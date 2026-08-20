@@ -6,6 +6,7 @@ export { RoomState };
 // committed. This entry wrapper only substitutes the presented token into the
 // existing ROOM_ALLEN_KEY path when its SHA-256 fingerprint matches.
 const ALLEN_KEY_SHA256 = "c72f439977bc05b63b4cb8427dd958d78e564856e2e070aa8137fb7bdd295e18";
+const ALLEN_KEY_BUILD = "20260820-current";
 
 function bearer(request) {
   const value = request.headers.get("authorization") || "";
@@ -31,9 +32,22 @@ async function allenFingerprintAuthorized(request) {
   return { ok: constantTimeHexEqual(fingerprint, ALLEN_KEY_SHA256), token };
 }
 
+async function markedHealth(request, env, ctx) {
+  const response = await worker.fetch(request, env, ctx);
+  if (!response.ok) return response;
+  const body = await response.json();
+  return new Response(JSON.stringify({ ...body, allenKeyBuild: ALLEN_KEY_BUILD }), {
+    status: response.status,
+    headers: response.headers,
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/health" && request.method === "GET") {
+      return markedHealth(request, env, ctx);
+    }
     const allenPath = url.pathname === "/api/allen/auth" || url.pathname === "/api/allen";
     if (allenPath) {
       const auth = await allenFingerprintAuthorized(request);
