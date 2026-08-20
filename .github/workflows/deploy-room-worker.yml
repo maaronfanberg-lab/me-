@@ -1,5 +1,5 @@
 name: Deploy validated Room Worker
-# self-reporting deployment gate plus live Allen auth/build probe: 2026-08-20
+# API deploy when credentials exist; Git-connected live verification always: 2026-08-20
 
 on:
   push:
@@ -25,6 +25,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID || vars.CF_ACCOUNT_ID }}
       ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+      EXPECTED_ALLEN_KEY_BUILD: 20260820-current
     steps:
       - uses: actions/checkout@v6
         with:
@@ -40,7 +41,7 @@ jobs:
             echo 'Cloudflare API token is available.'
           else
             echo 'available=false' >> "$GITHUB_OUTPUT"
-            echo 'Cloudflare API token is unavailable.'
+            echo 'Cloudflare API token is unavailable; Git-connected verification remains available.'
           fi
 
       - name: Resolve Fanberg Cloudflare account
@@ -83,10 +84,10 @@ jobs:
         run: |
           if [ "${{ steps.token.outputs.available }}" = 'true' ] && [ "${{ steps.account.outcome }}" = 'success' ]; then
             echo 'available=true' >> "$GITHUB_OUTPUT"
-            echo 'Cloudflare deployment credentials are usable.'
+            echo 'Cloudflare API deployment credentials are usable.'
           else
             echo 'available=false' >> "$GITHUB_OUTPUT"
-            echo 'Cloudflare deployment credentials are not usable.'
+            echo 'Cloudflare API deployment credentials are not usable; continuing with Git-connected live verification.'
           fi
 
       - name: Probe live Allen auth without a credential
@@ -119,17 +120,17 @@ jobs:
           import json
           d=json.load(open('room/worker-ingest-simulator-diagnostic.json'))
           if not d.get('pass'):
-              raise SystemExit('Worker source simulator is not green; refusing deployment')
+              raise SystemExit('Worker source simulator is not green; refusing API deployment')
           print('Worker source simulator is green.')
           PY
 
-      - name: Deploy existing room-live-mirror Worker
+      - name: Deploy existing room-live-mirror Worker by API
         id: deploy_worker
         if: steps.creds.outputs.available == 'true' && steps.validate.outcome == 'success'
         continue-on-error: true
         run: npx --yes wrangler@latest deploy --config cloudflare/room-worker/wrangler.toml
 
-      - name: Push current Room feed through deployed Worker
+      - name: Push current Room feed through API-deployed Worker
         id: ingest
         if: steps.deploy_worker.outcome == 'success'
         continue-on-error: true
@@ -150,7 +151,7 @@ jobs:
           accepted=$(printf '%s' "$ingest" | python3 -c 'import json,sys; print(str(bool(json.load(sys.stdin).get("accepted"))).lower())')
           test "$accepted" = true
 
-      - name: Verify live relay and Allen-key build
+      - name: Verify API-deployed relay and Allen-key build
         id: verify
         if: steps.ingest.outcome == 'success'
         continue-on-error: true
@@ -190,6 +191,35 @@ jobs:
               raise SystemExit('Live Worker does not have the current Allen-key build')
           PY
 
+      - name: Verify Git-connected Cloudflare build independently of API credentials
+        id: git_verify
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          matched=false
+          last_code=''
+          last_body=''
+          for attempt in $(seq 1 54); do
+            body=$(mktemp)
+            code=$(curl -sS --connect-timeout 4 --max-time 8 -o "$body" -w '%{http_code}' \
+              "${ROOM_RELAY_URL}/health?fresh=$(date +%s)" || true)
+            last_code="$code"
+            last_body=$(cat "$body" 2>/dev/null || true)
+            rm -f "$body"
+            echo "Git-connected build probe attempt=$attempt http=$code body=$last_body"
+            if [ "$code" = '200' ] && printf '%s' "$last_body" | python3 -c "import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get('allenKeyBuild') == '${EXPECTED_ALLEN_KEY_BUILD}' else 1)"; then
+              matched=true
+              break
+            fi
+            sleep 5
+          done
+          echo "matched=$matched" >> "$GITHUB_OUTPUT"
+          echo "http_code=$last_code" >> "$GITHUB_OUTPUT"
+          printf '%s' "$last_body" > /tmp/git-connected-room-health.json
+          test "$matched" = true
+
       - name: Write non-secret deployment status
         if: always()
         env:
@@ -200,6 +230,9 @@ jobs:
           DEPLOY_OUTCOME: ${{ steps.deploy_worker.outcome }}
           INGEST_OUTCOME: ${{ steps.ingest.outcome }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          GIT_VERIFY_OUTCOME: ${{ steps.git_verify.outcome }}
+          GIT_VERIFY_MATCHED: ${{ steps.git_verify.outputs.matched }}
+          GIT_VERIFY_HTTP: ${{ steps.git_verify.outputs.http_code }}
           ALLEN_AUTH_OUTCOME: ${{ steps.allen_auth.outcome }}
           ALLEN_AUTH_HTTP: ${{ steps.allen_auth.outputs.http_code }}
           ALLEN_AUTH_CURL_RC: ${{ steps.allen_auth.outputs.curl_rc }}
@@ -210,12 +243,24 @@ jobs:
           from datetime import datetime, timezone
           creds=os.environ.get('CREDS_AVAILABLE')=='true'
           auth={}
-          try:
-              auth=json.load(open('/tmp/allen-auth-response.json'))
-          except Exception:
-              pass
+          health={}
+          try: auth=json.load(open('/tmp/allen-auth-response.json'))
+          except Exception: pass
+          try: health=json.load(open('/tmp/git-connected-room-health.json'))
+          except Exception: pass
           auth_http=str(os.environ.get('ALLEN_AUTH_HTTP') or '')
           allen_live=(auth_http=='401' and auth.get('error')=='unauthorized')
+          direct_ok=(
+              creds and
+              os.environ.get('VALIDATE_OUTCOME')=='success' and
+              os.environ.get('DEPLOY_OUTCOME')=='success' and
+              os.environ.get('INGEST_OUTCOME')=='success' and
+              os.environ.get('VERIFY_OUTCOME')=='success'
+          )
+          git_ok=(
+              os.environ.get('GIT_VERIFY_MATCHED')=='true' and
+              health.get('allenKeyBuild')=='20260820-current'
+          )
           out={
             'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
             'worker':'room-live-mirror',
@@ -227,20 +272,37 @@ jobs:
             'deploy':os.environ.get('DEPLOY_OUTCOME') or 'skipped',
             'ingest':os.environ.get('INGEST_OUTCOME') or 'skipped',
             'verify':os.environ.get('VERIFY_OUTCOME') or 'skipped',
+            'git_connected_verify':os.environ.get('GIT_VERIFY_OUTCOME') or 'skipped',
+            'git_connected_matched':os.environ.get('GIT_VERIFY_MATCHED')=='true',
+            'git_connected_http':os.environ.get('GIT_VERIFY_HTTP') or '',
+            'live_allen_key_build':health.get('allenKeyBuild'),
             'allen_auth_transport':os.environ.get('ALLEN_AUTH_OUTCOME') or 'skipped',
             'allen_auth_http':auth_http,
             'allen_auth_error':auth.get('error'),
             'allen_auth_fallback_live':allen_live,
             'expected_allen_key_build':'20260820-current',
+            'direct_api_deploy_verified':direct_ok,
+            'git_connected_build_verified':git_ok,
           }
-          out['pass']=creds and out['validate']=='success' and out['deploy']=='success' and out['ingest']=='success' and out['verify']=='success'
+          out['pass']=bool(direct_ok or git_ok)
+          if direct_ok:
+              out['deployment_channel']='api'
+              out['state']='deployed-and-verified'
+          elif git_ok:
+              out['deployment_channel']='git-connected'
+              out['state']='git-connected-build-live'
+          elif not out['token_available']:
+              out['deployment_channel']='unverified'
+              out['state']='missing-cloudflare-token-and-git-build-not-verified'
+          else:
+              out['deployment_channel']='unverified'
+              out['state']='deployment-or-verification-failed'
           if allen_live:
               out['allen_state']='fallback-capable-worker-live'
           elif auth.get('error')=='allen-key-not-configured':
               out['allen_state']='old-secret-only-worker-live'
           else:
               out['allen_state']='live-auth-state-unresolved'
-          out['state']='deployed-and-verified' if out['pass'] else ('missing-cloudflare-token' if not out['token_available'] else 'deployment-or-verification-failed')
           open('room/cloudflare-deploy-status.json','w').write(json.dumps(out,indent=2)+'\n')
           print(json.dumps(out,indent=2))
           PY
