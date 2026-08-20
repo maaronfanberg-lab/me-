@@ -18,6 +18,20 @@ def require(name: str, ok: bool, detail: object = "") -> None:
     print(f"PASS: {name}")
 
 
+def relationship() -> dict:
+    return {
+        "exposure": .4,
+        "direct_familiarity": .2,
+        "trust": .2,
+        "predictability": .2,
+        "reciprocity": .2,
+        "warmth": .2,
+        "respect": .2,
+        "disclosure_depth": 0,
+        "tension": 0,
+    }
+
+
 def make_bus(latest: dict, partner: str) -> dict:
     base = {
         "event": latest,
@@ -25,7 +39,7 @@ def make_bus(latest: dict, partner: str) -> dict:
         "keywords": ["conversation", "response"],
         "topic": {"id": "topic-responsive", "root": "conversation", "current_facet": "response", "facets": [], "visited_facets": [], "status": "active", "shared_references": [], "unresolved": []},
         "partner": partner,
-        "relationship": {"exposure": .4, "direct_familiarity": .2, "trust": .2, "predictability": .2, "reciprocity": .2, "warmth": .2, "respect": .2, "disclosure_depth": 0, "tension": 0},
+        "relationship": relationship(),
     }
     return {
         "private": {"sarah": [
@@ -41,10 +55,20 @@ def run_rank(core, rank: int, latest: dict, partner: str, prior: list[dict], key
     captured: dict = {}
     original_model_run = core.model_run
     original_prior = core.prior_expression_messages
+    original_minds = core.minds
     old_rank = os.environ.get("ROOM_EXPRESSION_RANK")
     try:
         os.environ["ROOM_EXPRESSION_RANK"] = str(rank)
         core.prior_expression_messages = lambda node: list(prior)
+        core.minds = lambda: {
+            "entities": {
+                "sarah": {
+                    "people": {
+                        "mara": relationship(),
+                    }
+                }
+            }
+        }
 
         def fake_model_run(role, payload):
             if role != "expression":
@@ -66,6 +90,7 @@ def run_rank(core, rank: int, latest: dict, partner: str, prior: list[dict], key
     finally:
         core.model_run = original_model_run
         core.prior_expression_messages = original_prior
+        core.minds = original_minds
         if old_rank is None:
             os.environ.pop("ROOM_EXPRESSION_RANK", None)
         else:
