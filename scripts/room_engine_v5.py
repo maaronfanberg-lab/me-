@@ -454,6 +454,21 @@ def _participant_context_collapsed(context):
 _core.context_collapsed = _participant_context_collapsed
 
 
+_ALLEN_PROVOCATION_LABELS = frozenset({
+    "contradiction_or_challenge",
+    "criticism_or_rejection",
+    "exclusion",
+})
+
+
+def _allen_turn_is_provocative(event, context=None):
+    """Keep a genuinely challenging Allen turn salient for the whole beat."""
+    if not isinstance(event, dict) or str(event.get("speaker") or "").lower() != "allen":
+        return False
+    labels = set(_personality_v2.classify_event(event, context if isinstance(context, list) else []))
+    return bool(labels & _ALLEN_PROVOCATION_LABELS)
+
+
 def _second_voice_engages_allen(key):
     """Deterministic 75% gate so beat retries preserve the same routing."""
     return hashlib.sha256(f"allen-second-voice:{key}".encode()).digest()[0] < 192
@@ -479,13 +494,23 @@ def _participant_recurrent(node, key, bus_data):
             and latest
             and latest.get("speaker") == "allen"
         )
+        provocative_allen_turn = bool(
+            allen_latest and _allen_turn_is_provocative(latest, base.get("context"))
+        )
         primary_allen_reply = bool(allen_latest and rank == 0)
-        secondary_allen_reply = bool(allen_latest and rank == 1 and _second_voice_engages_allen(key))
-        routed_allen_reply = primary_allen_reply or secondary_allen_reply
+        secondary_allen_reply = bool(
+            allen_latest
+            and rank == 1
+            and (provocative_allen_turn or _second_voice_engages_allen(key))
+        )
+        late_allen_reply = bool(allen_latest and rank >= 2 and provocative_allen_turn)
+        routed_allen_reply = primary_allen_reply or secondary_allen_reply or late_allen_reply
     except Exception:
         routed_allen_reply = False
         primary_allen_reply = False
         secondary_allen_reply = False
+        late_allen_reply = False
+        provocative_allen_turn = False
         entity = None
 
     if not routed_allen_reply:
@@ -507,7 +532,9 @@ def _participant_recurrent(node, key, bus_data):
     original_job = _core.conversation_job
     original_prior = _core.prior_expression_messages
     _core.conversation_job = lambda *_args, **_kwargs: ""
-    if secondary_allen_reply:
+    if secondary_allen_reply or late_allen_reply:
+        # Later voices must still see Allen's challenging line itself, not
+        # the first AI reply that would otherwise replace it sequentially.
         _core.prior_expression_messages = lambda _node: []
     try:
         result = _original_recurrent(node, key, routed_bus)

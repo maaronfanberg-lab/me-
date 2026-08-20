@@ -8,6 +8,25 @@ NAMES = {"sarah", "mara", "owen", "jules", "allen"}
 _SOCIAL_LABELS = {"criticism_or_rejection", "exclusion", "praise_or_alignment"}
 _PRAISE_RE = re.compile(r"\b(winner|great|smart|brilliant|right|best|excellent|good point)\b")
 _CRITICISM_RE = re.compile(r"\b(wrong|nonsense|stupid|bad argument|makes no sense|ridiculous|idiot)\b")
+_CHALLENGE_RE = re.compile(r"\b(prove it|try me|i dare you|dare you|you can\'t|you cannot|make me|delete you|shut you down|bet you won\'t|bet you can\'t)\b")
+_CONTRADICTION_RE = re.compile(r"\b(that\'s false|that is false|not true|you\'re wrong|you are wrong|the opposite|can\'t be true|cannot be true|impossible|i disagree)\b")
+
+def _contradiction_or_challenge(text: str) -> bool:
+    low = _norm(text)
+    if _CHALLENGE_RE.search(low) or _CONTRADICTION_RE.search(low):
+        return True
+    # Treat an explicitly false numeric equality as a contradiction, not
+    # as an ignorable fragment. This catches compact probes such as 0=1.
+    for match in re.finditer(r"(?<![\w.])(-?\d+(?:\.\d+)?)\s*=\s*(-?\d+(?:\.\d+)?)(?![\w.])", low):
+        try:
+            if float(match.group(1)) != float(match.group(2)):
+                return True
+        except ValueError:
+            pass
+    # A direct self-negation ("X is not X") is also inherently salient.
+    if re.search(r"\b([a-z][a-z\'-]{2,})\s+(?:is|are)\s+not\s+\1\b", low):
+        return True
+    return False
 
 
 def _norm(text: Any) -> str:
@@ -88,6 +107,8 @@ def classify_event(event: dict | None, context: list[dict] | None = None) -> lis
         labels.append("praise_or_alignment")
     if _CRITICISM_RE.search(text):
         labels.append("criticism_or_rejection")
+    if _contradiction_or_challenge(text):
+        labels.append("contradiction_or_challenge")
     if re.search(r"\b(left out|exclude|excluded|ignore|ignored|doesn'?t get it|don'?t get it|everyone but|without you)\b", text):
         labels.append("exclusion")
     if re.search(r"\b(platypus|electroreceptor|monotreme|venom|quantum|recursive causation|axolotl|octopus)\b", text):
@@ -153,6 +174,8 @@ def appraise(entity: str, profile: dict, event: dict | None, context: list[dict]
         lenses.append(str(profile.get("novelty_response", "")))
     if "evidence_request" in labels:
         lenses.append(str(profile.get("evidence_style", "")))
+    if "contradiction_or_challenge" in labels:
+        lenses.extend([str(profile.get("disagreement_style", "")), str(profile.get("evidence_style", ""))])
     if social_targeting.get("praise_or_alignment"):
         lenses.extend([str(profile.get("praise_response", "")), str(profile.get("affiliation_style", ""))])
     if social_targeting.get("criticism_or_rejection"):
@@ -166,9 +189,13 @@ def appraise(entity: str, profile: dict, event: dict | None, context: list[dict]
 
     priority = "ground_latest_turn" if any(
         label in labels
-        for label in ("greeting", "question", "topic_bid", "evidence_request", "repair_bid")
+        for label in ("greeting", "question", "topic_bid", "evidence_request", "repair_bid", "contradiction_or_challenge")
     ) or directly_addressed else "integrate_latest_turn"
-    if "fragment_or_ambiguous" in labels and "question" not in labels:
+    if (
+        "fragment_or_ambiguous" in labels
+        and "question" not in labels
+        and "contradiction_or_challenge" not in labels
+    ):
         priority = "clarify_or_interpret_fragment"
 
     return {
