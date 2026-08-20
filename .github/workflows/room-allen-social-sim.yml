@@ -7,7 +7,6 @@ on:
       - 'scripts/room_allen_response_sim.py'
       - 'scripts/room_allen_observation_sim.py'
       - 'scripts/room_allen_provocation_sim.py'
-      - 'scripts/apply_allen_provocation_salience_fix.py'
       - 'scripts/room_participant.py'
       - 'scripts/room_social_v5.py'
       - 'scripts/room_personality_v2.py'
@@ -28,12 +27,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Apply repair and run Allen simulators
+      - name: Run Allen simulators and existing engine self-test
         shell: bash
         run: |
           set +e
-          python3 scripts/apply_allen_provocation_salience_fix.py > /tmp/allen-provocation-repair.txt 2>&1
-          repair_status=$?
           python3 scripts/room_allen_response_sim.py > /tmp/allen-response.txt 2>&1
           response_status=$?
           python3 scripts/room_allen_observation_sim.py > /tmp/allen-observation.txt 2>&1
@@ -43,22 +40,20 @@ jobs:
           python3 scripts/room_engine_v5.py selftest > /tmp/engine-selftest.txt 2>&1
           engine_status=$?
           set -e
-          python3 - "$repair_status" "$response_status" "$observation_status" "$provocation_status" "$engine_status" <<'PY'
+          python3 - "$response_status" "$observation_status" "$provocation_status" "$engine_status" <<'PY'
           import json,sys
           from datetime import datetime,timezone
-          repair_status,response_status,observation_status,provocation_status,engine_status=map(int,sys.argv[1:])
+          response_status,observation_status,provocation_status,engine_status=map(int,sys.argv[1:])
           def read(path):
               try:return open(path).read()[-6000:]
               except Exception:return ''
           payload={
               'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
-              'pass':repair_status==0 and response_status==0 and observation_status==0 and provocation_status==0 and engine_status==0,
-              'repair_exit_code':repair_status,
+              'pass':response_status==0 and observation_status==0 and provocation_status==0 and engine_status==0,
               'response_sim_exit_code':response_status,
               'observation_sim_exit_code':observation_status,
               'provocation_sim_exit_code':provocation_status,
               'engine_selftest_exit_code':engine_status,
-              'repair_output':read('/tmp/allen-provocation-repair.txt'),
               'response_sim_output':read('/tmp/allen-response.txt'),
               'observation_sim_output':read('/tmp/allen-observation.txt'),
               'provocation_sim_output':read('/tmp/allen-provocation.txt'),
@@ -68,15 +63,15 @@ jobs:
           open('room/allen-social-sim-diagnostic.json','w').write(json.dumps(payload,indent=2)+'\n')
           print(json.dumps(payload,indent=2))
           PY
-      - name: Record repaired runtime and diagnostic on tested branch
+      - name: Record diagnostic on tested branch
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'allen-social-simulator'
           git config user.email 'actions@users.noreply.github.com'
-          git add scripts/room_engine_v5.py scripts/room_personality_v2.py room/allen-social-sim-diagnostic.json
-          git commit -m 'Make provocative Allen turns salient to the Room' || exit 0
+          git add room/allen-social-sim-diagnostic.json
+          git commit -m 'Record Allen social boundary simulator' || exit 0
           branch="${GITHUB_REF_NAME}"
           for n in 1 2 3 4 5; do
             if git push origin "HEAD:${branch}"; then exit 0; fi
