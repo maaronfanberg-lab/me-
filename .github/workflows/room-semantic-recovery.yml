@@ -1,0 +1,56 @@
+name: Room semantic recovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'society/pulse-kick.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-semantic-recovery-main
+  cancel-in-progress: true
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply semantic epoch before cognition startup
+        run: |
+          set -euo pipefail
+          git config user.name "room-recovery"
+          git config user.email "actions@users.noreply.github.com"
+
+          python3 scripts/room_semantic_epoch.py migrate
+          git add room
+
+          if git diff --cached --quiet; then
+            echo "Semantic recovery already active"
+            exit 0
+          fi
+
+          git commit -m "Apply Room semantic epoch recovery"
+          for attempt in 1 2 3 4; do
+            if git push origin HEAD:main; then
+              echo "Semantic recovery published"
+              exit 0
+            fi
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "Recovery publish collided with incompatible main state"
+              exit 1
+            fi
+            sleep $((attempt * 2))
+          done
+
+          echo "Semantic recovery could not be published"
+          exit 1
