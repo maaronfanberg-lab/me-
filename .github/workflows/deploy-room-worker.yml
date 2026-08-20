@@ -1,5 +1,5 @@
 name: Deploy validated Room Worker
-# self-reporting deployment gate plus live Allen auth probe: 2026-08-19
+# self-reporting deployment gate plus live Allen auth/build probe: 2026-08-20
 
 on:
   push:
@@ -31,16 +31,62 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Check deploy credentials without exposing them
-        id: creds
+      - name: Detect Cloudflare API token
+        id: token
         shell: bash
         run: |
-          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
             echo 'available=true' >> "$GITHUB_OUTPUT"
-            echo 'Cloudflare deployment credentials are available.'
+            echo 'Cloudflare API token is available.'
           else
             echo 'available=false' >> "$GITHUB_OUTPUT"
-            echo 'Cloudflare deployment credentials are not available in the expected GitHub Actions secret/variable names.'
+            echo 'Cloudflare API token is unavailable.'
+          fi
+
+      - name: Resolve Fanberg Cloudflare account
+        id: account
+        if: steps.token.outputs.available == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+            echo 'Using configured Cloudflare account ID.'
+            exit 0
+          fi
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
+            > /tmp/cf-accounts.json
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          d=json.load(open('/tmp/cf-accounts.json'))
+          if not d.get('success'):
+              raise SystemExit('Cloudflare account lookup failed')
+          matches=[a for a in d.get('result',[]) if 'fanberg' in str(a.get('name','')).lower()]
+          if len(matches) != 1:
+              names=[str(a.get('name','')) for a in d.get('result',[])]
+              raise SystemExit(f'Expected exactly one Fanberg Cloudflare account; found {len(matches)}. Accessible account names: {names}')
+          a=matches[0]
+          print(f"CLOUDFLARE_ACCOUNT_ID={a['id']}")
+          print(f"CLOUDFLARE_ACCOUNT_NAME={a['name']}")
+          PY
+          echo 'available=true' >> "$GITHUB_OUTPUT"
+          echo 'Resolved Fanberg Cloudflare account.'
+
+      - name: Check deploy credentials without exposing them
+        id: creds
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.token.outputs.available }}" = 'true' ] && [ "${{ steps.account.outcome }}" = 'success' ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+            echo 'Cloudflare deployment credentials are usable.'
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'Cloudflare deployment credentials are not usable.'
           fi
 
       - name: Probe live Allen auth without a credential
@@ -67,6 +113,7 @@ jobs:
         if: steps.creds.outputs.available == 'true'
         continue-on-error: true
         run: |
+          node --check cloudflare/room-worker/src/index-entry.js
           node scripts/room_worker_ingest_sim.mjs
           python3 - <<'PY'
           import json
@@ -103,7 +150,7 @@ jobs:
           accepted=$(printf '%s' "$ingest" | python3 -c 'import json,sys; print(str(bool(json.load(sys.stdin).get("accepted"))).lower())')
           test "$accepted" = true
 
-      - name: Verify live relay now matches the current Room boot
+      - name: Verify live relay and Allen-key build
         id: verify
         if: steps.ingest.outcome == 'success'
         continue-on-error: true
@@ -112,11 +159,14 @@ jobs:
           curl -fsS --connect-timeout 3 --max-time 8 \
             -H 'Origin: https://maaronfanberg-lab.github.io' \
             "${ROOM_RELAY_URL}/api/feed?fresh=$(date +%s)" > /tmp/live-relay.json
+          curl -fsS --retry 5 --retry-delay 2 \
+            "${ROOM_RELAY_URL}/health?fresh=$(date +%s)" > /tmp/room-health.json
           python3 - <<'PY'
           import json
           from datetime import datetime
           local=json.load(open('room/feed.json'))
           raw=json.load(open('/tmp/live-relay.json'))
+          health=json.load(open('/tmp/room-health.json'))
           remote=raw.get('feed',raw)
           ls=local.get('state',{}); rs=remote.get('state',{})
           def ts(x):
@@ -130,16 +180,21 @@ jobs:
             'local_cycle':ls.get('cycle'),
             'relay_cycle':rs.get('cycle'),
             'timestamp_lag_seconds':lag,
+            'allen_key_build':health.get('allenKeyBuild'),
           },indent=2))
           if ls.get('boot_id') != rs.get('boot_id'):
               raise SystemExit('Relay is still on the wrong Room boot')
           if lag > 90:
               raise SystemExit('Relay is still stale')
+          if health.get('allenKeyBuild') != '20260820-current':
+              raise SystemExit('Live Worker does not have the current Allen-key build')
           PY
 
       - name: Write non-secret deployment status
         if: always()
         env:
+          TOKEN_AVAILABLE: ${{ steps.token.outputs.available }}
+          ACCOUNT_OUTCOME: ${{ steps.account.outcome }}
           CREDS_AVAILABLE: ${{ steps.creds.outputs.available }}
           VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
           DEPLOY_OUTCOME: ${{ steps.deploy_worker.outcome }}
@@ -165,6 +220,8 @@ jobs:
             'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
             'worker':'room-live-mirror',
             'source_sha':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+            'token_available':os.environ.get('TOKEN_AVAILABLE')=='true',
+            'account':os.environ.get('ACCOUNT_OUTCOME') or 'skipped',
             'credentials_available':creds,
             'validate':os.environ.get('VALIDATE_OUTCOME') or 'skipped',
             'deploy':os.environ.get('DEPLOY_OUTCOME') or 'skipped',
@@ -174,6 +231,7 @@ jobs:
             'allen_auth_http':auth_http,
             'allen_auth_error':auth.get('error'),
             'allen_auth_fallback_live':allen_live,
+            'expected_allen_key_build':'20260820-current',
           }
           out['pass']=creds and out['validate']=='success' and out['deploy']=='success' and out['ingest']=='success' and out['verify']=='success'
           if allen_live:
@@ -182,7 +240,7 @@ jobs:
               out['allen_state']='old-secret-only-worker-live'
           else:
               out['allen_state']='live-auth-state-unresolved'
-          out['state']='deployed-and-verified' if out['pass'] else ('missing-github-cloudflare-credentials' if not creds else 'deployment-or-verification-failed')
+          out['state']='deployed-and-verified' if out['pass'] else ('missing-cloudflare-token' if not out['token_available'] else 'deployment-or-verification-failed')
           open('room/cloudflare-deploy-status.json','w').write(json.dumps(out,indent=2)+'\n')
           print(json.dumps(out,indent=2))
           PY
