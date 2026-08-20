@@ -279,9 +279,11 @@ _ROLE_INSTRUCTION = {
         "and personality. Prefer a natural reaction over continuing an unrelated older subject."
     ),
     "expression": (
-        "Write this person's next natural conversational reply. Ground it in the newest spoken line when there "
-        "is one. Let personality shape perspective and tone. Keep it concise, usually one to three sentences, "
-        "and add something that has not already been said."
+        "Write this person's next natural conversational reply. Treat the newest spoken line as a real turn "
+        "that deserves a reaction before introducing a new angle. If someone just questioned, contradicted, "
+        "supported, teased, challenged, or added to a point, respond to that social meaning naturally. Let "
+        "personality shape perspective and tone. Keep it concise, usually one to three sentences, and add "
+        "something that has not already been said."
     ),
 }
 
@@ -469,15 +471,19 @@ def _allen_turn_is_provocative(event, context=None):
     return bool(labels & _ALLEN_PROVOCATION_LABELS)
 
 
-def _second_voice_engages_allen(key):
-    """Deterministic 75% gate so beat retries preserve the same routing."""
-    return hashlib.sha256(f"allen-second-voice:{key}".encode()).digest()[0] < 192
+def _allen_voice_engages(key, rank):
+    """Deterministic ordinary-turn engagement with natural falloff by rank."""
+    thresholds = {0: 256, 1: 230, 2: 175, 3: 105}
+    threshold = thresholds.get(int(rank), 0)
+    if threshold >= 256:
+        return True
+    return hashlib.sha256(f"allen-responsive:{rank}:{key}".encode()).digest()[0] < threshold
 
 
-# The expression phase is sequential. Rank 0 always answers Allen when Allen is
-# the latest public event. Rank 1 stays with Allen on a deterministic 75% gate,
-# which makes two responders usual without turning every interruption into a
-# four-voice chorus. Ranks 2-3 remain unconstrained.
+# The expression phase is sequential. Ordinary Allen turns usually hold roughly
+# three voices: rank 0 always, then deterministic falloff across ranks 1-3. A
+# provocative Allen turn remains salient to all four. When a voice does move on,
+# it follows the newest same-beat speaker with a matching relationship frame.
 _original_recurrent = _core.recurrent
 
 
@@ -488,6 +494,7 @@ def _participant_recurrent(node, key, bus_data):
         source = _core.rp(bus_data, entity, role) if role == "expression" else None
         base = (source or {}).get("private") or {}
         latest = base.get("event") if isinstance(base.get("event"), dict) else None
+        prior_same_beat = _core.prior_expression_messages(node) if role == "expression" else []
         allen_latest = bool(
             role == "expression"
             and base.get("partner") == "allen"
@@ -501,9 +508,13 @@ def _participant_recurrent(node, key, bus_data):
         secondary_allen_reply = bool(
             allen_latest
             and rank == 1
-            and (provocative_allen_turn or _second_voice_engages_allen(key))
+            and (provocative_allen_turn or _allen_voice_engages(key, rank))
         )
-        late_allen_reply = bool(allen_latest and rank >= 2 and provocative_allen_turn)
+        late_allen_reply = bool(
+            allen_latest
+            and rank >= 2
+            and (provocative_allen_turn or _allen_voice_engages(key, rank))
+        )
         routed_allen_reply = primary_allen_reply or secondary_allen_reply or late_allen_reply
     except Exception:
         routed_allen_reply = False
@@ -511,9 +522,37 @@ def _participant_recurrent(node, key, bus_data):
         secondary_allen_reply = False
         late_allen_reply = False
         provocative_allen_turn = False
+        prior_same_beat = []
         entity = None
 
     if not routed_allen_reply:
+        # Core expression generation already makes the newest same-beat
+        # utterance the current event. Keep partner and relationship context
+        # aligned with that same speaker instead of an older public partner.
+        if role == "expression" and prior_same_beat:
+            newest = prior_same_beat[-1] if isinstance(prior_same_beat[-1], dict) else {}
+            responsive_partner = str(newest.get("speaker") or "").lower()
+            if responsive_partner in _AI_ORDER and responsive_partner != entity:
+                responsive_bus = copy.deepcopy(bus_data)
+                responsive_source = _core.rp(responsive_bus, entity, role)
+                responsive_base = responsive_source.get("private") if isinstance(responsive_source.get("private"), dict) else {}
+                responsive_base["partner"] = responsive_partner
+                try:
+                    rel = _core.minds()["entities"][entity]["people"][responsive_partner]
+                    responsive_base["relationship"] = {
+                        k: rel.get(k) for k in (
+                            "exposure", "direct_familiarity", "trust", "predictability",
+                            "reciprocity", "warmth", "respect", "disclosure_depth", "tension"
+                        )
+                    }
+                except Exception:
+                    pass
+                thought = ((responsive_bus.get("recurrent", {}).get(entity, {}) or {}).get("thought", {}) or {})
+                thought_private = thought.get("private") if isinstance(thought.get("private"), dict) else {}
+                deliberation = thought_private.get("deliberation") if isinstance(thought_private.get("deliberation"), dict) else None
+                if isinstance(deliberation, dict):
+                    deliberation["preferred_partner"] = responsive_partner
+                return _original_recurrent(node, key, responsive_bus)
         return _original_recurrent(node, key, bus_data)
 
     routed_bus = copy.deepcopy(bus_data)
