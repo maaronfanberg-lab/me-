@@ -286,6 +286,36 @@ _ROLE_INSTRUCTION = {
 }
 
 
+def _neutral_comprehension(payload):
+    """Return a non-inventive observation when structured comprehension is unusable."""
+    source = payload if isinstance(payload, dict) else {}
+    entity = _private_model._norm(source.get("entity"))
+    partner = _private_model._norm(source.get("partner"))
+    if partner not in _private_model.PEOPLE or partner == entity:
+        partner = None
+
+    event = source.get("event") if isinstance(source.get("event"), dict) else {}
+    cognition = event.get("cognition") if isinstance(event.get("cognition"), dict) else {}
+    target = _private_model._norm(cognition.get("target"))
+    participation = "DIRECT_ADDRESSEE" if entity and target == entity else "PARTICIPANT"
+
+    # This contains no generated prose, retry reason, prompt text, or inferred
+    # relationship event. Downstream thought/expression may proceed while being
+    # explicitly told that comprehension confidence is zero.
+    return {
+        "participation": participation,
+        "partner": partner,
+        "move": "other",
+        "grounding": "ambiguous",
+        "focus": None,
+        "new_details": [],
+        "bids": [],
+        "relationship_events": [],
+        "shared_references": [],
+        "confidence": 0.0,
+    }
+
+
 def _private_run(role: str, payload: dict, timeout: int = 30):
     # Preserve the existing enable contract without exposing the secret contents.
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():
@@ -346,6 +376,9 @@ def _private_run(role: str, payload: dict, timeout: int = 30):
         except Exception as exc:
             raise RuntimeError(f"private model request failed for {role}: {type(exc).__name__}") from exc
 
+    if role == "comprehension":
+        fallback = _neutral_comprehension(payload)
+        return _private_model._validate(role, fallback, compact, instruction, self_entity)
     raise RuntimeError(f"private model output rejected for {role}: {last_reason}")
 
 
