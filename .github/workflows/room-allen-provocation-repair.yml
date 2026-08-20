@@ -1,0 +1,46 @@
+name: Apply Allen provocation salience repair
+
+on:
+  push:
+    branches:
+      - 'fix/allen-provocation-salience-20260820'
+    paths:
+      - 'scripts/apply_allen_provocation_salience_fix.py'
+      - '.github/workflows/room-allen-provocation-repair.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Apply deterministic repair
+        run: python3 scripts/apply_allen_provocation_salience_fix.py
+      - name: Run focused simulators
+        shell: bash
+        run: |
+          python3 scripts/room_allen_provocation_sim.py
+          python3 scripts/room_allen_response_sim.py
+          python3 scripts/room_allen_observation_sim.py
+          python3 scripts/room_engine_v5.py selftest
+      - name: Commit repaired runtime to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'allen-provocation-repair'
+          git config user.email 'actions@users.noreply.github.com'
+          git add scripts/room_engine_v5.py scripts/room_personality_v2.py
+          git commit -m 'Make provocative Allen turns salient to the Room' || exit 0
+          branch="${GITHUB_REF_NAME}"
+          for n in 1 2 3 4 5; do
+            if git push origin "HEAD:${branch}"; then exit 0; fi
+            git fetch origin "$branch"
+            git rebase "origin/$branch" || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
