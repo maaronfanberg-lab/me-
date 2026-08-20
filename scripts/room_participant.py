@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import room_engine_v5 as c
+from room_semantic_epoch import migrate_files
 
 TARGETS = ("sarah", "mara", "owen", "jules")
 PARTICIPANT = "allen"
@@ -187,6 +188,11 @@ def observe_allen_history(mind: dict, history: list, discourse: dict, state: dic
 def main():
     if len(sys.argv) != 3:
         raise SystemExit("usage: room_participant.py INBOX_JSON ACK_JSON")
+
+    # This is the one serialized ingress point before all 12 cognition nodes run.
+    # On the first post-repair beat it archives poisoned semantic history and
+    # preserves social/personality continuity; later beats are idempotent no-ops.
+    migrate_files()
 
     inbox_path = Path(sys.argv[1])
     ack_path = Path(sys.argv[2])
