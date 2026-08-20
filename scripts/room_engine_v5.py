@@ -12,6 +12,7 @@ generation remain Sarah/Mara/Owen/Jules only.
 
 import copy
 import os
+import re
 
 import room_private_model as _private_model
 
@@ -143,6 +144,13 @@ def _participant_recurrent(node, key, bus_data):
             expression = dict(expression)
             expression["target"] = "allen"
             expression["move"] = "answer"
+            # Live validation found a sharp hidden/surface mismatch: dozens of
+            # replies targeted Allen in metadata while not one utterance used his
+            # name. For the single adjacency reply, make the addressee audible.
+            # Preserve model wording when it already names Allen.
+            utterance = str(expression.get("utterance") or "").strip()
+            if utterance and not re.search(r"\ballen\b", utterance, re.I):
+                expression["utterance"] = f"Allen, {utterance}"
             private["expression"] = expression
             result["private"] = private
     return result
