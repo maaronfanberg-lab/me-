@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -140,4 +141,55 @@ for role, prompt in captured:
     assert "platypus" in low, f"{role}: latest conversational subject was lost"
     assert "why do platypuses have bills" in low, f"{role}: legitimate unresolved discussion material was lost"
 
-print("PASS: runtime secrets, internal diversity instructions, orchestration, and stale machine-self-reference stay outside cognition; real conversation survives")
+# Rejection is an internal control event. A retry must never add natural-language
+# rejection/revision instructions that could be copied into the spoken reply.
+retry_prompts: list[str] = []
+retry_text = (
+    "Platypuses are strange animals with electroreception and webbed feet, and their biology makes them "
+    "an unusually interesting mammal to discuss."
+)
+retry_payload = copy.deepcopy(payload)
+retry_payload["event"] = {"speaker": "allen", "text": retry_text}
+retry_payload["context"] = [{"speaker": "allen", "text": retry_text}]
+retry_payload["keywords"] = ["platypus", "electroreception"]
+retry_payload["topic"] = {
+    "root": "platypus",
+    "current_facet": "electroreception",
+    "facets": ["platypus", "electroreception"],
+    "shared_references": [],
+    "unresolved": [],
+}
+retry_payload["deliberation"] = {
+    "action": "ANSWER",
+    "preferred_partner": "allen",
+    "focus": "electroreception",
+    "new_information_goal": "respond about electroreception",
+}
+
+
+def retry_request(model_url, prompt, role, temperature, timeout, self_entity=None, attempt=0):
+    retry_prompts.append(prompt)
+    if attempt == 0:
+        utterance = retry_text
+    else:
+        utterance = "Allen, their electroreception is the part I find most surprising."
+    return json.dumps({
+        "decision": "SPEAK",
+        "target": "allen",
+        "move": "answer",
+        "utterance": utterance,
+        "semantic_terms": ["platypus", "electroreception"],
+    })
+
+
+private_model._request = retry_request
+private_model.run("expression", retry_payload)
+assert len(retry_prompts) >= 2, "retry boundary probe did not force a rejected first expression"
+first_prefix = retry_prompts[0].split("\nCONVERSATION\n", 1)[0]
+second_prefix = retry_prompts[1].split("\nCONVERSATION\n", 1)[0]
+assert first_prefix == second_prefix, "RED: rejection added model-visible retry instructions"
+assert "use a different idea" not in retry_prompts[1].lower(), "RED: retry prose can be echoed into dialogue"
+assert "keep the reply concise" not in retry_prompts[1].lower(), "RED: retry prose can be echoed into dialogue"
+assert retry_text in retry_prompts[1], "Allen's newest words were lost during rejection recovery"
+
+print("PASS: runtime secrets, diversity/retry instructions, orchestration, and stale machine-self-reference stay outside cognition; real conversation survives")
