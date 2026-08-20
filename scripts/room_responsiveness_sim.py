@@ -90,7 +90,12 @@ def main() -> int:
         hits = 0
         total = 256
         for i in range(total):
-            payload, expr = run_rank(core, rank, allen_event(f"{rank}-{i}"), "allen", [], f"ordinary-allen-{rank}-{i}")
+            prior = [] if rank == 0 else [{
+                "speaker": "mara",
+                "text": "I already reacted to Allen's comment.",
+                "cognition": {"target": "allen"},
+            }]
+            payload, expr = run_rank(core, rank, allen_event(f"{rank}-{i}"), "allen", prior, f"ordinary-allen-{rank}-{i}")
             if expr.get("target") == "allen" and ((payload.get("event") or {}).get("speaker") == "allen"):
                 hits += 1
         rates[rank] = hits / total
