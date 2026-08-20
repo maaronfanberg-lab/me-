@@ -47,3 +47,68 @@ jobs:
           python3 scripts/room_expression_quality_sim.py
           python3 scripts/room_semantic_epoch_sim.py
           python3 scripts/room_semantic_recovery_workflow_sim.py
+
+  expression_gate_probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Probe current production wrapper without logging dialogue
+        run: |
+          set -euo pipefail
+          mkdir -p .room_model/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'society-brain-q4_0.gguf' --dir .room_model
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
+          echo '7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  .room_model/society-brain-q4_0.gguf' | sha256sum -c -
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+          server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
+          chmod +x "$server_bin"
+          "$server_bin" -m .room_model/society-brain-q4_0.gguf --host 127.0.0.1 --port 18080 -c 16384 -np 2 >.room_model/server.log 2>&1 &
+          model_pid=$!
+          trap 'kill "$model_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in $(seq 1 120); do
+            if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then ready=true; break; fi
+            if ! kill -0 "$model_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo '{"server_ready":false}'
+            exit 1
+          fi
+          ROOM_NODE_PROMPT='diagnostic-enabled' ROOM_MODEL_URL='http://127.0.0.1:18080/completion' PYTHONPATH=scripts python3 - <<'PY'
+import json,time
+from pathlib import Path
+import room_engine_v5 as engine
+cfg=json.loads(Path('room/config.json').read_text())
+state=json.loads(Path('room/state.json').read_text())
+conversation=json.loads(Path('room/conversation.json').read_text())
+context=conversation[-5:]
+event=context[-1] if context else {'speaker':'mara','text':'What are you thinking about?','cognition':{'target':'sarah'}}
+topic=state.get('topic_episode') or {'root':'books','current_facet':'books','facets':['books']}
+known=['sarah','mara','owen','jules']
+results={}
+for entity in known:
+    partner=str(event.get('speaker') or 'mara').lower()
+    if partner==entity or partner not in known+['allen']:
+        partner=next(name for name in known if name!=entity)
+    payload={'entity':entity,'profile':cfg['p'][entity],'event':event,'context':context,'topic':topic,'partner':partner,'relationship':{'trust':0.1,'direct_familiarity':0.2,'warmth':0.2,'respect':0.2},'deliberation':{'action':'BRIDGE','preferred_partner':partner,'focus':topic.get('current_facet') or topic.get('root') or 'books','new_information_goal':'add one fresh concise point'}}
+    started=time.monotonic()
+    try:
+        obj=engine._private_run('expression',payload,timeout=25)
+        utterance=str((obj or {}).get('utterance') or '')
+        results[entity]={'status':'accepted','chars':len(utterance),'words':len(utterance.split()),'elapsed_ms':round((time.monotonic()-started)*1000)}
+    except Exception as exc:
+        raw=str(exc)
+        reason=raw.rsplit(':',1)[-1].strip() if ':' in raw else type(exc).__name__
+        allowed={'malformed_pronoun','self_address','trailing_fragment','self_repetition','duplicate_context','rambling_expression','empty_expression','unknown'}
+        if reason not in allowed: reason='runtime_error'
+        results[entity]={'status':'rejected','reason':reason,'elapsed_ms':round((time.monotonic()-started)*1000)}
+print(json.dumps({'server_ready':True,'cycle':state.get('cycle'),'results':results},sort_keys=True))
+PY
