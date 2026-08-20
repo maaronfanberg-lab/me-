@@ -20,14 +20,14 @@ def require(name: str, ok: bool, detail: object = "") -> None:
 
 
 def second_voice_expected(key: str) -> bool:
-    # 192 / 256 = 75%. The runtime must use this same deterministic gate so a
-    # replayed beat makes the same routing decision.
-    return hashlib.sha256(f"allen-second-voice:{key}".encode()).digest()[0] < 192
+    # Rank 1 now stays with an ordinary Allen turn about 90% of the time.
+    # Determinism keeps a replayed beat on the same routing decision.
+    return hashlib.sha256(f"allen-responsive:1:{key}".encode()).digest()[0] < 230
 
 
 def pick_key(expected: bool) -> str:
     for i in range(10000):
-        key = f"allen-two-voice-sim-{i}"
+        key = f"allen-responsive-rank1-sim-{i}"
         if second_voice_expected(key) is expected:
             return key
     raise AssertionError("could not find deterministic test key")
@@ -164,8 +164,8 @@ def main() -> int:
     require("unselected rank-1 voice is not forcibly redirected to Allen", no_expr.get("target") == "mara", no_expr)
 
     ratio = sum(second_voice_expected(f"distribution-{i}") for i in range(4096)) / 4096
-    require("second-voice deterministic gate is approximately 75 percent", 0.72 <= ratio <= 0.78, ratio)
-    print("PASS: Allen two-voice engagement boundary is green")
+    require("rank-1 deterministic gate is approximately 90 percent", 0.88 <= ratio <= 0.92, ratio)
+    print("PASS: Allen high-response rank-1 boundary is green")
     return 0
 
 
