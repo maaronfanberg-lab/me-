@@ -146,6 +146,23 @@ def main():
     assert len(allen_prompts) >= 2
     assert allen_words in allen_prompts[1], "fail-soft recovery discarded the newest participant's words"
 
+    # Live cycle 3907 exposed two unmatched closing braces followed by a
+    # parenthetical planning-like continuation. The prior 3906 live state did
+    # not contain this text, so it was newly generated rather than replayed from
+    # historical memory. Reject malformed structural residue and ask the model
+    # for a clean expression instead of publishing it or trying to invent a fix.
+    structural_residue = (
+        "I'm trying to figure out how to be a better partner, but I'm not sure where to begin. "
+        "I've been learning by asking questions and trying to understand where my partner feels and wants from the start. "
+        "That’s where I’m going. } } (I was going to go over your points and then share some of my own, "
+        "but I think it’s better to start here. I hope that makes sense.) Hey, I’m looking for some help with a new idea."
+    )
+    require_retry(
+        "unmatched structural residue from live 3907",
+        structural_residue,
+        "I want to understand what being a better partner would look like in ordinary moments, not just in big conversations.",
+    )
+
     require_first_try(
         "ordinary natural expression",
         "I liked the ambiguity at the end because it leaves the moral judgment less tidy.",
@@ -157,6 +174,10 @@ def main():
     require_first_try(
         "natural colon ending setup",
         "I keep coming back to one question: what did Scout understand that the adults missed?",
+    )
+    require_first_try(
+        "balanced braces in ordinary code discussion",
+        "In JavaScript, the object literal {name: 'Scout'} is balanced, so the braces themselves are not the problem.",
     )
 
     print("ROOM EXPRESSION QUALITY SIM: GREEN")
