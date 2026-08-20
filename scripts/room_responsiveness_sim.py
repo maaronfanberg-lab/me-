@@ -73,7 +73,7 @@ def run_rank(core, rank: int, latest: dict, partner: str, prior: list[dict], key
 
 
 def allen_event(key: str) -> dict:
-    return {"id": f"allen-{key}", "speaker": "allen", "text": "I think the opposite might be true.", "runtime": engine.VERSION, "boot_id": engine.BOOT, "cognition": {"target": None, "move_type": "deepen"}, "discourse_id": f"da-{key}"}
+    return {"id": f"allen-{key}", "speaker": "allen", "text": "I think this is interesting.", "runtime": engine.VERSION, "boot_id": engine.BOOT, "cognition": {"target": None, "move_type": "deepen"}, "discourse_id": f"da-{key}"}
 
 
 def ai_event(speaker: str, key: str) -> dict:
