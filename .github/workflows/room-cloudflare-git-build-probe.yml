@@ -1,0 +1,118 @@
+name: Verify Room Cloudflare Git build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/room-worker/.deploy-kick-20260819'
+      - '.github/workflows/room-cloudflare-git-build-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+      EXPECTED_BUILD: 20260820-current
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Wait for Cloudflare Git-connected deployment
+        id: probe
+        shell: bash
+        run: |
+          set -u
+          matched=false
+          last_body=''
+          last_code=''
+          for attempt in $(seq 1 60); do
+            body=$(mktemp)
+            code=$(curl -sS --connect-timeout 4 --max-time 8 -o "$body" -w '%{http_code}' \
+              "${ROOM_RELAY_URL}/health?fresh=$(date +%s)" || true)
+            last_code="$code"
+            last_body=$(cat "$body" 2>/dev/null || true)
+            rm -f "$body"
+            echo "attempt=$attempt http=$code body=$last_body"
+            if [ "$code" = '200' ] && printf '%s' "$last_body" | python3 -c "import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get('allenKeyBuild') == '${EXPECTED_BUILD}' else 1)"; then
+              matched=true
+              break
+            fi
+            sleep 5
+          done
+          echo "matched=$matched" >> "$GITHUB_OUTPUT"
+          echo "http_code=$last_code" >> "$GITHUB_OUTPUT"
+          printf '%s' "$last_body" > /tmp/room-health.json
+          test "$matched" = true
+
+      - name: Confirm Allen endpoint is protected without a key
+        id: auth
+        if: always()
+        shell: bash
+        run: |
+          body=$(mktemp)
+          code=$(curl -sS --connect-timeout 4 --max-time 8 -o "$body" -w '%{http_code}' \
+            "${ROOM_RELAY_URL}/api/allen/auth" || true)
+          echo "http_code=$code" >> "$GITHUB_OUTPUT"
+          cat "$body" > /tmp/allen-auth-no-key.json 2>/dev/null || true
+          rm -f "$body"
+          test "$code" = '401'
+
+      - name: Record Git-connected deployment result
+        if: always()
+        env:
+          PROBE_OUTCOME: ${{ steps.probe.outcome }}
+          PROBE_MATCHED: ${{ steps.probe.outputs.matched }}
+          PROBE_HTTP: ${{ steps.probe.outputs.http_code }}
+          AUTH_OUTCOME: ${{ steps.auth.outcome }}
+          AUTH_HTTP: ${{ steps.auth.outputs.http_code }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          from datetime import datetime, timezone
+          health={}
+          try: health=json.load(open('/tmp/room-health.json'))
+          except Exception: pass
+          out={
+            'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+            'source_sha':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+            'expected_allen_key_build':os.environ.get('EXPECTED_BUILD'),
+            'live_allen_key_build':health.get('allenKeyBuild'),
+            'live_health':health,
+            'probe_outcome':os.environ.get('PROBE_OUTCOME') or 'unknown',
+            'probe_matched':os.environ.get('PROBE_MATCHED') == 'true',
+            'probe_http':os.environ.get('PROBE_HTTP') or '',
+            'unauthenticated_allen_outcome':os.environ.get('AUTH_OUTCOME') or 'unknown',
+            'unauthenticated_allen_http':os.environ.get('AUTH_HTTP') or '',
+          }
+          out['pass']=out['probe_matched'] and out['unauthenticated_allen_http']=='401'
+          out['state']='git-connected-build-live' if out['pass'] else 'git-connected-build-not-verified'
+          open('room/cloudflare-git-build-status.json','w').write(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Publish probe status
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "room-cloudflare-git-probe"
+          git config user.email "actions@users.noreply.github.com"
+          git add room/cloudflare-git-build-status.json
+          git commit -m "Record Cloudflare Git-connected Room build status" || exit 0
+          for n in 1 2 3 4 5 6; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              exit 1
+            fi
+            sleep "$n"
+          done
+          exit 1
