@@ -1,0 +1,70 @@
+name: Deploy Subsonic Calm
+
+on:
+  push:
+    branches:
+      - subsonic-calm-app
+      - main
+    paths:
+      - 'cloudflare/subsonic-calm/**'
+      - '.github/workflows/deploy-subsonic-calm.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-subsonic-calm
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID || vars.CF_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check Cloudflare credentials
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          echo 'Cloudflare deployment credentials are available.'
+
+      - name: Validate Worker syntax
+        run: node --check cloudflare/subsonic-calm/src/index.js
+
+      - name: Deploy to Cloudflare Workers
+        id: deploy
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes wrangler@latest deploy --config cloudflare/subsonic-calm/wrangler.jsonc 2>&1 | tee /tmp/subsonic-deploy.txt
+          url=$(grep -Eo 'https://[^[:space:]]+\.workers\.dev' /tmp/subsonic-deploy.txt | tail -1)
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed URL: $url"
+
+      - name: Verify live app
+        env:
+          APP_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 "$APP_URL/health" | tee /tmp/health.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/health.json'))
+          assert d.get('ok') is True
+          assert d.get('app') == 'subsonic-calm'
+          print('Live health check passed.')
+          PY
+          curl -fsS "$APP_URL/" | grep -q 'SUBSONIC CALM'
+          echo "SUBSONIC_CALM_URL=$APP_URL" >> "$GITHUB_ENV"
+
+      - name: Summary
+        run: |
+          echo "### Subsonic Calm deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "$SUBSONIC_CALM_URL" >> "$GITHUB_STEP_SUMMARY"
