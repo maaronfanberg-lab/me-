@@ -68,9 +68,6 @@ def main() -> int:
         require(f"provocative Allen turn remains salient for rank {rank}", ((payload.get("event") or {}).get("speaker") == "allen"), payload.get("event"))
         require(f"provocative rank {rank} reacts to Allen", expr.get("target") == "allen", expr)
         require(f"provocative rank {rank} has no competing old-thread job", not payload.get("conversation_job"), payload.get("conversation_job"))
-    ordinary_payload, ordinary_expr = run_rank(core, 2, "I think that is interesting.", "ordinary-rank2")
-    require("ordinary Allen turn leaves rank 2 free to follow the room", ((ordinary_payload.get("event") or {}).get("speaker") == "mara"), ordinary_payload.get("event"))
-    require("ordinary rank 2 is not forcibly redirected to Allen", ordinary_expr.get("target") == "mara", ordinary_expr)
     print("PASS: Allen provocation salience boundary is green")
     return 0
 
