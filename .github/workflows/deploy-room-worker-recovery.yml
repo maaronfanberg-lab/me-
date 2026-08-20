@@ -1,0 +1,162 @@
+name: Recover Room Worker deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-room-worker-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-room-live-mirror-recovery
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID || vars.CF_ACCOUNT_ID }}
+      ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Detect Cloudflare token
+        id: token
+        shell: bash
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+            echo 'Cloudflare API token is available.'
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'Cloudflare API token is unavailable.'
+          fi
+
+      - name: Resolve Fanberg Cloudflare account
+        id: account
+        if: steps.token.outputs.available == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+            echo 'Using configured Cloudflare account ID.'
+            exit 0
+          fi
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
+            > /tmp/cf-accounts.json
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          d=json.load(open('/tmp/cf-accounts.json'))
+          if not d.get('success'):
+              raise SystemExit('Cloudflare account lookup failed')
+          matches=[a for a in d.get('result',[]) if 'fanberg' in str(a.get('name','')).lower()]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected exactly one Fanberg Cloudflare account; found {len(matches)}')
+          print(f"CLOUDFLARE_ACCOUNT_ID={matches[0]['id']}")
+          PY
+          echo 'available=true' >> "$GITHUB_OUTPUT"
+          echo 'Resolved Fanberg Cloudflare account.'
+
+      - name: Validate Worker source
+        id: validate
+        if: steps.token.outputs.available == 'true' && steps.account.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          node --check cloudflare/room-worker/src/index-entry.js
+          node scripts/room_worker_ingest_sim.mjs
+          python3 - <<'PY'
+          import json
+          d=json.load(open('room/worker-ingest-simulator-diagnostic.json'))
+          if not d.get('pass'):
+              raise SystemExit('Room Worker simulator is not green')
+          print('Room Worker validation is green.')
+          PY
+
+      - name: Deploy Room Worker
+        id: deploy
+        if: steps.validate.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: npx --yes wrangler@latest deploy --config cloudflare/room-worker/wrangler.toml
+
+      - name: Verify deployed Allen-key build marker
+        id: verify
+        if: steps.deploy.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 \
+            "${ROOM_RELAY_URL}/health?fresh=$(date +%s)" > /tmp/room-health.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/room-health.json'))
+          assert d.get('ok') is True, d
+          assert d.get('allenKeyBuild') == '20260820-current', d
+          print('Live Room Worker has the current Allen-key fingerprint build.')
+          PY
+          code=$(curl -sS -o /tmp/allen-no-key.json -w '%{http_code}' \
+            "${ROOM_RELAY_URL}/api/allen/auth")
+          test "$code" = '401'
+
+      - name: Record recovery deployment status
+        if: always()
+        env:
+          TOKEN_AVAILABLE: ${{ steps.token.outputs.available }}
+          ACCOUNT_OUTCOME: ${{ steps.account.outcome }}
+          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        shell: bash
+        run: |
+          mkdir -p room
+          python3 - <<'PY'
+          import json, os, subprocess
+          from datetime import datetime, timezone
+          out={
+            'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+            'source_sha':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+            'token_available':os.environ.get('TOKEN_AVAILABLE')=='true',
+            'account':os.environ.get('ACCOUNT_OUTCOME') or 'skipped',
+            'validate':os.environ.get('VALIDATE_OUTCOME') or 'skipped',
+            'deploy':os.environ.get('DEPLOY_OUTCOME') or 'skipped',
+            'verify':os.environ.get('VERIFY_OUTCOME') or 'skipped',
+            'expected_allen_key_build':'20260820-current',
+          }
+          out['pass']=out['token_available'] and out['account']=='success' and out['validate']=='success' and out['deploy']=='success' and out['verify']=='success'
+          out['state']='deployed-and-verified' if out['pass'] else 'recovery-not-complete'
+          open('room/cloudflare-recovery-status.json','w').write(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Publish recovery status
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "room-worker-recovery"
+          git config user.email "actions@users.noreply.github.com"
+          git add room/cloudflare-recovery-status.json
+          git commit -m "Record Room Worker recovery deployment status" || exit 0
+          for n in 1 2 3 4 5 6; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              exit 1
+            fi
+            sleep "$n"
+          done
+          exit 1
