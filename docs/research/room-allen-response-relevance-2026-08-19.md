@@ -107,3 +107,32 @@ This is the same structural behavior reported live: Allen is heard and remembere
 ### Revised post-change validation
 
 The **same** `scripts/room_allen_response_sim.py` must become green on PR #69, while the engine self-test and Allen observation simulator remain green. After merge/restart, live validation must use a real Allen interruption and show at least the first following AI turn with `cognition.target=allen` and answer-like content. Do not claim success from relationship counters alone.
+
+## Surface-name correction — 2026-08-20
+
+A fresh live probe at `2026-08-20T03:06:36Z` separated hidden targeting from visible address. Among the retained conversation, **55 AI messages had `cognition.target=allen`, while zero AI messages contained the spoken name `Allen`**. Across 85 retained Allen-turn windows with following AI speech, 54 windows contained an Allen-targeted reply and zero contained a name mention. The latest Allen turn explicitly said `Call me Allen or I’ll delete you from JSON`; Mara's following turn was correctly stored as `target=allen` and `move_type=answer`, but its utterance did not say Allen.
+
+This demonstrates a second, narrower representation failure: response routing now recognizes Allen, but the wrapper normalizes the structured target only **after** the model has already written the public utterance. Hidden target metadata therefore cannot by itself make the addressee perceptible in public dialogue.
+
+### Surface-name invariant and bounded implementation
+
+For the single rank-0 adjacency reply immediately following an Allen turn:
+
+- keep the existing model-generated utterance;
+- keep `target=allen` and `move=answer`;
+- if the model already says `Allen`, do not alter the text;
+- if the model omits the name, prefix only that one utterance with `Allen, `;
+- leave ranks 1–3 untouched;
+- do not add any human/operator metadata or make Allen an autonomous generator.
+
+This is intentionally narrower than forcing all four entities to name Allen or adding an insult/greeting script. It makes the already-selected public addressee audible while preserving the model's substantive language.
+
+### Surface-name red → green validation
+
+Draft PR #71 added the new invariant before changing production behavior. Architecture run `32327166010`, job `96300629832`, passed all prior Allen participation/routing checks and then failed only at:
+
+`rank-0 direct Allen reply says Allen in the spoken sentence`
+
+The simulated utterance was `I was going to tell Mara something else.` even though the wrapper had already normalized its hidden target to Allen.
+
+After the wrapper-only surface patch, architecture run `32327244409`, job `96300873788`, passed the same simulator and the existing architecture/Allen-memory checks. This establishes a clean red→green pair for the visible-name mismatch. Live validation remains required after merge/restart; do not claim the spoken-name behavior is live until a new real Allen interaction contains `Allen` in the first following AI utterance.
