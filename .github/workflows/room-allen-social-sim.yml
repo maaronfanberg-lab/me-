@@ -16,6 +16,21 @@ on:
       - 'scripts/room_private_model.py'
       - 'scripts/room_private_commit.py'
       - '.github/workflows/room-allen-social-sim.yml'
+  pull_request:
+    branches: ['main']
+    paths:
+      - 'scripts/room_allen_response_sim.py'
+      - 'scripts/room_allen_observation_sim.py'
+      - 'scripts/room_allen_provocation_sim.py'
+      - 'scripts/room_responsiveness_sim.py'
+      - 'scripts/room_allen_two_voice_sim.py'
+      - 'scripts/room_participant.py'
+      - 'scripts/room_social_v5.py'
+      - 'scripts/room_personality_v2.py'
+      - 'scripts/room_engine_v5.py'
+      - 'scripts/room_private_model.py'
+      - 'scripts/room_private_commit.py'
+      - '.github/workflows/room-allen-social-sim.yml'
   workflow_dispatch:
 
 permissions:
@@ -74,7 +89,7 @@ jobs:
           print(json.dumps(payload,indent=2))
           PY
       - name: Record diagnostic on tested branch
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
