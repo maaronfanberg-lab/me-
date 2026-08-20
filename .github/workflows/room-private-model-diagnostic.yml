@@ -1,12 +1,12 @@
 name: Room private model diagnostic
 
 on:
-  push:
+  pull_request:
     paths:
       - '.github/workflows/room-private-model-diagnostic.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   diagnostic:
@@ -26,8 +26,6 @@ jobs:
       - name: Probe production expression boundary without exposing prompts or dialogue
         run: |
           set -u
-          git config user.name "the-room-diagnostic"
-          git config user.email "actions@users.noreply.github.com"
           mkdir -p room .room_model/runtime
 
           perception_present=false
@@ -150,7 +148,7 @@ import json, os
 from pathlib import Path
 wrapper = json.loads(Path('.room_model/wrapper-status.json').read_text())
 status = {
-  'diagnostic_version': 3,
+  'diagnostic_version': 4,
   'perception_secret_present': os.environ['PERCEPTION_PRESENT'] == 'true',
   'deliberation_secret_present': os.environ['DELIBERATION_PRESENT'] == 'true',
   'expression_secret_present': os.environ['EXPRESSION_PRESENT'] == 'true',
@@ -160,14 +158,5 @@ status = {
   'production_wrapper_current_context': wrapper,
 }
 Path('room/private-model-diagnostic.json').write_text(json.dumps(status,indent=2)+'\n')
+print(json.dumps(status, sort_keys=True))
 PY
-
-          git add room/private-model-diagnostic.json
-          git commit -m "Record private model diagnostic" || true
-          for attempt in 1 2 3 4; do
-            if git push origin HEAD:main; then exit 0; fi
-            git fetch origin main || true
-            git rebase origin/main || { git rebase --abort || true; }
-            sleep "$attempt"
-          done
-          exit 1
