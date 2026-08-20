@@ -23,7 +23,7 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Test private model without exposing prompts
+      - name: Probe production expression boundary without exposing prompts or dialogue
         run: |
           set -u
           git config user.name "the-room-diagnostic"
@@ -40,9 +40,6 @@ jobs:
           download_ok=false
           hashes_ok=false
           server_ready=false
-          perception_status=not_tested
-          deliberation_status=not_tested
-          expression_status=not_tested
 
           if $perception_present && $deliberation_present && $expression_present; then
             if gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'society-brain-q4_0.gguf' --dir .room_model && \
@@ -65,10 +62,10 @@ jobs:
             if [ -n "${server_bin:-}" ]; then
               chmod +x "$server_bin"
               env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION -u ROOM_NODE_PROMPT \
-                "$server_bin" -m .room_model/society-brain-q4_0.gguf --host 127.0.0.1 --port 18080 -c 8192 -np 4 >.room_model/server.log 2>&1 &
+                "$server_bin" -m .room_model/society-brain-q4_0.gguf --host 127.0.0.1 --port 18080 -c 16384 -np 2 >.room_model/server.log 2>&1 &
               model_pid=$!
               for attempt in $(seq 1 120); do
-                if curl -fsS http://127.0.0.1:18080/health >/dev/null 2>&1; then
+                if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then
                   server_ready=true
                   break
                 fi
@@ -78,64 +75,91 @@ jobs:
             fi
           fi
 
-          test_role() {
-            role="$1"
-            prompt="$2"
-            if ! $server_ready; then
-              printf '%s' server_unavailable
-              return
-            fi
-            if env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-              ROOM_NODE_PROMPT="$prompt" ROOM_MODEL_URL='http://127.0.0.1:18080/completion' ROLE="$role" \
-              python3 - <<'PY' >/dev/null 2>&1
-import os
-from scripts.room_private_model import run
-role=os.environ['ROLE']
-base={
-  'entity':'sarah',
-  'profile':{},
-  'event':{'speaker':'mara','text':'I changed my mind after a counterexample.','cognition':{'target':'sarah'}},
-  'context':[],
-  'topic':{'id':'diagnostic','root':'belief','current_facet':'evidence','facets':['evidence','counterexample']},
-  'partner':'mara',
-  'relationship':{'trust':0.1,'direct_familiarity':0.2},
-  'mandatory_speech':True,
-}
-if role=='comprehension':
-    payload=base
-elif role=='thought':
-    payload={**base,'social_observation':{'participation':'DIRECT_ADDRESSEE','relationship_events':[]}}
-else:
-    payload={**base,'social_observation':{'participation':'DIRECT_ADDRESSEE','relationship_events':[]},'deliberation':{'action':'DEEPEN','preferred_partner':'mara','topic_facet':'evidence','mandatory_speech':True}}
-run(role,payload,timeout=30)
-PY
-            then
-              printf '%s' accepted
-            else
-              printf '%s' rejected
-            fi
-          }
+          if $server_ready; then
+            env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
+              ROOM_NODE_PROMPT='diagnostic-enabled' ROOM_MODEL_URL='http://127.0.0.1:18080/completion' \
+              PYTHONPATH=scripts python3 - <<'PY'
+import json, time
+from pathlib import Path
+import room_engine_v5 as engine
 
-          if $perception_present; then perception_status=$(test_role comprehension "$ROOM_PROMPT_PERCEPTION"); else perception_status=missing_secret; fi
-          if $deliberation_present; then deliberation_status=$(test_role thought "$ROOM_PROMPT_DELIBERATION"); else deliberation_status=missing_secret; fi
-          if $expression_present; then expression_status=$(test_role expression "$ROOM_PROMPT_EXPRESSION"); else expression_status=missing_secret; fi
+root = Path('.')
+cfg = json.loads((root/'room/config.json').read_text())
+state = json.loads((root/'room/state.json').read_text())
+conversation = json.loads((root/'room/conversation.json').read_text())
+context = conversation[-5:]
+event = context[-1] if context else {'speaker':'mara','text':'What are you thinking about?','cognition':{'target':'sarah'}}
+topic = state.get('topic_episode') or {'root':'books','current_facet':'books','facets':['books']}
+known = ['sarah','mara','owen','jules']
+allowed_reasons = {
+    'malformed_pronoun','self_address','trailing_fragment','self_repetition',
+    'duplicate_context','rambling_expression','empty_expression','unknown'
+}
+results = {}
+for entity in known:
+    partner = str(event.get('speaker') or 'mara').lower()
+    if partner == entity or partner not in known + ['allen']:
+        partner = next(name for name in known if name != entity)
+    payload = {
+        'entity': entity,
+        'profile': cfg['p'][entity],
+        'event': event,
+        'context': context,
+        'topic': topic,
+        'partner': partner,
+        'relationship': {'trust':0.1,'direct_familiarity':0.2,'warmth':0.2,'respect':0.2},
+        'deliberation': {
+            'action':'BRIDGE',
+            'preferred_partner':partner,
+            'focus':topic.get('current_facet') or topic.get('root') or 'books',
+            'new_information_goal':'add one fresh concise point',
+        },
+    }
+    started = time.monotonic()
+    try:
+        obj = engine._private_run('expression', payload, timeout=25)
+        utterance = str((obj or {}).get('utterance') or '')
+        results[entity] = {
+            'status':'accepted',
+            'chars':len(utterance),
+            'words':len(utterance.split()),
+            'elapsed_ms':round((time.monotonic()-started)*1000),
+        }
+    except Exception as exc:
+        raw = str(exc)
+        reason = raw.rsplit(':',1)[-1].strip() if ':' in raw else 'unknown'
+        if reason not in allowed_reasons:
+            reason = 'runtime_error'
+        results[entity] = {
+            'status':'rejected',
+            'reason':reason,
+            'elapsed_ms':round((time.monotonic()-started)*1000),
+        }
+
+Path('.room_model/wrapper-status.json').write_text(json.dumps(results,indent=2)+'\n')
+PY
+          else
+            printf '%s\n' '{}' > .room_model/wrapper-status.json
+          fi
 
           [ -n "$model_pid" ] && kill "$model_pid" 2>/dev/null || true
 
-          python3 - <<PY
-import json
-status={
-  'perception_secret_present': $perception_present,
-  'deliberation_secret_present': $deliberation_present,
-  'expression_secret_present': $expression_present,
-  'download_ok': $download_ok,
-  'hashes_ok': $hashes_ok,
-  'server_ready': $server_ready,
-  'perception_status': '$perception_status',
-  'deliberation_status': '$deliberation_status',
-  'expression_status': '$expression_status',
+          PERCEPTION_PRESENT="$perception_present" DELIBERATION_PRESENT="$deliberation_present" EXPRESSION_PRESENT="$expression_present" \
+          DOWNLOAD_OK="$download_ok" HASHES_OK="$hashes_ok" SERVER_READY="$server_ready" python3 - <<'PY'
+import json, os
+from pathlib import Path
+wrapper = json.loads(Path('.room_model/wrapper-status.json').read_text())
+status = {
+  'diagnostic_version': 3,
+  'perception_secret_present': os.environ['PERCEPTION_PRESENT'] == 'true',
+  'deliberation_secret_present': os.environ['DELIBERATION_PRESENT'] == 'true',
+  'expression_secret_present': os.environ['EXPRESSION_PRESENT'] == 'true',
+  'download_ok': os.environ['DOWNLOAD_OK'] == 'true',
+  'hashes_ok': os.environ['HASHES_OK'] == 'true',
+  'server_ready': os.environ['SERVER_READY'] == 'true',
+  'production_wrapper_current_context': wrapper,
 }
-open('room/private-model-diagnostic.json','w').write(json.dumps(status,indent=2)+'\n')
+Path('room/private-model-diagnostic.json').write_text(json.dumps(status,indent=2)+'\n')
 PY
 
           git add room/private-model-diagnostic.json
@@ -147,5 +171,3 @@ PY
             sleep "$attempt"
           done
           exit 1
-
-# trigger: 2
