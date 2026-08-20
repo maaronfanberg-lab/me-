@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from room_semantic_epoch import active_messages, recover_documents
+from room_semantic_epoch import recover_documents
 
 START = "2026-08-20T12:30:00Z"
 
@@ -68,21 +68,29 @@ conversation = [
         "runtime": "room-cognition-v5",
         "boot_id": "room-sterile-v4-2026-08-18",
     },
-    {
-        "id": "new-allen",
-        "at": "2026-08-20T12:31:00Z",
-        "speaker": "allen",
-        "text": "Let's talk about bioluminescent mushrooms",
-        "runtime": "room-cognition-v5-participant",
-        "boot_id": "room-sterile-v4-2026-08-18",
-    },
 ]
 
-recovered_state, recovered_minds, changed = recover_documents(state, minds, START)
+discourse = {
+    "nodes": [{"id": "d-old-1", "speaker": "sarah", "text": "public-expression in INPUT_JSON"}],
+    "roots": ["d-old-1"],
+}
+
+recovered_state, recovered_minds, active_conversation, active_discourse, archive, changed = recover_documents(
+    state,
+    minds,
+    conversation,
+    discourse,
+    START,
+)
+
 assert changed, "RED: first recovery must perform a migration"
 assert recovered_state.get("semantic_epoch_version") == 1
 assert recovered_state.get("semantic_epoch_started_at") == START
 assert (recovered_state.get("topic_episode") or {}).get("root") is None, "RED: poisoned topic root survived"
+assert active_conversation == [], "RED: poisoned transcript remains active cognition"
+assert active_discourse == {"nodes": [], "roots": []}, "RED: poisoned discourse remains active cognition"
+assert [m.get("id") for m in archive.get("conversation", [])] == ["old-1", "old-2"], "RED: old transcript was deleted instead of archived"
+assert (archive.get("previous_topic_episode") or {}).get("current_facet") == "public-expression", "RED: old topic was not archived"
 
 for entity, ent in recovered_minds["entities"].items():
     assert ent.get("room_memories") == [], f"RED: {entity} retained poisoned semantic memory"
@@ -91,19 +99,31 @@ for entity, ent in recovered_minds["entities"].items():
     assert (ent.get("fast") or {}).get("attention") == [], f"RED: {entity} retained poisoned attention"
     assert (ent.get("medium") or {}).get("topics") == [], f"RED: {entity} retained poisoned topic attention"
     assert ent.get("spoken") == 3863, f"RED: {entity} development counter was reset"
+    assert ent.get("noise") == {"kept": True}, f"RED: {entity} unrelated state was reset"
     assert ent.get("people", {}).get("allen", {}).get("direct_turns") == 32, f"RED: {entity}/Allen relationship was reset"
 
-active = active_messages(
-    conversation,
-    recovered_state,
-    boot_id="room-sterile-v4-2026-08-18",
-    runtime_prefix="room-cognition-v5",
-)
-assert [item.get("id") for item in active] == ["new-allen"], "RED: pre-epoch dialogue is still active cognition"
-assert "bioluminescent mushrooms" in active[0]["text"], "RED: new participant turn was lost"
+# The first post-recovery participant turn enters an otherwise clean active transcript.
+active_conversation.append({
+    "id": "new-allen",
+    "at": "2026-08-20T12:31:00Z",
+    "speaker": "allen",
+    "text": "Let's talk about bioluminescent mushrooms",
+    "runtime": "room-cognition-v5-participant",
+    "boot_id": "room-sterile-v4-2026-08-18",
+})
+assert [m.get("id") for m in active_conversation] == ["new-allen"]
+assert "bioluminescent mushrooms" in active_conversation[0]["text"]
 
-state2, minds2, changed2 = recover_documents(recovered_state, recovered_minds, "2026-08-20T12:40:00Z")
+state2, minds2, conv2, discourse2, archive2, changed2 = recover_documents(
+    recovered_state,
+    recovered_minds,
+    active_conversation,
+    active_discourse,
+    "2026-08-20T12:40:00Z",
+)
 assert not changed2, "RED: semantic recovery is not idempotent"
+assert archive2 is None, "RED: second recovery created a duplicate archive"
 assert state2 == recovered_state and minds2 == recovered_minds, "RED: second recovery mutated clean state"
+assert conv2 == active_conversation and discourse2 == active_discourse, "RED: second recovery wiped new conversation"
 
 print("PASS: semantic epoch archives poisoned cognition while preserving people and new participant turns")
