@@ -31,6 +31,7 @@ relationship = {
     "respect": 0.12,
     "direct_turns": 32,
     "observed_turns": 50,
+    "shared_references": ["public-expression", "language model", "speak"],
 }
 
 minds = {"entities": {}}
@@ -100,7 +101,9 @@ for entity, ent in recovered_minds["entities"].items():
     assert (ent.get("medium") or {}).get("topics") == [], f"RED: {entity} retained poisoned topic attention"
     assert ent.get("spoken") == 3863, f"RED: {entity} development counter was reset"
     assert ent.get("noise") == {"kept": True}, f"RED: {entity} unrelated state was reset"
-    assert ent.get("people", {}).get("allen", {}).get("direct_turns") == 32, f"RED: {entity}/Allen relationship was reset"
+    rel = ent.get("people", {}).get("allen", {})
+    assert rel.get("direct_turns") == 32, f"RED: {entity}/Allen relationship was reset"
+    assert rel.get("shared_references") == [], f"RED: {entity}/Allen retained old semantic relationship references"
 
 # The first post-recovery participant turn enters an otherwise clean active transcript.
 active_conversation.append({
@@ -126,4 +129,40 @@ assert archive2 is None, "RED: second recovery created a duplicate archive"
 assert state2 == recovered_state and minds2 == recovered_minds, "RED: second recovery mutated clean state"
 assert conv2 == active_conversation and discourse2 == active_discourse, "RED: second recovery wiped new conversation"
 
-print("PASS: semantic epoch archives poisoned cognition while preserving people and new participant turns")
+# Upgrade an already-live semantic epoch without resetting its clean conversation/topic/memory.
+v1_state = deepcopy(recovered_state)
+v1_state.pop("relationship_semantic_version", None)
+v1_state["topic_episode"] = {
+    "semantic_schema": 4,
+    "id": "topic-003864",
+    "root": "books",
+    "current_facet": "to kill a mockingbird",
+    "facets": ["harper lee"],
+    "participants": ["sarah", "mara", "owen", "jules", "allen"],
+}
+v1_minds = deepcopy(recovered_minds)
+for ent in v1_minds["entities"].values():
+    ent["room_memories"] = [{"source": "clean-1", "speaker": "mara", "text": "I found a book by Harper Lee"}]
+    ent["self_history"] = [{"source": "clean-self", "text": "Books can change how a story feels"}]
+    ent["people"]["allen"]["shared_references"] = ["public-expression", "language model", "speak"]
+clean_conv = [{"id": "clean-1", "speaker": "mara", "text": "I found a book by Harper Lee"}]
+clean_discourse = {"nodes": [{"id": "d-clean-1", "speaker": "mara", "text": "I found a book by Harper Lee"}], "roots": ["d-clean-1"]}
+
+upgrade_state, upgrade_minds, upgrade_conv, upgrade_discourse, upgrade_archive, upgraded = recover_documents(
+    v1_state,
+    v1_minds,
+    clean_conv,
+    clean_discourse,
+    "2026-08-20T13:10:00Z",
+)
+assert upgraded, "RED: live v1 state did not perform relationship semantic cleanup"
+assert upgrade_archive is None, "RED: relationship-only cleanup created a second transcript archive"
+assert upgrade_conv == clean_conv and upgrade_discourse == clean_discourse, "RED: relationship-only cleanup wiped live conversation"
+assert upgrade_state.get("topic_episode") == v1_state.get("topic_episode"), "RED: relationship-only cleanup reset the live topic"
+for entity, ent in upgrade_minds["entities"].items():
+    assert ent.get("room_memories") == v1_minds["entities"][entity].get("room_memories"), f"RED: {entity} clean memory was reset"
+    assert ent.get("self_history") == v1_minds["entities"][entity].get("self_history"), f"RED: {entity} clean self history was reset"
+    assert ent["people"]["allen"].get("direct_turns") == 32, f"RED: {entity}/Allen counter changed during relationship cleanup"
+    assert ent["people"]["allen"].get("shared_references") == [], f"RED: {entity}/Allen relationship text was not cleaned"
+
+print("PASS: semantic epoch archives poisoned cognition, preserves people, and cleans relationship semantic residue without resetting live dialogue")
