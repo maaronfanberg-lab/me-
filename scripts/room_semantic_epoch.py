@@ -10,6 +10,7 @@ from pathlib import Path
 from room_social_v5 import migrate_minds, topic_template
 
 SEMANTIC_EPOCH_VERSION = 1
+RELATIONSHIP_SEMANTIC_VERSION = 1
 ROOT = Path(__file__).resolve().parents[1]
 ROOM = ROOT / "room"
 ARCHIVE = ROOM / "archive" / "semantic-epoch-v1"
@@ -41,6 +42,17 @@ def _semantic_memory_snapshot(minds: dict) -> dict:
     return out
 
 
+def _clear_relationship_semantics(minds: dict) -> None:
+    """Remove textual social callbacks while preserving relationship history/scores."""
+    for ent in (minds.get("entities") or {}).values():
+        if not isinstance(ent, dict):
+            continue
+        people = ent.get("people") if isinstance(ent.get("people"), dict) else {}
+        for relation in people.values():
+            if isinstance(relation, dict):
+                relation["shared_references"] = []
+
+
 def recover_documents(
     state: dict,
     minds: dict,
@@ -48,13 +60,12 @@ def recover_documents(
     discourse: dict,
     started_at: str,
 ):
-    """Start one clean semantic epoch without resetting identity or relationships.
+    """Start/upgrade clean semantic state without resetting social continuity.
 
-    The visible pre-recovery transcript/discourse is returned as an archive, while
-    active cognition starts with an empty transcript, empty discourse tree, a new
-    topic episode, and cleared semantic memories/attention. Social relationships,
-    personality-bearing state, slow state, counters, and unknown future fields are
-    preserved. Calling this again after version 1 is a no-op.
+    The first semantic epoch archives the pre-recovery transcript/discourse and
+    clears active topic/memory. A later relationship-semantic upgrade can clear
+    stale textual callbacks from relationship records without touching the
+    already-clean live transcript, topic, memories, scores, counters, or events.
     """
 
     source_state = copy.deepcopy(state or {})
@@ -62,7 +73,12 @@ def recover_documents(
     source_conversation = copy.deepcopy(conversation or [])
     source_discourse = copy.deepcopy(discourse or {"nodes": [], "roots": []})
 
-    if int(source_state.get("semantic_epoch_version", 0) or 0) >= SEMANTIC_EPOCH_VERSION:
+    needs_epoch = int(source_state.get("semantic_epoch_version", 0) or 0) < SEMANTIC_EPOCH_VERSION
+    needs_relationship_cleanup = (
+        int(source_state.get("relationship_semantic_version", 0) or 0) < RELATIONSHIP_SEMANTIC_VERSION
+    )
+
+    if not needs_epoch and not needs_relationship_cleanup:
         return (
             source_state,
             source_minds,
@@ -70,6 +86,21 @@ def recover_documents(
             source_discourse,
             None,
             False,
+        )
+
+    # Existing semantic-epoch-v1 installations need only the relationship text
+    # cleanup. Do not archive or reset their already-clean live conversation.
+    if not needs_epoch:
+        _clear_relationship_semantics(source_minds)
+        source_state["relationship_semantic_version"] = RELATIONSHIP_SEMANTIC_VERSION
+        source_state["relationship_semantic_cleaned_at"] = started_at
+        return (
+            source_state,
+            source_minds,
+            source_conversation,
+            source_discourse,
+            None,
+            True,
         )
 
     cycle = int(source_state.get("cycle", 0) or 0)
@@ -86,6 +117,8 @@ def recover_documents(
     recovered_state["semantic_epoch_version"] = SEMANTIC_EPOCH_VERSION
     recovered_state["semantic_epoch_started_at"] = started_at
     recovered_state["semantic_epoch_reason"] = "replace-pre-boundary-semantic-contamination"
+    recovered_state["relationship_semantic_version"] = RELATIONSHIP_SEMANTIC_VERSION
+    recovered_state["relationship_semantic_cleaned_at"] = started_at
     recovered_state["topic_episode"] = topic_template(cycle)
     recovered_state["last_public_event"] = None
     recovered_state["last_speaker"] = None
@@ -105,6 +138,7 @@ def recover_documents(
         ent["room_memories"] = []
         ent["self_history"] = []
         ent["last_event"] = None
+    _clear_relationship_semantics(recovered_minds)
 
     return (
         recovered_state,
@@ -136,30 +170,36 @@ def migrate_files(started_at: str | None = None) -> bool:
         started_at,
     )
     if not changed:
-        print("Semantic epoch v1 already active; no recovery needed")
+        print("Semantic recovery already active; no recovery needed")
         return False
 
-    ARCHIVE.mkdir(parents=True, exist_ok=True)
-    if not (ARCHIVE / "conversation.json").exists():
-        _save(ARCHIVE / "conversation.json", archive.get("conversation") or [])
-    if not (ARCHIVE / "discourse.json").exists():
-        _save(ARCHIVE / "discourse.json", archive.get("discourse") or {"nodes": [], "roots": []})
-    if not (ARCHIVE / "semantic-state.json").exists():
-        _save(
-            ARCHIVE / "semantic-state.json",
-            {
-                "semantic_epoch_version": archive.get("semantic_epoch_version"),
-                "archived_at": archive.get("archived_at"),
-                "previous_topic_episode": archive.get("previous_topic_episode") or {},
-                "semantic_memory": archive.get("semantic_memory") or {"entities": {}},
-            },
-        )
+    # Only the first full semantic epoch creates an archive. Incremental social
+    # cleanup deliberately does not archive/reset the new live conversation.
+    if archive is not None:
+        ARCHIVE.mkdir(parents=True, exist_ok=True)
+        if not (ARCHIVE / "conversation.json").exists():
+            _save(ARCHIVE / "conversation.json", archive.get("conversation") or [])
+        if not (ARCHIVE / "discourse.json").exists():
+            _save(ARCHIVE / "discourse.json", archive.get("discourse") or {"nodes": [], "roots": []})
+        if not (ARCHIVE / "semantic-state.json").exists():
+            _save(
+                ARCHIVE / "semantic-state.json",
+                {
+                    "semantic_epoch_version": archive.get("semantic_epoch_version"),
+                    "archived_at": archive.get("archived_at"),
+                    "previous_topic_episode": archive.get("previous_topic_episode") or {},
+                    "semantic_memory": archive.get("semantic_memory") or {"entities": {}},
+                },
+            )
+        _save(conversation_path, recovered_conversation)
+        _save(discourse_path, recovered_discourse)
 
     _save(state_path, recovered_state)
     _save(minds_path, recovered_minds)
-    _save(conversation_path, recovered_conversation)
-    _save(discourse_path, recovered_discourse)
-    print("Semantic epoch v1 recovery applied; transcript archived and social continuity preserved")
+    if archive is None:
+        print("Relationship semantic cleanup applied; live dialogue and social scores preserved")
+    else:
+        print("Semantic epoch v1 recovery applied; transcript archived and social continuity preserved")
     return True
 
 
