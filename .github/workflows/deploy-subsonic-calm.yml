@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'cloudflare/subsonic-calm/**'
+      - 'scripts/subsonic-calm-signal-smoke.mjs'
       - '.github/workflows/deploy-subsonic-calm.yml'
   workflow_dispatch:
 
@@ -67,6 +68,9 @@ jobs:
       - name: Validate Worker syntax
         run: node --check cloudflare/subsonic-calm/src/index.js
 
+      - name: Run signal-sum smoke test
+        run: node scripts/subsonic-calm-signal-smoke.mjs
+
       - name: Deploy to Cloudflare Workers
         id: deploy
         shell: bash
@@ -89,7 +93,9 @@ jobs:
           d=json.load(open('/tmp/health.json'))
           assert d.get('ok') is True
           assert d.get('app') == 'subsonic-calm'
-          print('Live health check passed.')
+          assert d.get('version') == '2'
+          assert d.get('signal_path') == 'normalized-clean'
+          print('Live version-2 normalized signal path verified.')
           PY
           curl -fsS "$APP_URL/" | grep -q 'SUBSONIC CALM'
           echo "SUBSONIC_CALM_URL=$APP_URL" >> "$GITHUB_ENV"
@@ -98,4 +104,5 @@ jobs:
         run: |
           echo "### Subsonic Calm deployed" >> "$GITHUB_STEP_SUMMARY"
           echo "Cloudflare account: $CLOUDFLARE_ACCOUNT_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "Signal sum test: passed" >> "$GITHUB_STEP_SUMMARY"
           echo "$SUBSONIC_CALM_URL" >> "$GITHUB_STEP_SUMMARY"
