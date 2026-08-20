@@ -237,6 +237,21 @@ def _has_repeated_ngram(utterance: str, n: int = 6) -> bool:
     return False
 
 
+def _has_multiple_unmatched_closing_braces(text: str) -> bool:
+    """Detect JSON/structured-output tails without rejecting balanced code prose."""
+    balance = 0
+    unmatched_closings = 0
+    for char in str(text or ""):
+        if char == "{":
+            balance += 1
+        elif char == "}":
+            if balance:
+                balance -= 1
+            else:
+                unmatched_closings += 1
+    return unmatched_closings >= 2
+
+
 def _context_too_similar(utterance: str, compact: dict, similarity_fn) -> bool:
     context = compact.get("context") if isinstance(compact.get("context"), list) else []
     current_tokens = len(_tokens(utterance))
@@ -391,6 +406,8 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
         return "trailing_fragment"
     if _terminal_incomplete(text):
         return "trailing_fragment"
+    if _has_multiple_unmatched_closing_braces(text):
+        return "structural_residue"
     if _has_repeated_ngram(text):
         _escape_stale_context(compact, self_entity)
         return "self_repetition"
