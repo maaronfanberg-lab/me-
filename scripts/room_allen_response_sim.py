@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -187,6 +188,11 @@ def main() -> int:
         require("rank-0 Allen interruption becomes an answer", str(expr.get("move") or "").lower() == "answer", expr)
         require("rank-0 Allen interruption does not inject a competing conversation job", not payload.get("conversation_job"), payload.get("conversation_job"))
         require("rank-0 Allen interruption deliberation is answer-oriented", str(((payload.get("deliberation") or {}).get("action") or "")).upper() == "ANSWER", payload.get("deliberation"))
+        require(
+            "rank-0 direct Allen reply says Allen in the spoken sentence",
+            bool(re.search(r"\ballen\b", str(expr.get("utterance") or ""), re.I)),
+            expr.get("utterance"),
+        )
     finally:
         core.model_run = original_model_run
         core.prior_expression_messages = original_prior
