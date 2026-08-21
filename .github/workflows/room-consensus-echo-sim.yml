@@ -1,0 +1,27 @@
+name: Room consensus echo simulator
+
+on:
+  push:
+    branches:
+      - fix/room-consensus-echo-20260821
+    paths:
+      - 'scripts/room_expression_quality.py'
+      - 'scripts/room_expression_quality_core.py'
+      - 'scripts/room_consensus_echo_sim.py'
+      - '.github/workflows/room-consensus-echo-sim.yml'
+  pull_request:
+    paths:
+      - 'scripts/room_expression_quality.py'
+      - 'scripts/room_expression_quality_core.py'
+      - 'scripts/room_consensus_echo_sim.py'
+      - '.github/workflows/room-consensus-echo-sim.yml'
+
+jobs:
+  consensus-echo:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Replay exact post-PR127 consensus echoes
+        run: |
+          python3 -m py_compile scripts/room_expression_quality.py scripts/room_expression_quality_core.py scripts/room_consensus_echo_sim.py
+          python3 scripts/room_consensus_echo_sim.py
