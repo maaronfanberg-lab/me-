@@ -1,0 +1,109 @@
+name: Room live semantic quality probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-live-quality-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Replay post-PR127 published beats through production semantic predicate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, re, sys
+          from collections import defaultdict
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path('scripts').resolve()))
+          import room_expression_quality as quality
+
+          feed = json.load(open('room/feed.json'))
+          autonomous = {'sarah','mara','owen','jules'}
+          groups = defaultdict(list)
+          for item in feed.get('conversation', []):
+              speaker = str(item.get('speaker') or '').lower()
+              beat_id = str(item.get('beat_id') or '')
+              m = re.search(r'-(\d{6})$', beat_id)
+              if speaker not in autonomous or not m:
+                  continue
+              cycle = int(m.group(1))
+              if cycle >= 4791:
+                  groups[cycle].append(item)
+
+          beats = []
+          total_issues = 0
+          for cycle in sorted(groups):
+              prior = []
+              turns = []
+              for item in groups[cycle]:
+                  text = str(item.get('text') or '').strip()
+                  issue = quality.same_beat_issue(text, prior)
+                  if issue:
+                      total_issues += 1
+                  turns.append({
+                      'speaker': item.get('speaker'),
+                      'at': item.get('at'),
+                      'issue': issue,
+                      'text': text,
+                  })
+                  prior.append({
+                      'speaker': item.get('speaker'),
+                      'text': text,
+                      'cognition': {},
+                  })
+              beats.append({
+                  'cycle': cycle,
+                  'turn_count': len(turns),
+                  'clean': not any(t['issue'] for t in turns),
+                  'turns': turns,
+              })
+
+          out = {
+              'checked_at': datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+              'feed_cycle': feed.get('state', {}).get('cycle'),
+              'baseline_cycle': 4790,
+              'post_restart_beats_checked': len(beats),
+              'semantic_issues': total_issues,
+              'all_clean': bool(beats) and total_issues == 0,
+              'beats': beats,
+          }
+          Path('room/live-quality-probe.json').write_text(json.dumps(out, indent=2) + '\n')
+          print(json.dumps(out, indent=2))
+          if total_issues:
+              raise SystemExit('published post-PR127 beat fails production same-beat semantic predicate')
+          PY
+
+      - name: Publish quality probe result
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "room-live-quality-probe"
+          git config user.email "actions@users.noreply.github.com"
+          git add room/live-quality-probe.json
+          git commit -m "Record post-PR127 live semantic quality" || exit 0
+          for n in 1 2 3 4 5 6; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              exit 1
+            fi
+            sleep "$n"
+          done
+          exit 1
