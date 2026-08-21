@@ -7,13 +7,19 @@ on:
     paths:
       - 'cloudflare/leviathan-signal/**'
       - '.github/workflows/deploy-leviathan-signal.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'cloudflare/leviathan-signal/**'
+      - '.github/workflows/deploy-leviathan-signal.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: deploy-leviathan-signal
+  group: deploy-leviathan-signal-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -110,6 +116,7 @@ jobs:
           PY
 
       - name: Wire exact Worker URL into GitHub Pages frontend
+        if: ${{ github.event_name == 'push' }}
         env:
           SIGNAL_URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -131,7 +138,7 @@ jobs:
           git commit -m "Wire verified LEVIATHAN signal endpoint" || true
 
       - name: Record deploy outcome
-        if: ${{ always() }}
+        if: ${{ always() && github.event_name == 'push' }}
         env:
           JOB_STATUS: ${{ job.status }}
           RUN_ID: ${{ github.run_id }}
