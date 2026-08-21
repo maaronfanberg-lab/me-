@@ -1,0 +1,45 @@
+name: Room anti-echo repair
+
+on:
+  push:
+    branches:
+      - 'fix/room-anti-echo-20260821'
+    paths:
+      - 'scripts/apply_room_short_echo_fix.py'
+      - '.github/workflows/room-anti-echo-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Apply and verify anti-echo repair
+        run: |
+          python3 scripts/apply_room_short_echo_fix.py
+          python3 -m py_compile scripts/room_expression_quality.py scripts/room_ai_adjacency.py
+          python3 scripts/room_cross_voice_novelty_sim.py
+          python3 scripts/room_ai_adjacency_sim.py
+          python3 scripts/room_expression_quality_sim.py
+          python3 scripts/room_engine_v5.py selftest
+      - name: Record repaired runtime
+        run: |
+          set -euo pipefail
+          git config user.name 'room-anti-echo-repair'
+          git config user.email 'actions@users.noreply.github.com'
+          git add scripts/room_expression_quality.py
+          git commit -m 'Reject short same-beat echo paraphrases' || exit 0
+          branch="${GITHUB_REF_NAME}"
+          for n in 1 2 3 4 5; do
+            if git push origin "HEAD:${branch}"; then exit 0; fi
+            git fetch origin "$branch"
+            git rebase "origin/$branch" || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
