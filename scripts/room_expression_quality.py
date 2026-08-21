@@ -315,6 +315,39 @@ def _stem(word: str) -> str:
     return word
 
 
+def _short_content_tokens(text: object) -> set[str]:
+    out: set[str] = set()
+    for raw in _tokens(text):
+        if raw in _NOVELTY_STOP:
+            continue
+        word = _stem(raw)
+        if word:
+            out.add(word)
+    return out
+
+
+def _short_same_beat_paraphrase(utterance: str, prior_turns: list[dict]) -> bool:
+    """Reject brief restatements of the immediately preceding statement.
+
+    Tiny acknowledgements such as "I agree" remain legal. Direct questions are
+    also excluded here because concise answers may legitimately reuse their terms.
+    """
+    if not prior_turns:
+        return False
+    previous = str((prior_turns[-1] or {}).get("text") or "").strip()
+    if not previous or "?" in previous:
+        return False
+    current = _short_content_tokens(utterance)
+    earlier = _short_content_tokens(previous)
+    shortest = min(len(current), len(earlier))
+    if shortest < 2 or shortest > 10:
+        return False
+    overlap = len(current & earlier)
+    containment = overlap / max(1, shortest)
+    novel = current - earlier
+    return containment >= 0.80 and len(novel) <= 1 and len(current) <= len(earlier) + 1
+
+
 def _anchor_tokens(text: object) -> set[str]:
     out: set[str] = set()
     for raw in re.findall(r"[a-z][a-z']+", str(text or "").lower()):
@@ -397,10 +430,10 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
 
     same_beat = _same_beat_prior_turns(compact)
     if same_beat and _substantial_sentence_copy(text, same_beat):
-        _escape_stale_context(compact, self_entity)
         return "same_beat_sentence_copy"
+    if same_beat and _short_same_beat_paraphrase(text, same_beat):
+        return "same_beat_short_echo"
     if same_beat and _low_substantive_novelty(text, same_beat):
-        _escape_stale_context(compact, self_entity)
         return "same_beat_low_novelty"
 
     if _context_too_similar(text, compact, similarity_fn):

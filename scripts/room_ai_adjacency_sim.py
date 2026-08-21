@@ -157,6 +157,18 @@ def check_fresh_reply_plan() -> None:
     assert thought.get("focus") != "book collection", "stale pre-beat focus survived after a newer same-beat turn"
     assert not str(thought.get("new_information_goal") or "").strip(), "stale pre-beat aim survived after a newer same-beat turn"
 
+    # RED regression for the live echo failure. The expression-quality gate can
+    # only reject copying if the words just spoken in this beat are in the same
+    # event/context payload that reaches expression generation.
+    event = expression_source.get("event") or {}
+    context = expression_source.get("context") or []
+    assert event.get("speaker") == "owen" and event.get("text") == newest["text"], (
+        "newest same-beat line is not the expression event; anti-echo validation is blind to it"
+    )
+    assert context and context[-1].get("speaker") == "owen" and context[-1].get("text") == newest["text"], (
+        "newest same-beat line is missing from expression context; cross-voice novelty cannot reject echoes"
+    )
+
     expression = (result.get("private") or {}).get("expression") or {}
     assert expression.get("target") == "owen", "published reply target is not the immediately preceding speaker"
     assert expression.get("move") == "answer", "direct question did not publish as an answer move"
