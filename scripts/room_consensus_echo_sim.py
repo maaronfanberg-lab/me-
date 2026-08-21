@@ -109,11 +109,13 @@ def main() -> None:
     assert len(prompts) == 2, f"cycle 4791 should regenerate one offending voice, got {len(prompts)} attempts"
     assert result.get("utterance") == clean_retry, result
 
-    # Negative control: one quoted/established clause followed by genuinely new
-    # evidence and a new route is ordinary continuation, not a phrase mosaic.
-    extension_prior = "The north bridge is closed because the river rose after the storm."
+    # Negative control: a short established clause may be referenced while the
+    # reply contributes substantial new evidence and a new route. The older copy
+    # guards correctly reject wholesale copied sentences; this control proves the
+    # new phrase-cluster rule does not prohibit ordinary conversational reference.
+    extension_prior = "The north bridge is closed."
     legitimate_extension = (
-        "The north bridge is closed because the river rose after the storm. I checked the transit map, and the east ferry is still operating, "
+        "The north bridge is closed, but I checked the transit map and the east ferry is still operating, "
         "so I would reroute everyone through the market square and cross there before dusk."
     )
     assert quality.same_beat_issue(
