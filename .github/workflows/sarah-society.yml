@@ -45,11 +45,6 @@ jobs:
           set -uo pipefail
           git config user.name "the-room"
           git config user.email "actions@users.noreply.github.com"
-
-          # Bound every beat-scoped child and relay request. A wedged local model
-          # client or half-open relay connection must never freeze the 5.5-hour warm
-          # runner. Repeated failed beats stop this runner; the independent supervisor
-          # decides whether a replacement is warranted instead of restart-looping here.
           ROOM_NODE_TIMEOUT_SECONDS=45
           ROOM_NODE_KILL_GRACE_SECONDS=5
           ROOM_RELAY_CONNECT_TIMEOUT_SECONDS=3
@@ -57,9 +52,9 @@ jobs:
           ROOM_BEAT_FAILURE_LIMIT=2
           ROOM_QUALITY_REJECTION_EXIT=42
 
-          # Private prompts are runtime-only secrets. Perception and deliberation can
-          # share the two model slots; expression is intentionally sequential so each
-          # later speaker can see the already-generated turn(s) from the same beat.
+          # Rotate inherited over-age semantic context before any model call can see it.
+          python3 scripts/room_topic_preflight.py room/state.json room/cognitive_state.json || exit 1
+
           export ROOM_MODEL_URL=""
           model_pid=""
           if [ -n "${ROOM_PROMPT_PERCEPTION:-}" ] && [ -n "${ROOM_PROMPT_DELIBERATION:-}" ] && [ -n "${ROOM_PROMPT_EXPRESSION:-}" ]; then
@@ -72,253 +67,52 @@ jobs:
             server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
             if [ -n "$server_bin" ]; then
               chmod +x "$server_bin"
-              env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION -u ROOM_NODE_PROMPT \
-                "$server_bin" -m .room_model/society-brain-q4_0.gguf --host 127.0.0.1 --port 18080 -c 16384 -np 2 >.room_model/server.log 2>&1 &
+              env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION -u ROOM_NODE_PROMPT "$server_bin" -m .room_model/society-brain-q4_0.gguf --host 127.0.0.1 --port 18080 -c 16384 -np 2 >.room_model/server.log 2>&1 &
               model_pid=$!
               for attempt in $(seq 1 120); do
-                if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then
-                  export ROOM_MODEL_URL='http://127.0.0.1:18080/completion'
-                  break
-                fi
+                if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then export ROOM_MODEL_URL='http://127.0.0.1:18080/completion'; break; fi
                 if ! kill -0 "$model_pid" 2>/dev/null; then break; fi
                 sleep 1
               done
             fi
-            if [ -z "$ROOM_MODEL_URL" ]; then
-              echo "Private local model unavailable; prompted Room beats will fail closed and retry"
-            fi
+            if [ -z "$ROOM_MODEL_URL" ]; then echo "Private local model unavailable; prompted Room beats will fail closed and retry"; fi
           fi
 
-          stop_at=$((SECONDS + 19800))
-          beat_seq=0
-          consecutive_failures=0
-          runner_exit_reason="warm_expiry"
-          relay_token=""
-          relay_token_refresh_at=0
-
+          stop_at=$((SECONDS + 19800)); beat_seq=0; consecutive_failures=0; runner_exit_reason="warm_expiry"; relay_token=""; relay_token_refresh_at=0
           refresh_relay_token() {
             [ -n "${ROOM_RELAY_URL:-}" ] || return 1
-            now=$(date +%s)
-            if [ -n "$relay_token" ] && [ "$now" -lt "$relay_token_refresh_at" ]; then
-              return 0
-            fi
-            token_json=$(curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror") || {
-              echo "Cloudflare relay token unavailable; Room continues normally"
-              return 1
-            }
-            relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))')
-            if [ -z "$relay_token" ]; then
-              echo "Cloudflare relay token was empty; Room continues normally"
-              return 1
-            fi
-            relay_token_refresh_at=$((now + 240))
-            return 0
+            now=$(date +%s); if [ -n "$relay_token" ] && [ "$now" -lt "$relay_token_refresh_at" ]; then return 0; fi
+            token_json=$(curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror") || return 1
+            relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))'); [ -n "$relay_token" ] || return 1; relay_token_refresh_at=$((now + 240)); return 0
           }
-
-          publish_relay() {
-            [ -n "${ROOM_RELAY_URL:-}" ] || return 0
-            refresh_relay_token || return 0
-            if ! curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room/feed.json "${ROOM_RELAY_URL%/}/api/ingest" >/dev/null; then
-              echo "Cloudflare relay unavailable; Room continues normally"
-            fi
-            return 0
-          }
-
-          fetch_allen_turns() {
-            printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json
-            [ -n "${ROOM_RELAY_URL:-}" ] || return 0
-            refresh_relay_token || return 0
-            if ! curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -H "Authorization: Bearer ${relay_token}" "${ROOM_RELAY_URL%/}/api/participant/pending" > room_work/allen-inbox.json; then
-              printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json
-              return 0
-            fi
-            return 0
-          }
-
-          ack_allen_turns() {
-            [ -s room_work/allen-ack.json ] || return 0
-            ack_count=$(python3 -c 'import json; print(len(json.load(open("room_work/allen-ack.json")).get("ids", [])))' 2>/dev/null || echo 0)
-            [ "$ack_count" -gt 0 ] || return 0
-            refresh_relay_token || return 0
-            if ! curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room_work/allen-ack.json "${ROOM_RELAY_URL%/}/api/participant/ack" >/dev/null; then
-              echo "Allen queue acknowledgement failed; it will be retried safely"
-            fi
-            return 0
-          }
-
-          wait_batch() {
-            failed=0
-            for pid in "$@"; do wait "$pid" || failed=1; done
-            [ "$failed" -eq 0 ]
-          }
+          publish_relay() { [ -n "${ROOM_RELAY_URL:-}" ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "$ROOM_RELAY_CONNECT_TIMEOUT_SECONDS" --max-time "$ROOM_RELAY_MAX_TIME_SECONDS" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room/feed.json "${ROOM_RELAY_URL%/}/api/ingest" >/dev/null || true; }
+          fetch_allen_turns() { printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json; [ -n "${ROOM_RELAY_URL:-}" ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "$ROOM_RELAY_CONNECT_TIMEOUT_SECONDS" --max-time "$ROOM_RELAY_MAX_TIME_SECONDS" -H "Authorization: Bearer ${relay_token}" "${ROOM_RELAY_URL%/}/api/participant/pending" > room_work/allen-inbox.json || printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json; }
+          ack_allen_turns() { [ -s room_work/allen-ack.json ] || return 0; ack_count=$(python3 -c 'import json; print(len(json.load(open("room_work/allen-ack.json")).get("ids", [])))' 2>/dev/null || echo 0); [ "$ack_count" -gt 0 ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "$ROOM_RELAY_CONNECT_TIMEOUT_SECONDS" --max-time "$ROOM_RELAY_MAX_TIME_SECONDS" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room_work/allen-ack.json "${ROOM_RELAY_URL%/}/api/participant/ack" >/dev/null || true; }
+          wait_batch() { failed=0; for pid in "$@"; do wait "$pid" || failed=1; done; [ "$failed" -eq 0 ]; }
 
           run_beat() {
-            beat_seq=$((beat_seq + 1))
-            export ROOM_CYCLE_KEY="${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${beat_seq}"
-            rm -rf room_parts room_work
-            mkdir -p room_parts room_work
-
-            # Pull any waiting Allen turns before cognition starts. The injector gives
-            # them the same public conversational shape as the Room speakers, with no
-            # human/operator marker exposed to the entities.
+            beat_seq=$((beat_seq + 1)); export ROOM_CYCLE_KEY="${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${beat_seq}"; rm -rf room_parts room_work; mkdir -p room_parts room_work
             fetch_allen_turns
-            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-              python3 scripts/room_participant.py room_work/allen-inbox.json room_work/allen-ack.json || return 1
-
-            # Phase 1: unprompted sense nodes run together; four perception nodes use
-            # the two verified model slots in two pairs. Prompted nodes pass through
-            # the attention router, which adds at most two temporary project skills.
-            pids=()
-            for n in 1 2 4 5 7 8 10 11; do
-              (
-                timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-                  env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-                  ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" \
-                  python3 scripts/room_engine_v5.py node --phase sense
-              ) &
-              pids+=("$!")
-            done
-            wait_batch "${pids[@]}" || return 1
-
-            for pair in "0 3" "6 9"; do
-              pids=()
-              for n in $pair; do
-                (
-                  timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-                    env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-                    ROOM_NODE_PROMPT="${ROOM_PROMPT_PERCEPTION:-}" ROOM_NODE_ID="$n" \
-                    python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase sense
-                ) &
-                pids+=("$!")
-              done
-              wait_batch "${pids[@]}" || return 1
-            done
-
-            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-              env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-              python3 scripts/room_engine_v5.py bus || return 1
-
-            # Phase 2: comprehension recurrence is unprompted; thought nodes deliberate
-            # in two pairs against the same settled perception bus.
-            pids=()
-            for n in 0 3 6 9; do
-              (
-                timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-                  env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-                  ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" \
-                  python3 scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json
-              ) &
-              pids+=("$!")
-            done
-            wait_batch "${pids[@]}" || return 1
-
-            for pair in "1 4" "7 10"; do
-              pids=()
-              for n in $pair; do
-                (
-                  timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-                    env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-                    ROOM_NODE_PROMPT="${ROOM_PROMPT_DELIBERATION:-}" ROOM_NODE_ID="$n" \
-                    python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json
-                ) &
-                pids+=("$!")
-              done
-              wait_batch "${pids[@]}" || return 1
-            done
-
-            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-              env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-              python3 scripts/room_engine_v5.py bus2 --bus room_work/bus-sense.json || return 1
-
-            # Phase 3: four expression nodes run sequentially. The starting speaker
-            # rotates each beat, and each later node reads prior generated expressions
-            # from room_parts before producing its own turn.
-            expr_nodes=(2 5 8 11)
-            shift=$((beat_seq % 4))
-            for rank in 0 1 2 3; do
-              idx=$(((rank + shift) % 4))
-              n=${expr_nodes[$idx]}
-              timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-                env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-                ROOM_NODE_PROMPT="${ROOM_PROMPT_EXPRESSION:-}" ROOM_NODE_ID="$n" ROOM_EXPRESSION_RANK="$rank" \
-                python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json || return 1
-            done
-
-            if timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-              env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-              python3 scripts/room_private_commit.py commit; then
-              commit_rc=0
-            else
-              commit_rc=$?
-            fi
-            if [ "$commit_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then
-              return "$ROOM_QUALITY_REJECTION_EXIT"
-            fi
-            [ "$commit_rc" -eq 0 ] || return 1
-            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
-              python3 scripts/build_room_feed.py || return 1
+            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" python3 scripts/room_participant.py room_work/allen-inbox.json room_work/allen-ack.json || return 1
+            pids=(); for n in 1 2 4 5 7 8 10 11; do ( timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase sense ) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1
+            for pair in "0 3" "6 9"; do pids=(); for n in $pair; do ( timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_PERCEPTION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase sense ) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1; done
+            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_engine_v5.py bus || return 1
+            pids=(); for n in 0 3 6 9; do ( timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json ) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1
+            for pair in "1 4" "7 10"; do pids=(); for n in $pair; do ( timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_DELIBERATION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json ) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1; done
+            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_engine_v5.py bus2 --bus room_work/bus-sense.json || return 1
+            expr_nodes=(2 5 8 11); shift=$((beat_seq % 4)); for rank in 0 1 2 3; do idx=$(((rank + shift) % 4)); n=${expr_nodes[$idx]}; timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_EXPRESSION:-}" ROOM_NODE_ID="$n" ROOM_EXPRESSION_RANK="$rank" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json || return 1; done
+            if timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_private_commit.py commit; then commit_rc=0; else commit_rc=$?; fi
+            if [ "$commit_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then return "$ROOM_QUALITY_REJECTION_EXIT"; fi; [ "$commit_rc" -eq 0 ] || return 1
+            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" python3 scripts/build_room_feed.py || return 1
           }
-
           while [ "$SECONDS" -lt "$stop_at" ]; do
-            if run_beat; then
-              beat_rc=0
-            else
-              beat_rc=$?
-            fi
-            if [ "$beat_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then
-              consecutive_failures=0
-              echo "Publish boundary rejected semantic echo; regenerating the beat"
-              sleep 1
-              continue
-            fi
-            if [ "$beat_rc" -ne 0 ]; then
-              consecutive_failures=$((consecutive_failures + 1))
-              echo "A Room beat failed internally (${consecutive_failures}/${ROOM_BEAT_FAILURE_LIMIT})"
-              if [ "$consecutive_failures" -ge "$ROOM_BEAT_FAILURE_LIMIT" ]; then
-                echo "Repeated beat failures; stopping this warm runner for supervisor review"
-                runner_exit_reason="repeated_beat_failure"
-                break
-              fi
-              sleep 3
-              continue
-            fi
-            consecutive_failures=0
-            git add room society/live.json
-            if git diff --cached --quiet; then continue; fi
-            git commit -m "Room cognition v5 attention-routed skills beat"
-
-            pushed=0
-            for attempt in 1 2 3 4; do
-              if git push origin HEAD:main; then
-                pushed=1
-                publish_relay
-                ack_allen_turns
-                break
-              fi
-              echo "Push attempt $attempt collided with a newer main; rebasing"
-              if ! git fetch origin main; then sleep $((attempt * 2)); continue; fi
-              if ! git rebase origin/main; then
-                git rebase --abort || true
-                echo "Could not rebase cleanly; leaving the state intact and retrying shortly"
-                break
-              fi
-              sleep 1
-            done
-            if [ "$pushed" -eq 0 ]; then
-              echo "Beat is locally committed but not published yet; cooling briefly"
-              sleep 8
-            fi
+            if run_beat; then beat_rc=0; else beat_rc=$?; fi
+            if [ "$beat_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then consecutive_failures=0; echo "Publish boundary rejected semantic echo; regenerating the beat"; sleep 1; continue; fi
+            if [ "$beat_rc" -ne 0 ]; then consecutive_failures=$((consecutive_failures + 1)); echo "A Room beat failed internally (${consecutive_failures}/${ROOM_BEAT_FAILURE_LIMIT})"; if [ "$consecutive_failures" -ge "$ROOM_BEAT_FAILURE_LIMIT" ]; then runner_exit_reason="repeated_beat_failure"; break; fi; sleep 3; continue; fi
+            consecutive_failures=0; git add room society/live.json; if git diff --cached --quiet; then continue; fi; git commit -m "Room cognition v5 attention-routed skills beat"
+            pushed=0; for attempt in 1 2 3 4; do if git push origin HEAD:main; then pushed=1; publish_relay; ack_allen_turns; break; fi; git fetch origin main || { sleep $((attempt * 2)); continue; }; if ! git rebase origin/main; then git rebase --abort || true; break; fi; sleep 1; done; if [ "$pushed" -eq 0 ]; then sleep 8; fi
           done
-
           if [ -n "$model_pid" ]; then kill "$model_pid" 2>/dev/null || true; fi
-          if [ "$runner_exit_reason" = "repeated_beat_failure" ]; then
-            echo "Warm Room runner stopped after repeated failures; supervisor owns recovery"
-            exit 1
-          fi
-
-          echo "Warm Room runner completed its warm window; handing itself to a fresh runner"
-          for attempt in 1 2 3 4 5; do
-            if gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto; then exit 0; fi
-            sleep $((attempt * 5))
-          done
+          if [ "$runner_exit_reason" = "repeated_beat_failure" ]; then exit 1; fi
+          for attempt in 1 2 3 4 5; do if gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto; then exit 0; fi; sleep $((attempt * 5)); done
           exit 0
