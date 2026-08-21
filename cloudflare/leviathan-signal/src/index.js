@@ -1,5 +1,3 @@
-import { DurableObject } from "cloudflare:workers";
-
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), {
   status,
   headers: { "content-type": "application/json; charset=utf-8", ...extra }
@@ -26,10 +24,11 @@ function validEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : null;
 }
 
-export class LeviathanSignalStore extends DurableObject {
-  constructor(ctx, env) {
-    super(ctx, env);
-    this.ctx.storage.sql.exec(`
+export class LeviathanSignalStore {
+  constructor(state, env) {
+    this.state = state;
+    this.sql = state.storage.sql;
+    this.sql.exec(`
       CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         type TEXT NOT NULL,
@@ -51,7 +50,7 @@ export class LeviathanSignalStore extends DurableObject {
     const u = new URL(request.url);
     if (request.method === "POST" && u.pathname === "/event") {
       const body = await request.json();
-      this.ctx.storage.sql.exec(
+      this.sql.exec(
         "INSERT INTO events(type, source, created_at) VALUES (?, ?, ?)",
         body.type, body.source, body.created_at
       );
@@ -60,7 +59,7 @@ export class LeviathanSignalStore extends DurableObject {
 
     if (request.method === "POST" && u.pathname === "/interest") {
       const body = await request.json();
-      this.ctx.storage.sql.exec(
+      this.sql.exec(
         "INSERT INTO interest(intent, email, comment, source, created_at) VALUES (?, ?, ?, ?, ?)",
         body.intent, body.email, body.comment, body.source, body.created_at
       );
@@ -69,16 +68,16 @@ export class LeviathanSignalStore extends DurableObject {
 
     if (request.method === "GET" && u.pathname === "/summary") {
       const counts = {};
-      for (const row of this.ctx.storage.sql.exec(
+      for (const row of this.sql.exec(
         "SELECT type, COUNT(*) AS n FROM events WHERE source != 'deploy-smoke' GROUP BY type"
       )) counts[row.type] = Number(row.n);
 
       const intents = { yes: 0, maybe: 0, no: 0 };
-      for (const row of this.ctx.storage.sql.exec(
+      for (const row of this.sql.exec(
         "SELECT intent, COUNT(*) AS n FROM interest WHERE source != 'deploy-smoke' GROUP BY intent"
       )) intents[row.intent] = Number(row.n);
 
-      const total = Number([...this.ctx.storage.sql.exec(
+      const total = Number([...this.sql.exec(
         "SELECT COUNT(*) AS n FROM interest WHERE source != 'deploy-smoke'"
       )][0]?.n || 0);
 
