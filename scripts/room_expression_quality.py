@@ -348,6 +348,37 @@ def _short_same_beat_paraphrase(utterance: str, prior_turns: list[dict]) -> bool
     return containment >= 0.80 and len(novel) <= 1 and len(current) <= len(earlier) + 1
 
 
+def _same_beat_restatement_sentence(utterance: str, prior_turns: list[dict]) -> bool:
+    """Reject a substantive sentence that mainly restates a same-beat proposition.
+
+    Brief acknowledgements remain legal, and if the immediately preceding turn is
+    a question this rule stays out of the way so concise direct answers can reuse
+    the question's vocabulary.
+    """
+    if not prior_turns:
+        return False
+    previous = str((prior_turns[-1] or {}).get("text") or "").strip()
+    if not previous or "?" in previous:
+        return False
+    for current_sentence in _sentences(utterance):
+        current = _short_content_tokens(current_sentence)
+        if len(current) < 4:
+            continue
+        for turn in prior_turns:
+            for earlier_sentence in _sentences(turn.get("text")):
+                earlier = _short_content_tokens(earlier_sentence)
+                shortest = min(len(current), len(earlier))
+                if shortest < 4:
+                    continue
+                overlap = len(current & earlier)
+                current_coverage = overlap / max(1, len(current))
+                containment = overlap / max(1, shortest)
+                novel = current - earlier
+                if current_coverage >= 0.78 and containment >= 0.78 and len(novel) <= 2:
+                    return True
+    return False
+
+
 def _anchor_tokens(text: object) -> set[str]:
     out: set[str] = set()
     for raw in re.findall(r"[a-z][a-z']+", str(text or "").lower()):
@@ -433,6 +464,8 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
         return "same_beat_sentence_copy"
     if same_beat and _short_same_beat_paraphrase(text, same_beat):
         return "same_beat_short_echo"
+    if same_beat and _same_beat_restatement_sentence(text, same_beat):
+        return "same_beat_restatement_sentence"
     if same_beat and _low_substantive_novelty(text, same_beat):
         return "same_beat_low_novelty"
 
