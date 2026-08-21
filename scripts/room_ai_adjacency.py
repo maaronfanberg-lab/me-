@@ -78,7 +78,30 @@ def _relationship(entity: str, partner: str) -> dict:
     }
 
 
-def _fresh_reply_bus(bus_data: dict, entity: str, newest: dict) -> tuple[dict, str, bool]:
+def _same_beat_context(prior: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    for message in prior:
+        if not isinstance(message, dict):
+            continue
+        speaker = str(message.get("speaker") or "").lower()
+        text = str(message.get("text") or "").strip()
+        if speaker not in _AUTONOMOUS or not text:
+            continue
+        cognition = message.get("cognition") if isinstance(message.get("cognition"), dict) else {}
+        out.append({
+            "speaker": speaker,
+            "text": text,
+            "cognition": copy.deepcopy(cognition),
+        })
+    return out
+
+
+def _fresh_reply_bus(
+    bus_data: dict,
+    entity: str,
+    newest: dict,
+    prior: list[dict] | None = None,
+) -> tuple[dict, str, bool]:
     partner = str((newest or {}).get("speaker") or "").lower()
     direct_question = bool(_core.isq(newest))
     refreshed = copy.deepcopy(bus_data)
@@ -87,6 +110,17 @@ def _fresh_reply_bus(bus_data: dict, entity: str, newest: dict) -> tuple[dict, s
         source = _core.rp(refreshed, entity, "expression")
         base = source.get("private") if isinstance(source.get("private"), dict) else {}
         base["partner"] = partner
+
+        # The expression generator and quality gate must see the same spoken
+        # chronology that adjacency used to choose the partner. Without this,
+        # later voices can be correctly aimed at the newest speaker while still
+        # being blind to that speaker's words and simply echo them.
+        same_beat = _same_beat_context(prior or [newest])
+        if same_beat:
+            base["event"] = copy.deepcopy(same_beat[-1])
+            existing = base.get("context") if isinstance(base.get("context"), list) else []
+            base["context"] = [*copy.deepcopy(existing), *same_beat]
+
         rel = _relationship(entity, partner)
         if rel:
             base["relationship"] = rel
@@ -156,7 +190,7 @@ if not getattr(_core.recurrent, "_room_ai_adjacency", False):
         if partner not in _AUTONOMOUS or partner == entity:
             return _original_recurrent(node, key, bus_data)
 
-        refreshed, partner, direct_question = _fresh_reply_bus(bus_data, entity, newest)
+        refreshed, partner, direct_question = _fresh_reply_bus(bus_data, entity, newest, prior)
         result = _original_recurrent(node, key, refreshed)
         return _align_result(result, partner, direct_question)
 
