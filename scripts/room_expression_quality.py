@@ -169,16 +169,19 @@ def _consensus_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
 
 
 def same_beat_issue(utterance: object, prior_turns: list[dict]) -> str | None:
-    """Preserve existing checks, then reject phrase, aggregate and consensus reuse."""
+    """Preserve established classification order, then add the narrow phrase rule."""
     issue = _original_same_beat_issue(utterance, prior_turns)
     if issue:
         return issue
     text = str(utterance or "").strip()
     turns = [item for item in (prior_turns or []) if isinstance(item, dict)]
-    if text and turns and _single_prior_phrase_echo(text, turns):
-        return "same_beat_phrase_echo"
+    # Preserve the pre-PR130 aggregate reason code for older live regressions such
+    # as 4784. Only content that escaped the established aggregate boundary reaches
+    # the new single-prior phrase-cluster classifier.
     if text and turns and _aggregate_same_beat_echo(text, turns):
         return "same_beat_semantic_coverage"
+    if text and turns and _single_prior_phrase_echo(text, turns):
+        return "same_beat_phrase_echo"
     if text and turns and _consensus_same_beat_echo(text, turns):
         return "same_beat_consensus_echo"
     return None
