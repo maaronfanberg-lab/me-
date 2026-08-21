@@ -1,0 +1,17 @@
+name: Room publish phrase RED
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/room_private_commit.py'
+      - 'scripts/room_publish_quality_sim.py'
+      - 'scripts/room_publish_phrase_sim.py'
+      - '.github/workflows/room-publish-phrase-red.yml'
+
+jobs:
+  phrase-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prove fresh replacement-runner phrase echo is blocked
+        run: python3 scripts/room_publish_phrase_sim.py
