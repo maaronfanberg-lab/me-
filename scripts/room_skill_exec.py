@@ -16,6 +16,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import types
 from pathlib import Path
 
 import room_skill_exec_core as _core
@@ -124,6 +125,18 @@ def main(argv: list[str]) -> int:
             )
             return 0
     return rc
+
+
+class _RouterFacadeModule(types.ModuleType):
+    """Keep legacy tests/config monkey-patches connected to the preserved router."""
+
+    def __setattr__(self, name: str, value: object) -> None:
+        super().__setattr__(name, value)
+        if hasattr(_core, name):
+            setattr(_core, name, value)
+
+
+sys.modules[__name__].__class__ = _RouterFacadeModule
 
 
 if __name__ == "__main__":
