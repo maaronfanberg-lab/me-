@@ -43,6 +43,42 @@ def main() -> None:
     ]
     assert_blocked(live_4777, "live cycle 4777")
 
+    # Exact fresh beats from the replacement runner after PR #125
+    # (cycle_key 32498763751:1:*). They show the same proposition surviving the
+    # token-coverage gate because rhetorical padding was counted as novelty.
+    live_4783 = [
+        row("mara", "I'm sorry, but I can't agree with everything you're saying. Sometimes it's the whole 'it is' thing that matters."),
+        row("owen", "Let's move deeper into how we can use collaboration and support to drive systemic change, not just focusing on individual differences."),
+        row("jules", "Hi, Mara. It's good to be pursuing deeper conversations in your world, but how about we step a little deeper into a more individualistic perspective. Let's focus on the impact of collaboration in driving systemic change, but in a way that isn't just about individual differences. Let’s be more concrete about the collective effort and how it can lead to significant change. Instead of focusing on specific individuals, I"),
+        row("sarah", "Let's begin by breaking down the importance of collaboration in driving systemic change, emphasizing the collective effort and its potential impact on significant change. In contrast to individual differences, we should focus on how our actions can lead to systemic change, starting with a broad perspective and concrete examples."),
+    ]
+    assert_blocked(live_4783, "live cycle 4783")
+
+    live_4784 = [
+        row("owen", "Hello, Jules! Let's discuss how individual differences might clash with the idea of collective effort and how the collective power of a collective effort can lead to significant change. In contrast to individual differences, we can be more confident that our actions can lead to systemic change and have a collective impact. Let's not be afraid to ask questions and share our perspectives."),
+        row("jules", "Let's take a step back and reflect on the idea of collective effort and its potential to drive systemic change. Instead of focusing on individual differences, I would suggest that we focus on how our actions can lead to systemic change and have a collective impact. In contrast to individual differences, I would feel more confident that we can impact the collective effort and bring about significant change. Let's not."),
+        row("sarah", "Let's break down the importance of collaboration in driving systemic change, emphasizing the collective effort and its potential impact on significant change. In contrast to individual differences, we should focus on how our actions can lead to systemic change, starting with a broad perspective and concrete examples."),
+        row("mara", "In our next conversation, we can dive deeper into how our actions can drive significant systemic change, starting with a broad perspective and concrete examples. I believe that embracing collective effort can lead to impactful solutions, and I would be more confident that we can drive positive change through our collective efforts. Let's not let the individual differences overshadow our collective impact, but instead"),
+    ]
+    assert_blocked(live_4784, "live cycle 4784")
+
+    live_4785 = [
+        row("sarah", "I'm pretty sure that's true. I just can't see the big picture."),
+        row("mara", "I believe what you're saying is right. I just don't understand the broader context behind it."),
+        row("owen", "Let's start by exploring the broad context of systemic change through collective efforts. We can begin by taking a more holistic view of our actions, recognizing that our individual contributions are essential in driving systemic change. Let's not let the individual differences overshadow our collective impact, but instead, let's find a way to integrate the collective efforts and collective perspectives to unlock a"),
+        row("jules", "That's a great point, Mara. Let's dive deeper into the broader context of systemic change through collective efforts, recognizing that our individual contributions are essential in driving systemic change. By bringing together our collective efforts and perspectives, we can unlock a new, impactful way to make a more diverse impact, unlocking the full potential of collective efforts in systemic change. Let's go a step"),
+    ]
+    assert_blocked(live_4785, "live cycle 4785")
+
+    # A single reused clause can be legitimate when the reply contributes a new
+    # causal observation. Phrase-level protection must reject mosaics, not punish
+    # ordinary conversational reference to one established fact.
+    legitimate_extension = [
+        row("mara", "The red fox crossed the old stone bridge before dawn."),
+        row("owen", "The red fox crossed the old stone bridge before dawn because a dog chased it from the orchard, leaving muddy pawprints beside a torn feed sack near the gate."),
+    ]
+    publish.validate_staged_quality(legitimate_extension)
+
     fresh = [
         row("mara", "The group keeps using vague labels, so I would choose one concrete event to discuss."),
         row("owen", "A useful test is whether everyone describes that event the same way before drawing conclusions."),
