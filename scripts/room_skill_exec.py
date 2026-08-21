@@ -34,6 +34,11 @@ _QUALITY_OUTPUT_REASONS = {
     "trailing_fragment",
     "self_repetition",
     "duplicate_context",
+    "trivial_expression",
+    "generic_process_context_echo",
+    "instruction_residue",
+    "meta_placeholder",
+    "project_process_context_echo",
 }
 _QUALITY_EXHAUSTION = re.compile(
     r"RuntimeError:\s*private model output rejected for expression:\s*([^\r\n]+)"
