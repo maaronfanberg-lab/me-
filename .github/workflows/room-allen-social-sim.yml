@@ -9,6 +9,7 @@ on:
       - 'scripts/room_allen_provocation_sim.py'
       - 'scripts/room_responsiveness_sim.py'
       - 'scripts/room_allen_two_voice_sim.py'
+      - 'scripts/room_question_answering_sim.py'
       - 'scripts/room_participant.py'
       - 'scripts/room_social_v5.py'
       - 'scripts/room_personality_v2.py'
@@ -24,6 +25,7 @@ on:
       - 'scripts/room_allen_provocation_sim.py'
       - 'scripts/room_responsiveness_sim.py'
       - 'scripts/room_allen_two_voice_sim.py'
+      - 'scripts/room_question_answering_sim.py'
       - 'scripts/room_participant.py'
       - 'scripts/room_social_v5.py'
       - 'scripts/room_personality_v2.py'
@@ -58,30 +60,34 @@ jobs:
           responsiveness_status=$?
           python3 scripts/room_allen_two_voice_sim.py > /tmp/allen-rank1.txt 2>&1
           rank1_status=$?
+          python3 scripts/room_question_answering_sim.py > /tmp/room-question-answering.txt 2>&1
+          question_status=$?
           python3 scripts/room_engine_v5.py selftest > /tmp/engine-selftest.txt 2>&1
           engine_status=$?
           set -e
-          python3 - "$response_status" "$observation_status" "$provocation_status" "$responsiveness_status" "$rank1_status" "$engine_status" <<'PY'
+          python3 - "$response_status" "$observation_status" "$provocation_status" "$responsiveness_status" "$rank1_status" "$question_status" "$engine_status" <<'PY'
           import json,sys
           from datetime import datetime,timezone
-          response_status,observation_status,provocation_status,responsiveness_status,rank1_status,engine_status=map(int,sys.argv[1:])
+          response_status,observation_status,provocation_status,responsiveness_status,rank1_status,question_status,engine_status=map(int,sys.argv[1:])
           def read(path):
               try:return open(path).read()[-6000:]
               except Exception:return ''
           payload={
               'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
-              'pass':all(x==0 for x in (response_status,observation_status,provocation_status,responsiveness_status,rank1_status,engine_status)),
+              'pass':all(x==0 for x in (response_status,observation_status,provocation_status,responsiveness_status,rank1_status,question_status,engine_status)),
               'response_sim_exit_code':response_status,
               'observation_sim_exit_code':observation_status,
               'provocation_sim_exit_code':provocation_status,
               'responsiveness_sim_exit_code':responsiveness_status,
               'rank1_sim_exit_code':rank1_status,
+              'question_sim_exit_code':question_status,
               'engine_selftest_exit_code':engine_status,
               'response_sim_output':read('/tmp/allen-response.txt'),
               'observation_sim_output':read('/tmp/allen-observation.txt'),
               'provocation_sim_output':read('/tmp/allen-provocation.txt'),
               'responsiveness_sim_output':read('/tmp/room-responsiveness.txt'),
               'rank1_sim_output':read('/tmp/allen-rank1.txt'),
+              'question_sim_output':read('/tmp/room-question-answering.txt'),
               'engine_selftest_output':read('/tmp/engine-selftest.txt'),
               'tested_sha':'${{ github.sha }}',
           }
