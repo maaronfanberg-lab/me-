@@ -471,6 +471,19 @@ def _allen_turn_is_provocative(event, context=None):
     return bool(labels & _ALLEN_PROVOCATION_LABELS)
 
 
+def _direct_entity_question(event, entity):
+    """Return True only for a direct AI-to-AI question addressed to entity."""
+    if not isinstance(event, dict) or entity not in _AI_ORDER:
+        return False
+    speaker = str(event.get("speaker") or "").lower()
+    if speaker not in _AI_ORDER or speaker == entity:
+        return False
+    cognition = event.get("cognition") if isinstance(event.get("cognition"), dict) else {}
+    if str(cognition.get("target") or "").lower() != entity:
+        return False
+    return str(event.get("text") or "").rstrip().endswith("?")
+
+
 def _allen_voice_engages(key, rank):
     """Deterministic ordinary-turn engagement with natural falloff by rank."""
     thresholds = {0: 256, 1: 230, 2: 175, 3: 105}
@@ -495,6 +508,14 @@ def _participant_recurrent(node, key, bus_data):
         base = (source or {}).get("private") or {}
         latest = base.get("event") if isinstance(base.get("event"), dict) else None
         prior_same_beat = _core.prior_expression_messages(node) if role == "expression" else []
+        newest_same_beat = prior_same_beat[-1] if prior_same_beat and isinstance(prior_same_beat[-1], dict) else None
+        question_event = None
+        if role == "expression":
+            if _direct_entity_question(newest_same_beat, entity):
+                question_event = newest_same_beat
+            elif _direct_entity_question(latest, entity):
+                question_event = latest
+        question_reply = bool(question_event)
         allen_latest = bool(
             role == "expression"
             and base.get("partner") == "allen"
@@ -517,6 +538,8 @@ def _participant_recurrent(node, key, bus_data):
         )
         routed_allen_reply = primary_allen_reply or secondary_allen_reply or late_allen_reply
     except Exception:
+        question_reply = False
+        question_event = None
         routed_allen_reply = False
         primary_allen_reply = False
         secondary_allen_reply = False
@@ -524,6 +547,54 @@ def _participant_recurrent(node, key, bus_data):
         provocative_allen_turn = False
         prior_same_beat = []
         entity = None
+
+    if question_reply:
+        asker = str(question_event.get("speaker") or "").lower()
+        question_bus = copy.deepcopy(bus_data)
+        question_source = _core.rp(question_bus, entity, role)
+        question_base = question_source.get("private") if isinstance(question_source.get("private"), dict) else {}
+        question_base["event"] = copy.deepcopy(question_event)
+        question_base["partner"] = asker
+        question_context = list(question_base.get("context") or [])
+        if not question_context or question_context[-1] != question_event:
+            question_context.append(copy.deepcopy(question_event))
+        question_base["context"] = question_context[-8:]
+        try:
+            rel = _core.minds()["entities"][entity]["people"][asker]
+            question_base["relationship"] = {
+                k: rel.get(k) for k in (
+                    "exposure", "direct_familiarity", "trust", "predictability",
+                    "reciprocity", "warmth", "respect", "disclosure_depth", "tension"
+                )
+            }
+        except Exception:
+            pass
+        thought = ((question_bus.get("recurrent", {}).get(entity, {}) or {}).get("thought", {}) or {})
+        thought_private = thought.get("private") if isinstance(thought.get("private"), dict) else {}
+        deliberation = thought_private.get("deliberation") if isinstance(thought_private.get("deliberation"), dict) else None
+        if isinstance(deliberation, dict):
+            deliberation["action"] = "ANSWER"
+            deliberation["preferred_partner"] = asker
+            deliberation["focus"] = str(question_event.get("text") or "")[:240]
+            deliberation["new_information_goal"] = ""
+            deliberation.pop("conversation_job", None)
+        original_job = _core.conversation_job
+        _core.conversation_job = lambda *_args, **_kwargs: ""
+        try:
+            result = _original_recurrent(node, key, question_bus)
+        finally:
+            _core.conversation_job = original_job
+        if isinstance(result, dict):
+            result = dict(result)
+            private = dict(result.get("private") or {})
+            expression = private.get("expression")
+            if isinstance(expression, dict):
+                expression = dict(expression)
+                expression["target"] = asker
+                expression["move"] = "answer"
+                private["expression"] = expression
+                result["private"] = private
+        return result
 
     if not routed_allen_reply:
         # Core expression generation already makes the newest same-beat
