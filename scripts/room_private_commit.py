@@ -11,11 +11,24 @@ prevents dialogue-quality work from perturbing state/memory publication logic.
 """
 
 import re
+import sys
 
 import room_private_commit_base as _base
 
 
+QUALITY_REJECTION_EXIT = 42
 _original_validate_staged_quality = _base.validate_staged_quality
+
+
+def quality_rejection_exit_code(error: BaseException) -> int | None:
+    """Classify only an intentional same-beat publication rejection.
+
+    Privacy failures, model/runtime errors, timeouts, and all other exceptions
+    remain ordinary failures so the warm-runner circuit breaker still sees them.
+    """
+    if isinstance(error, RuntimeError) and "private Room same-beat echo blocked" in str(error):
+        return QUALITY_REJECTION_EXIT
+    return None
 
 
 def _publish_semantic_sequence(text: object) -> list[str]:
@@ -127,5 +140,16 @@ def __getattr__(name: str):
     return getattr(_base, name)
 
 
+def _run_cli() -> None:
+    try:
+        c.main()
+    except RuntimeError as exc:
+        code = quality_rejection_exit_code(exc)
+        if code is None:
+            raise
+        print(f"ROOM PUBLISH QUALITY REJECTION: {exc}", file=sys.stderr)
+        raise SystemExit(code) from None
+
+
 if __name__ == "__main__":
-    c.main()
+    _run_cli()
