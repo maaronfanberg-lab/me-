@@ -6,6 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import room_ai_adjacency as adjacency
 import room_engine_v5 as engine
 
 
@@ -82,12 +83,12 @@ def check_fresh_reply_plan() -> None:
         "cognition": {"target": "sarah"},
     }
     captured = {}
-    original_recurrent = engine._original_recurrent
+    original_underlay = adjacency._original_recurrent
     original_prior = engine._core.prior_expression_messages
     original_minds = engine._core.minds
     old_rank = os.environ.get("ROOM_EXPRESSION_RANK")
 
-    def fake_recurrent(_node, _key, bus_data):
+    def fake_underlay(_node, _key, bus_data):
         captured["bus"] = bus_data
         return {
             "private": {
@@ -120,14 +121,14 @@ def check_fresh_reply_plan() -> None:
             }
         }
 
-    engine._original_recurrent = fake_recurrent
+    adjacency._original_recurrent = fake_underlay
     engine._core.prior_expression_messages = lambda _node: [newest]
     engine._core.minds = fake_minds
     os.environ["ROOM_EXPRESSION_RANK"] = "1"
     try:
         result = engine._participant_recurrent(2, "adjacency-sim", _bus())
     finally:
-        engine._original_recurrent = original_recurrent
+        adjacency._original_recurrent = original_underlay
         engine._core.prior_expression_messages = original_prior
         engine._core.minds = original_minds
         if old_rank is None:
@@ -147,6 +148,7 @@ def check_fresh_reply_plan() -> None:
 
     expression = (result.get("private") or {}).get("expression") or {}
     assert expression.get("target") == "owen", "published reply target is not the immediately preceding speaker"
+    assert expression.get("move") == "answer", "direct question did not publish as an answer move"
 
 
 def main() -> None:
