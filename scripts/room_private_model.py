@@ -340,6 +340,7 @@ def _compact_payload(payload: dict, role: str, self_entity: str | None = None) -
         direct_question = bool(
             self_entity in PEOPLE
             and event_speaker in PEOPLE
+            and event_speaker != "allen"
             and event_speaker != self_entity
             and event_target == self_entity
             and str(event.get("text") or "").rstrip().endswith("?")
