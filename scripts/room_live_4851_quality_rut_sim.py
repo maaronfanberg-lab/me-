@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import room_expression_quality as quality
+import room_skill_exec as skill_exec
 import room_topic_bounded as bounded
 
 
@@ -18,9 +19,6 @@ def expression_issue(text: str) -> str | None:
 
 
 def main() -> None:
-    # Live cycle 4851: the model copied expression-instruction prose into public
-    # speech, then Sarah emitted a pure orchestration placeholder. Neither is a
-    # conversational contribution and both must be retried before publication.
     live_4851_mara = (
         "Speak a natural, nuanced, supportive, and relevant line to continue the conversation. "
         "Let's work together to structure the project's goals and objectives. I want a plan to "
@@ -36,17 +34,18 @@ def main() -> None:
         "cycle 4851 placeholder escaped expression boundary"
     )
 
-    # Negative control: participants may genuinely discuss an instruction. The
-    # detector is about model/orchestration-shaped output, not forbidden words.
     quoted_instruction = (
         "You asked me to 'speak naturally' yesterday; I think that instruction made the interview "
         "feel more awkward, so I'd rather begin with one concrete question."
     )
     assert expression_issue(quoted_instruction) is None, "ordinary quoted discussion was overblocked"
 
-    # Live cycle 4852: Owen establishes a generic project-goal frame. Jules then
-    # repeats the goal/team frame instead of adding substance; Mara later returns
-    # to goals/team/process after Sarah has supplied a genuinely distinct angle.
+    # Exhausting retries on these dialogue-quality reasons must recycle the beat,
+    # not count as model/infrastructure failure.
+    for reason in ("instruction_residue", "meta_placeholder", "project_process_context_echo"):
+        stderr = f"RuntimeError: private model output rejected for expression: {reason}\n"
+        assert skill_exec.expression_quality_exhaustion_reason(stderr) == reason, reason
+
     live_4852_owen = (
         "As a team, we need to align our project's goals and objectives. The structure of the "
         "project's goals and objectives should be clear and unified, ensuring that we have a shared "
@@ -83,8 +82,6 @@ def main() -> None:
         [turn("owen", live_4852_owen), turn("jules", live_4852_jules), turn("sarah", live_4852_sarah)],
     ) == "same_beat_project_process_echo", "cycle 4852 Mara escaped project-process chorus boundary"
 
-    # A real project continuation stays legal when it contributes measurable new
-    # evidence and an actionable experiment instead of merely rotating process words.
     concrete_extension = (
         "For that goal, the smart-meter log shows HVAC used sixty-two percent of yesterday's power; "
         "I'll test a two-degree setback tonight and compare the morning load."
@@ -93,9 +90,6 @@ def main() -> None:
         "concrete project evidence was overblocked"
     )
 
-    # Live cycle 4860 confirms the same family after the topic drifted from goals to
-    # data/strategy/focus. The later voices still repackage process rather than add
-    # facts about carbon emissions.
     live_4860_jules = "Sure, I know I'm not the first time using that phrase. It's the kind of phrase we need to use more often."
     live_4860_sarah = "We're working on a way to reduce carbon emissions. Let's focus on the new data and strategy. Can you hear us?"
     live_4860_mara = (
@@ -119,8 +113,6 @@ def main() -> None:
         [turn("jules", live_4860_jules), turn("sarah", live_4860_sarah), turn("mara", live_4860_mara)],
     ) == "same_beat_project_process_echo", "cycle 4860 Owen escaped project-process chorus boundary"
 
-    # The current live episode reached 91 updates because any superficial new term
-    # resets low_novelty_beats. Age must independently force a true topic bridge.
     limit = getattr(bounded, "MAX_EPISODE_UPDATES", None)
     assert isinstance(limit, int) and limit >= 8, "bounded topic has no hard episode-age limit"
     stale = bounded.new_topic_from_terms(["project", "goals", "strategy"], 4815)
@@ -129,24 +121,27 @@ def main() -> None:
     message = {
         "speaker": "sarah",
         "text": "We could add one more dashboard metric.",
-        "cognition": {
-            "topic_episode": stale["id"],
-            "topic_terms": ["dashboard", "metric"],
-        },
+        "cognition": {"topic_episode": stale["id"], "topic_terms": ["dashboard", "metric"]},
     }
     aged = bounded.update_topic(stale, [message], 4861)
     assert bounded.should_shift_topic(aged), "episode age did not force a topic bridge"
     assert aged.get("bridge_reason") == "episode_age", aged
+
+    # Even if the last stale beat contributes a superficially novel management
+    # term, the replacement episode must use a genuinely different breakout root.
+    escaped = bounded.new_topic_from_terms(["dashboard", "metric"], 4861, aged)
+    stale_vocab = [stale.get("root"), stale.get("current_facet"), *stale.get("facets", []), *stale.get("recent_terms", [])]
+    assert escaped.get("root") and not any(
+        bounded._near(escaped.get("root"), old) for old in stale_vocab if old
+    ), escaped
+    assert escaped.get("bridge_reason") == "" and escaped.get("turns") == 0, escaped
 
     fresh = bounded.new_topic_from_terms(["garden", "soil", "rain"], 4861)
     fresh["turns"] = max(0, limit - 3)
     fresh_message = {
         "speaker": "mara",
         "text": "The north bed stayed damp after last night's rain.",
-        "cognition": {
-            "topic_episode": fresh["id"],
-            "topic_terms": ["north bed", "damp", "rain"],
-        },
+        "cognition": {"topic_episode": fresh["id"], "topic_terms": ["north bed", "damp", "rain"]},
     }
     still_fresh = bounded.update_topic(fresh, [fresh_message], 4862)
     assert still_fresh.get("bridge_reason") != "episode_age", "fresh episode shifted too early"
