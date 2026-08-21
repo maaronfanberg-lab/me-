@@ -101,6 +101,19 @@ def main():
         source([("mara", mara)]),
     )
 
+    # Reproduce the short paraphrase loop seen live: one speaker says the flow is
+    # important to the group and the next speaker merely says the same thing with
+    # tiny wording changes. Short echoes need protection too; they should not be
+    # exempt merely because they contain fewer than eight distinct words.
+    flow = "The flow is important to us as a group."
+    flow_echo = "The flow is important for the group too."
+    require_retry(
+        "short live paraphrase echo",
+        flow_echo,
+        "What matters to me is who actually changes the direction of the conversation when the group gets stuck.",
+        source([("mara", flow)]),
+    )
+
     prior = [
         ("mara", mara),
         ("owen", "I think care gets harder when we confuse helping with taking responsibility for every outcome."),
