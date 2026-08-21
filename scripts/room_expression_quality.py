@@ -40,6 +40,71 @@ def _semantic_coverage_tokens(text: object) -> set[str]:
     }
 
 
+def _semantic_sequence(text: object) -> list[str]:
+    """Return ordered proposition-bearing anchors for phrase-cluster comparison."""
+    normalized = re.sub(r"\btest\s+bed\b", "testbed", str(text or ""), flags=re.I)
+    allowed = _semantic_coverage_tokens(normalized)
+    out: list[str] = []
+    for raw in re.findall(r"[a-z][a-z']+", normalized.lower()):
+        word = _core._stem(raw)
+        if word in allowed:
+            out.append(word)
+    return out
+
+
+def _shingles(sequence: list[str], width: int) -> set[tuple[str, ...]]:
+    if width <= 0 or len(sequence) < width:
+        return set()
+    return {
+        tuple(sequence[index:index + width])
+        for index in range(len(sequence) - width + 1)
+    }
+
+
+def _shared_bigram_runs(current: list[str], prior_bigrams: set[tuple[str, ...]]) -> int:
+    positions = [
+        index
+        for index in range(max(0, len(current) - 1))
+        if tuple(current[index:index + 2]) in prior_bigrams
+    ]
+    if not positions:
+        return 0
+    runs = 1
+    for previous, current_index in zip(positions, positions[1:]):
+        if current_index != previous + 1:
+            runs += 1
+    return runs
+
+
+def _single_prior_phrase_echo(utterance: str, prior_turns: list[dict]) -> bool:
+    """Catch a second voice rebuilding one earlier proposition in separated clusters.
+
+    Live cycle 4793 showed a simpler failure than the multi-speaker consensus case:
+    Owen reused Mara's research -> planning -> testing proposition with connector
+    prose. Requiring multiple separated shared phrase clusters prevents a single
+    quoted/reference clause from being mistaken for an echo when the reply then
+    adds genuinely new evidence.
+    """
+    if len(prior_turns) != 1:
+        return False
+    previous = str((prior_turns[0] or {}).get("text") or "").strip()
+    if not previous or "?" in previous:
+        return False
+
+    current = _semantic_sequence(utterance)
+    earlier = _semantic_sequence(previous)
+    if len(current) < 10 or len(earlier) < 8:
+        return False
+
+    prior_bigrams = _shingles(earlier, 2)
+    prior_trigrams = _shingles(earlier, 3)
+    shared_bigrams = len(_shingles(current, 2) & prior_bigrams)
+    shared_trigrams = len(_shingles(current, 3) & prior_trigrams)
+    shared_runs = _shared_bigram_runs(current, prior_bigrams)
+
+    return shared_runs >= 2 and shared_bigrams >= 4 and shared_trigrams >= 2
+
+
 def _aggregate_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
     """Detect a semantic mosaic assembled mostly from earlier same-beat content.
 
@@ -104,12 +169,14 @@ def _consensus_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
 
 
 def same_beat_issue(utterance: object, prior_turns: list[dict]) -> str | None:
-    """Preserve existing checks, then reject aggregate and consensus semantic reuse."""
+    """Preserve existing checks, then reject phrase, aggregate and consensus reuse."""
     issue = _original_same_beat_issue(utterance, prior_turns)
     if issue:
         return issue
     text = str(utterance or "").strip()
     turns = [item for item in (prior_turns or []) if isinstance(item, dict)]
+    if text and turns and _single_prior_phrase_echo(text, turns):
+        return "same_beat_phrase_echo"
     if text and turns and _aggregate_same_beat_echo(text, turns):
         return "same_beat_semantic_coverage"
     if text and turns and _consensus_same_beat_echo(text, turns):
