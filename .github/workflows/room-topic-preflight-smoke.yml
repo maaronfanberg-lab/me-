@@ -1,0 +1,23 @@
+name: Room topic preflight smoke
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/room_topic_bounded.py'
+      - 'scripts/room_topic_preflight.py'
+      - 'scripts/room_topic_preflight_sim.py'
+      - '.github/workflows/sarah-society.yml'
+      - '.github/workflows/room-topic-preflight-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify stale topics rotate before cognition
+        run: |
+          python3 -m py_compile scripts/room_topic_bounded.py scripts/room_topic_preflight_sim.py
+          PYTHONPATH=scripts python3 scripts/room_topic_preflight_sim.py
