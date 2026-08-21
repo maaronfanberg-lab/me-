@@ -1,0 +1,23 @@
+name: Room live-parts RED
+
+on:
+  push:
+    branches:
+      - 'fix/room-authoritative-live-parts-20260821'
+    paths:
+      - 'scripts/room_live_parts_echo_sim.py'
+      - '.github/workflows/room-live-parts-red.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  red:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Reproduce live 4642 echo escape
+        run: |
+          python3 -m py_compile scripts/room_live_parts_echo_sim.py
+          python3 scripts/room_live_parts_echo_sim.py
