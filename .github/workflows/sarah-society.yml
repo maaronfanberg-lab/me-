@@ -55,6 +55,7 @@ jobs:
           ROOM_RELAY_CONNECT_TIMEOUT_SECONDS=3
           ROOM_RELAY_MAX_TIME_SECONDS=8
           ROOM_BEAT_FAILURE_LIMIT=2
+          ROOM_QUALITY_REJECTION_EXIT=42
 
           # Private prompts are runtime-only secrets. Perception and deliberation can
           # share the two model slots; expression is intentionally sequential so each
@@ -245,13 +246,26 @@ jobs:
 
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
               env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-              python3 scripts/room_private_commit.py commit || return 1
+              python3 scripts/room_private_commit.py commit
+            commit_rc=$?
+            if [ "$commit_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then
+              return "$ROOM_QUALITY_REJECTION_EXIT"
+            fi
+            [ "$commit_rc" -eq 0 ] || return 1
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
               python3 scripts/build_room_feed.py || return 1
           }
 
           while [ "$SECONDS" -lt "$stop_at" ]; do
-            if ! run_beat; then
+            run_beat
+            beat_rc=$?
+            if [ "$beat_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then
+              consecutive_failures=0
+              echo "Publish boundary rejected semantic echo; regenerating the beat"
+              sleep 1
+              continue
+            fi
+            if [ "$beat_rc" -ne 0 ]; then
               consecutive_failures=$((consecutive_failures + 1))
               echo "A Room beat failed internally (${consecutive_failures}/${ROOM_BEAT_FAILURE_LIMIT})"
               if [ "$consecutive_failures" -ge "$ROOM_BEAT_FAILURE_LIMIT" ]; then
