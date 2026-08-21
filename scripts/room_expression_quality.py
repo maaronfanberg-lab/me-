@@ -443,6 +443,9 @@ if not getattr(_private_model._request, "_room_generic_process_guard", False):
         )
 
     _generic_process_guard_request._room_generic_process_guard = True
+    _generic_process_guard_request._room_retry_boundary = bool(
+        getattr(_previous_model_request, "_room_retry_boundary", False)
+    )
     _private_model._request = _generic_process_guard_request
 
 
