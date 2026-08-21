@@ -7,6 +7,14 @@ workers_dev = true
 name = "ROOM"
 class_name = "RoomState"
 
+[[durable_objects.bindings]]
+name = "LEVIATHAN_SIGNALS"
+class_name = "LeviathanSignalStore"
+
 [exports.RoomState]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.LeviathanSignalStore]
 type = "durable-object"
 storage = "sqlite"
