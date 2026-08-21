@@ -1,0 +1,147 @@
+name: Deploy LEVIATHAN Signal Collector
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cloudflare/leviathan-signal/**'
+      - '.github/workflows/deploy-leviathan-signal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-leviathan-signal
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check Cloudflare token
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          echo 'Cloudflare API token is available.'
+
+      - name: Select Fanberg Cloudflare account
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
+            > /tmp/cf-accounts.json
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          d=json.load(open('/tmp/cf-accounts.json'))
+          if not d.get('success'):
+              raise SystemExit('Cloudflare account lookup failed.')
+          matches=[a for a in d.get('result',[]) if 'fanberg' in str(a.get('name','')).lower()]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected exactly one Fanberg Cloudflare account; found {len(matches)}.')
+          a=matches[0]
+          print(f"CLOUDFLARE_ACCOUNT_ID={a['id']}")
+          print(f"CLOUDFLARE_ACCOUNT_NAME={a['name']}")
+          PY
+          echo 'Selected Fanberg Cloudflare account.'
+
+      - name: Validate Worker syntax
+        run: node --check cloudflare/leviathan-signal/src/index.js
+
+      - name: Deploy signal collector
+        id: deploy
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes wrangler@latest deploy --config cloudflare/leviathan-signal/wrangler.jsonc 2>&1 | tee /tmp/leviathan-signal-deploy.txt
+          url=$(grep -Eo 'https://[^[:space:]]+\.workers\.dev' /tmp/leviathan-signal-deploy.txt | tail -1)
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed URL: $url"
+
+      - name: Verify live collector
+        env:
+          SIGNAL_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 "$SIGNAL_URL/health" | tee /tmp/lev-health.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/lev-health.json'))
+          assert d.get('ok') is True
+          assert d.get('app') == 'leviathan-signal'
+          assert d.get('version') == '1'
+          print('Health endpoint verified.')
+          PY
+          code=$(curl -sS -o /tmp/options.txt -w '%{http_code}' -X OPTIONS \
+            -H 'Origin: https://maaronfanberg-lab.github.io' \
+            -H 'Access-Control-Request-Method: POST' \
+            "$SIGNAL_URL/event")
+          test "$code" = '204'
+          curl -fsS -X POST \
+            -H 'Origin: https://maaronfanberg-lab.github.io' \
+            -H 'Content-Type: application/json' \
+            --data '{"type":"page_view","source":"deploy-smoke"}' \
+            "$SIGNAL_URL/event" | tee /tmp/event.json
+          python3 - <<'PY'
+          import json
+          assert json.load(open('/tmp/event.json')).get('ok') is True
+          print('Write path verified.')
+          PY
+          curl -fsS "$SIGNAL_URL/summary" | tee /tmp/summary.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/summary.json'))
+          assert d.get('ok') is True
+          assert isinstance(d.get('events'), dict)
+          assert isinstance(d.get('interest'), dict)
+          print('Aggregate summary verified.')
+          PY
+
+      - name: Wire exact Worker URL into GitHub Pages frontend
+        env:
+          SIGNAL_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,re
+          p='apps/leviathan-signal.js'
+          s=open(p).read()
+          url=os.environ['SIGNAL_URL']
+          s2=re.sub(r"const ENDPOINT = '[^']*';", "const ENDPOINT = '"+url+"';", s, count=1)
+          if s2 == s and url not in s:
+              raise SystemExit('Could not wire signal endpoint.')
+          open(p,'w').write(s2)
+          print('Frontend endpoint wired.')
+          PY
+          git config user.name "leviathan-signal-deployer"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/leviathan-signal.js
+          git commit -m "Wire verified LEVIATHAN signal endpoint" || exit 0
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
+
+      - name: Summary
+        env:
+          SIGNAL_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          echo "### LEVIATHAN signal collector deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloudflare account: $CLOUDFLARE_ACCOUNT_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "Collector: $SIGNAL_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Public aggregate summary: $SIGNAL_URL/summary" >> "$GITHUB_STEP_SUMMARY"
