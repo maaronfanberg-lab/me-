@@ -32,6 +32,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: |
+            apps/leviathan-signal.js
+            cloudflare/leviathan-signal
+            status/leviathan-signal.json
 
       - name: Check Cloudflare token
         shell: bash
