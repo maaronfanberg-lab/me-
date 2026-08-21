@@ -153,9 +153,10 @@ def _per_source_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
         shared_trigrams = len(current_trigrams & prior_trigrams)
         shared_runs = _shared_bigram_runs(current, prior_bigrams)
 
-        # Compact proposition restatement: most of the later voice's anchors come
-        # from one source and at least one intact semantic phrase survives.
-        if shared >= 4 and coverage >= 0.50 and shared_bigrams >= 2:
+        # Compact proposition restatement. The live 4794/4795 failures all retain
+        # at least four source anchors covering 40% or more of a substantial later
+        # turn; the legitimate referenced-clause control retains only three.
+        if len(current_set) >= 8 and shared >= 4 and coverage >= 0.40:
             return True
 
         # Padded paraphrase: the later voice adds connective material but preserves
