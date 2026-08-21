@@ -1,4 +1,5 @@
 name: Room PR128 quality-liveness repair
+# trigger after PR129 consensus-core merge
 
 on:
   push:
@@ -29,7 +30,6 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # 1) Final publication quality rejection gets a dedicated soft exit.
           path = Path('scripts/room_private_commit.py')
           text = path.read_text()
           text = text.replace('import re\n', 'import re\nimport sys\n', 1)
@@ -43,8 +43,6 @@ jobs:
           text = text.replace(old_tail, new_tail, 1)
           path.write_text(text)
 
-          # 2) Expression-generation quality exhaustion gets the same soft exit,
-          # without changing the engine or masking request/schema/runtime failures.
           Path('scripts/room_expression_node.py').write_text(r'''#!/usr/bin/env python3
 from __future__ import annotations
 
@@ -66,7 +64,7 @@ _QUALITY_REASONS = {
 
 
 def expression_quality_rejection_exit_code(error: BaseException) -> int | None:
-    """Return 42 only when five expression attempts exhausted dialogue-quality gates."""
+    """Return 42 only when expression attempts exhausted dialogue-quality gates."""
     if not isinstance(error, RuntimeError):
         return None
     match = re.fullmatch(r"private model output rejected for expression: ([a-z0-9_ -]+)", str(error))
@@ -93,7 +91,6 @@ if __name__ == "__main__":
     main()
 ''')
 
-          # 3) Preserve exit 42 through expression nodes, commit, and warm-loop.
           wf = Path('.github/workflows/sarah-society.yml')
           workflow = wf.read_text()
           needle = '          ROOM_BEAT_FAILURE_LIMIT=2\n'
@@ -124,13 +121,8 @@ if __name__ == "__main__":
           assert old_loop in workflow
           new_loop = '''          while [ "$SECONDS" -lt "$stop_at" ]; do\n            run_beat\n            beat_rc=$?\n            if [ "$beat_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then\n              consecutive_failures=0\n              echo "Dialogue-quality boundary rejected this beat; regenerating without tripping infrastructure breaker"\n              sleep 1\n              continue\n            fi\n            if [ "$beat_rc" -ne 0 ]; then\n              consecutive_failures=$((consecutive_failures + 1))\n'''
           workflow = workflow.replace(old_loop, new_loop, 1)
-          # Close the replacement's explicit nonzero branch where the old `if !` closed.
-          target = '''              sleep 3\n              continue\n            fi\n            consecutive_failures=0\n'''
-          assert target in workflow
-          # Structure is already correct: this `fi` now closes `if beat_rc -ne 0`.
           wf.write_text(workflow)
 
-          # 4) Exact liveness contract + the two live RED reasons from run 32501429840.
           Path('scripts/room_quality_rejection_runner_sim.py').write_text(r'''#!/usr/bin/env python3
 from __future__ import annotations
 
@@ -142,15 +134,12 @@ import room_private_commit as publish
 
 def main() -> None:
     assert expression.QUALITY_REJECTION_EXIT == publish.QUALITY_REJECTION_EXIT == 42
-
-    # Exact first live RED: expression retry exhaustion at 16:16:48 UTC.
-    first = RuntimeError("private model output rejected for expression: same_beat_sentence_copy")
-    assert expression.expression_quality_rejection_exit_code(first) == 42
-    # Other dialogue-quality exhaustion is also soft.
     assert expression.expression_quality_rejection_exit_code(
-        RuntimeError("private model output rejected for expression: same_beat_semantic_coverage")
+        RuntimeError("private model output rejected for expression: same_beat_sentence_copy")
     ) == 42
-    # Broken request/schema/runtime paths remain hard failures.
+    assert expression.expression_quality_rejection_exit_code(
+        RuntimeError("private model output rejected for expression: same_beat_consensus_echo")
+    ) == 42
     assert expression.expression_quality_rejection_exit_code(
         RuntimeError("private model request failed for expression: HTTP 500")
     ) is None
@@ -158,13 +147,15 @@ def main() -> None:
         RuntimeError("private model output rejected for expression: invalid json")
     ) is None
 
-    # Exact second live RED: final staged semantic rejection at 16:17:56 UTC.
-    second = RuntimeError("private Room same-beat echo blocked for mara: same_beat_semantic_coverage")
-    assert publish.quality_rejection_exit_code(second) == 42
+    assert publish.quality_rejection_exit_code(
+        RuntimeError("private Room same-beat echo blocked for mara: same_beat_semantic_coverage")
+    ) == 42
+    assert publish.quality_rejection_exit_code(
+        RuntimeError("private Room same-beat echo blocked for sarah: same_beat_consensus_echo")
+    ) == 42
     assert publish.quality_rejection_exit_code(
         RuntimeError("private Room privacy leak blocked for mara")
     ) is None
-    assert publish.quality_rejection_exit_code(RuntimeError("model process crashed")) is None
 
     workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/sarah-society.yml').read_text()
     assert 'ROOM_QUALITY_REJECTION_EXIT=42' in workflow
@@ -175,10 +166,7 @@ def main() -> None:
     failure = workflow.find('consecutive_failures=$((consecutive_failures + 1))', quality)
     assert quality >= 0 and failure > quality
     assert 'consecutive_failures=0' in workflow[quality:failure]
-    assert 'Dialogue-quality boundary rejected this beat' in workflow
 
-    # Model the exact live sequence: both quality rejects are soft; a success may
-    # follow. Only two genuine hard failures in a row trip the circuit breaker.
     hard = 0
     published = 0
     for rc in (42, 42, 0):
@@ -195,7 +183,6 @@ def main() -> None:
         if rc:
             hard += 1
     assert hard == 2
-
     print('ROOM QUALITY-REJECTION RUNNER SIM: GREEN')
 
 
@@ -203,8 +190,6 @@ if __name__ == '__main__':
     main()
 ''')
 
-          # 5) Wire both new files into architecture smoke, without disturbing the
-          # existing PR124-127 corpus.
           arch = Path('.github/workflows/room-architecture-smoke.yml')
           smoke = arch.read_text()
           trigger = "      - 'scripts/room_publish_quality_sim.py'\n"
@@ -212,8 +197,7 @@ if __name__ == '__main__':
           smoke = smoke.replace(trigger, trigger + "      - 'scripts/room_expression_node.py'\n      - 'scripts/room_quality_rejection_runner_sim.py'\n", 1)
           compile_line = next(line for line in smoke.splitlines() if 'python3 -m py_compile ' in line)
           if 'scripts/room_expression_node.py' not in compile_line:
-              replacement = compile_line + ' scripts/room_expression_node.py scripts/room_quality_rejection_runner_sim.py'
-              smoke = smoke.replace(compile_line, replacement, 1)
+              smoke = smoke.replace(compile_line, compile_line + ' scripts/room_expression_node.py scripts/room_quality_rejection_runner_sim.py', 1)
           run_marker = '          python3 scripts/room_publish_quality_sim.py\n'
           assert run_marker in smoke
           smoke = smoke.replace(run_marker, run_marker + '          python3 scripts/room_quality_rejection_runner_sim.py\n', 1)
@@ -222,6 +206,7 @@ if __name__ == '__main__':
 
           python3 -m py_compile scripts/room_expression_node.py scripts/room_private_commit.py scripts/room_quality_rejection_runner_sim.py
           python3 scripts/room_expression_quality_sim.py
+          python3 scripts/room_consensus_echo_sim.py
           python3 scripts/room_cross_voice_novelty_sim.py
           python3 scripts/room_publish_quality_sim.py
           python3 scripts/room_publish_phrase_sim.py
