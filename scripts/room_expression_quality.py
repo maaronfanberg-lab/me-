@@ -105,6 +105,72 @@ def _single_prior_phrase_echo(utterance: str, prior_turns: list[dict]) -> bool:
     return shared_runs >= 2 and shared_bigrams >= 4 and shared_trigrams >= 2
 
 
+def _source_is_question_only(text: str) -> bool:
+    """Keep concise answers to a genuine question outside the stronger source gate."""
+    pieces = [
+        part.strip()
+        for part in re.split(r"(?<=[.!?])\s+", str(text or "").strip())
+        if part.strip()
+    ]
+    return bool(pieces) and all(part.endswith("?") for part in pieces)
+
+
+def _per_source_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
+    """Reject a later voice rebuilding any one earlier voice, at every rank.
+
+    Aggregate and consensus gates intentionally look across the whole beat. Fresh
+    cycles 4794/4795 proved that a rank-2 or rank-3 speaker can still paraphrase one
+    particular earlier speaker while aggregate overlap stays below those broader
+    thresholds. Compare each source independently and require either strong compact
+    coverage or multiple preserved phrase clusters. A single referenced clause plus
+    substantial new evidence remains legal.
+    """
+    current = _semantic_sequence(utterance)
+    current_set = set(current)
+    if len(current_set) < 4:
+        return False
+
+    current_bigrams = _shingles(current, 2)
+    current_trigrams = _shingles(current, 3)
+    for turn in prior_turns:
+        if not isinstance(turn, dict):
+            continue
+        previous = str(turn.get("text") or "").strip()
+        if not previous or _source_is_question_only(previous):
+            continue
+
+        earlier = _semantic_sequence(previous)
+        earlier_set = set(earlier)
+        if len(earlier_set) < 4:
+            continue
+
+        overlap = current_set & earlier_set
+        shared = len(overlap)
+        coverage = shared / max(1, len(current_set))
+        prior_bigrams = _shingles(earlier, 2)
+        prior_trigrams = _shingles(earlier, 3)
+        shared_bigrams = len(current_bigrams & prior_bigrams)
+        shared_trigrams = len(current_trigrams & prior_trigrams)
+        shared_runs = _shared_bigram_runs(current, prior_bigrams)
+
+        # Compact proposition restatement: most of the later voice's anchors come
+        # from one source and at least one intact semantic phrase survives.
+        if shared >= 4 and coverage >= 0.50 and shared_bigrams >= 2:
+            return True
+
+        # Padded paraphrase: the later voice adds connective material but preserves
+        # two or more three-anchor phrase clusters from one earlier speaker.
+        if shared >= 4 and coverage >= 0.28 and shared_trigrams >= 2:
+            return True
+
+        # Longer reordered frame: enough source anchors survive in separated runs
+        # even when local word order changes between the clusters.
+        if shared >= 6 and coverage >= 0.42 and shared_runs >= 2:
+            return True
+
+    return False
+
+
 def _aggregate_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
     """Detect a semantic mosaic assembled mostly from earlier same-beat content.
 
@@ -169,7 +235,7 @@ def _consensus_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
 
 
 def same_beat_issue(utterance: object, prior_turns: list[dict]) -> str | None:
-    """Preserve established classification order, then add the narrow phrase rule."""
+    """Preserve established classification order, then add narrow source gates."""
     issue = _original_same_beat_issue(utterance, prior_turns)
     if issue:
         return issue
@@ -177,11 +243,15 @@ def same_beat_issue(utterance: object, prior_turns: list[dict]) -> str | None:
     turns = [item for item in (prior_turns or []) if isinstance(item, dict)]
     # Preserve the pre-PR130 aggregate reason code for older live regressions such
     # as 4784. Only content that escaped the established aggregate boundary reaches
-    # the new single-prior phrase-cluster classifier.
+    # the newer phrase classifiers.
     if text and turns and _aggregate_same_beat_echo(text, turns):
         return "same_beat_semantic_coverage"
+    # Preserve 4793's established reason code before the generalized per-source
+    # rule handles later ranks and compact single-source paraphrases.
     if text and turns and _single_prior_phrase_echo(text, turns):
         return "same_beat_phrase_echo"
+    if text and turns and _per_source_same_beat_echo(text, turns):
+        return "same_beat_source_echo"
     if text and turns and _consensus_same_beat_echo(text, turns):
         return "same_beat_consensus_echo"
     return None
