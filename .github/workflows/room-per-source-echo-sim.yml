@@ -1,0 +1,27 @@
+name: Room per-source echo simulator
+
+on:
+  push:
+    branches:
+      - fix/room-per-source-phrase-echo-20260821
+    paths:
+      - 'scripts/room_expression_quality.py'
+      - 'scripts/room_expression_quality_core.py'
+      - 'scripts/room_per_source_echo_sim.py'
+      - '.github/workflows/room-per-source-echo-sim.yml'
+  pull_request:
+    paths:
+      - 'scripts/room_expression_quality.py'
+      - 'scripts/room_expression_quality_core.py'
+      - 'scripts/room_per_source_echo_sim.py'
+      - '.github/workflows/room-per-source-echo-sim.yml'
+
+jobs:
+  per-source:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Replay exact post-PR130 per-source echoes
+        run: |
+          python3 -m py_compile scripts/room_expression_quality.py scripts/room_expression_quality_core.py scripts/room_per_source_echo_sim.py
+          python3 scripts/room_per_source_echo_sim.py
