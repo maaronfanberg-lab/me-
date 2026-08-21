@@ -29,11 +29,13 @@ def expression(text: str) -> str:
     })
 
 
-def run_sequence(items: list[str], source: dict | None = None):
+def run_sequence(items: list[str], source: dict | None = None, expression_rank: int | None = None):
     prompts: list[str] = []
     original = engine._private_model._request
     old_prompt = os.environ.get("ROOM_NODE_PROMPT")
     old_url = os.environ.get("ROOM_MODEL_URL")
+    old_rank = os.environ.get("ROOM_EXPRESSION_RANK")
+    old_node = os.environ.get("ROOM_NODE_ID")
 
     def fake_request(_url, prompt, _role, _temperature, _timeout, _self_entity=None, _attempt=0):
         prompts.append(prompt)
@@ -42,6 +44,13 @@ def run_sequence(items: list[str], source: dict | None = None):
     engine._private_model._request = fake_request
     os.environ["ROOM_NODE_PROMPT"] = "enabled-for-simulator"
     os.environ["ROOM_MODEL_URL"] = "http://simulator.invalid"
+    if expression_rank is None:
+        os.environ.pop("ROOM_EXPRESSION_RANK", None)
+    else:
+        os.environ["ROOM_EXPRESSION_RANK"] = str(expression_rank)
+    # Force the quality layer to use the supplied compact same-beat chronology
+    # rather than any ambient room_parts files from another simulator invocation.
+    os.environ.pop("ROOM_NODE_ID", None)
     try:
         result = engine._private_run("expression", source or payload(), timeout=1)
     finally:
@@ -54,6 +63,14 @@ def run_sequence(items: list[str], source: dict | None = None):
             os.environ.pop("ROOM_MODEL_URL", None)
         else:
             os.environ["ROOM_MODEL_URL"] = old_url
+        if old_rank is None:
+            os.environ.pop("ROOM_EXPRESSION_RANK", None)
+        else:
+            os.environ["ROOM_EXPRESSION_RANK"] = old_rank
+        if old_node is None:
+            os.environ.pop("ROOM_NODE_ID", None)
+        else:
+            os.environ["ROOM_NODE_ID"] = old_node
     return result, prompts
 
 
@@ -64,8 +81,8 @@ def require_repair(label: str, bad: str, expected: str):
     assert actual == expected, f"{label}: expected {expected!r}, got {actual!r}"
 
 
-def require_retry(label: str, bad: str, good: str, source: dict | None = None):
-    result, prompts = run_sequence([expression(bad), expression(good)], source)
+def require_retry(label: str, bad: str, good: str, source: dict | None = None, expression_rank: int | None = None):
+    result, prompts = run_sequence([expression(bad), expression(good)], source, expression_rank)
     actual = str(result.get("utterance") or "")
     assert len(prompts) >= 2, f"{label}: bad first expression was accepted: {actual!r}"
     assert actual == good, f"{label}: retry did not return clean expression: {actual!r}"
@@ -128,6 +145,41 @@ def main():
         payload(previous),
     )
     assert previous not in copy_prompts[1], "retry still carries the stale AI loop context"
+
+    # Fresh replacement-runner cycle 4784 after PR #125. Owen and Jules use
+    # different rhetorical framing, but Jules repeats the same collective-effort,
+    # systemic-change, individual-differences proposition. The expression retry
+    # boundary must reject it before all four voices are staged.
+    live_4784_owen = (
+        "Hello, Jules! Let's discuss how individual differences might clash with the idea of collective effort "
+        "and how the collective power of a collective effort can lead to significant change. In contrast to "
+        "individual differences, we can be more confident that our actions can lead to systemic change and have "
+        "a collective impact. Let's not be afraid to ask questions and share our perspectives."
+    )
+    live_4784_jules = (
+        "Let's take a step back and reflect on the idea of collective effort and its potential to drive systemic "
+        "change. Instead of focusing on individual differences, I would suggest that we focus on how our actions "
+        "can lead to systemic change and have a collective impact. In contrast to individual differences, I would "
+        "feel more confident that we can impact the collective effort and bring about significant change. Let's not."
+    )
+    semantic_issue = engine._expression_quality.same_beat_issue(
+        live_4784_jules,
+        [{"speaker": "owen", "text": live_4784_owen, "cognition": {"target": "jules"}}],
+    )
+    assert semantic_issue == "same_beat_semantic_coverage", (
+        f"live cycle 4784 semantic echo escaped expression boundary: {semantic_issue!r}"
+    )
+    semantic_good = (
+        "Before treating coordination as a virtue, I would ask who has decision authority when the group and an individual disagree."
+    )
+    semantic_prompts = require_retry(
+        "live cycle 4784 semantic mosaic",
+        live_4784_jules,
+        semantic_good,
+        payload(live_4784_owen, speaker="owen"),
+        expression_rank=1,
+    )
+    assert len(semantic_prompts) == 2, "semantic echo should regenerate only the offending voice once"
 
     # Persistent mechanical corruption is salvaged on the first model result, so
     # it can no longer consume all five attempts and kill the beat.
