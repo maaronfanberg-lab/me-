@@ -99,28 +99,15 @@ def _model(text: str) -> str:
 def main() -> None:
     original_parts = engine._core.PARTS
     original_request = engine._private_model._request
-    original_quality = engine._expression_quality.quality_issue
     old_prompt = os.environ.get("ROOM_NODE_PROMPT")
     old_url = os.environ.get("ROOM_MODEL_URL")
     old_rank = os.environ.get("ROOM_EXPRESSION_RANK")
     prompts: list[str] = []
-    trace: list[dict] = []
     replies = [_model(MARA_EXACT), _model(FRESH)]
 
     def fake_request(_url, prompt, _role, _temperature, _timeout, _self_entity=None, _attempt=0):
         prompts.append(prompt)
         return replies[min(len(prompts) - 1, len(replies) - 1)]
-
-    def traced_quality(utterance, compact, self_entity, similarity_fn):
-        same = engine._expression_quality._same_beat_prior_turns(compact)
-        issue = original_quality(utterance, compact, self_entity, similarity_fn)
-        trace.append({
-            "rank": os.environ.get("ROOM_EXPRESSION_RANK"),
-            "same_beat": [(item.get("speaker"), item.get("text")) for item in same],
-            "issue": issue,
-            "utterance": str(utterance),
-        })
-        return issue
 
     with tempfile.TemporaryDirectory() as tmp:
         parts = Path(tmp)
@@ -128,7 +115,6 @@ def main() -> None:
         (parts / "recurrent-02.json").write_text(json.dumps(_part(2, "sarah", 0, SARAH)))
         (parts / "recurrent-05.json").write_text(json.dumps(_part(5, "mara", 1, MARA)))
         engine._private_model._request = fake_request
-        engine._expression_quality.quality_issue = traced_quality
         os.environ["ROOM_NODE_PROMPT"] = "enabled-for-simulator"
         os.environ["ROOM_MODEL_URL"] = "http://simulator.invalid"
         os.environ["ROOM_EXPRESSION_RANK"] = "2"
@@ -137,7 +123,6 @@ def main() -> None:
         finally:
             engine._core.PARTS = original_parts
             engine._private_model._request = original_request
-            engine._expression_quality.quality_issue = original_quality
             if old_prompt is None:
                 os.environ.pop("ROOM_NODE_PROMPT", None)
             else:
@@ -152,9 +137,8 @@ def main() -> None:
                 os.environ["ROOM_EXPRESSION_RANK"] = old_rank
 
     expression = (result.get("private") or {}).get("expression") or {}
-    print("LIVE ECHO TRACE", json.dumps(trace, ensure_ascii=False))
     assert MARA in prompts[0], "live 4697 pipeline: Mara's same-beat words never reached the expression prompt"
-    assert len(prompts) >= 2, f"live 4697 pipeline: exact Mara echo accepted; trace={trace!r}"
+    assert len(prompts) >= 2, "live 4697 pipeline: exact Mara same-beat echo was accepted on the first attempt"
     assert expression.get("utterance") == FRESH, "live 4697 pipeline: retry did not select the fresh contribution"
     print("ROOM LIVE ECHO PIPELINE SIM: GREEN")
 
