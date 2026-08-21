@@ -484,6 +484,23 @@ def _escape_stale_context(compact: dict, self_entity: str | None) -> None:
         personality.pop("current", None)
 
 
+def same_beat_issue(utterance: object, prior_turns: list[dict]) -> str | None:
+    """Return a cross-voice semantic echo issue for exact staged speech."""
+    text = str(utterance or "").strip()
+    turns = [item for item in (prior_turns or []) if isinstance(item, dict)]
+    if not text or not turns:
+        return None
+    if _substantial_sentence_copy(text, turns):
+        return "same_beat_sentence_copy"
+    if _short_same_beat_paraphrase(text, turns):
+        return "same_beat_short_echo"
+    if _same_beat_restatement_sentence(text, turns):
+        return "same_beat_restatement_sentence"
+    if _low_substantive_novelty(text, turns):
+        return "same_beat_low_novelty"
+    return None
+
+
 def quality_issue(utterance: object, compact: dict, self_entity: str | None, similarity_fn) -> str | None:
     text = str(utterance or "").strip()
     if not text:
@@ -503,14 +520,9 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
         return "self_repetition"
 
     same_beat = _authoritative_same_beat_prior_turns(compact)
-    if same_beat and _substantial_sentence_copy(text, same_beat):
-        return "same_beat_sentence_copy"
-    if same_beat and _short_same_beat_paraphrase(text, same_beat):
-        return "same_beat_short_echo"
-    if same_beat and _same_beat_restatement_sentence(text, same_beat):
-        return "same_beat_restatement_sentence"
-    if same_beat and _low_substantive_novelty(text, same_beat):
-        return "same_beat_low_novelty"
+    same_beat_problem = same_beat_issue(text, same_beat)
+    if same_beat_problem:
+        return same_beat_problem
 
     if _context_too_similar(text, compact, similarity_fn):
         _escape_stale_context(compact, self_entity)

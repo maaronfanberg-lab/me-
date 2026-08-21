@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timezone
 
 import room_engine_v5 as c
+import room_expression_quality as _quality
 import room_social_v5 as _social
 import room_topic_bounded as _bounded_topic
 
@@ -144,6 +145,20 @@ def validate_public_expression(entity: str, text: str, terms: list[str]) -> None
         raise RuntimeError(f"private Room privacy leak blocked for {entity}")
 
 
+def validate_staged_quality(staged: list[tuple[str, str, str, str, list[str]]]) -> None:
+    """Block cross-voice semantic echoes at the final publication boundary."""
+    prior: list[dict] = []
+    for entity, _move, target, text, _terms in staged:
+        issue = _quality.same_beat_issue(text, prior)
+        if issue:
+            raise RuntimeError(f"private Room same-beat echo blocked for {entity}: {issue}")
+        prior.append({
+            "speaker": entity,
+            "text": text,
+            "cognition": {"target": target},
+        })
+
+
 def private_commit(parts: list[dict], key: str):
     S = c.state()
     M = c.minds()
@@ -198,6 +213,11 @@ def private_commit(parts: list[dict], key: str):
         if target not in c.ORDER or target == entity:
             target = next(other for other in c.ORDER if other != entity)
         staged.append((entity, move, target, text, terms))
+
+    # This is the final quality boundary: compare the exact four strings that are
+    # about to be published. It cannot be bypassed by lossy prompt context, retry
+    # mutation, or temporary room_parts state.
+    validate_staged_quality(staged)
 
     spoken: list[dict] = []
     answer_msg = None
