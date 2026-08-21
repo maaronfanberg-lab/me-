@@ -10,6 +10,10 @@ SCHEMA = 5
 MAX_FACETS = 8
 MAX_HISTORY = 8
 MAX_RECENT_TERMS = 10
+# update_topic is called twice around a published beat. Twenty updates therefore
+# gives an episode roughly ten beats to develop before age alone forces a bridge.
+# This is a backstop, not the primary novelty detector: low-novelty can shift sooner.
+MAX_EPISODE_UPDATES = 20
 
 
 def _clean(value: object) -> str:
@@ -68,7 +72,7 @@ def topic_template(cycle: int = 0) -> dict:
         "last_shift_cycle": int(cycle),
         "status": "forming",
         "bridge_pending": False,
-        # Compatibility view for UI/debug code: root plus sibling facets only.
+        "bridge_reason": "",
         "branches": [],
         "branch_history": [],
         "focus_turns": 0,
@@ -161,6 +165,7 @@ def _normalize(topic: dict | None, cycle: int) -> dict:
             "recent_terms": _unique(source.get("recent_terms") or [], MAX_RECENT_TERMS),
             "status": "ready_to_bridge" if had_runaway_depth else "active",
             "bridge_pending": bool(had_runaway_depth),
+            "bridge_reason": "runaway_depth" if had_runaway_depth else "",
             "branch_history": [],
             "focus_turns": 0,
             "escape_pressure": 0,
@@ -175,6 +180,7 @@ def _normalize(topic: dict | None, cycle: int) -> dict:
     defaults["semantic_schema"] = SCHEMA
     defaults["participants"] = list(social.PARTICIPANTS)
     defaults["bridge_pending"] = bool(defaults.get("bridge_pending", False))
+    defaults["bridge_reason"] = str(defaults.get("bridge_reason") or "")
     defaults["root"] = root
     facets = [term for term in _unique(defaults.get("facets") or [], MAX_FACETS + 1) if not (root and _near(term, root))][:MAX_FACETS]
     defaults["facets"] = facets
@@ -208,6 +214,7 @@ def new_topic_from_terms(terms, cycle: int, prior: dict | None = None) -> dict:
         "visited_facets": [current],
         "status": "active",
         "bridge_pending": False,
+        "bridge_reason": "",
         "recent_terms": clean[:MAX_RECENT_TERMS],
     })
     if prior and prior.get("current_facet"):
@@ -230,9 +237,6 @@ def _outside_subject_shift(topic: dict, messages, cycle: int) -> dict | None:
     novel = [term for term in latest_terms if not any(_near(term, existing) for existing in vocabulary if existing)]
     if not novel:
         return None
-    # The outside participant's first declared term anchors the episode when it is
-    # genuinely outside the current vocabulary. This is generic participant logic,
-    # not an Allen-specific exception.
     primary = latest_terms[0]
     if any(_near(primary, existing) for existing in vocabulary if existing):
         primary = novel[0]
@@ -252,18 +256,16 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
         return new_topic_from_terms(terms, cycle, current)
 
     root = current.get("root")
-    bridge_pending = bool(current.get("bridge_pending", False))
+    was_bridge_pending = bool(current.get("bridge_pending", False))
     previous_terms = list(current.get("recent_terms") or [])
     novel = [term for term in terms if not any(_near(term, old) for old in [root, *current.get("facets", [])] if old)]
 
     facets = list(current.get("facets") or [])
-    # New terms are siblings under the episode root. There is no recursive parent=current path.
     for term in novel:
         if root and _near(term, root):
             continue
         if not any(_near(term, existing) for existing in facets):
             facets.insert(0, term)
-    # Keep recent spoken facets ahead of stale ones, but cap working set tightly.
     for term in reversed(terms):
         if root and _near(term, root):
             continue
@@ -295,7 +297,19 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
 
     meaningful = [term for term in terms if not any(_near(term, old) for old in previous_terms)]
     low_novelty = 0 if meaningful else int(current.get("low_novelty_beats", 0) or 0) + 1
-    status = "ready_to_bridge" if bridge_pending or low_novelty >= 3 else "active"
+    next_turns = int(current.get("turns", 0) or 0) + 1
+    age_exhausted = next_turns >= MAX_EPISODE_UPDATES
+    low_novelty_exhausted = low_novelty >= 3
+    bridge_pending = was_bridge_pending or age_exhausted or low_novelty_exhausted
+    if age_exhausted:
+        bridge_reason = "episode_age"
+    elif was_bridge_pending:
+        bridge_reason = str(current.get("bridge_reason") or "pending")
+    elif low_novelty_exhausted:
+        bridge_reason = "low_novelty"
+    else:
+        bridge_reason = ""
+    status = "ready_to_bridge" if bridge_pending else "active"
 
     current.update({
         "semantic_schema": SCHEMA,
@@ -306,12 +320,13 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
         "facet_index": max(0, len(visited) - 1),
         "branch_history": history,
         "focus_turns": focus_turns,
-        "turns": int(current.get("turns", 0) or 0) + 1,
+        "turns": next_turns,
         "recent_terms": terms[:MAX_RECENT_TERMS],
         "low_novelty_beats": low_novelty,
         "status": status,
         "bridge_pending": bridge_pending,
-        "escape_pressure": low_novelty,
+        "bridge_reason": bridge_reason,
+        "escape_pressure": max(low_novelty, 3 if age_exhausted else 0),
         "last_branch_cycle": int(cycle),
         "participants": list(social.PARTICIPANTS),
     })
