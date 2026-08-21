@@ -29,20 +29,31 @@ def check_true_spoken_order() -> None:
         parts = Path(tmp)
         engine._core.PARTS = parts
         try:
-            # Deliberately make filename/node order disagree with spoken rank.
-            (parts / "recurrent-11.json").write_text(json.dumps(_part(11, "jules", 0, "first spoken")))
-            (parts / "recurrent-2.json").write_text(json.dumps(_part(2, "sarah", 1, "second spoken")))
-            (parts / "recurrent-8.json").write_text(json.dumps(_part(8, "owen", 2, "third spoken")))
-            observed = engine._core.prior_expression_messages(5)
+            # Reproduce the live 4036 rotation: Owen(node 8) -> Jules(node 11)
+            # -> Sarah(node 2) -> Mara(node 5). Lexicographic filename order is
+            # wrong for this rotation, so rank must be the source of truth.
+            (parts / "recurrent-8.json").write_text(json.dumps(_part(8, "owen", 0, "first spoken")))
+            (parts / "recurrent-11.json").write_text(json.dumps(_part(11, "jules", 1, "second spoken")))
+            (parts / "recurrent-2.json").write_text(json.dumps(_part(2, "sarah", 2, "third spoken")))
+
+            before_sarah = engine._core.prior_expression_messages(2)
+            before_mara = engine._core.prior_expression_messages(5)
         finally:
             engine._core.PARTS = original_parts
 
-    speakers = [item.get("speaker") for item in observed]
-    assert speakers == ["jules", "sarah", "owen"], (
-        "same-beat replies are not ordered by actual generation rank; "
-        f"got {speakers!r}"
+    sarah_speakers = [item.get("speaker") for item in before_sarah]
+    assert sarah_speakers == ["owen", "jules"], (
+        "Sarah does not see the real same-beat spoken order; "
+        f"got {sarah_speakers!r}"
     )
-    assert observed[-1]["text"] == "third spoken", "latest same-beat event is not the latest spoken turn"
+    assert before_sarah[-1]["speaker"] == "jules", "Sarah's newest same-beat event is not Jules"
+
+    mara_speakers = [item.get("speaker") for item in before_mara]
+    assert mara_speakers == ["owen", "jules", "sarah"], (
+        "Mara does not see the real same-beat spoken order; "
+        f"got {mara_speakers!r}"
+    )
+    assert before_mara[-1]["speaker"] == "sarah", "Mara's newest same-beat event is not Sarah"
 
 
 def _bus() -> dict:
