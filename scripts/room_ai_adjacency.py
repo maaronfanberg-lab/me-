@@ -7,6 +7,48 @@ import room_engine_v5_core as _core
 _AUTONOMOUS = set(_core.ORDER)
 
 
+def _ranked_prior_expression_messages(current_node: int) -> list[dict]:
+    """Return completed same-beat expressions in the order they were spoken."""
+    ranked: list[tuple[int, int, dict]] = []
+    for path in _core.PARTS.glob("recurrent-*.json"):
+        part = _core.load(path, {})
+        if not isinstance(part, dict) or part.get("role") != "expression":
+            continue
+        try:
+            node = int(part.get("node", -1))
+        except Exception:
+            node = -1
+        if node == current_node:
+            continue
+
+        private = part.get("private") if isinstance(part.get("private"), dict) else {}
+        expression = private.get("expression") if isinstance(private.get("expression"), dict) else {}
+        text = str(expression.get("utterance") or "").strip()
+        speaker = str(part.get("entity") or "").lower()
+        if not text or speaker not in _AUTONOMOUS:
+            continue
+
+        intent = private.get("intent") if isinstance(private.get("intent"), dict) else {}
+        try:
+            rank = int(intent.get("generation_rank", 99))
+        except Exception:
+            rank = 99
+        ranked.append((rank, node, {
+            "speaker": speaker,
+            "text": text,
+            "cognition": {"target": expression.get("target")},
+        }))
+
+    ranked.sort(key=lambda row: (row[0], row[1]))
+    return [message for _rank, _node, message in ranked]
+
+
+# room_parts is cleared at the start of every beat, so generation_rank is the
+# canonical chronology for the temporary expressions that exist here. Filename
+# order is node topology, not conversational order.
+_core.prior_expression_messages = _ranked_prior_expression_messages
+
+
 def _reply_focus(message: dict) -> str:
     text = str((message or {}).get("text") or "").strip()
     terms = _core.toks(text)[:6]
