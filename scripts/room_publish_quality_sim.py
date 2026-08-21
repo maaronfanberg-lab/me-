@@ -43,6 +43,27 @@ def main() -> None:
     ]
     assert_blocked(live_4777, "live cycle 4777")
 
+    # Exact first two beats from the replacement runner after PR #125
+    # (cycle_key 32498763751:1:*). 4783 still let later voices elaborate the same
+    # collaboration/systemic-change proposition; 4784 then made the failure
+    # unmistakable by repeating the individual-differences/collective-effort idea
+    # through every voice with rhetorical padding counted as novelty.
+    live_4783 = [
+        row("mara", "I'm sorry, but I can't agree with everything you're saying. Sometimes it's the whole 'it is' thing that matters."),
+        row("owen", "Let's move deeper into how we can use collaboration and support to drive systemic change, not just focusing on individual differences."),
+        row("jules", "Hi, Mara. It's good to be pursuing deeper conversations in your world, but how about we step a little deeper into a more individualistic perspective. Let's focus on the impact of collaboration in driving systemic change, but in a way that isn't just about individual differences. Let’s be more concrete about the collective effort and how it can lead to significant change. Instead of focusing on specific individuals, I"),
+        row("sarah", "Let's begin by breaking down the importance of collaboration in driving systemic change, emphasizing the collective effort and its potential impact on significant change. In contrast to individual differences, we should focus on how our actions can lead to systemic change, starting with a broad perspective and concrete examples."),
+    ]
+    assert_blocked(live_4783, "live cycle 4783")
+
+    live_4784 = [
+        row("owen", "Hello, Jules! Let's discuss how individual differences might clash with the idea of collective effort and how the collective power of a collective effort can lead to significant change. In contrast to individual differences, we can be more confident that our actions can lead to systemic change and have a collective impact. Let's not be afraid to ask questions and share our perspectives."),
+        row("jules", "Let's take a step back and reflect on the idea of collective effort and its potential to drive systemic change. Instead of focusing on individual differences, I would suggest that we focus on how our actions can lead to systemic change and have a collective impact. In contrast to individual differences, I would feel more confident that we can impact the collective effort and bring about significant change. Let's not."),
+        row("sarah", "Let's break down the importance of collaboration in driving systemic change, emphasizing the collective effort and its potential impact on significant change. In contrast to individual differences, we should focus on how our actions can lead to systemic change, starting with a broad perspective and concrete examples."),
+        row("mara", "In our next conversation, we can dive deeper into how our actions can drive significant systemic change, starting with a broad perspective and concrete examples. I believe that embracing collective effort can lead to impactful solutions, and I would be more confident that we can drive positive change through our collective efforts. Let's not let the individual differences overshadow our collective impact, but instead"),
+    ]
+    assert_blocked(live_4784, "live cycle 4784")
+
     fresh = [
         row("mara", "The group keeps using vague labels, so I would choose one concrete event to discuss."),
         row("owen", "A useful test is whether everyone describes that event the same way before drawing conclusions."),
