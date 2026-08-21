@@ -43,6 +43,22 @@ def source(messages: list[tuple[str, str]], *, same_beat: bool = True) -> dict:
     }
 
 
+def source_with_history(history: list[tuple[str, str]], same_beat: list[tuple[str, str]]) -> dict:
+    historical = [
+        {"speaker": speaker, "text": text, "cognition": {"target": "sarah"}}
+        for speaker, text in history
+    ]
+    current = [
+        {"speaker": speaker, "text": text, "cognition": {"target": "sarah"}}
+        for speaker, text in same_beat
+    ]
+    payload = source(same_beat)
+    payload["context"] = [*historical, *current]
+    payload["event"] = current[-1]
+    payload["same_beat_prior_turns"] = current
+    return payload
+
+
 def run(items: list[str], payload: dict):
     prompts: list[str] = []
     original = engine._private_model._request
@@ -101,10 +117,6 @@ def main():
         source([("mara", mara)]),
     )
 
-    # Reproduce the short paraphrase loop seen live: one speaker says the flow is
-    # important to the group and the next speaker merely says the same thing with
-    # tiny wording changes. Short echoes need protection too; they should not be
-    # exempt merely because they contain fewer than eight distinct words.
     flow = "The flow is important to us as a group."
     flow_echo = "The flow is important for the group too."
     require_retry(
@@ -114,9 +126,6 @@ def main():
         source([("mara", flow)]),
     )
 
-    # Live verification after the first anti-echo restart (cycle 4623) exposed a
-    # broader failure: longer paraphrases can keep the same proposition while
-    # adding enough filler/modifiers to evade both exact-copy and short-echo rules.
     live_mara = (
         "I can see that incorporating the new feature in the game can be a strong option, "
         "but I also believe it will be beneficial in the long run."
@@ -145,6 +154,38 @@ def main():
         source([("mara", live_mara), ("owen", live_owen_echo)]),
     )
 
+    # Live cycle 4631: adding a name and "I think" must not turn an otherwise
+    # complete restatement into a distinct contribution.
+    live_topic = "The topic is an interesting topic when we discuss it in the group."
+    live_topic_padded_echo = "Mara, i think the topic is an interesting topic when we discuss it in the group."
+    require_retry(
+        "live speaker-prefix padded echo",
+        live_topic_padded_echo,
+        "I'd rather identify what makes this topic matter to one person than keep calling it interesting.",
+        source([("owen", live_topic)]),
+    )
+
+    # Live cycles 4630-4632 exposed a retry-path hole. A first rejection for an
+    # older-context duplicate must not erase already-spoken same-beat turns. If it
+    # does, attempt two can publish an exact same-beat echo because the quality
+    # gate has forgotten the utterance it is supposed to protect against.
+    historical = "A checklist can reveal which features actually changed how people played."
+    same_beat = [
+        ("mara", "We should compare the game histories before deciding what changed."),
+        ("owen", "The strongest evidence would be a concrete difference in how the rules affected play."),
+        ("jules", "I'd start with one example from each version rather than summarize the whole history."),
+    ]
+    exact_same_beat_echo = same_beat[0][1]
+    retry_fresh = "One useful comparison would be whether players made different decisions after the rule change."
+    retry_payload = source_with_history([("mara", historical)], same_beat)
+    result, prompts = run(
+        [expression(historical), expression(exact_same_beat_echo), expression(retry_fresh)],
+        retry_payload,
+    )
+    assert len(prompts) >= 3, "retry context loss: exact same-beat echo was accepted after an older duplicate was rejected"
+    assert same_beat[0][1] in prompts[1], "retry context loss: same-beat speech disappeared from the second attempt"
+    assert str(result.get("utterance") or "") == retry_fresh, "retry context loss: final retry did not reach the fresh contribution"
+
     prior = [
         ("mara", mara),
         ("owen", "I think care gets harder when we confuse helping with taking responsibility for every outcome."),
@@ -166,9 +207,8 @@ def main():
     assert len(prompts) == 1, "specific same-topic contribution was over-rejected"
     assert accepted.get("utterance") == fresh
 
-    # Similarity to older conversation is continuity, not a same-beat echo.
-    historical = source([("mara", mara)], same_beat=False)
-    accepted, prompts = run([expression(owen_echo)], historical)
+    historical_payload = source([("mara", mara)], same_beat=False)
+    accepted, prompts = run([expression(owen_echo)], historical_payload)
     assert len(prompts) == 1, "historical topic continuity was incorrectly treated as same-beat copying"
     assert accepted.get("utterance") == owen_echo
 
