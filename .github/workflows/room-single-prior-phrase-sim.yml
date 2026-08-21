@@ -1,0 +1,27 @@
+name: Room single-prior phrase simulator
+
+on:
+  push:
+    branches:
+      - fix/room-single-prior-phrase-echo-20260821
+    paths:
+      - 'scripts/room_expression_quality.py'
+      - 'scripts/room_expression_quality_core.py'
+      - 'scripts/room_consensus_echo_sim.py'
+      - '.github/workflows/room-single-prior-phrase-sim.yml'
+  pull_request:
+    paths:
+      - 'scripts/room_expression_quality.py'
+      - 'scripts/room_expression_quality_core.py'
+      - 'scripts/room_consensus_echo_sim.py'
+      - '.github/workflows/room-single-prior-phrase-sim.yml'
+
+jobs:
+  phrase-echo:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Replay exact cycle 4793 phrase echo
+        run: |
+          python3 -m py_compile scripts/room_expression_quality.py scripts/room_expression_quality_core.py scripts/room_consensus_echo_sim.py
+          python3 scripts/room_consensus_echo_sim.py
