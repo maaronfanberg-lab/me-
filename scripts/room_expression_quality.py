@@ -115,6 +115,26 @@ def _source_is_question_only(text: str) -> bool:
     return bool(pieces) and all(part.endswith("?") for part in pieces)
 
 
+def _contains_contiguous_sequence(haystack: list[str], needle: list[str]) -> bool:
+    if len(needle) < 4 or len(needle) > len(haystack):
+        return False
+    width = len(needle)
+    return any(
+        haystack[index:index + width] == needle
+        for index in range(len(haystack) - width + 1)
+    )
+
+
+def _substantive_source_extension(current: list[str], earlier: list[str]) -> bool:
+    """Allow a verbatim established clause when it leads into substantial new evidence."""
+    if len(earlier) < 4 or len(current) < len(earlier) + 6:
+        return False
+    if not _contains_contiguous_sequence(current, earlier):
+        return False
+    novel = set(current) - set(earlier)
+    return len(novel) >= 6
+
+
 def _per_source_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
     """Reject a later voice rebuilding any one earlier voice, at every rank.
 
@@ -122,8 +142,8 @@ def _per_source_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
     cycles 4794/4795 proved that a rank-2 or rank-3 speaker can still paraphrase one
     particular earlier speaker while aggregate overlap stays below those broader
     thresholds. Compare each source independently and require either strong compact
-    coverage or multiple preserved phrase clusters. A single referenced clause plus
-    substantial new evidence remains legal.
+    coverage or multiple preserved phrase clusters. A verbatim established clause
+    followed by substantial new evidence remains legal.
     """
     current = _semantic_sequence(utterance)
     current_set = set(current)
@@ -143,6 +163,8 @@ def _per_source_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
         earlier_set = set(earlier)
         if len(earlier_set) < 4:
             continue
+        if _substantive_source_extension(current, earlier):
+            continue
 
         overlap = current_set & earlier_set
         shared = len(overlap)
@@ -155,7 +177,7 @@ def _per_source_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
 
         # Compact proposition restatement. The live 4794/4795 failures all retain
         # at least four source anchors covering 40% or more of a substantial later
-        # turn; the legitimate referenced-clause control retains only three.
+        # turn; legitimate verbatim extension is excluded above.
         if len(current_set) >= 8 and shared >= 4 and coverage >= 0.40:
             return True
 
