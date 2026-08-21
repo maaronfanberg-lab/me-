@@ -3,8 +3,21 @@ from __future__ import annotations
 import copy
 
 import room_engine_v5_core as _core
+import room_private_model as _private_model
 
 _AUTONOMOUS = set(_core.ORDER)
+
+
+def _live_model_run(*args, **kwargs):
+    """Resolve the model runner at call time instead of keeping core's stale import-time binding."""
+    return _private_model.run(*args, **kwargs)
+
+
+# room_engine_v5 installs validation/personality wrappers onto
+# room_private_model.run after some modules may already have imported core.
+# A late-bound proxy guarantees recurrent generation uses the current wrapped
+# runner rather than the original function object captured during core import.
+_core.model_run = _live_model_run
 
 
 def _ranked_prior_expression_messages(current_node: int) -> list[dict]:
