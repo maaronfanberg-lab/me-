@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
+# Re-pushed after the workflow file existed so the branch-scoped repair job runs.
 path = Path(__file__).resolve().parent / "room_expression_quality.py"
 text = path.read_text()
 anchor = '''def _substantial_sentence_copy(utterance: str, prior_turns: list[dict]) -> bool:\n'''
