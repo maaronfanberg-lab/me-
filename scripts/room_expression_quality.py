@@ -11,6 +11,7 @@ private commit call same_beat_issue, one predicate now protects both boundaries.
 import re
 import sys
 import types
+from collections import Counter
 
 import room_expression_quality_core as _core
 
@@ -65,8 +66,45 @@ def _aggregate_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
     return False
 
 
+def _consensus_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
+    """Detect a later voice rebuilding a semantic core earlier voices converged on.
+
+    Exact phrase shingles miss a live failure where each earlier voice contributes
+    part of the same proposition and the later voice recombines those anchors with
+    new connective language. Count each prior speaker only once, then require both
+    a multi-speaker consensus core and substantial aggregate borrowing. This keeps
+    ordinary synthesis of two distinct facts legal because distinct facts do not
+    create a repeated consensus core across prior voices.
+    """
+    current = _semantic_coverage_tokens(utterance)
+    if len(current) < 10 or len(prior_turns) < 2:
+        return False
+
+    by_speaker: dict[str, set[str]] = {}
+    for index, turn in enumerate(prior_turns):
+        if not isinstance(turn, dict):
+            continue
+        speaker = str(turn.get("speaker") or f"prior-{index}").lower()
+        by_speaker.setdefault(speaker, set()).update(
+            _semantic_coverage_tokens(turn.get("text"))
+        )
+    if len(by_speaker) < 2:
+        return False
+
+    frequency: Counter[str] = Counter()
+    aggregate: set[str] = set()
+    for tokens in by_speaker.values():
+        aggregate.update(tokens)
+        frequency.update(tokens)
+
+    borrowed = current & aggregate
+    consensus = {token for token in current if frequency[token] >= 2}
+    coverage = len(borrowed) / max(1, len(current))
+    return len(consensus) >= 3 and len(borrowed) >= 7 and coverage >= 0.30
+
+
 def same_beat_issue(utterance: object, prior_turns: list[dict]) -> str | None:
-    """Preserve existing checks, then reject high aggregate semantic reuse."""
+    """Preserve existing checks, then reject aggregate and consensus semantic reuse."""
     issue = _original_same_beat_issue(utterance, prior_turns)
     if issue:
         return issue
@@ -74,6 +112,8 @@ def same_beat_issue(utterance: object, prior_turns: list[dict]) -> str | None:
     turns = [item for item in (prior_turns or []) if isinstance(item, dict)]
     if text and turns and _aggregate_same_beat_echo(text, turns):
         return "same_beat_semantic_coverage"
+    if text and turns and _consensus_same_beat_echo(text, turns):
+        return "same_beat_consensus_echo"
     return None
 
 
