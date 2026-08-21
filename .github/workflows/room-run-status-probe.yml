@@ -1,5 +1,5 @@
 name: Room run status observer
-# observe post-PR137 generic-process anti-echo restart: 2026-08-21 18:48Z
+# observe post-PR139 quality-rut restart: 2026-08-21 22:31Z
 
 on:
   push:
@@ -15,12 +15,12 @@ permissions:
 jobs:
   observe:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
         with:
           ref: main
-          fetch-depth: 0
+          fetch-depth: 1
       - name: Record latest relevant workflow runs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
