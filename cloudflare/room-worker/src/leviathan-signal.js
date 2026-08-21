@@ -114,7 +114,7 @@ export async function handleLeviathanSignal(request, env) {
 
   if (url.pathname === "/api/leviathan/summary" && request.method === "GET") {
     const stub = env.LEVIATHAN_SIGNALS.getByName("global");
-    return json(await stub.summary());
+    return json(await stub.summary(), 200, headers);
   }
 
   if (request.method !== "POST") return json({ ok: false, error: "not-found" }, 404, headers);
