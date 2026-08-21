@@ -1,0 +1,20 @@
+name: Cancel redundant PR129 Room dispatch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-pr129-cancel-duplicate.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel only redundant pending Room run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run cancel 32502786941 --repo "$GITHUB_REPOSITORY" || true
