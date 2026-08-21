@@ -114,6 +114,37 @@ def main():
         source([("mara", flow)]),
     )
 
+    # Live verification after the first anti-echo restart (cycle 4623) exposed a
+    # broader failure: longer paraphrases can keep the same proposition while
+    # adding enough filler/modifiers to evade both exact-copy and short-echo rules.
+    live_mara = (
+        "I can see that incorporating the new feature in the game can be a strong option, "
+        "but I also believe it will be beneficial in the long run."
+    )
+    live_owen_echo = (
+        "The new feature, if implemented, could be a strong option. While we can see that incorporating it can be a strong option, "
+        "it may not always be as effective or beneficial as incorporating it in a game like the one we've been discussing."
+    )
+    require_retry(
+        "live rank-1 proposition paraphrase",
+        live_owen_echo,
+        "Before deciding, I'd want to know what problem the feature solves and what result would show that it improves play.",
+        source([("mara", live_mara)]),
+    )
+
+    live_jules_echo = (
+        "In the discussion we had about the new feature, it becomes clear that incorporating it can be a strong option. "
+        "The game we were discussing was the one we've been on, and it is something we could have enjoyed. "
+        "Now we see that the new feature can be a strong option. As we all discussed earlier, it could potentially be a great tool, "
+        "but it may not be as effective or beneficial in the same way as the game we've been on."
+    )
+    require_retry(
+        "live later-voice proposition paraphrase",
+        live_jules_echo,
+        "I'd test the feature in one limited round first; if players ignore it or it slows decisions, that would argue against keeping it.",
+        source([("mara", live_mara), ("owen", live_owen_echo)]),
+    )
+
     prior = [
         ("mara", mara),
         ("owen", "I think care gets harder when we confuse helping with taking responsibility for every outcome."),
