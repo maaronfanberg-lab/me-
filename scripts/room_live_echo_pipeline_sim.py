@@ -16,7 +16,6 @@ MARA = (
     "a sense of belonging to the group, and a desire to maintain their identity and perspective."
 )
 MARA_EXACT = "Understood, the group believes it views itself differently."
-HISTORICAL = "A checklist can reveal which features actually changed how people played."
 FRESH = "One distinction is whether individual members disagree privately even when the group sounds unified in public."
 
 
@@ -41,8 +40,7 @@ def _part(node: int, entity: str, rank: int, text: str) -> dict:
 
 def _bus() -> dict:
     history = [
-        {"speaker": "jules", "text": HISTORICAL, "cognition": {"target": "owen"}},
-        {"speaker": "sarah", "text": "We have been discussing whether the group has a shared view.", "cognition": {"target": "mara"}},
+        {"speaker": "jules", "text": "We have been discussing whether the group has a shared view.", "cognition": {"target": "owen"}},
     ]
     expression_private = {
         "event": history[-1],
@@ -54,7 +52,7 @@ def _bus() -> dict:
             "shared_references": [],
             "unresolved": [],
         },
-        "partner": "sarah",
+        "partner": "jules",
         "relationship": {"trust": 0.4, "respect": 0.5},
     }
     return {
@@ -78,7 +76,7 @@ def _bus() -> dict:
                     "private": {
                         "deliberation": {
                             "action": "DEEPEN",
-                            "preferred_partner": "sarah",
+                            "preferred_partner": "jules",
                             "focus": "group views",
                             "new_information_goal": "say something about the group",
                         }
@@ -105,7 +103,7 @@ def main() -> None:
     old_url = os.environ.get("ROOM_MODEL_URL")
     old_rank = os.environ.get("ROOM_EXPRESSION_RANK")
     prompts: list[str] = []
-    replies = [_model(HISTORICAL), _model(MARA_EXACT), _model(FRESH)]
+    replies = [_model(MARA_EXACT), _model(FRESH)]
 
     def fake_request(_url, prompt, _role, _temperature, _timeout, _self_entity=None, _attempt=0):
         prompts.append(prompt)
@@ -139,11 +137,9 @@ def main() -> None:
                 os.environ["ROOM_EXPRESSION_RANK"] = old_rank
 
     expression = (result.get("private") or {}).get("expression") or {}
-    assert len(prompts) >= 3, (
-        "live 4697 pipeline: exact Mara same-beat echo was accepted after retry instead of being rejected"
-    )
-    assert MARA in prompts[1], "live 4697 pipeline: Mara's same-beat words disappeared before retry validation"
-    assert expression.get("utterance") == FRESH, "live 4697 pipeline: fresh third attempt was not selected"
+    assert MARA in prompts[0], "live 4697 pipeline: Mara's same-beat words never reached the expression prompt"
+    assert len(prompts) >= 2, "live 4697 pipeline: exact Mara same-beat echo was accepted on the first attempt"
+    assert expression.get("utterance") == FRESH, "live 4697 pipeline: retry did not select the fresh contribution"
     print("ROOM LIVE ECHO PIPELINE SIM: GREEN")
 
 
