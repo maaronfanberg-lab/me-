@@ -279,6 +279,37 @@ def _same_beat_prior_turns(compact: dict) -> list[dict]:
     return out
 
 
+def _authoritative_same_beat_prior_turns(compact: dict) -> list[dict]:
+    """Prefer the actual spoken parts for this expression process.
+
+    The compact prompt context is lossy by design. Production must not let that
+    lossy copy define the publication-quality boundary when `room_parts` still
+    contains the exact turns already spoken in this beat.
+    """
+    fallback = _same_beat_prior_turns(compact)
+    try:
+        node = int(os.environ.get("ROOM_NODE_ID", "-1"))
+    except Exception:
+        return fallback
+    if node < 0:
+        return fallback
+    try:
+        import room_engine_v5_core as _core
+        live = _core.prior_expression_messages(node)
+    except Exception:
+        live = []
+    out: list[dict] = []
+    for item in live if isinstance(live, list) else []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("speaker") or "").lower() not in _AUTONOMOUS:
+            continue
+        if not str(item.get("text") or "").strip():
+            continue
+        out.append(item)
+    return out or fallback
+
+
 def _substantial_sentence_copy(utterance: str, prior_turns: list[dict]) -> bool:
     current_sentences = _sentences(utterance)
     for current in current_sentences:
@@ -430,7 +461,7 @@ def _escape_stale_context(compact: dict, self_entity: str | None) -> None:
     # tried to prevent. Keep only current-beat autonomous speech; older history is
     # still discarded, so the retry escapes the stale source without losing its
     # conversational anti-echo boundary.
-    same_beat = _same_beat_prior_turns(compact)
+    same_beat = _authoritative_same_beat_prior_turns(compact)
     if same_beat:
         compact["context"] = [dict(item) for item in same_beat]
         compact["event"] = dict(same_beat[-1])
@@ -471,7 +502,7 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
         _escape_stale_context(compact, self_entity)
         return "self_repetition"
 
-    same_beat = _same_beat_prior_turns(compact)
+    same_beat = _authoritative_same_beat_prior_turns(compact)
     if same_beat and _substantial_sentence_copy(text, same_beat):
         return "same_beat_sentence_copy"
     if same_beat and _short_same_beat_paraphrase(text, same_beat):
