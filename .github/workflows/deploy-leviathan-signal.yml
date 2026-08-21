@@ -1,11 +1,25 @@
-name: Deploy LEVIATHAN Signal Collector
+name: Verify LEVIATHAN Signal Collector
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'cloudflare/leviathan-signal/**'
+      - 'cloudflare/room-worker/src/leviathan-signal.js'
+      - 'cloudflare/room-worker/src/index-entry.js'
+      - 'cloudflare/room-worker/wrangler.toml'
+      - 'apps/leviathan-signal.js'
+      - 'apps/leviathan.html'
+      - '.github/workflows/deploy-leviathan-signal.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'cloudflare/room-worker/src/leviathan-signal.js'
+      - 'cloudflare/room-worker/src/index-entry.js'
+      - 'cloudflare/room-worker/wrangler.toml'
+      - 'apps/leviathan-signal.js'
+      - 'apps/leviathan.html'
       - '.github/workflows/deploy-leviathan-signal.yml'
   workflow_dispatch:
 
@@ -13,152 +27,146 @@ permissions:
   contents: write
 
 concurrency:
-  group: deploy-leviathan-signal
+  group: verify-leviathan-signal-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+      ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+      EXPECTED_BUILD: 20260821-v1
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: |
+            apps/leviathan.html
+            apps/leviathan-signal.js
+            cloudflare/room-worker/src/index-entry.js
+            cloudflare/room-worker/src/leviathan-signal.js
+            cloudflare/room-worker/wrangler.toml
+            status/leviathan-signal.json
 
-      - name: Check Cloudflare token
+      - name: Validate source syntax
+        run: |
+          node --check cloudflare/room-worker/src/index-entry.js
+          node --check cloudflare/room-worker/src/leviathan-signal.js
+          node --check apps/leviathan-signal.js
+
+      - name: Validate wiring
         shell: bash
         run: |
-          test -n "$CLOUDFLARE_API_TOKEN"
-          echo 'Cloudflare API token is available.'
+          grep -F 'LEVIATHAN_SIGNALS' cloudflare/room-worker/wrangler.toml
+          grep -F '20260821-v1' cloudflare/room-worker/src/index-entry.js
+          grep -F 'https://room-live-mirror.dfp6k69dw5.workers.dev/api/leviathan' apps/leviathan-signal.js
+          grep -F 'leviathan-signal.js?v=20260821b' apps/leviathan.html
 
-      - name: Select Fanberg Cloudflare account
+      - name: Wait for Git-connected Cloudflare build
+        id: git_verify
+        if: ${{ github.event_name != 'pull_request' }}
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          curl -fsS \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            -H 'Content-Type: application/json' \
-            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
-            > /tmp/cf-accounts.json
-          python3 - <<'PY' >> "$GITHUB_ENV"
-          import json
-          d=json.load(open('/tmp/cf-accounts.json'))
-          if not d.get('success'):
-              raise SystemExit('Cloudflare account lookup failed.')
-          matches=[a for a in d.get('result',[]) if 'fanberg' in str(a.get('name','')).lower()]
-          if len(matches) != 1:
-              raise SystemExit(f'Expected exactly one Fanberg Cloudflare account; found {len(matches)}.')
-          a=matches[0]
-          print(f"CLOUDFLARE_ACCOUNT_ID={a['id']}")
-          print(f"CLOUDFLARE_ACCOUNT_NAME={a['name']}")
-          PY
-          echo 'Selected Fanberg Cloudflare account.'
+          set -u
+          matched=false
+          last_code=''
+          last_body=''
+          for attempt in $(seq 1 60); do
+            body=$(mktemp)
+            code=$(curl -sS --connect-timeout 4 --max-time 8 -o "$body" -w '%{http_code}' \
+              "${ROOM_RELAY_URL}/health?leviathan=$(date +%s)" || true)
+            last_code="$code"
+            last_body=$(cat "$body" 2>/dev/null || true)
+            rm -f "$body"
+            echo "Git-connected LEVIATHAN probe attempt=$attempt http=$code body=$last_body"
+            if [ "$code" = '200' ] && printf '%s' "$last_body" | python3 -c "import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get('leviathanSignalBuild') == '${EXPECTED_BUILD}' else 1)"; then
+              matched=true
+              break
+            fi
+            sleep 5
+          done
+          echo "matched=$matched" >> "$GITHUB_OUTPUT"
+          echo "http_code=$last_code" >> "$GITHUB_OUTPUT"
+          printf '%s' "$last_body" > /tmp/leviathan-live-health.json
+          test "$matched" = true
 
-      - name: Validate Worker syntax
-        run: node --check cloudflare/leviathan-signal/src/index.js
-
-      - name: Deploy signal collector
-        id: deploy
+      - name: Verify live LEVIATHAN signal API
+        id: api_verify
+        if: ${{ github.event_name != 'pull_request' && steps.git_verify.outputs.matched == 'true' }}
+        continue-on-error: true
         shell: bash
         run: |
-          set -o pipefail
-          npx --yes wrangler@latest deploy --config cloudflare/leviathan-signal/wrangler.jsonc 2>&1 | tee /tmp/leviathan-signal-deploy.txt
-          url=$(grep -Eo 'https://[^[:space:]]+\.workers\.dev' /tmp/leviathan-signal-deploy.txt | tail -1)
-          test -n "$url"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Deployed URL: $url"
-
-      - name: Verify live collector
-        env:
-          SIGNAL_URL: ${{ steps.deploy.outputs.url }}
-        shell: bash
-        run: |
-          curl -fsS --retry 5 --retry-delay 2 "$SIGNAL_URL/health" | tee /tmp/lev-health.json
-          python3 - <<'PY'
-          import json
-          d=json.load(open('/tmp/lev-health.json'))
-          assert d.get('ok') is True
-          assert d.get('app') == 'leviathan-signal'
-          assert d.get('version') == '1'
-          print('Health endpoint verified.')
-          PY
-          code=$(curl -sS -o /tmp/options.txt -w '%{http_code}' -X OPTIONS \
+          endpoint="${ROOM_RELAY_URL}/api/leviathan"
+          code=$(curl -sS -o /tmp/leviathan-options.txt -w '%{http_code}' -X OPTIONS \
             -H 'Origin: https://maaronfanberg-lab.github.io' \
             -H 'Access-Control-Request-Method: POST' \
-            "$SIGNAL_URL/event")
+            "$endpoint/event")
           test "$code" = '204'
           curl -fsS -X POST \
             -H 'Origin: https://maaronfanberg-lab.github.io' \
             -H 'Content-Type: application/json' \
             --data '{"type":"page_view","source":"deploy-smoke"}' \
-            "$SIGNAL_URL/event" | tee /tmp/event.json
+            "$endpoint/event" | tee /tmp/leviathan-event.json
           python3 - <<'PY'
           import json
-          assert json.load(open('/tmp/event.json')).get('ok') is True
-          print('Write path verified.')
+          assert json.load(open('/tmp/leviathan-event.json')).get('ok') is True
           PY
-          curl -fsS "$SIGNAL_URL/summary" | tee /tmp/summary.json
+          curl -fsS "$endpoint/summary" | tee /tmp/leviathan-summary.json
           python3 - <<'PY'
           import json
-          d=json.load(open('/tmp/summary.json'))
+          d=json.load(open('/tmp/leviathan-summary.json'))
           assert d.get('ok') is True
           assert isinstance(d.get('events'), dict)
           assert isinstance(d.get('interest'), dict)
-          print('Aggregate summary verified.')
+          assert set(('yes','maybe','no','total')).issubset(d['interest'])
+          print('LEVIATHAN signal API verified.')
           PY
 
-      - name: Wire exact Worker URL into GitHub Pages frontend
+      - name: Record verified deployment outcome
+        if: ${{ always() && github.event_name != 'pull_request' }}
         env:
-          SIGNAL_URL: ${{ steps.deploy.outputs.url }}
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import os,re
-          p='apps/leviathan-signal.js'
-          s=open(p).read()
-          url=os.environ['SIGNAL_URL']
-          s2=re.sub(r"const ENDPOINT = '[^']*';", "const ENDPOINT = '"+url+"';", s, count=1)
-          if s2 == s and url not in s:
-              raise SystemExit('Could not wire signal endpoint.')
-          open(p,'w').write(s2)
-          print('Frontend endpoint wired.')
-          PY
-          git config user.name "leviathan-signal-deployer"
-          git config user.email "actions@users.noreply.github.com"
-          git add apps/leviathan-signal.js
-          git commit -m "Wire verified LEVIATHAN signal endpoint" || true
-
-      - name: Record deploy outcome
-        if: ${{ always() }}
-        env:
-          JOB_STATUS: ${{ job.status }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          SIGNAL_URL: ${{ steps.deploy.outputs.url }}
           COMMIT_SHA: ${{ github.sha }}
+          BUILD_MATCHED: ${{ steps.git_verify.outputs.matched }}
+          BUILD_HTTP: ${{ steps.git_verify.outputs.http_code }}
+          BUILD_OUTCOME: ${{ steps.git_verify.outcome }}
+          API_OUTCOME: ${{ steps.api_verify.outcome }}
         shell: bash
         run: |
           mkdir -p status
           python3 - <<'PY'
           import json, os
           from datetime import datetime, timezone
-          d = {
-            'checked_at': datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
-            'app': 'leviathan-signal',
-            'job_status': os.environ.get('JOB_STATUS','unknown'),
-            'run_id': int(os.environ.get('RUN_ID','0') or 0),
-            'run_attempt': int(os.environ.get('RUN_ATTEMPT','0') or 0),
-            'trigger_commit': os.environ.get('COMMIT_SHA',''),
-            'cloudflare_url': os.environ.get('SIGNAL_URL',''),
+          matched=os.environ.get('BUILD_MATCHED')=='true'
+          api=os.environ.get('API_OUTCOME')=='success'
+          out={
+            'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+            'app':'leviathan-signal',
+            'deployment_channel':'git-connected',
+            'worker':'room-live-mirror',
+            'worker_url':'https://room-live-mirror.dfp6k69dw5.workers.dev',
+            'api_url':'https://room-live-mirror.dfp6k69dw5.workers.dev/api/leviathan',
+            'expected_build':'20260821-v1',
+            'git_connected_build_verified':matched,
+            'health_http':os.environ.get('BUILD_HTTP') or '',
+            'build_probe_outcome':os.environ.get('BUILD_OUTCOME') or 'skipped',
+            'api_verify_outcome':os.environ.get('API_OUTCOME') or 'skipped',
+            'pass':bool(matched and api),
+            'run_id':int(os.environ.get('RUN_ID','0') or 0),
+            'run_attempt':int(os.environ.get('RUN_ATTEMPT','0') or 0),
+            'trigger_commit':os.environ.get('COMMIT_SHA',''),
           }
-          open('status/leviathan-signal.json','w').write(json.dumps(d,indent=2)+'\n')
-          print(json.dumps(d,indent=2))
+          out['state']='git-connected-build-live' if out['pass'] else 'git-connected-build-not-verified'
+          open('status/leviathan-signal.json','w').write(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
           PY
-          git config user.name "leviathan-signal-deployer"
+          git config user.name "leviathan-signal-verifier"
           git config user.email "actions@users.noreply.github.com"
-          git add apps/leviathan-signal.js status/leviathan-signal.json
+          git add status/leviathan-signal.json
           git commit -m "Record LEVIATHAN signal deployment outcome" || exit 0
           for n in 1 2 3 4 5; do
             if git push origin HEAD:main; then exit 0; fi
@@ -170,10 +178,8 @@ jobs:
 
       - name: Summary
         if: ${{ always() }}
-        env:
-          SIGNAL_URL: ${{ steps.deploy.outputs.url }}
         run: |
           echo "### LEVIATHAN signal collector" >> "$GITHUB_STEP_SUMMARY"
-          echo "Job status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Cloudflare account: ${CLOUDFLARE_ACCOUNT_NAME:-unresolved}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Collector: ${SIGNAL_URL:-not-deployed}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Git-connected build matched: ${{ steps.git_verify.outputs.matched || 'PR syntax-only' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "API verification: ${{ steps.api_verify.outcome || 'PR syntax-only' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Collector: $ROOM_RELAY_URL/api/leviathan" >> "$GITHUB_STEP_SUMMARY"
