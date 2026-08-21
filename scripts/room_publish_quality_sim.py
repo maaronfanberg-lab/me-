@@ -70,6 +70,15 @@ def main() -> None:
     ]
     assert_blocked(live_4785, "live cycle 4785")
 
+    # A single reused clause can be legitimate when the reply contributes a new
+    # causal observation. Phrase-level protection must reject mosaics, not punish
+    # ordinary conversational reference to one established fact.
+    legitimate_extension = [
+        row("mara", "The red fox crossed the old stone bridge before dawn."),
+        row("owen", "The red fox crossed the old stone bridge before dawn because a dog chased it from the orchard, leaving muddy pawprints beside a torn feed sack near the gate."),
+    ]
+    publish.validate_staged_quality(legitimate_extension)
+
     fresh = [
         row("mara", "The group keeps using vague labels, so I would choose one concrete event to discuss."),
         row("owen", "A useful test is whether everyone describes that event the same way before drawing conclusions."),
