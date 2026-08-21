@@ -33,6 +33,17 @@ PRIVACY_MARKERS = (
     "internal instructions", "chain of thought", "room_prompt_",
 )
 
+# At the irreversible publication boundary, presentation garnish must not count
+# as a genuinely new proposition. These are deliberately narrow discourse and
+# evaluative tokens that the live 4777 echo used to manufacture false novelty.
+_PUBLISH_GARNISH = {
+    "hey", "exactly", "truly", "special", "interest", "fresh", "like",
+    "together", "first", "latest", "start", "use", "create", "creat",
+    "let", "let'", "we've", "here'", "that'", "i'd", "past", "few", "week",
+    "closer", "step", "take", "last", "since", "also", "consider",
+    "addition", "power", "powerful",
+}
+
 
 def norm(value) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
@@ -145,6 +156,40 @@ def validate_public_expression(entity: str, text: str, terms: list[str]) -> None
         raise RuntimeError(f"private Room privacy leak blocked for {entity}")
 
 
+def _publish_semantic_tokens(text: object) -> set[str]:
+    """Return proposition-bearing anchors for exact staged speech.
+
+    Normalize a common split compound and remove discourse/evaluative garnish so
+    respacing or stylistic flourishes cannot masquerade as semantic novelty.
+    """
+    normalized = re.sub(r"\btest\s+bed\b", "testbed", str(text or ""), flags=re.I)
+    return {
+        token for token in _quality._anchor_tokens(normalized)
+        if token not in _PUBLISH_GARNISH
+    }
+
+
+def _aggregate_staged_echo(text: str, prior: list[dict]) -> bool:
+    """Detect a multi-sentence paraphrase mosaic across already-staged voices."""
+    if not prior:
+        return False
+    current = _publish_semantic_tokens(text)
+    if len(current) < 6:
+        return False
+    earlier: set[str] = set()
+    for turn in prior:
+        earlier.update(_publish_semantic_tokens(turn.get("text")))
+    overlap = current & earlier
+    coverage = len(overlap) / max(1, len(current))
+    # One earlier turn can already establish a proposition. Later turns get a
+    # slightly broader aggregate test because they can remix two earlier voices.
+    if len(overlap) >= 8 and coverage >= 0.68:
+        return True
+    if len(prior) >= 2 and len(overlap) >= 10 and coverage >= 0.60:
+        return True
+    return False
+
+
 def validate_staged_quality(staged: list[tuple[str, str, str, str, list[str]]]) -> None:
     """Block cross-voice semantic echoes at the final publication boundary."""
     prior: list[dict] = []
@@ -152,6 +197,8 @@ def validate_staged_quality(staged: list[tuple[str, str, str, str, list[str]]]) 
         issue = _quality.same_beat_issue(text, prior)
         if issue:
             raise RuntimeError(f"private Room same-beat echo blocked for {entity}: {issue}")
+        if _aggregate_staged_echo(text, prior):
+            raise RuntimeError(f"private Room same-beat echo blocked for {entity}: semantic_coverage")
         prior.append({
             "speaker": entity,
             "text": text,
