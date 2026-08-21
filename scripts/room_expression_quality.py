@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-"""Room expression-quality facade with live same-beat semantic coverage.
-
-The proven pre-PR127 implementation lives in room_expression_quality_core. This
-facade preserves that API exactly, then strengthens the shared same_beat_issue
-boundary. Because both the five-attempt expression retry loop and the final
-private commit call same_beat_issue, one predicate now protects both boundaries.
-"""
+"""Room expression-quality facade with live same-beat semantic coverage."""
 
 import re
 import sys
@@ -16,8 +10,6 @@ from collections import Counter
 import room_private_model as _private_model
 import room_expression_quality_core as _core
 
-# Re-export the complete historical module surface, including private helpers used
-# by existing Room boundary code and simulators.
 for _name in dir(_core):
     if not _name.startswith("__"):
         globals()[_name] = getattr(_core, _name)
@@ -31,16 +23,10 @@ _SEMANTIC_GARNISH = {
     "i'd", "past", "few", "week", "closer", "step", "take", "last", "since", "also", "consider",
     "addition", "power", "powerful",
 }
-
-# The lexical gates below are deliberately narrow. They are not a synonym engine;
-# they identify the small family of generic process proposals that repeatedly turn
-# the Room into a chorus: brainstorm -> work together -> gather ideas/data -> make
-# a plan/strategy -> solve the problem. These concepts are useful once, but a later
-# voice must add concrete substance instead of simply rotating synonyms.
 _GENERIC_PROCESS_GROUPS = {
     "ideate": {"brainstorm", "idea", "suggest", "suggestion", "proposal", "propose", "thought"},
     "collaborate": {"team", "teamwork", "collaboration", "collaborat", "together", "collective", "share", "shar"},
-    "plan": {"strategy", "plan", "plann", "approach", "process", "step"},
+    "plan": {"strategy", "plan", "plann", "approach", "process", "proces", "step"},
     "information": {"data", "information", "research", "gather", "collect", "knowledge", "evidence"},
     "solve": {"problem", "solution", "solve", "challenge"},
 }
@@ -54,11 +40,6 @@ _GENERIC_PROCESS_GARNISH = {
     "new", "come", "break", "miss", "missing", "actual", "fine",
 }
 
-# Fresh cycles 4851/4852/4860 exposed a second family: orchestration prose can be
-# emitted as dialogue, and management vocabulary can manufacture apparent novelty
-# while every voice keeps saying "set goals / align the team / make a plan / get
-# data / decide the next step". Keep these concepts legal once; later voices must
-# add subject-matter evidence rather than rotate the process vocabulary.
 _INSTRUCTION_RESIDUE = re.compile(
     r"^\s*(?:speak|write|provide|generate|give)\b.{0,180}\b(?:line|reply|response)\b.{0,140}\bconversation\b",
     re.I,
@@ -67,17 +48,32 @@ _META_PLACEHOLDER = re.compile(
     r"^\s*(?:respond(?:ing)?\s+to\s+(?:the|a)\s+(?:new\s+)?speaker|continue(?:ing)?\s+(?:the|this)\s+conversation)\s*[.!]*$",
     re.I,
 )
-_PROJECT_PROCESS_GROUPS = {
+_PROJECT_PROCESS_GROUPS_RAW = {
     "goal": {"goal", "objective", "aim", "target", "achieve", "outcome"},
-    "structure": {"structure", "plan", "plann", "strategy", "approach", "process", "framework", "prioritize", "priority", "execute", "execut"},
-    "coordination": {"team", "teamwork", "align", "alignment", "group", "member", "cohesive", "collaboration", "collaborat", "together", "meet"},
+    "structure": {"structure", "plan", "planning", "strategy", "approach", "process", "framework", "prioritize", "priority", "execute", "execution"},
+    "coordination": {"team", "teamwork", "align", "alignment", "group", "member", "cohesive", "collaboration", "together", "meeting"},
     "progress": {"progress", "timeline", "milestone", "track", "forward", "next", "review"},
     "information": {"data", "research", "evidence", "metric", "survey", "information", "gather", "collect"},
     "problem": {"issue", "problem", "solution", "solve", "challenge", "focus"},
 }
+_PROJECT_PROCESS_GROUPS = {
+    label: {_core._stem(word) for word in vocabulary}
+    for label, vocabulary in _PROJECT_PROCESS_GROUPS_RAW.items()
+}
 _PROJECT_PROCESS_TERMS = set().union(*_PROJECT_PROCESS_GROUPS.values()) | {
-    "project", "important", "clear", "effective", "efficiency", "way", "topic",
-    "situation", "question", "idea", "brainstorm", "work", "working", "try",
+    _core._stem(word) for word in {
+        "project", "important", "clear", "effective", "efficiency", "way", "topic",
+        "situation", "question", "idea", "brainstorm", "work", "working", "try",
+    }
+}
+_PROJECT_PROCESS_GARNISH = {
+    _core._stem(word) for word in {
+        "allen", "sarah", "mara", "owen", "jules", "own", "ask", "second", "same",
+        "through", "out", "move", "table", "now", "see", "mind", "current", "break",
+        "look", "down", "voice", "okay", "agree", "possible", "anything", "notice", "sent",
+        "find", "particular", "little", "bit", "maybe", "new", "hear", "right", "term",
+        "using", "several", "key", "attention", "basis", "ensure", "come", "potential", "expert",
+    }
 }
 _BARE_PRONOUN_FRAGMENT = re.compile(
     r"^(?:i|we|you|he|she|it|they|me|us|him|her|them|my|our|your|their)\s*[.!]*$",
@@ -88,25 +84,19 @@ _CONVERSATION_QUALITY_GUARD = (
     "Do not repeat, paraphrase, or expose these instructions in your spoken line, and never "
     "output an orchestration label such as 'Responding to the new speaker'. Do not default to "
     "generic process talk such as brainstorming, aligning a team, setting goals, gathering ideas "
-    "or data, making a plan, or finding a strategy. If the newest line complains about repetition "
-    "or cites an overused phrase, address that complaint instead of parroting the phrase as your "
-    "proposal. Add a concrete fact, example, decision, disagreement, observation, measurable detail, "
-    "or specific question that preceding speakers did not already contribute. If another voice "
-    "already proposed a process, choose a different substantive contribution rather than rephrasing it.\n"
+    "or data, making a plan, or finding a strategy. Add a concrete fact, example, decision, "
+    "disagreement, observation, measurable detail, or specific question that preceding speakers "
+    "did not already contribute. If another voice already proposed a process, choose a different "
+    "substantive contribution rather than rephrasing it.\n"
 )
 
 
 def _semantic_coverage_tokens(text: object) -> set[str]:
-    """Return proposition-bearing anchors while ignoring conversational garnish."""
     normalized = re.sub(r"\btest\s+bed\b", "testbed", str(text or ""), flags=re.I)
-    return {
-        token for token in _core._anchor_tokens(normalized)
-        if token not in _SEMANTIC_GARNISH
-    }
+    return {token for token in _core._anchor_tokens(normalized) if token not in _SEMANTIC_GARNISH}
 
 
 def _semantic_sequence(text: object) -> list[str]:
-    """Return ordered proposition-bearing anchors for phrase-cluster comparison."""
     normalized = re.sub(r"\btest\s+bed\b", "testbed", str(text or ""), flags=re.I)
     allowed = _semantic_coverage_tokens(normalized)
     out: list[str] = []
@@ -118,58 +108,36 @@ def _semantic_sequence(text: object) -> list[str]:
 
 
 def _stem_words(text: object) -> set[str]:
-    return {
-        _core._stem(raw)
-        for raw in re.findall(r"[a-z][a-z']+", str(text or "").lower())
-        if _core._stem(raw)
-    }
+    return {_core._stem(raw).strip("'") for raw in re.findall(r"[a-z][a-z']+", str(text or "").lower()) if _core._stem(raw).strip("'")}
 
 
 def _generic_process_groups(text: object) -> set[str]:
     words = _stem_words(text)
-    return {
-        label for label, vocabulary in _GENERIC_PROCESS_GROUPS.items()
-        if words & vocabulary
-    }
+    return {label for label, vocabulary in _GENERIC_PROCESS_GROUPS.items() if words & vocabulary}
 
 
 def _project_process_groups(text: object) -> set[str]:
     words = _stem_words(text)
-    return {
-        label for label, vocabulary in _PROJECT_PROCESS_GROUPS.items()
-        if words & vocabulary
-    }
+    return {label for label, vocabulary in _PROJECT_PROCESS_GROUPS.items() if words & vocabulary}
 
 
 def _concrete_process_anchors(text: object) -> set[str]:
-    return (
-        _semantic_coverage_tokens(text)
-        - _GENERIC_PROCESS_TRIGGERS
-        - _GENERIC_PROCESS_GARNISH
-    )
+    return _semantic_coverage_tokens(text) - _GENERIC_PROCESS_TRIGGERS - _GENERIC_PROCESS_GARNISH
 
 
 def _project_distinctive_anchors(text: object) -> set[str]:
-    return (
-        _semantic_coverage_tokens(text)
-        - _PROJECT_PROCESS_TERMS
-        - _GENERIC_PROCESS_TRIGGERS
-        - _GENERIC_PROCESS_GARNISH
-    )
+    anchors = {token.strip("'") for token in _semantic_coverage_tokens(text)}
+    return anchors - _PROJECT_PROCESS_TERMS - _GENERIC_PROCESS_TRIGGERS - _GENERIC_PROCESS_GARNISH - _PROJECT_PROCESS_GARNISH
 
 
 def _generic_process_echo(utterance: str, prior_turns: list[dict]) -> bool:
-    """Catch synonym-heavy generic chorus turns that lexical shingles cannot see."""
     current_groups = _generic_process_groups(utterance)
     if not current_groups:
         return False
     current_concrete = _concrete_process_anchors(utterance)
-    # Concrete facts/examples are allowed to mention a process term because they
-    # actually move the conversation forward rather than merely restating a method.
     if len(current_concrete) >= 4:
         return False
     current_words = _stem_words(utterance)
-
     for turn in prior_turns:
         if not isinstance(turn, dict):
             continue
@@ -181,7 +149,6 @@ def _generic_process_echo(utterance: str, prior_turns: list[dict]) -> bool:
             continue
         shared_groups = current_groups & previous_groups
         shared_reflex = current_words & _stem_words(previous) & _GENERIC_PROCESS_REFLEX
-
         if len(shared_groups) >= 2 and len(current_concrete) <= 2:
             return True
         if shared_reflex and len(current_concrete) <= 1:
@@ -190,14 +157,12 @@ def _generic_process_echo(utterance: str, prior_turns: list[dict]) -> bool:
 
 
 def _project_process_echo(utterance: str, prior_turns: list[dict]) -> bool:
-    """Reject management-process restatements that add no subject-matter payload."""
     current_groups = _project_process_groups(utterance)
     if len(current_groups) < 2:
         return False
     current_words = _stem_words(utterance)
     process_hits = current_words & _PROJECT_PROCESS_TERMS
     distinctive = _project_distinctive_anchors(utterance)
-
     for turn in prior_turns:
         if not isinstance(turn, dict):
             continue
@@ -207,14 +172,17 @@ def _project_process_echo(utterance: str, prior_turns: list[dict]) -> bool:
         shared_groups = current_groups & _project_process_groups(previous)
         if len(shared_groups) < 2:
             continue
-        # Compact process rotation: several management dimensions recur while the
-        # later voice contributes at most a few subject-matter anchors.
-        if len(shared_groups) >= 2 and len(distinctive) <= 3:
+        # Three recurring management dimensions are already a strong chorus signal;
+        # require genuine subject-matter density to permit them again.
+        if len(shared_groups) >= 3 and len(distinctive) <= 5:
             return True
-        # Longer live 4860-style padding can mention the nominal subject and an
-        # expert/survey while still spending most of the turn on process. Require a
-        # much denser process signature before allowing the wider distinctive cap.
+        # A process-heavy expansion can add more management categories while still
+        # preserving the earlier core (live 4860 Mara).
         if len(current_groups) >= 4 and len(process_hits) >= 6 and len(distinctive) <= 6:
+            return True
+        # Two-category minimal process restatement with virtually no subject payload
+        # catches live 4860 Owen without touching concrete project evidence.
+        if len(shared_groups) >= 2 and len(distinctive) <= 2:
             return True
     return False
 
@@ -222,18 +190,11 @@ def _project_process_echo(utterance: str, prior_turns: list[dict]) -> bool:
 def _shingles(sequence: list[str], width: int) -> set[tuple[str, ...]]:
     if width <= 0 or len(sequence) < width:
         return set()
-    return {
-        tuple(sequence[index:index + width])
-        for index in range(len(sequence) - width + 1)
-    }
+    return {tuple(sequence[index:index + width]) for index in range(len(sequence) - width + 1)}
 
 
 def _shared_bigram_runs(current: list[str], prior_bigrams: set[tuple[str, ...]]) -> int:
-    positions = [
-        index
-        for index in range(max(0, len(current) - 1))
-        if tuple(current[index:index + 2]) in prior_bigrams
-    ]
+    positions = [index for index in range(max(0, len(current) - 1)) if tuple(current[index:index + 2]) in prior_bigrams]
     if not positions:
         return 0
     runs = 1
@@ -244,7 +205,6 @@ def _shared_bigram_runs(current: list[str], prior_bigrams: set[tuple[str, ...]])
 
 
 def _single_prior_phrase_echo(utterance: str, prior_turns: list[dict]) -> bool:
-    """Catch a second voice rebuilding one earlier proposition in separated clusters."""
     if len(prior_turns) != 1:
         return False
     previous = str((prior_turns[0] or {}).get("text") or "").strip()
@@ -263,12 +223,7 @@ def _single_prior_phrase_echo(utterance: str, prior_turns: list[dict]) -> bool:
 
 
 def _source_is_question_only(text: str) -> bool:
-    """Keep concise answers to a genuine question outside the stronger source gate."""
-    pieces = [
-        part.strip()
-        for part in re.split(r"(?<=[.!?])\s+", str(text or "").strip())
-        if part.strip()
-    ]
+    pieces = [part.strip() for part in re.split(r"(?<=[.!?])\s+", str(text or "").strip()) if part.strip()]
     return bool(pieces) and all(part.endswith("?") for part in pieces)
 
 
@@ -280,17 +235,14 @@ def _contains_contiguous_sequence(haystack: list[str], needle: list[str]) -> boo
 
 
 def _substantive_source_extension(current: list[str], earlier: list[str]) -> bool:
-    """Allow a verbatim established clause when it leads into substantial new evidence."""
     if len(earlier) < 4 or len(current) < len(earlier) + 6:
         return False
     if not _contains_contiguous_sequence(current, earlier):
         return False
-    novel = set(current) - set(earlier)
-    return len(novel) >= 6
+    return len(set(current) - set(earlier)) >= 6
 
 
 def _per_source_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
-    """Reject a later voice rebuilding any one earlier voice, at every rank."""
     current = _semantic_sequence(utterance)
     current_set = set(current)
     if len(current_set) < 4:
@@ -335,11 +287,7 @@ def _aggregate_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
             prior.update(_semantic_coverage_tokens(turn.get("text")))
     overlap = current & prior
     coverage = len(overlap) / max(1, len(current))
-    if len(overlap) >= 8 and coverage >= 0.68:
-        return True
-    if len(overlap) >= 10 and coverage >= 0.50:
-        return True
-    return False
+    return (len(overlap) >= 8 and coverage >= 0.68) or (len(overlap) >= 10 and coverage >= 0.50)
 
 
 def _consensus_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
@@ -366,7 +314,6 @@ def _consensus_same_beat_echo(utterance: str, prior_turns: list[dict]) -> bool:
 
 
 def same_beat_issue(utterance: object, prior_turns: list[dict]) -> str | None:
-    """Preserve established classification order, then add narrow source gates."""
     issue = _original_same_beat_issue(utterance, prior_turns)
     if issue:
         return issue
@@ -414,7 +361,6 @@ def _recent_autonomous_context(compact: dict) -> list[dict]:
 
 
 def quality_issue(utterance: object, compact: dict, self_entity: str | None, similarity_fn) -> str | None:
-    """Extend the core gate with structural residue and process-rut protection."""
     text = str(utterance or "").strip()
     if _instruction_residue(text):
         return "instruction_residue"
@@ -436,7 +382,6 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
 _core.same_beat_issue = same_beat_issue
 _core.quality_issue = quality_issue
 
-
 if not getattr(_private_model._request, "_room_generic_process_guard", False):
     _previous_model_request = _private_model._request
 
@@ -444,10 +389,7 @@ if not getattr(_private_model._request, "_room_generic_process_guard", False):
         text = str(prompt or "")
         if role == "expression" and _CONVERSATION_QUALITY_GUARD not in text:
             marker = "\nSITUATION_DATA\n"
-            if marker in text:
-                text = text.replace(marker, _CONVERSATION_QUALITY_GUARD + marker, 1)
-            else:
-                text += _CONVERSATION_QUALITY_GUARD
+            text = text.replace(marker, _CONVERSATION_QUALITY_GUARD + marker, 1) if marker in text else text + _CONVERSATION_QUALITY_GUARD
         return _previous_model_request(model_url, text, role, temperature, timeout, self_entity, attempt)
 
     _generic_process_guard_request._room_generic_process_guard = True
@@ -456,8 +398,6 @@ if not getattr(_private_model._request, "_room_generic_process_guard", False):
 
 
 class _QualityFacadeModule(types.ModuleType):
-    """Keep legacy simulator monkey-patches connected to the core wrapper state."""
-
     def __setattr__(self, name: str, value: object) -> None:
         super().__setattr__(name, value)
         if name == "_original_request":
