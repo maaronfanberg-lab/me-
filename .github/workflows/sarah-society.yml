@@ -244,10 +244,13 @@ jobs:
                 python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json || return 1
             done
 
-            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
+            if timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" \
               env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
-              python3 scripts/room_private_commit.py commit
-            commit_rc=$?
+              python3 scripts/room_private_commit.py commit; then
+              commit_rc=0
+            else
+              commit_rc=$?
+            fi
             if [ "$commit_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then
               return "$ROOM_QUALITY_REJECTION_EXIT"
             fi
@@ -257,8 +260,11 @@ jobs:
           }
 
           while [ "$SECONDS" -lt "$stop_at" ]; do
-            run_beat
-            beat_rc=$?
+            if run_beat; then
+              beat_rc=0
+            else
+              beat_rc=$?
+            fi
             if [ "$beat_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then
               consecutive_failures=0
               echo "Publish boundary rejected semantic echo; regenerating the beat"
