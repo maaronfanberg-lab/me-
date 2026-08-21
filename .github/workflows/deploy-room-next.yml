@@ -1,0 +1,99 @@
+name: Deploy Room Next
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/room-next/**'
+      - '.github/workflows/deploy-room-next.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-room-next
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID || vars.CF_ACCOUNT_ID }}
+      ROOM_NEXT_URL: https://room-next.dfp6k69dw5.workers.dev
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install and validate isolated project
+        working-directory: cloudflare/room-next
+        run: |
+          npm install --no-audit --no-fund
+          npm run check
+          npm run dry-run
+
+      - name: Detect Cloudflare API deployment access
+        id: token
+        shell: bash
+        run: |
+          if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'No Cloudflare API token is available in GitHub. Source is valid, but creating the new Worker requires a Cloudflare connection or token.'
+          fi
+
+      - name: Resolve Cloudflare account
+        if: steps.token.outputs.available == 'true' && env.CLOUDFLARE_ACCOUNT_ID == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            'https://api.cloudflare.com/client/v4/accounts?per_page=50' > /tmp/cf-accounts.json
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          d=json.load(open('/tmp/cf-accounts.json'))
+          if not d.get('success'):
+              raise SystemExit('Cloudflare account lookup failed')
+          matches=[a for a in d.get('result',[]) if 'fanberg' in str(a.get('name','')).lower()]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected one Fanberg Cloudflare account; found {len(matches)}')
+          print(f"CLOUDFLARE_ACCOUNT_ID={matches[0]['id']}")
+          PY
+
+      - name: Deploy brand-new Room Next Worker
+        id: deploy
+        if: steps.token.outputs.available == 'true'
+        working-directory: cloudflare/room-next
+        run: npx wrangler deploy
+
+      - name: Verify the new Worker is independent and live
+        if: steps.deploy.outcome == 'success'
+        shell: bash
+        run: |
+          curl -fsS --retry 8 --retry-delay 2 "$ROOM_NEXT_URL/health?fresh=$(date +%s)" > /tmp/room-next-health.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/room-next-health.json'))
+          print(json.dumps(d,indent=2))
+          assert d.get('ok') is True
+          assert d.get('system') == 'room-next'
+          assert d.get('oldRoomDependency') is False
+          PY
+
+      - name: Deployment summary
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.deploy.outcome }}" = 'success' ]; then
+            echo 'Room Next deployed independently at:'
+            echo "$ROOM_NEXT_URL/"
+          else
+            echo 'Room Next source and CI are ready, but a Cloudflare account credential/connection is still required to create the new Worker.'
+          fi
