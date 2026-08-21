@@ -215,3 +215,9 @@ def appraise(entity: str, profile: dict, event: dict | None, context: list[dict]
         "schema_activation": schema,
         "coping_patterns": profile.get("coping_patterns"),
     }
+
+
+# The wrapper imports personality before it captures the preserved core's
+# recurrent function. Installing the adjacency bridge here lets later same-beat
+# speakers refresh stale pre-beat plans without changing the preserved core file.
+import room_ai_adjacency as _room_ai_adjacency  # noqa: E402,F401
