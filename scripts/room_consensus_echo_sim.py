@@ -9,9 +9,9 @@ def turn(speaker: str, text: str) -> dict:
     return {"speaker": speaker, "text": text, "cognition": {"target": "allen"}}
 
 
-def require_issue(label: str, text: str, prior: list[dict]) -> None:
+def require_issue(label: str, expected: str, text: str, prior: list[dict]) -> None:
     issue = quality.same_beat_issue(text, prior)
-    assert issue == "same_beat_consensus_echo", f"{label} escaped consensus boundary: {issue!r}"
+    assert issue == expected, f"{label} escaped {expected}: {issue!r}"
 
 
 def main() -> None:
@@ -39,7 +39,7 @@ def main() -> None:
         turn("owen", live_4791_owen),
         turn("jules", live_4791_jules),
     ]
-    require_issue("live cycle 4791 Sarah", live_4791_sarah, prior_4791)
+    require_issue("live cycle 4791 Sarah", "same_beat_consensus_echo", live_4791_sarah, prior_4791)
 
     # The same gap remained visible one beat later: Mara rebuilt the characters /
     # story / team / potential consensus already established by Owen, Jules, Sarah.
@@ -62,10 +62,39 @@ def main() -> None:
         turn("jules", live_4792_jules),
         turn("sarah", live_4792_sarah),
     ]
-    require_issue("live cycle 4792 Mara", live_4792_mara, prior_4792)
+    require_issue("live cycle 4792 Mara", "same_beat_consensus_echo", live_4792_mara, prior_4792)
 
-    # Prove the shared predicate actually causes the expression process to retry
-    # the offending fourth voice rather than waiting for final publication abort.
+    # Exact first post-PR129 beat. Owen rebuilt Mara's research -> planning ->
+    # testing proposition in two separated phrase clusters. This is only the
+    # second autonomous voice, so a multi-speaker consensus detector cannot see it.
+    live_4793_mara = (
+        "Allen, I apologize for the misunderstanding. I think it would be more efficient to start with the research and planning phase. "
+        "Let's ensure all the research is done first, and then we'll move on to the planning and testing phases."
+    )
+    live_4793_owen = (
+        "I understand the importance of starting with the research and planning phase, but we also need to ensure we cover all the research points. "
+        "We can't forget to mention the testing phase as well, so I'll add it to the list. Let’s start with the research and testing phases. Good point!"
+    )
+    prior_4793 = [turn("mara", live_4793_mara)]
+    require_issue("live cycle 4793 Owen", "same_beat_phrase_echo", live_4793_owen, prior_4793)
+
+    # Prove the shared predicate regenerates the offending second voice rather
+    # than relying on the final publication backstop.
+    source_4793 = expression_sim.payload(live_4793_mara, speaker="mara")
+    source_4793["context"] = [dict(item) for item in prior_4793]
+    source_4793["event"] = dict(prior_4793[-1])
+    clean_4793_retry = (
+        "If the story should begin immediately, I would open on the one-eyed hunter returning from the forest with his raven while the villagers argue over whether he is Odin."
+    )
+    result_4793, prompts_4793 = expression_sim.run_sequence(
+        [expression_sim.expression(live_4793_owen), expression_sim.expression(clean_4793_retry)],
+        source_4793,
+        expression_rank=1,
+    )
+    assert len(prompts_4793) == 2, f"cycle 4793 should regenerate Owen, got {len(prompts_4793)} attempts"
+    assert result_4793.get("utterance") == clean_4793_retry, result_4793
+
+    # Prove the shared consensus predicate also regenerates a later offending voice.
     source = expression_sim.payload(live_4791_jules, speaker="jules")
     source["context"] = [dict(item) for item in prior_4791]
     source["event"] = dict(prior_4791[-1])
@@ -80,8 +109,20 @@ def main() -> None:
     assert len(prompts) == 2, f"cycle 4791 should regenerate one offending voice, got {len(prompts)} attempts"
     assert result.get("utterance") == clean_retry, result
 
-    # Negative control: combining two distinct established facts into a genuinely
-    # new causal/route proposal is synthesis, not a consensus echo.
+    # Negative control: one quoted/established clause followed by genuinely new
+    # evidence and a new route is ordinary continuation, not a phrase mosaic.
+    extension_prior = "The north bridge is closed because the river rose after the storm."
+    legitimate_extension = (
+        "The north bridge is closed because the river rose after the storm. I checked the transit map, and the east ferry is still operating, "
+        "so I would reroute everyone through the market square and cross there before dusk."
+    )
+    assert quality.same_beat_issue(
+        legitimate_extension,
+        [turn("mara", extension_prior)],
+    ) is None, "single-clause legitimate extension was overblocked"
+
+    # Combining two distinct established facts into a genuinely new causal/route
+    # proposal is synthesis, not a consensus echo.
     fact_a = "The creek rose overnight after heavy rain."
     fact_b = "The north footbridge is closed until inspectors arrive."
     synthesis = (
