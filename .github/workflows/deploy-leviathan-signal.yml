@@ -128,8 +128,39 @@ jobs:
           git config user.name "leviathan-signal-deployer"
           git config user.email "actions@users.noreply.github.com"
           git add apps/leviathan-signal.js
-          git commit -m "Wire verified LEVIATHAN signal endpoint" || exit 0
-          for n in 1 2 3 4; do
+          git commit -m "Wire verified LEVIATHAN signal endpoint" || true
+
+      - name: Record deploy outcome
+        if: ${{ always() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          SIGNAL_URL: ${{ steps.deploy.outputs.url }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          mkdir -p status
+          python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          d = {
+            'checked_at': datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+            'app': 'leviathan-signal',
+            'job_status': os.environ.get('JOB_STATUS','unknown'),
+            'run_id': int(os.environ.get('RUN_ID','0') or 0),
+            'run_attempt': int(os.environ.get('RUN_ATTEMPT','0') or 0),
+            'trigger_commit': os.environ.get('COMMIT_SHA',''),
+            'cloudflare_url': os.environ.get('SIGNAL_URL',''),
+          }
+          open('status/leviathan-signal.json','w').write(json.dumps(d,indent=2)+'\n')
+          print(json.dumps(d,indent=2))
+          PY
+          git config user.name "leviathan-signal-deployer"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/leviathan-signal.js status/leviathan-signal.json
+          git commit -m "Record LEVIATHAN signal deployment outcome" || exit 0
+          for n in 1 2 3 4 5; do
             if git push origin HEAD:main; then exit 0; fi
             git fetch origin main
             git rebase origin/main || { git rebase --abort || true; exit 1; }
@@ -138,10 +169,11 @@ jobs:
           exit 1
 
       - name: Summary
+        if: ${{ always() }}
         env:
           SIGNAL_URL: ${{ steps.deploy.outputs.url }}
         run: |
-          echo "### LEVIATHAN signal collector deployed" >> "$GITHUB_STEP_SUMMARY"
-          echo "Cloudflare account: $CLOUDFLARE_ACCOUNT_NAME" >> "$GITHUB_STEP_SUMMARY"
-          echo "Collector: $SIGNAL_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "Public aggregate summary: $SIGNAL_URL/summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "### LEVIATHAN signal collector" >> "$GITHUB_STEP_SUMMARY"
+          echo "Job status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloudflare account: ${CLOUDFLARE_ACCOUNT_NAME:-unresolved}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Collector: ${SIGNAL_URL:-not-deployed}" >> "$GITHUB_STEP_SUMMARY"
