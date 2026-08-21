@@ -12,8 +12,11 @@ MAX_HISTORY = 8
 MAX_RECENT_TERMS = 10
 # update_topic is called twice around a published beat. Twenty updates therefore
 # gives an episode roughly ten beats to develop before age alone forces a bridge.
-# This is a backstop, not the primary novelty detector: low-novelty can shift sooner.
 MAX_EPISODE_UPDATES = 20
+_AGE_BREAKOUT_SUBJECTS = (
+    "music", "places", "food", "friendship", "nature", "travel", "books", "art",
+    "home", "weather", "skills", "movies", "gardens", "photography", "humor",
+)
 
 
 def _clean(value: object) -> str:
@@ -52,6 +55,19 @@ def _unique(values, limit: int) -> list[str]:
     return out
 
 
+def _age_breakout_terms(prior: dict, cycle: int) -> list[str]:
+    vocabulary = [
+        prior.get("root"), prior.get("current_facet"),
+        *list(prior.get("facets") or []), *list(prior.get("recent_terms") or []),
+    ]
+    start = int(cycle) % len(_AGE_BREAKOUT_SUBJECTS)
+    for offset in range(len(_AGE_BREAKOUT_SUBJECTS)):
+        candidate = _AGE_BREAKOUT_SUBJECTS[(start + offset) % len(_AGE_BREAKOUT_SUBJECTS)]
+        if not any(_near(candidate, existing) for existing in vocabulary if existing):
+            return [candidate]
+    return [_AGE_BREAKOUT_SUBJECTS[start]]
+
+
 def topic_template(cycle: int = 0) -> dict:
     return {
         "semantic_schema": SCHEMA,
@@ -85,27 +101,11 @@ def _flat_branches(root: str | None, facets: list[str], cycle: int, counts: Coun
     counts = counts or Counter()
     out: list[dict] = []
     if root:
-        out.append({
-            "label": root,
-            "parent": None,
-            "depth": 0,
-            "first_cycle": int(cycle),
-            "last_cycle": int(cycle),
-            "hits": max(1, int(counts.get(root, 1))),
-            "status": "open",
-        })
+        out.append({"label": root, "parent": None, "depth": 0, "first_cycle": int(cycle), "last_cycle": int(cycle), "hits": max(1, int(counts.get(root, 1))), "status": "open"})
     for facet in facets:
         if root and _near(facet, root):
             continue
-        out.append({
-            "label": facet,
-            "parent": root,
-            "depth": 1,
-            "first_cycle": int(cycle),
-            "last_cycle": int(cycle),
-            "hits": max(1, int(counts.get(facet, 1))),
-            "status": "open",
-        })
+        out.append({"label": facet, "parent": root, "depth": 1, "first_cycle": int(cycle), "last_cycle": int(cycle), "hits": max(1, int(counts.get(facet, 1))), "status": "open"})
     return out[: 1 + MAX_FACETS]
 
 
@@ -139,42 +139,23 @@ def _normalize(topic: dict | None, cycle: int) -> dict:
     old_branches = source.get("branches") if isinstance(source.get("branches"), list) else []
     had_runaway_depth = any(int((branch or {}).get("depth", 0)) > 1 for branch in old_branches if isinstance(branch, dict))
     schema = int(source.get("semantic_schema", 0) or 0)
-
     if schema < SCHEMA or had_runaway_depth:
-        candidates = [
-            source.get("current_facet"),
-            *list(source.get("recent_terms") or []),
-            *list(source.get("visited_facets") or [])[-MAX_HISTORY:],
-            *list(source.get("facets") or []),
-        ]
+        candidates = [source.get("current_facet"), *list(source.get("recent_terms") or []), *list(source.get("visited_facets") or [])[-MAX_HISTORY:], *list(source.get("facets") or [])]
         facets = [term for term in _unique(candidates, MAX_FACETS + 1) if not (root and _near(term, root))][:MAX_FACETS]
         current = facets[0] if facets else root
         migrated = topic_template(cycle)
         migrated.update({
-            "id": str(source.get("id") or migrated["id"]),
-            "root": root,
-            "current_facet": current,
-            "facets": facets,
-            "visited_facets": [current] if current else [],
-            "facet_index": 0,
-            "shared_references": list(source.get("shared_references") or [])[-4:],
-            "unresolved": list(source.get("unresolved") or [])[-4:],
-            "participants": list(social.PARTICIPANTS),
-            "turns": int(source.get("turns", 0) or 0),
-            "low_novelty_beats": 3 if had_runaway_depth else 0,
-            "recent_terms": _unique(source.get("recent_terms") or [], MAX_RECENT_TERMS),
-            "status": "ready_to_bridge" if had_runaway_depth else "active",
-            "bridge_pending": bool(had_runaway_depth),
-            "bridge_reason": "runaway_depth" if had_runaway_depth else "",
-            "branch_history": [],
-            "focus_turns": 0,
-            "escape_pressure": 0,
-            "last_shift_cycle": int(source.get("last_shift_cycle", cycle) or cycle),
-            "last_branch_cycle": int(cycle),
+            "id": str(source.get("id") or migrated["id"]), "root": root, "current_facet": current,
+            "facets": facets, "visited_facets": [current] if current else [], "facet_index": 0,
+            "shared_references": list(source.get("shared_references") or [])[-4:], "unresolved": list(source.get("unresolved") or [])[-4:],
+            "participants": list(social.PARTICIPANTS), "turns": int(source.get("turns", 0) or 0),
+            "low_novelty_beats": 3 if had_runaway_depth else 0, "recent_terms": _unique(source.get("recent_terms") or [], MAX_RECENT_TERMS),
+            "status": "ready_to_bridge" if had_runaway_depth else "active", "bridge_pending": bool(had_runaway_depth),
+            "bridge_reason": "runaway_depth" if had_runaway_depth else "", "branch_history": [], "focus_turns": 0,
+            "escape_pressure": 0, "last_shift_cycle": int(source.get("last_shift_cycle", cycle) or cycle), "last_branch_cycle": int(cycle),
         })
         migrated["branches"] = _flat_branches(root, facets, cycle)
         return migrated
-
     defaults = topic_template(cycle)
     defaults.update(source)
     defaults["semantic_schema"] = SCHEMA
@@ -200,23 +181,17 @@ def _normalize(topic: dict | None, cycle: int) -> dict:
 
 
 def new_topic_from_terms(terms, cycle: int, prior: dict | None = None) -> dict:
-    clean = _unique(terms, 1 + MAX_FACETS)
+    source_terms = terms
+    if prior and str(prior.get("bridge_reason") or "") == "episode_age":
+        source_terms = _age_breakout_terms(prior, cycle)
+    clean = _unique(source_terms, 1 + MAX_FACETS)
     topic = topic_template(cycle)
     if not clean:
         return topic
     root = clean[0]
     facets = [term for term in clean[1:] if not _near(term, root)][:MAX_FACETS]
     current = facets[0] if facets else root
-    topic.update({
-        "root": root,
-        "current_facet": current,
-        "facets": facets,
-        "visited_facets": [current],
-        "status": "active",
-        "bridge_pending": False,
-        "bridge_reason": "",
-        "recent_terms": clean[:MAX_RECENT_TERMS],
-    })
+    topic.update({"root": root, "current_facet": current, "facets": facets, "visited_facets": [current], "status": "active", "bridge_pending": False, "bridge_reason": "", "recent_terms": clean[:MAX_RECENT_TERMS]})
     if prior and prior.get("current_facet"):
         topic["shared_references"] = [_clean(prior.get("current_facet"))]
     topic["branches"] = _flat_branches(root, facets, cycle)
@@ -249,17 +224,14 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
     shifted = _outside_subject_shift(current, list(messages or []), cycle)
     if shifted is not None:
         return shifted
-
     episode_id = current.get("id")
     terms = topic_terms_from_messages(messages, limit=MAX_RECENT_TERMS, episode_id=episode_id)
     if current.get("root") is None:
         return new_topic_from_terms(terms, cycle, current)
-
     root = current.get("root")
     was_bridge_pending = bool(current.get("bridge_pending", False))
     previous_terms = list(current.get("recent_terms") or [])
     novel = [term for term in terms if not any(_near(term, old) for old in [root, *current.get("facets", [])] if old)]
-
     facets = list(current.get("facets") or [])
     for term in novel:
         if root and _near(term, root):
@@ -274,7 +246,6 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
             facets.remove(match)
             facets.insert(0, match)
     facets = facets[:MAX_FACETS]
-
     focus_turns = int(current.get("focus_turns", 0) or 0) + 1
     active = current.get("current_facet") or root
     if novel and focus_turns >= 2:
@@ -282,19 +253,16 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
         focus_turns = 0
     elif active != root and not any(_near(active, facet) for facet in facets):
         active = facets[0] if facets else root
-
     history = list(current.get("branch_history") or [])
     old_focus = current.get("current_facet")
     if old_focus and active and not _near(old_focus, active):
         history.append(_clean(old_focus))
     history = _unique(history, MAX_HISTORY)
-
     visited = list(current.get("visited_facets") or [])
     if active:
         visited.append(_clean(active))
     visited = _unique(reversed(visited), MAX_HISTORY)
     visited.reverse()
-
     meaningful = [term for term in terms if not any(_near(term, old) for old in previous_terms)]
     low_novelty = 0 if meaningful else int(current.get("low_novelty_beats", 0) or 0) + 1
     next_turns = int(current.get("turns", 0) or 0) + 1
@@ -310,25 +278,13 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
     else:
         bridge_reason = ""
     status = "ready_to_bridge" if bridge_pending else "active"
-
     current.update({
-        "semantic_schema": SCHEMA,
-        "root": root,
-        "current_facet": active,
-        "facets": facets,
-        "visited_facets": visited,
-        "facet_index": max(0, len(visited) - 1),
-        "branch_history": history,
-        "focus_turns": focus_turns,
-        "turns": next_turns,
-        "recent_terms": terms[:MAX_RECENT_TERMS],
-        "low_novelty_beats": low_novelty,
-        "status": status,
-        "bridge_pending": bridge_pending,
-        "bridge_reason": bridge_reason,
-        "escape_pressure": max(low_novelty, 3 if age_exhausted else 0),
-        "last_branch_cycle": int(cycle),
-        "participants": list(social.PARTICIPANTS),
+        "semantic_schema": SCHEMA, "root": root, "current_facet": active, "facets": facets,
+        "visited_facets": visited, "facet_index": max(0, len(visited) - 1), "branch_history": history,
+        "focus_turns": focus_turns, "turns": next_turns, "recent_terms": terms[:MAX_RECENT_TERMS],
+        "low_novelty_beats": low_novelty, "status": status, "bridge_pending": bridge_pending,
+        "bridge_reason": bridge_reason, "escape_pressure": max(low_novelty, 3 if age_exhausted else 0),
+        "last_branch_cycle": int(cycle), "participants": list(social.PARTICIPANTS),
     })
     counts = Counter(terms)
     current["branches"] = _flat_branches(root, facets, cycle, counts)
