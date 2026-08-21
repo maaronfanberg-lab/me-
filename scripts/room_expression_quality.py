@@ -416,12 +416,24 @@ def _recovery_subject(self_entity: str | None) -> str:
 
 
 def _escape_stale_context(compact: dict, self_entity: str | None) -> None:
-    """Mutate only the next model attempt after a semantic-copy rejection."""
+    """Drop stale history on retry without forgetting speech from this beat."""
     event = compact.get("event") if isinstance(compact.get("event"), dict) else None
     speaker = str((event or {}).get("speaker") or "").lower()
 
     if event and speaker not in _AUTONOMOUS:
         compact["context"] = [event]
+        return
+
+    # Expression retries reuse the same compact object. If a generic duplicate or
+    # self-repetition rejection cleared this list, later attempts became blind to
+    # already-spoken same-beat turns and could publish the exact echo we had just
+    # tried to prevent. Keep only current-beat autonomous speech; older history is
+    # still discarded, so the retry escapes the stale source without losing its
+    # conversational anti-echo boundary.
+    same_beat = _same_beat_prior_turns(compact)
+    if same_beat:
+        compact["context"] = [dict(item) for item in same_beat]
+        compact["event"] = dict(same_beat[-1])
         return
 
     fresh = _recovery_subject(self_entity)
