@@ -1,7 +1,7 @@
 {
   "version": "room-attention-v2",
-  "generated_at": "2026-08-21T13:07:17.090530+00:00",
-  "cycle_key": "32484132931:1:6",
+  "generated_at": "2026-08-21T13:09:05.872568+00:00",
+  "cycle_key": "32484132931:1:7",
   "node": 4,
   "entity": "mara",
   "role": "thought",
@@ -32,28 +32,43 @@
       "name": "memory-callback",
       "tier": "project",
       "domain": "memory-callback",
-      "score": 1.83,
-      "confidence": 0.788,
-      "raw_score": 1.83,
+      "score": 3.59,
+      "confidence": 0.989,
+      "raw_score": 3.59,
       "repeat_penalty": 0.0,
       "matched_triggers": [
-        "remember",
-        "past"
+        "before",
+        "past",
+        "remember"
       ],
       "evidence_sources": [
         {
           "kind": "message",
           "matched": [
-            "remember"
+            "before"
           ],
-          "weight": 1.45
+          "weight": 1.8
         },
         {
-          "kind": "topic_support",
+          "kind": "message",
           "matched": [
             "past"
           ],
-          "weight": 0.38
+          "weight": 1.15
+        },
+        {
+          "kind": "message",
+          "matched": [
+            "remember"
+          ],
+          "weight": 0.64
+        },
+        {
+          "kind": "topic",
+          "matched": [
+            "past"
+          ],
+          "weight": 0.58
         }
       ]
     },
@@ -61,32 +76,33 @@
       "name": "critical-testing",
       "tier": "project",
       "domain": "critical-testing",
-      "score": 1.8,
-      "confidence": 0.779,
-      "raw_score": 1.8,
-      "repeat_penalty": 0.0,
+      "score": 1.4,
+      "confidence": 0.632,
+      "raw_score": 1.68,
+      "repeat_penalty": 0.28,
       "matched_triggers": [
+        "sure",
         "why"
       ],
       "evidence_sources": [
         {
           "kind": "message",
           "matched": [
-            "why"
+            "sure"
           ],
-          "weight": 1.8
+          "weight": 0.92
         },
         {
           "kind": "message",
           "matched": [
             "why"
           ],
-          "weight": 0.64
+          "weight": 0.76
         }
       ]
     }
   ],
-  "context_fingerprint": "750d29a1ddce",
+  "context_fingerprint": "e4994321975b",
   "base_prompt_chars": 3349,
   "temporary_skill_chars": 861,
   "approx_added_tokens": 215
