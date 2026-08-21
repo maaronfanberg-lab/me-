@@ -1,5 +1,5 @@
 name: Room run status observer
-# observe PR127 semantic retry restart: 2026-08-21 16:10Z
+# observe PR127 semantic retry + live quality probe: 2026-08-21 16:16Z
 
 on:
   push:
@@ -28,6 +28,8 @@ jobs:
           mkdir -p room
           fields='databaseId,status,conclusion,event,createdAt,updatedAt,headSha,displayTitle'
           gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --limit 5 --json "$fields" > /tmp/room-runs.json
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow room-live-quality-probe.yml --limit 5 --json "$fields" > /tmp/quality-runs.json
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow room-cloudflare-git-build-probe.yml --limit 5 --json "$fields" > /tmp/cloudflare-probe-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow room-worker-ingest-simulator.yml --limit 5 --json "$fields" > /tmp/worker-sim-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow room-relay-probe.yml --limit 5 --json "$fields" > /tmp/relay-probe-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-room-worker.yml --limit 5 --json "$fields" > /tmp/deploy-runs.json
@@ -35,6 +37,8 @@ jobs:
           import json
           out={
             'room':json.load(open('/tmp/room-runs.json')),
+            'live_quality_probe':json.load(open('/tmp/quality-runs.json')),
+            'cloudflare_git_probe':json.load(open('/tmp/cloudflare-probe-runs.json')),
             'worker_ingest_simulator':json.load(open('/tmp/worker-sim-runs.json')),
             'relay_probe':json.load(open('/tmp/relay-probe-runs.json')),
             'room_worker_deploy':json.load(open('/tmp/deploy-runs.json')),
