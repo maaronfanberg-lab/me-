@@ -10,6 +10,7 @@ on:
       - 'scripts/room_responsiveness_sim.py'
       - 'scripts/room_allen_two_voice_sim.py'
       - 'scripts/room_question_answering_sim.py'
+      - 'scripts/apply_entity_question_answering_fix.py'
       - 'scripts/room_participant.py'
       - 'scripts/room_social_v5.py'
       - 'scripts/room_personality_v2.py'
@@ -46,10 +47,12 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Run Allen and Room responsiveness simulators
+      - name: Apply question repair and run simulators
         shell: bash
         run: |
           set +e
+          python3 scripts/apply_entity_question_answering_fix.py > /tmp/question-repair.txt 2>&1
+          repair_status=$?
           python3 scripts/room_allen_response_sim.py > /tmp/allen-response.txt 2>&1
           response_status=$?
           python3 scripts/room_allen_observation_sim.py > /tmp/allen-observation.txt 2>&1
@@ -65,16 +68,17 @@ jobs:
           python3 scripts/room_engine_v5.py selftest > /tmp/engine-selftest.txt 2>&1
           engine_status=$?
           set -e
-          python3 - "$response_status" "$observation_status" "$provocation_status" "$responsiveness_status" "$rank1_status" "$question_status" "$engine_status" <<'PY'
+          python3 - "$repair_status" "$response_status" "$observation_status" "$provocation_status" "$responsiveness_status" "$rank1_status" "$question_status" "$engine_status" <<'PY'
           import json,sys
           from datetime import datetime,timezone
-          response_status,observation_status,provocation_status,responsiveness_status,rank1_status,question_status,engine_status=map(int,sys.argv[1:])
+          repair_status,response_status,observation_status,provocation_status,responsiveness_status,rank1_status,question_status,engine_status=map(int,sys.argv[1:])
           def read(path):
               try:return open(path).read()[-6000:]
               except Exception:return ''
           payload={
               'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
-              'pass':all(x==0 for x in (response_status,observation_status,provocation_status,responsiveness_status,rank1_status,question_status,engine_status)),
+              'pass':all(x==0 for x in (repair_status,response_status,observation_status,provocation_status,responsiveness_status,rank1_status,question_status,engine_status)),
+              'repair_exit_code':repair_status,
               'response_sim_exit_code':response_status,
               'observation_sim_exit_code':observation_status,
               'provocation_sim_exit_code':provocation_status,
@@ -82,6 +86,7 @@ jobs:
               'rank1_sim_exit_code':rank1_status,
               'question_sim_exit_code':question_status,
               'engine_selftest_exit_code':engine_status,
+              'repair_output':read('/tmp/question-repair.txt'),
               'response_sim_output':read('/tmp/allen-response.txt'),
               'observation_sim_output':read('/tmp/allen-observation.txt'),
               'provocation_sim_output':read('/tmp/allen-provocation.txt'),
@@ -94,15 +99,15 @@ jobs:
           open('room/allen-social-sim-diagnostic.json','w').write(json.dumps(payload,indent=2)+'\n')
           print(json.dumps(payload,indent=2))
           PY
-      - name: Record diagnostic on tested branch
+      - name: Record repaired runtime and diagnostic on tested branch
         if: always() && github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'allen-social-simulator'
           git config user.email 'actions@users.noreply.github.com'
-          git add room/allen-social-sim-diagnostic.json
-          git commit -m 'Record Allen social boundary simulator' || exit 0
+          git add scripts/room_engine_v5.py scripts/room_private_model.py room/allen-social-sim-diagnostic.json
+          git commit -m 'Make entities answer direct questions' || exit 0
           branch="${GITHUB_REF_NAME}"
           for n in 1 2 3 4 5; do
             if git push origin "HEAD:${branch}"; then exit 0; fi
