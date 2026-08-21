@@ -1,0 +1,27 @@
+name: PR129 explicit Room restart
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-pr129-explicit-restart.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Dispatch The Room explicitly
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto
+          sleep 5
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --limit 3 \
+            --json databaseId,status,conclusion,event,createdAt,headSha,displayTitle
