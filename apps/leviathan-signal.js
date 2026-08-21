@@ -1,10 +1,8 @@
 (() => {
-  const ENDPOINT = '__LEVIATHAN_SIGNAL_ENDPOINT__';
-  const enabled = /^https:\/\//.test(ENDPOINT);
+  const ENDPOINT = 'https://room-live-mirror.dfp6k69dw5.workers.dev/api/leviathan';
   const source = 'github-pages-v1';
 
   function post(path, payload) {
-    if (!enabled) return Promise.resolve({ ok: false, disabled: true });
     return fetch(ENDPOINT + path, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -23,9 +21,15 @@
 
   const boot = () => {
     once('leviathan_signal_page_view', () => post('/event', { type: 'page_view' }));
+    const markPower = () => once('leviathan_signal_power', () => post('/event', { type: 'power_on' }));
 
     const power = document.getElementById('power');
-    if (power) power.addEventListener('click', () => once('leviathan_signal_power', () => post('/event', { type: 'power_on' })), { passive: true });
+    if (power) power.addEventListener('click', markPower, { passive: true });
+    document.querySelectorAll('[onclick*="playLeviathanClassic"]').forEach(button => {
+      button.addEventListener('click', markPower, { passive: true });
+    });
+    const workpiecePlay = document.getElementById('workpiecePlay');
+    if (workpiecePlay) workpiecePlay.addEventListener('click', markPower, { passive: true });
 
     const box = document.getElementById('marketSignal');
     const open = document.getElementById('marketOpen');
@@ -58,7 +62,7 @@
         status.textContent = 'SIGNAL RECEIVED — THANK YOU.';
         status.style.color = 'var(--teal)';
       } else {
-        status.textContent = enabled ? 'COULD NOT SEND. TRY AGAIN.' : 'SIGNAL COLLECTOR IS DEPLOYING.';
+        status.textContent = 'COULD NOT SEND. TRY AGAIN.';
         status.style.color = 'var(--crimson)';
       }
     });
