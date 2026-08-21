@@ -1,5 +1,5 @@
 name: Room run status observer
-# observe explicit PR129 Room dispatch: 2026-08-21 16:24Z
+# observe PR129 Room + pulse orchestration: 2026-08-21 16:27Z
 
 on:
   push:
@@ -27,7 +27,8 @@ jobs:
         run: |
           mkdir -p room
           fields='databaseId,status,conclusion,event,createdAt,updatedAt,headSha,displayTitle'
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --limit 5 --json "$fields" > /tmp/room-runs.json
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --limit 8 --json "$fields" > /tmp/room-runs.json
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society-pulse.yml --limit 5 --json "$fields" > /tmp/pulse-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow room-live-quality-probe.yml --limit 5 --json "$fields" > /tmp/quality-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow room-cloudflare-git-build-probe.yml --limit 5 --json "$fields" > /tmp/cloudflare-probe-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow room-worker-ingest-simulator.yml --limit 5 --json "$fields" > /tmp/worker-sim-runs.json
@@ -37,6 +38,7 @@ jobs:
           import json
           out={
             'room':json.load(open('/tmp/room-runs.json')),
+            'pulse':json.load(open('/tmp/pulse-runs.json')),
             'live_quality_probe':json.load(open('/tmp/quality-runs.json')),
             'cloudflare_git_probe':json.load(open('/tmp/cloudflare-probe-runs.json')),
             'worker_ingest_simulator':json.load(open('/tmp/worker-sim-runs.json')),
