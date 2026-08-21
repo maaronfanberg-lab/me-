@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
+# Apply only the tested retry-context mutation; the helper is removed before merge.
 path = Path(__file__).resolve().parent / "room_expression_quality.py"
 text = path.read_text()
 old = '''def _escape_stale_context(compact: dict, self_entity: str | None) -> None:\n    \"\"\"Mutate only the next model attempt after a semantic-copy rejection.\"\"\"\n    event = compact.get(\"event\") if isinstance(compact.get(\"event\"), dict) else None\n    speaker = str((event or {}).get(\"speaker\") or \"\").lower()\n\n    if event and speaker not in _AUTONOMOUS:\n        compact[\"context\"] = [event]\n        return\n\n    fresh = _recovery_subject(self_entity)\n    compact[\"event\"] = None\n    compact[\"context\"] = []\n    compact[\"discussion\"] = {\n        \"subject\": fresh,\n        \"focus\": fresh,\n        \"related\": [],\n        \"shared\": [],\n        \"open_questions\": [],\n    }\n    compact.pop(\"intent\", None)\n    compact.pop(\"possible_direction\", None)\n    personality = compact.get(\"personality_context\")\n    if isinstance(personality, dict):\n        personality.pop(\"current\", None)\n'''
