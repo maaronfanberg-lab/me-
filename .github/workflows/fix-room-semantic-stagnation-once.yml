@@ -1,0 +1,122 @@
+name: Fix Room semantic stagnation once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-room-semantic-stagnation-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch semantic stagnation and live-vocabulary breakout
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('scripts/room_topic_bounded.py')
+          s = p.read_text()
+
+          s = s.replace('import re\nfrom collections import Counter\n', 'import json\nimport re\nfrom collections import Counter\nfrom pathlib import Path\n', 1)
+
+          old_pool = '''_AGE_BREAKOUT_SUBJECTS = (\n    "music", "places", "food", "friendship", "nature", "travel", "books", "art",\n    "home", "weather", "skills", "movies", "gardens", "photography", "humor",\n)\n'''
+          new_pool = '''_AGE_BREAKOUT_SUBJECTS = (\n    "volcanoes", "beekeeping", "coral reefs", "astronomy", "origami", "mushrooms",\n    "architecture", "bird migration", "ceramics", "ocean currents", "mythology", "fossils",\n    "urban trees", "caves", "lighthouses", "tea", "deserts", "constellations", "rivers",\n    "insects", "textiles", "woodworking", "clouds", "maps", "islands", "orchards",\n    "languages", "bridges", "tides", "seeds", "comets", "mountains", "shells",\n    "fermentation", "railways", "museums", "wolves", "whales", "glassmaking", "geology",\n    "folklore", "bicycles", "calligraphy", "wetlands", "penguins", "shipwrecks",\n    "stargazing", "pottery", "butterflies", "waterfalls", "chess", "kites", "breadmaking",\n    "mosaics", "orchids", "meteorites", "canoes", "castles", "spices", "snowflakes",\n)\n'''
+          if old_pool not in s:
+              raise SystemExit('breakout pool anchor missing')
+          s = s.replace(old_pool, new_pool, 1)
+
+          old_age = re.compile(r'def _age_breakout_terms\(prior: dict, cycle: int\) -> list\[str\]:\n.*?\n\ndef topic_template', re.S)
+          new_age = '''def _persisted_live_vocabulary() -> list[str]:\n    """Collect semantic terms from the persisted live Room, fail-soft when absent."""\n    path = Path("room/feed.json")\n    if not path.exists():\n        return []\n    try:\n        payload = json.loads(path.read_text())\n    except Exception:\n        return []\n    vocabulary: list[str] = []\n    state = payload.get("state") if isinstance(payload, dict) else {}\n    topic = state.get("topic_episode") if isinstance(state, dict) else {}\n    if isinstance(topic, dict):\n        vocabulary.extend([topic.get("root"), topic.get("current_facet")])\n        vocabulary.extend(list(topic.get("facets") or []))\n        vocabulary.extend(list(topic.get("recent_terms") or []))\n        vocabulary.extend(list(topic.get("visited_facets") or []))\n        vocabulary.extend(list(topic.get("branch_history") or []))\n    for message in list(payload.get("conversation") or []) if isinstance(payload, dict) else []:\n        if not isinstance(message, dict):\n            continue\n        vocabulary.extend(_declared_terms(message))\n    return _unique(vocabulary, 512)\n\n\ndef _age_breakout_terms(prior: dict, cycle: int) -> list[str]:\n    vocabulary = [\n        prior.get("root"), prior.get("current_facet"),\n        *list(prior.get("facets") or []), *list(prior.get("recent_terms") or []),\n        *list(prior.get("visited_facets") or []), *list(prior.get("branch_history") or []),\n        *_persisted_live_vocabulary(),\n    ]\n    vocabulary = _unique(vocabulary, 512)\n    start = int(cycle) % len(_AGE_BREAKOUT_SUBJECTS)\n    for offset in range(len(_AGE_BREAKOUT_SUBJECTS)):\n        candidate = _AGE_BREAKOUT_SUBJECTS[(start + offset) % len(_AGE_BREAKOUT_SUBJECTS)]\n        if not any(_near(candidate, existing) for existing in vocabulary if existing):\n            return [candidate]\n    raise RuntimeError("no semantically fresh age-breakout subject remains")\n\n\ndef topic_template'''
+          s, n = old_age.subn(new_age, s, count=1)
+          if n != 1:
+              raise SystemExit(f'age breakout replacement count={n}')
+
+          s = s.replace('''        "last_branch_cycle": int(cycle),\n        "escape_pressure": 0,\n''', '''        "last_branch_cycle": int(cycle),\n        "last_semantic_progress_cycle": int(cycle),\n        "last_stagnation_cycle": None,\n        "escape_pressure": 0,\n''', 1)
+
+          old = '''    meaningful = [term for term in terms if not any(_near(term, old) for old in previous_terms)]\n    low_novelty = 0 if meaningful else int(current.get("low_novelty_beats", 0) or 0) + 1\n    next_turns = int(current.get("turns", 0) or 0) + 1\n'''
+          new = '''    # Semantic progress and stagnation use the same criterion as facet advancement.\n    # Lexically different paraphrases of known facets are not progress. Because\n    # update_topic runs twice around a beat, count at most once per cycle.\n    prior_low_novelty = int(current.get("low_novelty_beats", 0) or 0)\n    last_progress_cycle = int(current.get("last_semantic_progress_cycle", -1) or -1)\n    last_stagnation_cycle = current.get("last_stagnation_cycle")\n    if novel:\n        low_novelty = 0\n        last_progress_cycle = int(cycle)\n        last_stagnation_cycle = None\n    elif last_progress_cycle == int(cycle):\n        low_novelty = prior_low_novelty\n    elif last_stagnation_cycle == int(cycle) if last_stagnation_cycle is not None else False:\n        low_novelty = prior_low_novelty\n    else:\n        low_novelty = prior_low_novelty + 1\n        last_stagnation_cycle = int(cycle)\n    next_turns = int(current.get("turns", 0) or 0) + 1\n'''
+          if old not in s:
+              raise SystemExit('stagnation anchor missing')
+          s = s.replace(old, new, 1)
+
+          old_update = '''        "bridge_reason": bridge_reason, "escape_pressure": max(low_novelty, 3 if age_exhausted else 0),\n        "last_branch_cycle": int(cycle), "participants": list(social.PARTICIPANTS),\n'''
+          new_update = '''        "bridge_reason": bridge_reason, "escape_pressure": max(low_novelty, 3 if age_exhausted else 0),\n        "last_branch_cycle": int(cycle), "last_semantic_progress_cycle": last_progress_cycle,\n        "last_stagnation_cycle": last_stagnation_cycle, "participants": list(social.PARTICIPANTS),\n'''
+          if old_update not in s:
+              raise SystemExit('state update anchor missing')
+          s = s.replace(old_update, new_update, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Verify against persisted live Room vocabulary
+        run: |
+          python3 -m py_compile scripts/room_topic_bounded.py
+          PYTHONPATH=scripts python3 - <<'PY'
+          import copy, json
+          from pathlib import Path
+          import room_topic_bounded as t
+
+          state = json.loads(Path('room/state.json').read_text())
+          feed = json.loads(Path('room/feed.json').read_text())
+          live_topic = copy.deepcopy(state['topic_episode'])
+          live_vocab = t._persisted_live_vocabulary()
+          assert len(live_vocab) >= 12, f'live vocabulary unexpectedly thin: {len(live_vocab)}'
+
+          # This is the adversarial production vocabulary, not a hand-written fixture.
+          bridge_topic = copy.deepcopy(live_topic)
+          bridge_topic['bridge_reason'] = 'episode_age'
+          bridge_topic['bridge_pending'] = True
+          selected = t._age_breakout_terms(bridge_topic, int(state['cycle']) + 1)[0]
+          collisions = [term for term in live_vocab if t._near(selected, term)]
+          assert not collisions, (selected, collisions[:20])
+
+          # Reuse actual known facets from the live topic with changing wording/order.
+          # They must accumulate stagnation rather than resetting it as lexical novelty.
+          known = [x for x in live_topic.get('facets', []) if x][:4]
+          assert len(known) >= 2, known
+          rolling = copy.deepcopy(live_topic)
+          rolling['turns'] = 0
+          rolling['low_novelty_beats'] = 0
+          rolling['bridge_pending'] = False
+          rolling['bridge_reason'] = ''
+          rolling['last_semantic_progress_cycle'] = int(state['cycle'])
+          rolling['last_stagnation_cycle'] = None
+          eid = rolling['id']
+          for step in range(1, 4):
+              cycle = int(state['cycle']) + step
+              terms = [rolling['root'], known[step % len(known)], known[(step + 1) % len(known)]]
+              msg = {'speaker':'sarah','text':' '.join(terms), 'cognition':{'topic_episode':eid,'topic_terms':terms}}
+              rolling = t.update_topic(rolling, [msg], cycle)
+              once = rolling['low_novelty_beats']
+              rolling = t.update_topic(rolling, [msg], cycle)
+              assert rolling['low_novelty_beats'] == once, 'same-cycle second update double-counted stagnation'
+          assert rolling['bridge_pending'] is True, rolling
+          assert rolling['bridge_reason'] == 'low_novelty', rolling
+          print('PASS live vocabulary size=', len(live_vocab), 'fresh breakout=', selected)
+          PY
+
+      - name: Commit and self-delete
+        run: |
+          set -e
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/room_topic_bounded.py
+          git rm .github/workflows/fix-room-semantic-stagnation-once.yml
+          git commit -m 'Count Room semantic stagnation by real facet novelty'
+          for attempt in $(seq 1 12); do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep 2
+          done
+          exit 1
