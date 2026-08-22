@@ -473,8 +473,8 @@ def _allen_turn_is_provocative(event, context=None):
 
 
 def _allen_voice_engages(key, rank):
-    """Deterministic ordinary-turn engagement with natural falloff by rank."""
-    thresholds = {0: 256, 1: 230, 2: 175, 3: 105}
+    """Allen has high conversational gravity: every autonomous voice engages his newest turn."""
+    thresholds = {0: 256, 1: 256, 2: 256, 3: 256}
     threshold = thresholds.get(int(rank), 0)
     if threshold >= 256:
         return True

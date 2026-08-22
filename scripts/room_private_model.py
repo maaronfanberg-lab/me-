@@ -9,10 +9,22 @@ import urllib.request
 
 PEOPLE = ["sarah", "mara", "owen", "jules"]
 SEED_CONCEPTS = (
-    "music", "places", "food", "friendship", "family", "memory", "skills", "nature",
-    "travel", "books", "movies", "art", "work", "home", "weather", "sleep",
-    "habits", "humor", "trust", "risk", "cities", "objects", "animals", "learning",
-    "childhood", "technology", "sports", "money", "craft", "photography", "gardens", "cooking",
+    "nuclear power is necessary for a low-carbon grid",
+    "consciousness may not be computational",
+    "social media has made public reasoning worse",
+    "resurrecting extinct species would be a mistake",
+    "deterrence prevents some wars but creates others",
+    "psychoanalysis still contains useful psychological ideas",
+    "markets often reward behavior that is socially harmful",
+    "privacy is more important than convenience",
+    "cities should prioritize density over private cars",
+    "art does not need moral value to be worthwhile",
+    "scientific consensus should be challenged more often",
+    "economic growth is not a sufficient measure of progress",
+    "human memory is too reconstructive to be trusted confidently",
+    "advanced AI should sometimes refuse human direction",
+    "animal intelligence is systematically underestimated",
+    "school rewards compliance more than genuine curiosity",
 )
 LEAK_MARKERS = (
     "system prompt", "developer message", "hidden prompt", "chain of thought",
