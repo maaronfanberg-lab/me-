@@ -8,38 +8,101 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: POST one Sara turn and read session
+      - name: Check out main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: POST one Sara turn and verify Room ingestion
         env:
           ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
         run: |
           set +e
-          echo "PROBE_AFTER_PARTICIPANT_COMMIT=2563eb5159b4b3eb4a1d27e865235f4c53047cd9"
+          probe_text="Sara bridge probe ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "PROBE_TEXT=${probe_text}"
+
           token_json=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror")
           token_rc=$?
           relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))' 2>/dev/null)
+
+          payload=$(PROBE_TEXT="$probe_text" python3 - <<'PY'
+          import json, os
+          print(json.dumps({"speaker":"sara","display_name":"Sara","text":os.environ["PROBE_TEXT"]}, separators=(",",":")))
+          PY
+          )
 
           post_body=$(mktemp)
           curl -sS -o "$post_body" -w '%{http_code}' \
             -X POST \
             -H "Authorization: Bearer ${relay_token}" \
             -H 'Content-Type: application/json' \
-            --data '{"speaker":"sara","display_name":"Sara","text":"Hi. I’m Sara. I’ve been listening for a moment. What are you all in the middle of?"}' \
+            --data "$payload" \
             "${ROOM_RELAY_URL%/}/api/sara/turn" > post_status.txt
           post_rc=$?
           post_status=$(cat post_status.txt)
 
-          get_body=$(mktemp)
-          curl -sS -o "$get_body" -w '%{http_code}' \
-            "${ROOM_RELAY_URL%/}/api/sara/session" > get_status.txt
-          get_rc=$?
-          get_status=$(cat get_status.txt)
+          post_accepted=$(python3 - "$post_body" <<'PY'
+          import json,sys
+          try: print("true" if json.load(open(sys.argv[1])).get("accepted") is True else "false")
+          except Exception: print("false")
+          PY
+          )
+          room_queued=$(python3 - "$post_body" <<'PY'
+          import json,sys
+          try: print("true" if json.load(open(sys.argv[1])).get("room_queued") is True else "false")
+          except Exception: print("false")
+          PY
+          )
+
+          session_body=$(mktemp)
+          curl -sS -o "$session_body" -w '%{http_code}' \
+            "${ROOM_RELAY_URL%/}/api/sara/session" > session_status.txt
+          session_rc=$?
+          session_status=$(cat session_status.txt)
+          session_match=$(PROBE_TEXT="$probe_text" python3 - "$session_body" <<'PY'
+          import json,os,sys
+          try:
+              d=json.load(open(sys.argv[1])); text=os.environ["PROBE_TEXT"]
+              ok=any((t.get("message") or {}).get("speaker")=="sara" and (t.get("message") or {}).get("text")==text for t in d.get("turns",[]))
+              print("true" if ok else "false")
+          except Exception: print("false")
+          PY
+          )
+
+          feed_body=$(mktemp)
+          feed_status="000"
+          feed_rc=1
+          feed_match=false
+          feed_message='null'
+          for attempt in $(seq 1 80); do
+            curl -sS -o "$feed_body" -w '%{http_code}' "${ROOM_RELAY_URL%/}/api/feed?probe=${GITHUB_RUN_ID}-${attempt}" > feed_status.txt
+            feed_rc=$?
+            feed_status=$(cat feed_status.txt)
+            if [ "$feed_rc" -eq 0 ] && [ "$feed_status" = "200" ]; then
+              feed_message=$(PROBE_TEXT="$probe_text" python3 - "$feed_body" <<'PY'
+          import json,os,sys
+          try:
+              d=json.load(open(sys.argv[1])); text=os.environ["PROBE_TEXT"]
+              found=next((m for m in ((d.get("feed") or {}).get("conversation") or []) if m.get("speaker")=="sara" and m.get("text")==text), None)
+              print(json.dumps(found,separators=(",",":")) if found else "null")
+          except Exception: print("null")
+          PY
+              )
+              if [ "$feed_message" != "null" ]; then
+                feed_match=true
+                break
+              fi
+            fi
+            sleep 3
+          done
 
           echo "TOKEN_EXIT_CODE=${token_rc}"
           echo "POST_HTTP_STATUS=${post_status}"
@@ -48,13 +111,86 @@ jobs:
           echo
           echo "POST_BODY_END"
           echo "POST_EXIT_CODE=${post_rc}"
-          echo "GET_HTTP_STATUS=${get_status}"
-          echo "GET_BODY_BEGIN"
-          cat "$get_body"
+          echo "POST_ACCEPTED=${post_accepted}"
+          echo "ROOM_QUEUED=${room_queued}"
+          echo "SESSION_HTTP_STATUS=${session_status}"
+          echo "SESSION_BODY_BEGIN"
+          cat "$session_body"
           echo
-          echo "GET_BODY_END"
-          echo "GET_EXIT_CODE=${get_rc}"
+          echo "SESSION_BODY_END"
+          echo "SESSION_EXIT_CODE=${session_rc}"
+          echo "SESSION_MATCH=${session_match}"
+          echo "FEED_HTTP_STATUS=${feed_status}"
+          echo "FEED_EXIT_CODE=${feed_rc}"
+          echo "FEED_MATCH=${feed_match}"
+          echo "FEED_MATCHED_MESSAGE=${feed_message}"
 
-          if [ "$token_rc" -ne 0 ] || [ "$post_rc" -ne 0 ] || [ "$post_status" != "202" ] || [ "$get_rc" -ne 0 ] || [ "$get_status" != "200" ]; then
-            exit 1
+          pass=false
+          if [ "$token_rc" -eq 0 ] && [ "$post_rc" -eq 0 ] && [ "$post_status" = "202" ] && \
+             [ "$post_accepted" = "true" ] && [ "$room_queued" = "true" ] && \
+             [ "$session_rc" -eq 0 ] && [ "$session_status" = "200" ] && [ "$session_match" = "true" ] && \
+             [ "$feed_rc" -eq 0 ] && [ "$feed_status" = "200" ] && [ "$feed_match" = "true" ]; then
+            pass=true
           fi
+
+          PROBE_TEXT="$probe_text" TOKEN_RC="$token_rc" POST_STATUS="$post_status" POST_RC="$post_rc" \
+          POST_ACCEPTED="$post_accepted" ROOM_QUEUED="$room_queued" SESSION_STATUS="$session_status" \
+          SESSION_RC="$session_rc" SESSION_MATCH="$session_match" FEED_STATUS="$feed_status" FEED_RC="$feed_rc" \
+          FEED_MATCH="$feed_match" FEED_MESSAGE="$feed_message" PASS="$pass" POST_BODY_FILE="$post_body" \
+          SESSION_BODY_FILE="$session_body" python3 - <<'PY'
+          import json, os
+          def read(path):
+              try: return open(path).read()
+              except Exception: return ""
+          def integer(name):
+              try: return int(os.environ[name])
+              except Exception: return -1
+          def boolean(name): return os.environ.get(name)=="true"
+          payload={
+              "probe_text":os.environ["PROBE_TEXT"],
+              "pass":boolean("PASS"),
+              "token_exit_code":integer("TOKEN_RC"),
+              "post_http_status":os.environ.get("POST_STATUS"),
+              "post_exit_code":integer("POST_RC"),
+              "post_accepted":boolean("POST_ACCEPTED"),
+              "room_queued":boolean("ROOM_QUEUED"),
+              "post_body":read(os.environ["POST_BODY_FILE"]),
+              "session_http_status":os.environ.get("SESSION_STATUS"),
+              "session_exit_code":integer("SESSION_RC"),
+              "session_match":boolean("SESSION_MATCH"),
+              "session_body":read(os.environ["SESSION_BODY_FILE"]),
+              "feed_http_status":os.environ.get("FEED_STATUS"),
+              "feed_exit_code":integer("FEED_RC"),
+              "feed_match":boolean("FEED_MATCH"),
+              "feed_matched_message":json.loads(os.environ.get("FEED_MESSAGE","null")),
+              "run_id":os.environ.get("GITHUB_RUN_ID"),
+              "run_attempt":os.environ.get("GITHUB_RUN_ATTEMPT"),
+          }
+          os.makedirs("room",exist_ok=True)
+          open("room/sara-room-live-e2e.json","w").write(json.dumps(payload,indent=2)+"\n")
+          PY
+
+      - name: Persist probe result
+        if: always()
+        run: |
+          set -e
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add room/sara-room-live-e2e.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record Sara Room live end-to-end probe'
+          for attempt in $(seq 1 12); do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep 2
+          done
+          exit 1
+
+      - name: Enforce probe result
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          d=json.load(open('room/sara-room-live-e2e.json'))
+          raise SystemExit(0 if d.get('pass') else 1)
+          PY
