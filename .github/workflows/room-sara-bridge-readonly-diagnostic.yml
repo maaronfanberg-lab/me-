@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   diagnose:
@@ -21,85 +20,138 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Read previous Sara bridge probe state
-        env:
-          ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+      - name: Verify consumed Sara turn reached social cognition
         run: |
-          set +e
-          token_json=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror")
-          token_rc=$?
-          relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))' 2>/dev/null)
-
-          session_body=$(mktemp)
-          curl -sS -o "$session_body" -w '%{http_code}' "${ROOM_RELAY_URL%/}/api/sara/session" > session_status.txt
-          session_rc=$?
-          session_status=$(cat session_status.txt)
-
-          pending_body=$(mktemp)
-          curl -sS -o "$pending_body" -w '%{http_code}' -H "Authorization: Bearer ${relay_token}" "${ROOM_RELAY_URL%/}/api/participant/pending" > pending_status.txt
-          pending_rc=$?
-          pending_status=$(cat pending_status.txt)
-
-          feed_body=$(mktemp)
-          curl -sS -o "$feed_body" -w '%{http_code}' "${ROOM_RELAY_URL%/}/api/feed?diag=${GITHUB_RUN_ID}" > feed_status.txt
-          feed_rc=$?
-          feed_status=$(cat feed_status.txt)
-
-          SESSION_FILE="$session_body" PENDING_FILE="$pending_body" FEED_FILE="$feed_body" \
-          TOKEN_RC="$token_rc" SESSION_RC="$session_rc" SESSION_STATUS="$session_status" \
-          PENDING_RC="$pending_rc" PENDING_STATUS="$pending_status" FEED_RC="$feed_rc" FEED_STATUS="$feed_status" \
+          set -euo pipefail
           python3 - <<'PY'
-          import json, os
-          def load(name):
-              try: return json.load(open(os.environ[name]))
-              except Exception: return None
-          def integer(name):
-              try: return int(os.environ[name])
-              except Exception: return -1
-          session=load('SESSION_FILE') or {}
-          pending=load('PENDING_FILE') or {}
-          feed=load('FEED_FILE') or {}
-          probes=[]
-          for turn in session.get('turns',[]):
-              msg=(turn or {}).get('message') or {}
-              text=str(msg.get('text') or '')
-              if msg.get('speaker')=='sara' and text.startswith('Sara bridge probe '):
-                  probes.append({'sequence':turn.get('sequence'),'message':msg})
-          latest=probes[-1] if probes else None
-          text=((latest or {}).get('message') or {}).get('text')
-          pending_match=None
-          feed_match=None
-          if text:
-              pending_match=next((m for m in pending.get('messages',[]) if m.get('speaker')=='sara' and m.get('text')==text),None)
-              feed_match=next((m for m in ((feed.get('feed') or {}).get('conversation') or []) if m.get('speaker')=='sara' and m.get('text')==text),None)
-          result={
-              'checked_at':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat().replace('+00:00','Z'),
-              'token_exit_code':integer('TOKEN_RC'),
-              'session_http_status':os.environ.get('SESSION_STATUS'),
-              'session_exit_code':integer('SESSION_RC'),
-              'pending_http_status':os.environ.get('PENDING_STATUS'),
-              'pending_exit_code':integer('PENDING_RC'),
-              'feed_http_status':os.environ.get('FEED_STATUS'),
-              'feed_exit_code':integer('FEED_RC'),
-              'latest_probe':latest,
-              'pending_match':pending_match,
-              'feed_match':feed_match,
-              'probe_count':len(probes),
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def load(path, default):
+              try:
+                  return json.loads(Path(path).read_text())
+              except Exception:
+                  return default
+
+          prior = load('room/sara-room-readonly-diagnostic.json', {})
+          latest = (prior.get('latest_probe') or {}).get('message') or {}
+          probe_text = str(latest.get('text') or '')
+          feed_match = prior.get('feed_match') or {}
+          source_id = str(feed_match.get('id') or '')
+
+          conversation = load('room/conversation.json', [])
+          minds = load('room/cognitive_state.json', {})
+          ai = ('sarah', 'mara', 'owen', 'jules')
+          entities = minds.get('entities') or {}
+          observed_ids = {str(x) for x in (minds.get('participant_observation_ids') or [])}
+
+          sara_index = None
+          sara_message = None
+          for i, message in enumerate(conversation):
+              if not isinstance(message, dict):
+                  continue
+              if message.get('speaker') == 'sara' and str(message.get('text') or '') == probe_text:
+                  sara_index = i
+                  sara_message = message
+
+          relationships = {}
+          memory_matches = {}
+          for name in ai:
+              entity = entities.get(name) or {}
+              rel = ((entity.get('people') or {}).get('sara') or {})
+              relationships[name] = {
+                  'present': bool(rel),
+                  'observed_turns': int(rel.get('observed_turns') or 0),
+                  'direct_turns': int(rel.get('direct_turns') or 0),
+                  'last_direct_cycle': rel.get('last_direct_cycle'),
+                  'exposure': rel.get('exposure'),
+                  'direct_familiarity': rel.get('direct_familiarity'),
+                  'warmth': rel.get('warmth'),
+                  'reciprocity': rel.get('reciprocity'),
+              }
+              matches = []
+              for memory in entity.get('room_memories') or []:
+                  if not isinstance(memory, dict):
+                      continue
+                  if (source_id and str(memory.get('source') or '') == source_id) or (
+                      probe_text and memory.get('speaker') == 'sara' and str(memory.get('text') or '') == probe_text
+                  ):
+                      matches.append(memory)
+              memory_matches[name] = matches
+
+          following_ai = []
+          linked_ai = []
+          if sara_index is not None:
+              sara_discourse = str((sara_message or {}).get('discourse_id') or '')
+              for message in conversation[sara_index + 1:]:
+                  if not isinstance(message, dict):
+                      continue
+                  speaker = str(message.get('speaker') or '')
+                  if speaker in ('allen', 'sara'):
+                      break
+                  if speaker not in ai:
+                      continue
+                  cognition = message.get('cognition') or {}
+                  compact = {
+                      'id': message.get('id'),
+                      'speaker': speaker,
+                      'text': message.get('text'),
+                      'at': message.get('at'),
+                      'target': cognition.get('target'),
+                      'move_type': cognition.get('move_type'),
+                      'parent_discourse_id': message.get('parent_discourse_id'),
+                      'derived_from': message.get('derived_from'),
+                      'discourse_id': message.get('discourse_id'),
+                      'beat_id': message.get('beat_id') or cognition.get('beat_id'),
+                  }
+                  following_ai.append(compact)
+                  if (
+                      (sara_discourse and str(message.get('parent_discourse_id') or '') == sara_discourse)
+                      or (source_id and str(message.get('derived_from') or '') == source_id)
+                      or str(cognition.get('target') or '') == 'sara'
+                  ):
+                      linked_ai.append(compact)
+                  if len(following_ai) >= 8:
+                      break
+
+          social_present_for_all = all(relationships[n]['present'] for n in ai)
+          memories_present_for_all = all(bool(memory_matches[n]) for n in ai)
+          observed_id_present = bool(source_id and source_id in observed_ids)
+          consumed_in_conversation = sara_message is not None
+          room_continued_after = bool(following_ai)
+
+          result = {
+              'checked_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+              'probe_text': probe_text,
+              'source_id': source_id,
+              'consumed_in_conversation': consumed_in_conversation,
+              'participant_observation_id_present': observed_id_present,
+              'sara_relationship_present_for_all': social_present_for_all,
+              'sara_memory_present_for_all': memories_present_for_all,
+              'relationships': relationships,
+              'memory_matches': memory_matches,
+              'following_ai': following_ai,
+              'linked_ai': linked_ai,
+              'room_continued_after_sara': room_continued_after,
+              'pass': all((consumed_in_conversation, observed_id_present, social_present_for_all, memories_present_for_all, room_continued_after)),
           }
-          os.makedirs('room',exist_ok=True)
-          open('room/sara-room-readonly-diagnostic.json','w').write(json.dumps(result,indent=2)+'\n')
-          print(json.dumps(result,indent=2))
+          Path('room/sara-room-cognition-final.json').write_text(json.dumps(result, indent=2) + '\n')
+          print(json.dumps(result, indent=2))
+          if not result['pass']:
+              raise SystemExit(1)
           PY
 
-      - name: Persist diagnostic
+      - name: Persist final Sara cognition evidence
         if: always()
         run: |
           set -e
+          [ -f room/sara-room-cognition-final.json ] || exit 1
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add room/sara-room-readonly-diagnostic.json
+          git add room/sara-room-cognition-final.json
           git diff --cached --quiet && exit 0
-          git commit -m 'Record Sara Room read-only diagnostic'
+          git commit -m 'Record final Sara Room cognition evidence'
           for attempt in $(seq 1 12); do
             git pull --rebase origin main && git push origin HEAD:main && exit 0
             git rebase --abort >/dev/null 2>&1 || true
