@@ -72,7 +72,15 @@ async function handleAuthenticatedSaraTurn(request, env, ctx) {
     } catch {}
     return new Response(JSON.stringify({error:"unauthorized",detail}),{status:401,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*"}});
   }
-  const result = await env.SARA_EXPERIMENT.getByName("main").appendTurn(await request.json());
+
+  const message = await request.json();
+  const result = await env.SARA_EXPERIMENT.getByName("main").appendTurn(message);
+  if (result?.accepted) {
+    const text = String(message?.text || message?.content || "").trim();
+    const roomQueue = await env.ROOM.getByName("main").enqueueParticipant("sara", text);
+    result.room_queued = Boolean(roomQueue?.accepted);
+    result.room_queue = roomQueue;
+  }
   return new Response(JSON.stringify(result),{status:result?.accepted?202:400,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","access-control-allow-origin":"*"}});
 }
 
