@@ -1,0 +1,55 @@
+name: Room extreme personality once
+on:
+  push:
+    paths:
+      - '.github/workflows/room-extreme-personality-once.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Randomize extreme genomes
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('room/config.json')
+          cfg=json.loads(p.read_text())
+          traits={
+            'sarah': {'openness':.97,'extraversion':.18,'conscientiousness':.91,'agreeableness':.08,'emotional_reactivity':.82,'curiosity':.99,'skepticism':.95,'self_disclosure':.21,'social_sensitivity':.34,'novelty_seeking':.87,'inhibition':.12,'humor':.73,'attention_persistence':.88},
+            'mara': {'openness':.22,'extraversion':.99,'conscientiousness':.09,'agreeableness':.91,'emotional_reactivity':.98,'curiosity':.44,'skepticism':.11,'self_disclosure':.99,'social_sensitivity':.96,'novelty_seeking':.93,'inhibition':.04,'humor':.37,'attention_persistence':.19},
+            'owen': {'openness':.81,'extraversion':.07,'conscientiousness':.98,'agreeableness':.03,'emotional_reactivity':.15,'curiosity':.76,'skepticism':.99,'self_disclosure':.06,'social_sensitivity':.12,'novelty_seeking':.28,'inhibition':.78,'humor':.16,'attention_persistence':.99},
+            'jules': {'openness':.99,'extraversion':.93,'conscientiousness':.05,'agreeableness':.17,'emotional_reactivity':.71,'curiosity':.97,'skepticism':.62,'self_disclosure':.85,'social_sensitivity':.41,'novelty_seeking':.99,'inhibition':.01,'humor':.99,'attention_persistence':.14},
+          }
+          people=cfg.get('p')
+          assert isinstance(people,dict), 'config.p missing'
+          for name,vals in traits.items():
+            assert name in people and isinstance(people[name].get('traits'),dict), f'{name} traits missing'
+            assert set(people[name]['traits']) == set(vals), f'{name} trait vocabulary changed'
+            people[name]['traits']=vals
+          p.write_text(json.dumps(cfg,indent=2,ensure_ascii=False)+'\n')
+          PY
+      - name: Verify
+        run: |
+          python - <<'PY'
+          import json
+          c=json.load(open('room/config.json'))
+          assert c['p']['mara']['traits']['extraversion']==.99
+          assert c['p']['owen']['traits']['agreeableness']==.03
+          assert c['p']['jules']['traits']['inhibition']==.01
+          assert c['p']['sarah']['traits']['skepticism']==.95
+          print('PASS: all four 13-value genomes replaced with extreme values')
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add room/config.json
+          git commit -m 'Randomize Room personalities to extreme genomes'
+          git pull --rebase origin main
+          git push origin HEAD:main
