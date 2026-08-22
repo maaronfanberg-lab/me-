@@ -1,0 +1,188 @@
+name: Room Sara live loop
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/room-sara-live-loop.yml'
+      - 'scripts/room_sara_live_turn.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-sara-live-loop.yml'
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: room-sara-live-loop
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            scripts
+          sparse-checkout-cone-mode: true
+      - name: Validate Sara generator without network writes
+        run: |
+          python3 -m py_compile scripts/room_sara_live_turn.py
+          python3 scripts/room_sara_live_turn.py --selftest
+
+  speak:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+      ROOM_MODEL_URL: ${{ secrets.ROOM_MODEL_URL }}
+      ROOM_NODE_PROMPT: ${{ secrets.ROOM_NODE_PROMPT }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            scripts
+            room
+          sparse-checkout-cone-mode: true
+
+      - name: Generate and POST at most one autonomous Sara turn
+        id: speak
+        run: |
+          set +e
+          rm -f /tmp/sara-turn.json /tmp/sara-session.json /tmp/sara-post-body.json
+
+          curl -sS -o /tmp/sara-session.json -w '%{http_code}' \
+            "${ROOM_RELAY_URL%/}/api/sara/session" > /tmp/session-status.txt
+          session_rc=$?
+          session_status=$(cat /tmp/session-status.txt)
+
+          if [ "$session_rc" -ne 0 ] || [ "$session_status" != "200" ]; then
+            echo "SESSION_HTTP_STATUS=${session_status}"
+            echo "SESSION_EXIT_CODE=${session_rc}"
+            exit 1
+          fi
+
+          python3 scripts/room_sara_live_turn.py \
+            --feed room/feed.json \
+            --session /tmp/sara-session.json \
+            --output /tmp/sara-turn.json
+          generator_rc=$?
+          if [ "$generator_rc" -ne 0 ]; then
+            echo "GENERATOR_EXIT_CODE=${generator_rc}"
+            exit "$generator_rc"
+          fi
+
+          if [ ! -s /tmp/sara-turn.json ]; then
+            echo "SARA_LIVE_RESULT=skipped-no-fresh-room-event"
+            if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+              python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          payload={
+              "checked_at":datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
+              "event":os.environ.get("GITHUB_EVENT_NAME"),
+              "result":"skipped-no-fresh-room-event",
+              "run_id":os.environ.get("GITHUB_RUN_ID"),
+              "run_attempt":os.environ.get("GITHUB_RUN_ATTEMPT"),
+          }
+          open("room/sara-live-loop-launch.json","w").write(json.dumps(payload,indent=2)+"\n")
+          PY
+            fi
+            exit 0
+          fi
+
+          token_json=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror")
+          token_rc=$?
+          relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))' 2>/dev/null)
+          if [ "$token_rc" -ne 0 ] || [ -z "$relay_token" ]; then
+            echo "TOKEN_EXIT_CODE=${token_rc}"
+            exit 1
+          fi
+
+          curl -sS -o /tmp/sara-post-body.json -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer ${relay_token}" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/sara-turn.json \
+            "${ROOM_RELAY_URL%/}/api/sara/turn" > /tmp/post-status.txt
+          post_rc=$?
+          post_status=$(cat /tmp/post-status.txt)
+
+          accepted=$(python3 - <<'PY'
+          import json
+          try: print("true" if json.load(open('/tmp/sara-post-body.json')).get('accepted') is True else "false")
+          except Exception: print("false")
+          PY
+          )
+          room_queued=$(python3 - <<'PY'
+          import json
+          try: print("true" if json.load(open('/tmp/sara-post-body.json')).get('room_queued') is True else "false")
+          except Exception: print("false")
+          PY
+          )
+
+          echo "TOKEN_EXIT_CODE=${token_rc}"
+          echo "POST_HTTP_STATUS=${post_status}"
+          echo "POST_BODY_BEGIN"
+          cat /tmp/sara-post-body.json
+          echo
+          echo "POST_BODY_END"
+          echo "POST_EXIT_CODE=${post_rc}"
+          echo "POST_ACCEPTED=${accepted}"
+          echo "ROOM_QUEUED=${room_queued}"
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            POST_STATUS="$post_status" POST_RC="$post_rc" POST_ACCEPTED="$accepted" ROOM_QUEUED="$room_queued" \
+            python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          def load(path):
+              try: return json.load(open(path))
+              except Exception: return None
+          payload={
+              "checked_at":datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
+              "event":os.environ.get("GITHUB_EVENT_NAME"),
+              "result":"posted",
+              "turn":load('/tmp/sara-turn.json'),
+              "post_http_status":os.environ.get('POST_STATUS'),
+              "post_exit_code":int(os.environ.get('POST_RC','-1')),
+              "post_accepted":os.environ.get('POST_ACCEPTED')=='true',
+              "room_queued":os.environ.get('ROOM_QUEUED')=='true',
+              "post_body":load('/tmp/sara-post-body.json'),
+              "run_id":os.environ.get("GITHUB_RUN_ID"),
+              "run_attempt":os.environ.get("GITHUB_RUN_ATTEMPT"),
+          }
+          open("room/sara-live-loop-launch.json","w").write(json.dumps(payload,indent=2)+"\n")
+          PY
+          fi
+
+          if [ "$post_rc" -ne 0 ] || [ "$post_status" != "202" ] || [ "$accepted" != "true" ] || [ "$room_queued" != "true" ]; then
+            exit 1
+          fi
+
+      - name: Persist first-launch evidence
+        if: github.event_name == 'push' && always()
+        run: |
+          set -e
+          [ -f room/sara-live-loop-launch.json ] || exit 0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add room/sara-live-loop-launch.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record Sara autonomous live-loop launch'
+          for attempt in $(seq 1 12); do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep 2
+          done
+          exit 1
