@@ -1,7 +1,7 @@
 {
   "version": "room-attention-v2",
-  "generated_at": "2026-08-22T10:17:16.773794+00:00",
-  "cycle_key": "32566755999:1:6",
+  "generated_at": "2026-08-22T10:18:55.350007+00:00",
+  "cycle_key": "32566755999:1:7",
   "node": 1,
   "entity": "sarah",
   "role": "thought",
@@ -32,12 +32,14 @@
       "name": "concrete-specificity",
       "tier": "project",
       "domain": "concrete-specificity",
-      "score": 4.75,
-      "confidence": 0.999,
-      "raw_score": 4.75,
+      "score": 4.45,
+      "confidence": 0.998,
+      "raw_score": 4.45,
       "repeat_penalty": 0.0,
       "matched_triggers": [
+        "specific",
         "concrete",
+        "detail",
         "example",
         "show"
       ],
@@ -45,10 +47,26 @@
         {
           "kind": "message",
           "matched": [
+            "specific"
+          ],
+          "weight": 1.15
+        },
+        {
+          "kind": "message",
+          "matched": [
+            "example",
+            "detail",
+            "concrete"
+          ],
+          "weight": 0.92
+        },
+        {
+          "kind": "message",
+          "matched": [
             "example",
             "concrete"
           ],
-          "weight": 1.8
+          "weight": 0.76
         },
         {
           "kind": "message",
@@ -56,51 +74,50 @@
             "concrete",
             "show"
           ],
-          "weight": 1.15
+          "weight": 0.54
         }
       ]
     },
     {
-      "name": "critical-testing",
+      "name": "memory-callback",
       "tier": "project",
-      "domain": "critical-testing",
-      "score": 3.64,
-      "confidence": 0.99,
-      "raw_score": 3.64,
+      "domain": "memory-callback",
+      "score": 3.958,
+      "confidence": 0.994,
+      "raw_score": 3.958,
       "repeat_penalty": 0.0,
       "matched_triggers": [
-        "proof",
-        "claim",
-        "evidence"
+        "past",
+        "used to",
+        "earlier"
       ],
       "evidence_sources": [
         {
           "kind": "message",
           "matched": [
-            "proof"
+            "past"
           ],
           "weight": 1.8
         },
         {
           "kind": "message",
           "matched": [
-            "proof"
+            "used to"
           ],
-          "weight": 1.15
+          "weight": 0.92
         },
         {
           "kind": "message",
           "matched": [
-            "evidence",
-            "claim"
+            "earlier"
           ],
-          "weight": 0.92
+          "weight": 0.64
         }
       ]
     }
   ],
-  "context_fingerprint": "062b7bb5e3d2",
+  "context_fingerprint": "f4eeec223796",
   "base_prompt_chars": 3349,
-  "temporary_skill_chars": 839,
-  "approx_added_tokens": 210
+  "temporary_skill_chars": 825,
+  "approx_added_tokens": 206
 }
