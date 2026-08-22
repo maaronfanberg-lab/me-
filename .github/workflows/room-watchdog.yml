@@ -1,0 +1,57 @@
+name: Room watchdog
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: room-watchdog-main
+  cancel-in-progress: true
+
+jobs:
+  supervise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Replace Room runner when feed is stale
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, time, datetime
+          p = pathlib.Path('room/feed.json')
+          if not p.exists():
+              print('ROOM_WATCHDOG stale: feed missing')
+              raise SystemExit(2)
+          data = json.loads(p.read_text())
+          stamp = data.get('generated_at') or (data.get('state') or {}).get('last_run')
+          if not stamp:
+              print('ROOM_WATCHDOG stale: no timestamp')
+              raise SystemExit(2)
+          dt = datetime.datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+          age = time.time() - dt.timestamp()
+          print(f'ROOM_WATCHDOG age_seconds={age:.1f} cycle={(data.get("state") or {}).get("cycle")}')
+          # A healthy beat is usually a few minutes. Eight minutes is deliberately
+          # generous enough not to kill active cognition, but bounded enough that
+          # a wedged Room cannot sit silently for tens of minutes.
+          if age > 480:
+              raise SystemExit(2)
+          PY
+          rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo 'ROOM_WATCHDOG healthy; no action'
+            exit 0
+          fi
+          echo 'ROOM_WATCHDOG stale; dispatching replacement Room runner'
+          gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto
