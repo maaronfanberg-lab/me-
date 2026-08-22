@@ -33,11 +33,25 @@ jobs:
         run: |
           set -uo pipefail
 
-          active_room_runs=$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/sarah-society.yml/runs?per_page=20" --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued")] | length' 2>/dev/null || echo 0)
-          case "$active_room_runs" in ''|*[!0-9]*) active_room_runs=0 ;; esac
-          if [ "$active_room_runs" -gt 0 ]; then
-            echo "ROOM_WATCHDOG runner already active (${active_room_runs}); no replacement dispatch"
-            exit 0
+          active=$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/sarah-society.yml/runs?per_page=20" \
+            --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued")][0] | if . then [.id,.status,.created_at] | @tsv else "" end' 2>/dev/null || true)
+          if [ -n "$active" ]; then
+            IFS=$'\t' read -r active_id active_status active_created <<< "$active"
+            active_age=$(python3 - "$active_created" <<'PY'
+          import datetime, sys, time
+          dt=datetime.datetime.fromisoformat(sys.argv[1].replace('Z','+00:00'))
+          print(int(time.time()-dt.timestamp()))
+          PY
+            )
+            echo "ROOM_WATCHDOG active_run=$active_id status=$active_status age_seconds=$active_age"
+            # Protect fresh recovery runs from the workflow's cancel-in-progress
+            # policy. Only an active run that has itself failed to publish within
+            # ten minutes is old enough to replace.
+            if [ "$active_age" -lt 600 ]; then
+              echo 'ROOM_WATCHDOG fresh Room runner already active; no replacement dispatch'
+              exit 0
+            fi
+            echo 'ROOM_WATCHDOG active Room runner is stale enough to replace'
           fi
 
           if python3 - <<'PY'
