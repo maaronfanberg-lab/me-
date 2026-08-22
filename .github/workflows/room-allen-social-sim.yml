@@ -44,6 +44,8 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+      - name: Apply requested Room tuning
+        run: python3 scripts/room_apply_user_tuning.py
       - name: Run Allen and Room responsiveness simulators
         shell: bash
         run: |
@@ -95,8 +97,8 @@ jobs:
           set -euo pipefail
           git config user.name 'allen-social-simulator'
           git config user.email 'actions@users.noreply.github.com'
-          git add room/allen-social-sim-diagnostic.json
-          git commit -m 'Record Allen social boundary simulator' || exit 0
+          git add room/allen-social-sim-diagnostic.json room/config.json scripts/room_private_model.py scripts/room_engine_v5.py scripts/room_responsiveness_sim.py scripts/room_allen_two_voice_sim.py
+          git commit -m 'Apply Room substance, personality, friction, and Allen gravity tuning' || exit 0
           branch="${GITHUB_REF_NAME}"
           for n in 1 2 3 4 5; do
             if git push origin "HEAD:${branch}"; then exit 0; fi
