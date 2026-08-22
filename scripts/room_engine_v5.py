@@ -23,8 +23,9 @@ import room_personality_v2 as _personality_v2
 import room_expression_quality as _expression_quality
 
 # Structured model output must be allowed to refer directly to Allen.
-if "allen" not in _private_model.PEOPLE:
-    _private_model.PEOPLE = [*_private_model.PEOPLE, "allen"]
+for _participant in ("allen", "sara"):
+    if _participant not in _private_model.PEOPLE:
+        _private_model.PEOPLE = [*_private_model.PEOPLE, _participant]
 
 # The language model boundary is allowlist-only. New internal/debug/research
 # fields are invisible by default unless they are explicitly promoted here.
@@ -393,12 +394,12 @@ class _ParticipantAwareOrder(tuple):
     """Iterate over four generators; treat Allen as a legal interlocutor."""
 
     def __contains__(self, item):
-        return str(item or "").lower() == "allen" or super().__contains__(item)
+        return str(item or "").lower() in {"allen", "sara"} or super().__contains__(item)
 
 
 _AI_ORDER = tuple(_core.ORDER)
 ORDER = _ParticipantAwareOrder(_AI_ORDER)
-PARTICIPANTS = _AI_ORDER + ("allen",)
+PARTICIPANTS = _AI_ORDER + ("allen", "sara")
 _core.ORDER = ORDER
 
 _ALLEN_RELATIONSHIP = {
