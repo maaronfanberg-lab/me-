@@ -193,6 +193,11 @@ def observe_participant_history(mind: dict, history: list, discourse: dict, stat
     return observed
 
 
+# Backward-compatible public helper retained for existing Allen simulators.
+def observe_allen_history(mind: dict, history: list, discourse: dict, state: dict) -> int:
+    return observe_participant_history(mind, history, discourse, state)
+
+
 def main():
     if len(sys.argv) != 3:
         raise SystemExit("usage: room_participant.py INBOX_JSON ACK_JSON")
