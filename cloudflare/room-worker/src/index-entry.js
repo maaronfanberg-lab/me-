@@ -8,6 +8,25 @@ const ALLEN_KEY_SHA256 = "c72f439977bc05b63b4cb8427dd958d78e564856e2e070aa8137fb
 const ALLEN_KEY_BUILD = "20260820-current";
 const LEVIATHAN_SIGNAL_BUILD = "20260821-v1";
 const SARA_LIVE_BUILD = "20260822-v1";
+const PARTICIPANT_QUEUE_KEY = "allenQueue";
+const MAX_PARTICIPANT_QUEUE = 50;
+const PARTICIPANT_SPEAKERS = new Set(["allen", "sara"]);
+
+RoomState.prototype.enqueueParticipant = async function enqueueParticipant(speaker, text) {
+  const participant = String(speaker || "").trim().toLowerCase();
+  if (!PARTICIPANT_SPEAKERS.has(participant)) return { accepted: false, reason: "invalid-speaker" };
+  const queue = (await this.ctx.storage.get(PARTICIPANT_QUEUE_KEY)) || [];
+  if (queue.length >= MAX_PARTICIPANT_QUEUE) return { accepted: false, reason: "queue-full" };
+  const turn = {
+    id: crypto.randomUUID(),
+    speaker: participant,
+    text: String(text || ""),
+    at: new Date().toISOString(),
+  };
+  queue.push(turn);
+  await this.ctx.storage.put(PARTICIPANT_QUEUE_KEY, queue);
+  return { accepted: true, id: turn.id, speaker: participant, at: turn.at, queued: queue.length };
+};
 
 function bearer(request) {
   const value = request.headers.get("authorization") || "";
