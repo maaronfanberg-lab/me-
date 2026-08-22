@@ -1,0 +1,54 @@
+name: Fix Room exit42 liveness once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-room-exit42-liveness-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Patch and verify Room liveness boundary
+        run: |
+          set -euo pipefail
+          git config user.name "room-liveness-fix"
+          git config user.email "actions@users.noreply.github.com"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/sarah-society.yml')
+          s=p.read_text()
+          old='''            ( run_beat; printf '%s\\n' "$?" > "$beat_rc_file" ) & beat_pid=$!'''
+          new='''            ( set +e; run_beat; rc=$?; printf '%s\\n' "$rc" > "$beat_rc_file"; exit 0 ) & beat_pid=$!'''
+          assert old in s, 'exit42 capture anchor missing'
+          s=s.replace(old,new,1)
+          old='''            rm -f "$beat_rc_file"
+            if [ "$beat_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then consecutive_failures=0; echo "Publish boundary rejected semantic echo; regenerating the beat"; sleep 1; continue; fi
+            if [ "$beat_rc" -ne 0 ]; then consecutive_failures=$((consecutive_failures + 1)); echo "A Room beat failed internally (${consecutive_failures}/${ROOM_BEAT_FAILURE_LIMIT})"; if [ "$consecutive_failures" -ge "$ROOM_BEAT_FAILURE_LIMIT" ]; then runner_exit_reason="repeated_beat_failure"; break; fi; sleep 3; continue; fi
+            consecutive_failures=0; git add room society/live.json; if git diff --cached --quiet; then continue; fi; git commit -m "Room cognition v5 attention-routed skills beat"'''
+          new='''            rm -f "$beat_rc_file"
+            case "$beat_rc" in ''|*[!0-9]*) beat_rc=1 ;; esac
+            if [ "$beat_rc" -ne 0 ]; then git reset --hard HEAD >/dev/null; fi
+            if [ "$beat_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then consecutive_failures=0; echo "Publish boundary rejected semantic echo; regenerating the beat"; sleep 1; continue; fi
+            if [ "$beat_rc" -ne 0 ]; then consecutive_failures=$((consecutive_failures + 1)); echo "A Room beat failed internally (${consecutive_failures}/${ROOM_BEAT_FAILURE_LIMIT})"; if [ "$consecutive_failures" -ge "$ROOM_BEAT_FAILURE_LIMIT" ]; then runner_exit_reason="repeated_beat_failure"; break; fi; sleep 3; continue; fi
+            consecutive_failures=0; git add room society/live.json; if git diff --cached --quiet; then git reset --hard HEAD >/dev/null; continue; fi; git commit -m "Room cognition v5 attention-routed skills beat"; git reset --hard HEAD >/dev/null'''
+          assert old in s, 'cleanup anchor missing'
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          assert 'set +e; run_beat; rc=$?' in s
+          assert 'case "$beat_rc" in' in s
+          assert 'git commit -m "Room cognition v5 attention-routed skills beat"; git reset --hard HEAD' in s
+          print('ROOM_LIVENESS_ASSERTIONS PASS')
+          PY
+          git add .github/workflows/sarah-society.yml
+          git commit -m "Fix Room rejection retry and dirty rebase liveness"
+          git pull --rebase origin main
+          git push origin HEAD:main
