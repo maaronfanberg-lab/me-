@@ -1,0 +1,82 @@
+name: Patch Sara social participant once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-sara-social-participant-once.yml'
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch social participant boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/room_social_v5.py')
+          s = p.read_text()
+          old = 'PARTICIPANTS=ORDER+("allen",)'
+          new = 'PARTICIPANTS=ORDER+("allen","sara")'
+          count = s.count(old)
+          print(f'BEFORE participant_constant_count={count}')
+          if count != 1:
+              raise SystemExit(f'expected exactly one social participant constant, found {count}')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          print('AFTER sara_social_participant=', new in s)
+          PY
+          git diff -- scripts/room_social_v5.py
+          git diff --check
+
+      - name: Participant regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=scripts python3 - <<'PY'
+          import room_social_v5 as s
+          assert tuple(s.ORDER) == ('sarah','mara','owen','jules')
+          assert tuple(s.PARTICIPANTS) == ('sarah','mara','owen','jules','allen','sara')
+          t = s.topic_template(1)
+          assert tuple(t['participants']) == tuple(s.PARTICIPANTS)
+          m = s.migrate_minds({'entities': {}})
+          for entity in s.ORDER:
+              assert 'sara' in m['entities'][entity]['people']
+          print('SOCIAL_ORDER=', tuple(s.ORDER))
+          print('SOCIAL_PARTICIPANTS=', tuple(s.PARTICIPANTS))
+          print('TOPIC_PARTICIPANTS=', tuple(t['participants']))
+          print('SARA_RELATIONSHIPS=', all('sara' in m['entities'][e]['people'] for e in s.ORDER))
+
+          import room_engine_v5 as r
+          assert tuple(r.ORDER) == ('sarah','mara','owen','jules')
+          assert tuple(r.PARTICIPANTS) == ('sarah','mara','owen','jules','allen','sara')
+          print('ENGINE_ORDER=', tuple(r.ORDER))
+          print('ENGINE_PARTICIPANTS=', tuple(r.PARTICIPANTS))
+          PY
+          python3 -m py_compile scripts/room_social_v5.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py
+          python3 -m compileall -q scripts
+          echo 'ROOM_COMPILE_EXIT_CODE=0'
+
+      - name: Commit only after checks pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/room_social_v5.py
+          git rm .github/workflows/patch-sara-social-participant-once.yml
+          git diff --cached --check
+          git commit -m 'Add Sara to Room social participant state'
+          git push origin HEAD:main
