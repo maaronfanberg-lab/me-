@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timezone
 
 import room_engine_v5 as c
+import room_bridge_fresh as _bridge
 import room_expression_quality as _quality
 import room_social_v5 as _social
 import room_topic_bounded as _bounded_topic
@@ -72,7 +73,7 @@ def bad_term(value) -> bool:
 
 def clean_topic(topic: dict) -> dict:
     topic = dict(topic or {})
-    for key in ("facets", "visited_facets", "recent_terms", "shared_references", "unresolved"):
+    for key in ("facets", "visited_facets", "recent_terms", "shared_references", "unresolved", "previous_vocabulary"):
         vals = topic.get(key)
         if isinstance(vals, list):
             cleaned = []
@@ -214,6 +215,7 @@ def private_commit(parts: list[dict], key: str):
     prev = c.event()
     cycle = int(S.get("cycle", 0)) + 1
     topic = clean_topic(S.get("topic_episode") or {})
+    topic = _bridge.with_previous_vocabulary(topic, V)
     if topic.get("root"):
         topic = clean_topic(c.update_topic(topic, V[-24:], cycle))
 
@@ -280,22 +282,23 @@ def private_commit(parts: list[dict], key: str):
     if len(spoken) != 4 or set(speakers) != set(c.ORDER):
         raise RuntimeError(f"v5 mandatory speech invariant failed: {speakers}")
 
-    previous_vocabulary = {
-        norm(x)
-        for x in [topic.get("root"), topic.get("current_facet")] + list(topic.get("facets", []))
-        if not bad_term(x)
-    }
     topic = clean_topic(c.update_topic(topic, spoken, cycle))
+    topic = _bridge.with_previous_vocabulary(topic, [*V, *spoken])
     if not topic.get("root") or bad_term(topic.get("root")):
         topic = seed_topic(expressions, order, cycle, topic)
+        topic = _bridge.with_previous_vocabulary(topic, spoken)
 
     if c.should_shift_topic(topic):
+        exhausted_vocabulary = list(topic.get("previous_vocabulary") or [])
         declared = c.topic_terms_from_messages(spoken, limit=12, episode_id=topic.get("id"))
-        novel = [norm(x) for x in declared if not bad_term(x) and norm(x) not in previous_vocabulary]
-        candidate_terms = novel or [c.breakout_subject(key)]
+        candidate_terms = _bridge.bridge_seed_terms(c, key, exhausted_vocabulary, declared)
         candidate = clean_topic(c.new_topic_from_terms(candidate_terms, cycle, topic))
-        if candidate.get("root") and not bad_term(candidate.get("root")):
-            topic = candidate
+        candidate = _bridge.with_previous_vocabulary(candidate, [])
+        if not candidate.get("root") or bad_term(candidate.get("root")):
+            raise RuntimeError("fresh breakout failed to establish a publishable new episode")
+        if any(_bounded_topic._near(candidate.get("root"), old) for old in exhausted_vocabulary if old):
+            raise RuntimeError("fresh breakout root collided with exhausted previous_vocabulary")
+        topic = candidate
 
     S["topic_episode"] = topic
     for entity in c.ORDER:
@@ -329,6 +332,9 @@ def private_commit(parts: list[dict], key: str):
     c.audit_invariants(M, topic)
     c.save(c.ROOM / "conversation.json", V)
     c.save(c.ROOM / "discourse.json", T)
+    # Persist the live topic snapshot beside minds so the accumulated episode
+    # vocabulary is directly inspectable and regression-testable.
+    M["topic_episode"] = topic
     c.save(c.ROOM / "cognitive_state.json", M)
     c.save(c.ROOM / "state.json", S)
 

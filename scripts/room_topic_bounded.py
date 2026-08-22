@@ -122,6 +122,7 @@ def topic_template(cycle: int = 0) -> dict:
         "turns": 0,
         "low_novelty_beats": 0,
         "recent_terms": [],
+        "previous_vocabulary": [],
         "last_shift_cycle": int(cycle),
         "status": "forming",
         "bridge_pending": False,
@@ -220,10 +221,9 @@ def _normalize(topic: dict | None, cycle: int) -> dict:
 
 
 def new_topic_from_terms(terms, cycle: int, prior: dict | None = None) -> dict:
-    source_terms = terms
-    if prior and str(prior.get("bridge_reason") or "") == "episode_age":
-        source_terms = _age_breakout_terms(prior, cycle)
-    clean = _unique(source_terms, 1 + MAX_FACETS)
+    # The commit boundary chooses the bridge seed. Never replace an explicit
+    # fresh seed with terms inherited from the exhausted episode.
+    clean = _unique(terms, 1 + MAX_FACETS)
     topic = topic_template(cycle)
     if not clean:
         return topic

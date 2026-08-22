@@ -45,8 +45,15 @@ CONVERSATION_JOBS = (
     "Make a comparison or unexpected connection that introduces a genuinely new direction.",
 )
 BREAKOUT_SUBJECTS = (
-    "music", "places", "food", "friendship", "nature", "travel", "books", "art",
-    "work", "home", "weather", "skills", "movies", "gardens", "photography", "humor",
+    "volcanoes", "beekeeping", "coral reefs", "astronomy", "origami", "mushrooms",
+    "architecture", "bird migration", "ceramics", "ocean currents", "mythology", "fossils",
+    "urban trees", "caves", "lighthouses", "tea", "deserts", "constellations", "rivers",
+    "insects", "textiles", "woodworking", "clouds", "maps", "islands", "orchards",
+    "languages", "bridges", "tides", "seeds", "comets", "mountains", "shells",
+    "fermentation", "railways", "museums", "wolves", "whales", "glassmaking", "geology",
+    "folklore", "bicycles", "calligraphy", "wetlands", "penguins", "shipwrecks",
+    "stargazing", "pottery", "butterflies", "waterfalls", "chess", "kites", "breadmaking",
+    "mosaics", "orchids", "meteorites", "canoes", "castles", "spices", "snowflakes",
 )
 
 
@@ -73,8 +80,9 @@ def conversation_job(entity, key):
     return CONVERSATION_JOBS[(ORDER.index(entity) + offset) % len(CONVERSATION_JOBS)]
 
 
-def breakout_subject(key):
-    return BREAKOUT_SUBJECTS[rr("breakout-subject", key).randrange(len(BREAKOUT_SUBJECTS))]
+def breakout_subject(key, attempt=0):
+    start = rr("breakout-subject", key).randrange(len(BREAKOUT_SUBJECTS))
+    return BREAKOUT_SUBJECTS[(start + int(attempt)) % len(BREAKOUT_SUBJECTS)]
 
 
 def _simple_norm(text):
