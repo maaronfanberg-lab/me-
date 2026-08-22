@@ -4,7 +4,7 @@ import { SaraExperimentState, handleSaraLive } from "./sara-live.js";
 
 export { RoomState, LeviathanSignalStore, SaraExperimentState };
 
-const ALLEN_KEY_SHA256 = "c72f439977bc05b63b4cb8427dd958d78e564856e2e070aa8137fb7bdd295e18";
+const ALLEN_KEY_SHA256 = "4430912785b4d2a0f75bda347e9fc7c6d35e90156b50ff4ce223c45ae910cadb";
 const ALLEN_KEY_BUILD = "20260820-current";
 const LEVIATHAN_SIGNAL_BUILD = "20260821-v1";
 const SARA_LIVE_BUILD = "20260822-v2-room-queue";
