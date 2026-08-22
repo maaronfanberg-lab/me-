@@ -16,7 +16,16 @@ SEED_CONCEPTS = (
 )
 LEAK_MARKERS = (
     "system prompt", "developer message", "hidden prompt", "chain of thought",
-    "internal instructions", "system instructions", "room_prompt_",
+    "internal instructions", "system instructions", "room_prompt_", "these instructions",
+)
+INSTRUCTION_LEAK_PATTERNS = (
+    r"\byou should not (?:repeat|paraphrase|expose)\b",
+    r"\b(?:do not|don't|never) (?:repeat|paraphrase|expose|reveal).{0,100}\binstruction",
+    r"\bspeak (?:a|the) (?:natural|nuanced|supportive|relevant)[^.!?]{0,120}\bline\b",
+    r"\bspoken line\b",
+    r"\breturn (?:structured data|json)\b",
+    r"\bpublic[_ -]?speech[_ -]?rule\b",
+    r"\btry[_ -]?again\b",
 )
 META_PATTERNS = (
     r"\btopic[-_ ]?\d{3,}\b",
@@ -67,6 +76,11 @@ def _contains_explicit_leak_marker(value: object) -> bool:
     return any(marker in low for marker in LEAK_MARKERS)
 
 
+def _contains_instruction_language(value: object) -> bool:
+    low = _norm(value)
+    return any(re.search(pattern, low) for pattern in INSTRUCTION_LEAK_PATTERNS)
+
+
 def _contains_meta_language(value: object) -> bool:
     low = _norm(value)
     return any(re.search(pattern, low) for pattern in META_PATTERNS)
@@ -75,7 +89,7 @@ def _contains_meta_language(value: object) -> bool:
 def _structure_contaminated(value: object) -> bool:
     """Only genuine secret/privacy markers are blocking now."""
     if isinstance(value, str):
-        return _contains_explicit_leak_marker(value)
+        return _contains_explicit_leak_marker(value) or _contains_instruction_language(value)
     if isinstance(value, list):
         return any(_structure_contaminated(item) for item in value)
     if isinstance(value, dict):
@@ -85,7 +99,7 @@ def _structure_contaminated(value: object) -> bool:
 
 def _clean_private(value: object):
     if isinstance(value, str):
-        return None if _contains_explicit_leak_marker(value) else value
+        return None if (_contains_explicit_leak_marker(value) or _contains_instruction_language(value)) else value
     if isinstance(value, list):
         return [cleaned for item in value if (cleaned := _clean_private(item)) is not None]
     if isinstance(value, dict):
@@ -229,7 +243,7 @@ def _bad_term(value: object) -> bool:
     text = _norm(value)
     if not text or len(text) > 80:
         return True
-    return _contains_explicit_leak_marker(text)
+    return _contains_explicit_leak_marker(text) or _contains_instruction_language(text)
 
 
 def _public_message(message: object, text_limit: int) -> dict:
@@ -272,14 +286,14 @@ def _compact_payload(payload: dict, role: str, self_entity: str | None = None) -
 
     if "event" in out:
         event = _public_message(out.get("event"), event_limit)
-        out["event"] = None if _contains_explicit_leak_marker(event.get("text")) else event
+        out["event"] = None if (_contains_explicit_leak_marker(event.get("text")) or _contains_instruction_language(event.get("text"))) else event
 
     context = out.get("context")
     if isinstance(context, list):
         cleaned = []
         for message in context[-context_count:]:
             public = _public_message(message, text_limit)
-            if _contains_explicit_leak_marker(public.get("text")):
+            if _contains_explicit_leak_marker(public.get("text")) or _contains_instruction_language(public.get("text")):
                 continue
             cleaned.append(public)
         out["context"] = cleaned[-context_count:]
@@ -379,7 +393,7 @@ def _validate(role: str, obj: object, compact: dict, prompt: str, self_entity: s
             raise ValueError("missing_utterance")
         if len(utterance.strip()) > 700:
             raise ValueError("utterance_too_long")
-        if _contains_explicit_leak_marker(utterance):
+        if _contains_explicit_leak_marker(utterance) or _contains_instruction_language(utterance):
             raise ValueError("privacy_marker")
         if _prompt_overlap(utterance, prompt):
             raise ValueError("instruction_overlap")
@@ -434,6 +448,30 @@ def _completion_url(model_url: str) -> str:
     return base if base.endswith("/completion") else base + "/completion"
 
 
+def _chat_completion_url(model_url: str) -> str:
+    base = model_url.rstrip("/")
+    if base.endswith("/completion"):
+        base = base[:-len("/completion")]
+    if base.endswith("/v1/chat/completions"):
+        return base
+    return base + "/v1/chat/completions"
+
+
+def _split_expression_prompt(prompt: str) -> tuple[str, str]:
+    """Separate private control text from conversational data for chat transport."""
+    text = str(prompt or "")
+    for marker, tail in (
+        ("\nSITUATION_DATA\n", "\nRETURN_STRUCTURED_DATA_ONLY\n"),
+        ("\nCONVERSATION\n", "\nRESPONSE\n"),
+    ):
+        if marker in text:
+            control, user = text.split(marker, 1)
+            if user.endswith(tail):
+                user = user[:-len(tail)]
+            return control.strip(), user.strip()
+    raise ValueError("expression_prompt_not_separable")
+
+
 def _safe_http_detail(exc: urllib.error.HTTPError) -> str:
     detail = ""
     try:
@@ -456,20 +494,53 @@ def _safe_http_detail(exc: urllib.error.HTTPError) -> str:
 
 
 def _request(model_url: str, prompt: str, role: str, temperature: float, timeout: int, self_entity: str | None = None, attempt: int = 0) -> str:
+    if role == "expression":
+        control, situation = _split_expression_prompt(prompt)
+        body = {
+            "messages": [
+                {"role": "system", "content": control},
+                {"role": "user", "content": situation},
+            ],
+            "max_tokens": 220,
+            "temperature": temperature,
+            "seed": _sample_seed(role, self_entity, attempt),
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "room_expression",
+                    "strict": True,
+                    "schema": _schema(role, self_entity),
+                },
+            },
+        }
+        req = urllib.request.Request(
+            _chat_completion_url(model_url),
+            data=json.dumps(body, ensure_ascii=False).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            parsed = json.loads(resp.read().decode("utf-8", "replace"))
+        choices = parsed.get("choices") if isinstance(parsed, dict) else None
+        message = choices[0].get("message") if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
+        content = str(message.get("content", "")) if isinstance(message, dict) else ""
+        if not content:
+            raise ValueError("empty_chat_expression")
+        try:
+            utterance = str((_extract_json(content) or {}).get("utterance") or "")
+        except Exception:
+            utterance = ""
+        if utterance and (_prompt_overlap(utterance, control) or _contains_instruction_language(utterance)):
+            raise ValueError("instruction_channel_leak")
+        return content
+
     body = {
         "prompt": prompt,
-        "n_predict": {"comprehension": 192, "thought": 220, "expression": 220}.get(role, 192),
+        "n_predict": {"comprehension": 192, "thought": 220}.get(role, 192),
         "temperature": temperature,
         "cache_prompt": True,
         "json_schema": _schema(role, self_entity),
     }
-    if role == "expression":
-        body.update({
-            "seed": _sample_seed(role, self_entity, attempt),
-            "top_k": 60,
-            "top_p": 0.96,
-            "min_p": 0.02,
-        })
     req = urllib.request.Request(
         _completion_url(model_url),
         data=json.dumps(body, ensure_ascii=False).encode(),
@@ -524,7 +595,7 @@ def run(role: str, payload: dict, timeout: int = 30):
             if not out:
                 last_reason = "empty_output"
                 continue
-            obj = _validate(role, _extract_json(out), compact, prompt, self_entity)
+            obj = _validate(role, _extract_json(out), compact, combined if role == "expression" else prompt, self_entity)
             if role == "expression":
                 obj = _sanitize_expression(obj, compact, self_entity)
                 if attempt < attempts - 1 and _too_similar_to_context(str(obj.get("utterance", "")), compact):
