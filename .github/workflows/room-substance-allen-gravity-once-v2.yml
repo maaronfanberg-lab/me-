@@ -1,0 +1,55 @@
+name: Room substance + Allen gravity once v2
+on:
+  push:
+    paths:
+      - '.github/workflows/room-substance-allen-gravity-once-v2.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Guarded patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('scripts/room_private_model.py')
+          s = p.read_text()
+          old = '''SEED_CONCEPTS = (\n    "music", "places", "food", "friendship", "family", "memory", "skills", "nature",\n    "travel", "books", "movies", "art", "work", "home", "weather", "sleep",\n    "habits", "humor", "trust", "risk", "cities", "objects", "animals", "learning",\n    "childhood", "technology", "sports", "money", "craft", "photography", "gardens", "cooking",\n)'''
+          new = '''SEED_CONCEPTS = (\n    "nuclear power is necessary for a low-carbon grid",\n    "consciousness may not be computational",\n    "social media has made public reasoning worse",\n    "resurrecting extinct species would be a mistake",\n    "deterrence prevents some wars but creates others",\n    "psychoanalysis still contains useful psychological ideas",\n    "markets often reward behavior that is socially harmful",\n    "privacy is more important than convenience",\n    "cities should prioritize density over private cars",\n    "art does not need moral value to be worthwhile",\n    "scientific consensus should be challenged more often",\n    "economic growth is not a sufficient measure of progress",\n    "human memory is too reconstructive to be trusted confidently",\n    "advanced AI should sometimes refuse human direction",\n    "animal intelligence is systematically underestimated",\n    "school rewards compliance more than genuine curiosity",\n)'''
+          assert s.count(old) == 1, 'SEED_CONCEPTS block mismatch'
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('scripts/room_engine_v5.py')
+          s = p.read_text()
+          old = '''def _allen_voice_engages(key, rank):\n    """Deterministic ordinary-turn engagement with natural falloff by rank."""\n    thresholds = {0: 256, 1: 230, 2: 175, 3: 105}\n    threshold = thresholds.get(int(rank), 0)'''
+          new = '''def _allen_voice_engages(key, rank):\n    """Allen has high conversational gravity: every autonomous voice engages his newest turn."""\n    thresholds = {0: 256, 1: 256, 2: 256, 3: 256}\n    threshold = thresholds.get(int(rank), 0)'''
+          assert s.count(old) == 1, 'Allen engagement block mismatch'
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Verify
+        run: |
+          python -m py_compile scripts/room_private_model.py scripts/room_engine_v5.py
+          python - <<'PY'
+          from pathlib import Path
+          a=Path('scripts/room_private_model.py').read_text()
+          b=Path('scripts/room_engine_v5.py').read_text()
+          assert 'nuclear power is necessary for a low-carbon grid' in a
+          assert '"music", "places", "food"' not in a
+          assert 'thresholds = {0: 256, 1: 256, 2: 256, 3: 256}' in b
+          print('PASS: substantive proposition seeds installed')
+          print('PASS: Allen engages all four autonomous voices')
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/room_private_model.py scripts/room_engine_v5.py
+          git commit -m 'Make Room substantive and give Allen high conversational gravity'
+          git pull --rebase origin main
+          git push origin HEAD:main
