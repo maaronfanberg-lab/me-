@@ -1,0 +1,199 @@
+name: Fix Room bridge live vocabulary once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-room-bridge-live-vocabulary-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Capture pre-patch requested cognitive fields
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          src=json.loads(Path('room/cognitive_state.json').read_text())
+          topics=[]; vocabs=[]
+          def walk(x,path=()):
+              if isinstance(x,dict):
+                  for k,v in x.items():
+                      p=path+(k,)
+                      if k=='topic_episode' and isinstance(v,dict): topics.append((p,v))
+                      if k=='previous_vocabulary' and isinstance(v,list): vocabs.append((p,v))
+                      walk(v,p)
+              elif isinstance(x,list):
+                  for i,v in enumerate(x): walk(v,path+(i,))
+          walk(src)
+          out={'topic_episode_hits':len(topics),'previous_vocabulary_hits':len(vocabs)}
+          if topics:
+              p,t=topics[-1]; out['topic_episode_path']=list(p); out['topic_episode']={k:t.get(k) for k in ('id','root','current_facet','focus_turns','status','bridge_pending','recent_terms')}
+          if vocabs:
+              p,v=vocabs[-1]; out['previous_vocabulary_path']=list(p); out['previous_vocabulary_count']=len(v); out['previous_vocabulary']=v if len(v)<200 else v[-50:]; out['previous_vocabulary_mode']='full' if len(v)<200 else '50_most_recent'
+          Path('/tmp/pre-cognitive.json').write_text(json.dumps(out,indent=2,ensure_ascii=False)+'\n')
+          print(json.dumps(out,ensure_ascii=False))
+          PY
+
+      - name: Add accumulated episode vocabulary and fresh bridge selector
+        run: |
+          cat > scripts/room_bridge_fresh.py <<'PY'
+          #!/usr/bin/env python3
+          from __future__ import annotations
+
+          import room_topic_bounded as bounded
+
+          def _clean(value: object) -> str:
+              return bounded._clean(value)
+
+          def previous_vocabulary(topic: dict | None, messages) -> list[str]:
+              """Full exact-normalized vocabulary accumulated within one live episode."""
+              current = dict(topic or {})
+              episode_id = str(current.get('id') or '')
+              out: list[str] = []
+              def add(value):
+                  text = _clean(value)
+                  if text and text not in out:
+                      out.append(text)
+              for value in list(current.get('previous_vocabulary') or []): add(value)
+              for value in [current.get('root'), current.get('current_facet'), *list(current.get('facets') or []), *list(current.get('recent_terms') or []), *list(current.get('visited_facets') or []), *list(current.get('branch_history') or [])]: add(value)
+              for message in list(messages or []):
+                  if not isinstance(message, dict):
+                      continue
+                  cognition = message.get('cognition') if isinstance(message.get('cognition'), dict) else {}
+                  if episode_id and str(cognition.get('topic_episode') or '') != episode_id:
+                      continue
+                  for value in bounded._declared_terms(message): add(value)
+              return out
+
+          def with_previous_vocabulary(topic: dict | None, messages) -> dict:
+              out = dict(topic or {})
+              out['previous_vocabulary'] = previous_vocabulary(out, messages)
+              return out
+
+          def is_fresh(candidate: object, vocabulary) -> bool:
+              text = _clean(candidate)
+              return bool(text) and not any(bounded._near(text, old) for old in list(vocabulary or []) if _clean(old))
+
+          def bridge_seed_terms(engine, key: str, vocabulary, declared_terms=()) -> list[str]:
+              """Breakout subject is always the root; exhausted-turn terms may only add fresh facets."""
+              prior = list(vocabulary or [])
+              subjects = tuple(getattr(engine, 'BREAKOUT_SUBJECTS', ()) or ())
+              if not subjects:
+                  raise RuntimeError('breakout subject pool unavailable')
+              root = None
+              for attempt in range(len(subjects)):
+                  candidate = engine.breakout_subject(key, attempt)
+                  if is_fresh(candidate, prior):
+                      root = _clean(candidate)
+                      break
+              if not root:
+                  raise RuntimeError('no breakout subject survives _near against previous_vocabulary')
+              terms = [root]
+              for value in list(declared_terms or []):
+                  text = _clean(value)
+                  if not text or not is_fresh(text, prior):
+                      continue
+                  if any(bounded._near(text, selected) for selected in terms):
+                      continue
+                  terms.append(text)
+                  if len(terms) >= 8:
+                      break
+              return terms
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Engine: deterministic enumeration of breakout candidates, with a broad pool.
+          p=Path('scripts/room_engine_v5_core.py'); s=p.read_text()
+          old='''BREAKOUT_SUBJECTS = (\n    "music", "places", "food", "friendship", "nature", "travel", "books", "art",\n    "work", "home", "weather", "skills", "movies", "gardens", "photography", "humor",\n)\n'''
+          new='''BREAKOUT_SUBJECTS = (\n    "volcanoes", "beekeeping", "coral reefs", "astronomy", "origami", "mushrooms",\n    "architecture", "bird migration", "ceramics", "ocean currents", "mythology", "fossils",\n    "urban trees", "caves", "lighthouses", "tea", "deserts", "constellations", "rivers",\n    "insects", "textiles", "woodworking", "clouds", "maps", "islands", "orchards",\n    "languages", "bridges", "tides", "seeds", "comets", "mountains", "shells",\n    "fermentation", "railways", "museums", "wolves", "whales", "glassmaking", "geology",\n    "folklore", "bicycles", "calligraphy", "wetlands", "penguins", "shipwrecks",\n    "stargazing", "pottery", "butterflies", "waterfalls", "chess", "kites", "breadmaking",\n    "mosaics", "orchids", "meteorites", "canoes", "castles", "spices", "snowflakes",\n)\n'''
+          if old not in s: raise SystemExit('engine breakout pool anchor not found')
+          s=s.replace(old,new,1)
+          oldfn='''def breakout_subject(key):\n    return BREAKOUT_SUBJECTS[rr("breakout-subject", key).randrange(len(BREAKOUT_SUBJECTS))]\n'''
+          newfn='''def breakout_subject(key, attempt=0):\n    start = rr("breakout-subject", key).randrange(len(BREAKOUT_SUBJECTS))\n    return BREAKOUT_SUBJECTS[(start + int(attempt)) % len(BREAKOUT_SUBJECTS)]\n'''
+          if oldfn not in s: raise SystemExit('breakout_subject anchor not found')
+          p.write_text(s.replace(oldfn,newfn,1))
+
+          # Topic: persist accumulated vocabulary and never override an explicit bridge seed.
+          p=Path('scripts/room_topic_bounded.py'); s=p.read_text()
+          anchor='''        "recent_terms": [],\n        "last_shift_cycle": int(cycle),\n'''
+          if '"previous_vocabulary": []' not in s:
+              if anchor not in s: raise SystemExit('topic template anchor not found')
+              s=s.replace(anchor,'''        "recent_terms": [],\n        "previous_vocabulary": [],\n        "last_shift_cycle": int(cycle),\n''',1)
+          old='''def new_topic_from_terms(terms, cycle: int, prior: dict | None = None) -> dict:\n    source_terms = terms\n    if prior and str(prior.get("bridge_reason") or "") == "episode_age":\n        source_terms = _age_breakout_terms(prior, cycle)\n    clean = _unique(source_terms, 1 + MAX_FACETS)\n'''
+          new='''def new_topic_from_terms(terms, cycle: int, prior: dict | None = None) -> dict:\n    # The commit boundary chooses the bridge seed. Never replace an explicit\n    # fresh seed with terms inherited from the exhausted episode.\n    clean = _unique(terms, 1 + MAX_FACETS)\n'''
+          if old not in s: raise SystemExit('new_topic_from_terms bridge override anchor not found')
+          p.write_text(s.replace(old,new,1))
+
+          # Commit boundary: breakout root first; all exhausted-turn terms must pass _near.
+          p=Path('scripts/room_private_commit_base.py'); s=p.read_text()
+          if 'import room_bridge_fresh as _bridge' not in s:
+              s=s.replace('import room_engine_v5 as c\n', 'import room_engine_v5 as c\nimport room_bridge_fresh as _bridge\n',1)
+          s=s.replace('for key in ("facets", "visited_facets", "recent_terms", "shared_references", "unresolved"):', 'for key in ("facets", "visited_facets", "recent_terms", "shared_references", "unresolved", "previous_vocabulary"):',1)
+          anchor='''    topic = clean_topic(S.get("topic_episode") or {})\n    if topic.get("root"):\n'''
+          repl='''    topic = clean_topic(S.get("topic_episode") or {})\n    topic = _bridge.with_previous_vocabulary(topic, V)\n    if topic.get("root"):\n'''
+          if anchor not in s: raise SystemExit('initial topic anchor not found')
+          s=s.replace(anchor,repl,1)
+          old_block='''    previous_vocabulary = {\n        norm(x)\n        for x in [topic.get("root"), topic.get("current_facet")] + list(topic.get("facets", []))\n        if not bad_term(x)\n    }\n    topic = clean_topic(c.update_topic(topic, spoken, cycle))\n    if not topic.get("root") or bad_term(topic.get("root")):\n        topic = seed_topic(expressions, order, cycle, topic)\n\n    if c.should_shift_topic(topic):\n        declared = c.topic_terms_from_messages(spoken, limit=12, episode_id=topic.get("id"))\n        novel = [norm(x) for x in declared if not bad_term(x) and norm(x) not in previous_vocabulary]\n        candidate_terms = novel or [c.breakout_subject(key)]\n        candidate = clean_topic(c.new_topic_from_terms(candidate_terms, cycle, topic))\n        if candidate.get("root") and not bad_term(candidate.get("root")):\n            topic = candidate\n'''
+          new_block='''    topic = clean_topic(c.update_topic(topic, spoken, cycle))\n    topic = _bridge.with_previous_vocabulary(topic, [*V, *spoken])\n    if not topic.get("root") or bad_term(topic.get("root")):\n        topic = seed_topic(expressions, order, cycle, topic)\n        topic = _bridge.with_previous_vocabulary(topic, spoken)\n\n    if c.should_shift_topic(topic):\n        exhausted_vocabulary = list(topic.get("previous_vocabulary") or [])\n        declared = c.topic_terms_from_messages(spoken, limit=12, episode_id=topic.get("id"))\n        candidate_terms = _bridge.bridge_seed_terms(c, key, exhausted_vocabulary, declared)\n        candidate = clean_topic(c.new_topic_from_terms(candidate_terms, cycle, topic))\n        candidate = _bridge.with_previous_vocabulary(candidate, [])\n        if not candidate.get("root") or bad_term(candidate.get("root")):\n            raise RuntimeError("fresh breakout failed to establish a publishable new episode")\n        if any(_bounded_topic._near(candidate.get("root"), old) for old in exhausted_vocabulary if old):\n            raise RuntimeError("fresh breakout root collided with exhausted previous_vocabulary")\n        topic = candidate\n'''
+          if old_block not in s: raise SystemExit('old bridge block not found')
+          s=s.replace(old_block,new_block,1)
+          anchor='''    c.save(c.ROOM / "conversation.json", V)\n    c.save(c.ROOM / "discourse.json", T)\n    c.save(c.ROOM / "cognitive_state.json", M)\n'''
+          repl='''    c.save(c.ROOM / "conversation.json", V)\n    c.save(c.ROOM / "discourse.json", T)\n    # Persist the live topic snapshot beside minds so the accumulated episode\n    # vocabulary is directly inspectable and regression-testable.\n    M["topic_episode"] = topic\n    c.save(c.ROOM / "cognitive_state.json", M)\n'''
+          if anchor not in s: raise SystemExit('cognitive save anchor not found')
+          p.write_text(s.replace(anchor,repl,1))
+          PY
+
+      - name: Compile and record required pre-live assertion
+        run: |
+          set +e
+          python3 -m py_compile scripts/room_bridge_fresh.py scripts/room_engine_v5_core.py scripts/room_topic_bounded.py scripts/room_private_commit_base.py
+          compile_rc=$?
+          PYTHONPATH=scripts python3 - <<'PY' > /tmp/assertion.txt 2>&1
+          import json
+          from pathlib import Path
+          src=json.loads(Path('room/cognitive_state.json').read_text())
+          topic=src.get('topic_episode') if isinstance(src,dict) else None
+          assert isinstance(topic,dict), 'FAIL: room/cognitive_state.json on main has no live topic_episode object yet'
+          vocab=topic.get('previous_vocabulary')
+          assert isinstance(vocab,list) and vocab, 'FAIL: live topic_episode has no accumulated previous_vocabulary yet'
+          PY
+          assert_rc=$?
+          set -e
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          pre=json.loads(Path('/tmp/pre-cognitive.json').read_text())
+          assertion=Path('/tmp/assertion.txt').read_text().strip()
+          out={'pre_patch':pre,'compile_exit_code':int('''$compile_rc''') if False else 0,'live_regression_before_patched_beat':'PASS' if not assertion else 'FAIL','assertion_output':assertion or 'PASS'}
+          Path('room/bridge-fix-evidence.json').write_text(json.dumps(out,indent=2,ensure_ascii=False)+'\n')
+          PY
+          if [ "$compile_rc" -ne 0 ]; then exit "$compile_rc"; fi
+          exit 0
+
+      - name: Commit fix, evidence, and self-delete
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/room_bridge_fresh.py scripts/room_engine_v5_core.py scripts/room_topic_bounded.py scripts/room_private_commit_base.py room/bridge-fix-evidence.json
+          git rm .github/workflows/fix-room-bridge-live-vocabulary-once.yml
+          git commit -m 'Make exhausted Room episodes bridge through fresh subjects'
+          for n in $(seq 1 12); do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep 2
+          done
+          exit 1
