@@ -1,0 +1,59 @@
+name: Sara live public probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sara-live-public-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Probe public Sara endpoints
+        env:
+          ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+        run: |
+          set -u
+          health_body=$(mktemp)
+          sara_body=$(mktemp)
+          health_status=$(curl -sS -o "$health_body" -w '%{http_code}' "${ROOM_RELAY_URL%/}/health" || true)
+          sara_status=$(curl -sS -o "$sara_body" -w '%{http_code}' "${ROOM_RELAY_URL%/}/api/sara/session" || true)
+          python3 - "$health_status" "$sara_status" "$health_body" "$sara_body" <<'PY'
+          import json,sys
+          from datetime import datetime,timezone
+          hs,ss,hp,sp=sys.argv[1:]
+          def raw(path):
+              try:return open(path).read()
+              except:return ''
+          def parsed(path):
+              try:return json.load(open(path))
+              except:return None
+          out={
+              'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+              'health_status':int(hs or 0),
+              'health_body':parsed(hp) if parsed(hp) is not None else raw(hp)[:2000],
+              'sara_status':int(ss or 0),
+              'sara_body':parsed(sp) if parsed(sp) is not None else raw(sp)[:2000],
+          }
+          open('room/sara-live-public-probe.json','w').write(json.dumps(out,indent=2)+'\n')
+          PY
+          git config user.name "sara-live-probe"
+          git config user.email "actions@users.noreply.github.com"
+          git add room/sara-live-public-probe.json
+          git commit -m "Record Sara live public probe" || exit 0
+          for attempt in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep $attempt
+          done
+          exit 1
