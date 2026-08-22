@@ -1,0 +1,100 @@
+name: Sara first interaction probe once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sara-first-interaction-probe-once.yml'
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify Sara first direct interaction boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=scripts python3 - <<'PY'
+          import copy
+          import room_social_v5 as social
+          import room_engine_v5 as engine
+
+          expected_order = ('sarah','mara','owen','jules')
+          expected_participants = expected_order + ('allen','sara')
+          assert tuple(engine.ORDER) == expected_order
+          assert tuple(social.ORDER) == expected_order
+          assert tuple(engine.PARTICIPANTS) == expected_participants
+          assert tuple(social.PARTICIPANTS) == expected_participants
+
+          mind = {'entities': {e: {'people': {}} for e in expected_order}}
+          social.migrate_minds(mind)
+          before = copy.deepcopy(mind['entities']['sarah']['people']['sara'])
+          assert before['direct_turns'] == 0
+          assert before['observed_turns'] == 0
+          assert before['last_direct_cycle'] is None
+
+          sara_turn = {
+              'id': 'sim-sara-first-direct',
+              'speaker': 'sara',
+              'text': 'Sarah, what do you think about that?',
+              'cognition': {
+                  'target': 'sarah',
+                  'move_type': 'follow_up',
+                  'topic_terms': ['question'],
+              },
+              'discourse_id': 'd-sim-sara-first-direct',
+              'parent_discourse_id': None,
+          }
+          by = {'d-sim-sara-first-direct': sara_turn}
+          event = social.classify_event('sarah', sara_turn, by)
+          assert event is not None
+          assert event['speaker'] == 'sara'
+          assert event['listener'] == 'sarah'
+          assert event['direct'] is True
+          assert event['participation'] == 'DIRECT_ADDRESSEE'
+
+          social.observe_message(mind, sara_turn, 77, by)
+          after = mind['entities']['sarah']['people']['sara']
+          assert after['direct_turns'] == 1
+          assert after['observed_turns'] == 1
+          assert after['last_direct_cycle'] == 77
+          assert after['direct_familiarity'] > before['direct_familiarity']
+          assert after['exposure'] > before['exposure']
+          assert after['reciprocity'] > before['reciprocity']
+          assert after['predictability'] > before['predictability']
+          assert after['warmth'] > before['warmth']
+
+          for e in ('mara','owen','jules'):
+              rel = mind['entities'][e]['people']['sara']
+              assert rel['direct_turns'] == 0
+              assert rel['observed_turns'] == 1
+              assert rel['last_direct_cycle'] is None
+
+          print('SARA_EVENT=', event)
+          print('SARA_BEFORE=', before)
+          print('SARA_AFTER=', after)
+          print('AUTONOMOUS_ORDER=', tuple(engine.ORDER))
+          print('PARTICIPANTS=', tuple(engine.PARTICIPANTS))
+          print('SARA_FIRST_INTERACTION_EXIT_CODE=0')
+          PY
+
+      - name: Remove one-shot workflow after pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/sara-first-interaction-probe-once.yml
+          git diff --cached --check
+          git commit -m 'Confirm Sara first interaction boundary'
+          git push origin HEAD:main
