@@ -7,7 +7,7 @@ export { RoomState, LeviathanSignalStore, SaraExperimentState };
 const ALLEN_KEY_SHA256 = "c72f439977bc05b63b4cb8427dd958d78e564856e2e070aa8137fb7bdd295e18";
 const ALLEN_KEY_BUILD = "20260820-current";
 const LEVIATHAN_SIGNAL_BUILD = "20260821-v1";
-const SARA_LIVE_BUILD = "20260822-v1";
+const SARA_LIVE_BUILD = "20260822-v2-room-queue";
 const PARTICIPANT_QUEUE_KEY = "allenQueue";
 const MAX_PARTICIPANT_QUEUE = 50;
 const PARTICIPANT_SPEAKERS = new Set(["allen", "sara"]);
