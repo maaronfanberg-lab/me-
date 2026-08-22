@@ -553,9 +553,15 @@ if not getattr(_private_model._request, "_room_retry_boundary", False):
     _original_request = _private_model._request
 
     def _quality_request(model_url, prompt, role, temperature, timeout, self_entity=None, attempt=0):
+        # Expression transport separates control from conversational situation.
+        # Keep retry guidance in the control channel so a rejected echo receives
+        # a genuinely different instruction; never place it in situation data.
+        request_prompt = str(prompt or "")
+        if role != "expression":
+            request_prompt = _strip_retry_prose(request_prompt)
         return _original_request(
             model_url,
-            _strip_retry_prose(prompt),
+            request_prompt,
             role,
             temperature,
             timeout,
