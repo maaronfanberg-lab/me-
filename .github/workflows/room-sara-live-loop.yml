@@ -122,8 +122,7 @@ jobs:
 
           if [ ! -s /tmp/sara-turn.json ]; then
             echo "SARA_LIVE_RESULT=skipped-no-fresh-room-event"
-            if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-              python3 - <<'PY'
+            python3 - <<'PY'
           import json, os
           from datetime import datetime, timezone
           payload={
@@ -135,7 +134,6 @@ jobs:
           }
           open("room/sara-live-loop-launch.json","w").write(json.dumps(payload,indent=2)+"\n")
           PY
-            fi
             exit 0
           fi
 
@@ -180,9 +178,8 @@ jobs:
           echo "POST_ACCEPTED=${accepted}"
           echo "ROOM_QUEUED=${room_queued}"
 
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            POST_STATUS="$post_status" POST_RC="$post_rc" POST_ACCEPTED="$accepted" ROOM_QUEUED="$room_queued" \
-            python3 - <<'PY'
+          POST_STATUS="$post_status" POST_RC="$post_rc" POST_ACCEPTED="$accepted" ROOM_QUEUED="$room_queued" \
+          python3 - <<'PY'
           import json, os
           from datetime import datetime, timezone
           def load(path):
@@ -203,7 +200,6 @@ jobs:
           }
           open("room/sara-live-loop-launch.json","w").write(json.dumps(payload,indent=2)+"\n")
           PY
-          fi
 
           if [ "$post_rc" -ne 0 ] || [ "$post_status" != "202" ] || [ "$accepted" != "true" ] || [ "$room_queued" != "true" ]; then
             exit 1
@@ -214,8 +210,8 @@ jobs:
         run: |
           if [ -s /tmp/sara-model.pid ]; then kill "$(cat /tmp/sara-model.pid)" 2>/dev/null || true; fi
 
-      - name: Persist first-launch evidence
-        if: github.event_name == 'push' && always()
+      - name: Persist live-loop evidence
+        if: always()
         run: |
           set -e
           [ -f room/sara-live-loop-launch.json ] || exit 0
