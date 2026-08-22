@@ -31,6 +31,7 @@ jobs:
         with:
           sparse-checkout: |
             scripts
+            room
           sparse-checkout-cone-mode: true
       - name: Validate Sara generator without network writes
         run: |
@@ -76,7 +77,11 @@ jobs:
           for attempt in $(seq 1 120); do
             if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then
               echo 'ROOM_MODEL_URL=http://127.0.0.1:18080/completion' >> "$GITHUB_ENV"
-              echo "ROOM_NODE_PROMPT=${ROOM_PROMPT_EXPRESSION}" >> "$GITHUB_ENV"
+              {
+                echo 'ROOM_NODE_PROMPT<<__ROOM_PROMPT_20260822__'
+                printf '%s\n' "$ROOM_PROMPT_EXPRESSION"
+                echo '__ROOM_PROMPT_20260822__'
+              } >> "$GITHUB_ENV"
               exit 0
             fi
             if ! kill -0 "$(cat /tmp/sara-model.pid)" 2>/dev/null; then
