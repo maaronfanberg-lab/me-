@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,13 +46,17 @@ def tuple_block(name: str, values: tuple[str, ...]) -> str:
 
 def replace_pool(path: Path, name: str) -> None:
     text = path.read_text()
-    old = tuple_block(name, GENERIC)
     new = tuple_block(name, PROPOSITIONS)
     if new in text:
         return
-    if text.count(old) != 1:
+    pattern = re.compile(rf"(?ms)^{re.escape(name)}\s*=\s*\(\n.*?^\)")
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
         raise RuntimeError(f"{path}: {name} live source mismatch")
-    path.write_text(text.replace(old, new, 1))
+    existing = matches[0].group(0)
+    if not any(json.dumps(value) in existing for value in GENERIC):
+        raise RuntimeError(f"{path}: {name} is neither generic nor already substantive")
+    path.write_text(text[:matches[0].start()] + new + text[matches[0].end():])
 
 
 def mark_episode(path: Path) -> None:
