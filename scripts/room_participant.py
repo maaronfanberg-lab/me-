@@ -12,7 +12,8 @@ import room_engine_v5 as c
 from room_semantic_epoch import migrate_files
 
 TARGETS = ("sarah", "mara", "owen", "jules")
-PARTICIPANT = "allen"
+PARTICIPANTS = ("allen", "sara")
+DEFAULT_PARTICIPANT = "allen"
 MAX_TEXT = 700
 OBSERVED_IDS_KEY = "participant_observation_ids"
 
@@ -29,6 +30,11 @@ def parse_time(value: str) -> datetime:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
     except Exception:
         return datetime.now(timezone.utc)
+
+
+def participant_for(item: dict) -> str:
+    speaker = str(item.get("speaker") or DEFAULT_PARTICIPANT).strip().lower()
+    return speaker if speaker in PARTICIPANTS else DEFAULT_PARTICIPANT
 
 
 def infer_target(text: str):
@@ -52,12 +58,13 @@ def clean_terms(text: str, topic: dict):
 def inject(item: dict, history: list, discourse: dict, state: dict):
     source_id = str(item.get("id") or "").strip()
     text = re.sub(r"\s+", " ", str(item.get("text") or "").strip())[:MAX_TEXT]
+    participant = participant_for(item)
     if not source_id or not text:
         return None
 
     digest = hashlib.sha256(source_id.encode()).hexdigest()[:10]
     at = parse_time(item.get("at") or "")
-    message_id = f"{at.strftime('%Y%m%dT%H%M%S%f')[:-3]}-{PARTICIPANT}-v5-{digest}"
+    message_id = f"{at.strftime('%Y%m%dT%H%M%S%f')[:-3]}-{participant}-v5-{digest}"
     if any(message.get("id") == message_id for message in history):
         return source_id
 
@@ -71,9 +78,9 @@ def inject(item: dict, history: list, discourse: dict, state: dict):
     discourse_id = "d-" + message_id
     stamp = at.isoformat().replace("+00:00", "Z")
 
-    # Allen is deliberately represented in the same public conversational shape
-    # as the Room speakers. There is no human/operator flag in the context the
-    # entities receive.
+    # External participants are deliberately represented in the same public
+    # conversational shape as the Room speakers. There is no human/operator flag
+    # in the context the entities receive.
     cognition = {
         "move_type": move,
         "target": target,
@@ -90,7 +97,7 @@ def inject(item: dict, history: list, discourse: dict, state: dict):
     message = {
         "id": message_id,
         "at": stamp,
-        "speaker": PARTICIPANT,
+        "speaker": participant,
         "text": text,
         "runtime": c.VERSION,
         "boot_id": c.BOOT,
@@ -103,7 +110,7 @@ def inject(item: dict, history: list, discourse: dict, state: dict):
     }
     node = {
         "id": discourse_id,
-        "speaker": PARTICIPANT,
+        "speaker": participant,
         "parent": parent,
         "derived_from": None,
         "move": move,
@@ -133,13 +140,14 @@ def _remember_for_listener(mind: dict, listener: str, message: dict) -> None:
     if not isinstance(entity, dict):
         return
     source = str(message.get("id") or "")
+    participant = str(message.get("speaker") or DEFAULT_PARTICIPANT).lower()
     memories = list(entity.get("room_memories") or [])
     if source and not any(str(item.get("source") or "") == source for item in memories if isinstance(item, dict)):
         cognition = message.get("cognition") or {}
         memories.append({
             "source": source,
             "status": "observed",
-            "speaker": PARTICIPANT,
+            "speaker": participant,
             "text": str(message.get("text") or "")[:300],
             "discourse": message.get("discourse_id"),
             "beat_id": message.get("beat_id"),
@@ -158,8 +166,8 @@ def _remember_for_listener(mind: dict, listener: str, message: dict) -> None:
         entity["last_event"] = source
 
 
-def observe_allen_history(mind: dict, history: list, discourse: dict, state: dict) -> int:
-    """Persist each retained Allen turn into listener social memory exactly once."""
+def observe_participant_history(mind: dict, history: list, discourse: dict, state: dict) -> int:
+    """Persist each retained external participant turn into social memory exactly once."""
     if not isinstance(mind, dict):
         return 0
     seen = {str(value) for value in list(mind.get(OBSERVED_IDS_KEY) or []) if str(value)}
@@ -171,7 +179,7 @@ def observe_allen_history(mind: dict, history: list, discourse: dict, state: dic
     fallback_cycle = int((state or {}).get("cycle", 0))
     observed = 0
     for message in list(history or []):
-        if not isinstance(message, dict) or message.get("speaker") != PARTICIPANT:
+        if not isinstance(message, dict) or str(message.get("speaker") or "").lower() not in PARTICIPANTS:
             continue
         source = str(message.get("id") or "")
         if not source or source in seen:
@@ -183,6 +191,11 @@ def observe_allen_history(mind: dict, history: list, discourse: dict, state: dic
         observed += 1
     mind[OBSERVED_IDS_KEY] = sorted(seen)[-1000:]
     return observed
+
+
+# Backward-compatible public helper retained for existing Allen simulators.
+def observe_allen_history(mind: dict, history: list, discourse: dict, state: dict) -> int:
+    return observe_participant_history(mind, history, discourse, state)
 
 
 def main():
@@ -206,25 +219,27 @@ def main():
     state = c.state()
     mind = c.minds()
     ack_ids = []
+    injected_speakers = []
     for item in pending[:20]:
         if not isinstance(item, dict):
             continue
         source_id = inject(item, history, discourse, state)
         if source_id:
             ack_ids.append(source_id)
+            injected_speakers.append(participant_for(item))
 
-    observed_count = observe_allen_history(mind, history, discourse, state)
+    observed_count = observe_participant_history(mind, history, discourse, state)
 
     if ack_ids:
         c.save(c.ROOM / "conversation.json", history[-1000:])
         discourse["nodes"] = discourse.get("nodes", [])[-1200:]
         discourse["roots"] = discourse.get("roots", [])[-300:]
         c.save(c.ROOM / "discourse.json", discourse)
-        print(f"Injected {len(ack_ids)} Allen turn(s) into the Room context")
+        print(f"Injected {len(ack_ids)} participant turn(s) into the Room context: {','.join(injected_speakers)}")
 
     if observed_count:
         c.save(c.ROOM / "cognitive_state.json", mind)
-        print(f"Observed {observed_count} previously unseen Allen turn(s) into Room social memory")
+        print(f"Observed {observed_count} previously unseen participant turn(s) into Room social memory")
 
     ack_path.parent.mkdir(parents=True, exist_ok=True)
     ack_path.write_text(json.dumps({"ids": ack_ids}, separators=(",", ":")) + "\n")
