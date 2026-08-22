@@ -47,12 +47,12 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           ROOM_NODE_TIMEOUT_SECONDS=45
           ROOM_NODE_KILL_GRACE_SECONDS=5
+          ROOM_BEAT_TIMEOUT_SECONDS=300
           ROOM_RELAY_CONNECT_TIMEOUT_SECONDS=3
           ROOM_RELAY_MAX_TIME_SECONDS=8
           ROOM_BEAT_FAILURE_LIMIT=2
           ROOM_QUALITY_REJECTION_EXIT=42
 
-          # Rotate inherited over-age semantic context before any model call can see it.
           python3 scripts/room_topic_preflight.py room/state.json room/cognitive_state.json || exit 1
 
           export ROOM_MODEL_URL=""
@@ -106,13 +106,19 @@ jobs:
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" python3 scripts/build_room_feed.py || return 1
           }
           while [ "$SECONDS" -lt "$stop_at" ]; do
-            if run_beat; then beat_rc=0; else beat_rc=$?; fi
+            beat_rc_file=$(mktemp)
+            ( run_beat; printf '%s\n' "$?" > "$beat_rc_file" ) & beat_pid=$!
+            if timeout --preserve-status -k 10s "${ROOM_BEAT_TIMEOUT_SECONDS}s" tail --pid="$beat_pid" -f /dev/null; then wait "$beat_pid" || true; beat_rc=$(cat "$beat_rc_file" 2>/dev/null || echo 1); else echo "Room beat watchdog expired after ${ROOM_BEAT_TIMEOUT_SECONDS}s"; kill -TERM "$beat_pid" 2>/dev/null || true; sleep 2; kill -KILL "$beat_pid" 2>/dev/null || true; wait "$beat_pid" 2>/dev/null || true; beat_rc=1; fi
+            rm -f "$beat_rc_file"
             if [ "$beat_rc" -eq "$ROOM_QUALITY_REJECTION_EXIT" ]; then consecutive_failures=0; echo "Publish boundary rejected semantic echo; regenerating the beat"; sleep 1; continue; fi
             if [ "$beat_rc" -ne 0 ]; then consecutive_failures=$((consecutive_failures + 1)); echo "A Room beat failed internally (${consecutive_failures}/${ROOM_BEAT_FAILURE_LIMIT})"; if [ "$consecutive_failures" -ge "$ROOM_BEAT_FAILURE_LIMIT" ]; then runner_exit_reason="repeated_beat_failure"; break; fi; sleep 3; continue; fi
             consecutive_failures=0; git add room society/live.json; if git diff --cached --quiet; then continue; fi; git commit -m "Room cognition v5 attention-routed skills beat"
             pushed=0; for attempt in 1 2 3 4; do if git push origin HEAD:main; then pushed=1; publish_relay; ack_allen_turns; break; fi; git fetch origin main || { sleep $((attempt * 2)); continue; }; if ! git rebase origin/main; then git rebase --abort || true; break; fi; sleep 1; done; if [ "$pushed" -eq 0 ]; then sleep 8; fi
           done
           if [ -n "$model_pid" ]; then kill "$model_pid" 2>/dev/null || true; fi
-          if [ "$runner_exit_reason" = "repeated_beat_failure" ]; then exit 1; fi
+          if [ "$runner_exit_reason" = "repeated_beat_failure" ]; then
+            for attempt in 1 2 3 4 5; do if gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto; then exit 1; fi; sleep $((attempt * 5)); done
+            exit 1
+          fi
           for attempt in 1 2 3 4 5; do if gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto; then exit 0; fi; sleep $((attempt * 5)); done
           exit 0
