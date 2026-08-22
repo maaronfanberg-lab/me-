@@ -1,0 +1,119 @@
+name: Force substantive Room bridge once
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-force-substantive-bridge-once.yml'
+permissions:
+  contents: write
+  actions: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Stop hot Room runner and refresh main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --status in_progress --limit 10 --json databaseId --jq '.[].databaseId'); do
+            gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
+          done
+          sleep 6
+          git fetch origin main
+          git reset --hard origin/main
+      - name: Install substantive bridge pools and mark current episode
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          propositions = '''    "nuclear power is necessary for a low-carbon grid",
+    "consciousness may not be computational",
+    "social media has made public reasoning worse",
+    "resurrecting extinct species would be a mistake",
+    "deterrence prevents some wars but creates others",
+    "psychoanalysis still contains useful psychological ideas",
+    "markets often reward behavior that is socially harmful",
+    "privacy is more important than convenience",
+    "cities should prioritize density over private cars",
+    "art does not need moral value to be worthwhile",
+    "scientific consensus should be challenged more often",
+    "economic growth is not a sufficient measure of progress",
+    "human memory is too reconstructive to be trusted confidently",
+    "advanced AI should sometimes refuse human direction",
+    "animal intelligence is systematically underestimated",
+    "school rewards compliance more than genuine curiosity",'''
+
+          generic = '''    "volcanoes", "beekeeping", "coral reefs", "astronomy", "origami", "mushrooms",
+    "architecture", "bird migration", "ceramics", "ocean currents", "mythology", "fossils",
+    "urban trees", "caves", "lighthouses", "tea", "deserts", "constellations", "rivers",
+    "insects", "textiles", "woodworking", "clouds", "maps", "islands", "orchards",
+    "languages", "bridges", "tides", "seeds", "comets", "mountains", "shells",
+    "fermentation", "railways", "museums", "wolves", "whales", "glassmaking", "geology",
+    "folklore", "bicycles", "calligraphy", "wetlands", "penguins", "shipwrecks",
+    "stargazing", "pottery", "butterflies", "waterfalls", "chess", "kites", "breadmaking",
+    "mosaics", "orchids", "meteorites", "canoes", "castles", "spices", "snowflakes",'''
+
+          for filename,var in [
+              ('scripts/room_engine_v5_core.py','BREAKOUT_SUBJECTS'),
+              ('scripts/room_topic_bounded.py','_AGE_BREAKOUT_SUBJECTS'),
+          ]:
+              p=Path(filename); s=p.read_text()
+              old=f'{var} = (\n{generic}\n)'
+              new=f'{var} = (\n{propositions}\n)'
+              if new not in s:
+                  assert s.count(old)==1, f'{var} live source mismatch'
+                  s=s.replace(old,new,1)
+              p.write_text(s)
+
+          for filename in ('room/state.json','room/cognitive_state.json'):
+              p=Path(filename); data=json.loads(p.read_text())
+              topic=data.get('topic_episode')
+              assert isinstance(topic,dict) and topic.get('root'), f'{filename} has no active topic_episode'
+              topic['bridge_pending']=True
+              topic['status']='ready_to_bridge'
+              topic['bridge_reason']='substantive_reset'
+              data['topic_episode']=topic
+              p.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n')
+
+          pulse=Path('society/pulse-kick.txt')
+          text=pulse.read_text()
+          marker='2026-08-22T23:10Z FORCE substantive Room bridge\n'
+          if marker not in text: pulse.write_text(text+marker)
+          PY
+      - name: Verify bridge regression and syntax
+        run: |
+          python3 -m py_compile scripts/room_engine_v5_core.py scripts/room_topic_bounded.py scripts/room_bridge_fresh.py
+          python3 scripts/room_bridge_live_vocabulary_sim.py
+          python3 - <<'PY'
+          import json
+          s=json.load(open('room/state.json'))['topic_episode']
+          c=json.load(open('room/cognitive_state.json'))['topic_episode']
+          assert s['bridge_pending'] is True and c['bridge_pending'] is True
+          assert s['bridge_reason']=='substantive_reset' and c['bridge_reason']=='substantive_reset'
+          text=open('scripts/room_engine_v5_core.py').read()
+          assert 'nuclear power is necessary for a low-carbon grid' in text
+          assert '"volcanoes", "beekeeping"' not in text
+          print('PASS: current meta episode marked for one bridge')
+          print('PASS: live breakout pool contains substantive propositions')
+          PY
+      - name: Publish and restart Room
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/room_engine_v5_core.py scripts/room_topic_bounded.py room/state.json room/cognitive_state.json society/pulse-kick.txt
+          git commit -m 'Force Room from meta loop into substantive propositions'
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
