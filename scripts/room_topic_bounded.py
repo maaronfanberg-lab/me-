@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
+from pathlib import Path
 
 import room_social_v5 as social
 
@@ -14,8 +16,15 @@ MAX_RECENT_TERMS = 10
 # gives an episode roughly ten beats to develop before age alone forces a bridge.
 MAX_EPISODE_UPDATES = 20
 _AGE_BREAKOUT_SUBJECTS = (
-    "music", "places", "food", "friendship", "nature", "travel", "books", "art",
-    "home", "weather", "skills", "movies", "gardens", "photography", "humor",
+    "volcanoes", "beekeeping", "coral reefs", "astronomy", "origami", "mushrooms",
+    "architecture", "bird migration", "ceramics", "ocean currents", "mythology", "fossils",
+    "urban trees", "caves", "lighthouses", "tea", "deserts", "constellations", "rivers",
+    "insects", "textiles", "woodworking", "clouds", "maps", "islands", "orchards",
+    "languages", "bridges", "tides", "seeds", "comets", "mountains", "shells",
+    "fermentation", "railways", "museums", "wolves", "whales", "glassmaking", "geology",
+    "folklore", "bicycles", "calligraphy", "wetlands", "penguins", "shipwrecks",
+    "stargazing", "pottery", "butterflies", "waterfalls", "chess", "kites", "breadmaking",
+    "mosaics", "orchids", "meteorites", "canoes", "castles", "spices", "snowflakes",
 )
 
 
@@ -55,17 +64,45 @@ def _unique(values, limit: int) -> list[str]:
     return out
 
 
+def _persisted_live_vocabulary() -> list[str]:
+    """Collect semantic terms from the persisted live Room, fail-soft when absent."""
+    path = Path("room/feed.json")
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text())
+    except Exception:
+        return []
+    vocabulary: list[str] = []
+    state = payload.get("state") if isinstance(payload, dict) else {}
+    topic = state.get("topic_episode") if isinstance(state, dict) else {}
+    if isinstance(topic, dict):
+        vocabulary.extend([topic.get("root"), topic.get("current_facet")])
+        vocabulary.extend(list(topic.get("facets") or []))
+        vocabulary.extend(list(topic.get("recent_terms") or []))
+        vocabulary.extend(list(topic.get("visited_facets") or []))
+        vocabulary.extend(list(topic.get("branch_history") or []))
+    for message in list(payload.get("conversation") or []) if isinstance(payload, dict) else []:
+        if not isinstance(message, dict):
+            continue
+        vocabulary.extend(_declared_terms(message))
+    return _unique(vocabulary, 512)
+
+
 def _age_breakout_terms(prior: dict, cycle: int) -> list[str]:
     vocabulary = [
         prior.get("root"), prior.get("current_facet"),
         *list(prior.get("facets") or []), *list(prior.get("recent_terms") or []),
+        *list(prior.get("visited_facets") or []), *list(prior.get("branch_history") or []),
+        *_persisted_live_vocabulary(),
     ]
+    vocabulary = _unique(vocabulary, 512)
     start = int(cycle) % len(_AGE_BREAKOUT_SUBJECTS)
     for offset in range(len(_AGE_BREAKOUT_SUBJECTS)):
         candidate = _AGE_BREAKOUT_SUBJECTS[(start + offset) % len(_AGE_BREAKOUT_SUBJECTS)]
         if not any(_near(candidate, existing) for existing in vocabulary if existing):
             return [candidate]
-    return [_AGE_BREAKOUT_SUBJECTS[start]]
+    raise RuntimeError("no semantically fresh age-breakout subject remains")
 
 
 def topic_template(cycle: int = 0) -> dict:
@@ -93,6 +130,8 @@ def topic_template(cycle: int = 0) -> dict:
         "branch_history": [],
         "focus_turns": 0,
         "last_branch_cycle": int(cycle),
+        "last_semantic_progress_cycle": int(cycle),
+        "last_stagnation_cycle": None,
         "escape_pressure": 0,
     }
 
@@ -263,8 +302,23 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
         visited.append(_clean(active))
     visited = _unique(reversed(visited), MAX_HISTORY)
     visited.reverse()
-    meaningful = [term for term in terms if not any(_near(term, old) for old in previous_terms)]
-    low_novelty = 0 if meaningful else int(current.get("low_novelty_beats", 0) or 0) + 1
+    # Semantic progress and stagnation use the same criterion as facet advancement.
+    # Lexically different paraphrases of known facets are not progress. Because
+    # update_topic runs twice around a beat, count at most once per cycle.
+    prior_low_novelty = int(current.get("low_novelty_beats", 0) or 0)
+    last_progress_cycle = int(current.get("last_semantic_progress_cycle", -1) or -1)
+    last_stagnation_cycle = current.get("last_stagnation_cycle")
+    if novel:
+        low_novelty = 0
+        last_progress_cycle = int(cycle)
+        last_stagnation_cycle = None
+    elif last_progress_cycle == int(cycle):
+        low_novelty = prior_low_novelty
+    elif last_stagnation_cycle == int(cycle) if last_stagnation_cycle is not None else False:
+        low_novelty = prior_low_novelty
+    else:
+        low_novelty = prior_low_novelty + 1
+        last_stagnation_cycle = int(cycle)
     next_turns = int(current.get("turns", 0) or 0) + 1
     age_exhausted = next_turns >= MAX_EPISODE_UPDATES
     low_novelty_exhausted = low_novelty >= 3
@@ -284,7 +338,8 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
         "focus_turns": focus_turns, "turns": next_turns, "recent_terms": terms[:MAX_RECENT_TERMS],
         "low_novelty_beats": low_novelty, "status": status, "bridge_pending": bridge_pending,
         "bridge_reason": bridge_reason, "escape_pressure": max(low_novelty, 3 if age_exhausted else 0),
-        "last_branch_cycle": int(cycle), "participants": list(social.PARTICIPANTS),
+        "last_branch_cycle": int(cycle), "last_semantic_progress_cycle": last_progress_cycle,
+        "last_stagnation_cycle": last_stagnation_cycle, "participants": list(social.PARTICIPANTS),
     })
     counts = Counter(terms)
     current["branches"] = _flat_branches(root, facets, cycle, counts)
