@@ -1,0 +1,51 @@
+name: Room watchdog dispatch probe once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-watchdog-dispatch-probe-once.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Probe exact watchdog dispatch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          out=$(mktemp)
+          err=$(mktemp)
+          gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto >"$out" 2>"$err"
+          rc=$?
+          python3 - "$rc" "$out" "$err" <<'PY'
+          import json, pathlib, sys, datetime
+          rc=int(sys.argv[1])
+          out=pathlib.Path(sys.argv[2]).read_text(errors='replace')
+          err=pathlib.Path(sys.argv[3]).read_text(errors='replace')
+          payload={
+            'checked_at': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00','Z'),
+            'command': 'gh workflow run sarah-society.yml --repo $GITHUB_REPOSITORY --ref main -f entity=auto',
+            'exit_code': rc,
+            'stdout': out,
+            'stderr': err,
+          }
+          pathlib.Path('room/watchdog-dispatch-probe.json').write_text(json.dumps(payload, indent=2)+'\n')
+          print(json.dumps(payload))
+          PY
+          git config user.name "room-watchdog-probe"
+          git config user.email "actions@users.noreply.github.com"
+          git add room/watchdog-dispatch-probe.json
+          git commit -m "Record Room watchdog dispatch probe"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          exit "$rc"
