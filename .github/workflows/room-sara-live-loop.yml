@@ -40,11 +40,11 @@ jobs:
   speak:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
-      ROOM_MODEL_URL: ${{ secrets.ROOM_MODEL_URL }}
-      ROOM_NODE_PROMPT: ${{ secrets.ROOM_NODE_PROMPT }}
+      ROOM_PROMPT_EXPRESSION: ${{ secrets.ROOM_PROMPT_EXPRESSION }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -54,6 +54,39 @@ jobs:
             scripts
             room
           sparse-checkout-cone-mode: true
+
+      - name: Start the same local Society Brain used by the Room
+        run: |
+          set -euo pipefail
+          if [ -z "${ROOM_PROMPT_EXPRESSION:-}" ]; then
+            echo 'ROOM_PROMPT_EXPRESSION is unavailable'
+            exit 1
+          fi
+          mkdir -p .room_model/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'society-brain-q4_0.gguf' --dir .room_model
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
+          echo '7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  .room_model/society-brain-q4_0.gguf' | sha256sum -c -
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+          server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
+          [ -n "$server_bin" ]
+          chmod +x "$server_bin"
+          env -u ROOM_NODE_PROMPT -u ROOM_PROMPT_EXPRESSION "$server_bin" -m .room_model/society-brain-q4_0.gguf --host 127.0.0.1 --port 18080 -c 16384 -np 2 >.room_model/server.log 2>&1 &
+          echo $! > /tmp/sara-model.pid
+          for attempt in $(seq 1 120); do
+            if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then
+              echo 'ROOM_MODEL_URL=http://127.0.0.1:18080/completion' >> "$GITHUB_ENV"
+              echo "ROOM_NODE_PROMPT=${ROOM_PROMPT_EXPRESSION}" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/sara-model.pid)" 2>/dev/null; then
+              cat .room_model/server.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+          cat .room_model/server.log || true
+          exit 1
 
       - name: Generate and POST at most one autonomous Sara turn
         id: speak
@@ -170,6 +203,11 @@ jobs:
           if [ "$post_rc" -ne 0 ] || [ "$post_status" != "202" ] || [ "$accepted" != "true" ] || [ "$room_queued" != "true" ]; then
             exit 1
           fi
+
+      - name: Stop local model
+        if: always()
+        run: |
+          if [ -s /tmp/sara-model.pid ]; then kill "$(cat /tmp/sara-model.pid)" 2>/dev/null || true; fi
 
       - name: Persist first-launch evidence
         if: github.event_name == 'push' && always()
