@@ -3,7 +3,7 @@ import re
 from collections import Counter
 
 ORDER=("sarah","mara","owen","jules")
-PARTICIPANTS=ORDER+("allen",)
+PARTICIPANTS=ORDER+("allen","sara")
 REL_KEYS=("exposure","direct_familiarity","trust","predictability","reciprocity","warmth","respect","disclosure_depth","tension")
 GENERIC=set("the and but for not was are you your our out too did can got one once that this with from have has had just what when where how there they them then than about would could should into only because been being does doing done will well yeah okay also still maybe kind sort thing things something anything someone everyone say saying think thinking thought know knowing mean means seem seems want wants wanted make making made start starting started try trying tried good great nice sure right actually probably pretty little much many few around again already even ever never always often sometimes today tonight tomorrow yesterday different together interesting going everything really people person conversation talk feel feeling answer question makes like their which while more very usually between over under through during before after each other another both such own same much example specific rule case point pattern actual interaction general concrete keep hear hearing saying said change changes changed outcome matter matters version part piece compare comparison contrast exception exceptions different differently useful interesting coming leaving leave pin rather now edge test against gets involving especially happens rest i'd".split())
 GENERIC.update({"you're","we're","they're","i'm","don't","doesn't","isn't","aren't","wasn't","weren't","can't","won't","wouldn't","couldn't","shouldn't"})
