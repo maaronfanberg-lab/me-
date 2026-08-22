@@ -1,0 +1,67 @@
+name: Repair Room retry control once
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-retry-control-repair-once.yml'
+permissions:
+  contents: write
+  actions: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Apply guarded repair
+        run: python3 scripts/room_retry_control_repair.py
+      - name: Verify retry channel and existing Room tests
+        run: |
+          python3 -m py_compile scripts/room_expression_quality_core.py scripts/room_private_model.py scripts/room_engine_v5.py
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts')
+          import room_private_model as pm
+          import room_expression_quality_core as q
+          captured={}
+          original=q._original_request
+          try:
+              def fake(model_url,prompt,role,temperature,timeout,self_entity=None,attempt=0):
+                  captured['prompt']=prompt
+                  return '{}'
+              q._original_request=fake
+              prompt='CONTROL'+q._RETRY_PROSE+'\nCONVERSATION\n{"event":{"speaker":"mara","text":"A real statement."}}\nRESPONSE\n'
+              q._quality_request('unused',prompt,'expression',1.0,1,'sarah',1)
+              control,situation=pm._split_expression_prompt(captured['prompt'])
+              assert q._RETRY_PROSE.strip() in control, (control,situation)
+              assert q._RETRY_PROSE.strip() not in situation, (control,situation)
+              print('PASS: retry directive reaches expression control channel')
+              print('PASS: retry directive is absent from conversational situation')
+          finally:
+              q._original_request=original
+          PY
+          python3 scripts/room_engine_v5.py selftest
+          python3 scripts/room_bridge_live_vocabulary_sim.py
+      - name: Publish and restart one Room runner
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/room_expression_quality_core.py
+          git commit -m 'Preserve expression retry guidance in control channel' || true
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then break; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --status in_progress --limit 10 --json databaseId --jq '.[].databaseId'); do
+            gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
+          done
+          sleep 3
+          gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto
