@@ -16,6 +16,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+# Install the same participant-aware/sanitized private-model boundary used by
+# the live Room before importing the model module itself. This makes Sara a
+# legal model identity without turning her into a core 12-node Room entity.
+import room_engine_v5 as _room_engine_v5  # noqa: F401
 import room_private_model as model
 
 ROOM_VOICES = ("sarah", "mara", "owen", "jules")
