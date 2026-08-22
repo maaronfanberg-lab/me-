@@ -16,15 +16,22 @@ MAX_RECENT_TERMS = 10
 # gives an episode roughly ten beats to develop before age alone forces a bridge.
 MAX_EPISODE_UPDATES = 20
 _AGE_BREAKOUT_SUBJECTS = (
-    "volcanoes", "beekeeping", "coral reefs", "astronomy", "origami", "mushrooms",
-    "architecture", "bird migration", "ceramics", "ocean currents", "mythology", "fossils",
-    "urban trees", "caves", "lighthouses", "tea", "deserts", "constellations", "rivers",
-    "insects", "textiles", "woodworking", "clouds", "maps", "islands", "orchards",
-    "languages", "bridges", "tides", "seeds", "comets", "mountains", "shells",
-    "fermentation", "railways", "museums", "wolves", "whales", "glassmaking", "geology",
-    "folklore", "bicycles", "calligraphy", "wetlands", "penguins", "shipwrecks",
-    "stargazing", "pottery", "butterflies", "waterfalls", "chess", "kites", "breadmaking",
-    "mosaics", "orchids", "meteorites", "canoes", "castles", "spices", "snowflakes",
+    "nuclear power is necessary for a low-carbon grid",
+    "consciousness may not be computational",
+    "social media has made public reasoning worse",
+    "resurrecting extinct species would be a mistake",
+    "deterrence prevents some wars but creates others",
+    "psychoanalysis still contains useful psychological ideas",
+    "markets often reward behavior that is socially harmful",
+    "privacy is more important than convenience",
+    "cities should prioritize density over private cars",
+    "art does not need moral value to be worthwhile",
+    "scientific consensus should be challenged more often",
+    "economic growth is not a sufficient measure of progress",
+    "human memory is too reconstructive to be trusted confidently",
+    "advanced AI should sometimes refuse human direction",
+    "animal intelligence is systematically underestimated",
+    "school rewards compliance more than genuine curiosity",
 )
 
 
