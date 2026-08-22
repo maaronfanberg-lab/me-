@@ -20,6 +20,7 @@ jobs:
           ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
         run: |
           set +e
+          echo "PROBE_AFTER_PARTICIPANT_COMMIT=2563eb5159b4b3eb4a1d27e865235f4c53047cd9"
           token_json=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror")
           token_rc=$?
           relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))' 2>/dev/null)
