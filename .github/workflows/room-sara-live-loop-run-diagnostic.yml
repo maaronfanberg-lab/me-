@@ -1,0 +1,78 @@
+name: Sara live-loop run diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-sara-live-loop-run-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            room
+          sparse-checkout-cone-mode: true
+
+      - name: Capture live-loop run status and log
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p room
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow room-sara-live-loop.yml --limit 20 \
+            --json databaseId,event,status,conclusion,headSha,createdAt,url > /tmp/runs.json
+          run_id=$(python3 - <<'PY'
+          import json
+          runs=json.load(open('/tmp/runs.json'))
+          candidates=[r for r in runs if r.get('event')!='pull_request']
+          print(candidates[0]['databaseId'] if candidates else '')
+          PY
+          )
+          if [ -z "$run_id" ]; then
+            python3 - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          json.dump({'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),'found':False,'runs':json.load(open('/tmp/runs.json'))},open('room/sara-live-loop-run-diagnostic.json','w'),indent=2)
+          open('room/sara-live-loop-run.log','w').write('No non-PR Room Sara live-loop run found.\n')
+          PY
+          else
+            for attempt in $(seq 1 24); do
+              status=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')
+              [ "$status" = "completed" ] && break
+              sleep 5
+            done
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json databaseId,event,status,conclusion,headSha,createdAt,updatedAt,url,jobs > /tmp/run.json
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log > room/sara-live-loop-run.log 2>&1 || true
+            RUN_ID="$run_id" python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          run=json.load(open('/tmp/run.json'))
+          payload={'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),'found':True,'run':run}
+          json.dump(payload,open('room/sara-live-loop-run-diagnostic.json','w'),indent=2)
+          PY
+          fi
+
+      - name: Persist diagnostic
+        run: |
+          set -e
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add room/sara-live-loop-run-diagnostic.json room/sara-live-loop-run.log
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record Sara live-loop run diagnostic'
+          for attempt in $(seq 1 12); do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep 2
+          done
+          exit 1
