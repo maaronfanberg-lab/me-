@@ -1,0 +1,64 @@
+name: Room run diagnostic once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-run-diagnostic-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            room
+          sparse-checkout-cone-mode: true
+      - name: Capture latest Room run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p room
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --limit 10 --json databaseId,event,status,conclusion,headSha,createdAt,updatedAt,url > /tmp/runs.json
+          run_id=$(python3 - <<'PY'
+import json
+runs=json.load(open('/tmp/runs.json'))
+print(runs[0]['databaseId'] if runs else '')
+PY
+)
+          if [ -z "$run_id" ]; then
+            cp /tmp/runs.json room/room-run-diagnostic.json
+            printf '%s\n' 'No Room run found.' > room/room-run-diagnostic.log
+          else
+            for attempt in $(seq 1 60); do
+              status=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')
+              [ "$status" = "completed" ] && break
+              sleep 5
+            done
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json databaseId,event,status,conclusion,headSha,createdAt,updatedAt,url,jobs > room/room-run-diagnostic.json
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log > room/room-run-diagnostic.log 2>&1 || true
+          fi
+      - name: Persist and self-delete
+        run: |
+          set -e
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add room/room-run-diagnostic.json room/room-run-diagnostic.log
+          git rm .github/workflows/room-run-diagnostic-once.yml
+          git commit -m 'Capture Room runner diagnostic'
+          for attempt in $(seq 1 12); do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep 2
+          done
+          exit 1
