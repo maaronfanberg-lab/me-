@@ -1,0 +1,19 @@
+name: room bridge live vocabulary regression
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/room_private_commit_liveness_core.py'
+      - 'scripts/room_bridge_live_vocabulary_sim.py'
+      - '.github/workflows/room-bridge-live-vocabulary-regression.yml'
+
+jobs:
+  live-vocabulary-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Assert bridge avoids live accumulated vocabulary
+        run: PYTHONPATH=scripts python scripts/room_bridge_live_vocabulary_sim.py
