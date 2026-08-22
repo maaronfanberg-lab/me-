@@ -1,0 +1,103 @@
+name: Patch Sara participant once
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-sara-participant-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify before state and patch participant boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('scripts/room_engine_v5.py')
+          s = p.read_text()
+
+          required = {
+              'people': 'if "allen" not in _private_model.PEOPLE:\n    _private_model.PEOPLE = [*_private_model.PEOPLE, "allen"]',
+              'contains': 'return str(item or "").lower() == "allen" or super().__contains__(item)',
+              'participants': 'PARTICIPANTS = _AI_ORDER + ("allen",)',
+          }
+          for name, old in required.items():
+              count = s.count(old)
+              print(f'BEFORE {name}: count={count}')
+              if count != 1:
+                  raise SystemExit(f'expected exactly one {name} boundary, found {count}')
+
+          s = s.replace(
+              required['people'],
+              'for _participant in ("allen", "sara"):\n    if _participant not in _private_model.PEOPLE:\n        _private_model.PEOPLE = [*_private_model.PEOPLE, _participant]',
+              1,
+          )
+          s = s.replace(
+              required['contains'],
+              'return str(item or "").lower() in {"allen", "sara"} or super().__contains__(item)',
+              1,
+          )
+          s = s.replace(
+              required['participants'],
+              'PARTICIPANTS = _AI_ORDER + ("allen", "sara")',
+              1,
+          )
+          p.write_text(s)
+
+          print('AFTER sara_in_people=', '"sara"' in s)
+          print('AFTER participants=', 'PARTICIPANTS = _AI_ORDER + ("allen", "sara")' in s)
+          print('AFTER core_order_unchanged=', '_AI_ORDER = tuple(_core.ORDER)' in s)
+          PY
+
+          git diff -- scripts/room_engine_v5.py
+          git diff --check
+
+      - name: Syntax and participant regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_engine_v5.py
+          PYTHONPATH=scripts python3 - <<'PY'
+          import room_engine_v5 as r
+          print('AI_ORDER=', tuple(r._AI_ORDER))
+          print('PARTICIPANTS=', tuple(r.PARTICIPANTS))
+          print('contains_allen=', 'allen' in r.ORDER)
+          print('contains_sara=', 'sara' in r.ORDER)
+          print('iterated_order=', tuple(r.ORDER))
+          assert tuple(r.ORDER) == tuple(r._AI_ORDER)
+          assert 'allen' in r.ORDER
+          assert 'sara' in r.ORDER
+          assert tuple(r.PARTICIPANTS) == tuple(r._AI_ORDER) + ('allen', 'sara')
+          assert len(tuple(r.ORDER)) == 4
+          PY
+
+      - name: Run Room tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d tests ]; then
+            python3 -m pytest -q tests -k 'room' --disable-warnings
+          else
+            echo 'No tests directory; refusing to claim full Room suite.'
+          fi
+
+      - name: Commit only after checks pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/room_engine_v5.py
+          git diff --cached --check
+          git commit -m 'Add Sara as Room participant'
+          git push origin HEAD:main
