@@ -1,5 +1,5 @@
 name: Room run status observer
-# observe superseding Room restart: 2026-08-22 23:28Z
+# observe retry-control repair: 2026-08-22 23:45Z
 
 on:
   push:
@@ -30,6 +30,7 @@ jobs:
           gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --limit 8 --json "$fields" > /tmp/room-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society-pulse.yml --limit 5 --json "$fields" > /tmp/pulse-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow room-force-substantive-bridge-once.yml --limit 5 --json "$fields" > /tmp/substantive-runs.json
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow room-retry-control-repair-once.yml --limit 5 --json "$fields" > /tmp/retry-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow room-live-quality-probe.yml --limit 5 --json "$fields" > /tmp/quality-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow room-cloudflare-git-build-probe.yml --limit 5 --json "$fields" > /tmp/cloudflare-probe-runs.json
           gh run list --repo "$GITHUB_REPOSITORY" --workflow room-worker-ingest-simulator.yml --limit 5 --json "$fields" > /tmp/worker-sim-runs.json
@@ -41,6 +42,7 @@ jobs:
             'room':json.load(open('/tmp/room-runs.json')),
             'pulse':json.load(open('/tmp/pulse-runs.json')),
             'substantive_bridge':json.load(open('/tmp/substantive-runs.json')),
+            'retry_control_repair':json.load(open('/tmp/retry-runs.json')),
             'live_quality_probe':json.load(open('/tmp/quality-runs.json')),
             'cloudflare_git_probe':json.load(open('/tmp/cloudflare-probe-runs.json')),
             'worker_ingest_simulator':json.load(open('/tmp/worker-sim-runs.json')),
