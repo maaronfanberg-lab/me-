@@ -1,0 +1,33 @@
+name: Capture current Room runner state
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diag-current-room-run.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Capture latest Room runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "room-run-diagnostic"
+          git config user.email "actions@users.noreply.github.com"
+          mkdir -p room_work
+          gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/sarah-society.yml/runs?per_page=5" --jq '.workflow_runs[] | [.id,.status,.conclusion,.event,.head_sha,.created_at,.updated_at] | @tsv' > room_work/current-room-runs.tsv
+          git add room_work/current-room-runs.tsv
+          git commit -m "Record current Room runner state"
+          git pull --rebase origin main
+          git push origin HEAD:main
