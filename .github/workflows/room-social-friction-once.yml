@@ -1,0 +1,46 @@
+name: Room social friction once
+on:
+  push:
+    paths:
+      - '.github/workflows/room-social-friction-once.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Add stochastic friction and Mara bias
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/room_engine_v5.py')
+          s=p.read_text()
+          old='''    compact["personality_context"] = {\n        "identity": fixed.get("core_identity"),\n        "values": list(fixed.get("values") or [])[:4],\n        "motives": list(fixed.get("motives") or [])[:3],\n        "interpersonal": appraisal.get("interpersonal_style"),\n        "current": {\n            "situation": appraisal.get("situation"),\n            "latest_words": (appraisal.get("grounding") or {}).get("source_text"),\n            "grounding_terms": (appraisal.get("grounding") or {}).get("terms"),\n            "salience": appraisal.get("priority"),\n            "personality_lens": appraisal.get("personality_lens"),\n            "activated_sensitivities": activated,\n            "usual_coping": list(appraisal.get("coping_patterns") or [])[:4],\n        },\n    }\n    return compact'''
+          new='''    traits = profile.get("traits") if isinstance(profile.get("traits"), dict) else {}\n    agree = float(traits.get("agreeableness", .5))\n    react = float(traits.get("emotional_reactivity", .5))\n    extra = float(traits.get("extraversion", .5))\n    friction_propensity = max(0.0, min(1.0, .50 * (1.0 - agree) + .30 * react + .20 * extra))\n    cycle_key = os.environ.get("ROOM_CYCLE_KEY", "room-cycle")\n    friction_roll = hashlib.sha256(f"social-friction:{cycle_key}:{entity}".encode()).digest()[0] / 255.0\n    friction_active = friction_roll < (.08 + .28 * friction_propensity)\n    partner = str(source.get("partner") or "").lower()\n    mara_bias = entity != "mara" and partner == "mara"\n\n    compact["personality_context"] = {\n        "identity": fixed.get("core_identity"),\n        "values": list(fixed.get("values") or [])[:4],\n        "motives": list(fixed.get("motives") or [])[:3],\n        "interpersonal": appraisal.get("interpersonal_style"),\n        "current": {\n            "situation": appraisal.get("situation"),\n            "latest_words": (appraisal.get("grounding") or {}).get("source_text"),\n            "grounding_terms": (appraisal.get("grounding") or {}).get("terms"),\n            "salience": appraisal.get("priority"),\n            "personality_lens": appraisal.get("personality_lens"),\n            "activated_sensitivities": activated,\n            "usual_coping": list(appraisal.get("coping_patterns") or [])[:4],\n            "social_friction": "irritable; may be needlessly sharp, sarcastic, petty, or dismissive" if friction_active else "ordinary",\n            "mara_bias": "low patience and low goodwill toward Mara; disagreement may become cutting or unfair" if mara_bias else None,\n        },\n    }\n    return compact'''
+          assert s.count(old)==1, 'personality_context block mismatch'
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Verify
+        run: |
+          python -m py_compile scripts/room_engine_v5.py
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/room_engine_v5.py').read_text()
+          assert 'social-friction:' in s
+          assert 'needlessly sharp, sarcastic, petty, or dismissive' in s
+          assert 'low patience and low goodwill toward Mara' in s
+          print('PASS: stochastic social friction installed')
+          print('PASS: Mara-specific low-goodwill bias installed for the other voices')
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/room_engine_v5.py
+          git commit -m 'Add stochastic nastiness and Mara-specific friction'
+          git pull --rebase origin main
+          git push origin HEAD:main
