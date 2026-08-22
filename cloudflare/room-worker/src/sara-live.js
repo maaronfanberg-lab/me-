@@ -24,12 +24,15 @@ export class SaraExperimentState extends DurableObject {
   }
 }
 
+// Public clients may observe the experiment, never mutate it. Write transport is
+// intentionally closed until it is wired through the repository's verified
+// GitHub OIDC boundary. This prevents an Internet client from impersonating Sara
+// or any Room voice while still allowing us to deploy and verify the live reader.
 export async function handleSaraLive(request,env){
   const url=new URL(request.url);
   const stub=env.SARA_EXPERIMENT.getByName("main");
-  if(request.method==="OPTIONS") return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET,POST,PUT,OPTIONS","access-control-allow-headers":"content-type","access-control-max-age":"86400"}});
+  if(request.method==="OPTIONS") return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET,OPTIONS","access-control-allow-headers":"content-type","access-control-max-age":"86400"}});
   if(url.pathname==="/api/sara/session"&&request.method==="GET") return json(await stub.getSession());
-  if(url.pathname==="/api/sara/session"&&request.method==="PUT") return json(await stub.replaceSession(await request.json()),202);
-  if(url.pathname==="/api/sara/turn"&&request.method==="POST") return json(await stub.appendTurn(await request.json()),202);
+  if(url.pathname==="/api/sara/session"||url.pathname==="/api/sara/turn") return json({error:"write-boundary-closed"},405);
   return json({error:"not-found"},404);
 }
