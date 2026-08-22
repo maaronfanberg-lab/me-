@@ -32,6 +32,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
+
+          active_room_runs=$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/sarah-society.yml/runs?per_page=20" --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued")] | length' 2>/dev/null || echo 0)
+          case "$active_room_runs" in ''|*[!0-9]*) active_room_runs=0 ;; esac
+          if [ "$active_room_runs" -gt 0 ]; then
+            echo "ROOM_WATCHDOG runner already active (${active_room_runs}); no replacement dispatch"
+            exit 0
+          fi
+
           if python3 - <<'PY'
           import json, pathlib, time, datetime
           p = pathlib.Path('room/feed.json')
