@@ -1,0 +1,92 @@
+name: Verify Room bridge persisted live vocabulary once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-room-bridge-live-field-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Extract literal live fields and assert bridge freshness
+        run: |
+          set +e
+          PYTHONPATH=scripts python3 - <<'PY' > /tmp/live-bridge-verify.txt 2>&1
+          import json
+          from pathlib import Path
+          import room_private_commit_liveness_core as bridge
+
+          minds=json.loads(Path('room/cognitive_state.json').read_text())
+          state=json.loads(Path('room/state.json').read_text())
+          topic=minds.get('topic_episode') if isinstance(minds,dict) else None
+          assert isinstance(topic,dict), 'room/cognitive_state.json has no topic_episode object'
+          vocab=topic.get('previous_vocabulary')
+          assert isinstance(vocab,list) and vocab, 'topic_episode.previous_vocabulary is missing or empty'
+
+          requested={
+            'topic_episode':{k:topic.get(k) for k in ('id','root','current_facet','focus_turns','status','bridge_pending','recent_terms')},
+            'previous_vocabulary_count':len(vocab),
+            'previous_vocabulary':vocab if len(vocab)<200 else None,
+            'previous_vocabulary_recent_50':vocab[-50:] if len(vocab)>=200 else None,
+            'bridge_pending':topic.get('bridge_pending'),
+          }
+          Path('room/cognitive-topic-requested.json').write_text(json.dumps(requested,indent=2,ensure_ascii=False)+'\n')
+          print('LIVE_FIELD='+json.dumps(requested,ensure_ascii=False,separators=(',',':')))
+
+          probe=dict(topic)
+          probe['bridge_pending']=True
+          probe['status']='ready_to_bridge'
+          probe['bridge_reason']=probe.get('bridge_reason') or 'regression_probe'
+          cycle=int(state.get('cycle',0))+1
+          selected=bridge._bridge_safe_new_topic_from_terms(vocab[-50:],cycle,probe)
+          root=selected.get('root')
+          near_hits=[term for term in vocab if bridge._base._bounded_topic._near(root,term)]
+          print(f"ASSERT selected_root_not_near_literal_previous_vocabulary root={root!r} near_hits={near_hits!r} vocabulary_count={len(vocab)}")
+          assert root, 'bridge selected no root'
+          assert not near_hits, f'bridge selected root near literal previous_vocabulary: root={root!r} near_hits={near_hits!r}'
+
+          original=bridge.c.breakout_subject
+          contaminated=vocab[-1]
+          try:
+              bridge.c.breakout_subject=lambda *args,**kwargs: contaminated
+              selected2=bridge._bridge_safe_new_topic_from_terms(vocab[-50:],cycle+1,probe)
+          finally:
+              bridge.c.breakout_subject=original
+          root2=selected2.get('root')
+          near2=[term for term in vocab if bridge._base._bounded_topic._near(root2,term)]
+          print(f"ASSERT contaminated_default_and_exhausted_terms_rejected contaminated={contaminated!r} root={root2!r} near_hits={near2!r}")
+          assert root2, 'bridge selected no root after contaminated default breakout'
+          assert not near2, f'bridge admitted term near literal previous_vocabulary: root={root2!r} near_hits={near2!r}'
+          print('PASS literal live previous_vocabulary bridge regression')
+          PY
+          rc=$?
+          set -e
+          {
+            echo "EXIT_CODE=$rc"
+            cat /tmp/live-bridge-verify.txt
+          } > room/bridge-live-main-test.txt
+          cat room/bridge-live-main-test.txt
+          test "$rc" -eq 0
+      - name: Commit evidence and self-delete
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add room/cognitive-topic-requested.json room/bridge-live-main-test.txt
+          git rm .github/workflows/verify-room-bridge-live-field-once.yml
+          git commit -m 'Record literal live bridge vocabulary regression'
+          for n in $(seq 1 12); do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep 2
+          done
+          exit 1
