@@ -27,8 +27,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
+          set -uo pipefail
+          if python3 - <<'PY'
           import json, pathlib, time, datetime
           p = pathlib.Path('room/feed.json')
           if not p.exists():
@@ -42,14 +42,10 @@ jobs:
           dt = datetime.datetime.fromisoformat(stamp.replace('Z', '+00:00'))
           age = time.time() - dt.timestamp()
           print(f'ROOM_WATCHDOG age_seconds={age:.1f} cycle={(data.get("state") or {}).get("cycle")}')
-          # A healthy beat is usually a few minutes. Eight minutes is deliberately
-          # generous enough not to kill active cognition, but bounded enough that
-          # a wedged Room cannot sit silently for tens of minutes.
           if age > 480:
               raise SystemExit(2)
           PY
-          rc=$?
-          if [ "$rc" -eq 0 ]; then
+          then
             echo 'ROOM_WATCHDOG healthy; no action'
             exit 0
           fi
