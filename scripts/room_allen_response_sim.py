@@ -15,7 +15,7 @@ import room_engine_v5 as engine
 import room_private_model as private_model
 
 GENERATORS = ("sarah", "mara", "owen", "jules")
-PARTICIPANTS = (*GENERATORS, "allen")
+PARTICIPANTS = (*GENERATORS, "allen", "sara")
 
 
 def require(name: str, ok: bool, detail: object = "") -> None:
