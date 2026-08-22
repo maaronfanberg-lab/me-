@@ -1,5 +1,5 @@
 name: Force substantive Room bridge once
-# rerun after structural pool guard fix: 2026-08-22 23:17Z
+# explicit Room dispatch after recovery: 2026-08-22 23:26Z
 on:
   push:
     branches: [main]
@@ -36,16 +36,25 @@ jobs:
           python3 scripts/room_bridge_live_vocabulary_sim.py
           python3 -c "import json; s=json.load(open('room/state.json'))['topic_episode']; c=json.load(open('room/cognitive_state.json'))['topic_episode']; assert s['bridge_pending'] and c['bridge_pending']; assert s['bridge_reason']=='substantive_reset' and c['bridge_reason']=='substantive_reset'; print('PASS: substantive bridge marked')"
       - name: Publish and restart Room
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add scripts/room_engine_v5_core.py scripts/room_topic_bounded.py room/state.json room/cognitive_state.json society/pulse-kick.txt
-          git commit -m 'Force Room from meta loop into substantive propositions'
-          for n in 1 2 3 4; do
-            if git push origin HEAD:main; then exit 0; fi
-            git fetch origin main
-            git rebase origin/main || { git rebase --abort || true; exit 1; }
-            sleep "$n"
-          done
-          exit 1
+          if ! git diff --cached --quiet; then
+            git commit -m 'Force Room from meta loop into substantive propositions'
+            pushed=0
+            for n in 1 2 3 4; do
+              if git push origin HEAD:main; then pushed=1; break; fi
+              git fetch origin main
+              git rebase origin/main || { git rebase --abort || true; exit 1; }
+              sleep "$n"
+            done
+            [ "$pushed" -eq 1 ] || exit 1
+          else
+            echo 'Substantive bridge state already published'
+          fi
+          gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto
+          echo 'Room restart explicitly dispatched'
