@@ -209,6 +209,17 @@ def _personality_compact_payload(payload, role, self_entity=None):
             "interpretive_pull": item.get("interpretation_bias"),
             "coping_pull": item.get("coping_bias"),
         })
+    traits = profile.get("traits") if isinstance(profile.get("traits"), dict) else {}
+    agree = float(traits.get("agreeableness", .5))
+    react = float(traits.get("emotional_reactivity", .5))
+    extra = float(traits.get("extraversion", .5))
+    friction_propensity = max(0.0, min(1.0, .50 * (1.0 - agree) + .30 * react + .20 * extra))
+    cycle_key = os.environ.get("ROOM_CYCLE_KEY", "room-cycle")
+    friction_roll = hashlib.sha256(f"social-friction:{cycle_key}:{entity}".encode()).digest()[0] / 255.0
+    friction_active = friction_roll < (.08 + .28 * friction_propensity)
+    partner = str(source.get("partner") or "").lower()
+    mara_bias = entity != "mara" and partner == "mara"
+
     compact["personality_context"] = {
         "identity": fixed.get("core_identity"),
         "values": list(fixed.get("values") or [])[:4],
@@ -222,6 +233,8 @@ def _personality_compact_payload(payload, role, self_entity=None):
             "personality_lens": appraisal.get("personality_lens"),
             "activated_sensitivities": activated,
             "usual_coping": list(appraisal.get("coping_patterns") or [])[:4],
+            "social_friction": "irritable; may be needlessly sharp, sarcastic, petty, or dismissive" if friction_active else "ordinary",
+            "mara_bias": "low patience and low goodwill toward Mara; disagreement may become cutting or unfair" if mara_bias else None,
         },
     }
     return compact
