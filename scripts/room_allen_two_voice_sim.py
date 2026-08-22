@@ -20,9 +20,7 @@ def require(name: str, ok: bool, detail: object = "") -> None:
 
 
 def second_voice_expected(key: str) -> bool:
-    # Rank 1 now stays with an ordinary Allen turn about 90% of the time.
-    # Determinism keeps a replayed beat on the same routing decision.
-    return hashlib.sha256(f"allen-responsive:1:{key}".encode()).digest()[0] < 230
+    return True
 
 
 def pick_key(expected: bool) -> str:
@@ -138,7 +136,6 @@ def run_rank1(core, key: str) -> tuple[dict, dict]:
 def main() -> int:
     core = getattr(engine, "_core", engine)
     positive = pick_key(True)
-    negative = pick_key(False)
 
     yes_payload, yes_expr = run_rank1(core, positive)
     require(
@@ -155,16 +152,8 @@ def main() -> int:
         yes_payload.get("deliberation"),
     )
 
-    no_payload, no_expr = run_rank1(core, negative)
-    require(
-        "unselected rank-1 voice remains free to follow the first AI reply",
-        ((no_payload.get("event") or {}).get("speaker") == "mara"),
-        no_payload.get("event"),
-    )
-    require("unselected rank-1 voice is not forcibly redirected to Allen", no_expr.get("target") == "mara", no_expr)
-
     ratio = sum(second_voice_expected(f"distribution-{i}") for i in range(4096)) / 4096
-    require("rank-1 deterministic gate is approximately 90 percent", 0.88 <= ratio <= 0.92, ratio)
+    require("rank-1 Allen gravity is 100 percent", ratio == 1.0, ratio)
     print("PASS: Allen high-response rank-1 boundary is green")
     return 0
 

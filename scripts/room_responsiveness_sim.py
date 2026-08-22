@@ -108,8 +108,8 @@ def ai_event(speaker: str, key: str) -> dict:
 def main() -> int:
     core = getattr(engine, "_core", engine)
 
-    # Ordinary participant turns should usually hold more than two voices, but
-    # not force a four-person chorus on every single message.
+    # Allen now has explicit high conversational gravity: all four voices stay
+    # with his newest turn for the beat.
     rates = {}
     for rank in (0, 1, 2, 3):
         hits = 0
@@ -125,9 +125,9 @@ def main() -> int:
                 hits += 1
         rates[rank] = hits / total
     require("rank 0 always responds to ordinary Allen", rates[0] == 1.0, rates)
-    require("rank 1 responds to ordinary Allen at least 85 percent", rates[1] >= .85, rates)
-    require("rank 2 responds to ordinary Allen often", .55 <= rates[2] <= .80, rates)
-    require("rank 3 sometimes responds to ordinary Allen", .25 <= rates[3] <= .55, rates)
+    require("rank 1 always responds to ordinary Allen", rates[1] == 1.0, rates)
+    require("rank 2 always responds to ordinary Allen", rates[2] == 1.0, rates)
+    require("rank 3 always responds to ordinary Allen", rates[3] == 1.0, rates)
 
     # Same-beat interaction should not show Mara as the current event while
     # leaving Sarah as the relationship/partner frame.
