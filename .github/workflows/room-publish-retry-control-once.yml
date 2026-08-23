@@ -1,0 +1,104 @@
+name: Repair Room publish-retry control once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-publish-retry-control-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply guarded publish-retry repair
+        run: python3 scripts/room_publish_retry_control_repair.py
+
+      - name: Verify publish-retry control and Room invariants
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_expression_quality_core.py scripts/room_private_commit.py scripts/room_private_commit_liveness_core.py
+          python3 - <<'PY'
+          import json, sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          import room_expression_quality_core as q
+          import room_private_commit_liveness_core as live
+          import room_private_commit as facade
+          import room_engine_v5 as room
+
+          with tempfile.TemporaryDirectory() as td:
+              marker = Path(td) / 'retry.json'
+              err = RuntimeError('private Room same-beat echo blocked for jules: same_beat_sentence_copy')
+              payload = live.record_publish_retry_marker(err, marker)
+              assert payload == {'entity':'jules','reason':'same_beat_sentence_copy'}, payload
+              raw = json.loads(marker.read_text())
+              assert raw == payload
+
+              prompt = 'PRIVATE CONTROL\nCONVERSATION\nAllen asks about birds.\nRESPONSE\n'
+              unchanged = q._inject_publish_retry_control(prompt, 'owen', marker)
+              assert unchanged == prompt, 'control applied to wrong voice'
+              changed = q._inject_publish_retry_control(prompt, 'jules', marker)
+              control, situation = room._private_model._split_expression_prompt(changed)
+              _, original_situation = room._private_model._split_expression_prompt(prompt)
+              assert 'WHOLE-BEAT RETRY CONTROL:' in control
+              assert 'new proposition' in control
+              assert situation == original_situation, 'publish retry control contaminated conversation data'
+              assert 'WHOLE-BEAT RETRY CONTROL:' not in situation
+
+              marker.write_text('{"entity":"owen","reason":"same_beat_restatement_sentence"}\n')
+              changed = q._inject_publish_retry_control(prompt, 'owen', marker)
+              control, situation = room._private_model._split_expression_prompt(changed)
+              assert 'different consequence' in control
+              assert situation == original_situation
+
+              facade.clear_publish_retry_marker(marker)
+              assert not marker.exists(), 'successful publish cleanup did not clear retry marker'
+
+          assert 'sara' in room.ORDER and 'allen' in room.ORDER
+          assert len(tuple(room.ORDER)) == 4
+          assert tuple(room.PARTICIPANTS)[-2:] == ('allen','sara')
+          print('PASS: publish rejection survives as private targeted retry control')
+          print('PASS: conversational situation is byte-stable across publish retry control')
+          print('PASS: Sara remains participant-only; autonomous ORDER remains four')
+          PY
+          python3 scripts/room_retry_truncation_sim.py
+          python3 scripts/room_expression_quality_sim.py
+          python3 scripts/room_engine_v5.py selftest
+          git diff --check
+
+      - name: Publish repair and restart exactly one Room runner
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/room_expression_quality_core.py scripts/room_private_commit.py scripts/room_private_commit_liveness_core.py
+          git rm .github/workflows/room-publish-retry-control-once.yml
+          git rm scripts/room_publish_retry_control_repair.py
+          git diff --cached --check
+          git commit -m 'Carry publish rejection into Room retry control'
+          pushed=0
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then pushed=1; break; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          test "$pushed" -eq 1
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --status in_progress --limit 10 --json databaseId --jq '.[].databaseId'); do
+            gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
+          done
+          sleep 3
+          gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto
