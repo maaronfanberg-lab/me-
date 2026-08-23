@@ -131,6 +131,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -f scripts/room_step0_liveness_patch.py .github/workflows/room-step0-liveness-once.yml
           git add scripts/room_expression_quality_core.py scripts/room_engine_v5_core.py scripts/room_private_commit_base.py scripts/room_mark_stalled.py .github/workflows/sarah-society.yml scripts/room_step0_liveness_patch.py .github/workflows/room-step0-liveness-once.yml
           git diff --cached --quiet && { echo 'FAIL: Step 0 produced no source diff'; exit 1; }
