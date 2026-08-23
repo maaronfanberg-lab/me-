@@ -1,0 +1,10 @@
+Room Step 0 failed verification fixture diagnosis
+
+Run: 32613898041
+Job: 97131236250
+Failure: quality_issue(...) returned None because same-beat checks are gated by ROOM_EXPRESSION_RANK. The verification fixture supplied context/event but did not set ROOM_EXPRESSION_RANK, so _same_beat_prior_turns() returned [] by design.
+
+Safe correction for the one-shot workflow before retry:
+Set os.environ['ROOM_EXPRESSION_RANK']='1' before calling q.quality_issue(...) in the verification fixture, then clear it before subsequent checks as appropriate.
+
+No production source behavior should be changed to satisfy this fixture.
