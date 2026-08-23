@@ -9,8 +9,10 @@ selection guards, then delegates every other behavior to that preserved
 implementation.
 """
 
+import json
 import re
 import sys
+from pathlib import Path
 
 import room_private_commit_base as _base
 
@@ -223,6 +225,19 @@ def __getattr__(name: str):
     return getattr(_base, name)
 
 
+PUBLISH_RETRY_MARKER = Path(".room-publish-retry.json")
+
+
+def record_publish_retry_marker(error: BaseException, path: Path | None = None) -> dict | None:
+    match = re.search(r"private Room same-beat echo blocked for ([a-z]+): ([a-z0-9_]+)", str(error), re.I)
+    if not match:
+        return None
+    payload = {"entity": match.group(1).lower(), "reason": match.group(2).lower()}
+    marker = Path(path) if path is not None else PUBLISH_RETRY_MARKER
+    marker.write_text(json.dumps(payload, sort_keys=True) + "\n")
+    return payload
+
+
 def _run_cli() -> None:
     try:
         c.main()
@@ -230,6 +245,7 @@ def _run_cli() -> None:
         code = quality_rejection_exit_code(exc)
         if code is None:
             raise
+        record_publish_retry_marker(exc)
         print(f"ROOM PUBLISH QUALITY REJECTION: {exc}", file=sys.stderr)
         raise SystemExit(code) from None
 

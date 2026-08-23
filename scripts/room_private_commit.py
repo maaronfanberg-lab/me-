@@ -16,6 +16,7 @@ for _name in dir(_core):
 QUALITY_REJECTION_EXIT = _core.QUALITY_REJECTION_EXIT
 QUALITY_MARKER = Path("room_work/quality-rejection.json")
 QUALITY_REJECTION_COUNTER = Path(".room-quality-rejections")
+PUBLISH_RETRY_MARKER = Path(".room-publish-retry.json")
 MAX_CONSECUTIVE_QUALITY_REJECTIONS = 3
 
 
@@ -63,6 +64,14 @@ def _clear_quality_rejections() -> None:
         pass
 
 
+def clear_publish_retry_marker(path: Path | None = None) -> None:
+    marker = Path(path) if path is not None else PUBLISH_RETRY_MARKER
+    try:
+        marker.unlink()
+    except FileNotFoundError:
+        pass
+
+
 def _run_cli() -> None:
     reason = beat_quality_marker_reason()
     if reason:
@@ -76,6 +85,7 @@ def _run_cli() -> None:
         raise
     else:
         _clear_quality_rejections()
+        clear_publish_retry_marker()
 
 
 def __getattr__(name: str):

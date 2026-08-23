@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
+from pathlib import Path
 
 import room_private_model as _private_model
 
@@ -530,6 +532,50 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
     return None
 
 
+PUBLISH_RETRY_MARKER = Path(".room-publish-retry.json")
+
+
+def _publish_retry_control(reason: object) -> str:
+    reason = str(reason or "").lower()
+    if "same_beat_sentence_copy" in reason or "same_beat_phrase_echo" in reason or "semantic_phrase_mosaic" in reason:
+        return (
+            "\nWHOLE-BEAT RETRY CONTROL: Your previous staged reply overlapped too closely with speech already in this beat. "
+            "Use a new proposition and entirely fresh phrasing; do not reuse a complete sentence, clause, or distinctive phrase."
+        )
+    if "same_beat_semantic_coverage" in reason or "same_beat_restatement_sentence" in reason or "same_beat_short_echo" in reason or "same_beat_low_novelty" in reason:
+        return (
+            "\nWHOLE-BEAT RETRY CONTROL: Your previous staged reply restated a contribution already made in this beat. "
+            "Advance the conversation with a different consequence, example, question, disagreement, or concrete implication."
+        )
+    return (
+        "\nWHOLE-BEAT RETRY CONTROL: Your previous staged reply failed the final novelty check. "
+        "Make one genuinely new contribution in fresh wording."
+    )
+
+
+def _inject_publish_retry_control(prompt: object, self_entity: object, path: Path | None = None) -> str:
+    text = str(prompt or "")
+    marker = Path(path) if path is not None else PUBLISH_RETRY_MARKER
+    try:
+        payload = json.loads(marker.read_text())
+    except Exception:
+        return text
+    if not isinstance(payload, dict):
+        return text
+    entity = str(payload.get("entity") or "").lower()
+    if entity and entity != str(self_entity or "").lower():
+        return text
+    reason = str(payload.get("reason") or "").strip()
+    if not reason:
+        return text
+    guidance = _publish_retry_control(reason)
+    for separator in ("\nSITUATION_DATA\n", "\nCONVERSATION\n"):
+        if separator in text:
+            control, situation = text.split(separator, 1)
+            return control + guidance + separator + situation
+    return text
+
+
 def _strip_retry_prose(prompt: object) -> str:
     """Retry control is internal state; never expose it as model-visible prose."""
     return str(prompt or "").replace(_RETRY_PROSE, "")
@@ -557,7 +603,9 @@ if not getattr(_private_model._request, "_room_retry_boundary", False):
         # Keep retry guidance in the control channel so a rejected echo receives
         # a genuinely different instruction; never place it in situation data.
         request_prompt = str(prompt or "")
-        if role != "expression":
+        if role == "expression":
+            request_prompt = _inject_publish_retry_control(request_prompt, self_entity)
+        else:
             request_prompt = _strip_retry_prose(request_prompt)
         return _original_request(
             model_url,
