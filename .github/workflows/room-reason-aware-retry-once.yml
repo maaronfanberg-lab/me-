@@ -1,0 +1,48 @@
+name: Repair Room reason-aware retry once
+on:
+  push:
+    branches: [fix/room-reason-aware-expression-retry]
+    paths:
+      - '.github/workflows/room-reason-aware-retry-once.yml'
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/room-reason-aware-expression-retry
+          fetch-depth: 0
+      - name: Apply guarded retry repair
+        run: python3 scripts/room_reason_aware_retry_repair.py
+      - name: Verify reason-aware retry and Room invariants
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_engine_v5.py scripts/room_reason_aware_retry_sim.py
+          python3 scripts/room_reason_aware_retry_sim.py
+          python3 scripts/room_retry_truncation_sim.py
+          python3 scripts/room_expression_quality_sim.py
+          python3 scripts/room_engine_v5.py selftest
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts')
+          import room_engine_v5 as r
+          assert 'sara' in r.ORDER
+          assert 'allen' in r.ORDER
+          assert len(tuple(r.ORDER)) == 4
+          assert tuple(r.PARTICIPANTS)[-2:] == ('allen', 'sara')
+          print('PASS: Sara remains a participant while autonomous ORDER remains four')
+          PY
+          git diff --check
+      - name: Commit tested repair to branch
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          rm -f scripts/room_reason_aware_retry_repair.py .github/workflows/room-reason-aware-retry-once.yml
+          git add scripts/room_engine_v5.py scripts/room_reason_aware_retry_sim.py scripts/room_reason_aware_retry_repair.py .github/workflows/room-reason-aware-retry-once.yml
+          git diff --cached --check
+          git commit -m 'Make Room expression retries reason-aware'
+          git push origin HEAD:fix/room-reason-aware-expression-retry
