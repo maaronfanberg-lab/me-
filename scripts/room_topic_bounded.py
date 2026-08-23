@@ -267,7 +267,10 @@ def _outside_subject_shift(topic: dict, messages, cycle: int) -> dict | None:
 
 def update_topic(topic: dict | None, messages, cycle: int) -> dict:
     current = _normalize(topic, cycle)
-    shifted = _outside_subject_shift(current, list(messages or []), cycle)
+    # A bridge already marked pending is authoritative. Participant ingress may
+    # redirect an active episode, but it must not clear an exhausted episode's
+    # bridge before the vetted breakout selector gets to run.
+    shifted = None if current.get("bridge_pending") else _outside_subject_shift(current, list(messages or []), cycle)
     if shifted is not None:
         return shifted
     episode_id = current.get("id")
