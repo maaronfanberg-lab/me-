@@ -1,0 +1,44 @@
+name: Test Room extra expression retries once
+on:
+  push:
+    branches: [ops/room-liveness-extra-retries-v3]
+    paths: ['.github/workflows/room-extra-retries-branch-once.yml']
+permissions:
+  contents: write
+jobs:
+  patch-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ops/room-liveness-extra-retries-v3
+          fetch-depth: 0
+      - name: Patch and test
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/room_engine_v5.py')
+          s=p.read_text()
+          old='attempts = 5 if role == "expression" else 2'
+          new='attempts = 9 if role == "expression" else 2'
+          assert s.count(old)==1, s.count(old)
+          p.write_text(s.replace(old,new))
+          PY
+          python3 -m py_compile scripts/room_engine_v5.py scripts/room_expression_quality_core.py
+          python3 scripts/room_expression_quality_sim.py
+          python3 scripts/room_cross_voice_novelty_sim.py
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0,'scripts')
+          import room_engine_v5 as r
+          assert len(tuple(r.ORDER)) == 4
+          assert 'sara' in r.ORDER and 'allen' in r.ORDER
+          PY
+          git rm .github/workflows/room-extra-retries-branch-once.yml
+          git add scripts/room_engine_v5.py
+          git diff --cached --check
+          git commit -m 'Give Room expression quality retries more room'
+          git push origin HEAD:ops/room-liveness-extra-retries-v3
