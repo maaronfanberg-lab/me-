@@ -418,19 +418,12 @@ def _private_run(role: str, payload: dict, timeout: int = 30):
             + json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
             + "\nRESPONSE\n"
         )
-
-
-        
         if role == "expression":
             voice_index = _private_model.PEOPLE.index(self_entity) if self_entity in _private_model.PEOPLE else 0
             if os.environ.get("ROOM_TEMP_CAP", "").strip().lower() in {"1", "true", "yes", "on"}:
                 temperature = min(0.98, 0.88 + 0.06 * voice_index)
             else:
                 temperature = min(1.28, 0.88 + 0.06 * voice_index + 0.09 * attempt)
-
-
-            
-            temperature = min(1.28, 0.88 + 0.06 * voice_index + 0.09 * attempt)
         else:
             temperature = {"comprehension": 0.15, "thought": 0.25}.get(role, 0.25) + 0.04 * attempt
         try:
