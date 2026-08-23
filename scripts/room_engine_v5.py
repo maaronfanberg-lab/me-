@@ -366,6 +366,27 @@ def _expression_retry_guidance(reason):
     )
 
 
+def _publish_retry_reason_for(entity):
+    marker = ".room-publish-retry.json"
+    try:
+        data = json.load(open(marker))
+    except Exception:
+        return ""
+    if str(data.get("entity") or "").lower() != str(entity or "").lower():
+        return ""
+    return str(data.get("reason") or "").strip()
+
+
+def _clear_publish_retry_marker(entity):
+    marker = ".room-publish-retry.json"
+    try:
+        data = json.load(open(marker))
+        if str(data.get("entity") or "").lower() == str(entity or "").lower():
+            os.remove(marker)
+    except Exception:
+        pass
+
+
 def _private_run(role: str, payload: dict, timeout: int = 30):
     # Preserve the existing enable contract without exposing the secret contents.
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():
@@ -379,11 +400,14 @@ def _private_run(role: str, payload: dict, timeout: int = 30):
     instruction = _ROLE_INSTRUCTION.get(role, _ROLE_INSTRUCTION["thought"])
 
     attempts = 5 if role == "expression" else 2
-    last_reason = "unknown"
+    external_retry_reason = _publish_retry_reason_for(self_entity) if role == "expression" else ""
+    last_reason = external_retry_reason or "unknown"
     for attempt in range(attempts):
         retry = ""
-        if attempt:
-            retry = _expression_retry_guidance(last_reason) if role == "expression" else (
+        if role == "expression" and (attempt or external_retry_reason):
+            retry = _expression_retry_guidance(last_reason)
+        elif attempt:
+            retry = (
                 "\nUse a different idea and wording while staying with the same conversation. "
                 "Keep the reply concise and grammatically complete."
             )
@@ -418,6 +442,8 @@ def _private_run(role: str, payload: dict, timeout: int = 30):
                     if attempt < attempts - 1:
                         continue
                     raise ValueError(issue)
+            if role == "expression" and external_retry_reason:
+                _clear_publish_retry_marker(self_entity)
             return obj
         except urllib.error.HTTPError as exc:
             detail = _private_model._safe_http_detail(exc)
