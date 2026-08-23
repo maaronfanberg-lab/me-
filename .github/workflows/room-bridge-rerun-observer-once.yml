@@ -1,0 +1,36 @@
+name: Observe bridge precedence rerun once
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-bridge-rerun-observer-once.yml'
+permissions:
+  contents: write
+  actions: read
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Record bridge rerun
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow room-bridge-pending-precedence-once.yml --limit 3 --json databaseId,status,conclusion,createdAt,updatedAt,headSha,displayTitle > room/bridge-rerun-status.json
+          git config user.name room-run-observer
+          git config user.email actions@users.noreply.github.com
+          git add room/bridge-rerun-status.json
+          git rm .github/workflows/room-bridge-rerun-observer-once.yml
+          git commit -m 'Record bridge precedence rerun status'
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
