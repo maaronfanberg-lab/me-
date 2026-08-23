@@ -50,7 +50,8 @@ jobs:
           ROOM_BEAT_TIMEOUT_SECONDS=300
           ROOM_RELAY_CONNECT_TIMEOUT_SECONDS=3
           ROOM_RELAY_MAX_TIME_SECONDS=8
-          ROOM_BEAT_FAILURE_LIMIT=2
+          ROOM_BEAT_FAILURE_LIMIT=4
+          export ROOM_DEGRADE_QUALITY=1
           ROOM_QUALITY_REJECTION_EXIT=42
 
           python3 scripts/room_topic_preflight.py room/state.json room/cognitive_state.json || exit 1
@@ -119,6 +120,19 @@ jobs:
           done
           if [ -n "$model_pid" ]; then kill "$model_pid" 2>/dev/null || true; fi
           if [ "$runner_exit_reason" = "repeated_beat_failure" ]; then
+            python3 scripts/room_mark_stalled.py room/state.json
+            python3 scripts/build_room_feed.py
+            git add room/state.json room/feed.json
+            if ! git diff --cached --quiet; then
+              git commit -m "Mark Room stalled after genuine engine faults"
+              pushed=0
+              for attempt in 1 2 3 4; do
+                if git push origin HEAD:main; then pushed=1; break; fi
+                git fetch origin main || { sleep $((attempt * 2)); continue; }
+                if ! git rebase origin/main; then git rebase --abort || true; break; fi
+              done
+              [ "$pushed" -eq 1 ] || { echo "FAIL: could not publish stalled heartbeat"; exit 1; }
+            fi
             for attempt in 1 2 3 4 5; do if gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto; then exit 1; fi; sleep $((attempt * 5)); done
             exit 1
           fi
