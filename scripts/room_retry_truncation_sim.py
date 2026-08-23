@@ -49,8 +49,9 @@ def main() -> None:
     old_url = os.environ.get("ROOM_MODEL_URL")
 
     def fake_request(_url, prompt, _role, _temperature, _timeout, _self_entity=None, attempt=0):
-        # Capture what would actually cross the network boundary, after the
-        # production wrapper has removed internal retry-control language.
+        # Capture what crosses the expression transport boundary. Retry guidance
+        # may change the private system/control message, but it must never enter
+        # the conversational situation supplied as user data.
         prompts.append(prompt)
         if attempt == 0:
             return expression(allen_words)
@@ -74,12 +75,13 @@ def main() -> None:
 
     assert result.get("utterance")
     assert len(prompts) >= 2, "retry probe did not force a second expression attempt"
-    first_prefix = prompts[0].split("\nCONVERSATION\n", 1)[0]
-    second_prefix = prompts[1].split("\nCONVERSATION\n", 1)[0]
-    assert first_prefix == second_prefix, "retry control changed the model-visible instruction prefix"
-    assert "use a different idea" not in prompts[1].lower(), "retry instruction can be echoed into dialogue"
-    assert "keep the reply concise" not in prompts[1].lower(), "retry quality instruction can be echoed into dialogue"
-    assert allen_words in prompts[1], "Allen's newest words were lost during retry recovery"
+    first_control, first_situation = engine._private_model._split_expression_prompt(prompts[0])
+    second_control, second_situation = engine._private_model._split_expression_prompt(prompts[1])
+    assert first_control != second_control, "retry did not change the private control instruction"
+    assert first_situation == second_situation, "retry control contaminated conversational situation data"
+    assert "use a different idea" not in second_situation.lower(), "retry instruction leaked into dialogue situation"
+    assert "keep the reply concise" not in second_situation.lower(), "retry quality instruction leaked into dialogue situation"
+    assert allen_words in second_situation, "Allen's newest words were lost during retry recovery"
 
     # Production runs 3870 and 3906 both stopped after consecutive malformed
     # comprehension JSON. Comprehension is observational support, not public
