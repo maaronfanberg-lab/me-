@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import re
+import sys
 from datetime import datetime, timezone
 
 import room_engine_v5 as c
@@ -207,6 +209,41 @@ def validate_staged_quality(staged: list[tuple[str, str, str, str, list[str]]]) 
         })
 
 
+def _quality_collision_log(entity: str, text: str, prior: list[dict], issue: str) -> None:
+    detail = _quality.collision_detail(text, prior) if hasattr(_quality, "collision_detail") else None
+    if detail:
+        print(
+            "ROOM PUBLISH COLLISION "
+            f"issue={issue} current_speaker={entity} current={detail['current_sentence']!r} "
+            f"prior_speaker={detail['prior_speaker']} prior={detail['prior_sentence']!r}",
+            file=sys.stderr,
+        )
+    else:
+        print(f"ROOM PUBLISH COLLISION issue={issue} current_speaker={entity} pair=unavailable", file=sys.stderr)
+
+
+def filter_staged_quality(staged: list[tuple[str, str, str, str, list[str]]]) -> list[tuple[str, str, str, str, list[str]]]:
+    if os.environ.get("ROOM_DEGRADE_QUALITY") != "1":
+        validate_staged_quality(staged)
+        return staged
+    kept = []
+    for item in staged:
+        entity, _move, target, text, _terms = item
+        try:
+            validate_staged_quality([*kept, item])
+        except RuntimeError as exc:
+            if "private Room same-beat echo blocked" not in str(exc):
+                raise
+            prior = [{"speaker": e, "text": t, "cognition": {"target": tg}} for e, _m, tg, t, _ts in kept]
+            _quality_collision_log(entity, text, prior, str(exc))
+            print(f"ROOM DEGRADED TURN DROP: speaker={entity} reason=publish_quality", file=sys.stderr)
+            continue
+        kept.append(item)
+    if not kept:
+        raise RuntimeError("Room quality degradation removed every staged speaker")
+    return kept
+
+
 def private_commit(parts: list[dict], key: str):
     S = c.state()
     M = c.minds()
@@ -228,6 +265,9 @@ def private_commit(parts: list[dict], key: str):
         expr = (E[entity].get("private") or {}).get("expression")
         if not isinstance(expr, dict):
             raise RuntimeError(f"private Room requires model expression for {entity}; no public fallback is permitted")
+        if expr.get("quality_dropped"):
+            expressions[entity] = expr
+            continue
         if not semantic_values(expr):
             raise RuntimeError(f"private Room expression lacks semantic fields for {entity}")
         expressions[entity] = expr
@@ -241,6 +281,9 @@ def private_commit(parts: list[dict], key: str):
     # Nothing touches memory until all four public turns pass the privacy gate.
     for entity in order:
         expr = expressions[entity]
+        if expr.get("quality_dropped"):
+            print(f"ROOM DEGRADED TURN DROP: speaker={entity} reason={expr.get('quality_dropped')}", file=sys.stderr)
+            continue
         text = c.model_text(expr)
         if not text:
             raise RuntimeError(f"private Room expression invalid for {entity}; no public fallback is permitted")
@@ -266,7 +309,7 @@ def private_commit(parts: list[dict], key: str):
     # This is the final quality boundary: compare the exact four strings that are
     # about to be published. It cannot be bypassed by lossy prompt context, retry
     # mutation, or temporary room_parts state.
-    validate_staged_quality(staged)
+    staged = filter_staged_quality(staged)
 
     spoken: list[dict] = []
     answer_msg = None
@@ -279,7 +322,10 @@ def private_commit(parts: list[dict], key: str):
             answer_msg = msg
 
     speakers = [m["speaker"] for m in spoken]
-    if len(spoken) != 4 or set(speakers) != set(c.ORDER):
+    if os.environ.get("ROOM_DEGRADE_QUALITY") == "1":
+        if not spoken or len(speakers) != len(set(speakers)) or any(speaker not in c.ORDER for speaker in speakers):
+            raise RuntimeError(f"v5 degraded speech invariant failed: {speakers}")
+    elif len(spoken) != 4 or set(speakers) != set(c.ORDER):
         raise RuntimeError(f"v5 mandatory speech invariant failed: {speakers}")
 
     topic = clean_topic(c.update_topic(topic, spoken, cycle))
@@ -326,8 +372,10 @@ def private_commit(parts: list[dict], key: str):
         "beat_contributors": speakers,
         "beat_message_count": 4,
         "silence_cycles": 0,
-        "note": "research-informed v5 private model active; four mandatory unique speakers; bounded topic episodes; no public fallback; privacy gate retained",
+        "note": "research-informed v5 private model active; quality rejection degrades individual turns; bounded topic episodes; privacy gate retained",
     })
+    if os.environ.get("ROOM_DEGRADE_QUALITY") == "1":
+        S["heartbeat"] = {"last_successful_beat_at": stamp, "stalled": False}
 
     c.audit_invariants(M, topic)
     c.save(c.ROOM / "conversation.json", V)

@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 import room_private_model as _private_model
@@ -486,6 +487,60 @@ def _escape_stale_context(compact: dict, self_entity: str | None) -> None:
         personality.pop("current", None)
 
 
+def collision_detail(utterance: object, prior_turns: list[dict]) -> dict | None:
+    current_sentences = _sentences(utterance)
+    best = None
+    best_score = -1.0
+    for turn in prior_turns or []:
+        if not isinstance(turn, dict):
+            continue
+        for current in current_sentences:
+            current_tokens = set(_tokens(current))
+            if not current_tokens:
+                continue
+            for earlier in _sentences(turn.get("text")):
+                earlier_tokens = set(_tokens(earlier))
+                if not earlier_tokens:
+                    continue
+                overlap = len(current_tokens & earlier_tokens)
+                score = overlap / max(1, len(current_tokens | earlier_tokens))
+                if score > best_score:
+                    best_score = score
+                    best = {
+                        "current_sentence": current,
+                        "prior_sentence": earlier,
+                        "prior_speaker": str(turn.get("speaker") or "").strip().lower(),
+                        "score": round(score, 6),
+                    }
+    return best
+
+
+def _exclude_collided_sentence(compact: dict, detail: dict | None) -> None:
+    if not detail:
+        return
+    collided = str(detail.get("prior_sentence") or "").strip()
+    if not collided:
+        return
+    context = compact.get("context") if isinstance(compact.get("context"), list) else []
+    cleaned = []
+    for item in context:
+        if not isinstance(item, dict):
+            cleaned.append(item)
+            continue
+        copy = dict(item)
+        sentences = _sentences(copy.get("text"))
+        kept = [sentence for sentence in sentences if sentence != collided]
+        if kept:
+            copy["text"] = " ".join(kept)
+            cleaned.append(copy)
+    compact["context"] = cleaned
+    event = compact.get("event")
+    if isinstance(event, dict):
+        event_copy = dict(event)
+        kept = [sentence for sentence in _sentences(event_copy.get("text")) if sentence != collided]
+        compact["event"] = ({**event_copy, "text": " ".join(kept)} if kept else (cleaned[-1] if cleaned else None))
+
+
 def same_beat_issue(utterance: object, prior_turns: list[dict]) -> str | None:
     """Return a cross-voice semantic echo issue for exact staged speech."""
     text = str(utterance or "").strip()
@@ -524,6 +579,17 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
     same_beat = _authoritative_same_beat_prior_turns(compact)
     same_beat_problem = same_beat_issue(text, same_beat)
     if same_beat_problem:
+        detail = collision_detail(text, same_beat)
+        if detail:
+            print(
+                "ROOM QUALITY COLLISION "
+                f"issue={same_beat_problem} current_speaker={self_entity or ''} "
+                f"current={detail['current_sentence']!r} prior_speaker={detail['prior_speaker']} "
+                f"prior={detail['prior_sentence']!r}",
+                file=sys.stderr,
+            )
+        if os.environ.get("ROOM_DEGRADE_QUALITY") == "1":
+            _exclude_collided_sentence(compact, detail)
         return same_beat_problem
 
     if _context_too_similar(text, compact, similarity_fn):

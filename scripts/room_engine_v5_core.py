@@ -7,6 +7,7 @@ import json
 import os
 import random
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -367,19 +368,34 @@ def recurrent(node, key, bus_data):
                 original_goal = ""
             deliberation["new_information_goal"] = (original_goal + " " if original_goal else "") + "Distinct contribution: " + job
             deliberation["conversation_job"] = job
-        expression = model_run("expression", {
-            "entity": entity,
-            "profile": P[entity],
-            "social_observation": perception,
-            "deliberation": deliberation,
-            "conversation_job": job,
-            "event": expression_context[-1] if expression_context else (None if collapsed else base.get("event")),
-            "context": expression_context,
-            "topic": expression_topic,
-            "partner": base.get("partner"),
-            "relationship": base.get("relationship"),
-            "mandatory_speech": True,
-        })
+        try:
+            expression = model_run("expression", {
+                "entity": entity,
+                "profile": P[entity],
+                "social_observation": perception,
+                "deliberation": deliberation,
+                "conversation_job": job,
+                "event": expression_context[-1] if expression_context else (None if collapsed else base.get("event")),
+                "context": expression_context,
+                "topic": expression_topic,
+                "partner": base.get("partner"),
+                "relationship": base.get("relationship"),
+                "mandatory_speech": True,
+            })
+        except RuntimeError as exc:
+            prefix = "private model output rejected for expression:"
+            if os.environ.get("ROOM_DEGRADE_QUALITY") != "1" or prefix not in str(exc):
+                raise
+            reason = str(exc).split(prefix, 1)[1].strip() or "quality_rejection"
+            expression = {
+                "decision": "SPEAK",
+                "target": base.get("partner"),
+                "move": "deepen",
+                "utterance": "",
+                "semantic_terms": [],
+                "quality_dropped": reason,
+            }
+            print(f"ROOM DEGRADED TURN DROP: speaker={entity} reason={reason}", file=sys.stderr)
         ready = float(source["public"].get("readiness", 0.5))
         generation_rank = int(os.environ.get("ROOM_EXPRESSION_RANK", str(ORDER.index(entity))))
         intent = {
