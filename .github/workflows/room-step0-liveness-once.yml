@@ -1,0 +1,135 @@
+name: Room Step 0 liveness once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-step0-liveness-once.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  step0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Stop hot Room and refresh exact main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --status in_progress --limit 10 --json databaseId --jq '.[].databaseId'); do
+            gh run cancel "$id" --repo "$GITHUB_REPOSITORY"
+          done
+          for n in $(seq 1 40); do
+            count=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --status in_progress --limit 10 --json databaseId --jq 'length')
+            [ "$count" -eq 0 ] && break
+            sleep 2
+          done
+          count=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --status in_progress --limit 10 --json databaseId --jq 'length')
+          [ "$count" -eq 0 ] || { echo 'FAIL: hot Room runner did not stop'; exit 1; }
+          git fetch origin main
+          git rebase origin/main
+          test ! -e .github/workflows/room-step1-memory-attribution-once.yml || { echo 'FAIL: deferred Step 1 workflow is still present'; exit 1; }
+          cp room/feed.json /tmp/feed-before-step0.json
+
+      - name: Apply guarded Step 0 patch
+        run: |
+          set -euo pipefail
+          python3 scripts/room_step0_liveness_patch.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/sarah-society.yml')
+          text=p.read_text()
+          old='''          if [ "$runner_exit_reason" = "repeated_beat_failure" ]; then\n            for attempt in 1 2 3 4 5; do if gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto; then exit 1; fi; sleep $((attempt * 5)); done\n            exit 1\n          fi\n'''
+          new='''          if [ "$runner_exit_reason" = "repeated_beat_failure" ]; then\n            python3 scripts/room_mark_stalled.py room/state.json\n            python3 scripts/build_room_feed.py\n            git add room/state.json room/feed.json\n            if ! git diff --cached --quiet; then\n              git commit -m "Mark Room stalled after genuine engine faults"\n              pushed=0\n              for attempt in 1 2 3 4; do\n                if git push origin HEAD:main; then pushed=1; break; fi\n                git fetch origin main || { sleep $((attempt * 2)); continue; }\n                if ! git rebase origin/main; then git rebase --abort || true; break; fi\n              done\n              [ "$pushed" -eq 1 ] || { echo "FAIL: could not publish stalled heartbeat"; exit 1; }\n            fi\n            for attempt in 1 2 3 4 5; do if gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto; then exit 1; fi; sleep $((attempt * 5)); done\n            exit 1\n          fi\n'''
+          count=text.count(old)
+          if count != 1:
+              raise SystemExit(f'FAIL: expected one repeated-failure block, found {count}')
+          p.write_text(text.replace(old,new,1))
+          print('PATCH sarah-society.yml: stalled heartbeat on genuine engine failure')
+          PY
+
+      - name: Prove disabled path is feed-identical
+        run: |
+          set -euo pipefail
+          env -u ROOM_DEGRADE_QUALITY python3 scripts/build_room_feed.py
+          cmp -s /tmp/feed-before-step0.json room/feed.json || {
+            echo 'FAIL: Step 0 disabled changed feed output'
+            diff -u /tmp/feed-before-step0.json room/feed.json | head -200 || true
+            exit 1
+          }
+          echo 'PASS: Step 0 disabled is bit-identical at feed boundary'
+
+      - name: Verify per-turn degradation, collision logging, and heartbeat
+        run: |
+          set -euo pipefail
+          ROOM_DEGRADE_QUALITY=1 python3 - <<'PY'
+          import contextlib, io, json, os, tempfile
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'scripts')
+          import room_expression_quality as q
+          import room_private_commit_base as b
+          from room_mark_stalled import mark_stalled
+
+          prior=[{'speaker':'sarah','text':'Animal intelligence is routinely underestimated because tool use and social learning are measured with human-centered tests.'}]
+          current='Animal intelligence is routinely underestimated because tool use and social learning are measured using human centered tests.'
+          compact={'context':[dict(prior[0])], 'event':dict(prior[0])}
+          err=io.StringIO()
+          with contextlib.redirect_stderr(err):
+              issue=q.quality_issue(current, compact, 'mara', lambda a,b: 0.0)
+          assert issue in {'same_beat_sentence_copy','same_beat_semantic_coverage','same_beat_source_echo','same_beat_restatement_sentence'}, issue
+          log=err.getvalue()
+          assert 'current_speaker=mara' in log and 'prior_speaker=sarah' in log, log
+          assert current not in str(compact), compact
+          assert prior[0]['text'] not in str(compact), compact
+          print('PASS collision pair logged and collided prior sentence removed from retry context')
+
+          os.environ['ROOM_DEGRADE_QUALITY']='1'
+          staged=[
+              ('sarah','deepen','mara',prior[0]['text'],['animal intelligence']),
+              ('mara','deepen','sarah',current,['animal intelligence']),
+              ('owen','disagree','sarah','Octopus problem solving suggests our tests should separate dexterity from general cognition.',['octopus']),
+          ]
+          kept=b.filter_staged_quality(staged)
+          assert [x[0] for x in kept] == ['sarah','owen'], [x[0] for x in kept]
+          print('PASS publication drops only the colliding turn and keeps passed speakers')
+
+          os.environ.pop('ROOM_DEGRADE_QUALITY',None)
+          try:
+              b.filter_staged_quality(staged)
+          except RuntimeError:
+              pass
+          else:
+              raise AssertionError('disabled path no longer preserves old reject behavior')
+          print('PASS disabled path preserves pre-Step-0 rejection semantics')
+
+          with tempfile.TemporaryDirectory() as td:
+              p=Path(td)/'state.json'
+              p.write_text(json.dumps({'last_run':'2026-08-23T02:12:54Z'}))
+              state=mark_stalled(p)
+              assert state['heartbeat']['last_successful_beat_at']=='2026-08-23T02:12:54Z'
+              assert state['heartbeat']['stalled'] is True
+          print('PASS stalled heartbeat writer')
+          PY
+          python3 scripts/room_engine_v5.py selftest
+
+      - name: Publish Step 0 only
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -f scripts/room_step0_liveness_patch.py .github/workflows/room-step0-liveness-once.yml
+          git add scripts/room_expression_quality_core.py scripts/room_engine_v5_core.py scripts/room_private_commit_base.py scripts/room_mark_stalled.py .github/workflows/sarah-society.yml scripts/room_step0_liveness_patch.py .github/workflows/room-step0-liveness-once.yml
+          git diff --cached --quiet && { echo 'FAIL: Step 0 produced no source diff'; exit 1; }
+          git commit -m 'Make Room quality rejection degrade per turn'
+          git push origin HEAD:main
+          gh workflow run sarah-society.yml --repo "$GITHUB_REPOSITORY" --ref main -f entity=auto
