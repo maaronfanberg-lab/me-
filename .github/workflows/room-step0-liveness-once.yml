@@ -84,8 +84,12 @@ jobs:
           current='Animal intelligence is routinely underestimated because tool use and social learning are measured using human centered tests.'
           compact={'context':[dict(prior[0])], 'event':dict(prior[0])}
           err=io.StringIO()
-          with contextlib.redirect_stderr(err):
-              issue=q.quality_issue(current, compact, 'mara', lambda a,b: 0.0)
+          os.environ['ROOM_EXPRESSION_RANK']='1'
+          try:
+              with contextlib.redirect_stderr(err):
+                  issue=q.quality_issue(current, compact, 'mara', lambda a,b: 0.0)
+          finally:
+              os.environ.pop('ROOM_EXPRESSION_RANK',None)
           assert issue in {'same_beat_sentence_copy','same_beat_semantic_coverage','same_beat_source_echo','same_beat_restatement_sentence'}, issue
           log=err.getvalue()
           assert 'current_speaker=mara' in log and 'prior_speaker=sarah' in log, log
