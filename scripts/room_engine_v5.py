@@ -399,7 +399,7 @@ def _private_run(role: str, payload: dict, timeout: int = 30):
     compact = _private_model._compact_payload(payload, role, self_entity)
     instruction = _ROLE_INSTRUCTION.get(role, _ROLE_INSTRUCTION["thought"])
 
-    attempts = 5 if role == "expression" else 2
+    attempts = 9 if role == "expression" else 2
     external_retry_reason = _publish_retry_reason_for(self_entity) if role == "expression" else ""
     last_reason = external_retry_reason or "unknown"
     for attempt in range(attempts):
