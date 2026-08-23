@@ -1,0 +1,68 @@
+name: Observe reason-aware retry repair once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/observe-reason-aware-retry-once.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Wait for repair verdict
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          target='room-reason-aware-retry-main-once.yml'
+          run_id=''
+          for n in $(seq 1 30); do
+            run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$target" --limit 5 --json databaseId,headSha --jq '.[] | select(.headSha=="8c4b19608cd645d857b114e8c2c816c773816865") | .databaseId' | head -1)
+            [ -n "$run_id" ] && break
+            sleep 5
+          done
+          [ -n "$run_id" ] || { echo 'TARGET_RUN_NOT_FOUND' > /tmp/report; exit 0; }
+          for n in $(seq 1 90); do
+            state=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status,(.conclusion//"")] | @tsv')
+            status=$(printf '%s' "$state" | cut -f1)
+            [ "$status" = completed ] && break
+            sleep 5
+          done
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json databaseId,status,conclusion,url,headSha,createdAt,updatedAt > /tmp/meta.json
+          {
+            echo "run_id=$run_id"
+            python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/meta.json'))
+          for k in ('status','conclusion','url','headSha','createdAt','updatedAt'):
+              print(f'{k}={d.get(k)}')
+          PY
+            echo '--- failed log tail ---'
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed 2>/dev/null | tail -80 || true
+          } > diagnostics_reason_aware_retry.txt
+      - name: Publish observer result
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          if [ -f /tmp/report ]; then cp /tmp/report diagnostics_reason_aware_retry.txt; fi
+          git add diagnostics_reason_aware_retry.txt
+          git rm .github/workflows/observe-reason-aware-retry-once.yml
+          git commit -m 'Record reason-aware retry repair result'
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
