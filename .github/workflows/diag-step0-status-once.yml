@@ -1,0 +1,30 @@
+name: Observe Room Step 0 once
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diag-step0-status-once.yml'
+permissions:
+  contents: write
+  actions: read
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Record exact Step 0 run state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p room_work
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow room-step0-liveness-once.yml --limit 5 --json databaseId,status,conclusion,headSha,createdAt,updatedAt --jq '.[] | [.databaseId,.status,(.conclusion//""),.headSha,.createdAt,.updatedAt] | @tsv' > room_work/step0-status.tsv
+          cat room_work/step0-status.tsv
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add room_work/step0-status.tsv
+          git commit -m 'Record Room Step 0 workflow state'
+          git push origin HEAD:main
