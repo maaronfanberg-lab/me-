@@ -35,8 +35,8 @@ jobs:
           state=json.load(open('room/state.json'))
           conversation=json.load(open('room/conversation.json'))
           live=copy.deepcopy(state['topic_episode'])
-          latest=conversation[-1]
-          assert latest.get('speaker') not in bounded.social.ORDER, latest.get('speaker')
+          latest=next((m for m in reversed(conversation) if m.get('speaker') not in bounded.social.ORDER), None)
+          assert latest is not None, 'no live external participant event found'
           live['bridge_pending']=True
           live['status']='ready_to_bridge'
           live['bridge_reason']='selector_precedence_regression'
@@ -79,12 +79,14 @@ jobs:
           git rm .github/workflows/room-bridge-pending-precedence-once.yml
           git rm scripts/room_bridge_pending_precedence_repair.py
           git commit -m 'Give pending bridge precedence over participant ingress'
+          pushed=0
           for n in 1 2 3 4; do
-            if git push origin HEAD:main; then break; fi
+            if git push origin HEAD:main; then pushed=1; break; fi
             git fetch origin main
             git rebase origin/main || { git rebase --abort || true; exit 1; }
             sleep "$n"
           done
+          test "$pushed" -eq 1
           for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow sarah-society.yml --status in_progress --limit 10 --json databaseId --jq '.[].databaseId'); do
             gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
           done
