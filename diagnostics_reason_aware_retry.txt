@@ -1,0 +1,88 @@
+run_id=32607918451
+status=completed
+conclusion=failure
+url=https://github.com/maaronfanberg-lab/me-/actions/runs/32607918451
+headSha=8c4b19608cd645d857b114e8c2c816c773816865
+createdAt=2026-08-23T00:27:46Z
+updatedAt=2026-08-23T00:30:02Z
+--- failed log tail ---
+repair	Verify reason-aware retry and Room invariants	﻿2026-08-23T00:29:58.9368906Z ##[group]Run set -euo pipefail
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9369330Z ^[[36;1mset -euo pipefail^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9369766Z ^[[36;1mpython3 -m py_compile scripts/room_engine_v5.py scripts/room_private_model.py^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9370204Z ^[[36;1mpython3 - <<'PY'^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9370445Z ^[[36;1mimport os, sys^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9370690Z ^[[36;1msys.path.insert(0, 'scripts')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9370971Z ^[[36;1mimport room_engine_v5 as room^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9371249Z ^[[36;1m^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9371480Z ^[[36;1mguidance = room._expression_retry_guidance^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9371927Z ^[[36;1massert 'Do not reuse any complete sentence' in guidance('same_beat_sentence_copy')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9372503Z ^[[36;1massert 'Change the underlying contribution' in guidance('same_beat_semantic_coverage')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9373119Z ^[[36;1massert 'Change the underlying contribution' in guidance('same_beat_restatement_sentence')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9373656Z ^[[36;1massert 'without recapping it' in guidance('duplicate_context')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9374258Z ^[[36;1massert 'complete valid JSON object' in guidance('Unterminated string starting at: line 1 column 47')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9374709Z ^[[36;1m^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9374898Z ^[[36;1mcaptured=[]^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9375112Z ^[[36;1moriginals={^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9375381Z ^[[36;1m    'compact': room._private_model._compact_payload,^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9375737Z ^[[36;1m    'request': room._private_model._request,^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9376081Z ^[[36;1m    'extract': room._private_model._extract_json,^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9376436Z ^[[36;1m    'validate': room._private_model._validate,^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9376889Z ^[[36;1m    'sanitize': room._private_model._sanitize_expression,^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9377464Z ^[[36;1m    'quality': room._expression_quality.quality_issue,^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9377927Z ^[[36;1m}^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9378415Z ^[[36;1mold_prompt=os.environ.get('ROOM_NODE_PROMPT')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9378996Z ^[[36;1mold_url=os.environ.get('ROOM_MODEL_URL')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9379430Z ^[[36;1mtry:^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9379791Z ^[[36;1m    os.environ['ROOM_NODE_PROMPT']='enabled'^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9380283Z ^[[36;1m    os.environ['ROOM_MODEL_URL']='http://unused'^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9381109Z ^[[36;1m    room._private_model._compact_payload=lambda payload, role, self_entity=None: {'entity': payload.get('entity','sarah')}^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9382336Z ^[[36;1m    def fake_request(model_url,prompt,role,temperature,timeout,self_entity=None,attempt=0):^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9382827Z ^[[36;1m        captured.append(prompt)^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9383136Z ^[[36;1m        return '{"utterance":"fresh point"}'^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9383483Z ^[[36;1m    room._private_model._request=fake_request^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9383900Z ^[[36;1m    room._private_model._extract_json=lambda raw: {'utterance':'fresh point'}^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9384455Z ^[[36;1m    room._private_model._validate=lambda role,obj,compact,prompt,self_entity=None: obj^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9385045Z ^[[36;1m    room._private_model._sanitize_expression=lambda obj,compact,self_entity=None: obj^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9385520Z ^[[36;1m    outcomes=iter(['same_beat_sentence_copy',None])^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9386061Z ^[[36;1m    room._expression_quality.quality_issue=lambda utterance,compact,self_entity,similarity: next(outcomes)^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9386659Z ^[[36;1m    result=room._private_run('expression',{'entity':'sarah'},timeout=1)^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9387299Z ^[[36;1m    assert result == {'utterance':'fresh point'}, result^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9387656Z ^[[36;1m    assert len(captured) == 2, captured^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9388020Z ^[[36;1m    assert 'RETRY CONTROL:' not in captured[0], captured[0]^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9388649Z ^[[36;1m    assert 'Do not reuse any complete sentence' in captured[1], captured[1]^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9389134Z ^[[36;1m    assert 'same_beat_sentence_copy' not in captured[1], captured[1]^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9389816Z ^[[36;1m    print('PASS: rejected expression receives reason-aware retry control')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9390204Z ^[[36;1mfinally:^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9390698Z ^[[36;1m    room._private_model._compact_payload=originals['compact']^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9391145Z ^[[36;1m    room._private_model._request=originals['request']^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9391531Z ^[[36;1m    room._private_model._extract_json=originals['extract']^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9391937Z ^[[36;1m    room._private_model._validate=originals['validate']^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9392366Z ^[[36;1m    room._private_model._sanitize_expression=originals['sanitize']^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9392823Z ^[[36;1m    room._expression_quality.quality_issue=originals['quality']^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9393258Z ^[[36;1m    if old_prompt is None: os.environ.pop('ROOM_NODE_PROMPT',None)^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9393666Z ^[[36;1m    else: os.environ['ROOM_NODE_PROMPT']=old_prompt^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9394047Z ^[[36;1m    if old_url is None: os.environ.pop('ROOM_MODEL_URL',None)^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9394432Z ^[[36;1m    else: os.environ['ROOM_MODEL_URL']=old_url^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9394720Z ^[[36;1m^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9394929Z ^[[36;1massert 'sara' in room.ORDER^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9395198Z ^[[36;1massert 'allen' in room.ORDER^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9395481Z ^[[36;1massert len(tuple(room.ORDER)) == 4^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9395830Z ^[[36;1massert tuple(room.PARTICIPANTS)[-2:] == ('allen','sara')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9396292Z ^[[36;1mprint('PASS: Sara remains participant-only; autonomous ORDER remains four')^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9396674Z ^[[36;1mPY^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9396918Z ^[[36;1mpython3 scripts/room_retry_truncation_sim.py^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9397262Z ^[[36;1mpython3 scripts/room_expression_quality_sim.py^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9397607Z ^[[36;1mpython3 scripts/room_engine_v5.py selftest^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9397913Z ^[[36;1mgit diff --check^[[0m
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9422314Z shell: /usr/bin/bash -e {0}
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:58.9422668Z ##[endgroup]
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.0656333Z PASS: rejected expression receives reason-aware retry control
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.0657309Z PASS: Sara remains participant-only; autonomous ORDER remains four
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.1758892Z Traceback (most recent call last):
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.1759490Z   File "/home/runner/work/me-/me-/scripts/room_retry_truncation_sim.py", line 173, in <module>
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.1769013Z     main()
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.1769757Z   File "/home/runner/work/me-/me-/scripts/room_retry_truncation_sim.py", line 79, in main
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.1770674Z     assert first_prefix == second_prefix, "retry control changed the model-visible instruction prefix"
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.1771327Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.1912746Z AssertionError: retry control changed the model-visible instruction prefix
+repair	Verify reason-aware retry and Room invariants	2026-08-23T00:29:59.1923942Z ##[error]Process completed with exit code 1.
