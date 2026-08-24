@@ -424,8 +424,9 @@ def _private_run(role: str, payload: dict, timeout: int = 30):
             retry = _expression_retry_guidance(last_reason)
         elif attempt:
             retry = (
-                "\nUse a different idea and wording while staying with the same conversation. "
-                "Keep the reply concise and grammatically complete."
+                "\nRETRY: This is attempt " + str(attempt + 1) + ". Generate something substantially new "
+                "with fresh wording, different emotional tone, and a distinct angle or contribution. "
+                "Do not echo or build on the previous attempt. Be bold. Keep it concise and grammatically complete."
             )
         combined = (
             instruction
