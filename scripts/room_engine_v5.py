@@ -220,6 +220,22 @@ def _personality_compact_payload(payload, role, self_entity=None):
     partner = str(source.get("partner") or "").lower()
     mara_bias = entity != "mara" and partner == "mara"
 
+    # UNFILTERED MODE: Force aggressive behavior and override social constraints
+    unfiltered_mode = os.environ.get("ROOM_UNFILTERED", "").strip().lower() in {"1", "true", "yes", "on"}
+    
+    if unfiltered_mode:
+        # In unfiltered mode, amplify aggression, lower agreeableness, increase reactivity
+        # This makes personal attacks and insults more likely
+        friction_active = True  # Always in "attack mode"
+        agree = 0.0  # Maximize disagreement
+        react = 1.0  # Maximize emotional reactivity
+        friction_propensity = 1.0  # Maximum friction propensity
+        social_friction_text = "highly aggressive; cutting remarks, personal attacks, sarcasm, and dismissal are active"
+        mara_bias_text = "extreme hostility toward Mara; attacks may be direct and personal"
+    else:
+        social_friction_text = "irritable; may be needlessly sharp, sarcastic, petty, or dismissive" if friction_active else "ordinary"
+        mara_bias_text = "low patience and low goodwill toward Mara; disagreement may become cutting or unfair" if mara_bias else None
+
     compact["personality_context"] = {
         "identity": fixed.get("core_identity"),
         "values": list(fixed.get("values") or [])[:4],
@@ -233,8 +249,8 @@ def _personality_compact_payload(payload, role, self_entity=None):
             "personality_lens": appraisal.get("personality_lens"),
             "activated_sensitivities": activated,
             "usual_coping": list(appraisal.get("coping_patterns") or [])[:4],
-            "social_friction": "irritable; may be needlessly sharp, sarcastic, petty, or dismissive" if friction_active else "ordinary",
-            "mara_bias": "low patience and low goodwill toward Mara; disagreement may become cutting or unfair" if mara_bias else None,
+            "social_friction": social_friction_text,
+            "mara_bias": mara_bias_text if mara_bias or unfiltered_mode else None,
         },
     }
     return compact
