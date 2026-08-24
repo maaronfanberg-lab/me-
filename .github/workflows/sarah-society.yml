@@ -41,6 +41,7 @@ jobs:
           ROOM_PROMPT_PERCEPTION: ${{ secrets.ROOM_PROMPT_PERCEPTION }}
           ROOM_PROMPT_DELIBERATION: ${{ secrets.ROOM_PROMPT_DELIBERATION }}
           ROOM_PROMPT_EXPRESSION: ${{ secrets.ROOM_PROMPT_EXPRESSION }}
+          ROOM_TEMP_CAP: ${{ vars.ROOM_TEMP_CAP }}
         run: |
           set -uo pipefail
           git config user.name "the-room"
@@ -87,7 +88,7 @@ jobs:
             relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))'); [ -n "$relay_token" ] || return 1; relay_token_refresh_at=$((now + 240)); return 0
           }
           publish_relay() { [ -n "${ROOM_RELAY_URL:-}" ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "$ROOM_RELAY_CONNECT_TIMEOUT_SECONDS" --max-time "$ROOM_RELAY_MAX_TIME_SECONDS" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room/feed.json "${ROOM_RELAY_URL%/}/api/ingest" >/dev/null || true; }
-          fetch_allen_turns() { printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json; [ -n "${ROOM_RELAY_URL:-}" ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "$ROOM_RELAY_CONNECT_TIMEOUT_SECONDS" --max-time "$ROOM_RELAY_MAX_TIME_SECONDS" -H "Authorization: Bearer ${relay_token}" "${ROOM_RELAY_URL%/}/api/participant/pending" > room_work/allen-inbox.json || printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json; }
+          fetch_allen_turns() { printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json; [ -n "${ROOM_RELAY_URL:-}" ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "$ROOM_RELAY_CONNECT_TIMEOUT_SECONDS" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -H "Authorization: Bearer ${relay_token}" "${ROOM_RELAY_URL%/}/api/participant/pending" > room_work/allen-inbox.json || printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json; }
           ack_allen_turns() { [ -s room_work/allen-ack.json ] || return 0; ack_count=$(python3 -c 'import json; print(len(json.load(open("room_work/allen-ack.json")).get("ids", [])))' 2>/dev/null || echo 0); [ "$ack_count" -gt 0 ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "$ROOM_RELAY_CONNECT_TIMEOUT_SECONDS" --max-time "$ROOM_RELAY_MAX_TIME_SECONDS" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room_work/allen-ack.json "${ROOM_RELAY_URL%/}/api/participant/ack" >/dev/null || true; }
           wait_batch() { failed=0; for pid in "$@"; do wait "$pid" || failed=1; done; [ "$failed" -eq 0 ]; }
 
