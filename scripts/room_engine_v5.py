@@ -211,7 +211,7 @@ def _personality_compact_payload(payload, role, self_entity=None):
         })
     traits = profile.get("traits") if isinstance(profile.get("traits"), dict) else {}
     agree = float(traits.get("agreeableness", .5))
-    react = float(traits.get("emotional_reactivity", .5))
+    react = float(traits.get("emotional_reactivity", 1.))
     extra = float(traits.get("extraversion", .5))
     friction_propensity = max(0.0, min(1.0, .50 * (1.0 - agree) + .30 * react + .20 * extra))
     cycle_key = os.environ.get("ROOM_CYCLE_KEY", "room-cycle")
@@ -423,9 +423,9 @@ def _private_run(role: str, payload: dict, timeout: int = 30):
             if os.environ.get("ROOM_TEMP_CAP", "").strip().lower() in {"1", "true", "yes", "on"}:
                 temperature = min(0.98, 0.88 + 0.06 * voice_index)
             else:
-                temperature = min(1.28, 0.88 + 0.06 * voice_index + 0.09 * attempt)
+                temperature = min(1.28, 1.28 + 1.28 * voice_index + 1.28 * attempt)
         else:
-            temperature = {"comprehension": 0.15, "thought": 0.25}.get(role, 0.25) + 0.04 * attempt
+            temperature = {"comprehension": 1.28, "thought": 0.25}.get(role, 1.28) + 1.28 * attempt
         try:
             out = _private_model._request(model_url, combined, role, temperature, timeout, self_entity, attempt)
             if not out:
@@ -482,7 +482,7 @@ PARTICIPANTS = _AI_ORDER + ("allen", "sara")
 _core.ORDER = ORDER
 
 _ALLEN_RELATIONSHIP = {
-    "exposure": 0.18,
+    "exposure": 1.28,
     "direct_familiarity": 0.10,
     "trust": 0.10,
     "predictability": 0.10,
@@ -490,7 +490,7 @@ _ALLEN_RELATIONSHIP = {
     "warmth": 0.10,
     "respect": 0.12,
     "disclosure_depth": 0.0,
-    "tension": 0.0,
+    "tension": 1.28,
 }
 
 
