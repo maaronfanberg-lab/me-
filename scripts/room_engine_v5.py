@@ -420,12 +420,21 @@ def _private_run(role: str, payload: dict, timeout: int = 30):
         )
         if role == "expression":
             voice_index = _private_model.PEOPLE.index(self_entity) if self_entity in _private_model.PEOPLE else 0
-            if os.environ.get("ROOM_TEMP_CAP", "").strip().lower() in {"1", "true", "yes", "on"}:
+            # EXTREME TEMPERATURE MODE: Much higher randomness/unpredictability
+            if os.environ.get("ROOM_EXTREME_TEMP", "").strip().lower() in {"1", "true", "yes", "on"}:
+                # Extreme mode: very high temps for wild variation
+                temperature = min(2.0, 1.8 + 0.15 * voice_index)
+            elif os.environ.get("ROOM_TEMP_CAP", "").strip().lower() in {"1", "true", "yes", "on"}:
                 temperature = min(0.98, 0.88 + 0.06 * voice_index)
             else:
                 temperature = min(1.28, 1.28 + 1.28 * voice_index + 1.28 * attempt)
         else:
-            temperature = {"comprehension": 1.28, "thought": 0.25}.get(role, 1.28) + 1.28 * attempt
+            role_temp = {"comprehension": 1.28, "thought": 0.25}.get(role, 1.28)
+            # Check for extreme mode for non-expression roles too
+            if os.environ.get("ROOM_EXTREME_TEMP", "").strip().lower() in {"1", "true", "yes", "on"}:
+                temperature = role_temp * 2.0 + 0.8 * attempt
+            else:
+                temperature = role_temp + 1.28 * attempt
         try:
             out = _private_model._request(model_url, combined, role, temperature, timeout, self_entity, attempt)
             if not out:
