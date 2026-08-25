@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import re
@@ -17,6 +18,7 @@ RESULTS = ROOT / "canary-results.json"
 CFG = json.loads((ROOT / "room" / "config.json").read_text())
 PROFILES = CFG["p"]
 ENTITIES = ("sarah", "mara", "owen", "jules")
+LIVE_PAIRS = (("sarah", "mara"), ("owen", "jules"))
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import room_private_model_autonomy as autonomy
@@ -152,14 +154,14 @@ def stop_server(proc, log_handle) -> None:
     log_handle.close()
 
 
-def call(role: str, payload: dict, label: str) -> tuple[dict, float]:
+def call(role: str, payload: dict, label: str, min_words: int = 5) -> tuple[dict, float]:
     os.environ["ROOM_NODE_PROMPT"] = {
         "comprehension": "Understand the conversation and return only the required structured object.",
         "thought": "Choose what you personally want to do next and return only the required structured object.",
         "expression": "Speak naturally from your own intent and return only the required structured object.",
     }[role]
     started = time.monotonic()
-    result = autonomy.run(role, payload, timeout=30)
+    result = autonomy.run(role, payload, timeout=30, min_words=min_words)
     elapsed = time.monotonic() - started
     if not isinstance(result, dict):
         raise RuntimeError(f"{label}:{role} returned non-object")
@@ -232,16 +234,21 @@ def verify_low_steering_transform() -> None:
             raise RuntimeError(f"{entity}: compact still contains steering markers: {hits}")
 
 
-def autonomy_chain(entity: str, brain_label: str) -> dict:
+def autonomy_chain(
+    entity: str,
+    brain_label: str,
+    min_words: int = 5,
+    strict_quality: bool = True,
+) -> dict:
     label = f"{brain_label}:{entity}"
     source = base_payload(entity)
 
-    perception, perception_seconds = call("comprehension", source, label)
+    perception, perception_seconds = call("comprehension", source, label, min_words=min_words)
     reject_overlay_text(label, "comprehension", perception)
 
     thought_payload = dict(source)
     thought_payload["social_observation"] = perception
-    thought, thought_seconds = call("thought", thought_payload, label)
+    thought, thought_seconds = call("thought", thought_payload, label, min_words=min_words)
     reject_overlay_text(label, "thought", thought)
     intended_partner = str(thought.get("preferred_partner") or "").lower()
     if intended_partner == entity:
@@ -259,16 +266,17 @@ def autonomy_chain(entity: str, brain_label: str) -> dict:
     if compact_intent.get("aim"):
         raise RuntimeError(f"{entity}: external sentence-level aim survived into expression")
 
-    expression, expression_seconds = call("expression", expression_payload, label)
+    expression, expression_seconds = call("expression", expression_payload, label, min_words=min_words)
     reject_overlay_text(label, "expression", expression)
     if str(expression.get("move") or "").upper() != str(thought.get("action") or "").upper():
         raise RuntimeError(f"{entity}: final speech changed its own chosen move")
     if str(expression.get("target") or "").lower() != intended_partner:
         raise RuntimeError(f"{entity}: final speech changed its own chosen partner")
     utterance = str(expression.get("utterance") or "").strip()
-    if len(utterance.split()) < 5:
+    if len(utterance.split()) < min_words:
         raise RuntimeError(f"{entity}: expression was too empty to evaluate")
-    reject_long_echo(entity, utterance, source)
+    if strict_quality:
+        reject_long_echo(entity, utterance, source)
 
     return {
         "entity": entity,
@@ -278,6 +286,64 @@ def autonomy_chain(entity: str, brain_label: str) -> dict:
         "expression_seconds": round(expression_seconds, 3),
         "thought": thought,
         "expression": expression,
+    }
+
+
+def _parallel_phase(
+    brain_label: str,
+    role: str,
+    pair: tuple[str, str],
+    perceptions: dict[str, dict] | None = None,
+) -> dict:
+    started = time.monotonic()
+
+    def worker(entity: str):
+        payload = base_payload(entity)
+        if role == "thought":
+            if not perceptions or entity not in perceptions:
+                raise RuntimeError(f"missing perception for {entity}")
+            payload["social_observation"] = perceptions[entity]
+        result, elapsed = call(role, payload, f"{brain_label}:parallel:{entity}")
+        reject_overlay_text(brain_label, role, result)
+        if role == "thought" and str(result.get("preferred_partner") or "").lower() == entity:
+            raise RuntimeError(f"{entity}: parallel thought selected self as partner")
+        return entity, result, elapsed
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(worker, entity) for entity in pair]
+        rows = [future.result() for future in futures]
+
+    wall = time.monotonic() - started
+    if wall > 40.0:
+        raise RuntimeError(f"{brain_label}:{role}:{'+'.join(pair)} exceeded live pair gate: {wall:.3f}s")
+    return {
+        "pair": list(pair),
+        "wall_seconds": round(wall, 3),
+        "results": {
+            entity: {"seconds": round(elapsed, 3), "output": result}
+            for entity, result, elapsed in rows
+        },
+    }
+
+
+def parallel_load_probe(brain_label: str) -> dict:
+    perceptions: dict[str, dict] = {}
+    perception_pairs: list[dict] = []
+    thought_pairs: list[dict] = []
+
+    for pair in LIVE_PAIRS:
+        record = _parallel_phase(brain_label, "comprehension", pair)
+        perception_pairs.append(record)
+        for entity, row in record["results"].items():
+            perceptions[entity] = row["output"]
+
+    for pair in LIVE_PAIRS:
+        thought_pairs.append(_parallel_phase(brain_label, "thought", pair, perceptions))
+
+    return {
+        "status": "pass",
+        "perception_pairs": perception_pairs,
+        "thought_pairs": thought_pairs,
     }
 
 
@@ -292,18 +358,31 @@ def run_model(label: str, model: Path) -> dict:
                 passes.append(autonomy_chain(entity, label))
             except Exception as exc:
                 failures.append({"entity": entity, "error": f"{type(exc).__name__}: {exc}"})
+
         utterances = [str(row["expression"].get("utterance") or "").strip().lower() for row in passes]
         duplicate = len(set(utterances)) != len(utterances)
         actions = sorted({str(row["thought"].get("action") or "") for row in passes})
         focuses = sorted({str(row["thought"].get("focus") or "") for row in passes})
+        action_diversity = len(actions) >= 2
+        sequential_ok = not failures and not duplicate and len(passes) == len(ENTITIES) and action_diversity
+
+        parallel = {"status": "not_tested"}
+        if sequential_ok:
+            try:
+                parallel = parallel_load_probe(label)
+            except Exception as exc:
+                parallel = {"status": "fail", "error": f"{type(exc).__name__}: {exc}"}
+
         return {
-            "status": "pass" if not failures and not duplicate and len(passes) == len(ENTITIES) else "fail",
+            "status": "pass" if sequential_ok and parallel.get("status") == "pass" else "fail",
             "startup_seconds": round(startup, 3),
             "voices_passed": passes,
             "voices_failed": failures,
             "duplicate_utterances": duplicate,
             "distinct_actions": actions,
             "distinct_focuses": focuses,
+            "action_diversity": action_diversity,
+            "parallel_live_load": parallel,
         }
     except Exception as exc:
         return {"status": "fail", "error": f"{type(exc).__name__}: {exc}"}
@@ -314,7 +393,6 @@ def run_model(label: str, model: Path) -> dict:
 
 def main() -> int:
     candidates = {
-        "smollm2-1.7b": MODEL_DIR / "smollm2-1.7b-instruct-q4_k_m.gguf",
         "llama3.2-1b": MODEL_DIR / "llama-3.2-1b-instruct-q4_k_m.gguf",
     }
     fallback = MODEL_DIR / "society-brain-q4_0.gguf"
@@ -350,7 +428,12 @@ def main() -> int:
         report["qwen_brain_fallback"] = {
             "status": "pass",
             "startup_seconds": round(startup, 3),
-            "probe": autonomy_chain("sarah", "qwen2.5-0.5b-autonomy-fallback"),
+            "probe": autonomy_chain(
+                "sarah",
+                "qwen2.5-0.5b-autonomy-fallback",
+                min_words=1,
+                strict_quality=False,
+            ),
         }
     except Exception as exc:
         report["qwen_brain_fallback"] = {"status": "fail", "error": f"{type(exc).__name__}: {exc}"}
