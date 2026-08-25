@@ -194,8 +194,8 @@ def reject_long_echo(entity: str, utterance: str, source: dict) -> None:
 
 
 def verify_low_steering_transform() -> None:
-    if autonomy.AUTONOMY_ENGINE != "structural-base-no-live-overlay-v1":
-        raise RuntimeError("autonomy engine is not the no-overlay structural base")
+    if autonomy.AUTONOMY_ENGINE != "structural-base-no-live-overlay-v2":
+        raise RuntimeError("autonomy engine is not the no-overlay structural base v2")
     if Path(autonomy.base.__file__).resolve() != (ROOT / "scripts" / "room_private_model.py").resolve():
         raise RuntimeError("autonomy path resolved through the live overlay")
 
