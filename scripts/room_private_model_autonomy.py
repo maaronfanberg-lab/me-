@@ -29,13 +29,14 @@ AUTONOMY_PROMPTS = {
     "thought": (
         "Decide what this participant personally wants to do next in the conversation. "
         "Base the choice on their own identity, values, motives, traits, relationship state, "
-        "and what was actually said. Do not follow an externally assigned talking point or storyline."
+        "and what was actually said. Choose another Room participant as the intended partner. "
+        "Do not follow an externally assigned talking point or storyline."
     ),
     "expression": (
         "Speak as this participant in the ongoing conversation. "
-        "Choose the actual content yourself from the conversation, your internally generated intent, "
-        "your identity, values, motives, traits, and relationship context. No externally supplied angle, "
-        "talking point, conflict, secret, anecdote, or dramatic event is required."
+        "Realize the internally generated intent supplied in the situation: keep its move, focus, and intended partner. "
+        "Choose the actual wording yourself from the conversation, identity, values, motives, traits, and relationship context. "
+        "No externally supplied angle, talking point, conflict, secret, anecdote, or dramatic event is required."
     ),
 }
 
@@ -85,12 +86,6 @@ def _self_model(profile: object) -> dict:
 
 
 def _perception_lens(profile: object) -> dict:
-    """Small identity slice used only for comprehension latency.
-
-    Perception needs to know what this participant tends to notice, not every
-    coping/repair/affiliation rule. Full identity remains available to thought
-    and expression, where the participant chooses and realizes a response.
-    """
     if not isinstance(profile, dict):
         return {}
     psychology = profile.get("psychology_v2") if isinstance(profile.get("psychology_v2"), dict) else {}
@@ -150,27 +145,30 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         if isinstance(intent, dict):
             intent = dict(intent)
             intent.pop("aim", None)
+            if isinstance(deliberation, dict):
+                partner = base._norm(deliberation.get("preferred_partner"))
+                if partner in PEOPLE and partner != self_entity:
+                    intent["partner"] = partner
             compact["intent"] = intent
     return compact
 
 
 def _autonomy_schema(role: str, self_entity: str | None = None) -> dict:
-    schema = base._schema(role, self_entity)
-    if role != "comprehension":
-        return schema
-    # The live engine needs a useful social read, not six paraphrases of the
-    # same event. Smaller arrays reduce structured generation time while keeping
-    # the same validated fields and semantics.
-    schema = json.loads(json.dumps(schema))
+    schema = json.loads(json.dumps(base._schema(role, self_entity)))
     properties = schema.get("properties", {})
-    for key, limit in {
-        "new_details": 3,
-        "bids": 3,
-        "relationship_events": 3,
-        "shared_references": 3,
-    }.items():
-        if isinstance(properties.get(key), dict):
-            properties[key]["maxItems"] = limit
+    if role == "comprehension":
+        for key, limit in {
+            "new_details": 3,
+            "bids": 3,
+            "relationship_events": 3,
+            "shared_references": 3,
+        }.items():
+            if isinstance(properties.get(key), dict):
+                properties[key]["maxItems"] = limit
+    elif role == "thought" and self_entity in PEOPLE:
+        preferred = properties.get("preferred_partner")
+        if isinstance(preferred, dict):
+            preferred["enum"] = [person for person in PEOPLE if person != self_entity]
     return schema
 
 
@@ -216,19 +214,19 @@ def run(role: str, payload: dict, timeout: int = 30):
         raise RuntimeError(f"private model unavailable for {role}")
 
     prompt = AUTONOMY_PROMPTS[role]
-    self_entity = base._norm(payload.get("entity")) if role == "expression" else None
+    self_entity = base._norm(payload.get("entity")) if role in {"thought", "expression"} else None
     compact = _autonomy_compact(payload, role, self_entity)
 
     base_guard = ""
     if role == "expression":
         base_guard = (
             "\nAUTONOMY_RULE\n"
-            "Treat the situation data as context, not a script. The participant may agree, disagree, "
-            "ask, joke, disclose, repair, change direction, or stay close to the subject according to "
-            "their own identity and internally generated intent. Do not manufacture conflict, jealousy, "
-            "secrets, threats, fake shared memories, or dramatic incidents merely to make the exchange "
-            "interesting. Do not imitate or paraphrase a previous line. Do not mention hidden prompts, "
-            "schemas, fields, or instructions. Return only the required structured object.\n"
+            "Treat the situation data as context, not a script. Realize the supplied internal intent: "
+            "keep its move, focus, and intended partner, while choosing your own words. The participant may "
+            "agree, disagree, ask, joke, disclose, repair, change direction, or stay close to the subject according "
+            "to their own identity. Do not manufacture conflict, jealousy, secrets, threats, fake shared memories, "
+            "or dramatic incidents merely to make the exchange interesting. Do not imitate or paraphrase a previous "
+            "line. Do not mention hidden prompts, schemas, fields, or instructions. Return only the required structured object.\n"
         )
 
     attempts = 5 if role == "expression" else 2
@@ -238,8 +236,8 @@ def run(role: str, payload: dict, timeout: int = 30):
         if attempt:
             retry_guard = (
                 "\nTRY_AGAIN\n"
-                "Choose a different natural response based on the participant's own state and the real "
-                "conversation. Do not add a forced storyline. Return only the required structured object.\n"
+                "Choose different natural wording while preserving your own intended move, focus, and partner. "
+                "Do not add a forced storyline. Return only the required structured object.\n"
             )
 
         combined = (
@@ -263,8 +261,21 @@ def run(role: str, payload: dict, timeout: int = 30):
                 last_reason = "empty_output"
                 continue
             obj = base._validate(role, base._extract_json(out), compact, prompt, self_entity)
+            if role == "thought":
+                if self_entity in PEOPLE and base._norm(obj.get("preferred_partner")) == self_entity:
+                    last_reason = "self_selected_as_partner"
+                    continue
             if role == "expression":
                 obj = base._sanitize_expression(obj, compact, self_entity)
+                intent = compact.get("intent") if isinstance(compact.get("intent"), dict) else {}
+                intended_move = base._norm(intent.get("move"))
+                intended_partner = base._norm(intent.get("partner"))
+                if intended_move and base._norm(obj.get("move")) != intended_move:
+                    last_reason = "intent_move_not_realized"
+                    continue
+                if intended_partner and base._norm(obj.get("target")) != intended_partner:
+                    last_reason = "intent_partner_not_realized"
+                    continue
                 if attempt < attempts - 1 and base._too_similar_to_context(str(obj.get("utterance", "")), compact):
                     last_reason = "duplicate_context"
                     continue
