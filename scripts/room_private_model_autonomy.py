@@ -1,11 +1,24 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
+from pathlib import Path
 import urllib.error
 
-import room_private_model as base
+# IMPORTANT: load the plain structural model module directly by file path.
+# Importing `room_private_model` normally resolves to scripts/room_private_model/
+# __init__.py, which is the live semantic-chaos overlay and can rewrite a
+# participant's own thought into seeded shared-fiction agendas. The autonomy
+# path must not pass through that layer.
+_BASE_PATH = Path(__file__).resolve().parent / "room_private_model.py"
+_SPEC = importlib.util.spec_from_file_location("_room_autonomy_structural_base", _BASE_PATH)
+if _SPEC is None or _SPEC.loader is None:
+    raise ImportError(f"cannot load structural Room model base from {_BASE_PATH}")
+base = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(base)
 
+AUTONOMY_ENGINE = "structural-base-no-live-overlay-v1"
 PEOPLE = base.PEOPLE
 
 AUTONOMY_PROMPTS = {
@@ -35,10 +48,9 @@ def enabled(role: str) -> bool:
 def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) -> dict:
     clean_payload = dict(payload or {})
 
-    # The legacy engine may attach a rotating conversation job to the payload and
-    # append it to new_information_goal. It is useful for anti-repetition, but it
-    # also tells the speaker what contribution to make. Strip that external
-    # assignment before inference while preserving the participant's own thought.
+    # The legacy engine may attach a rotating conversation job to the expression
+    # payload and append it to new_information_goal. Strip that externally assigned
+    # sentence-level content while preserving the participant's own deliberation.
     clean_payload.pop("conversation_job", None)
     deliberation = clean_payload.get("deliberation")
     if isinstance(deliberation, dict):
@@ -46,8 +58,8 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         deliberation.pop("conversation_job", None)
         raw_goal = str(deliberation.get("new_information_goal") or "")
         marker = "Distinct contribution:"
-        if marker.lower() in raw_goal.lower():
-            lower = raw_goal.lower()
+        lower = raw_goal.lower()
+        if marker.lower() in lower:
             raw_goal = raw_goal[: lower.index(marker.lower())].strip()
         deliberation["new_information_goal"] = raw_goal
         clean_payload["deliberation"] = deliberation
@@ -57,8 +69,8 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         compact.pop("angle", None)
         intent = compact.get("intent")
         if isinstance(intent, dict):
-            # Keep move/focus chosen by the participant's thought node, but do not
-            # hand expression a sentence-level content assignment.
+            # Preserve the participant's internally selected move/focus, but do not
+            # give expression a sentence-level content assignment.
             intent = dict(intent)
             intent.pop("aim", None)
             compact["intent"] = intent
