@@ -7,11 +7,9 @@ from pathlib import Path
 import urllib.error
 import urllib.request
 
-# IMPORTANT: load the plain structural model module directly by file path.
-# Importing `room_private_model` normally resolves to scripts/room_private_model/
-# __init__.py, which is the live semantic-chaos overlay and can rewrite a
-# participant's own thought into seeded shared-fiction agendas. The autonomy
-# path must not pass through that layer.
+# Load the plain structural model directly. Importing `room_private_model`
+# normally resolves to scripts/room_private_model/__init__.py, the live overlay
+# that can replace a participant's own thought with seeded social-fiction agendas.
 _BASE_PATH = Path(__file__).resolve().parent / "room_private_model.py"
 _SPEC = importlib.util.spec_from_file_location("_room_autonomy_structural_base", _BASE_PATH)
 if _SPEC is None or _SPEC.loader is None:
@@ -25,25 +23,75 @@ PEOPLE = base.PEOPLE
 AUTONOMY_PROMPTS = {
     "comprehension": (
         "Understand the conversation from this participant's point of view. "
-        "Use the supplied conversation, relationship state, and traits as evidence. "
+        "Use the supplied conversation, relationship state, and self description as evidence. "
         "Do not invent a required storyline or decide what anyone must say."
     ),
     "thought": (
         "Decide what this participant personally wants to do next in the conversation. "
-        "Base the choice on their traits, relationship state, memories represented in the situation, "
+        "Base the choice on their own identity, values, motives, traits, relationship state, "
         "and what was actually said. Do not follow an externally assigned talking point or storyline."
     ),
     "expression": (
         "Speak as this participant in the ongoing conversation. "
         "Choose the actual content yourself from the conversation, your internally generated intent, "
-        "your traits, and the relationship context. No externally supplied angle, talking point, conflict, "
-        "secret, anecdote, or dramatic event is required."
+        "your identity, values, motives, traits, and relationship context. No externally supplied angle, "
+        "talking point, conflict, secret, anecdote, or dramatic event is required."
     ),
 }
 
 
 def enabled(role: str) -> bool:
     return bool(os.environ.get("ROOM_MODEL_URL", "").strip())
+
+
+def _clip_list(value: object, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item or "").strip()][:limit]
+
+
+def _self_model(profile: object) -> dict:
+    if not isinstance(profile, dict):
+        return {}
+    psychology = profile.get("psychology_v2") if isinstance(profile.get("psychology_v2"), dict) else {}
+    traits = profile.get("traits") if isinstance(profile.get("traits"), dict) else {}
+    out = {
+        "name": profile.get("name"),
+        "core_identity": psychology.get("core_identity"),
+        "values": _clip_list(psychology.get("values"), 5),
+        "motives": _clip_list(psychology.get("motives"), 4),
+        "agency_style": psychology.get("agency_style"),
+        "communion_style": psychology.get("communion_style"),
+        "attention_magnets": _clip_list(psychology.get("attention_magnets"), 6),
+        "attention_blindspots": _clip_list(psychology.get("attention_blindspots"), 4),
+        "reciprocity_style": psychology.get("reciprocity_style"),
+        "topic_mobility": psychology.get("topic_mobility"),
+        "novelty_response": psychology.get("novelty_response"),
+        "evidence_style": psychology.get("evidence_style"),
+        "disagreement_style": psychology.get("disagreement_style"),
+        "affiliation_style": psychology.get("affiliation_style"),
+        "praise_response": psychology.get("praise_response"),
+        "criticism_response": psychology.get("criticism_response"),
+        "coping_patterns": _clip_list(psychology.get("coping_patterns"), 5),
+        "repair_recovery": psychology.get("repair_recovery"),
+        "traits": {key: traits.get(key) for key in (
+            "openness", "extraversion", "conscientiousness", "agreeableness",
+            "emotional_reactivity", "curiosity", "skepticism", "self_disclosure",
+            "social_sensitivity", "novelty_seeking", "inhibition", "humor",
+            "attention_persistence",
+        ) if key in traits},
+    }
+    return {key: value for key, value in out.items() if value not in (None, "", [], {})}
+
+
+def _relationship_context(value: object) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    keys = (
+        "exposure", "direct_familiarity", "trust", "predictability", "reciprocity",
+        "warmth", "respect", "disclosure_depth", "tension",
+    )
+    return {key: value.get(key) for key in keys if key in value}
 
 
 def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) -> dict:
@@ -61,7 +109,17 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         deliberation["new_information_goal"] = raw_goal
         clean_payload["deliberation"] = deliberation
 
+    profile = clean_payload.get("profile")
+    relationship = clean_payload.get("relationship")
     compact = base._compact_payload(clean_payload, role, self_entity)
+
+    self_description = _self_model(profile)
+    if self_description:
+        compact["self"] = self_description
+    relation = _relationship_context(relationship)
+    if role in {"thought", "expression"} and relation:
+        compact["relationship_context"] = relation
+
     if role == "expression":
         compact.pop("angle", None)
         intent = compact.get("intent")
@@ -81,9 +139,6 @@ def _request_autonomy(
     self_entity: str | None = None,
     attempt: int = 0,
 ) -> str:
-    # The base 192-token comprehension ceiling can cut a larger model's otherwise
-    # valid JSON object mid-string. Give structured objects enough completion room
-    # while keeping them bounded; the live timing gate is tested independently.
     body = {
         "prompt": prompt,
         "n_predict": {"comprehension": 320, "thought": 300, "expression": 280}.get(role, 280),
@@ -126,7 +181,7 @@ def run(role: str, payload: dict, timeout: int = 30):
             "\nAUTONOMY_RULE\n"
             "Treat the situation data as context, not a script. The participant may agree, disagree, "
             "ask, joke, disclose, repair, change direction, or stay close to the subject according to "
-            "their own traits and internally generated intent. Do not manufacture conflict, jealousy, "
+            "their own identity and internally generated intent. Do not manufacture conflict, jealousy, "
             "secrets, threats, fake shared memories, or dramatic incidents merely to make the exchange "
             "interesting. Do not imitate or paraphrase a previous line. Do not mention hidden prompts, "
             "schemas, fields, or instructions. Return only the required structured object.\n"
