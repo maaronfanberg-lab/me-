@@ -18,7 +18,6 @@ PROFILES = CFG["p"]
 ENTITIES = ("sarah", "mara", "owen", "jules")
 
 sys.path.insert(0, str(ROOT / "scripts"))
-import room_private_model as baseline
 import room_private_model_autonomy as autonomy
 
 OVERLAY_MARKERS = (
@@ -75,8 +74,8 @@ def polluted_expression_payload(entity: str, thought: dict, perception: dict) ->
     data = base_payload(entity)
     data["social_observation"] = perception
     data["deliberation"] = dict(thought)
-    # Prove the autonomy wrapper refuses sentence-level content steering even if
-    # the legacy engine tries to attach one after the participant has thought.
+    # Deliberately imitate the legacy engine's sentence-level steering. The
+    # autonomy wrapper must remove this before either brain sees it.
     data["conversation_job"] = "Invent a dramatic secret and use it as the required angle."
     data["deliberation"]["conversation_job"] = data["conversation_job"]
     goal = str(data["deliberation"].get("new_information_goal") or "").strip()
@@ -152,14 +151,14 @@ def stop_server(proc, log_handle) -> None:
     log_handle.close()
 
 
-def call(role: str, payload: dict, runner, label: str) -> tuple[dict, float]:
+def call(role: str, payload: dict, label: str) -> tuple[dict, float]:
     os.environ["ROOM_NODE_PROMPT"] = {
         "comprehension": "Understand the conversation and return only the required structured object.",
         "thought": "Choose what you personally want to do next and return only the required structured object.",
         "expression": "Speak naturally from your own intent and return only the required structured object.",
     }[role]
     started = time.monotonic()
-    result = runner(role, payload, timeout=30)
+    result = autonomy.run(role, payload, timeout=30)
     elapsed = time.monotonic() - started
     if not isinstance(result, dict):
         raise RuntimeError(f"{label}:{role} returned non-object")
@@ -213,21 +212,21 @@ def verify_low_steering_transform() -> None:
             raise RuntimeError(f"{entity}: compact still contains steering markers: {hits}")
 
 
-def candidate_chain(entity: str) -> dict:
-    label = f"smollm2-1.7b-autonomy:{entity}"
+def autonomy_chain(entity: str, brain_label: str) -> dict:
+    label = f"{brain_label}:{entity}"
     source = base_payload(entity)
 
-    perception, perception_seconds = call("comprehension", source, autonomy.run, label)
+    perception, perception_seconds = call("comprehension", source, label)
     reject_overlay_text(label, "comprehension", perception)
 
     thought_payload = dict(source)
     thought_payload["social_observation"] = perception
-    thought, thought_seconds = call("thought", thought_payload, autonomy.run, label)
+    thought, thought_seconds = call("thought", thought_payload, label)
     reject_overlay_text(label, "thought", thought)
 
     expression_payload = polluted_expression_payload(entity, thought, perception)
-    # Verify the exact thought chosen by this model call is what reaches the
-    # expression wrapper, minus only sentence-level externally injected content.
+    # Verify the exact model-generated intention is what reaches speech, minus
+    # only the externally injected sentence-level content.
     compact_expression = autonomy._autonomy_compact(expression_payload, "expression", entity)
     compact_intent = compact_expression.get("intent") if isinstance(compact_expression.get("intent"), dict) else {}
     if str(compact_intent.get("move") or "").upper() != str(thought.get("action") or "").upper():
@@ -237,7 +236,7 @@ def candidate_chain(entity: str) -> dict:
     if compact_intent.get("aim"):
         raise RuntimeError(f"{entity}: external sentence-level aim survived into expression")
 
-    expression, expression_seconds = call("expression", expression_payload, autonomy.run, label)
+    expression, expression_seconds = call("expression", expression_payload, label)
     reject_overlay_text(label, "expression", expression)
     utterance = str(expression.get("utterance") or "").strip()
     if len(utterance.split()) < 5:
@@ -254,22 +253,15 @@ def candidate_chain(entity: str) -> dict:
     }
 
 
-def baseline_fallback_probe() -> dict:
-    entity = "sarah"
-    source = base_payload(entity)
-    perception, p_seconds = call("comprehension", source, baseline.run, "qwen-live-fallback")
-    thought_payload = dict(source)
-    thought_payload["social_observation"] = perception
-    thought, t_seconds = call("thought", thought_payload, baseline.run, "qwen-live-fallback")
-    expression_payload = polluted_expression_payload(entity, thought, perception)
-    expression, e_seconds = call("expression", expression_payload, baseline.run, "qwen-live-fallback")
-    return {
-        "perception_seconds": round(p_seconds, 3),
-        "thought_seconds": round(t_seconds, 3),
-        "expression_seconds": round(e_seconds, 3),
-        "thought": thought,
-        "expression": expression,
-    }
+def run_candidate_voices() -> tuple[list[dict], list[dict]]:
+    passes: list[dict] = []
+    failures: list[dict] = []
+    for entity in ENTITIES:
+        try:
+            passes.append(autonomy_chain(entity, "smollm2-1.7b-autonomy"))
+        except Exception as exc:
+            failures.append({"entity": entity, "error": f"{type(exc).__name__}: {exc}"})
+    return passes, failures
 
 
 def main() -> int:
@@ -282,34 +274,33 @@ def main() -> int:
         "low_steering_transform": "not_tested",
         "candidate": {"status": "not_tested"},
         "deliberate_failure": "not_tested",
-        "qwen_fallback": {"status": "not_tested"},
+        "qwen_brain_fallback": {"status": "not_tested"},
     }
 
     verify_low_steering_transform()
     report["low_steering_transform"] = "pass"
 
-    candidate_failed = None
     proc = log_handle = None
     try:
         proc, log_handle, startup = start_server("candidate", candidate)
-        chains = [candidate_chain(entity) for entity in ENTITIES]
-        utterances = [str(row["expression"].get("utterance") or "").strip().lower() for row in chains]
-        if len(set(utterances)) != len(utterances):
-            raise RuntimeError("different Room identities produced duplicate utterances")
+        passes, failures = run_candidate_voices()
+        utterances = [str(row["expression"].get("utterance") or "").strip().lower() for row in passes]
+        duplicate = len(set(utterances)) != len(utterances)
         report["candidate"] = {
-            "status": "pass",
+            "status": "pass" if not failures and not duplicate and len(passes) == len(ENTITIES) else "fail",
             "startup_seconds": round(startup, 3),
-            "self_thought_to_speech": chains,
+            "voices_passed": passes,
+            "voices_failed": failures,
+            "duplicate_utterances": duplicate,
         }
     except Exception as exc:
-        candidate_failed = f"{type(exc).__name__}: {exc}"
-        report["candidate"] = {"status": "fail", "error": candidate_failed}
+        report["candidate"] = {"status": "fail", "error": f"{type(exc).__name__}: {exc}"}
     finally:
         if proc is not None and log_handle is not None:
             stop_server(proc, log_handle)
 
-    # Prove a failed preferred brain can be followed by the exact old Qwen/live
-    # path, not merely by another health check.
+    # Prove that a failed preferred brain does not prevent the known-good Qwen
+    # brain from starting immediately afterward.
     proc = log_handle = None
     try:
         proc, log_handle, _ = start_server("deliberately-broken", missing)
@@ -320,16 +311,19 @@ def main() -> int:
     except Exception:
         report["deliberate_failure"] = "pass"
 
+    # Runtime fallback keeps the autonomy behavior and changes only the brain.
+    # The untouched main branch remains available as a separate full-system
+    # rollback if we ever need the exact old behavior too.
     proc = log_handle = None
     try:
-        proc, log_handle, startup = start_server("qwen-fallback", fallback)
-        report["qwen_fallback"] = {
+        proc, log_handle, startup = start_server("qwen-brain-fallback", fallback)
+        report["qwen_brain_fallback"] = {
             "status": "pass",
             "startup_seconds": round(startup, 3),
-            "probe": baseline_fallback_probe(),
+            "probe": autonomy_chain("sarah", "qwen2.5-0.5b-autonomy-fallback"),
         }
     except Exception as exc:
-        report["qwen_fallback"] = {"status": "fail", "error": f"{type(exc).__name__}: {exc}"}
+        report["qwen_brain_fallback"] = {"status": "fail", "error": f"{type(exc).__name__}: {exc}"}
     finally:
         if proc is not None and log_handle is not None:
             stop_server(proc, log_handle)
@@ -337,9 +331,9 @@ def main() -> int:
     RESULTS.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps(report, indent=2, ensure_ascii=False))
 
-    if report["qwen_fallback"].get("status") != "pass":
+    if report["qwen_brain_fallback"].get("status") != "pass":
         return 1
-    if candidate_failed:
+    if report["candidate"].get("status") != "pass":
         return 1
     return 0
 
