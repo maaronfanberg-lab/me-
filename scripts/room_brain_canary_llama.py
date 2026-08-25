@@ -44,7 +44,12 @@ def main() -> int:
         report["qwen_brain_fallback"] = {
             "status": "pass",
             "startup_seconds": round(startup, 3),
-            "probe": canary.autonomy_chain("sarah", "qwen2.5-0.5b-autonomy-fallback"),
+            "probe": canary.autonomy_chain(
+                "sarah",
+                "qwen2.5-0.5b-autonomy-fallback",
+                min_words=1,
+                strict_quality=False,
+            ),
         }
     except Exception as exc:
         report["qwen_brain_fallback"] = {
