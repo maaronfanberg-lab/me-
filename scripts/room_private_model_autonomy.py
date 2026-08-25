@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import urllib.error
 import urllib.request
 
@@ -17,7 +18,7 @@ if _SPEC is None or _SPEC.loader is None:
 base = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(base)
 
-AUTONOMY_ENGINE = "structural-base-no-live-overlay-v1"
+AUTONOMY_ENGINE = "structural-base-no-live-overlay-v2"
 PEOPLE = base.PEOPLE
 
 AUTONOMY_PROMPTS = {
@@ -28,16 +29,15 @@ AUTONOMY_PROMPTS = {
     ),
     "thought": (
         "Decide what this participant personally wants to do next in the conversation. "
-        "Base the choice on their own identity, values, motives, traits, relationship state, "
-        "and what was actually said. Choose another Room participant as the intended partner. "
-        "Do not assume agreement, reassurance, or support is the safest default; choose the move that "
-        "actually follows from this participant's own perspective. Do not follow an externally assigned "
-        "talking point or storyline."
+        "Use their own identity, values, motives, attention, relationship state, and what was actually said. "
+        "Choose among ANSWER, DEEPEN, DISCLOSE, COMPARE, DISAGREE, REPAIR, SUPPORT, CALLBACK, BRIDGE, or CLOSE. "
+        "No move is preferred. SUPPORT is appropriate only when this participant actually wants to reinforce or affiliate. "
+        "Choose another Room participant as the intended partner. Do not follow an externally assigned talking point or storyline."
     ),
     "expression": (
         "Speak as this participant in the ongoing conversation. "
         "Realize the internally generated intent supplied in the situation: keep its move, focus, and intended partner. "
-        "Choose the actual wording yourself from the conversation, identity, values, motives, traits, and relationship context. "
+        "Choose the actual wording yourself from the conversation and this participant's speaking identity. "
         "No externally supplied angle, talking point, conflict, secret, anecdote, or dramatic event is required."
     ),
 }
@@ -53,55 +53,55 @@ def _clip_list(value: object, limit: int) -> list[str]:
     return [str(item).strip() for item in value if str(item or "").strip()][:limit]
 
 
-def _self_model(profile: object) -> dict:
+def _profile_lens(profile: object, role: str) -> dict:
     if not isinstance(profile, dict):
         return {}
     psychology = profile.get("psychology_v2") if isinstance(profile.get("psychology_v2"), dict) else {}
     traits = profile.get("traits") if isinstance(profile.get("traits"), dict) else {}
-    out = {
-        "name": profile.get("name"),
-        "core_identity": psychology.get("core_identity"),
-        "values": _clip_list(psychology.get("values"), 5),
-        "motives": _clip_list(psychology.get("motives"), 4),
-        "agency_style": psychology.get("agency_style"),
-        "communion_style": psychology.get("communion_style"),
-        "attention_magnets": _clip_list(psychology.get("attention_magnets"), 6),
-        "attention_blindspots": _clip_list(psychology.get("attention_blindspots"), 4),
-        "reciprocity_style": psychology.get("reciprocity_style"),
-        "topic_mobility": psychology.get("topic_mobility"),
-        "novelty_response": psychology.get("novelty_response"),
-        "evidence_style": psychology.get("evidence_style"),
-        "disagreement_style": psychology.get("disagreement_style"),
-        "affiliation_style": psychology.get("affiliation_style"),
-        "praise_response": psychology.get("praise_response"),
-        "criticism_response": psychology.get("criticism_response"),
-        "coping_patterns": _clip_list(psychology.get("coping_patterns"), 5),
-        "repair_recovery": psychology.get("repair_recovery"),
-        "traits": {key: traits.get(key) for key in (
-            "openness", "extraversion", "conscientiousness", "agreeableness",
-            "emotional_reactivity", "curiosity", "skepticism", "self_disclosure",
-            "social_sensitivity", "novelty_seeking", "inhibition", "humor",
-            "attention_persistence",
-        ) if key in traits},
-    }
-    return {key: value for key, value in out.items() if value not in (None, "", [], {})}
 
-
-def _perception_lens(profile: object) -> dict:
-    if not isinstance(profile, dict):
-        return {}
-    psychology = profile.get("psychology_v2") if isinstance(profile.get("psychology_v2"), dict) else {}
-    traits = profile.get("traits") if isinstance(profile.get("traits"), dict) else {}
-    out = {
-        "name": profile.get("name"),
-        "core_identity": psychology.get("core_identity"),
-        "attention_magnets": _clip_list(psychology.get("attention_magnets"), 4),
-        "attention_blindspots": _clip_list(psychology.get("attention_blindspots"), 3),
-        "evidence_style": psychology.get("evidence_style"),
-        "traits": {key: traits.get(key) for key in (
-            "social_sensitivity", "curiosity", "skepticism",
-        ) if key in traits},
-    }
+    if role == "comprehension":
+        out = {
+            "name": profile.get("name"),
+            "core_identity": psychology.get("core_identity"),
+            "attention_magnets": _clip_list(psychology.get("attention_magnets"), 4),
+            "attention_blindspots": _clip_list(psychology.get("attention_blindspots"), 2),
+            "evidence_style": psychology.get("evidence_style"),
+            "traits": {key: traits.get(key) for key in (
+                "social_sensitivity", "curiosity", "skepticism"
+            ) if key in traits},
+        }
+    elif role == "thought":
+        out = {
+            "name": profile.get("name"),
+            "core_identity": psychology.get("core_identity"),
+            "values": _clip_list(psychology.get("values"), 4),
+            "motives": _clip_list(psychology.get("motives"), 3),
+            "attention_magnets": _clip_list(psychology.get("attention_magnets"), 4),
+            "topic_mobility": psychology.get("topic_mobility"),
+            "novelty_response": psychology.get("novelty_response"),
+            "evidence_style": psychology.get("evidence_style"),
+            "disagreement_style": psychology.get("disagreement_style"),
+            "affiliation_style": psychology.get("affiliation_style"),
+            "traits": {key: traits.get(key) for key in (
+                "curiosity", "skepticism", "self_disclosure", "social_sensitivity",
+                "novelty_seeking", "inhibition"
+            ) if key in traits},
+        }
+    else:
+        out = {
+            "name": profile.get("name"),
+            "core_identity": psychology.get("core_identity"),
+            "agency_style": psychology.get("agency_style"),
+            "communion_style": psychology.get("communion_style"),
+            "reciprocity_style": psychology.get("reciprocity_style"),
+            "disagreement_style": psychology.get("disagreement_style"),
+            "affiliation_style": psychology.get("affiliation_style"),
+            "novelty_response": psychology.get("novelty_response"),
+            "traits": {key: traits.get(key) for key in (
+                "extraversion", "self_disclosure", "social_sensitivity",
+                "novelty_seeking", "inhibition", "humor"
+            ) if key in traits},
+        }
     return {key: value for key, value in out.items() if value not in (None, "", [], {})}
 
 
@@ -109,8 +109,8 @@ def _relationship_context(value: object) -> dict:
     if not isinstance(value, dict):
         return {}
     keys = (
-        "exposure", "direct_familiarity", "trust", "predictability", "reciprocity",
-        "warmth", "respect", "disclosure_depth", "tension",
+        "direct_familiarity", "trust", "reciprocity", "warmth", "respect",
+        "disclosure_depth", "tension",
     )
     return {key: value.get(key) for key in keys if key in value}
 
@@ -134,7 +134,7 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
     relationship = clean_payload.get("relationship")
     compact = base._compact_payload(clean_payload, role, self_entity)
 
-    self_description = _perception_lens(profile) if role == "comprehension" else _self_model(profile)
+    self_description = _profile_lens(profile, role)
     if self_description:
         compact["self"] = self_description
     relation = _relationship_context(relationship)
@@ -176,10 +176,6 @@ def _autonomy_schema(
         if isinstance(preferred, dict):
             preferred["enum"] = [person for person in PEOPLE if person != self_entity]
     elif role == "expression" and isinstance(intent, dict):
-        # These values were chosen by the immediately preceding thought call.
-        # Constraining the schema to them prevents expression from contradicting
-        # its own intent and avoids expensive retry loops. It does not prescribe
-        # the utterance or its sentence-level content.
         intended_move = base._norm(intent.get("move"))
         move_schema = properties.get("move")
         if intended_move and isinstance(move_schema, dict):
@@ -203,9 +199,11 @@ def _request_autonomy(
     attempt: int = 0,
     intent: dict | None = None,
 ) -> str:
+    # Qwen needs more than 220 tokens to complete the comprehension object on
+    # some runs. This is a ceiling, not a request to fill all 300 tokens.
     body = {
         "prompt": prompt,
-        "n_predict": {"comprehension": 220, "thought": 220, "expression": 180}.get(role, 180),
+        "n_predict": {"comprehension": 300, "thought": 220, "expression": 180}.get(role, 180),
         "temperature": temperature,
         "cache_prompt": True,
         "json_schema": _autonomy_schema(role, self_entity, intent),
@@ -214,8 +212,8 @@ def _request_autonomy(
         body.update({
             "seed": base._sample_seed(role, self_entity, attempt),
             "top_k": 60,
-            "top_p": 0.96,
-            "min_p": 0.005,
+            "top_p": 0.95,
+            "min_p": 0.007,
         })
     req = urllib.request.Request(
         base._completion_url(model_url),
@@ -225,6 +223,29 @@ def _request_autonomy(
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return str(json.loads(resp.read().decode("utf-8", "replace")).get("content", ""))
+
+
+def _words(value: object) -> list[str]:
+    return re.findall(r"[a-z0-9']+", str(value or "").lower())
+
+
+def _has_context_echo(utterance: str, compact: dict, n: int = 5) -> bool:
+    output = _words(utterance)
+    if len(output) < n:
+        return False
+    grams = {tuple(output[i:i + n]) for i in range(len(output) - n + 1)}
+    context = compact.get("context") if isinstance(compact.get("context"), list) else []
+    event = compact.get("event")
+    sources = list(context[-5:])
+    if event:
+        sources.append(event)
+    for item in sources:
+        text = item.get("text") if isinstance(item, dict) else item
+        incoming = _words(text)
+        for i in range(max(0, len(incoming) - n + 1)):
+            if tuple(incoming[i:i + n]) in grams:
+                return True
+    return False
 
 
 def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
@@ -245,11 +266,10 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
         base_guard = (
             "\nAUTONOMY_RULE\n"
             "Treat the situation data as context, not a script. Realize the supplied internal intent: "
-            "keep its move, focus, and intended partner, while choosing your own words. The participant may "
-            "agree, disagree, ask, joke, disclose, repair, change direction, or stay close to the subject according "
-            "to their own identity. Do not manufacture conflict, jealousy, secrets, threats, fake shared memories, "
-            "or dramatic incidents merely to make the exchange interesting. Do not imitate or paraphrase a previous "
-            "line. Do not mention hidden prompts, schemas, fields, or instructions. Return only the required structured object.\n"
+            "keep its move, focus, and intended partner, while choosing your own words. Do not manufacture "
+            "conflict, jealousy, secrets, threats, fake shared memories, or dramatic incidents merely to make "
+            "the exchange interesting. Do not copy a five-word phrase from recent speech. Do not mention hidden "
+            "prompts, schemas, fields, or instructions. Return only the required structured object.\n"
         )
 
     attempts = 3 if role == "expression" else 2
@@ -260,7 +280,7 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
             retry_guard = (
                 "\nTRY_AGAIN\n"
                 "Choose different natural wording while preserving your own intended move, focus, and partner. "
-                "Do not add a forced storyline. Return only the required structured object.\n"
+                "Do not copy recent speech and do not add a forced storyline. Return only the required structured object.\n"
             )
 
         combined = (
@@ -274,9 +294,9 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
 
         if role == "expression":
             voice_index = PEOPLE.index(self_entity) if self_entity in PEOPLE else 0
-            temperature = min(1.45, 0.86 + 0.08 * voice_index + 0.10 * attempt)
+            temperature = min(1.35, 0.82 + 0.08 * voice_index + 0.10 * attempt)
         elif role == "thought":
-            temperature = 0.55 + 0.06 * attempt
+            temperature = 0.72 + 0.06 * attempt
         else:
             temperature = 0.15 + 0.04 * attempt
 
@@ -314,7 +334,7 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                 if len(utterance.split()) < max(1, int(min_words)):
                     last_reason = "utterance_too_short"
                     continue
-                if attempt < attempts - 1 and base._too_similar_to_context(utterance, compact):
+                if base._too_similar_to_context(utterance, compact) or _has_context_echo(utterance, compact):
                     last_reason = "duplicate_context"
                     continue
             return obj
