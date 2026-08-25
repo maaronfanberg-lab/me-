@@ -25,175 +25,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .room_model/runtime
-
-          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" \
-            --pattern 'society-brain-q4_0.gguf' --dir .room_model
-          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" \
-            --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
-
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'society-brain-q4_0.gguf' --dir .room_model
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
           echo '7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  .room_model/society-brain-q4_0.gguf' | sha256sum -c -
           echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
-
-          curl --fail --location --retry 4 --retry-delay 5 \
-            'https://huggingface.co/bartowski/SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf?download=true' \
-            --output .room_model/smollm2-1.7b-instruct-q4_k_m.gguf
+          curl --fail --location --retry 4 --retry-delay 5 'https://huggingface.co/bartowski/SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf?download=true' --output .room_model/smollm2-1.7b-instruct-q4_k_m.gguf
           echo '77665ea4815999596525c636fbeb56ba8b080b46ae85efef4f0d986a139834d7  .room_model/smollm2-1.7b-instruct-q4_k_m.gguf' | sha256sum -c -
-
           tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
-          server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
-          test -n "$server_bin"
-          chmod +x "$server_bin"
 
-          {
-            echo "runner_cpu=$(nproc)"
-            free -h
-            du -h .room_model/society-brain-q4_0.gguf .room_model/smollm2-1.7b-instruct-q4_k_m.gguf
-          } | tee canary-results.txt
-
-      - name: Exercise candidate, exact Room structured output, and Qwen rollback
-        run: |
-          set -euo pipefail
-          server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
-          current_pid=''
-
-          stop_server() {
-            if [ -n "${current_pid:-}" ] && kill -0 "$current_pid" 2>/dev/null; then
-              kill "$current_pid" 2>/dev/null || true
-              wait "$current_pid" 2>/dev/null || true
-            fi
-            current_pid=''
-          }
-
-          start_server() {
-            label="$1"
-            model="$2"
-            log=".room_model/${label}.log"
-            stop_server
-            start_epoch=$(date +%s)
-            "$server_bin" -m "$model" --host 127.0.0.1 --port 18080 -c 16384 -np 2 >"$log" 2>&1 &
-            current_pid=$!
-            for attempt in $(seq 1 120); do
-              if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then
-                elapsed=$(( $(date +%s) - start_epoch ))
-                echo "${label}_startup_seconds=${elapsed}" | tee -a canary-results.txt
-                export ROOM_MODEL_URL='http://127.0.0.1:18080/completion'
-                return 0
-              fi
-              if ! kill -0 "$current_pid" 2>/dev/null; then
-                break
-              fi
-              sleep 1
-            done
-            echo "${label}_startup=FAILED" | tee -a canary-results.txt
-            tail -80 "$log" || true
-            stop_server
-            return 1
-          }
-
-          run_room_probe() {
-            label="$1"
-            LABEL="$label" python3 - <<'PY' | tee -a canary-results.txt
-import json
-import os
-import sys
-import time
-sys.path.insert(0, "scripts")
-import room_private_model
-
-payload = {
-    "entity": "sarah",
-    "event": {
-        "speaker": "allen",
-        "text": "The Room has been repeating itself and sometimes mixing up who is who. What would you focus on first?",
-        "cognition": {"target": "sarah"},
-    },
-    "context": [
-        {"speaker": "mara", "text": "We keep circling the same idea instead of adding information.", "cognition": {"target": "sarah"}},
-        {"speaker": "owen", "text": "Identity mistakes make the conversation hard to trust.", "cognition": {"target": "sarah"}},
-        {"speaker": "allen", "text": "The Room has been repeating itself and sometimes mixing up who is who. What would you focus on first?", "cognition": {"target": "sarah"}},
-    ],
-    "profile": {
-        "traits": {
-            "openness": 0.82,
-            "extraversion": 0.60,
-            "conscientiousness": 0.68,
-            "agreeableness": 0.62,
-            "curiosity": 0.88,
-            "skepticism": 0.55,
-            "self_disclosure": 0.55,
-            "social_sensitivity": 0.75,
-            "novelty_seeking": 0.58,
-            "inhibition": 0.42,
-            "humor": 0.52,
-            "attention_persistence": 0.72,
-        }
-    },
-    "topic": {
-        "root": "room conversation quality",
-        "current_facet": "repetition and identity consistency",
-        "facets": ["repetition", "identity", "coherence"],
-        "shared_references": [],
-        "unresolved": ["which failure should be addressed first"],
-    },
-    "keywords": ["repetition", "identity", "coherence"],
-    "conversation_job": "Add one concrete observation about improving the conversation.",
-    "deliberation": {
-        "action": "ANSWER",
-        "focus": "repetition and identity consistency",
-        "new_information_goal": "identify one practical cause that could be addressed first",
-    },
-}
-
-tests = [
-    ("comprehension", "Understand the current conversation as a participant. Return only the required structured data."),
-    ("thought", "Choose a useful next conversational move. Return only the required structured data."),
-    ("expression", "Speak as Sarah to another Room participant and add a concrete useful point. Return only the required structured data."),
-]
-
-label = os.environ["LABEL"]
-for role, prompt in tests:
-    os.environ["ROOM_NODE_PROMPT"] = prompt
-    started = time.monotonic()
-    result = room_private_model.run(role, payload, timeout=30)
-    elapsed = time.monotonic() - started
-    print(json.dumps({"brain": label, "role": role, "seconds": round(elapsed, 3), "result": result}, ensure_ascii=False))
-PY
-          }
-
-          trap stop_server EXIT
-          candidate_ok=1
-
-          if start_server candidate .room_model/smollm2-1.7b-instruct-q4_k_m.gguf; then
-            if ! run_room_probe candidate; then
-              candidate_ok=0
-              echo 'candidate_probe=FAILED' | tee -a canary-results.txt
-            else
-              echo 'candidate_probe=PASS' | tee -a canary-results.txt
-            fi
-          else
-            candidate_ok=0
-          fi
-          stop_server
-
-          echo 'deliberate_failure_test=BEGIN' | tee -a canary-results.txt
-          if start_server deliberately-broken .room_model/this-model-does-not-exist.gguf; then
-            echo 'deliberate_failure_test=FAILED_UNEXPECTED_START' | tee -a canary-results.txt
-            exit 1
-          fi
-
-          if ! start_server qwen-fallback .room_model/society-brain-q4_0.gguf; then
-            echo 'qwen_fallback=FAILED_TO_START' | tee -a canary-results.txt
-            exit 1
-          fi
-          run_room_probe qwen-fallback
-          echo 'qwen_fallback=PASS' | tee -a canary-results.txt
-          stop_server
-
-          if [ "$candidate_ok" -ne 1 ]; then
-            echo 'candidate_overall=FAIL' | tee -a canary-results.txt
-            exit 1
-          fi
-          echo 'candidate_overall=PASS' | tee -a canary-results.txt
+      - name: Run stronger-model autonomy canary and Qwen rollback proof
+        run: python3 scripts/room_brain_canary.py
 
       - name: Upload canary evidence
         if: always()
@@ -201,6 +42,6 @@ PY
         with:
           name: room-brain-canary-evidence
           path: |
-            canary-results.txt
+            canary-results.json
             .room_model/*.log
           if-no-files-found: warn
