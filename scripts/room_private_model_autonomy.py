@@ -30,7 +30,9 @@ AUTONOMY_PROMPTS = {
         "Decide what this participant personally wants to do next in the conversation. "
         "Base the choice on their own identity, values, motives, traits, relationship state, "
         "and what was actually said. Choose another Room participant as the intended partner. "
-        "Do not follow an externally assigned talking point or storyline."
+        "Do not assume agreement, reassurance, or support is the safest default; choose the move that "
+        "actually follows from this participant's own perspective. Do not follow an externally assigned "
+        "talking point or storyline."
     ),
     "expression": (
         "Speak as this participant in the ongoing conversation. "
@@ -203,12 +205,12 @@ def _request_autonomy(
 ) -> str:
     body = {
         "prompt": prompt,
-        "n_predict": {"comprehension": 280, "thought": 300, "expression": 280}.get(role, 280),
+        "n_predict": {"comprehension": 220, "thought": 220, "expression": 180}.get(role, 180),
         "temperature": temperature,
         "cache_prompt": True,
         "json_schema": _autonomy_schema(role, self_entity, intent),
     }
-    if role == "expression":
+    if role in {"thought", "expression"}:
         body.update({
             "seed": base._sample_seed(role, self_entity, attempt),
             "top_k": 60,
@@ -225,7 +227,7 @@ def _request_autonomy(
         return str(json.loads(resp.read().decode("utf-8", "replace")).get("content", ""))
 
 
-def run(role: str, payload: dict, timeout: int = 30):
+def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
     if role not in AUTONOMY_PROMPTS:
         raise ValueError(f"unknown private model role: {role}")
 
@@ -250,7 +252,7 @@ def run(role: str, payload: dict, timeout: int = 30):
             "line. Do not mention hidden prompts, schemas, fields, or instructions. Return only the required structured object.\n"
         )
 
-    attempts = 5 if role == "expression" else 2
+    attempts = 3 if role == "expression" else 2
     last_reason = "unknown"
     for attempt in range(attempts):
         retry_guard = ""
@@ -272,9 +274,11 @@ def run(role: str, payload: dict, timeout: int = 30):
 
         if role == "expression":
             voice_index = PEOPLE.index(self_entity) if self_entity in PEOPLE else 0
-            temperature = min(1.55, 0.92 + 0.08 * voice_index + 0.12 * attempt)
+            temperature = min(1.45, 0.86 + 0.08 * voice_index + 0.10 * attempt)
+        elif role == "thought":
+            temperature = 0.55 + 0.06 * attempt
         else:
-            temperature = {"comprehension": 0.15, "thought": 0.35}.get(role, 0.25) + 0.04 * attempt
+            temperature = 0.15 + 0.04 * attempt
 
         try:
             out = _request_autonomy(
@@ -307,7 +311,7 @@ def run(role: str, payload: dict, timeout: int = 30):
                     last_reason = "intent_partner_not_realized"
                     continue
                 utterance = str(obj.get("utterance") or "").strip()
-                if len(utterance.split()) < 5:
+                if len(utterance.split()) < max(1, int(min_words)):
                     last_reason = "utterance_too_short"
                     continue
                 if attempt < attempts - 1 and base._too_similar_to_context(utterance, compact):
