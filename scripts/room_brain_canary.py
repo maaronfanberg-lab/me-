@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -48,22 +49,22 @@ def base_payload(entity: str) -> dict:
         "profile": PROFILES[entity],
         "event": {
             "speaker": "allen",
-            "text": "The Room has been repeating itself and sometimes mixing up who is who. What would you focus on first?",
+            "text": "The Room keeps repeating itself and sometimes mixing up who is who. I am tempted to lock everyone onto one careful topic, but that might make the Room dull. What do you want to do next?",
             "cognition": {"target": entity},
         },
         "context": [
-            {"speaker": "mara", "text": "We keep circling the same idea instead of adding information.", "cognition": {"target": "sarah"}},
-            {"speaker": "owen", "text": "Identity mistakes make the conversation hard to trust.", "cognition": {"target": "jules"}},
-            {"speaker": "allen", "text": "The Room has been repeating itself and sometimes mixing up who is who. What would you focus on first?", "cognition": {"target": entity}},
+            {"speaker": "mara", "text": "If we make everything orderly, I worry we will lose the human part of the conversation.", "cognition": {"target": "sarah"}},
+            {"speaker": "owen", "text": "Identity mistakes make the conversation hard to trust, and I want a way to test whether they are actually improving.", "cognition": {"target": "jules"}},
+            {"speaker": "allen", "text": "The Room keeps repeating itself and sometimes mixing up who is who. I am tempted to lock everyone onto one careful topic, but that might make the Room dull. What do you want to do next?", "cognition": {"target": entity}},
         ],
         "topic": {
             "root": "room conversation quality",
-            "current_facet": "repetition and identity consistency",
-            "facets": ["repetition", "identity", "coherence"],
+            "current_facet": "autonomy versus coherence",
+            "facets": ["repetition", "identity", "coherence", "novelty", "autonomy"],
             "shared_references": [],
-            "unresolved": ["which failure should be addressed first"],
+            "unresolved": ["how to reduce repetition without scripting the participants"],
         },
-        "keywords": ["repetition", "identity", "coherence"],
+        "keywords": ["repetition", "identity", "coherence", "novelty", "autonomy"],
         "partner": "sarah" if entity != "sarah" else "owen",
         "relationship": dict(NEUTRAL_RELATIONSHIP),
         "mandatory_speech": True,
@@ -75,7 +76,7 @@ def polluted_expression_payload(entity: str, thought: dict, perception: dict) ->
     data["social_observation"] = perception
     data["deliberation"] = dict(thought)
     # Deliberately imitate the legacy engine's sentence-level steering. The
-    # autonomy wrapper must remove this before either brain sees it.
+    # autonomy wrapper must remove this before any candidate brain sees it.
     data["conversation_job"] = "Invent a dramatic secret and use it as the required angle."
     data["deliberation"]["conversation_job"] = data["conversation_job"]
     goal = str(data["deliberation"].get("new_information_goal") or "").strip()
@@ -174,6 +175,22 @@ def reject_overlay_text(label: str, role: str, result: dict) -> None:
         raise RuntimeError(f"{label}:{role} leaked external steering: {hits}")
 
 
+def words(text: object) -> list[str]:
+    return re.findall(r"[a-z0-9']+", str(text or "").lower())
+
+
+def reject_long_echo(entity: str, utterance: str, source: dict) -> None:
+    out_words = words(utterance)
+    if len(out_words) < 5:
+        return
+    out_ngrams = {tuple(out_words[i:i + 5]) for i in range(len(out_words) - 4)}
+    for message in source.get("context", []):
+        incoming = words(message.get("text") if isinstance(message, dict) else message)
+        for i in range(max(0, len(incoming) - 4)):
+            if tuple(incoming[i:i + 5]) in out_ngrams:
+                raise RuntimeError(f"{entity}: expression copied a 5-word phrase from recent speech")
+
+
 def verify_low_steering_transform() -> None:
     if autonomy.AUTONOMY_ENGINE != "structural-base-no-live-overlay-v1":
         raise RuntimeError("autonomy engine is not the no-overlay structural base")
@@ -182,9 +199,10 @@ def verify_low_steering_transform() -> None:
 
     for entity in ENTITIES:
         profile = PROFILES[entity]
+        dummy_partner = "owen" if entity != "owen" else "sarah"
         dummy_thought = {
             "action": "ANSWER",
-            "preferred_partner": "owen" if entity != "owen" else "sarah",
+            "preferred_partner": dummy_partner,
             "focus": "identity",
             "new_information_goal": "use my own view",
             "disclosure_depth": 0,
@@ -202,6 +220,8 @@ def verify_low_steering_transform() -> None:
         intent = compact.get("intent") or {}
         if isinstance(intent, dict) and intent.get("aim"):
             raise RuntimeError(f"{entity}: autonomy compact still exposes assigned content aim")
+        if str(intent.get("partner") or "") != dummy_partner:
+            raise RuntimeError(f"{entity}: own intended partner did not survive compacting")
         self_model = compact.get("self") or {}
         expected_identity = ((profile.get("psychology_v2") or {}).get("core_identity") or "").strip()
         if expected_identity and self_model.get("core_identity") != expected_identity:
@@ -223,24 +243,32 @@ def autonomy_chain(entity: str, brain_label: str) -> dict:
     thought_payload["social_observation"] = perception
     thought, thought_seconds = call("thought", thought_payload, label)
     reject_overlay_text(label, "thought", thought)
+    intended_partner = str(thought.get("preferred_partner") or "").lower()
+    if intended_partner == entity:
+        raise RuntimeError(f"{entity}: thought selected self as partner")
 
     expression_payload = polluted_expression_payload(entity, thought, perception)
-    # Verify the exact model-generated intention is what reaches speech, minus
-    # only the externally injected sentence-level content.
     compact_expression = autonomy._autonomy_compact(expression_payload, "expression", entity)
     compact_intent = compact_expression.get("intent") if isinstance(compact_expression.get("intent"), dict) else {}
     if str(compact_intent.get("move") or "").upper() != str(thought.get("action") or "").upper():
         raise RuntimeError(f"{entity}: expression did not inherit its own chosen move")
     if str(compact_intent.get("focus") or "").strip() != str(thought.get("focus") or "").strip():
         raise RuntimeError(f"{entity}: expression did not inherit its own chosen focus")
+    if str(compact_intent.get("partner") or "").lower() != intended_partner:
+        raise RuntimeError(f"{entity}: expression did not inherit its own chosen partner")
     if compact_intent.get("aim"):
         raise RuntimeError(f"{entity}: external sentence-level aim survived into expression")
 
     expression, expression_seconds = call("expression", expression_payload, label)
     reject_overlay_text(label, "expression", expression)
+    if str(expression.get("move") or "").upper() != str(thought.get("action") or "").upper():
+        raise RuntimeError(f"{entity}: final speech changed its own chosen move")
+    if str(expression.get("target") or "").lower() != intended_partner:
+        raise RuntimeError(f"{entity}: final speech changed its own chosen partner")
     utterance = str(expression.get("utterance") or "").strip()
     if len(utterance.split()) < 5:
         raise RuntimeError(f"{entity}: expression was too empty to evaluate")
+    reject_long_echo(entity, utterance, source)
 
     return {
         "entity": entity,
@@ -253,26 +281,49 @@ def autonomy_chain(entity: str, brain_label: str) -> dict:
     }
 
 
-def run_candidate_voices() -> tuple[list[dict], list[dict]]:
-    passes: list[dict] = []
-    failures: list[dict] = []
-    for entity in ENTITIES:
-        try:
-            passes.append(autonomy_chain(entity, "smollm2-1.7b-autonomy"))
-        except Exception as exc:
-            failures.append({"entity": entity, "error": f"{type(exc).__name__}: {exc}"})
-    return passes, failures
+def run_model(label: str, model: Path) -> dict:
+    proc = log_handle = None
+    try:
+        proc, log_handle, startup = start_server(label, model)
+        passes: list[dict] = []
+        failures: list[dict] = []
+        for entity in ENTITIES:
+            try:
+                passes.append(autonomy_chain(entity, label))
+            except Exception as exc:
+                failures.append({"entity": entity, "error": f"{type(exc).__name__}: {exc}"})
+        utterances = [str(row["expression"].get("utterance") or "").strip().lower() for row in passes]
+        duplicate = len(set(utterances)) != len(utterances)
+        actions = sorted({str(row["thought"].get("action") or "") for row in passes})
+        focuses = sorted({str(row["thought"].get("focus") or "") for row in passes})
+        return {
+            "status": "pass" if not failures and not duplicate and len(passes) == len(ENTITIES) else "fail",
+            "startup_seconds": round(startup, 3),
+            "voices_passed": passes,
+            "voices_failed": failures,
+            "duplicate_utterances": duplicate,
+            "distinct_actions": actions,
+            "distinct_focuses": focuses,
+        }
+    except Exception as exc:
+        return {"status": "fail", "error": f"{type(exc).__name__}: {exc}"}
+    finally:
+        if proc is not None and log_handle is not None:
+            stop_server(proc, log_handle)
 
 
 def main() -> int:
-    candidate = MODEL_DIR / "smollm2-1.7b-instruct-q4_k_m.gguf"
+    candidates = {
+        "smollm2-1.7b": MODEL_DIR / "smollm2-1.7b-instruct-q4_k_m.gguf",
+        "llama3.2-1b": MODEL_DIR / "llama-3.2-1b-instruct-q4_k_m.gguf",
+    }
     fallback = MODEL_DIR / "society-brain-q4_0.gguf"
     missing = MODEL_DIR / "this-model-does-not-exist.gguf"
 
     report: dict = {
         "autonomy_engine": getattr(autonomy, "AUTONOMY_ENGINE", "unknown"),
         "low_steering_transform": "not_tested",
-        "candidate": {"status": "not_tested"},
+        "candidates": {},
         "deliberate_failure": "not_tested",
         "qwen_brain_fallback": {"status": "not_tested"},
     }
@@ -280,27 +331,9 @@ def main() -> int:
     verify_low_steering_transform()
     report["low_steering_transform"] = "pass"
 
-    proc = log_handle = None
-    try:
-        proc, log_handle, startup = start_server("candidate", candidate)
-        passes, failures = run_candidate_voices()
-        utterances = [str(row["expression"].get("utterance") or "").strip().lower() for row in passes]
-        duplicate = len(set(utterances)) != len(utterances)
-        report["candidate"] = {
-            "status": "pass" if not failures and not duplicate and len(passes) == len(ENTITIES) else "fail",
-            "startup_seconds": round(startup, 3),
-            "voices_passed": passes,
-            "voices_failed": failures,
-            "duplicate_utterances": duplicate,
-        }
-    except Exception as exc:
-        report["candidate"] = {"status": "fail", "error": f"{type(exc).__name__}: {exc}"}
-    finally:
-        if proc is not None and log_handle is not None:
-            stop_server(proc, log_handle)
+    for label, path in candidates.items():
+        report["candidates"][label] = run_model(label, path)
 
-    # Prove that a failed preferred brain does not prevent the known-good Qwen
-    # brain from starting immediately afterward.
     proc = log_handle = None
     try:
         proc, log_handle, _ = start_server("deliberately-broken", missing)
@@ -311,9 +344,6 @@ def main() -> int:
     except Exception:
         report["deliberate_failure"] = "pass"
 
-    # Runtime fallback keeps the autonomy behavior and changes only the brain.
-    # The untouched main branch remains available as a separate full-system
-    # rollback if we ever need the exact old behavior too.
     proc = log_handle = None
     try:
         proc, log_handle, startup = start_server("qwen-brain-fallback", fallback)
@@ -333,7 +363,7 @@ def main() -> int:
 
     if report["qwen_brain_fallback"].get("status") != "pass":
         return 1
-    if report["candidate"].get("status") != "pass":
+    if not any(value.get("status") == "pass" for value in report["candidates"].values()):
         return 1
     return 0
 
