@@ -23,7 +23,7 @@ PEOPLE = base.PEOPLE
 AUTONOMY_PROMPTS = {
     "comprehension": (
         "Understand the conversation from this participant's point of view. "
-        "Use the supplied conversation, relationship state, and self description as evidence. "
+        "Use the supplied conversation, relationship state, and attention lens as evidence. "
         "Do not invent a required storyline or decide what anyone must say."
     ),
     "thought": (
@@ -84,6 +84,30 @@ def _self_model(profile: object) -> dict:
     return {key: value for key, value in out.items() if value not in (None, "", [], {})}
 
 
+def _perception_lens(profile: object) -> dict:
+    """Small identity slice used only for comprehension latency.
+
+    Perception needs to know what this participant tends to notice, not every
+    coping/repair/affiliation rule. Full identity remains available to thought
+    and expression, where the participant chooses and realizes a response.
+    """
+    if not isinstance(profile, dict):
+        return {}
+    psychology = profile.get("psychology_v2") if isinstance(profile.get("psychology_v2"), dict) else {}
+    traits = profile.get("traits") if isinstance(profile.get("traits"), dict) else {}
+    out = {
+        "name": profile.get("name"),
+        "core_identity": psychology.get("core_identity"),
+        "attention_magnets": _clip_list(psychology.get("attention_magnets"), 4),
+        "attention_blindspots": _clip_list(psychology.get("attention_blindspots"), 3),
+        "evidence_style": psychology.get("evidence_style"),
+        "traits": {key: traits.get(key) for key in (
+            "social_sensitivity", "curiosity", "skepticism",
+        ) if key in traits},
+    }
+    return {key: value for key, value in out.items() if value not in (None, "", [], {})}
+
+
 def _relationship_context(value: object) -> dict:
     if not isinstance(value, dict):
         return {}
@@ -113,7 +137,7 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
     relationship = clean_payload.get("relationship")
     compact = base._compact_payload(clean_payload, role, self_entity)
 
-    self_description = _self_model(profile)
+    self_description = _perception_lens(profile) if role == "comprehension" else _self_model(profile)
     if self_description:
         compact["self"] = self_description
     relation = _relationship_context(relationship)
@@ -130,6 +154,26 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
     return compact
 
 
+def _autonomy_schema(role: str, self_entity: str | None = None) -> dict:
+    schema = base._schema(role, self_entity)
+    if role != "comprehension":
+        return schema
+    # The live engine needs a useful social read, not six paraphrases of the
+    # same event. Smaller arrays reduce structured generation time while keeping
+    # the same validated fields and semantics.
+    schema = json.loads(json.dumps(schema))
+    properties = schema.get("properties", {})
+    for key, limit in {
+        "new_details": 3,
+        "bids": 3,
+        "relationship_events": 3,
+        "shared_references": 3,
+    }.items():
+        if isinstance(properties.get(key), dict):
+            properties[key]["maxItems"] = limit
+    return schema
+
+
 def _request_autonomy(
     model_url: str,
     prompt: str,
@@ -141,10 +185,10 @@ def _request_autonomy(
 ) -> str:
     body = {
         "prompt": prompt,
-        "n_predict": {"comprehension": 320, "thought": 300, "expression": 280}.get(role, 280),
+        "n_predict": {"comprehension": 280, "thought": 300, "expression": 280}.get(role, 280),
         "temperature": temperature,
         "cache_prompt": True,
-        "json_schema": base._schema(role, self_entity),
+        "json_schema": _autonomy_schema(role, self_entity),
     }
     if role == "expression":
         body.update({
