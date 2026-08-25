@@ -37,6 +37,18 @@ jobs:
 
           tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
 
+      - name: Match live 16K model context
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/room_brain_canary.py')
+          text = path.read_text()
+          old = '"-c", "8192",'
+          new = '"-c", "16384",'
+          assert text.count(old) == 1, 'unexpected canary context configuration'
+          path.write_text(text.replace(old, new))
+          PY
+
       - name: Run focused autonomy canary and Qwen rollback proof
         run: python3 scripts/room_brain_canary_llama.py
 
