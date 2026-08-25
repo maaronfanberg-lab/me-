@@ -153,7 +153,11 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
     return compact
 
 
-def _autonomy_schema(role: str, self_entity: str | None = None) -> dict:
+def _autonomy_schema(
+    role: str,
+    self_entity: str | None = None,
+    intent: dict | None = None,
+) -> dict:
     schema = json.loads(json.dumps(base._schema(role, self_entity)))
     properties = schema.get("properties", {})
     if role == "comprehension":
@@ -169,6 +173,21 @@ def _autonomy_schema(role: str, self_entity: str | None = None) -> dict:
         preferred = properties.get("preferred_partner")
         if isinstance(preferred, dict):
             preferred["enum"] = [person for person in PEOPLE if person != self_entity]
+    elif role == "expression" and isinstance(intent, dict):
+        # These values were chosen by the immediately preceding thought call.
+        # Constraining the schema to them prevents expression from contradicting
+        # its own intent and avoids expensive retry loops. It does not prescribe
+        # the utterance or its sentence-level content.
+        intended_move = base._norm(intent.get("move"))
+        move_schema = properties.get("move")
+        if intended_move and isinstance(move_schema, dict):
+            allowed_moves = set(move_schema.get("enum") or [])
+            if intended_move in allowed_moves:
+                move_schema["enum"] = [intended_move]
+        intended_partner = base._norm(intent.get("partner"))
+        target_schema = properties.get("target")
+        if intended_partner in PEOPLE and intended_partner != self_entity and isinstance(target_schema, dict):
+            target_schema["enum"] = [intended_partner]
     return schema
 
 
@@ -180,13 +199,14 @@ def _request_autonomy(
     timeout: int,
     self_entity: str | None = None,
     attempt: int = 0,
+    intent: dict | None = None,
 ) -> str:
     body = {
         "prompt": prompt,
         "n_predict": {"comprehension": 280, "thought": 300, "expression": 280}.get(role, 280),
         "temperature": temperature,
         "cache_prompt": True,
-        "json_schema": _autonomy_schema(role, self_entity),
+        "json_schema": _autonomy_schema(role, self_entity, intent),
     }
     if role == "expression":
         body.update({
@@ -216,6 +236,7 @@ def run(role: str, payload: dict, timeout: int = 30):
     prompt = AUTONOMY_PROMPTS[role]
     self_entity = base._norm(payload.get("entity")) if role in {"thought", "expression"} else None
     compact = _autonomy_compact(payload, role, self_entity)
+    compact_intent = compact.get("intent") if role == "expression" and isinstance(compact.get("intent"), dict) else None
 
     base_guard = ""
     if role == "expression":
@@ -256,7 +277,16 @@ def run(role: str, payload: dict, timeout: int = 30):
             temperature = {"comprehension": 0.15, "thought": 0.35}.get(role, 0.25) + 0.04 * attempt
 
         try:
-            out = _request_autonomy(model_url, combined, role, temperature, timeout, self_entity, attempt)
+            out = _request_autonomy(
+                model_url,
+                combined,
+                role,
+                temperature,
+                timeout,
+                self_entity,
+                attempt,
+                compact_intent,
+            )
             if not out:
                 last_reason = "empty_output"
                 continue
@@ -267,7 +297,7 @@ def run(role: str, payload: dict, timeout: int = 30):
                     continue
             if role == "expression":
                 obj = base._sanitize_expression(obj, compact, self_entity)
-                intent = compact.get("intent") if isinstance(compact.get("intent"), dict) else {}
+                intent = compact_intent or {}
                 intended_move = base._norm(intent.get("move"))
                 intended_partner = base._norm(intent.get("partner"))
                 if intended_move and base._norm(obj.get("move")) != intended_move:
@@ -276,7 +306,11 @@ def run(role: str, payload: dict, timeout: int = 30):
                 if intended_partner and base._norm(obj.get("target")) != intended_partner:
                     last_reason = "intent_partner_not_realized"
                     continue
-                if attempt < attempts - 1 and base._too_similar_to_context(str(obj.get("utterance", "")), compact):
+                utterance = str(obj.get("utterance") or "").strip()
+                if len(utterance.split()) < 5:
+                    last_reason = "utterance_too_short"
+                    continue
+                if attempt < attempts - 1 and base._too_similar_to_context(utterance, compact):
                     last_reason = "duplicate_context"
                     continue
             return obj
