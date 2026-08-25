@@ -19,7 +19,7 @@ if _SPEC is None or _SPEC.loader is None:
 base = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(base)
 
-AUTONOMY_ENGINE = "structural-base-no-live-overlay-v2"
+AUTONOMY_ENGINE = "structural-base-no-live-overlay-v1"
 PEOPLE = base.PEOPLE
 
 AUTONOMY_PROMPTS = {
@@ -48,10 +48,6 @@ def enabled(role: str) -> bool:
 
 def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) -> dict:
     clean_payload = dict(payload or {})
-
-    # The legacy engine may attach a rotating conversation job to the expression
-    # payload and append it to new_information_goal. Strip that externally assigned
-    # sentence-level content while preserving the participant's own deliberation.
     clean_payload.pop("conversation_job", None)
     deliberation = clean_payload.get("deliberation")
     if isinstance(deliberation, dict):
@@ -70,8 +66,6 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         compact.pop("angle", None)
         intent = compact.get("intent")
         if isinstance(intent, dict):
-            # Preserve the participant's internally selected move/focus, but do not
-            # give expression a sentence-level content assignment.
             intent = dict(intent)
             intent.pop("aim", None)
             compact["intent"] = intent
@@ -87,9 +81,9 @@ def _request_autonomy(
     self_entity: str | None = None,
     attempt: int = 0,
 ) -> str:
-    # The base 192-token comprehension ceiling occasionally cuts a valid larger
-    # model's JSON object mid-string. Give structured objects enough completion
-    # room while keeping them bounded. The live timing gate is tested separately.
+    # The base 192-token comprehension ceiling can cut a larger model's otherwise
+    # valid JSON object mid-string. Give structured objects enough completion room
+    # while keeping them bounded; the live timing gate is tested independently.
     body = {
         "prompt": prompt,
         "n_predict": {"comprehension": 320, "thought": 300, "expression": 280}.get(role, 280),
