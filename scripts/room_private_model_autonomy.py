@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import urllib.error
+import urllib.request
 
 # IMPORTANT: load the plain structural model module directly by file path.
 # Importing `room_private_model` normally resolves to scripts/room_private_model/
@@ -18,7 +19,7 @@ if _SPEC is None or _SPEC.loader is None:
 base = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(base)
 
-AUTONOMY_ENGINE = "structural-base-no-live-overlay-v1"
+AUTONOMY_ENGINE = "structural-base-no-live-overlay-v2"
 PEOPLE = base.PEOPLE
 
 AUTONOMY_PROMPTS = {
@@ -77,6 +78,42 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
     return compact
 
 
+def _request_autonomy(
+    model_url: str,
+    prompt: str,
+    role: str,
+    temperature: float,
+    timeout: int,
+    self_entity: str | None = None,
+    attempt: int = 0,
+) -> str:
+    # The base 192-token comprehension ceiling occasionally cuts a valid larger
+    # model's JSON object mid-string. Give structured objects enough completion
+    # room while keeping them bounded. The live timing gate is tested separately.
+    body = {
+        "prompt": prompt,
+        "n_predict": {"comprehension": 320, "thought": 300, "expression": 280}.get(role, 280),
+        "temperature": temperature,
+        "cache_prompt": True,
+        "json_schema": base._schema(role, self_entity),
+    }
+    if role == "expression":
+        body.update({
+            "seed": base._sample_seed(role, self_entity, attempt),
+            "top_k": 60,
+            "top_p": 0.96,
+            "min_p": 0.005,
+        })
+    req = urllib.request.Request(
+        base._completion_url(model_url),
+        data=json.dumps(body, ensure_ascii=False).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return str(json.loads(resp.read().decode("utf-8", "replace")).get("content", ""))
+
+
 def run(role: str, payload: dict, timeout: int = 30):
     if role not in AUTONOMY_PROMPTS:
         raise ValueError(f"unknown private model role: {role}")
@@ -128,7 +165,7 @@ def run(role: str, payload: dict, timeout: int = 30):
             temperature = {"comprehension": 0.15, "thought": 0.35}.get(role, 0.25) + 0.04 * attempt
 
         try:
-            out = base._request(model_url, combined, role, temperature, timeout, self_entity, attempt)
+            out = _request_autonomy(model_url, combined, role, temperature, timeout, self_entity, attempt)
             if not out:
                 last_reason = "empty_output"
                 continue
