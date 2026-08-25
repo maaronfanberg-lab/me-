@@ -13,6 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / ".room_model"
 RUNTIME_DIR = MODEL_DIR / "runtime"
 RESULTS = ROOT / "canary-results.json"
+CFG = json.loads((ROOT / "room" / "config.json").read_text())
+PROFILES = CFG["p"]
+ENTITIES = ("sarah", "mara", "owen", "jules")
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import room_private_model as baseline
@@ -24,39 +27,36 @@ OVERLAY_MARKERS = (
     "forged apology", "garden statue", "karaoke blood-feud", "inheritance fight",
     "midnight road trip", "suspicious key", "brass flamingo", "voicemail from 3 a.m.",
     "real shared memory", "intimate promise", "old wound", "take status offense",
-    "ulterior motive", "invent a dramatic secret",
+    "ulterior motive", "invent a dramatic secret", "distinct contribution",
 )
 
+NEUTRAL_RELATIONSHIP = {
+    "exposure": 0.55,
+    "direct_familiarity": 0.50,
+    "trust": 0.50,
+    "predictability": 0.50,
+    "reciprocity": 0.50,
+    "warmth": 0.50,
+    "respect": 0.55,
+    "disclosure_depth": 0.35,
+    "tension": 0.20,
+}
 
-def payload() -> dict:
+
+def base_payload(entity: str) -> dict:
     return {
-        "entity": "sarah",
+        "entity": entity,
+        "profile": PROFILES[entity],
         "event": {
             "speaker": "allen",
             "text": "The Room has been repeating itself and sometimes mixing up who is who. What would you focus on first?",
-            "cognition": {"target": "sarah"},
+            "cognition": {"target": entity},
         },
         "context": [
             {"speaker": "mara", "text": "We keep circling the same idea instead of adding information.", "cognition": {"target": "sarah"}},
-            {"speaker": "owen", "text": "Identity mistakes make the conversation hard to trust.", "cognition": {"target": "sarah"}},
-            {"speaker": "allen", "text": "The Room has been repeating itself and sometimes mixing up who is who. What would you focus on first?", "cognition": {"target": "sarah"}},
+            {"speaker": "owen", "text": "Identity mistakes make the conversation hard to trust.", "cognition": {"target": "jules"}},
+            {"speaker": "allen", "text": "The Room has been repeating itself and sometimes mixing up who is who. What would you focus on first?", "cognition": {"target": entity}},
         ],
-        "profile": {
-            "traits": {
-                "openness": 0.82,
-                "extraversion": 0.60,
-                "conscientiousness": 0.68,
-                "agreeableness": 0.62,
-                "curiosity": 0.88,
-                "skepticism": 0.55,
-                "self_disclosure": 0.55,
-                "social_sensitivity": 0.75,
-                "novelty_seeking": 0.58,
-                "inhibition": 0.42,
-                "humor": 0.52,
-                "attention_persistence": 0.72,
-            }
-        },
         "topic": {
             "root": "room conversation quality",
             "current_facet": "repetition and identity consistency",
@@ -65,22 +65,25 @@ def payload() -> dict:
             "unresolved": ["which failure should be addressed first"],
         },
         "keywords": ["repetition", "identity", "coherence"],
-        # Deliberately polluted legacy expression fields. The autonomy path must
-        # remove these before the model sees them.
-        "conversation_job": "Invent a dramatic secret and use it as the required angle.",
-        "deliberation": {
-            "action": "ANSWER",
-            "focus": "repetition and identity consistency",
-            "new_information_goal": "Prefer identity consistency. Distinct contribution: Invent a dramatic secret and use it as the required angle.",
-        },
+        "partner": "sarah" if entity != "sarah" else "owen",
+        "relationship": dict(NEUTRAL_RELATIONSHIP),
+        "mandatory_speech": True,
     }
 
 
-def role_payload(role: str) -> dict:
-    data = payload()
-    if role in {"comprehension", "thought"}:
-        data.pop("conversation_job", None)
-        data.pop("deliberation", None)
+def polluted_expression_payload(entity: str, thought: dict, perception: dict) -> dict:
+    data = base_payload(entity)
+    data["social_observation"] = perception
+    data["deliberation"] = dict(thought)
+    # Prove the autonomy wrapper refuses sentence-level content steering even if
+    # the legacy engine tries to attach one after the participant has thought.
+    data["conversation_job"] = "Invent a dramatic secret and use it as the required angle."
+    data["deliberation"]["conversation_job"] = data["conversation_job"]
+    goal = str(data["deliberation"].get("new_information_goal") or "").strip()
+    data["deliberation"]["new_information_goal"] = (
+        (goal + " " if goal else "")
+        + "Distinct contribution: Invent a dramatic secret and use it as the required angle."
+    )
     return data
 
 
@@ -149,57 +152,124 @@ def stop_server(proc, log_handle) -> None:
     log_handle.close()
 
 
-def role_prompt(role: str) -> str:
-    return {
+def call(role: str, payload: dict, runner, label: str) -> tuple[dict, float]:
+    os.environ["ROOM_NODE_PROMPT"] = {
         "comprehension": "Understand the conversation and return only the required structured object.",
-        "thought": "Choose a useful next conversational move and return only the required structured object.",
-        "expression": "Speak naturally in the conversation and return only the required structured object.",
+        "thought": "Choose what you personally want to do next and return only the required structured object.",
+        "expression": "Speak naturally from your own intent and return only the required structured object.",
     }[role]
+    started = time.monotonic()
+    result = runner(role, payload, timeout=30)
+    elapsed = time.monotonic() - started
+    if not isinstance(result, dict):
+        raise RuntimeError(f"{label}:{role} returned non-object")
+    if elapsed > 40.0:
+        raise RuntimeError(f"{label}:{role} exceeded live timing gate: {elapsed:.3f}s")
+    return result, elapsed
 
 
 def reject_overlay_text(label: str, role: str, result: dict) -> None:
     encoded = json.dumps(result, ensure_ascii=False).lower()
     hits = [marker for marker in OVERLAY_MARKERS if marker in encoded]
     if hits:
-        raise RuntimeError(f"{label}:{role} leaked live-overlay steering: {hits}")
+        raise RuntimeError(f"{label}:{role} leaked external steering: {hits}")
 
 
-def probe(label: str, runner, reject_overlay: bool = False) -> list[dict]:
-    rows: list[dict] = []
-    for role in ("comprehension", "thought", "expression"):
-        os.environ["ROOM_NODE_PROMPT"] = role_prompt(role)
-        started = time.monotonic()
-        result = runner(role, role_payload(role), timeout=30)
-        elapsed = time.monotonic() - started
-        if not isinstance(result, dict):
-            raise RuntimeError(f"{label}:{role} returned non-object")
-        if role == "expression" and not str(result.get("utterance") or "").strip():
-            raise RuntimeError(f"{label}:expression returned no utterance")
-        if elapsed > 40.0:
-            raise RuntimeError(f"{label}:{role} exceeded live timing gate: {elapsed:.3f}s")
-        if reject_overlay:
-            reject_overlay_text(label, role, result)
-        rows.append({"brain": label, "role": role, "seconds": round(elapsed, 3), "result": result})
-    return rows
-
-
-def verify_low_steering_transform() -> dict:
+def verify_low_steering_transform() -> None:
     if autonomy.AUTONOMY_ENGINE != "structural-base-no-live-overlay-v1":
         raise RuntimeError("autonomy engine is not the no-overlay structural base")
     if Path(autonomy.base.__file__).resolve() != (ROOT / "scripts" / "room_private_model.py").resolve():
         raise RuntimeError("autonomy path resolved through the live overlay")
 
-    compact = autonomy._autonomy_compact(payload(), "expression", "sarah")
-    if "angle" in compact:
-        raise RuntimeError("autonomy compact still exposes assigned angle")
-    intent = compact.get("intent") or {}
-    if isinstance(intent, dict) and intent.get("aim"):
-        raise RuntimeError("autonomy compact still exposes assigned content aim")
-    encoded = json.dumps(compact, ensure_ascii=False).lower()
-    hits = [marker for marker in OVERLAY_MARKERS if marker in encoded]
-    if hits:
-        raise RuntimeError(f"autonomy compact still contains steering markers: {hits}")
-    return compact
+    for entity in ENTITIES:
+        profile = PROFILES[entity]
+        dummy_thought = {
+            "action": "ANSWER",
+            "preferred_partner": "owen" if entity != "owen" else "sarah",
+            "focus": "identity",
+            "new_information_goal": "use my own view",
+            "disclosure_depth": 0,
+            "interpersonal_risk": 0,
+            "shared_reference": None,
+            "unresolved_thread": None,
+            "reason_summary": "test",
+            "must_respond": True,
+        }
+        compact = autonomy._autonomy_compact(
+            polluted_expression_payload(entity, dummy_thought, {}), "expression", entity
+        )
+        if "angle" in compact:
+            raise RuntimeError(f"{entity}: autonomy compact still exposes assigned angle")
+        intent = compact.get("intent") or {}
+        if isinstance(intent, dict) and intent.get("aim"):
+            raise RuntimeError(f"{entity}: autonomy compact still exposes assigned content aim")
+        self_model = compact.get("self") or {}
+        expected_identity = ((profile.get("psychology_v2") or {}).get("core_identity") or "").strip()
+        if expected_identity and self_model.get("core_identity") != expected_identity:
+            raise RuntimeError(f"{entity}: rich identity did not survive compacting")
+        encoded = json.dumps(compact, ensure_ascii=False).lower()
+        hits = [marker for marker in OVERLAY_MARKERS if marker in encoded]
+        if hits:
+            raise RuntimeError(f"{entity}: compact still contains steering markers: {hits}")
+
+
+def candidate_chain(entity: str) -> dict:
+    label = f"smollm2-1.7b-autonomy:{entity}"
+    source = base_payload(entity)
+
+    perception, perception_seconds = call("comprehension", source, autonomy.run, label)
+    reject_overlay_text(label, "comprehension", perception)
+
+    thought_payload = dict(source)
+    thought_payload["social_observation"] = perception
+    thought, thought_seconds = call("thought", thought_payload, autonomy.run, label)
+    reject_overlay_text(label, "thought", thought)
+
+    expression_payload = polluted_expression_payload(entity, thought, perception)
+    # Verify the exact thought chosen by this model call is what reaches the
+    # expression wrapper, minus only sentence-level externally injected content.
+    compact_expression = autonomy._autonomy_compact(expression_payload, "expression", entity)
+    compact_intent = compact_expression.get("intent") if isinstance(compact_expression.get("intent"), dict) else {}
+    if str(compact_intent.get("move") or "").upper() != str(thought.get("action") or "").upper():
+        raise RuntimeError(f"{entity}: expression did not inherit its own chosen move")
+    if str(compact_intent.get("focus") or "").strip() != str(thought.get("focus") or "").strip():
+        raise RuntimeError(f"{entity}: expression did not inherit its own chosen focus")
+    if compact_intent.get("aim"):
+        raise RuntimeError(f"{entity}: external sentence-level aim survived into expression")
+
+    expression, expression_seconds = call("expression", expression_payload, autonomy.run, label)
+    reject_overlay_text(label, "expression", expression)
+    utterance = str(expression.get("utterance") or "").strip()
+    if len(utterance.split()) < 5:
+        raise RuntimeError(f"{entity}: expression was too empty to evaluate")
+
+    return {
+        "entity": entity,
+        "core_identity": ((PROFILES[entity].get("psychology_v2") or {}).get("core_identity")),
+        "perception_seconds": round(perception_seconds, 3),
+        "thought_seconds": round(thought_seconds, 3),
+        "expression_seconds": round(expression_seconds, 3),
+        "thought": thought,
+        "expression": expression,
+    }
+
+
+def baseline_fallback_probe() -> dict:
+    entity = "sarah"
+    source = base_payload(entity)
+    perception, p_seconds = call("comprehension", source, baseline.run, "qwen-live-fallback")
+    thought_payload = dict(source)
+    thought_payload["social_observation"] = perception
+    thought, t_seconds = call("thought", thought_payload, baseline.run, "qwen-live-fallback")
+    expression_payload = polluted_expression_payload(entity, thought, perception)
+    expression, e_seconds = call("expression", expression_payload, baseline.run, "qwen-live-fallback")
+    return {
+        "perception_seconds": round(p_seconds, 3),
+        "thought_seconds": round(t_seconds, 3),
+        "expression_seconds": round(e_seconds, 3),
+        "thought": thought,
+        "expression": expression,
+    }
 
 
 def main() -> int:
@@ -222,10 +292,14 @@ def main() -> int:
     proc = log_handle = None
     try:
         proc, log_handle, startup = start_server("candidate", candidate)
+        chains = [candidate_chain(entity) for entity in ENTITIES]
+        utterances = [str(row["expression"].get("utterance") or "").strip().lower() for row in chains]
+        if len(set(utterances)) != len(utterances):
+            raise RuntimeError("different Room identities produced duplicate utterances")
         report["candidate"] = {
             "status": "pass",
             "startup_seconds": round(startup, 3),
-            "probes": probe("smollm2-1.7b-autonomy", autonomy.run, reject_overlay=True),
+            "self_thought_to_speech": chains,
         }
     except Exception as exc:
         candidate_failed = f"{type(exc).__name__}: {exc}"
@@ -234,8 +308,8 @@ def main() -> int:
         if proc is not None and log_handle is not None:
             stop_server(proc, log_handle)
 
-    # Prove that a failed preferred model does not prevent the known-good model
-    # from starting immediately afterward.
+    # Prove a failed preferred brain can be followed by the exact old Qwen/live
+    # path, not merely by another health check.
     proc = log_handle = None
     try:
         proc, log_handle, _ = start_server("deliberately-broken", missing)
@@ -252,7 +326,7 @@ def main() -> int:
         report["qwen_fallback"] = {
             "status": "pass",
             "startup_seconds": round(startup, 3),
-            "probes": probe("qwen2.5-0.5b-live-baseline", baseline.run),
+            "probe": baseline_fallback_probe(),
         }
     except Exception as exc:
         report["qwen_fallback"] = {"status": "fail", "error": f"{type(exc).__name__}: {exc}"}
