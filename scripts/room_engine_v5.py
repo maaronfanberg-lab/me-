@@ -18,14 +18,21 @@ import room_engine_v5_legacy as _legacy
 LEGACY_RETRY_POLICY = 'attempts = 9 if role == "expression" else 2'
 
 
+def _remember_rejected(_autonomy, utterance):
+    text = str(utterance or "").strip()
+    rejected = getattr(_autonomy, "_production_rejected_wordings", [])
+    if text and text not in rejected:
+        rejected.append(text)
+    _autonomy._production_rejected_wordings = rejected[-3:]
+
+
 def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():
         return None
     import room_private_model_autonomy as _autonomy
 
-    # Keep the strict similarity detector. When it rejects copied wording,
-    # accumulate every rejected variant from this model call so later attempts
-    # must genuinely rewrite rather than deleting or swapping one token.
+    # Keep both anti-copy detectors intact. Every rejected wording variant from
+    # this model call is remembered so later attempts must genuinely rewrite.
     _autonomy._production_rejected_wordings = []
 
     if not hasattr(_autonomy, "_production_original_request_autonomy"):
@@ -62,6 +69,7 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
                 utterance, compact, n=max(8, int(n))
             )
             if matched:
+                _remember_rejected(_autonomy, utterance)
                 print(f"duplicate-detector=phrase utterance={utterance!r}", flush=True)
             return matched
 
@@ -73,11 +81,7 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
         def _production_too_similar(utterance, compact):
             matched = _autonomy.base._production_original_too_similar(utterance, compact)
             if matched:
-                text = str(utterance or "").strip()
-                rejected = getattr(_autonomy, "_production_rejected_wordings", [])
-                if text and text not in rejected:
-                    rejected.append(text)
-                _autonomy._production_rejected_wordings = rejected[-3:]
+                _remember_rejected(_autonomy, utterance)
                 print(f"duplicate-detector=similarity utterance={utterance!r}", flush=True)
             return matched
 
@@ -104,7 +108,7 @@ def main():
 
 
 # Branch-only probe trigger. No runtime effect.
-_PROBE_TRIGGER = 5
+_PROBE_TRIGGER = 6
 
 if __name__ == "__main__":
     main()
