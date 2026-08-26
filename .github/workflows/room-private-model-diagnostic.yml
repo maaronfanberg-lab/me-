@@ -1,146 +1,151 @@
-name: Room Llama autonomy live integration
+name: Room private model diagnostic
 
 on:
   push:
-    branches: [room-llama-current-main]
     paths:
       - '.github/workflows/room-private-model-diagnostic.yml'
-      - 'scripts/room_engine_v5.py'
-      - 'scripts/room_engine_v5_legacy.py'
-      - 'scripts/room_private_model_autonomy.py'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diagnostic:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_PROMPT_PERCEPTION: ${{ secrets.ROOM_PROMPT_PERCEPTION }}
+      ROOM_PROMPT_DELIBERATION: ${{ secrets.ROOM_PROMPT_DELIBERATION }}
+      ROOM_PROMPT_EXPRESSION: ${{ secrets.ROOM_PROMPT_EXPRESSION }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: room-llama-current-main
-          fetch-depth: 1
+          ref: main
+          fetch-depth: 0
 
-      - name: Validate selector and Qwen preservation
+      - name: Test private model without exposing prompts
         run: |
-          set -euo pipefail
-          python3 -m py_compile scripts/room_engine_v5.py scripts/room_engine_v5_legacy.py scripts/room_private_model_autonomy.py
-          PYTHONPATH=scripts ROOM_BRAIN_ACTIVE='qwen2.5-0.5b-fallback' python3 - <<'PY'
-          import room_engine_v5 as engine
-          assert engine._legacy._core.model_run is engine._legacy._private_run, (
-              engine._legacy._core.model_run, engine._legacy._private_run
-          )
-          print('qwen-route-preserved')
-          PY
-          PYTHONPATH=scripts ROOM_BRAIN_ACTIVE='llama3.2-1b' python3 - <<'PY'
-          import room_engine_v5 as engine
-          assert engine._legacy._core.model_run is engine._llama_model_run
-          assert engine._legacy._private_model.run is engine._llama_model_run
-          print('llama-route-selected')
-          PY
+          set -u
+          git config user.name "the-room-diagnostic"
+          git config user.email "actions@users.noreply.github.com"
+          mkdir -p room .room_model/runtime
 
-      - name: Download verified runtime and Llama candidate
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p .room_model/runtime
-          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
-          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
-          curl --fail --location --retry 4 --retry-delay 5 \
-            'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' \
-            --output .room_model/llama-3.2-1b-instruct-q4_k_m.gguf
-          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_model/llama-3.2-1b-instruct-q4_k_m.gguf' | sha256sum -c -
-          tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+          perception_present=false
+          deliberation_present=false
+          expression_present=false
+          [ -n "${ROOM_PROMPT_PERCEPTION:-}" ] && perception_present=true
+          [ -n "${ROOM_PROMPT_DELIBERATION:-}" ] && deliberation_present=true
+          [ -n "${ROOM_PROMPT_EXPRESSION:-}" ] && expression_present=true
 
-      - name: Run real Llama Room integration probe
-        run: |
-          set -euo pipefail
-          server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
-          test -n "$server_bin"
-          chmod +x "$server_bin"
-          "$server_bin" -m .room_model/llama-3.2-1b-instruct-q4_k_m.gguf --host 127.0.0.1 --port 18080 -c 8192 -np 2 >.room_model/integration-server.log 2>&1 &
-          model_pid=$!
-          trap 'kill "$model_pid" 2>/dev/null || true' EXIT
-          ready=0
-          for attempt in $(seq 1 120); do
-            if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then ready=1; break; fi
-            kill -0 "$model_pid" 2>/dev/null || break
-            sleep 1
-          done
-          test "$ready" -eq 1
+          download_ok=false
+          hashes_ok=false
+          server_ready=false
+          perception_status=not_tested
+          deliberation_status=not_tested
+          expression_status=not_tested
 
-          PYTHONPATH=scripts \
-          ROOM_BRAIN_ACTIVE='llama3.2-1b' \
-          ROOM_MODEL_URL='http://127.0.0.1:18080/completion' \
-          ROOM_NODE_PROMPT='integration-probe' \
-          python3 - <<'PY'
-          import json, time
-          import room_engine_v5 as engine
-          import room_private_model_autonomy as autonomy
+          if $perception_present && $deliberation_present && $expression_present; then
+            if gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'society-brain-q4_0.gguf' --dir .room_model && \
+               gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model; then
+              download_ok=true
+            fi
+          fi
 
-          assert autonomy.AUTONOMY_ENGINE == 'structural-base-no-live-overlay-v2'
-          assert 'allen' in autonomy.PEOPLE
-          assert engine._legacy._core.model_run is engine._llama_model_run
+          if $download_ok; then
+            if echo '7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  .room_model/society-brain-q4_0.gguf' | sha256sum -c - >/dev/null 2>&1 && \
+               echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c - >/dev/null 2>&1; then
+              hashes_ok=true
+            fi
+          fi
 
-          cfg = json.load(open('room/config.json'))
-          profile = cfg['p']['sarah']
-          source = {
-              'entity': 'sarah',
-              'profile': profile,
-              'event': {
-                  'speaker': 'allen',
-                  'text': 'I want the Room to stay coherent without telling any of you what to say. What do you personally want to do next?',
-                  'cognition': {'target': 'sarah'},
-              },
-              'context': [
-                  {'speaker': 'owen', 'text': 'We should distinguish evidence from a plausible story.', 'cognition': {'target': 'sarah'}},
-                  {'speaker': 'allen', 'text': 'I want the Room to stay coherent without telling any of you what to say. What do you personally want to do next?', 'cognition': {'target': 'sarah'}},
-              ],
-              'topic': {
-                  'root': 'room autonomy',
-                  'current_facet': 'coherence without scripting',
-                  'facets': ['autonomy', 'coherence', 'identity'],
-                  'shared_references': [],
-                  'unresolved': ['how to remain coherent without assigned talking points'],
-              },
-              'keywords': ['autonomy', 'coherence', 'identity'],
-              'partner': 'allen',
-              'relationship': {'trust': 0.6, 'warmth': 0.6, 'respect': 0.7, 'direct_familiarity': 0.6, 'reciprocity': 0.5, 'disclosure_depth': 0.3, 'tension': 0.1},
-              'mandatory_speech': True,
+          model_pid=""
+          if $hashes_ok; then
+            tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+            server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
+            if [ -n "${server_bin:-}" ]; then
+              chmod +x "$server_bin"
+              env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION -u ROOM_NODE_PROMPT \
+                "$server_bin" -m .room_model/society-brain-q4_0.gguf --host 127.0.0.1 --port 18080 -c 8192 -np 4 >.room_model/server.log 2>&1 &
+              model_pid=$!
+              for attempt in $(seq 1 120); do
+                if curl -fsS http://127.0.0.1:18080/health >/dev/null 2>&1; then
+                  server_ready=true
+                  break
+                fi
+                if ! kill -0 "$model_pid" 2>/dev/null; then break; fi
+                sleep 1
+              done
+            fi
+          fi
+
+          test_role() {
+            role="$1"
+            prompt="$2"
+            if ! $server_ready; then
+              printf '%s' server_unavailable
+              return
+            fi
+            if env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION \
+              ROOM_NODE_PROMPT="$prompt" ROOM_MODEL_URL='http://127.0.0.1:18080/completion' ROLE="$role" \
+              python3 - <<'PY' >/dev/null 2>&1
+import os
+from scripts.room_private_model import run
+role=os.environ['ROLE']
+base={
+  'entity':'sarah',
+  'profile':{},
+  'event':{'speaker':'mara','text':'I changed my mind after a counterexample.','cognition':{'target':'sarah'}},
+  'context':[],
+  'topic':{'id':'diagnostic','root':'belief','current_facet':'evidence','facets':['evidence','counterexample']},
+  'partner':'mara',
+  'relationship':{'trust':0.1,'direct_familiarity':0.2},
+  'mandatory_speech':True,
+}
+if role=='comprehension':
+    payload=base
+elif role=='thought':
+    payload={**base,'social_observation':{'participation':'DIRECT_ADDRESSEE','relationship_events':[]}}
+else:
+    payload={**base,'social_observation':{'participation':'DIRECT_ADDRESSEE','relationship_events':[]},'deliberation':{'action':'DEEPEN','preferred_partner':'mara','topic_facet':'evidence','mandatory_speech':True}}
+run(role,payload,timeout=30)
+PY
+            then
+              printf '%s' accepted
+            else
+              printf '%s' rejected
+            fi
           }
 
-          def call(role, payload):
-              started = time.monotonic()
-              result = engine._legacy._core.model_run(role, payload, timeout=30)
-              elapsed = time.monotonic() - started
-              assert isinstance(result, dict), (role, result)
-              assert elapsed < 40, (role, elapsed)
-              print(f'{role}-seconds={elapsed:.3f}')
-              return result
+          if $perception_present; then perception_status=$(test_role comprehension "$ROOM_PROMPT_PERCEPTION"); else perception_status=missing_secret; fi
+          if $deliberation_present; then deliberation_status=$(test_role thought "$ROOM_PROMPT_DELIBERATION"); else deliberation_status=missing_secret; fi
+          if $expression_present; then expression_status=$(test_role expression "$ROOM_PROMPT_EXPRESSION"); else expression_status=missing_secret; fi
 
-          perception = call('comprehension', source)
-          thought_payload = dict(source)
-          thought_payload['social_observation'] = perception
-          thought = call('thought', thought_payload)
-          assert thought.get('preferred_partner') != 'sarah'
+          [ -n "$model_pid" ] && kill "$model_pid" 2>/dev/null || true
 
-          expression_payload = dict(thought_payload)
-          expression_payload['deliberation'] = thought
-          expression = call('expression', expression_payload)
-          assert str(expression.get('utterance') or '').strip()
-          assert expression.get('target') == thought.get('preferred_partner')
+          python3 - <<PY
+import json
+status={
+  'perception_secret_present': $perception_present,
+  'deliberation_secret_present': $deliberation_present,
+  'expression_secret_present': $expression_present,
+  'download_ok': $download_ok,
+  'hashes_ok': $hashes_ok,
+  'server_ready': $server_ready,
+  'perception_status': '$perception_status',
+  'deliberation_status': '$deliberation_status',
+  'expression_status': '$expression_status',
+}
+open('room/private-model-diagnostic.json','w').write(json.dumps(status,indent=2)+'\n')
+PY
 
-          allen_thought = dict(thought)
-          allen_thought['action'] = 'ANSWER'
-          allen_thought['preferred_partner'] = 'allen'
-          allen_thought['focus'] = 'coherence without scripting'
-          allen_expression_payload = dict(thought_payload)
-          allen_expression_payload['deliberation'] = allen_thought
-          allen_expression = call('expression', allen_expression_payload)
-          assert allen_expression.get('target') == 'allen', allen_expression
-          print('allen-target-pass')
-          print('sample=' + str(expression.get('utterance')))
-          print('integration-pass')
-          PY
+          git add room/private-model-diagnostic.json
+          git commit -m "Record private model diagnostic" || true
+          for attempt in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main || true
+            git rebase origin/main || { git rebase --abort || true; }
+            sleep "$attempt"
+          done
+          exit 1
+
+# trigger: 4
