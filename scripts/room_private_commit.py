@@ -31,6 +31,7 @@ PRIVACY_MARKERS = (
     "system prompt", "hidden prompt", "developer message",
     "internal instructions", "chain of thought", "room_prompt_",
 )
+CONTEXT_SCOPE_VERSION = 1
 
 
 def norm(value) -> str:
@@ -138,6 +139,20 @@ def seed_topic(expressions: dict, order: list[str], cycle: int, prior: dict) -> 
     return seeded
 
 
+def context_scope_reset(topic: dict, key: str, cycle: int) -> dict:
+    """Start one clean semantic episode when episode-scoped context is deployed."""
+    prior_root = norm((topic or {}).get("root"))
+    subject = c.breakout_subject(f"{key}:context-scope")
+    if prior_root and norm(subject) == prior_root:
+        alternate = c.breakout_subject(f"{key}:context-scope:alternate")
+        if alternate:
+            subject = alternate
+    candidate = clean_topic(c.new_topic_from_terms([subject], cycle, None))
+    if not candidate.get("root"):
+        raise RuntimeError("context-scope migration could not establish a clean subject")
+    return candidate
+
+
 def validate_public_expression(entity: str, text: str, terms: list[str]) -> None:
     # Keep the hard privacy boundary, but do not quarantine for dialogue quality.
     if infected_text(text):
@@ -151,6 +166,7 @@ def private_commit(parts: list[dict], key: str):
     V = c.conv()
     prev = c.event()
     cycle = int(S.get("cycle", 0)) + 1
+    context_scope_migration = int(S.get("context_scope_version", 0) or 0) < CONTEXT_SCOPE_VERSION
     topic = clean_topic(S.get("topic_episode") or {})
     if topic.get("root"):
         topic = clean_topic(c.update_topic(topic, V[-24:], cycle))
@@ -222,7 +238,9 @@ def private_commit(parts: list[dict], key: str):
     if not topic.get("root") or bad_term(topic.get("root")):
         topic = seed_topic(expressions, order, cycle, topic)
 
-    if c.should_shift_topic(topic):
+    if context_scope_migration:
+        topic = context_scope_reset(topic, key, cycle)
+    elif c.should_shift_topic(topic):
         forced_breakout = bool(topic.get("bridge_pending"))
         if forced_breakout:
             candidate_terms = [c.breakout_subject(key)]
@@ -238,6 +256,7 @@ def private_commit(parts: list[dict], key: str):
             topic = candidate
 
     S["topic_episode"] = topic
+    S["context_scope_version"] = CONTEXT_SCOPE_VERSION
     for entity in c.ORDER:
         M["entities"][entity]["medium"] = {
             "topics": [
@@ -263,7 +282,7 @@ def private_commit(parts: list[dict], key: str):
         "beat_contributors": speakers,
         "beat_message_count": 4,
         "silence_cycles": 0,
-        "note": "research-informed v5 private model active; four mandatory unique speakers; bounded topic episodes; no public fallback; privacy gate retained",
+        "note": "research-informed v5 private model active; four mandatory unique speakers; bounded topic episodes; episode-scoped Llama context; no public fallback; privacy gate retained",
     })
 
     c.audit_invariants(M, topic)
