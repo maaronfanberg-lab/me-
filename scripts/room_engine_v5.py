@@ -42,15 +42,7 @@ def _semantic_cues(value: object, limit: int = 6) -> list[str]:
     return cues
 
 
-def _mask_expression_transcript(prompt: str) -> str:
-    """Hide copyable sentence text from expression generation only.
-
-    Validation still receives the original compact payload, so anti-copy checks
-    compare generated speech with the exact transcript. Thought and
-    comprehension still receive the real conversation. Expression keeps
-    speaker/target information, sparse semantic cues, its own intent, topic,
-    identity, and relationship context.
-    """
+def _rewrite_prompt_data(prompt: str, transform) -> str:
     marker = "\nSITUATION_DATA\n"
     end_marker = "\nRETURN_STRUCTURED_DATA_ONLY\n"
     if marker not in prompt or end_marker not in prompt:
@@ -63,32 +55,73 @@ def _mask_expression_transcript(prompt: str) -> str:
         return prompt
     if not isinstance(data, dict):
         return prompt
+    transformed = transform(data)
+    return before + marker + json.dumps(transformed, ensure_ascii=False, separators=(",", ":")) + end_marker + after
 
-    context = data.get("context")
-    if isinstance(context, list):
-        masked = []
-        for item in context:
-            if isinstance(item, dict):
-                masked.append({
-                    "speaker": item.get("speaker"),
-                    "target": item.get("target"),
-                    "cues": _semantic_cues(item.get("text")),
-                })
-            else:
-                masked.append({"speaker": None, "target": None, "cues": _semantic_cues(item)})
-        data["context"] = masked
 
-    event = data.get("event")
-    if isinstance(event, dict):
-        data["event"] = {
-            "speaker": event.get("speaker"),
-            "target": event.get("target"),
-            "cues": _semantic_cues(event.get("text")),
-        }
-    elif event:
-        data["event"] = {"speaker": None, "target": None, "cues": _semantic_cues(event)}
+def _mask_thought_transcript(prompt: str) -> str:
+    """Compact older transcript text for Llama thought only.
 
-    return before + marker + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + end_marker + after
+    The latest event remains verbatim and the structured social observation is
+    preserved. Only older context messages are reduced to speaker/target plus
+    sparse semantic cues, removing redundant tokens before two concurrent
+    deliberation calls reach the 1B model.
+    """
+    def transform(data: dict) -> dict:
+        context = data.get("context")
+        if isinstance(context, list):
+            compact = []
+            for item in context:
+                if isinstance(item, dict):
+                    compact.append({
+                        "speaker": item.get("speaker"),
+                        "target": item.get("target"),
+                        "cues": _semantic_cues(item.get("text"), limit=5),
+                    })
+                else:
+                    compact.append({"speaker": None, "target": None, "cues": _semantic_cues(item, limit=5)})
+            data["context"] = compact
+        return data
+
+    return _rewrite_prompt_data(prompt, transform)
+
+
+def _mask_expression_transcript(prompt: str) -> str:
+    """Hide copyable sentence text from expression generation only.
+
+    Validation still receives the original compact payload, so anti-copy checks
+    compare generated speech with the exact transcript. Thought and
+    comprehension still receive the real conversation. Expression keeps
+    speaker/target information, sparse semantic cues, its own intent, topic,
+    identity, and relationship context.
+    """
+    def transform(data: dict) -> dict:
+        context = data.get("context")
+        if isinstance(context, list):
+            masked = []
+            for item in context:
+                if isinstance(item, dict):
+                    masked.append({
+                        "speaker": item.get("speaker"),
+                        "target": item.get("target"),
+                        "cues": _semantic_cues(item.get("text")),
+                    })
+                else:
+                    masked.append({"speaker": None, "target": None, "cues": _semantic_cues(item)})
+            data["context"] = masked
+
+        event = data.get("event")
+        if isinstance(event, dict):
+            data["event"] = {
+                "speaker": event.get("speaker"),
+                "target": event.get("target"),
+                "cues": _semantic_cues(event.get("text")),
+            }
+        elif event:
+            data["event"] = {"speaker": None, "target": None, "cues": _semantic_cues(event)}
+        return data
+
+    return _rewrite_prompt_data(prompt, transform)
 
 
 def _remember_rejected(autonomy, utterance: object) -> None:
@@ -111,7 +144,9 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
 
         def _production_request_autonomy(model_url, prompt, request_role, temperature, request_timeout,
                                          self_entity=None, attempt=0, intent=None):
-            if request_role == "expression":
+            if request_role == "thought":
+                prompt = _mask_thought_transcript(prompt)
+            elif request_role == "expression":
                 prompt = _mask_expression_transcript(prompt)
             rejected = [
                 str(item or "").strip()
