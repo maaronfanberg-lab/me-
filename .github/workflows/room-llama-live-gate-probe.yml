@@ -118,12 +118,11 @@ jobs:
               outputs.append(out['utterance'])
               print(f'{entity}-seconds={elapsed:.3f} utterance={out["utterance"]}')
 
-          # The production selector masks exact transcript wording from the model,
-          # while validation still retains the exact transcript. Five-word overlap
-          # alone is allowed; an eight-word verbatim span remains rejected.
           assert autonomy._has_context_echo('the room to stay coherent', sample_context) is False
           assert autonomy._has_context_echo('the room to stay coherent without telling anyone', sample_context) is True
           assert len(set(outputs)) == 4
           print('four-voice-pass')
           print('live-gate-probe-pass')
           PY
+
+# meta-language-fix probe trigger
