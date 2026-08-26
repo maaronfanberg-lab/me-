@@ -111,7 +111,7 @@ def main():
 
 
 # Branch-only probe trigger. No runtime effect.
-_PROBE_TRIGGER = 7
+_PROBE_TRIGGER = 8
 
 if __name__ == "__main__":
     main()
