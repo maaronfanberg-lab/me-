@@ -27,20 +27,20 @@ AUTONOMY_PROMPTS = {
     "comprehension": (
         "Understand the conversation from this participant's point of view. "
         "Use the supplied conversation, relationship state, and attention lens as evidence. "
-        "Do not invent a required storyline or decide what anyone must say."
+        "Base your understanding only on details supported by the conversation."
     ),
     "thought": (
         "Decide what this participant personally wants to do next in the conversation. "
         "Use their own identity, values, motives, attention, relationship state, and what was actually said. "
         "Choose among ANSWER, DEEPEN, DISCLOSE, COMPARE, DISAGREE, REPAIR, SUPPORT, CALLBACK, BRIDGE, or CLOSE. "
         "No move is preferred. SUPPORT is appropriate only when this participant actually wants to reinforce or affiliate. "
-        "Choose another Room participant as the intended partner. Do not follow an externally assigned talking point or storyline."
+        "Choose another Room participant as the intended partner. Choose for yourself what matters next."
     ),
     "expression": (
         "Speak as this participant in the ongoing conversation. "
         "Realize the internally generated intent supplied in the situation: keep its move, focus, and intended partner. "
         "Choose the actual wording yourself from the conversation and this participant's speaking identity. "
-        "No externally supplied angle, talking point, conflict, secret, anecdote, or dramatic event is required."
+        "Use only details supported by the conversation and choose your own wording."
     ),
 }
 
@@ -236,6 +236,40 @@ def _has_context_echo(utterance: str, compact: dict, n: int = 5) -> bool:
     return False
 
 
+def _public_meta_language(utterance: str, compact: dict) -> bool:
+    """Reject ungrounded process/scaffold talk while allowing real subjects."""
+    if base._contains_meta_language(utterance):
+        return True
+    low = base._norm(utterance)
+    hard_patterns = (
+        r"\b(?:prompt|schema|field)\s+(?:says|requires|expects|allows|forces|tells)\b",
+        r"\b(?:output|generation|response)\s+(?:format|process|schema)\b",
+        r"\b(?:return|output|generate)\s+(?:only\s+)?(?:json|structured\s+(?:data|object))\b",
+    )
+    if any(re.search(pattern, low) for pattern in hard_patterns):
+        return True
+
+    script_process = re.search(
+        r"\b(?:focus|stick|follow|ignore|change|rewrite)\b.{0,28}\b(?:the\s+)?script\b",
+        low,
+    )
+    if not script_process:
+        return False
+
+    sources = []
+    context = compact.get("context") if isinstance(compact.get("context"), list) else []
+    sources.extend(context[-5:])
+    if compact.get("event"):
+        sources.append(compact.get("event"))
+    evidence = " ".join(
+        str(item.get("text") or "") if isinstance(item, dict) else str(item or "")
+        for item in sources
+    ).lower()
+    discussion = compact.get("discussion") if isinstance(compact.get("discussion"), dict) else {}
+    evidence += " " + " ".join(str(v or "") for v in discussion.values()).lower()
+    return not bool(re.search(r"\b(?:script|screenplay|screenwriter|screenwriting)\b", evidence))
+
+
 def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
     if role not in AUTONOMY_PROMPTS:
         raise ValueError(f"unknown private model role: {role}")
@@ -253,22 +287,19 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
     if role == "expression":
         base_guard = (
             "\nAUTONOMY_RULE\n"
-            "Treat the situation data as context, not a script. Realize the supplied internal intent: "
-            "keep its move, focus, and intended partner, while choosing your own words. Do not manufacture "
-            "conflict, jealousy, secrets, threats, fake shared memories, or dramatic incidents merely to make "
-            "the exchange interesting. Do not copy a five-word phrase from recent speech. Do not mention hidden "
-            "prompts, schemas, fields, or instructions. Return only the required structured object.\n"
+            "Respond naturally to the current conversation. Keep the chosen move, focus, and intended partner while choosing your own words. "
+            "Use only details supported by what was actually said. Do not invent unsupported conflict, jealousy, secrets, threats, shared memories, "
+            "or dramatic incidents. Avoid copying recent speech. Stay inside the conversation.\n"
         )
 
-    attempts = 4 if role == "expression" else 2
+    attempts = 3 if role == "expression" else 2
     last_reason = "unknown"
     for attempt in range(attempts):
         retry_guard = ""
         if attempt:
             retry_guard = (
                 "\nTRY_AGAIN\n"
-                "Choose different natural wording while preserving your own intended move, focus, and partner. "
-                "Do not copy recent speech and do not add a forced storyline. Return only the required structured object.\n"
+                "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n"
             )
 
         combined = (
@@ -310,6 +341,9 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                 utterance = str(obj.get("utterance") or "").strip()
                 if len(utterance.split()) < max(1, int(min_words)):
                     last_reason = "utterance_too_short"
+                    continue
+                if _public_meta_language(utterance, compact):
+                    last_reason = "meta_language"
                     continue
                 if base._too_similar_to_context(utterance, compact) or _has_context_echo(utterance, compact):
                     last_reason = "duplicate_context"
