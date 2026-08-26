@@ -1,0 +1,130 @@
+name: Room Llama live gate probe
+
+on:
+  push:
+    branches: [room-llama-live-gate-fix]
+    paths:
+      - '.github/workflows/room-llama-live-gate-probe.yml'
+      - 'scripts/room_engine_v5.py'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: room-llama-live-gate-fix
+          fetch-depth: 1
+
+      - name: Verify warm-runner startup guard compatibility
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/room_engine_v5.py')
+          s = p.read_text()
+          old = 'attempts = 5 if role == "expression" else 2'
+          new = 'attempts = 9 if role == "expression" else 2'
+          if old in s:
+              assert s.count(old) == 1
+          else:
+              assert new in s, 'warm-runner retry guard incompatible with selector'
+          print('startup-guard-pass')
+          PY
+          python3 -m py_compile scripts/room_engine_v5.py scripts/room_engine_v5_legacy.py scripts/room_private_model_autonomy.py
+
+      - name: Download verified runtime and Llama
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p .room_model/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          curl --fail --location --retry 4 --retry-delay 5 \
+            'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' \
+            --output .room_model/llama.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_model/llama.gguf' | sha256sum -c -
+          tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+
+      - name: Run dense-context four-voice Llama probe
+        run: |
+          set -euo pipefail
+          server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
+          chmod +x "$server_bin"
+          "$server_bin" -m .room_model/llama.gguf --host 127.0.0.1 --port 18080 -c 8192 -np 2 >.room_model/server.log 2>&1 &
+          model_pid=$!
+          trap 'kill "$model_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 120); do
+            curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1 && break
+            kill -0 "$model_pid"
+            sleep 1
+          done
+
+          PYTHONPATH=scripts ROOM_BRAIN_ACTIVE='llama3.2-1b' ROOM_MODEL_URL='http://127.0.0.1:18080/completion' ROOM_NODE_PROMPT='live-gate-probe' python3 - <<'PY'
+          import json, time
+          import room_engine_v5 as engine
+          import room_private_model_autonomy as autonomy
+
+          # The production selector must soften only the secondary phrase-span gate.
+          engine._llama_model_run
+          sample_context = {'context':[{'speaker':'mara','text':'we need the room to stay coherent without telling anyone what to say'}]}
+          engine._llama_model_run.__globals__
+          # Import path patches the module lazily on first real call below.
+
+          cfg=json.load(open('room/config.json'))
+          people=['sarah','mara','owen','jules']
+          dense_context=[
+            {'speaker':'allen','text':'I want the Room to stay coherent without telling anyone what to say.'},
+            {'speaker':'sarah','text':'Coherence matters, but agreement is not the same thing as identity.'},
+            {'speaker':'mara','text':'I keep noticing how easily the room can circle the same idea when everyone is trying to be careful.'},
+            {'speaker':'owen','text':'We should separate what we observed from what merely sounds plausible.'},
+            {'speaker':'jules','text':'Maybe the interesting part is what happens when nobody gets assigned the interesting part.'},
+            {'speaker':'allen','text':'Stay with what is actually happening here, but decide for yourselves where to take it.'},
+            {'speaker':'sarah','text':'Then the test is whether each of us can choose a direction without borrowing the previous sentence.'},
+            {'speaker':'mara','text':'And whether it still feels like a conversation instead of four isolated demonstrations.'},
+          ]
+          actions=['ANSWER','DEEPEN','COMPARE','BRIDGE']
+          partners=['allen','sarah','mara','owen']
+          outputs=[]
+          for idx,entity in enumerate(people):
+              payload={
+                'entity':entity,
+                'profile':cfg['p'][entity],
+                'event':dense_context[-1],
+                'context':dense_context,
+                'topic':{'root':'room autonomy','current_facet':'coherence without scripting','facets':['coherence','identity','autonomy'],'shared_references':[],'unresolved':['how to converse without assigned talking points']},
+                'keywords':['coherence','identity','autonomy'],
+                'partner':partners[idx],
+                'relationship':{'trust':0.6,'warmth':0.5,'respect':0.7,'direct_familiarity':0.5,'reciprocity':0.5,'disclosure_depth':0.3,'tension':0.1},
+                'social_observation':{'participation':'PARTICIPANT','relationship_events':[]},
+                'deliberation':{
+                  'action':actions[idx],
+                  'preferred_partner':partners[idx],
+                  'focus':'coherence without scripting',
+                  'topic_facet':'coherence without scripting',
+                  'new_information_goal':'choose a personally meaningful next contribution',
+                  'must_respond':True,
+                },
+              }
+              started=time.monotonic()
+              out=engine._legacy._core.model_run('expression',payload,timeout=30)
+              elapsed=time.monotonic()-started
+              assert elapsed < 40,(entity,elapsed)
+              assert out['target']==partners[idx],(entity,out)
+              assert str(out.get('utterance') or '').strip(),(entity,out)
+              outputs.append(out['utterance'])
+              print(f'{entity}-seconds={elapsed:.3f} utterance={out["utterance"]}')
+
+          # Lazy patch has now occurred. Five-word overlap alone is no longer fatal;
+          # a long verbatim span still triggers the secondary detector.
+          assert autonomy._has_context_echo('the room to stay coherent', sample_context) is False
+          assert autonomy._has_context_echo('I want the Room to stay coherent without telling', sample_context) is True
+          assert len(set(outputs)) == 4
+          print('four-voice-pass')
+          print('live-gate-probe-pass')
+          PY
