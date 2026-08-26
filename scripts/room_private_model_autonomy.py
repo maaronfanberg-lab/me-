@@ -260,7 +260,7 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
             "prompts, schemas, fields, or instructions. Return only the required structured object.\n"
         )
 
-    attempts = 3 if role == "expression" else 2
+    attempts = 4 if role == "expression" else 2
     last_reason = "unknown"
     for attempt in range(attempts):
         retry_guard = ""
