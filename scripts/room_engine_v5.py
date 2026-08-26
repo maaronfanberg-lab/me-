@@ -30,7 +30,7 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
             matched = _autonomy._production_original_context_echo(
                 utterance, compact, n=max(8, int(n))
             )
-            if matched and os.environ.get("ROOM_DUPLICATE_DIAGNOSTIC") == "1":
+            if matched:
                 print(f"duplicate-detector=phrase utterance={utterance!r}", flush=True)
             return matched
 
@@ -41,7 +41,7 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
 
         def _production_too_similar(utterance, compact):
             matched = _autonomy.base._production_original_too_similar(utterance, compact)
-            if matched and os.environ.get("ROOM_DUPLICATE_DIAGNOSTIC") == "1":
+            if matched:
                 print(f"duplicate-detector=similarity utterance={utterance!r}", flush=True)
             return matched
 
@@ -68,7 +68,7 @@ def main():
 
 
 # Branch-only probe trigger. No runtime effect.
-_PROBE_TRIGGER = 2
+_PROBE_TRIGGER = 3
 
 if __name__ == "__main__":
     main()
