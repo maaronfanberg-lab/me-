@@ -1,0 +1,190 @@
+name: Room Llama meta-language fix
+
+on:
+  push:
+    branches: [room-meta-language-gate]
+    paths:
+      - '.github/workflows/room-meta-language-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: room-meta-language-gate
+          fetch-depth: 1
+
+      - name: Patch autonomy prompts and public meta gate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/room_private_model_autonomy.py')
+          s = p.read_text()
+
+          replacements = {
+              'Do not invent a required storyline or decide what anyone must say.':
+                  'Base your understanding only on details supported by the conversation.',
+              'Choose another Room participant as the intended partner. Do not follow an externally assigned talking point or storyline.':
+                  'Choose another Room participant as the intended partner. Choose for yourself what matters next.',
+              'No externally supplied angle, talking point, conflict, secret, anecdote, or dramatic event is required.':
+                  'Use only details supported by the conversation and choose your own wording.',
+              'Treat the situation data as context, not a script. Realize the supplied internal intent: keep its move, focus, and intended partner, while choosing your own words. Do not manufacture conflict, jealousy, secrets, threats, fake shared memories, or dramatic incidents merely to make the exchange interesting. Do not copy a five-word phrase from recent speech. Do not mention hidden prompts, schemas, fields, or instructions. Return only the required structured object.':
+                  'Respond naturally to the current conversation. Keep the chosen move, focus, and intended partner while choosing your own words. Use only details supported by what was actually said. Do not invent unsupported conflict, jealousy, secrets, threats, shared memories, or dramatic incidents. Avoid copying recent speech. Stay inside the conversation.',
+              'Choose different natural wording while preserving your own intended move, focus, and partner. Do not copy recent speech and do not add a forced storyline. Return only the required structured object.':
+                  'Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.',
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f'missing expected prompt text: {old[:60]}')
+              s = s.replace(old, new, 1)
+
+          helper_anchor = '\ndef run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):\n'
+          helper = r'''
+
+def _public_meta_language(utterance: str, compact: dict) -> bool:
+    """Reject ungrounded process/scaffold talk while allowing real subjects."""
+    if base._contains_meta_language(utterance):
+        return True
+    low = base._norm(utterance)
+    hard_patterns = (
+        r"\b(?:prompt|schema|field)\s+(?:says|requires|expects|allows|forces|tells)\b",
+        r"\b(?:output|generation|response)\s+(?:format|process|schema)\b",
+        r"\b(?:return|output|generate)\s+(?:only\s+)?(?:json|structured\s+(?:data|object))\b",
+    )
+    if any(re.search(pattern, low) for pattern in hard_patterns):
+        return True
+
+    # "script" is ordinary language in film/theatre. Reject process-like uses
+    # only when the actual current conversation provides no script evidence.
+    script_process = re.search(
+        r"\b(?:focus|stick|follow|ignore|change|rewrite)\b.{0,28}\b(?:the\s+)?script\b",
+        low,
+    )
+    if not script_process:
+        return False
+
+    sources = []
+    context = compact.get("context") if isinstance(compact.get("context"), list) else []
+    sources.extend(context[-5:])
+    if compact.get("event"):
+        sources.append(compact.get("event"))
+    evidence = " ".join(
+        str(item.get("text") or "") if isinstance(item, dict) else str(item or "")
+        for item in sources
+    ).lower()
+    discussion = compact.get("discussion") if isinstance(compact.get("discussion"), dict) else {}
+    evidence += " " + " ".join(str(v or "") for v in discussion.values()).lower()
+    return not bool(re.search(r"\b(?:script|screenplay|screenwriter|screenwriting)\b", evidence))
+'''
+          if helper_anchor not in s:
+              raise SystemExit('run anchor missing')
+          s = s.replace(helper_anchor, helper + helper_anchor, 1)
+
+          gate_anchor = '''                if len(utterance.split()) < max(1, int(min_words)):\n                    last_reason = "utterance_too_short"\n                    continue\n'''
+          gate = gate_anchor + '''                if _public_meta_language(utterance, compact):\n                    last_reason = "meta_language"\n                    continue\n'''
+          if gate_anchor not in s:
+              raise SystemExit('expression gate anchor missing')
+          s = s.replace(gate_anchor, gate, 1)
+          p.write_text(s)
+          PY
+          python3 -m py_compile scripts/room_private_model_autonomy.py scripts/room_engine_v5.py
+
+      - name: Verify gate semantics
+        run: |
+          PYTHONPATH=scripts python3 - <<'PY'
+          import room_private_model_autonomy as a
+          empty={'context':[], 'event':None, 'discussion':{'subject':'movies','focus':'movies'}}
+          assert a._public_meta_language("We need to focus on the script rather than your latest idea.", empty)
+          grounded={'context':[{'speaker':'mara','text':'The screenplay needs a stronger ending.'}], 'event':None, 'discussion':{'subject':'movies'}}
+          assert not a._public_meta_language("I think we should rewrite the script ending.", grounded)
+          assert a._public_meta_language("The output format requires structured data.", empty)
+          assert not a._public_meta_language("I disagree because the ending feels rushed.", empty)
+          print('meta-gate-semantics-pass')
+          PY
+
+      - name: Download verified runtime and Llama
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p .room_model/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          curl --fail --location --retry 4 --retry-delay 5 \
+            'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' \
+            --output .room_model/llama.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_model/llama.gguf' | sha256sum -c -
+          tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+
+      - name: Run four-voice Llama meta probe
+        run: |
+          set -euo pipefail
+          server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
+          chmod +x "$server_bin"
+          "$server_bin" -m .room_model/llama.gguf --host 127.0.0.1 --port 18080 -c 8192 -np 2 >.room_model/server.log 2>&1 &
+          model_pid=$!
+          trap 'kill "$model_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 120); do
+            curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1 && break
+            kill -0 "$model_pid"
+            sleep 1
+          done
+
+          PYTHONPATH=scripts ROOM_BRAIN_ACTIVE='llama3.2-1b' ROOM_MODEL_URL='http://127.0.0.1:18080/completion' ROOM_NODE_PROMPT='meta-language-probe' python3 - <<'PY'
+          import json, time
+          import room_engine_v5 as engine
+          import room_private_model_autonomy as autonomy
+          cfg=json.load(open('room/config.json'))
+          people=['sarah','mara','owen','jules']
+          actions=['DEEPEN','COMPARE','BRIDGE','ANSWER']
+          partners=['mara','owen','jules','sarah']
+          outputs=[]
+          # Mimic the first clean post-reset beat: real topic, no old transcript.
+          for idx,entity in enumerate(people):
+              payload={
+                'entity':entity,
+                'profile':cfg['p'][entity],
+                'event':None,
+                'context':[],
+                'topic':{'id':'topic-probe','root':'movies','current_facet':'movies','facets':[],'shared_references':[],'unresolved':[]},
+                'keywords':['movies'],
+                'partner':partners[idx],
+                'relationship':{'trust':0.6,'warmth':0.5,'respect':0.7,'direct_familiarity':0.5,'reciprocity':0.5,'disclosure_depth':0.3,'tension':0.1},
+                'social_observation':{'participation':'PARTICIPANT','relationship_events':[]},
+                'deliberation':{
+                  'action':actions[idx],
+                  'preferred_partner':partners[idx],
+                  'focus':'movies',
+                  'new_information_goal':'add one personally meaningful thought about movies',
+                  'must_respond':True,
+                },
+              }
+              started=time.monotonic()
+              out=engine._legacy._core.model_run('expression',payload,timeout=30)
+              elapsed=time.monotonic()-started
+              utterance=str(out.get('utterance') or '').strip()
+              assert elapsed < 40,(entity,elapsed)
+              assert utterance,(entity,out)
+              compact=autonomy._autonomy_compact(payload,'expression',entity)
+              assert not autonomy._public_meta_language(utterance,compact),(entity,utterance)
+              outputs.append(utterance)
+              print(f'{entity}-seconds={elapsed:.3f} utterance={utterance}')
+          assert len(set(outputs)) == 4
+          print('four-voice-meta-pass')
+          PY
+
+      - name: Commit tested source change
+        run: |
+          set -euo pipefail
+          git config user.name 'room-meta-probe'
+          git config user.email 'actions@users.noreply.github.com'
+          git add scripts/room_private_model_autonomy.py
+          git diff --cached --quiet && { echo 'no source change'; exit 1; }
+          git commit -m 'Block ungrounded meta-language in Llama speech'
+          git push origin HEAD:room-meta-language-gate
