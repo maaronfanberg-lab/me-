@@ -223,10 +223,17 @@ def private_commit(parts: list[dict], key: str):
         topic = seed_topic(expressions, order, cycle, topic)
 
     if c.should_shift_topic(topic):
-        declared = c.topic_terms_from_messages(spoken, limit=12, episode_id=topic.get("id"))
-        novel = [norm(x) for x in declared if not bad_term(x) and norm(x) not in previous_vocabulary]
-        candidate_terms = novel or [c.breakout_subject(key)]
-        candidate = clean_topic(c.new_topic_from_terms(candidate_terms, cycle, topic))
+        forced_breakout = bool(topic.get("bridge_pending"))
+        if forced_breakout:
+            candidate_terms = [c.breakout_subject(key)]
+        else:
+            declared = c.topic_terms_from_messages(spoken, limit=12, episode_id=topic.get("id"))
+            novel = [norm(x) for x in declared if not bad_term(x) and norm(x) not in previous_vocabulary]
+            candidate_terms = novel or [c.breakout_subject(key)]
+        # Forced episode exhaustion is a real semantic boundary: do not smuggle
+        # the exhausted topic back into the fresh episode as a shared reference.
+        prior = None if forced_breakout else topic
+        candidate = clean_topic(c.new_topic_from_terms(candidate_terms, cycle, prior))
         if candidate.get("root") and not bad_term(candidate.get("root")):
             topic = candidate
 
