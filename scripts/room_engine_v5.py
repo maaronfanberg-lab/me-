@@ -42,6 +42,39 @@ def _semantic_cues(value: object, limit: int = 6) -> list[str]:
     return cues
 
 
+def _message_episode(message: object) -> str:
+    if not isinstance(message, dict):
+        return ""
+    cognition = message.get("cognition")
+    if isinstance(cognition, dict):
+        return str(cognition.get("topic_episode") or "").strip()
+    return ""
+
+
+def _episode_scoped_payload(payload: dict) -> dict:
+    """Keep short-term transcript inside the current semantic episode.
+
+    A forced topic reset is a real cognition boundary: messages emitted under
+    an exhausted episode must not be fed back into Llama merely because they
+    are among the last few public turns. Once the new episode has produced its
+    own messages, ordinary short-term conversational continuity resumes.
+    """
+    scoped = dict(payload or {})
+    topic = scoped.get("topic")
+    episode_id = str(topic.get("id") or "").strip() if isinstance(topic, dict) else ""
+    if not episode_id:
+        return scoped
+
+    context = scoped.get("context")
+    if isinstance(context, list):
+        scoped["context"] = [item for item in context if _message_episode(item) == episode_id]
+
+    event = scoped.get("event")
+    if event is not None and _message_episode(event) != episode_id:
+        scoped["event"] = None
+    return scoped
+
+
 def _rewrite_prompt_data(prompt: str, transform) -> str:
     marker = "\nSITUATION_DATA\n"
     end_marker = "\nRETURN_STRUCTURED_DATA_ONLY\n"
@@ -138,6 +171,7 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     import room_private_model_autonomy as autonomy
 
     autonomy._production_rejected_wordings = []
+    payload = _episode_scoped_payload(payload)
 
     if not hasattr(autonomy, "_production_original_request_autonomy"):
         autonomy._production_original_request_autonomy = autonomy._request_autonomy
