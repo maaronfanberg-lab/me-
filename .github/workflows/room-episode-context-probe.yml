@@ -1,0 +1,47 @@
+name: Room episode context probe
+
+on:
+  push:
+    branches: [room-episode-context-fix]
+    paths:
+      - scripts/room_engine_v5.py
+      - .github/workflows/room-episode-context-probe.yml
+  workflow_dispatch:
+
+jobs:
+  episode-context:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify semantic episode boundary
+        run: |
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts')
+          import room_engine_v5 as engine
+
+          old = {'speaker':'sarah','text':'old poisoned story','cognition':{'topic_episode':'topic-old'}}
+          new1 = {'speaker':'mara','text':'new clean subject','cognition':{'topic_episode':'topic-new'}}
+          new2 = {'speaker':'owen','text':'follow the new subject','cognition':{'topic_episode':'topic-new'}}
+          payload = {
+              'topic': {'id':'topic-new','root':'movies'},
+              'event': old,
+              'context': [old, new1, new2],
+              'relationship': {'trust':0.5},
+          }
+          scoped = engine._episode_scoped_payload(payload)
+          assert scoped['context'] == [new1, new2], scoped
+          assert scoped['event'] is None, scoped
+          assert payload['context'] == [old, new1, new2], 'input mutated'
+
+          payload2 = {'topic': {'id':'topic-new'}, 'event': new2, 'context':[old,new2]}
+          scoped2 = engine._episode_scoped_payload(payload2)
+          assert scoped2['context'] == [new2], scoped2
+          assert scoped2['event'] == new2, scoped2
+
+          payload3 = {'topic': {}, 'event': old, 'context':[old]}
+          scoped3 = engine._episode_scoped_payload(payload3)
+          assert scoped3['context'] == [old] and scoped3['event'] == old, scoped3
+
+          print('episode-context-pass')
+          PY
