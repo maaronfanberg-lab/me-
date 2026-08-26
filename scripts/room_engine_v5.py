@@ -54,10 +54,13 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
                     + "\n".join(f"- {item}" for item in rejected[-3:])
                     + "\nEND_REJECTED_WORDING\n"
                 )
-            return _autonomy._production_original_request_autonomy(
+            result = _autonomy._production_original_request_autonomy(
                 model_url, prompt, request_role, temperature, request_timeout,
                 self_entity, attempt, intent
             )
+            if request_role == "expression":
+                print(f"expression-attempt={attempt + 1} raw={result!r}", flush=True)
+            return result
 
         _autonomy._request_autonomy = _production_request_autonomy
 
@@ -108,7 +111,7 @@ def main():
 
 
 # Branch-only probe trigger. No runtime effect.
-_PROBE_TRIGGER = 6
+_PROBE_TRIGGER = 7
 
 if __name__ == "__main__":
     main()
