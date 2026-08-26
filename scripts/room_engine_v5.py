@@ -23,23 +23,28 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
         return None
     import room_private_model_autonomy as _autonomy
 
-    # Keep the strict similarity detector. If it rejects a copied sentence,
-    # remember that exact wording so the next model attempt can be told not to
-    # repeat it. This changes regeneration guidance, not the rejection bar.
-    _autonomy._production_rejected_wording = ""
+    # Keep the strict similarity detector. When it rejects copied wording,
+    # accumulate every rejected variant from this model call so later attempts
+    # must genuinely rewrite rather than deleting or swapping one token.
+    _autonomy._production_rejected_wordings = []
 
     if not hasattr(_autonomy, "_production_original_request_autonomy"):
         _autonomy._production_original_request_autonomy = _autonomy._request_autonomy
 
         def _production_request_autonomy(model_url, prompt, request_role, temperature, request_timeout,
                                          self_entity=None, attempt=0, intent=None):
-            rejected = str(getattr(_autonomy, "_production_rejected_wording", "") or "").strip()
+            rejected = [
+                str(item or "").strip()
+                for item in getattr(_autonomy, "_production_rejected_wordings", [])
+                if str(item or "").strip()
+            ]
             if request_role == "expression" and attempt > 0 and rejected:
                 prompt += (
                     "\nREJECTED_WORDING\n"
-                    "Your previous wording copied recent speech too closely. Do not repeat or closely paraphrase "
-                    "this rejected sentence; preserve the same intent using genuinely different wording:\n"
-                    + rejected
+                    "Previous attempts copied recent speech too closely. Rewrite from scratch while preserving "
+                    "the same internal intent. Do not repeat, lightly edit, or closely paraphrase any rejected "
+                    "sentence below. Use a different sentence structure and different phrasing.\n"
+                    + "\n".join(f"- {item}" for item in rejected[-3:])
                     + "\nEND_REJECTED_WORDING\n"
                 )
             return _autonomy._production_original_request_autonomy(
@@ -68,7 +73,11 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
         def _production_too_similar(utterance, compact):
             matched = _autonomy.base._production_original_too_similar(utterance, compact)
             if matched:
-                _autonomy._production_rejected_wording = str(utterance or "").strip()
+                text = str(utterance or "").strip()
+                rejected = getattr(_autonomy, "_production_rejected_wordings", [])
+                if text and text not in rejected:
+                    rejected.append(text)
+                _autonomy._production_rejected_wordings = rejected[-3:]
                 print(f"duplicate-detector=similarity utterance={utterance!r}", flush=True)
             return matched
 
@@ -95,7 +104,7 @@ def main():
 
 
 # Branch-only probe trigger. No runtime effect.
-_PROBE_TRIGGER = 4
+_PROBE_TRIGGER = 5
 
 if __name__ == "__main__":
     main()
