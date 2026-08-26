@@ -10,6 +10,7 @@ SCHEMA = 5
 MAX_FACETS = 8
 MAX_HISTORY = 8
 MAX_RECENT_TERMS = 10
+MAX_EPISODE_UPDATES = 16
 
 
 def _clean(value: object) -> str:
@@ -295,6 +296,9 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
 
     meaningful = [term for term in terms if not any(_near(term, old) for old in previous_terms)]
     low_novelty = 0 if meaningful else int(current.get("low_novelty_beats", 0) or 0) + 1
+    next_turns = int(current.get("turns", 0) or 0) + 1
+    hard_escape = next_turns >= MAX_EPISODE_UPDATES
+    bridge_pending = bridge_pending or hard_escape
     status = "ready_to_bridge" if bridge_pending or low_novelty >= 3 else "active"
 
     current.update({
@@ -306,7 +310,7 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
         "facet_index": max(0, len(visited) - 1),
         "branch_history": history,
         "focus_turns": focus_turns,
-        "turns": int(current.get("turns", 0) or 0) + 1,
+        "turns": next_turns,
         "recent_terms": terms[:MAX_RECENT_TERMS],
         "low_novelty_beats": low_novelty,
         "status": status,
