@@ -70,5 +70,8 @@ def main():
     return _legacy.main()
 
 
+# Branch-only probe trigger. No runtime effect.
+_PROBE_TRIGGER = 1
+
 if __name__ == "__main__":
     main()
