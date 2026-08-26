@@ -1,0 +1,78 @@
+name: Room topic escape probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - room-topic-escape-fix
+    paths:
+      - scripts/room_topic_bounded.py
+      - scripts/room_private_commit.py
+      - .github/workflows/room-topic-escape-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  topic-escape:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: room-topic-escape-fix
+          fetch-depth: 1
+      - name: Verify bounded escape and clean reset
+        env:
+          PYTHONPATH: scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_topic_bounded.py scripts/room_private_commit.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import room_topic_bounded as topic
+
+          # A healthy younger episode with genuine novelty remains active.
+          young = topic.new_topic_from_terms(['music', 'rhythm'], 600, None)
+          young['turns'] = 4
+          young['recent_terms'] = ['music', 'rhythm']
+          young_msg = {
+              'speaker': 'sarah',
+              'text': 'tempo changes the feel',
+              'cognition': {'topic_episode': young['id'], 'topic_terms': ['music', 'rhythm', 'tempo']},
+          }
+          young = topic.update_topic(young, [young_msg], 601)
+          assert young['status'] == 'active', young
+          assert young['bridge_pending'] is False, young
+
+          # Lexical churn must not keep an old episode alive forever. Even a new
+          # declared term at the boundary must force a bridge.
+          old = topic.new_topic_from_terms(['wedding', 'herman'], 600, None)
+          old['turns'] = topic.MAX_EPISODE_UPDATES - 1
+          old['low_novelty_beats'] = 0
+          old['recent_terms'] = ['wedding', 'herman']
+          churn_msg = {
+              'speaker': 'mara',
+              'text': 'another invented branch appears',
+              'cognition': {'topic_episode': old['id'], 'topic_terms': ['wedding', 'herman', 'novelbranch']},
+          }
+          old = topic.update_topic(old, [churn_msg], 601)
+          assert old['bridge_pending'] is True, old
+          assert old['status'] == 'ready_to_bridge', old
+          assert topic.should_shift_topic(old), old
+
+          # Forced breakout starts a genuinely fresh semantic episode. No prior
+          # shared reference is smuggled into the new topic.
+          fresh = topic.new_topic_from_terms(['gardens'], 601, None)
+          assert fresh['root'] == 'gardens', fresh
+          assert fresh['shared_references'] == [], fresh
+          assert fresh['bridge_pending'] is False, fresh
+
+          # Verify the commit path is wired to use that clean boundary.
+          source = Path('scripts/room_private_commit.py').read_text()
+          assert 'forced_breakout = bool(topic.get("bridge_pending"))' in source
+          assert 'candidate_terms = [c.breakout_subject(key)]' in source
+          assert 'prior = None if forced_breakout else topic' in source
+          print('PASS: topic episodes cannot survive indefinitely through lexical churn')
+          print('PASS: forced breakout drops prior shared-reference baggage')
+          PY
