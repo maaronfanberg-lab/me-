@@ -5,6 +5,7 @@ on:
     branches: [room-episode-context-fix]
     paths:
       - scripts/room_engine_v5.py
+      - scripts/room_private_commit.py
       - .github/workflows/room-episode-context-probe.yml
   workflow_dispatch:
 
@@ -19,6 +20,7 @@ jobs:
           import sys
           sys.path.insert(0, 'scripts')
           import room_engine_v5 as engine
+          import room_private_commit as commit
 
           old = {'speaker':'sarah','text':'old poisoned story','cognition':{'topic_episode':'topic-old'}}
           new1 = {'speaker':'mara','text':'new clean subject','cognition':{'topic_episode':'topic-new'}}
@@ -42,6 +44,18 @@ jobs:
           payload3 = {'topic': {}, 'event': old, 'context':[old]}
           scoped3 = engine._episode_scoped_payload(payload3)
           assert scoped3['context'] == [old] and scoped3['event'] == old, scoped3
+
+          reset = commit.context_scope_reset(
+              {'id':'topic-old','root':'movies','shared_references':['old poison']},
+              'probe-key',
+              777,
+          )
+          assert reset['id'] == 'topic-000777', reset
+          assert reset['turns'] == 0, reset
+          assert reset['shared_references'] == [], reset
+          assert reset['bridge_pending'] is False, reset
+          assert reset['root'], reset
+          assert commit.CONTEXT_SCOPE_VERSION == 1
 
           print('episode-context-pass')
           PY
