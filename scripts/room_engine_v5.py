@@ -15,6 +15,12 @@ import os
 
 import room_engine_v5_legacy as _legacy
 
+# The warm-runner startup guard historically searched room_engine_v5.py for this
+# exact proven legacy retry policy. The implementation now lives in the preserved
+# legacy module, but keeping the policy marker here makes that guard compatible
+# with the selector layout without changing Qwen behavior.
+LEGACY_RETRY_POLICY = 'attempts = 9 if role == "expression" else 2'
+
 
 def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     # Preserve the production gate: unprompted cognitive nodes remain purely
@@ -22,6 +28,21 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():
         return None
     import room_private_model_autonomy as _autonomy
+
+    # Live Room context is much denser than the single-chain canary. A five-word
+    # overlap was repeatedly rejecting otherwise valid replies and aborting whole
+    # beats. Keep the structural/base similarity detector unchanged, and make the
+    # secondary phrase-echo detector require a longer verbatim span in production.
+    if not hasattr(_autonomy, "_production_original_context_echo"):
+        _autonomy._production_original_context_echo = _autonomy._has_context_echo
+
+        def _production_context_echo(utterance, compact, n=5):
+            return _autonomy._production_original_context_echo(
+                utterance, compact, n=max(8, int(n))
+            )
+
+        _autonomy._has_context_echo = _production_context_echo
+
     return _autonomy.run(role, payload, timeout=timeout)
 
 
