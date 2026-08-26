@@ -1,0 +1,140 @@
+name: Room Llama thought latency probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - room-llama-thought-latency
+    paths:
+      - scripts/room_engine_v5.py
+      - .github/workflows/room-llama-thought-latency-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  thought-pairs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ROOM_PROMPT_DELIBERATION: ${{ secrets.ROOM_PROMPT_DELIBERATION }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: room-llama-thought-latency
+          fetch-depth: 1
+
+      - name: Start verified Llama 3.2 1B
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .room_model/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+          server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
+          curl --fail --location --retry 4 --retry-delay 5 \
+            'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' \
+            --output .room_model/llama-3.2-1b-instruct-q4_k_m.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_model/llama-3.2-1b-instruct-q4_k_m.gguf' | sha256sum -c -
+          chmod +x "$server_bin"
+          env -u ROOM_PROMPT_DELIBERATION -u ROOM_NODE_PROMPT \
+            "$server_bin" -m .room_model/llama-3.2-1b-instruct-q4_k_m.gguf --host 127.0.0.1 --port 18080 -c 8192 -np 2 >.room_model/server.log 2>&1 &
+          echo $! > .room_model/server.pid
+          for attempt in $(seq 1 120); do
+            if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then exit 0; fi
+            if ! kill -0 "$(cat .room_model/server.pid)" 2>/dev/null; then cat .room_model/server.log; exit 1; fi
+            sleep 1
+          done
+          cat .room_model/server.log
+          exit 1
+
+      - name: Verify thought compaction and concurrent production calls
+        env:
+          ROOM_BRAIN_ACTIVE: llama3.2-1b
+          ROOM_MODEL_URL: http://127.0.0.1:18080/completion
+          ROOM_NODE_PROMPT: ${{ secrets.ROOM_PROMPT_DELIBERATION }}
+          ROOM_CYCLE_KEY: thought-latency-probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import concurrent.futures
+          import json
+          import time
+          from pathlib import Path
+
+          import room_engine_v5 as engine
+
+          sample = '\nSITUATION_DATA\n' + json.dumps({
+              'context': [{'speaker':'mara','target':'sarah','text':'We keep circling autonomy and coherence because the room needs its own reasons.'}],
+              'event': {'speaker':'owen','target':'sarah','text':'Keep this newest event verbatim for deliberation.'},
+              'social_observation': {'focus':'autonomy versus coherence'},
+          }) + '\nRETURN_STRUCTURED_DATA_ONLY\n'
+          masked = engine._mask_thought_transcript(sample)
+          assert 'We keep circling autonomy and coherence because the room needs its own reasons.' not in masked
+          assert 'Keep this newest event verbatim for deliberation.' in masked
+          assert 'autonomy versus coherence' in masked
+          print('thought-mask-contract-pass')
+
+          feed = json.loads(Path('room/feed.json').read_text())
+          conversation = list(feed.get('conversation') or [])
+          if len(conversation) < 5:
+              raise SystemExit('not enough current Room conversation for production-style probe')
+          context = conversation[-5:]
+          event = conversation[-1]
+
+          def profile_for(entity):
+              return engine.P[entity]
+
+          def make_payload(entity):
+              partner = next((str(m.get('speaker')) for m in reversed(context) if str(m.get('speaker')) != entity), 'sarah')
+              return {
+                  'entity': entity,
+                  'profile': profile_for(entity),
+                  'social_observation': {
+                      'participation': 'PARTICIPANT',
+                      'partner': partner,
+                      'move': 'deepen',
+                      'grounding': 'understood',
+                      'focus': 'what matters in the current exchange',
+                      'new_details': [],
+                      'bids': [],
+                      'relationship_events': [],
+                      'shared_references': [],
+                      'confidence': 0.8,
+                  },
+                  'event': event,
+                  'context': context,
+                  'topic': {'root':'current exchange','current_facet':'what matters now','facets':[],'shared_references':[],'unresolved':[]},
+                  'partner': partner,
+                  'relationship': {},
+                  'mandatory_speech': True,
+              }
+
+          def one(entity):
+              started = time.monotonic()
+              result = engine._llama_model_run('thought', make_payload(entity), timeout=30)
+              elapsed = time.monotonic() - started
+              if not isinstance(result, dict) or not result.get('focus') or not result.get('preferred_partner'):
+                  raise RuntimeError(f'{entity} invalid thought result: {result!r}')
+              print(f'{entity}-thought-pass {elapsed:.3f}s action={result.get("action")} partner={result.get("preferred_partner")}')
+              if elapsed >= 30.0:
+                  raise RuntimeError(f'{entity} exceeded 30s inner budget: {elapsed:.3f}')
+              return elapsed
+
+          for pair in [('sarah','mara'), ('owen','jules')]:
+              wall_start = time.monotonic()
+              with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                  times = list(pool.map(one, pair))
+              wall = time.monotonic() - wall_start
+              print(f'pair-pass {pair[0]}+{pair[1]} wall={wall:.3f}s individual={times}')
+              if wall >= 40.0:
+                  raise RuntimeError(f'{pair} exceeded 40s production safety gate: {wall:.3f}')
+          print('concurrent-thought-pass')
+          PY
+
+      - name: Show server tail on failure
+        if: failure()
+        run: tail -200 .room_model/server.log || true
