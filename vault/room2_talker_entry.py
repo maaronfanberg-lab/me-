@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 import re
 import sys
@@ -13,6 +14,7 @@ import vault_talker
 
 _original_has_ngram_echo = vault_talker._has_ngram_echo
 _original_quality_check = vault_talker.quality_check
+_original_request = vault_talker._request
 
 BOILERPLATE = (
     "grateful for the opportunity",
@@ -30,18 +32,45 @@ def _balanced_echo_guard(text, sources, n=5):
     return _original_has_ngram_echo(text, sources, n=effective_n)
 
 
+def _compact_text(value: object, limit: int = 6) -> str:
+    """Keep ordered content cues, not copyable source sentences."""
+    words = re.findall(r"[a-z0-9']+", str(value or "").lower())
+    out: list[str] = []
+    for word in words:
+        if len(word) < 4 or word in vault_talker.STOPWORDS:
+            continue
+        if word not in out:
+            out.append(word)
+        if len(out) >= limit:
+            break
+    return " ".join(out)
+
+
+def _compact_request(model_url: str, payload: dict, entity: str, attempt: int, cycle: int) -> str:
+    # A 1B model tends to copy long supplied sentences. Give it the concepts, not a phrasebook.
+    compact = copy.deepcopy(payload) if isinstance(payload, dict) else {}
+    for key in ("CONTEXT", "ROOM2"):
+        items = compact.get(key) if isinstance(compact.get(key), list) else []
+        reduced = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            cue = _compact_text(item.get("text"))
+            if cue:
+                reduced.append({"speaker": str(item.get("speaker") or "")[:40], "text": cue})
+        compact[key] = reduced
+    return _original_request(model_url, compact, entity, attempt, cycle)
+
+
 def _hardened_quality_check(text, entity, recent, live_context, archive):
     accepted, reason = _original_quality_check(text, entity, recent, live_context, archive)
     if not accepted:
         return accepted, reason
     grounding = list(live_context) + list(recent[-6:])
     low = str(text or "").lower()
-    # The 1B model tends to retreat into generic assistant-style filler. Reject it unless the
-    # phrase is actually grounded in the conversation.
     grounding_text = " ".join(str(x.get("text") or "") for x in grounding if isinstance(x, dict)).lower()
     if any(p in low and p not in grounding_text for p in BOILERPLATE):
         return False, "generic_boilerplate"
-    # ROOM 2 is meant to emit one conversational turn, not two stitched fragments.
     if len(re.findall(r"[.!?](?:\s|$)", str(text or ""))) > 1:
         return False, "multiple_sentences"
     if room2_guardrails.has_unsupported_accusation(text):
@@ -116,6 +145,7 @@ def main() -> None:
     if stats.get("removed"):
         print(f"ROOM 2 quarantined {stats['removed']} persisted utterance(s).")
     vault_talker._has_ngram_echo = _balanced_echo_guard
+    vault_talker._request = _compact_request
     vault_talker.quality_check = _hardened_quality_check
     vault_talker.main()
     _postflight()
