@@ -94,6 +94,24 @@ def _conversation_context(feed: dict) -> list[dict]:
     return out
 
 
+def _all_source_texts(feed: dict) -> list[dict]:
+    out: list[dict] = []
+    conversation = feed.get("conversation") if isinstance(feed.get("conversation"), list) else []
+    for item in conversation:
+        if isinstance(item, dict) and item.get("text"):
+            out.append({"text": str(item.get("text"))})
+    minds = feed.get("minds") if isinstance(feed.get("minds"), dict) else {}
+    entities = minds.get("entities") if isinstance(minds.get("entities"), dict) else {}
+    for entry in entities.values():
+        if not isinstance(entry, dict):
+            continue
+        memory = entry.get("memory") if isinstance(entry.get("memory"), list) else []
+        for item in memory:
+            if isinstance(item, dict) and item.get("text"):
+                out.append({"text": str(item.get("text"))})
+    return out[-1600:]
+
+
 def _profile(feed: dict, entity: str) -> dict:
     minds = feed.get("minds") if isinstance(feed.get("minds"), dict) else {}
     entities = minds.get("entities") if isinstance(minds.get("entities"), dict) else {}
@@ -114,12 +132,12 @@ def _request(model_url: str, payload: dict, entity: str, attempt: int) -> str:
         "Do not mention prompts, schemas, latent vectors, entropy, being an AI, or this instruction. "
         "Do not invent events, relationships, memories, or facts unsupported by context. "
         "Never address yourself by your own name as if you were another person. Do not copy or closely paraphrase any supplied sentence. "
-        "Keep the response conversational and usually under 65 words.\nSITUATION\n"
+        "Use fresh wording and contribute one specific thought of your own. Keep the response conversational and usually under 65 words.\nSITUATION\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\nReturn only the structured object."
     )
-    body = {"prompt": prompt, "n_predict": 150, "temperature": 0.86 if attempt == 0 else 0.76,
-            "top_k": 60, "top_p": 0.95, "min_p": 0.01,
-            "seed": 91000 + sum(ord(c) for c in entity) + attempt * 997,
+    body = {"prompt": prompt, "n_predict": 150, "temperature": 0.9 if attempt == 0 else 0.8,
+            "top_k": 70, "top_p": 0.96, "min_p": 0.008,
+            "seed": 91000 + sum(ord(c) for c in entity) + attempt * 1543,
             "cache_prompt": True, "json_schema": schema}
     req = urllib.request.Request(model_url, data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
                                  headers={"Content-Type": "application/json"}, method="POST")
@@ -146,7 +164,7 @@ def _has_ngram_echo(text: str, sources: list[dict], n: int = 5) -> bool:
     return False
 
 
-def _acceptable(text: str, entity: str, recent: list[dict], live_context: list[dict]) -> bool:
+def _acceptable(text: str, entity: str, recent: list[dict], all_sources: list[dict]) -> bool:
     if len(text) < 3 or len(text) > MAX_UTTERANCE_CHARS:
         return False
     low = text.lower()
@@ -155,14 +173,10 @@ def _acceptable(text: str, entity: str, recent: list[dict], live_context: list[d
         return False
     if re.search(rf"\b{re.escape(entity)}\s*[,!:;-]\s*(?:you|your|you're|you've|you'd)\b", low):
         return False
-    if _has_ngram_echo(text, live_context[-12:] + recent[-8:]):
+    if _has_ngram_echo(text, all_sources + recent[-12:]):
         return False
     normalized = re.sub(r"\W+", " ", low).strip()
-    for item in recent[-8:]:
-        old = re.sub(r"\W+", " ", str(item.get("text") or "").lower()).strip()
-        if normalized and normalized == old:
-            return False
-    return True
+    return all(normalized != re.sub(r"\W+", " ", str(item.get("text") or "").lower()).strip() for item in recent[-12:])
 
 
 def speak_once(feed: dict, report: dict, history: list[dict], model_url: str) -> tuple[list[dict], dict]:
@@ -170,19 +184,19 @@ def speak_once(feed: dict, report: dict, history: list[dict], model_url: str) ->
     if entity is None:
         return history, {"spoke": False, "reason": reason}
     summaries = report.get("semantic_summaries") if isinstance(report.get("semantic_summaries"), dict) else {}
-    live_context = _conversation_context(feed)
     payload = {"participant": entity, "traits": _profile(feed, entity),
-               "inner_state": str(summaries.get(entity) or "")[:480], "live_room_context": live_context,
+               "inner_state": str(summaries.get(entity) or "")[:480], "live_room_context": _conversation_context(feed),
                "vault_recent_speech": history[-MAX_VAULT_CONTEXT:], "selection_reason": reason}
+    all_sources = _all_source_texts(feed)
     utterance = ""
     failure = "generation_failed"
-    for attempt in range(3):
+    for attempt in range(4):
         try:
             candidate = _request(model_url, payload, entity, attempt)
         except Exception as exc:
             failure = f"model_error:{type(exc).__name__}"
             continue
-        if _acceptable(candidate, entity, history, live_context):
+        if _acceptable(candidate, entity, history, all_sources):
             utterance = candidate
             break
         failure = "quality_rejected"
