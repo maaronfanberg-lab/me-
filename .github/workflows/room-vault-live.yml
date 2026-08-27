@@ -1,4 +1,4 @@
-name: Vault Room Live
+name: Room 2 Live
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: vault-room-live
+  group: room-2-live
   cancel-in-progress: true
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: vault-room-dynamics
-          fetch-depth: 20
+          fetch-depth: 30
 
       - name: Assert hard isolation and test
         run: |
@@ -37,44 +37,62 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p .vault_model/runtime
-          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .vault_model
-          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .vault_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
-          tar -xzf .vault_model/llama-runtime-linux-x64.tar.gz -C .vault_model/runtime
-          server_bin=$(find .vault_model/runtime -type f -name 'llama-server' | head -1)
+          mkdir -p .room2_model/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room2_model --clobber
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room2_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .room2_model/llama-runtime-linux-x64.tar.gz -C .room2_model/runtime
+          server_bin=$(find .room2_model/runtime -type f -name 'llama-server' | head -1)
           test -n "$server_bin"
           chmod +x "$server_bin"
-          curl --fail --location --retry 4 --retry-delay 5 \
+          curl --fail --location --retry 6 --retry-delay 4 --connect-timeout 10 --max-time 240 \
             'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' \
-            --output .vault_model/llama-3.2-1b-instruct-q4_k_m.gguf
-          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .vault_model/llama-3.2-1b-instruct-q4_k_m.gguf' | sha256sum -c -
-          "$server_bin" -m .vault_model/llama-3.2-1b-instruct-q4_k_m.gguf --host 127.0.0.1 --port 18081 -c 8192 -np 1 >.vault_model/server.log 2>&1 &
-          echo $! > .vault_model/pid
+            --output .room2_model/llama-3.2-1b-instruct-q4_k_m.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room2_model/llama-3.2-1b-instruct-q4_k_m.gguf' | sha256sum -c -
+          "$server_bin" -m .room2_model/llama-3.2-1b-instruct-q4_k_m.gguf --host 127.0.0.1 --port 18081 -c 8192 -np 1 >.room2_model/server.log 2>&1 &
+          echo $! > .room2_model/pid
           ready=0
           for attempt in $(seq 1 120); do
             if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18081/health >/dev/null 2>&1; then ready=1; break; fi
-            if ! kill -0 "$(cat .vault_model/pid)" 2>/dev/null; then break; fi
+            if ! kill -0 "$(cat .room2_model/pid)" 2>/dev/null; then
+              cat .room2_model/server.log || true
+              break
+            fi
             sleep 1
           done
           test "$ready" -eq 1
 
-      - name: Run autonomous isolated Vault Room
+      - name: Run autonomous isolated Room 2
+        env:
+          ROOM2_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          git config user.name 'vault-room-live'
+          git config user.name 'room-2-live'
           git config user.email 'actions@users.noreply.github.com'
           mkdir -p vault/runtime
           stop_at=$((SECONDS + 17400))
           iteration=0
           while [ "$SECONDS" -lt "$stop_at" ]; do
             iteration=$((iteration + 1))
-            echo "Vault live iteration $iteration"
+            echo "ROOM 2 live iteration $iteration"
 
-            git fetch origin main --depth=2
+            timeout 35s git fetch origin main --depth=2
             git show origin/main:room/feed.json > vault/runtime/production-feed.json
             test -s vault/runtime/production-feed.json
+            python3 - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          src=Path('vault/runtime/production-feed.json')
+          feed=json.loads(src.read_text())
+          assert isinstance(feed,dict)
+          assert isinstance(feed.get('conversation'),list)
+          original=feed.get('generated_at')
+          feed['production_generated_at']=original
+          feed['generated_at']=datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
+          Path('vault/runtime/dynamics-feed.json').write_text(json.dumps(feed,ensure_ascii=False)+'\n')
+          PY
 
-            (cd vault && python3 shadow_runner.py runtime/production-feed.json --state runtime/shadow-state.json --report runtime/report.json)
+            (cd vault && python3 shadow_runner.py runtime/dynamics-feed.json --state runtime/shadow-state.json --report runtime/report.json)
             python3 vault/vault_talker.py \
               vault/runtime/production-feed.json \
               vault/runtime/report.json \
@@ -82,9 +100,9 @@ jobs:
               --model-url http://127.0.0.1:18081/completion \
               --result vault/runtime/last-speech-result.json
 
-            rm -f vault/runtime/production-feed.json
             python3 - <<'PY'
-          import json
+          import json, os
+          from datetime import datetime, timezone
           from pathlib import Path
           r=json.load(open('vault/runtime/report.json'))
           assert r['production_write_enabled'] is False
@@ -92,29 +110,40 @@ jobs:
           h=json.load(open('vault/runtime/vault-conversation.json')) if Path('vault/runtime/vault-conversation.json').exists() else []
           assert isinstance(h,list) and len(h) <= 120
           assert all(x.get('speaker') in {'sarah','mara','owen','jules'} for x in h)
-          assert all(len(str(x.get('text',''))) <= 420 for x in h)
+          assert all(12 <= len(str(x.get('text',''))) <= 360 for x in h)
+          assert all(str(x.get('text','')).rstrip()[-1:] in '.?!' for x in h)
+          heartbeat={
+            'version':'room-2-heartbeat-v1',
+            'at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+            'run_id':os.environ.get('ROOM2_RUN_ID'),
+            'source_cycle':r.get('source_cycle'),
+            'health':(r.get('health') or {}).get('status'),
+            'conversation_size':len(h),
+          }
+          Path('vault/runtime/heartbeat.json').write_text(json.dumps(heartbeat,ensure_ascii=False,indent=2)+'\n')
           PY
 
-            git add vault/runtime/shadow-state.json vault/runtime/report.json vault/runtime/vault-conversation.json vault/runtime/last-speech-result.json
+            rm -f vault/runtime/production-feed.json vault/runtime/dynamics-feed.json
+            git add vault/runtime/shadow-state.json vault/runtime/report.json vault/runtime/vault-conversation.json vault/runtime/last-speech-result.json vault/runtime/heartbeat.json
             staged=$(git diff --cached --name-only)
             if [ -n "$staged" ]; then
-              test "$(printf '%s\n' "$staged" | grep -vcE '^vault/runtime/(shadow-state|report|vault-conversation|last-speech-result)\.json$' || true)" -eq 0
-              git commit -m "Vault live iteration ${iteration} [skip ci]"
+              test "$(printf '%s\n' "$staged" | grep -vcE '^vault/runtime/(shadow-state|report|vault-conversation|last-speech-result|heartbeat)\.json$' || true)" -eq 0
+              git commit -m "ROOM 2 live iteration ${iteration} [skip ci]"
               pushed=0
               for attempt in 1 2 3 4; do
-                if git push origin HEAD:vault-room-dynamics; then pushed=1; break; fi
-                git fetch origin vault-room-dynamics
+                if timeout 35s git push origin HEAD:vault-room-dynamics; then pushed=1; break; fi
+                git fetch origin vault-room-dynamics --depth=30
                 git rebase origin/vault-room-dynamics || { git rebase --abort || true; exit 1; }
                 sleep $((attempt * 2))
               done
               test "$pushed" -eq 1
             fi
-            sleep 75
+            sleep 45
           done
 
       - name: Stop model
         if: always()
         run: |
-          if [ -f .vault_model/pid ]; then
-            kill "$(cat .vault_model/pid)" 2>/dev/null || true
+          if [ -f .room2_model/pid ]; then
+            kill "$(cat .room2_model/pid)" 2>/dev/null || true
           fi
