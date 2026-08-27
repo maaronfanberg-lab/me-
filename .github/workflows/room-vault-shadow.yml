@@ -24,12 +24,19 @@ jobs:
           ref: vault-room-dynamics
           fetch-depth: 10
 
+      - name: Assert vault branch isolation
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "vault-room-dynamics"
+          test -d vault
+
       - name: Read production feed without modifying main
         run: |
           set -euo pipefail
           git fetch origin main --depth=2
           mkdir -p vault/runtime
           git show origin/main:room/feed.json > vault/runtime/production-feed.json
+          test -s vault/runtime/production-feed.json
 
       - name: Test vault dynamics
         working-directory: vault
@@ -44,19 +51,27 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json
+          import math
           r=json.load(open('vault/runtime/report.json'))
+          assert r['version'] == 'room-vault-shadow-v4'
           assert r['production_write_enabled'] is False
           assert r['llm_enabled'] is False
           assert r['speech_requested'] is False
           assert r['candidate_budget'] == 1
+          assert r['health']['state_version'] == 4
+          assert r['health']['status'] in {'ok','degraded'}
           assert set(r['entities']) == {'sarah','mara','owen','jules'}
           assert set(r['candidates']) == set(r['entities'])
+          assert set(r['semantic_summaries']) == set(r['entities'])
           assert sum(bool(v['would_request_speech']) for v in r['candidates'].values()) <= 1
           for entity, d in r['entities'].items():
               assert d['speech_requested'] is False
               assert 0.0 <= d['entropy'] <= 1.0
               assert abs(sum(d['regime_probabilities']) - 1.0) < 1e-9
-              assert len(r['semantic_summaries'][entity]) < 500
+              assert all(math.isfinite(float(x)) for x in d['observables'])
+              assert len(r['semantic_summaries'][entity]) <= 480
+              assert 'regime_entropy=' in r['semantic_summaries'][entity]
+              assert 'mode_separation=' in r['semantic_summaries'][entity]
           PY
 
       - name: Persist vault-only state and report
@@ -66,6 +81,10 @@ jobs:
           git config user.name 'room-vault-shadow'
           git config user.email 'actions@users.noreply.github.com'
           git add vault/runtime/shadow-state.json vault/runtime/report.json
+          STAGED="$(git diff --cached --name-only)"
+          if [ -n "$STAGED" ]; then
+            test "$(printf '%s\n' "$STAGED" | grep -vcE '^vault/runtime/(shadow-state|report)\.json$' || true)" -eq 0
+          fi
           if git diff --cached --quiet; then
             echo 'No vault state changes'
             exit 0
