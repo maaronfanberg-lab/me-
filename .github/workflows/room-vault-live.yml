@@ -69,6 +69,7 @@ jobs:
           mkdir -p vault/runtime
           stop_at=$((SECONDS + 17400))
           iteration=0
+          commit_every=3
 
           restart_model() {
             echo 'ROOM 2 model health failed; restarting local server.'
@@ -89,7 +90,7 @@ jobs:
             echo "ROOM 2 live iteration $iteration"
 
             if ! curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18081/health >/dev/null 2>&1; then
-              restart_model || { cat .room2_model/server.log || true; exit 1; }
+              restart_model || { cat .room2_model/server.log || true; sleep 30; continue; }
             fi
 
             if ! timeout 35s git fetch origin main --depth=2; then
@@ -102,9 +103,14 @@ jobs:
               sleep 20
               continue
             fi
-            test -s vault/runtime/production-feed.json
+            if [ ! -s vault/runtime/production-feed.json ]; then
+              echo 'Production feed empty; preserving ROOM 2 state and retrying.'
+              sleep 20
+              continue
+            fi
 
-            python3 - <<'PY'
+            merge_ok=1
+            python3 - <<'PY' || merge_ok=0
           import json, sys
           from datetime import datetime, timezone
           from pathlib import Path
@@ -119,9 +125,9 @@ jobs:
           if room2_path.exists():
               try: raw_room2=json.loads(room2_path.read_text())
               except Exception: raw_room2=[]
-              room2,_=sanitize_history(raw_room2)
+              room2,sanitize_stats=sanitize_history(raw_room2)
           else:
-              room2=[]
+              room2=[]; sanitize_stats={'removed':0,'kept':0}
           merged=[]
           for item in feed.get('conversation',[]):
               if isinstance(item,dict): merged.append(dict(item))
@@ -132,15 +138,30 @@ jobs:
           feed['production_generated_at']=original
           feed['generated_at']=datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
           Path('vault/runtime/dynamics-feed.json').write_text(json.dumps(feed,ensure_ascii=False)+'\n')
+          Path('vault/runtime/sanitizer-report.json').write_text(json.dumps(sanitize_stats,ensure_ascii=False,indent=2)+'\n')
           PY
+            if [ "$merge_ok" -ne 1 ]; then
+              echo 'Merged feed validation failed; preserving prior ROOM 2 state.'
+              rm -f vault/runtime/dynamics-feed.json
+              sleep 20
+              continue
+            fi
 
-            (cd vault && python3 shadow_runner.py runtime/dynamics-feed.json --state runtime/shadow-state.json --report runtime/report.json)
-            python3 vault/room2_talker_entry.py \
+            if ! (cd vault && python3 shadow_runner.py runtime/dynamics-feed.json --state runtime/shadow-state.json --report runtime/report.json); then
+              echo 'Dynamics iteration failed; preserving last committed state.'
+              rm -f vault/runtime/production-feed.json vault/runtime/dynamics-feed.json
+              sleep 20
+              continue
+            fi
+            if ! python3 vault/room2_talker_entry.py \
               vault/runtime/production-feed.json \
               vault/runtime/report.json \
               vault/runtime/vault-conversation.json \
               --model-url http://127.0.0.1:18081/completion \
-              --result vault/runtime/last-speech-result.json
+              --result vault/runtime/last-speech-result.json; then
+              echo 'Speech iteration failed; keeping dynamics alive and continuing.'
+              printf '{"spoke":false,"reason":"talker_process_failed"}\n' > vault/runtime/last-speech-result.json
+            fi
 
             python3 - <<'PY'
           import json, os, sys
@@ -157,8 +178,10 @@ jobs:
           assert all(acceptable_persisted_text(str(x.get('text',''))) for x in h)
           ids=[str(x.get('id') or '') for x in h]
           assert len(ids)==len(set(ids))
+          try: sanitizer=json.load(open('vault/runtime/sanitizer-report.json'))
+          except Exception: sanitizer={'removed':0,'kept':len(h)}
           heartbeat={
-            'version':'room-2-heartbeat-v2',
+            'version':'room-2-heartbeat-v3',
             'at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
             'run_id':os.environ.get('ROOM2_RUN_ID'),
             'source_cycle':r.get('source_cycle'),
@@ -166,24 +189,45 @@ jobs:
             'conversation_size':len(h),
             'llm_active':True,
             'feedback_loop':True,
+            'sanitizer_removed':int(sanitizer.get('removed') or 0),
           }
           Path('vault/runtime/heartbeat.json').write_text(json.dumps(heartbeat,ensure_ascii=False,indent=2)+'\n')
           PY
 
             rm -f vault/runtime/production-feed.json vault/runtime/dynamics-feed.json
-            git add vault/runtime/shadow-state.json vault/runtime/report.json vault/runtime/vault-conversation.json vault/runtime/last-speech-result.json vault/runtime/heartbeat.json
+            git add vault/runtime/shadow-state.json vault/runtime/report.json vault/runtime/vault-conversation.json vault/runtime/last-speech-result.json vault/runtime/heartbeat.json vault/runtime/sanitizer-report.json
             staged=$(git diff --cached --name-only)
             if [ -n "$staged" ]; then
-              test "$(printf '%s\n' "$staged" | grep -vcE '^vault/runtime/(shadow-state|report|vault-conversation|last-speech-result|heartbeat)\.json$' || true)" -eq 0
-              git commit -m "ROOM 2 live iteration ${iteration} [skip ci]"
-              pushed=0
-              for attempt in 1 2 3 4; do
-                if timeout 35s git push origin HEAD:vault-room-dynamics; then pushed=1; break; fi
-                git fetch origin vault-room-dynamics --depth=30
-                git rebase origin/vault-room-dynamics || { git rebase --abort || true; exit 1; }
-                sleep $((attempt * 2))
-              done
-              test "$pushed" -eq 1
+              test "$(printf '%s\n' "$staged" | grep -vcE '^vault/runtime/(shadow-state|report|vault-conversation|last-speech-result|heartbeat|sanitizer-report)\.json$' || true)" -eq 0
+              spoke=$(python3 - <<'PY'
+          import json
+          try: print(1 if json.load(open('vault/runtime/last-speech-result.json')).get('spoke') else 0)
+          except Exception: print(0)
+          PY
+              )
+              if [ "$spoke" -eq 1 ] || [ $((iteration % commit_every)) -eq 0 ]; then
+                git commit -m "ROOM 2 live iteration ${iteration} [skip ci]"
+                pushed=0
+                for attempt in 1 2 3 4; do
+                  if timeout 35s git push origin HEAD:vault-room-dynamics; then pushed=1; break; fi
+                  git fetch origin vault-room-dynamics --depth=30 || true
+                  if ! git rebase origin/vault-room-dynamics; then
+                    git rebase --abort || true
+                    echo 'ROOM 2 push conflict; dropping local checkpoint and continuing.'
+                    git reset --hard origin/vault-room-dynamics
+                    pushed=2
+                    break
+                  fi
+                  sleep $((attempt * 2))
+                done
+                if [ "$pushed" -eq 0 ]; then
+                  echo 'ROOM 2 checkpoint push exhausted retries; dropping checkpoint, not the live session.'
+                  git fetch origin vault-room-dynamics --depth=30 || true
+                  git reset --hard origin/vault-room-dynamics || true
+                fi
+              else
+                git reset
+              fi
             fi
             sleep 45
           done
