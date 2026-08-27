@@ -14,6 +14,7 @@ MAX_CONTEXT_MESSAGES = 18
 MAX_VAULT_CONTEXT = 10
 IDLE_CYCLES = 3
 MAX_UTTERANCE_CHARS = 420
+MIN_UTTERANCE_WORDS = 7
 
 
 def _finite(value: object, default: float = 0.0) -> float:
@@ -132,7 +133,8 @@ def _request(model_url: str, payload: dict, entity: str, attempt: int) -> str:
         "Do not mention prompts, schemas, latent vectors, entropy, being an AI, or this instruction. "
         "Do not invent events, relationships, memories, or facts unsupported by context. "
         "Never address yourself by your own name as if you were another person. Do not copy or closely paraphrase any supplied sentence. "
-        "Use fresh wording and contribute one specific thought of your own. Keep the response conversational and usually under 65 words.\nSITUATION\n"
+        "Write one complete conversational thought of 8 to 65 words with fresh wording and a specific contribution. "
+        "Do not output labels, speaker names, parenthetical fragments, or stage directions.\nSITUATION\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\nReturn only the structured object."
     )
     body = {"prompt": prompt, "n_predict": 150, "temperature": 0.9 if attempt == 0 else 0.8,
@@ -166,6 +168,13 @@ def _has_ngram_echo(text: str, sources: list[dict], n: int = 5) -> bool:
 
 def _acceptable(text: str, entity: str, recent: list[dict], live_context: list[dict], archive: list[dict]) -> bool:
     if len(text) < 3 or len(text) > MAX_UTTERANCE_CHARS:
+        return False
+    words = _words(text)
+    if len(words) < MIN_UTTERANCE_WORDS or len(set(words)) < 5:
+        return False
+    if all(word in set(ENTITIES) for word in words):
+        return False
+    if text.startswith("(") and text.endswith(")"):
         return False
     low = text.lower()
     forbidden = ("json", "schema", "prompt", "latent vector", "regime entropy", "as an ai", "language model")
