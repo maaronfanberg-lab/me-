@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from decision import choose_candidates
+from decision import ENTITIES, MAX_L1_CHANGE, choose_candidates
 from prompt_adapter import compact_state_text
 
 
@@ -25,8 +25,13 @@ class DecisionAdapterTests(unittest.TestCase):
         self.assertFalse(meta["actual_speech_enabled"])
         self.assertTrue(decisions["owen"]["would_request_speech"])
 
+    def test_output_contains_only_known_entities(self):
+        diagnostics = self.diagnostics(); diagnostics["intruder"] = dict(diagnostics["sarah"])
+        decisions, _ = choose_candidates(diagnostics, 100, {}, 4)
+        self.assertEqual(tuple(decisions), ENTITIES)
+
     def test_cooldown_blocks_repeat_candidate(self):
-        first, meta = choose_candidates(self.diagnostics(), 100, {}, 4)
+        _, meta = choose_candidates(self.diagnostics(), 100, {}, 4)
         second, _ = choose_candidates(self.diagnostics(), 101, meta, 4)
         self.assertFalse(second["owen"]["would_request_speech"])
         self.assertTrue(second["owen"]["cooldown_blocked"])
@@ -44,6 +49,10 @@ class DecisionAdapterTests(unittest.TestCase):
         decisions, _ = choose_candidates(self.diagnostics(), 100, {}, 0)
         self.assertFalse(any(v["would_request_speech"] for v in decisions.values()))
 
+    def test_negative_messages_are_treated_as_zero(self):
+        decisions, _ = choose_candidates(self.diagnostics(), 100, {}, -99)
+        self.assertFalse(any(v["would_request_speech"] for v in decisions.values()))
+
     def test_bootstrap_flag_suppresses_candidates(self):
         decisions, _ = choose_candidates(self.diagnostics(), 100, {}, 4, allow_candidates=False)
         self.assertFalse(any(v["would_request_speech"] for v in decisions.values()))
@@ -57,19 +66,42 @@ class DecisionAdapterTests(unittest.TestCase):
         self.assertTrue(all(math.isfinite(v["score"]) for v in decisions.values()))
         self.assertFalse(decisions["owen"]["would_request_speech"])
 
+    def test_absurd_change_is_clamped(self):
+        diagnostics = self.diagnostics(); diagnostics["owen"]["regime_l1_change"] = 10**50
+        decisions, _ = choose_candidates(diagnostics, 100, {}, 4)
+        self.assertLessEqual(decisions["owen"]["score"], 2 * MAX_L1_CHANGE + 0.15)
+
+    def test_missing_regime_probabilities_are_safe(self):
+        diagnostics = self.diagnostics(); diagnostics["owen"].pop("regime_probabilities")
+        decisions, _ = choose_candidates(diagnostics, 100, {}, 4)
+        self.assertTrue(math.isfinite(decisions["owen"]["score"]))
+
     def test_equal_scores_have_stable_entity_tie_break(self):
         diagnostics = self.diagnostics()
         for diag in diagnostics.values():
-            diag["regime_l1_change"] = 0.1
-            diag["regime_probabilities"] = [0.25] * 4
+            diag["regime_l1_change"] = 0.1; diag["regime_probabilities"] = [0.25] * 4
         decisions, _ = choose_candidates(diagnostics, 100, {}, 4)
         winners = [name for name, value in decisions.items() if value["would_request_speech"]]
         self.assertEqual(winners, ["jules"])
 
-    def test_cycle_regression_is_recorded_not_arithmetically_trusted(self):
+    def test_cycle_regression_is_explicit_and_suppressed(self):
         _, meta = choose_candidates(self.diagnostics(), 100, {}, 4)
-        _, regressed = choose_candidates(self.diagnostics(), 99, meta, 4)
+        decisions, regressed = choose_candidates(self.diagnostics(), 99, meta, 4)
         self.assertTrue(regressed["cycle_regressed"])
+        self.assertFalse(any(v["would_request_speech"] for v in decisions.values()))
+        self.assertTrue(all(v["reason"] == "cycle_regression" for v in decisions.values()))
+
+    def test_garbage_cooldown_keys_are_pruned(self):
+        previous = {"last_candidate_cycle": {"owen": 10, "intruder": 9},
+                    "last_candidate_observation": {"owen": 5, "intruder": 4}}
+        _, meta = choose_candidates(self.diagnostics(), 20, previous, 4)
+        self.assertNotIn("intruder", meta["last_candidate_cycle"])
+        self.assertNotIn("intruder", meta["last_candidate_observation"])
+
+    def test_huge_cycle_is_rejected_safely(self):
+        decisions, meta = choose_candidates(self.diagnostics(), 10**30, {}, 4)
+        self.assertIsNone(meta["last_source_cycle"])
+        self.assertTrue(any(v["would_request_speech"] for v in decisions.values()))
 
     def test_semantic_summary_is_compact_and_directional(self):
         diag = self.diagnostics()["sarah"]
