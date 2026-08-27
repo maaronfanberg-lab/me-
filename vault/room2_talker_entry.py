@@ -23,17 +23,27 @@ BOILERPLATE = (
     "opportunity to engage",
     "meaningful conversations with you",
     "taking measures, you know that",
+    "grateful for these moments",
+    "moments of connection",
 )
+GENERIC_SENTIMENT = re.compile(
+    r"\b(?:i(?:'m| am)\s+)?(?:grateful|thankful|appreciative)\b.{0,45}\b(?:moment|moments|connection|conversation|opportunity)\b",
+    re.I,
+)
+FUNCTION_WORDS = {
+    "a", "an", "the", "and", "or", "but", "because", "if", "when", "while", "that", "this", "these",
+    "to", "of", "for", "with", "from", "in", "on", "at", "is", "are", "was", "were", "be", "been",
+    "my", "our", "your", "it", "its", "i", "i'm", "i've", "i'd", "me", "we", "you",
+}
 
 
 def _balanced_echo_guard(text, sources, n=5):
-    # Recent context needs enough freedom for ordinary English; the full archive stays stricter.
     effective_n = 7 if n == 5 else (9 if n >= 7 else n)
     return _original_has_ngram_echo(text, sources, n=effective_n)
 
 
 def _compact_text(value: object, limit: int = 6) -> str:
-    """Keep ordered content cues, not copyable source sentences."""
+    """Keep ordered concepts while removing source sentence structure."""
     words = re.findall(r"[a-z0-9']+", str(value or "").lower())
     out: list[str] = []
     for word in words:
@@ -47,7 +57,8 @@ def _compact_text(value: object, limit: int = 6) -> str:
 
 
 def _compact_request(model_url: str, payload: dict, entity: str, attempt: int, cycle: int) -> str:
-    # A 1B model tends to copy long supplied sentences. Give it the concepts, not a phrasebook.
+    # Preserve ideas but remove copyable syntax. A complete cue sentence encourages grammatical output
+    # better than handing a tiny model a naked keyword pile.
     compact = copy.deepcopy(payload) if isinstance(payload, dict) else {}
     for key in ("CONTEXT", "ROOM2"):
         items = compact.get(key) if isinstance(compact.get(key), list) else []
@@ -57,9 +68,28 @@ def _compact_request(model_url: str, payload: dict, entity: str, attempt: int, c
                 continue
             cue = _compact_text(item.get("text"))
             if cue:
-                reduced.append({"speaker": str(item.get("speaker") or "")[:40], "text": cue})
+                concepts = ", ".join(cue.split())
+                reduced.append({
+                    "speaker": str(item.get("speaker") or "")[:40],
+                    "text": f"Topic cues: {concepts}.",
+                })
         compact[key] = reduced
     return _original_request(model_url, compact, entity, attempt, cycle)
+
+
+def _looks_telegraphic(text: str) -> bool:
+    words = re.findall(r"[a-z0-9']+", str(text or "").lower())
+    if len(words) < 7:
+        return True
+    # Several tiny comma-separated noun/verb chunks are characteristic of the 1B model collapsing
+    # its keyword cues into word salad rather than forming a sentence.
+    chunks = [c.strip() for c in str(text or "").rstrip(".?!").split(",")]
+    if len(chunks) >= 3 and sum(len(re.findall(r"[a-z0-9']+", c.lower())) <= 3 for c in chunks) >= 2:
+        return True
+    function_count = sum(w in FUNCTION_WORDS for w in words)
+    if len(words) >= 8 and function_count / len(words) < 0.18:
+        return True
+    return False
 
 
 def _hardened_quality_check(text, entity, recent, live_context, archive):
@@ -69,8 +99,10 @@ def _hardened_quality_check(text, entity, recent, live_context, archive):
     grounding = list(live_context) + list(recent[-6:])
     low = str(text or "").lower()
     grounding_text = " ".join(str(x.get("text") or "") for x in grounding if isinstance(x, dict)).lower()
-    if any(p in low and p not in grounding_text for p in BOILERPLATE):
+    if any(p in low and p not in grounding_text for p in BOILERPLATE) or GENERIC_SENTIMENT.search(low):
         return False, "generic_boilerplate"
+    if _looks_telegraphic(text):
+        return False, "telegraphic_syntax"
     if len(re.findall(r"[.!?](?:\s|$)", str(text or ""))) > 1:
         return False, "multiple_sentences"
     if room2_guardrails.has_unsupported_accusation(text):
