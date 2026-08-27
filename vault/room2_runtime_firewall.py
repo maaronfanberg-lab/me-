@@ -42,7 +42,6 @@ def validate(feed, report, history, speech, sanitizer, heartbeat):
     cycle=state.get('cycle')
     ck('08_feed_cycle_intish', isinstance(cycle,int) and cycle>=0)
     ck('09_feed_cycle_bounded', isinstance(cycle,int) and cycle<10**9)
-    brain=feed.get('brain') if isinstance(feed.get('brain'),dict) else {}
     ck('10_feed_brain_dict', isinstance(feed.get('brain'),dict))
     ck('11_feed_no_runtime_write_flag', feed.get('production_write_enabled') is not True)
     ck('12_feed_items_dicts', isinstance(conv,list) and all(isinstance(x,dict) for x in conv))
@@ -52,7 +51,7 @@ def validate(feed, report, history, speech, sanitizer, heartbeat):
 
     # Report 16-40
     ck('16_report_dict', isinstance(report,dict))
-    ck('17_report_version', str(report.get('version','')).startswith('room-vault-shadow-v'))
+    ck('17_report_version', str(report.get('version','')).startswith('room-2-shadow-v'))
     ck('18_report_prod_write_false', report.get('production_write_enabled') is False)
     ck('19_report_shadow_speech_false', report.get('speech_requested') is False)
     ck('20_report_entities_dict', isinstance(report.get('entities'),dict))
@@ -69,6 +68,7 @@ def validate(feed, report, history, speech, sanitizer, heartbeat):
     ck('28_report_processed_nonnegative', isinstance(report.get('processed_messages'),int) and report.get('processed_messages')>=0)
     ck('29_report_processed_bounded', isinstance(report.get('processed_messages'),int) and report.get('processed_messages')<=2000)
     ck('30_report_llm_shadow_false', report.get('llm_enabled') is False)
+    summaries=report.get('semantic_summaries') if isinstance(report.get('semantic_summaries'),dict) else {}
     for e in ENTITIES:
         x=ents.get(e,{}) if isinstance(ents.get(e),dict) else {}
         probs=x.get('regime_probabilities')
@@ -79,9 +79,9 @@ def validate(feed, report, history, speech, sanitizer, heartbeat):
         ck(f'35_{e}_probs_nonnegative', isinstance(probs,list) and len(probs)==4 and all(float(v)>=0 for v in probs if _finite(v)))
         ck(f'36_{e}_probs_sum', isinstance(probs,list) and len(probs)==4 and abs(sum(float(v) for v in probs)-1)<1e-5)
         ck(f'37_{e}_entropy', _finite(x.get('entropy')) and 0<=float(x.get('entropy'))<=1.000001)
-        ck(f'38_{e}_change', _finite(x.get('regime_change')) and 0<=float(x.get('regime_change'))<=2)
+        ck(f'38_{e}_change', _finite(x.get('regime_l1_change')) and 0<=float(x.get('regime_l1_change'))<=2)
         ck(f'39_{e}_observables', isinstance(x.get('observables'),list) and len(x.get('observables'))==10 and all(_finite(v) for v in x.get('observables')))
-        ck(f'40_{e}_summary_bounded', len(str(x.get('semantic_summary','')))<=600)
+        ck(f'40_{e}_summary_bounded', isinstance(summaries.get(e),str) and 0 < len(summaries.get(e)) <= 600)
 
     # History 41-65
     ck('41_history_list', isinstance(history,list))
@@ -111,7 +111,7 @@ def validate(feed, report, history, speech, sanitizer, heartbeat):
     ck('62_history_words_max', all(len(re.findall(r"[a-z0-9']+",t.lower()))<=48 for t in texts))
     ck('63_history_no_nul', all('\x00' not in t for t in texts))
     ck('64_history_known_fields', all(set(x).issubset({'id','speaker','text','at','source_cycle','reason'}) for x in history if isinstance(x,dict)))
-    ck('65_history_recent_reason_known', all((x.get('reason') in VALID_SPEECH_REASONS or x.get('reason') in {'latent_candidate','latent_candidate_fair','bounded_idle_turn','bounded_idle_fair'}) for x in history if isinstance(x,dict)))
+    ck('65_history_recent_reason_known', all(x.get('reason') in VALID_SPEECH_REASONS for x in history if isinstance(x,dict)))
 
     # Speech result 66-80
     ck('66_speech_dict', isinstance(speech,dict))
