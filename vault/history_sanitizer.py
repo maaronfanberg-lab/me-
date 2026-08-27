@@ -22,7 +22,18 @@ BOILERPLATE = (
     "opportunity to engage",
     "meaningful conversations with you",
     "taking measures, you know that",
+    "grateful for these moments",
+    "moments of connection",
 )
+GENERIC_SENTIMENT = re.compile(
+    r"\b(?:i(?:'m| am)\s+)?(?:grateful|thankful|appreciative)\b.{0,45}\b(?:moment|moments|connection|conversation|opportunity)\b",
+    re.I,
+)
+FUNCTION_WORDS = {
+    "a", "an", "the", "and", "or", "but", "because", "if", "when", "while", "that", "this", "these",
+    "to", "of", "for", "with", "from", "in", "on", "at", "is", "are", "was", "were", "be", "been",
+    "my", "our", "your", "it", "its", "i", "i'm", "i've", "i'd", "me", "we", "you",
+}
 
 
 def _clean(value: object) -> str:
@@ -65,6 +76,15 @@ def _normalized_text(text: str) -> str:
     return re.sub(r"\W+", " ", text.lower()).strip()
 
 
+def _looks_telegraphic(text: str) -> bool:
+    words = re.findall(r"[a-z0-9']+", str(text or "").lower())
+    chunks = [c.strip() for c in str(text or "").rstrip(".?!").split(",")]
+    if len(chunks) >= 3 and sum(len(re.findall(r"[a-z0-9']+", c.lower())) <= 3 for c in chunks) >= 2:
+        return True
+    function_count = sum(w in FUNCTION_WORDS for w in words)
+    return len(words) >= 8 and function_count / len(words) < 0.18
+
+
 def acceptable_persisted_text(text: str) -> bool:
     text = _clean(text)
     low = text.lower()
@@ -72,9 +92,10 @@ def acceptable_persisted_text(text: str) -> bool:
         return False
     if any(term in low for term in META):
         return False
-    if any(term in low for term in BOILERPLATE):
+    if any(term in low for term in BOILERPLATE) or GENERIC_SENTIMENT.search(low):
         return False
-    # Persist only one coherent conversational turn. This removes old stitched fragments too.
+    if _looks_telegraphic(text):
+        return False
     if len(re.findall(r"[.!?](?:\s|$)", text)) > 1:
         return False
     if room2_guardrails.has_unsupported_accusation(text):
