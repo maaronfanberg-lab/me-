@@ -109,14 +109,19 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
           sys.path.insert(0,'vault')
-          from vault_talker import load_history
+          from history_sanitizer import sanitize_history
           src=Path('vault/runtime/production-feed.json')
           feed=json.loads(src.read_text())
           if not isinstance(feed,dict) or not isinstance(feed.get('conversation'),list):
               raise SystemExit('invalid production feed shape')
           original=feed.get('generated_at')
           room2_path=Path('vault/runtime/vault-conversation.json')
-          room2=load_history(room2_path) if room2_path.exists() else []
+          if room2_path.exists():
+              try: raw_room2=json.loads(room2_path.read_text())
+              except Exception: raw_room2=[]
+              room2,_=sanitize_history(raw_room2)
+          else:
+              room2=[]
           merged=[]
           for item in feed.get('conversation',[]):
               if isinstance(item,dict): merged.append(dict(item))
@@ -130,7 +135,7 @@ jobs:
           PY
 
             (cd vault && python3 shadow_runner.py runtime/dynamics-feed.json --state runtime/shadow-state.json --report runtime/report.json)
-            python3 vault/vault_talker.py \
+            python3 vault/room2_talker_entry.py \
               vault/runtime/production-feed.json \
               vault/runtime/report.json \
               vault/runtime/vault-conversation.json \
@@ -138,17 +143,18 @@ jobs:
               --result vault/runtime/last-speech-result.json
 
             python3 - <<'PY'
-          import json, os
+          import json, os, sys
           from datetime import datetime, timezone
           from pathlib import Path
+          sys.path.insert(0,'vault')
+          from history_sanitizer import acceptable_persisted_text
           r=json.load(open('vault/runtime/report.json'))
           assert r['production_write_enabled'] is False
           assert r['speech_requested'] is False
           h=json.load(open('vault/runtime/vault-conversation.json')) if Path('vault/runtime/vault-conversation.json').exists() else []
           assert isinstance(h,list) and len(h) <= 120
           assert all(x.get('speaker') in {'sarah','mara','owen','jules'} for x in h)
-          assert all(12 <= len(str(x.get('text',''))) <= 360 for x in h)
-          assert all(str(x.get('text','')).rstrip()[-1:] in '.?!' for x in h)
+          assert all(acceptable_persisted_text(str(x.get('text',''))) for x in h)
           ids=[str(x.get('id') or '') for x in h]
           assert len(ids)==len(set(ids))
           heartbeat={
