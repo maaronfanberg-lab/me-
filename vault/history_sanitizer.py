@@ -15,6 +15,14 @@ VALID_REASONS = {
     "latent_candidate", "latent_candidate_fair", "bounded_idle_turn", "bounded_idle_fair",
 }
 META = ("inner_state", "regime_entropy", "mode_separation", "candidate_budget", "would_request_speech")
+BOILERPLATE = (
+    "grateful for the opportunity",
+    "appreciating the opportunity",
+    "opportunity to share my perspective",
+    "opportunity to engage",
+    "meaningful conversations with you",
+    "taking measures, you know that",
+)
 
 
 def _clean(value: object) -> str:
@@ -63,6 +71,11 @@ def acceptable_persisted_text(text: str) -> bool:
     if len(text) < 12 or text[-1:] not in ".?!":
         return False
     if any(term in low for term in META):
+        return False
+    if any(term in low for term in BOILERPLATE):
+        return False
+    # Persist only one coherent conversational turn. This removes old stitched fragments too.
+    if len(re.findall(r"[.!?](?:\s|$)", text)) > 1:
         return False
     if room2_guardrails.has_unsupported_accusation(text):
         return False
