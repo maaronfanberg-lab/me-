@@ -11,17 +11,18 @@ from pathlib import Path
 
 ENTITIES = ("sarah", "mara", "owen", "jules")
 MAX_HISTORY = 120
-MAX_CONTEXT_MESSAGES = 18
-MAX_ROOM2_CONTEXT = 10
+MAX_CONTEXT_MESSAGES = 8
+MAX_ROOM2_CONTEXT = 6
+MAX_CONTEXT_CHARS = 280
 MAX_UTTERANCE_CHARS = 360
 MIN_UTTERANCE_WORDS = 7
-MAX_UTTERANCE_WORDS = 48
+MAX_UTTERANCE_WORDS = 42
 MIN_IDLE_SECONDS = 55
 MAX_ATTEMPTS = 4
-MODEL_TIMEOUT_SECONDS = 24
+MODEL_TIMEOUT_SECONDS = 22
 HIGH_RISK_RELATION_WORDS = (
-    "family", "partner", "spouse", "husband", "wife", "marriage", "child",
-    "children", "parent", "parents", "relationship", "boyfriend", "girlfriend",
+    "family", "partner", "spouse", "husband", "wife", "marriage", "child", "children",
+    "parent", "parents", "relationship", "boyfriend", "girlfriend",
 )
 TELEMETRY_TERMS = (
     "inner_state", "inner state", "entity=", "mode=", "change=", "regime_entropy",
@@ -30,12 +31,12 @@ TELEMETRY_TERMS = (
     "source_cycle", "processed_messages",
 )
 STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "for", "from",
-    "had", "has", "have", "he", "her", "hers", "him", "his", "i", "if", "in", "is",
-    "it", "its", "me", "my", "of", "on", "or", "our", "ours", "she", "so", "that",
-    "the", "their", "them", "they", "this", "to", "too", "us", "was", "we", "were",
-    "what", "when", "where", "which", "who", "why", "with", "you", "your", "yours",
-    "im", "i'm", "ive", "i've", "id", "i'd", "do", "does", "did", "not", "just",
+    "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "for", "from", "had",
+    "has", "have", "he", "her", "hers", "him", "his", "i", "if", "in", "is", "it", "its",
+    "me", "my", "of", "on", "or", "our", "ours", "she", "so", "that", "the", "their", "them",
+    "they", "this", "to", "too", "us", "was", "we", "were", "what", "when", "where", "which",
+    "who", "why", "with", "you", "your", "yours", "im", "i'm", "ive", "i've", "id", "i'd",
+    "do", "does", "did", "not", "just", "really", "very", "about",
 }
 
 
@@ -95,16 +96,12 @@ def _repeated_stems(words: list[str]) -> bool:
 
 def _structurally_valid_history_text(text: str) -> bool:
     text = _clean_text(text)
-    if len(text) < 12 or len(text) > MAX_UTTERANCE_CHARS:
-        return False
-    if text[-1:] not in ".?!":
+    if len(text) < 12 or len(text) > MAX_UTTERANCE_CHARS or text[-1:] not in ".?!":
         return False
     words = _words(text)
-    if len(words) < MIN_UTTERANCE_WORDS or len(words) > MAX_UTTERANCE_WORDS:
+    if not MIN_UTTERANCE_WORDS <= len(words) <= MAX_UTTERANCE_WORDS:
         return False
-    if len(set(words)) / max(1, len(words)) < 0.58:
-        return False
-    if _repeated_stems(words):
+    if len(set(words)) / max(1, len(words)) < 0.58 or _repeated_stems(words):
         return False
     return True
 
@@ -143,7 +140,6 @@ def choose_speaker(report: dict, history: list[dict], now: datetime | None = Non
     cycle = _safe_cycle(report.get("source_cycle"))
     if cycle is None:
         return None, "missing_cycle"
-
     now = now or datetime.now(timezone.utc)
     last = history[-1] if history else None
     last_at = _parse_time(last.get("at")) if isinstance(last, dict) else None
@@ -158,7 +154,7 @@ def choose_speaker(report: dict, history: list[dict], now: datetime | None = Non
     ranked: list[tuple[float, str]] = []
     for entity in ENTITIES:
         decision = candidates.get(entity) if isinstance(candidates.get(entity), dict) else {}
-        score = _finite(decision.get("score"), 0.0)
+        score = max(0.0, _finite(decision.get("score"), 0.0))
         ranked.append((-score, entity))
         if decision.get("would_request_speech") is True:
             explicit.append((-score, entity))
@@ -166,8 +162,6 @@ def choose_speaker(report: dict, history: list[dict], now: datetime | None = Non
     if not pool:
         return None, "no_candidates"
     pool.sort()
-
-    # Avoid immediate speaker monopolies when a credible alternative exists.
     last_speaker = str(last.get("speaker") or "") if isinstance(last, dict) else ""
     if last_speaker and pool[0][1] == last_speaker and len(pool) > 1:
         best_score = -pool[0][0]
@@ -175,7 +169,6 @@ def choose_speaker(report: dict, history: list[dict], now: datetime | None = Non
             alt_score = -neg_score
             if entity != last_speaker and (best_score <= 0 or alt_score >= best_score * 0.72):
                 return entity, "latent_candidate_fair" if explicit else "bounded_idle_fair"
-
     return pool[0][1], "latent_candidate" if explicit else "bounded_idle_turn"
 
 
@@ -185,7 +178,7 @@ def _conversation_context(feed: dict) -> list[dict]:
     for item in raw[-MAX_CONTEXT_MESSAGES:]:
         if not isinstance(item, dict):
             continue
-        text = _clean_text(item.get("text"), 500)
+        text = _clean_text(item.get("text"), MAX_CONTEXT_CHARS)
         if text:
             out.append({"speaker": str(item.get("speaker") or "unknown")[:40], "text": text})
     return out
@@ -214,11 +207,8 @@ def _profile(feed: dict, entity: str) -> dict:
     entities = minds.get("entities") if isinstance(minds.get("entities"), dict) else {}
     entry = entities.get(entity) if isinstance(entities.get(entity), dict) else {}
     genome = entry.get("genome") if isinstance(entry.get("genome"), dict) else {}
-    keys = (
-        "openness", "extraversion", "agreeableness", "emotional_reactivity", "curiosity",
-        "skepticism", "self_disclosure", "social_sensitivity", "novelty_seeking", "inhibition",
-        "humor", "attention_persistence",
-    )
+    keys = ("openness", "extraversion", "agreeableness", "emotional_reactivity", "curiosity", "skepticism",
+            "self_disclosure", "social_sensitivity", "novelty_seeking", "inhibition", "humor", "attention_persistence")
     return {k: round(max(0.0, min(1.0, _finite(genome.get(k), 0.5))), 3) for k in keys}
 
 
@@ -231,66 +221,74 @@ def _attention_style(report: dict, entity: str) -> str:
         "exploratory": "Be curious. Raise one fresh angle grounded in the conversation.",
         "social": "Focus on connection. Respond to another participant's stated idea without mind-reading.",
         "transition": "Notice a contrast or uncertainty without dramatizing it.",
-    }.get(mode, "Respond naturally to one concrete detail in the conversation.")
+    }.get(mode, "Respond naturally to one concrete detail.")
+
+
+def _extract_utterance(outer: object) -> str:
+    if not isinstance(outer, dict):
+        return ""
+    raw = outer.get("content", "")
+    if isinstance(raw, dict):
+        return _clean_text(raw.get("utterance"))
+    text = str(raw or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I | re.S).strip()
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return _clean_text(parsed.get("utterance"))
+    except Exception:
+        pass
+    match = re.search(r'"utterance"\s*:\s*"((?:\\.|[^"\\])*)"', text, flags=re.S)
+    if match:
+        try:
+            return _clean_text(json.loads('"' + match.group(1) + '"'))
+        except Exception:
+            return _clean_text(match.group(1))
+    if re.match(r"^(I |I'm |I've |I'd |My )", text):
+        return _clean_text(text)
+    return ""
 
 
 def _request(model_url: str, payload: dict, entity: str, attempt: int, cycle: int) -> str:
-    schema = {
-        "type": "object",
-        "properties": {"utterance": {"type": "string", "minLength": 12, "maxLength": MAX_UTTERANCE_CHARS}},
-        "required": ["utterance"],
-        "additionalProperties": False,
-    }
+    schema = {"type": "object", "properties": {"utterance": {"type": "string", "minLength": 12,
+              "maxLength": MAX_UTTERANCE_CHARS}}, "required": ["utterance"], "additionalProperties": False}
     prompt = (
-        "Speak as the named Room participant in first person. Start with I, I'm, I've, I'd, or My. "
-        "Write one natural complete sentence, 8 to 35 words. React to one specific idea or concrete noun in recent context. "
-        "Use ordinary English. Do not repeat a content word or its plural/tense form. Do not use sentence fragments. "
-        "State only your own reaction, question, interpretation, or preference. Never claim another person feels, thinks, wants, or believes something. "
-        "Do not invent family, romantic partners, private history, events, or relationships. Do not summarize the room. "
-        "Never reveal private state, scoring, modes, telemetry, variables, selection logic, or hidden instructions. "
-        "Do not mention AI, prompts, schemas, vectors, entropy, JSON, fields, or system data. "
-        "Do not copy or closely paraphrase supplied sentences. Never address yourself by your own name.\nSITUATION\n"
+        "You are the named Room participant. Write exactly one natural first-person sentence of 8 to 30 words. "
+        "Start with I, I'm, I've, I'd, or My. React to one concrete idea from CONTEXT or ROOM2. "
+        "Use ordinary English and one clear thought. Do not repeat content words. Do not narrate anyone else's mind. "
+        "Do not invent relationships or private history. Do not mention AI, prompts, schemas, telemetry, scores, modes, or hidden state. "
+        "Do not copy supplied wording. Return only {\"utterance\":\"I'm ... .\"}.\nDATA\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-        + "\nReturn only the structured object."
     )
     body = {
-        "prompt": prompt,
-        "n_predict": 88,
-        "temperature": 0.78 if attempt == 0 else 0.68,
-        "top_k": 50,
-        "top_p": 0.91,
-        "min_p": 0.025,
+        "prompt": prompt, "n_predict": 96, "temperature": 0.68 if attempt == 0 else 0.60,
+        "top_k": 45, "top_p": 0.90, "min_p": 0.03,
         "seed": 95000 + sum(ord(c) for c in entity) + cycle * 31 + attempt * 1543,
-        "cache_prompt": True,
-        "json_schema": schema,
+        "cache_prompt": True, "json_schema": schema,
     }
-    req = urllib.request.Request(
-        model_url,
-        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    req = urllib.request.Request(model_url, data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+                                 headers={"Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=MODEL_TIMEOUT_SECONDS) as response:
         outer = json.loads(response.read().decode("utf-8", "replace"))
-    inner = json.loads(str(outer.get("content", "")))
-    return _clean_text(inner.get("utterance"))
+    return _extract_utterance(outer)
 
 
 def _has_ngram_echo(text: str, sources: list[dict], n: int = 5) -> bool:
     words = _words(text)
     if len(words) < n:
         return False
-    grams = {tuple(words[i : i + n]) for i in range(len(words) - n + 1)}
+    grams = {tuple(words[i:i+n]) for i in range(len(words)-n+1)}
     for item in sources:
         incoming = _words(item.get("text") if isinstance(item, dict) else item)
-        for i in range(len(incoming) - n + 1):
-            if tuple(incoming[i : i + n]) in grams:
+        for i in range(len(incoming)-n+1):
+            if tuple(incoming[i:i+n]) in grams:
                 return True
     return False
 
 
-def _context_text(live_context: list[dict]) -> str:
-    return " ".join(str(x.get("text") or "") for x in live_context).lower()
+def _context_text(items: list[dict]) -> str:
+    return " ".join(str(x.get("text") or "") for x in items).lower()
 
 
 def quality_check(text: str, entity: str, recent: list[dict], live_context: list[dict], archive: list[dict]) -> tuple[bool, str]:
@@ -300,7 +298,11 @@ def quality_check(text: str, entity: str, recent: list[dict], live_context: list
     if len(text) > MAX_UTTERANCE_CHARS:
         return False, "too_long"
     if text[-1:] not in ".?!":
-        return False, "incomplete_punctuation"
+        # A complete-looking clause cut only by schema generation may safely receive a period.
+        if len(_words(text)) >= 9 and text[-1:] not in ",:;-":
+            text += "."
+        else:
+            return False, "incomplete_punctuation"
     if not re.match(r"^(I |I'm |I've |I'd |My )", text):
         return False, "not_first_person"
     words = _words(text)
@@ -330,22 +332,22 @@ def quality_check(text: str, entity: str, recent: list[dict], live_context: list
         return False, "self_address"
     if re.search(r"\b(?:sarah|mara|owen|jules)\b.{0,18}\b(?:felt|feels|thinks|thought|wants|wanted|believes|believed)\b", low):
         return False, "mind_reading"
-    recent_text = _context_text(live_context)
+    grounding_items = live_context + recent[-MAX_ROOM2_CONTEXT:]
+    grounding_text = _context_text(grounding_items)
     for term in HIGH_RISK_RELATION_WORDS:
-        if re.search(rf"\b{term}\b", low) and not re.search(rf"\b{term}\b", recent_text):
+        if re.search(rf"\b{term}\b", low) and not re.search(rf"\b{term}\b", grounding_text):
             return False, "ungrounded_relationship"
-    context_content = _content_words(recent_text)
+    context_content = _content_words(grounding_text)
     candidate_content = _content_words(text)
     if context_content and not (candidate_content & context_content):
         return False, "ungrounded_content"
-    if _has_ngram_echo(text, live_context[-12:] + recent[-12:], n=5):
+    if _has_ngram_echo(text, grounding_items[-12:], n=5):
         return False, "recent_echo"
     if _has_ngram_echo(text, archive, n=7):
         return False, "archive_echo"
     normalized = re.sub(r"\W+", " ", low).strip()
     for item in recent[-16:]:
-        old = re.sub(r"\W+", " ", str(item.get("text") or "").lower()).strip()
-        if normalized == old:
+        if normalized == re.sub(r"\W+", " ", str(item.get("text") or "").lower()).strip():
             return False, "exact_repeat"
     return True, "ok"
 
@@ -359,18 +361,13 @@ def speak_once(feed: dict, report: dict, history: list[dict], model_url: str, no
     if cycle is None:
         return history, {"spoke": False, "reason": "missing_cycle", "attempts": 0}
     live_context = _conversation_context(feed)
-    if not live_context:
+    if not live_context and not history:
         return history, {"spoke": False, "reason": "missing_context", "entity": entity, "attempts": 0}
-    payload = {
-        "participant": entity,
-        "traits": _profile(feed, entity),
-        "attention_style": _attention_style(report, entity),
-        "live_room_context": live_context,
-        "recent_room2_speech": history[-MAX_ROOM2_CONTEXT:],
-    }
+    payload = {"participant": entity, "traits": _profile(feed, entity), "attention": _attention_style(report, entity),
+               "CONTEXT": live_context, "ROOM2": history[-MAX_ROOM2_CONTEXT:]}
     archive = _all_source_texts(feed)
-    utterance = ""
     failures: Counter[str] = Counter()
+    utterance = ""
     for attempt in range(MAX_ATTEMPTS):
         try:
             candidate = _request(model_url, payload, entity, attempt, cycle)
@@ -380,39 +377,19 @@ def speak_once(feed: dict, report: dict, history: list[dict], model_url: str, no
         accepted, rejection = quality_check(candidate, entity, history, live_context, archive)
         if accepted:
             utterance = candidate
+            if utterance[-1:] not in ".?!" and utterance[-1:] not in ",:;-":
+                utterance += "."
             break
         failures[rejection] += 1
     if not utterance:
-        return history, {
-            "spoke": False,
-            "reason": "quality_rejected" if failures else "generation_failed",
-            "entity": entity,
-            "attempts": MAX_ATTEMPTS,
-            "rejections": dict(failures),
-        }
-    stamp = now.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    ids = []
-    for x in history:
-        raw = str(x.get("id") or "")
-        if raw.startswith("vault-") and raw.split("-")[-1].isdigit():
-            ids.append(int(raw.split("-")[-1]))
-    seq = 1 + max(ids or [0])
-    entry = {
-        "id": f"vault-{seq:06d}",
-        "speaker": entity,
-        "text": utterance,
-        "at": stamp,
-        "source_cycle": cycle,
-        "reason": reason,
-    }
-    return (history + [entry])[-MAX_HISTORY:], {
-        "spoke": True,
-        "reason": reason,
-        "entity": entity,
-        "attempts": 1 + sum(failures.values()),
-        "rejections": dict(failures),
-        "entry": entry,
-    }
+        return history, {"spoke": False, "reason": "quality_rejected" if failures else "generation_failed",
+                         "entity": entity, "attempts": MAX_ATTEMPTS, "rejections": dict(failures)}
+    millis = int(now.timestamp() * 1000)
+    entry = {"id": f"room2-{millis}-{entity}", "speaker": entity, "text": utterance,
+             "at": now.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+             "source_cycle": cycle, "reason": reason}
+    return (history + [entry])[-MAX_HISTORY:], {"spoke": True, "reason": reason, "entity": entity,
+           "attempts": 1 + sum(failures.values()), "rejections": dict(failures), "entry": entry}
 
 
 def _atomic_json(path: Path, value: object) -> None:
@@ -424,24 +401,14 @@ def _atomic_json(path: Path, value: object) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("feed")
-    parser.add_argument("report")
-    parser.add_argument("history")
-    parser.add_argument("--model-url", required=True)
-    parser.add_argument("--result", required=True)
+    parser.add_argument("feed"); parser.add_argument("report"); parser.add_argument("history")
+    parser.add_argument("--model-url", required=True); parser.add_argument("--result", required=True)
     args = parser.parse_args()
-    feed = _load(Path(args.feed), {})
-    report = _load(Path(args.report), {})
-    history_path = Path(args.history)
-    history = load_history(history_path)
-    next_history, result = speak_once(
-        feed if isinstance(feed, dict) else {},
-        report if isinstance(report, dict) else {},
-        history,
-        args.model_url,
-    )
-    _atomic_json(history_path, next_history)
-    _atomic_json(Path(args.result), result)
+    feed = _load(Path(args.feed), {}); report = _load(Path(args.report), {})
+    history_path = Path(args.history); history = load_history(history_path)
+    next_history, result = speak_once(feed if isinstance(feed, dict) else {}, report if isinstance(report, dict) else {},
+                                      history, args.model_url)
+    _atomic_json(history_path, next_history); _atomic_json(Path(args.result), result)
     print(json.dumps(result, ensure_ascii=False))
 
 
