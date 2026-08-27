@@ -23,7 +23,7 @@ class FirewallTests(unittest.TestCase):
     def test_valid_bundle_passes(self):
         result=room2_firewall_adapter.validate(*valid_bundle())
         self.assertTrue(result['ok'],result)
-        self.assertGreaterEqual(result['passed'],100)
+        self.assertGreaterEqual(result['passed'],103)
 
     def test_production_write_tripwire(self):
         b=valid_bundle(); b[1]['production_write_enabled']=True
@@ -44,8 +44,26 @@ class FirewallTests(unittest.TestCase):
 
     def test_spoken_entry_must_be_in_history(self):
         b=valid_bundle(); now=b[5]['at']
-        b[3]={'spoke':True,'reason':'bounded_idle_turn','entity':'mara','attempts':1,'rejections':{},'entry':{'id':'missing','speaker':'mara','text':'I am thinking carefully about this current shared topic.','at':now}}
+        b[3]={'spoke':True,'reason':'bounded_idle_turn','entity':'mara','attempts':1,'rejections':{},'entry':{'id':'missing','speaker':'mara','text':'I am thinking carefully about this current shared topic.','at':now,'source_cycle':1}}
         r=room2_firewall_adapter.validate(*b)
         self.assertFalse(r['ok']); self.assertIn('80_speech_entry_in_history',r['failures'])
+
+    def test_feed_report_cycle_mismatch(self):
+        b=valid_bundle(); b[0]['state']['cycle']=2
+        r=room2_firewall_adapter.validate(*b)
+        self.assertFalse(r['ok']); self.assertIn('101_feed_report_cycle_match',r['failures'])
+
+    def test_heartbeat_report_cycle_mismatch(self):
+        b=valid_bundle(); b[5]['source_cycle']=2
+        r=room2_firewall_adapter.validate(*b)
+        self.assertFalse(r['ok']); self.assertIn('102_heartbeat_report_cycle_match',r['failures'])
+
+    def test_spoken_entry_cycle_mismatch(self):
+        b=valid_bundle(); now=b[5]['at']
+        msg={'id':'spoken','speaker':'mara','text':'I am thinking carefully about this current shared topic.','at':now,'source_cycle':2,'reason':'bounded_idle_turn'}
+        b[2]=[msg]; b[4]['kept']=1; b[5]['conversation_size']=1
+        b[3]={'spoke':True,'reason':'bounded_idle_turn','entity':'mara','attempts':1,'rejections':{},'entry':dict(msg)}
+        r=room2_firewall_adapter.validate(*b)
+        self.assertFalse(r['ok']); self.assertIn('103_speech_report_cycle_match',r['failures'])
 
 if __name__=='__main__': unittest.main()
