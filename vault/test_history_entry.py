@@ -35,6 +35,19 @@ class Room2HistoryEntryTests(unittest.TestCase):
         self.assertEqual(clean, [])
         self.assertEqual(stats["removed"], 1)
 
+    def test_generic_connection_filler_is_quarantined(self):
+        value = [{"id": "a", "speaker": "sarah", "text": "I'm grateful for these moments of connection.", "at": "2026-08-27T14:00:00Z"}]
+        clean, stats = history_sanitizer.sanitize_history(value)
+        self.assertEqual(clean, [])
+        self.assertEqual(stats["removed"], 1)
+
+    def test_telegraphic_word_salad_is_quarantined(self):
+        value = [{"id": "a", "speaker": "owen", "text": "I appreciate deeply, care nature, conversation means.", "at": "2026-08-27T14:00:00Z"}]
+        clean, stats = history_sanitizer.sanitize_history(value)
+        self.assertEqual(clean, [])
+        self.assertEqual(stats["removed"], 1)
+        self.assertTrue(room2_talker_entry._looks_telegraphic(value[0]["text"]))
+
     def test_stitched_multiple_sentences_are_quarantined(self):
         value = [{"id": "a", "speaker": "mara", "text": "I'm considering that idea carefully. That's great, Owen!", "at": "2026-08-27T14:00:00Z"}]
         clean, stats = history_sanitizer.sanitize_history(value)
