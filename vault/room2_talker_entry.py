@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import os
 import re
 import sys
@@ -15,6 +16,7 @@ import vault_talker
 _original_has_ngram_echo = vault_talker._has_ngram_echo
 _original_quality_check = vault_talker.quality_check
 _original_request = vault_talker._request
+_original_attention_style = vault_talker._attention_style
 
 BOILERPLATE = (
     "grateful for the opportunity",
@@ -81,8 +83,6 @@ def _looks_telegraphic(text: str) -> bool:
     words = re.findall(r"[a-z0-9']+", str(text or "").lower())
     if len(words) < 7:
         return True
-    # Several tiny comma-separated noun/verb chunks are characteristic of the 1B model collapsing
-    # its keyword cues into word salad rather than forming a sentence.
     chunks = [c.strip() for c in str(text or "").rstrip(".?!").split(",")]
     if len(chunks) >= 3 and sum(len(re.findall(r"[a-z0-9']+", c.lower())) <= 3 for c in chunks) >= 2:
         return True
@@ -90,6 +90,55 @@ def _looks_telegraphic(text: str) -> bool:
     if len(words) >= 8 and function_count / len(words) < 0.18:
         return True
     return False
+
+
+def _sarah_abandonment_pressure(report: dict) -> tuple[bool, float]:
+    """Rare deterministic high-threat phase derived from Sarah's own live state.
+
+    The rhythmic gate prevents this from becoming her permanent voice; tension, uncertainty,
+    social salience, and affiliation must also be elevated enough for the phase to emerge.
+    """
+    entities = report.get("entities") if isinstance(report.get("entities"), dict) else {}
+    sarah = entities.get("sarah") if isinstance(entities.get("sarah"), dict) else {}
+    obs = sarah.get("observables") if isinstance(sarah.get("observables"), list) else []
+    if len(obs) < 10:
+        return False, 0.0
+    try:
+        tension = float(obs[1])
+        affiliation = float(obs[3])
+        uncertainty = float(obs[6])
+        social_salience = float(obs[8])
+        cycle = int(report.get("source_cycle") or 0)
+    except (TypeError, ValueError):
+        return False, 0.0
+    values = (tension, affiliation, uncertainty, social_salience)
+    if not all(math.isfinite(v) for v in values):
+        return False, 0.0
+    signal = 0.30 * tension + 0.20 * affiliation + 0.25 * uncertainty + 0.25 * social_salience
+    pulse = 0.5 + 0.5 * math.sin(cycle * 0.73 + 1.9)
+    active = signal >= 0.50 and pulse >= 0.84
+    intensity = max(0.0, min(1.0, ((signal - 0.45) / 0.25) * pulse))
+    return active, intensity
+
+
+def _room2_attention_style(report: dict, entity: str) -> str:
+    base = _original_attention_style(report, entity)
+    if entity != "sarah":
+        return base
+    active, intensity = _sarah_abandonment_pressure(report)
+    if not active:
+        return base
+    if intensity >= 0.55:
+        return (
+            "Keep your voice low, clipped, and sharp, almost a hiss. Let fear of being left and anger crowd the sentence. "
+            "Own both as your feelings: say what I fear, I hate, I can't stand, or I want, rather than accusing anyone. "
+            "React to one concrete detail from the conversation. No threats, no claims about another person's motives, "
+            "and no invented relationship history. One tense natural sentence."
+        )
+    return (
+        "Sound guarded and tight. Let a flash of fear of being left mix with anger, but own it as your internal reaction. "
+        "Stay grounded in one concrete conversational detail and do not accuse, threaten, or invent history."
+    )
 
 
 def _hardened_quality_check(text, entity, recent, live_context, archive):
@@ -178,6 +227,7 @@ def main() -> None:
         print(f"ROOM 2 quarantined {stats['removed']} persisted utterance(s).")
     vault_talker._has_ngram_echo = _balanced_echo_guard
     vault_talker._request = _compact_request
+    vault_talker._attention_style = _room2_attention_style
     vault_talker.quality_check = _hardened_quality_check
     vault_talker.main()
     _postflight()
