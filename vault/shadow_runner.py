@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from room_dynamics import ENTITIES, LATENT_BOUND, initial_state, project_observables, regime_logits, softmax, normalized_entropy, tick
+from room_dynamics import ENTITIES, LATENT_BOUND, initial_state, project_observables, regime_logits, softmax, normalized_entropy, tick, l1_change
 
 LEXICONS = (
     ("why", "how", "what", "wonder", "curious", "explore", "new", "novel"),
@@ -24,6 +23,8 @@ GENOME_KEYS = (
     "curiosity", "emotional_reactivity", "novelty_seeking", "social_sensitivity",
     "skepticism", "attention_persistence", "inhibition", "extraversion",
 )
+
+EVENT_HOMEOSTASIS = 0.96
 
 
 def clamp(v: float) -> float:
@@ -51,20 +52,21 @@ def token_score(text: str, terms: tuple[str, ...]) -> float:
 
 def semantic_event_delta(entity: str, speaker: str, text: str) -> list[float]:
     body = str(text or "")[:1200]
-    scores = [token_score(body, terms) for terms in LEXICONS]
+    s = [token_score(body, terms) for terms in LEXICONS]
     mention = 1.0 if re.search(rf"\b{re.escape(entity)}\b", body, flags=re.I) else 0.0
     question = 1.0 if "?" in body else 0.0
     self_speech = 1.0 if speaker == entity else 0.0
-    # Signed, bounded nudges. Same semantics yield same state change; no model call.
+    # Small signed semantic impulses. Cross-inhibition prevents every dimension
+    # drifting upward together, while homeostasis below prevents accumulation.
     return [
-        0.22 * scores[0] + 0.08 * question,
-        0.24 * scores[1] - 0.05 * scores[3],
-        0.24 * scores[2],
-        0.22 * scores[3] + 0.10 * mention,
-        0.16 * scores[4] - 0.15 * scores[6],
-        0.18 * scores[5],
-        0.20 * scores[6] + 0.04 * mention,
-        0.17 * scores[7] + 0.05 * self_speech,
+        0.055 * s[0] + 0.025 * s[2] + 0.015 * question - 0.020 * s[7],
+        0.070 * s[1] - 0.040 * s[3],
+        0.065 * s[2] - 0.020 * s[5],
+        0.060 * s[3] + 0.020 * mention - 0.055 * s[1],
+        0.055 * s[4] - 0.060 * s[6],
+        0.050 * s[5] - 0.015 * s[2],
+        0.060 * s[6] + 0.010 * mention - 0.040 * s[4],
+        0.050 * s[7] + 0.015 * self_speech - 0.015 * s[2],
     ]
 
 
@@ -86,7 +88,7 @@ def seed_from_genome(state, genome: dict) -> None:
 def load_envelope(path: Path, feed: dict) -> dict:
     if path.exists():
         data = json.loads(path.read_text())
-        if data.get("version") == 1:
+        if data.get("version") == 2:
             return data
     generated = parse_minute(feed.get("generated_at"), 0.0)
     entities = {}
@@ -95,7 +97,7 @@ def load_envelope(path: Path, feed: dict) -> dict:
         state = initial_state(entity, generated)
         seed_from_genome(state, (minds.get(entity) or {}).get("genome", {}) or {})
         entities[entity] = state.__dict__
-    return {"version": 1, "last_message_id": None, "entities": entities, "source_cycle": None}
+    return {"version": 2, "last_message_id": None, "entities": entities, "source_cycle": None}
 
 
 def restore_state(data: dict):
@@ -115,7 +117,6 @@ def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
                 found = True
                 break
         if not found:
-            # Feed is a rolling window; resync without replaying all history.
             start = max(0, len(conversation) - 16)
     else:
         start = max(0, len(conversation) - 40)
@@ -125,15 +126,19 @@ def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
     states = {}
     for entity in ENTITIES:
         state = restore_state(envelope["entities"][entity])
+        starting_regimes = list(state.regimes)
         for msg in new_messages:
             event_minute = parse_minute(msg.get("at"), state.minute)
             state, _ = tick(state, max(state.minute, event_minute), None)
             delta = semantic_event_delta(entity, str(msg.get("speaker") or "").lower(), str(msg.get("text") or ""))
-            state.latent = [clamp(v + d) for v, d in zip(state.latent, delta)]
+            state.latent = [clamp(EVENT_HOMEOSTASIS * v + d) for v, d in zip(state.latent, delta)]
             obs = project_observables(state.latent)
             state.regimes = softmax(regime_logits(obs))
             state.entropy = normalized_entropy(state.regimes)
         state, diag = tick(state, max(state.minute, now_minute), None)
+        cumulative_change = l1_change(starting_regimes, state.regimes)
+        diag["regime_l1_change"] = cumulative_change
+        diag["interesting"] = bool(cumulative_change >= 0.08 or state.entropy >= 0.985)
         diag["dominant_regime"] = diag["regime_names"][max(range(4), key=lambda i: diag["regime_probabilities"][i])]
         diag["speech_requested"] = False
         states[entity] = state.__dict__
@@ -142,13 +147,13 @@ def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
     last_message = new_messages[-1] if new_messages else (conversation[-1] if conversation else {})
     state_obj = feed.get("state") or {}
     new_envelope = {
-        "version": 1,
+        "version": 2,
         "last_message_id": last_message.get("id") if last_message else last_id,
         "entities": states,
         "source_cycle": state_obj.get("cycle"),
     }
     report = {
-        "version": "room-vault-shadow-v1",
+        "version": "room-vault-shadow-v2",
         "source_generated_at": feed.get("generated_at"),
         "source_cycle": state_obj.get("cycle"),
         "source_brain": (feed.get("brain") or {}).get("active"),
