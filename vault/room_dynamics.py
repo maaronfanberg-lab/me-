@@ -12,14 +12,10 @@ OBS_DIM = 10
 REGIME_DIM = 4
 LATENT_BOUND = 3.0
 
-# Slow intrinsic frequencies in radians per minute. They create persistent
-# internal motion without requiring a continuous loop or numerical solver.
 OMEGA = (0.071, 0.103, 0.149, 0.211, 0.293, 0.379, 0.487, 0.613)
 DECAY_PER_MINUTE = (0.004, 0.006, 0.005, 0.008, 0.007, 0.004, 0.009, 0.006)
+INTRINSIC_AMPLITUDE = 0.22
 
-# Interpretable projection: curiosity, tension, novelty, affiliation,
-# confidence, memory activation, uncertainty, persistence, social salience,
-# initiative. Values are deliberately modest to keep logits bounded.
 OBS_WEIGHTS = (
     (0.55, -0.10, 0.20, 0.05, 0.15, 0.10, -0.05, 0.15),
     (-0.05, 0.60, -0.10, 0.20, -0.15, 0.10, 0.15, 0.05),
@@ -33,8 +29,6 @@ OBS_WEIGHTS = (
     (0.25, 0.05, 0.20, 0.10, 0.20, 0.00, -0.10, 0.30),
 )
 
-# Four deliberately generic regimes. We are not pretending these are validated
-# psychological categories. They are behavioral control modes for experiments.
 REGIME_NAMES = ("settled", "exploratory", "social", "transition")
 REGIME_WEIGHTS = (
     (0.10, -0.35, -0.10, 0.20, 0.35, 0.15, -0.30, 0.25, 0.05, -0.05),
@@ -65,67 +59,66 @@ def _seed_unit(entity: str, i: int) -> float:
     return 2.0 * n - 1.0
 
 
+def _phase(entity: str, i: int) -> float:
+    return math.pi * (_seed_unit(entity, i + 200) + 1.0)
+
+
 def initial_state(entity: str, minute: float = 0.0) -> EntityState:
     if entity not in ENTITIES:
         raise ValueError(f"unknown entity: {entity}")
     latent = [0.35 * _seed_unit(entity, i) for i in range(LATENT_DIM)]
     observables = project_observables(latent)
     regimes = softmax(regime_logits(observables))
-    return EntityState(
-        version=1,
-        entity=entity,
-        minute=float(minute),
-        latent=latent,
-        regimes=regimes,
-        entropy=normalized_entropy(regimes),
-    )
+    return EntityState(1, entity, float(minute), latent, regimes, normalized_entropy(regimes))
 
 
-def advance_latent(latent: Iterable[float], dt_minutes: float, entity: str) -> list[float]:
-    """Analytically advance state across any elapsed interval in one bounded step."""
+def advance_latent(latent: Iterable[float], dt_minutes: float, entity: str,
+                   start_minute: float = 0.0) -> list[float]:
+    """Exact transition of a damped sinusoidally forced state over any interval.
+
+    This has the semigroup property: advancing A→B→C matches A→C (apart from
+    floating-point roundoff), so missed scheduler ticks do not alter the physics.
+    """
     dt = max(0.0, float(dt_minutes))
+    t0 = float(start_minute)
+    t1 = t0 + dt
     out: list[float] = []
     for i, x in enumerate(latent):
-        decay = math.exp(-DECAY_PER_MINUTE[i] * dt)
-        phase = OMEGA[i] * dt
-        intrinsic = 0.22 * _seed_unit(entity, i + 100)
-        # Damp old state and add a bounded intrinsic oscillatory component.
-        value = float(x) * decay + intrinsic * math.sin(phase)
+        lam = DECAY_PER_MINUTE[i]
+        omega = OMEGA[i]
+        phase = _phase(entity, i)
+        decay = math.exp(-lam * dt)
+        # Choose forcing magnitude so the steady-state sinusoid has the desired amplitude.
+        forcing = INTRINSIC_AMPLITUDE * math.sqrt(lam * lam + omega * omega) * _seed_unit(entity, i + 100)
+        denom = lam * lam + omega * omega
+
+        def primitive(t: float) -> float:
+            angle = omega * t + phase
+            return (lam * math.sin(angle) - omega * math.cos(angle)) / denom
+
+        value = float(x) * decay + forcing * (primitive(t1) - decay * primitive(t0))
         out.append(_clamp(value, -LATENT_BOUND, LATENT_BOUND))
     return out
 
 
 def event_vector(entity: str, event: str) -> list[float]:
-    """Hash an event into a deterministic small perturbation vector."""
     text = str(event or "").strip()
     if not text:
         return [0.0] * LATENT_DIM
     digest = hashlib.sha256(f"{entity}|{text}".encode()).digest()
-    vector = []
-    for i in range(LATENT_DIM):
-        byte = digest[i]
-        vector.append(((byte / 255.0) * 2.0 - 1.0) * 0.28)
-    return vector
+    return [((digest[i] / 255.0) * 2.0 - 1.0) * 0.28 for i in range(LATENT_DIM)]
 
 
 def apply_event(latent: Iterable[float], entity: str, event: str) -> list[float]:
     delta = event_vector(entity, event)
-    return [
-        _clamp(float(x) + delta[i], -LATENT_BOUND, LATENT_BOUND)
-        for i, x in enumerate(latent)
-    ]
+    return [_clamp(float(x) + delta[i], -LATENT_BOUND, LATENT_BOUND) for i, x in enumerate(latent)]
 
 
 def project_observables(latent: Iterable[float]) -> list[float]:
     x = list(latent)
     if len(x) != LATENT_DIM:
         raise ValueError(f"latent must have {LATENT_DIM} values")
-    out = []
-    for row in OBS_WEIGHTS:
-        raw = sum(w * v for w, v in zip(row, x))
-        # Map to [0, 1] while naturally saturating.
-        out.append(0.5 + 0.5 * math.tanh(raw))
-    return out
+    return [0.5 + 0.5 * math.tanh(sum(w * v for w, v in zip(row, x))) for row in OBS_WEIGHTS]
 
 
 def regime_logits(observables: Iterable[float]) -> list[float]:
@@ -162,7 +155,7 @@ def tick(state: EntityState, now_minute: float, event: str | None = None) -> tup
     if state.entity not in ENTITIES:
         raise ValueError(f"unknown entity: {state.entity}")
     dt = max(0.0, float(now_minute) - float(state.minute))
-    latent = advance_latent(state.latent, dt, state.entity)
+    latent = advance_latent(state.latent, dt, state.entity, state.minute)
 
     event_hash = state.last_event_hash
     if event is not None and str(event).strip():
@@ -174,23 +167,9 @@ def tick(state: EntityState, now_minute: float, event: str | None = None) -> tup
     entropy = normalized_entropy(regimes)
     change = l1_change(state.regimes, regimes)
 
-    # Recommendation only. No model invocation happens here.
-    interesting = bool(
-        event is not None
-        or change >= 0.18
-        or entropy >= 0.985
-        or dt >= 180.0
-    )
-
-    new_state = EntityState(
-        version=1,
-        entity=state.entity,
-        minute=float(now_minute),
-        latent=latent,
-        regimes=regimes,
-        entropy=entropy,
-        last_event_hash=event_hash,
-    )
+    # Diagnostic only. Candidate speech policy lives in decision.py.
+    interesting = bool(event is not None or change >= 0.18 or dt >= 180.0)
+    new_state = EntityState(1, state.entity, float(now_minute), latent, regimes, entropy, event_hash)
     diagnostics = {
         "entity": state.entity,
         "dt_minutes": dt,
