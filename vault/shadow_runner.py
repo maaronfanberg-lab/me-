@@ -6,6 +6,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from decision import choose_candidates
+from prompt_adapter import compact_state_text
 from room_dynamics import ENTITIES, LATENT_BOUND, initial_state, project_observables, regime_logits, softmax, normalized_entropy, tick, l1_change
 
 LEXICONS = (
@@ -18,12 +20,10 @@ LEXICONS = (
     ("maybe", "unclear", "unsure", "confused", "don't know", "not sure", "question"),
     ("keep", "continue", "again", "still", "persist", "finish", "return", "back"),
 )
-
 GENOME_KEYS = (
     "curiosity", "emotional_reactivity", "novelty_seeking", "social_sensitivity",
     "skepticism", "attention_persistence", "inhibition", "extraversion",
 )
-
 EVENT_HOMEOSTASIS = 0.96
 
 
@@ -56,8 +56,6 @@ def semantic_event_delta(entity: str, speaker: str, text: str) -> list[float]:
     mention = 1.0 if re.search(rf"\b{re.escape(entity)}\b", body, flags=re.I) else 0.0
     question = 1.0 if "?" in body else 0.0
     self_speech = 1.0 if speaker == entity else 0.0
-    # Small signed semantic impulses. Cross-inhibition prevents every dimension
-    # drifting upward together, while homeostasis below prevents accumulation.
     return [
         0.055 * s[0] + 0.025 * s[2] + 0.015 * question - 0.020 * s[7],
         0.070 * s[1] - 0.040 * s[3],
@@ -88,7 +86,7 @@ def seed_from_genome(state, genome: dict) -> None:
 def load_envelope(path: Path, feed: dict) -> dict:
     if path.exists():
         data = json.loads(path.read_text())
-        if data.get("version") == 2:
+        if data.get("version") == 3:
             return data
     generated = parse_minute(feed.get("generated_at"), 0.0)
     entities = {}
@@ -97,7 +95,7 @@ def load_envelope(path: Path, feed: dict) -> dict:
         state = initial_state(entity, generated)
         seed_from_genome(state, (minds.get(entity) or {}).get("genome", {}) or {})
         entities[entity] = state.__dict__
-    return {"version": 2, "last_message_id": None, "entities": entities, "source_cycle": None}
+    return {"version": 3, "last_message_id": None, "entities": entities, "source_cycle": None, "decision_meta": {}}
 
 
 def restore_state(data: dict):
@@ -122,8 +120,8 @@ def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
         start = max(0, len(conversation) - 40)
     new_messages = conversation[start:]
     now_minute = parse_minute(feed.get("generated_at"), 0.0)
-    diagnostics = {}
-    states = {}
+    diagnostics, states = {}, {}
+
     for entity in ENTITIES:
         state = restore_state(envelope["entities"][entity])
         starting_regimes = list(state.regimes)
@@ -138,29 +136,39 @@ def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
         state, diag = tick(state, max(state.minute, now_minute), None)
         cumulative_change = l1_change(starting_regimes, state.regimes)
         diag["regime_l1_change"] = cumulative_change
-        diag["interesting"] = bool(cumulative_change >= 0.08 or state.entropy >= 0.985)
+        diag["interesting"] = bool(cumulative_change >= 0.06)
         diag["dominant_regime"] = diag["regime_names"][max(range(4), key=lambda i: diag["regime_probabilities"][i])]
         diag["speech_requested"] = False
-        states[entity] = state.__dict__
-        diagnostics[entity] = diag
+        states[entity], diagnostics[entity] = state.__dict__, diag
 
-    last_message = new_messages[-1] if new_messages else (conversation[-1] if conversation else {})
     state_obj = feed.get("state") or {}
+    source_cycle = state_obj.get("cycle")
+    candidates, decision_meta = choose_candidates(
+        diagnostics, source_cycle, envelope.get("decision_meta"), len(new_messages)
+    )
+    semantic_summaries = {
+        entity: compact_state_text(entity, diagnostics[entity], candidates[entity]) for entity in ENTITIES
+    }
+    last_message = new_messages[-1] if new_messages else (conversation[-1] if conversation else {})
     new_envelope = {
-        "version": 2,
+        "version": 3,
         "last_message_id": last_message.get("id") if last_message else last_id,
         "entities": states,
-        "source_cycle": state_obj.get("cycle"),
+        "source_cycle": source_cycle,
+        "decision_meta": decision_meta,
     }
     report = {
-        "version": "room-vault-shadow-v2",
+        "version": "room-vault-shadow-v3",
         "source_generated_at": feed.get("generated_at"),
-        "source_cycle": state_obj.get("cycle"),
+        "source_cycle": source_cycle,
         "source_brain": (feed.get("brain") or {}).get("active"),
         "processed_messages": len(new_messages),
         "production_write_enabled": False,
         "llm_enabled": False,
         "speech_requested": False,
+        "candidate_budget": decision_meta["global_candidate_budget"],
+        "candidates": candidates,
+        "semantic_summaries": semantic_summaries,
         "entities": diagnostics,
     }
     return new_envelope, report
@@ -173,8 +181,7 @@ def main() -> None:
     p.add_argument("--report", default="runtime/report.json")
     args = p.parse_args()
     feed = json.loads(Path(args.feed).read_text())
-    state_path = Path(args.state)
-    report_path = Path(args.report)
+    state_path, report_path = Path(args.state), Path(args.report)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     envelope = load_envelope(state_path, feed)
