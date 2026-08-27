@@ -4,6 +4,7 @@ import unittest
 from room_dynamics import (
     ENTITIES,
     LATENT_BOUND,
+    advance_latent,
     initial_state,
     state_from_json,
     state_to_json,
@@ -31,6 +32,22 @@ class RoomDynamicsTests(unittest.TestCase):
             self.assertTrue(all(math.isfinite(v) for v in advanced.latent))
             self.assertTrue(all(-LATENT_BOUND <= v <= LATENT_BOUND for v in advanced.latent))
             self.assertAlmostEqual(sum(advanced.regimes), 1.0, places=12)
+
+    def test_catchup_is_path_independent(self):
+        for entity in ENTITIES:
+            state = initial_state(entity, 1000.0)
+            direct = advance_latent(state.latent, 180.0, entity, 1000.0)
+            first = advance_latent(state.latent, 60.0, entity, 1000.0)
+            second = advance_latent(first, 60.0, entity, 1060.0)
+            stepped = advance_latent(second, 60.0, entity, 1120.0)
+            for a, b in zip(direct, stepped):
+                self.assertAlmostEqual(a, b, places=11)
+
+    def test_state_moves_without_messages(self):
+        for entity in ENTITIES:
+            state = initial_state(entity, 1000.0)
+            moved, _ = tick(state, 1060.0)
+            self.assertNotEqual(state.latent, moved.latent)
 
     def test_event_is_deterministic_but_changes_state(self):
         state = initial_state("sarah")
