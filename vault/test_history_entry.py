@@ -40,8 +40,8 @@ class Room2HistoryEntryTests(unittest.TestCase):
         self.assertTrue(room2_talker_entry._balanced_echo_guard(text, source, n=5))
 
     def test_archive_guard_allows_seven_word_overlap(self):
-        text = "I'm thinking renewal can change where our attention goes next."
-        source = [{"text": "renewal can change where our attention goes next week"}]
+        text = "I'm thinking renewal can change where attention goes next."
+        source = [{"text": "renewal can change where attention goes next week"}]
         self.assertFalse(room2_talker_entry._balanced_echo_guard(text, source, n=7))
 
     def test_archive_guard_blocks_eight_word_overlap(self):
