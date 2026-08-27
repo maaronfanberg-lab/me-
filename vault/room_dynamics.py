@@ -12,11 +12,27 @@ OBS_DIM = 10
 REGIME_DIM = 4
 LATENT_BOUND = 3.0
 MAX_ADVANCE_MINUTES = 525600.0
-REGIME_GAIN = 2.4
+REGIME_GAIN = 5.0
 
 OMEGA = (0.071, 0.103, 0.149, 0.211, 0.293, 0.379, 0.487, 0.613)
 DECAY_PER_MINUTE = (0.004, 0.006, 0.005, 0.008, 0.007, 0.004, 0.009, 0.006)
-INTRINSIC_AMPLITUDE = 0.22
+INTRINSIC_AMPLITUDE = 0.30
+
+# Each entity has its own deterministic tempo. These are deliberately not
+# harmonic multiples, so their internal motion drifts in and out of phase.
+ENTITY_TEMPO = {
+    "sarah": 0.82,
+    "mara": 1.07,
+    "owen": 0.94,
+    "jules": 1.19,
+}
+ENTITY_PULSE_AMPLITUDE = {
+    "sarah": 0.48,
+    "mara": 0.58,
+    "owen": 0.53,
+    "jules": 0.65,
+}
+REGIME_PULSE_OMEGA = (0.031, 0.043, 0.057, 0.071)
 
 OBS_WEIGHTS = (
     (0.55, -0.10, 0.20, 0.05, 0.15, 0.10, -0.05, 0.15),
@@ -79,13 +95,36 @@ def _reduced_angle(value: float) -> float:
     return math.remainder(value, math.tau)
 
 
+def rhythmic_regime_pulse(entity: str, minute: float) -> list[float]:
+    """Zero-mean deterministic rhythmic pressure on the four regimes."""
+    if entity not in ENTITIES:
+        raise ValueError(f"unknown entity: {entity}")
+    t = _finite(minute, "minute")
+    tempo = ENTITY_TEMPO[entity]
+    amplitude = ENTITY_PULSE_AMPLITUDE[entity]
+    raw = [
+        amplitude * math.sin(
+            _reduced_angle(REGIME_PULSE_OMEGA[i] * tempo * t + _phase(entity, i + 500))
+        )
+        for i in range(REGIME_DIM)
+    ]
+    mean = sum(raw) / REGIME_DIM
+    return [v - mean for v in raw]
+
+
+def regime_probabilities(observables: Iterable[float], entity: str, minute: float) -> list[float]:
+    base = regime_logits(observables)
+    pulse = rhythmic_regime_pulse(entity, minute)
+    return softmax([a + b for a, b in zip(base, pulse)])
+
+
 def initial_state(entity: str, minute: float = 0.0) -> EntityState:
     if entity not in ENTITIES:
         raise ValueError(f"unknown entity: {entity}")
     minute_f = _finite(minute, "minute")
     latent = [0.35 * _seed_unit(entity, i) for i in range(LATENT_DIM)]
     observables = project_observables(latent)
-    regimes = softmax(regime_logits(observables))
+    regimes = regime_probabilities(observables, entity, minute_f)
     return EntityState(1, entity, minute_f, latent, regimes, normalized_entropy(regimes))
 
 
@@ -104,10 +143,11 @@ def advance_latent(latent: Iterable[float], dt_minutes: float, entity: str,
     dt = min(dt, MAX_ADVANCE_MINUTES)
     t0 = _finite(start_minute, "start_minute")
     t1 = t0 + dt
+    tempo = ENTITY_TEMPO[entity]
     out: list[float] = []
     for i, x in enumerate(xs):
         lam = DECAY_PER_MINUTE[i]
-        omega = OMEGA[i]
+        omega = OMEGA[i] * tempo
         phase = _phase(entity, i)
         decay = math.exp(-lam * dt)
         forcing = INTRINSIC_AMPLITUDE * math.sqrt(lam * lam + omega * omega) * _seed_unit(entity, i + 100)
@@ -217,7 +257,7 @@ def tick(state: EntityState, now_minute: float, event: str | None = None) -> tup
         latent = apply_event(latent, state.entity, str(event))
         event_hash = hashlib.sha256(str(event).encode()).hexdigest()[:16]
     observables = project_observables(latent)
-    regimes = softmax(regime_logits(observables))
+    regimes = regime_probabilities(observables, state.entity, effective_now)
     entropy = normalized_entropy(regimes)
     change = l1_change(state.regimes, regimes)
     interesting = bool(has_event or change >= 0.18 or dt >= 180.0)
