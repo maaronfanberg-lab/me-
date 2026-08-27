@@ -52,13 +52,13 @@ class Room2HistoryEntryTests(unittest.TestCase):
         self.assertTrue(room2_talker_entry._balanced_echo_guard(text, source, n=5))
 
     def test_archive_guard_allows_eight_word_overlap(self):
-        text = "I'm thinking renewal can change where our attention goes next week."
-        source = [{"text": "renewal can change where our attention goes next week quickly"}]
+        text = "I'm thinking renewal can change where attention goes next week."
+        source = [{"text": "renewal can change where attention goes next week quickly"}]
         self.assertFalse(room2_talker_entry._balanced_echo_guard(text, source, n=7))
 
     def test_archive_guard_blocks_nine_word_overlap(self):
-        text = "I'm thinking renewal can change where our attention goes next week slowly."
-        source = [{"text": "renewal can change where our attention goes next week slowly today"}]
+        text = "I'm thinking renewal can change where our attention goes next week."
+        source = [{"text": "renewal can change where our attention goes next week quickly"}]
         self.assertTrue(room2_talker_entry._balanced_echo_guard(text, source, n=7))
 
     def test_entry_sanitizes_history_argument(self):
