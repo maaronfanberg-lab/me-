@@ -24,11 +24,13 @@ from room_dynamics import (
     tick,
 )
 
-STATE_VERSION = 4
+STATE_VERSION = 5
 MAX_TEXT_CHARS = 1200
 MAX_NEW_MESSAGES = 200
-RECENT_ID_LIMIT = 256
+RECENT_ID_LIMIT = 2048
+BOOTSTRAP_MESSAGES = 40
 EVENT_HOMEOSTASIS = 0.96
+SELF_EVENT_SCALE = 0.35
 
 LEXICONS = (
     ("why", "how", "what", "wonder", "curious", "explore", "new", "novel"),
@@ -61,13 +63,13 @@ def finite_float(value: object, default: float = 0.0) -> float:
 def parse_cycle(value: object) -> int | None:
     try:
         cycle = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
-    return cycle if cycle >= 0 else None
+    return cycle if 0 <= cycle <= 10**12 else None
 
 
 def parse_minute(value: object) -> float | None:
-    text = str(value or "").strip()
+    text = str(value or "").strip()[:100]
     if not text:
         return None
     try:
@@ -81,7 +83,6 @@ def parse_minute(value: object) -> float | None:
 
 
 def _term_present(text: str, term: str) -> bool:
-    # Word/phrase boundaries avoid accidental hits such as 'how' inside 'show'.
     pattern = r"(?<!\w)" + re.escape(term.lower()) + r"(?!\w)"
     return re.search(pattern, text.lower()) is not None
 
@@ -94,13 +95,10 @@ def token_score(text: str, terms: tuple[str, ...]) -> float:
 def semantic_event_delta(entity: str, speaker: str, text: str) -> list[float]:
     body = str(text or "")[:MAX_TEXT_CHARS]
     scores = [token_score(body, terms) for terms in LEXICONS]
-    # Negated certainty should not simultaneously count as confidence.
     if _term_present(body, "not sure") or _term_present(body, "don't know"):
         scores[4] *= 0.25
     mention = 1.0 if re.search(rf"(?<!\w){re.escape(entity)}(?!\w)", body, flags=re.I) else 0.0
     question = 1.0 if "?" in body else 0.0
-    # Deliberately no self-speech reward: otherwise an entity can amplify itself
-    # merely because its own previous output is present in the feed.
     return [
         0.055 * scores[0] + 0.025 * scores[2] + 0.015 * question - 0.020 * scores[7],
         0.070 * scores[1] - 0.040 * scores[3],
@@ -127,19 +125,6 @@ def seed_from_genome(state: EntityState, genome: dict) -> None:
     state.entropy = normalized_entropy(state.regimes)
 
 
-def _state_valid(data: object, entity: str) -> bool:
-    if not isinstance(data, dict) or data.get("entity") != entity:
-        return False
-    latent = data.get("latent")
-    regimes = data.get("regimes")
-    if not isinstance(latent, list) or len(latent) != 8:
-        return False
-    if not isinstance(regimes, list) or len(regimes) != 4:
-        return False
-    values = latent + regimes + [data.get("minute", 0.0), data.get("entropy", 0.0)]
-    return all(math.isfinite(finite_float(v, float("nan"))) for v in values)
-
-
 def _fresh_entity(feed: dict, entity: str, minute: float) -> EntityState:
     state = initial_state(entity, minute)
     minds = feed.get("minds") if isinstance(feed.get("minds"), dict) else {}
@@ -163,6 +148,31 @@ def _fresh_envelope(feed: dict) -> dict:
     }
 
 
+def _repair_entity(feed: dict, entity: str, data: object, fallback_minute: float) -> tuple[dict, bool]:
+    if not isinstance(data, dict) or str(data.get("entity")) != entity:
+        return _fresh_entity(feed, entity, fallback_minute).__dict__, True
+    latent = data.get("latent")
+    minute = finite_float(data.get("minute"), float("nan"))
+    if not isinstance(latent, list) or len(latent) != 8 or not math.isfinite(minute):
+        return _fresh_entity(feed, entity, fallback_minute).__dict__, True
+    cleaned = [finite_float(v, float("nan")) for v in latent]
+    if not all(math.isfinite(v) for v in cleaned):
+        return _fresh_entity(feed, entity, fallback_minute).__dict__, True
+    cleaned = [clamp(v) for v in cleaned]
+    obs = project_observables(cleaned)
+    regimes = softmax(regime_logits(obs))
+    state = EntityState(
+        version=1,
+        entity=entity,
+        minute=max(0.0, minute),
+        latent=cleaned,
+        regimes=regimes,
+        entropy=normalized_entropy(regimes),
+        last_event_hash=str(data.get("last_event_hash"))[:64] if data.get("last_event_hash") else None,
+    )
+    return state.__dict__, False
+
+
 def load_envelope(path: Path, feed: dict) -> dict:
     fresh = _fresh_envelope(feed)
     if not path.exists():
@@ -177,11 +187,8 @@ def load_envelope(path: Path, feed: dict) -> dict:
         fresh["recovery_count"] = 1
         fresh["recovery_reason"] = "invalid_state_root"
         return fresh
-
-    # Migrate v3 in place rather than throwing away accumulated dynamics.
-    version = data.get("version")
-    if version not in {3, STATE_VERSION}:
-        fresh["recovery_count"] = int(finite_float(data.get("recovery_count"), 0.0)) + 1
+    if data.get("version") not in {3, 4, STATE_VERSION}:
+        fresh["recovery_count"] = min(10**6, int(finite_float(data.get("recovery_count"), 0.0)) + 1)
         fresh["recovery_reason"] = "unsupported_state_version"
         return fresh
 
@@ -191,79 +198,76 @@ def load_envelope(path: Path, feed: dict) -> dict:
     migrated.setdefault("decision_meta", {})
     migrated.setdefault("source_cycle", None)
     migrated.setdefault("has_observed_feed", bool(migrated.get("last_message_id")))
-    migrated.setdefault("recovery_count", 0)
-    if not isinstance(migrated.get("recent_message_ids"), list):
-        migrated["recent_message_ids"] = []
-    migrated["recent_message_ids"] = [str(x) for x in migrated["recent_message_ids"][-RECENT_ID_LIMIT:]]
+    migrated["recovery_count"] = min(10**6, max(0, int(finite_float(migrated.get("recovery_count"), 0.0))))
+    ids = migrated.get("recent_message_ids") if isinstance(migrated.get("recent_message_ids"), list) else []
+    migrated["recent_message_ids"] = [str(x)[:160] for x in ids[-RECENT_ID_LIMIT:] if str(x)]
 
     generated = parse_minute(feed.get("generated_at")) or 0.0
     entities = migrated.get("entities") if isinstance(migrated.get("entities"), dict) else {}
     recovered = 0
+    repaired: dict[str, dict] = {}
     for entity in ENTITIES:
-        if not _state_valid(entities.get(entity), entity):
-            entities[entity] = _fresh_entity(feed, entity, generated).__dict__
-            recovered += 1
-    migrated["entities"] = {entity: entities[entity] for entity in ENTITIES}
+        repaired[entity], did_recover = _repair_entity(feed, entity, entities.get(entity), generated)
+        recovered += int(did_recover)
+    migrated["entities"] = repaired
     if recovered:
-        migrated["recovery_count"] = int(finite_float(migrated.get("recovery_count"), 0.0)) + recovered
+        migrated["recovery_count"] = min(10**6, migrated["recovery_count"] + recovered)
         migrated["recovery_reason"] = "recovered_invalid_entities"
+    elif data.get("version") != STATE_VERSION:
+        migrated["recovery_reason"] = "migrated_state_v5"
     return migrated
 
 
 def restore_state(data: dict) -> EntityState:
-    return EntityState(**data)
+    return EntityState(
+        version=1,
+        entity=str(data["entity"]),
+        minute=float(data["minute"]),
+        latent=[float(v) for v in data["latent"]],
+        regimes=[float(v) for v in data["regimes"]],
+        entropy=float(data["entropy"]),
+        last_event_hash=data.get("last_event_hash"),
+    )
 
 
 def _synthetic_id(msg: dict) -> str:
-    canonical = json.dumps(
-        {"speaker": msg.get("speaker"), "text": msg.get("text"), "at": msg.get("at")},
-        sort_keys=True,
-        ensure_ascii=False,
-        default=str,
-    )
+    canonical = json.dumps({"speaker": msg.get("speaker"), "text": msg.get("text"), "at": msg.get("at")},
+                           sort_keys=True, ensure_ascii=False, default=str)
     return "synthetic-" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:20]
 
 
 def sanitize_conversation(feed: dict) -> tuple[list[dict], dict]:
     anomalies = {
-        "invalid_messages": 0,
-        "synthetic_ids": 0,
-        "duplicate_ids": 0,
-        "truncated_texts": 0,
-        "future_timestamps": 0,
-        "out_of_order_timestamps": 0,
-        "cursor_missing": False,
-        "backlog_capped": 0,
-        "clock_regressed": False,
-        "cycle_regressed": False,
+        "invalid_messages": 0, "synthetic_ids": 0, "duplicate_ids": 0, "truncated_texts": 0,
+        "future_timestamps": 0, "out_of_order_timestamps": 0, "cursor_missing": False,
+        "backlog_capped": 0, "clock_regressed": False, "cycle_regressed": False,
     }
     raw = feed.get("conversation")
     if not isinstance(raw, list):
         raw = []
         anomalies["invalid_messages"] += 1
-
     cleaned: list[dict] = []
     for item in raw:
         if not isinstance(item, dict):
             anomalies["invalid_messages"] += 1
             continue
-        text = str(item.get("text") or "")
+        text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
+        if not text:
+            anomalies["invalid_messages"] += 1
+            continue
         if len(text) > MAX_TEXT_CHARS:
             anomalies["truncated_texts"] += 1
             text = text[:MAX_TEXT_CHARS]
         msg = {
-            "id": str(item.get("id") or "").strip(),
-            "speaker": str(item.get("speaker") or "").strip().lower()[:64],
+            "id": str(item.get("id") or "").strip()[:160],
+            "speaker": str(item.get("speaker") or "unknown").strip().lower()[:64] or "unknown",
             "text": text,
-            "at": item.get("at"),
+            "at": str(item.get("at") or "")[:100],
         }
         if not msg["id"]:
             msg["id"] = _synthetic_id(msg)
             anomalies["synthetic_ids"] += 1
         cleaned.append(msg)
-
-    # Keep the last occurrence of a duplicate id. The latest copy is closest to
-    # the production feed's current truth and avoids replay ambiguity.
     seen: set[str] = set()
     deduped_reversed: list[dict] = []
     for msg in reversed(cleaned):
@@ -276,18 +280,15 @@ def sanitize_conversation(feed: dict) -> tuple[list[dict], dict]:
 
 
 def _select_new_messages(conversation: list[dict], envelope: dict, anomalies: dict) -> list[dict]:
-    last_id = envelope.get("last_message_id")
     recent = set(str(x) for x in (envelope.get("recent_message_ids") or []))
-    if last_id:
-        positions = [i for i, msg in enumerate(conversation) if msg.get("id") == last_id]
-        if positions:
-            candidates = conversation[positions[-1] + 1 :]
-        else:
-            anomalies["cursor_missing"] = True
-            candidates = [msg for msg in conversation if msg.get("id") not in recent]
+    last_id = str(envelope.get("last_message_id") or "")
+    ids = {str(msg.get("id")) for msg in conversation}
+    if last_id and last_id not in ids:
+        anomalies["cursor_missing"] = True
+    if not bool(envelope.get("has_observed_feed")):
+        candidates = conversation[-BOOTSTRAP_MESSAGES:]
     else:
-        candidates = conversation[-40:]
-
+        candidates = [msg for msg in conversation if str(msg.get("id")) not in recent]
     if len(candidates) > MAX_NEW_MESSAGES:
         anomalies["backlog_capped"] = len(candidates) - MAX_NEW_MESSAGES
         candidates = candidates[-MAX_NEW_MESSAGES:]
@@ -296,16 +297,15 @@ def _select_new_messages(conversation: list[dict], envelope: dict, anomalies: di
 
 def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
     feed = feed if isinstance(feed, dict) else {}
+    envelope = envelope if isinstance(envelope, dict) else _fresh_envelope(feed)
     conversation, anomalies = sanitize_conversation(feed)
     new_messages = _select_new_messages(conversation, envelope, anomalies)
 
     source_cycle = parse_cycle((feed.get("state") or {}).get("cycle") if isinstance(feed.get("state"), dict) else None)
     previous_cycle = parse_cycle(envelope.get("source_cycle"))
-    anomalies["cycle_regressed"] = (
-        source_cycle is not None and previous_cycle is not None and source_cycle < previous_cycle
-    )
+    anomalies["cycle_regressed"] = source_cycle is not None and previous_cycle is not None and source_cycle < previous_cycle
 
-    state_minutes = [finite_float(envelope["entities"][e].get("minute"), 0.0) for e in ENTITIES]
+    state_minutes = [finite_float((envelope.get("entities") or {}).get(e, {}).get("minute"), 0.0) for e in ENTITIES]
     prior_minute = max(state_minutes) if state_minutes else 0.0
     generated = parse_minute(feed.get("generated_at"))
     if generated is None:
@@ -316,7 +316,7 @@ def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
 
     diagnostics: dict[str, dict] = {}
     states: dict[str, dict] = {}
-    previous_event_minute: float | None = None
+    first_entity_event_minute: float | None = None
 
     for entity in ENTITIES:
         state = restore_state(envelope["entities"][entity])
@@ -327,15 +327,18 @@ def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
                 event_minute = state.minute
             else:
                 if parsed_event_minute > now_minute:
-                    anomalies["future_timestamps"] += 1 if entity == ENTITIES[0] else 0
+                    if entity == ENTITIES[0]:
+                        anomalies["future_timestamps"] += 1
                     parsed_event_minute = now_minute
-                if previous_event_minute is not None and parsed_event_minute < previous_event_minute and entity == ENTITIES[0]:
-                    anomalies["out_of_order_timestamps"] += 1
-                event_minute = max(state.minute, parsed_event_minute)
                 if entity == ENTITIES[0]:
-                    previous_event_minute = parsed_event_minute
+                    if first_entity_event_minute is not None and parsed_event_minute < first_entity_event_minute:
+                        anomalies["out_of_order_timestamps"] += 1
+                    first_entity_event_minute = parsed_event_minute
+                event_minute = max(state.minute, parsed_event_minute)
             state, _ = tick(state, event_minute, None)
             delta = semantic_event_delta(entity, msg.get("speaker", ""), msg.get("text", ""))
+            if str(msg.get("speaker") or "").lower() == entity:
+                delta = [SELF_EVENT_SCALE * d for d in delta]
             state.latent = [clamp(EVENT_HOMEOSTASIS * v + d) for v, d in zip(state.latent, delta)]
             obs = project_observables(state.latent)
             state.regimes = softmax(regime_logits(obs))
@@ -352,31 +355,16 @@ def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
 
     allow_candidates = bool(envelope.get("has_observed_feed")) and not anomalies["cycle_regressed"]
     candidates, decision_meta = choose_candidates(
-        diagnostics,
-        source_cycle,
-        envelope.get("decision_meta"),
-        len(new_messages),
-        allow_candidates=allow_candidates,
+        diagnostics, source_cycle, envelope.get("decision_meta"), len(new_messages), allow_candidates=allow_candidates
     )
     semantic_summaries = {
         entity: compact_state_text(entity, diagnostics[entity], candidates[entity]) for entity in ENTITIES
     }
 
-    last_message = new_messages[-1] if new_messages else (conversation[-1] if conversation else {})
-    recent_ids = [str(x) for x in (envelope.get("recent_message_ids") or [])]
-    recent_ids.extend(msg["id"] for msg in new_messages)
-    recent_ids = list(dict.fromkeys(recent_ids))[-RECENT_ID_LIMIT:]
-
-    health_status = "degraded" if any(
-        [
-            anomalies["invalid_messages"],
-            anomalies["cursor_missing"],
-            anomalies["backlog_capped"],
-            anomalies["clock_regressed"],
-            anomalies["cycle_regressed"],
-            anomalies["future_timestamps"],
-        ]
-    ) else "ok"
+    all_ids = [str(msg.get("id")) for msg in conversation if msg.get("id")]
+    recent_ids = list(dict.fromkeys(all_ids))[-RECENT_ID_LIMIT:]
+    last_message = conversation[-1] if conversation else {}
+    health_status = "degraded" if any(bool(v) for v in anomalies.values()) else "ok"
 
     new_envelope = {
         "version": STATE_VERSION,
@@ -386,14 +374,15 @@ def run_shadow(feed: dict, envelope: dict) -> tuple[dict, dict]:
         "source_cycle": source_cycle if source_cycle is not None else previous_cycle,
         "decision_meta": decision_meta,
         "has_observed_feed": True,
-        "recovery_count": int(finite_float(envelope.get("recovery_count"), 0.0)),
+        "recovery_count": min(10**6, max(0, int(finite_float(envelope.get("recovery_count"), 0.0)))),
     }
     if envelope.get("recovery_reason"):
-        new_envelope["recovery_reason"] = envelope.get("recovery_reason")
+        new_envelope["recovery_reason"] = str(envelope.get("recovery_reason"))[:100]
 
     report = {
-        "version": "room-vault-shadow-v4",
+        "version": "room-2-shadow-v5",
         "source_generated_at": feed.get("generated_at"),
+        "production_generated_at": feed.get("production_generated_at"),
         "source_cycle": source_cycle,
         "source_brain": (feed.get("brain") or {}).get("active") if isinstance(feed.get("brain"), dict) else None,
         "processed_messages": len(new_messages),
@@ -428,7 +417,6 @@ def main() -> None:
     parser.add_argument("--state", default="runtime/shadow-state.json")
     parser.add_argument("--report", default="runtime/report.json")
     args = parser.parse_args()
-
     feed_path = Path(args.feed)
     try:
         feed = json.loads(feed_path.read_text())
@@ -436,7 +424,6 @@ def main() -> None:
         raise SystemExit(f"invalid feed JSON: {exc}")
     if not isinstance(feed, dict):
         raise SystemExit("invalid feed JSON: root must be an object")
-
     state_path = Path(args.state)
     report_path = Path(args.report)
     envelope = load_envelope(state_path, feed)
