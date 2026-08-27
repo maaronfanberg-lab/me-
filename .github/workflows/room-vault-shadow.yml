@@ -1,0 +1,70 @@
+name: Room Vault Shadow
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [vault-room-dynamics]
+    paths:
+      - 'vault/run-kick.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-vault-shadow
+  cancel-in-progress: true
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: vault-room-dynamics
+          fetch-depth: 10
+
+      - name: Read production feed without modifying main
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=2
+          mkdir -p vault/runtime
+          git show origin/main:room/feed.json > vault/runtime/production-feed.json
+
+      - name: Test vault dynamics
+        working-directory: vault
+        run: python3 -m unittest -v
+
+      - name: Run passive shadow
+        working-directory: vault
+        run: python3 shadow_runner.py runtime/production-feed.json --state runtime/shadow-state.json --report runtime/report.json
+
+      - name: Assert isolation invariants
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          r=json.load(open('vault/runtime/report.json'))
+          assert r['production_write_enabled'] is False
+          assert r['llm_enabled'] is False
+          assert r['speech_requested'] is False
+          assert set(r['entities']) == {'sarah','mara','owen','jules'}
+          for d in r['entities'].values():
+              assert d['speech_requested'] is False
+              assert 0.0 <= d['entropy'] <= 1.0
+              assert abs(sum(d['regime_probabilities']) - 1.0) < 1e-9
+          PY
+
+      - name: Persist vault-only state and report
+        run: |
+          set -euo pipefail
+          rm -f vault/runtime/production-feed.json
+          git config user.name 'room-vault-shadow'
+          git config user.email 'actions@users.noreply.github.com'
+          git add vault/runtime/shadow-state.json vault/runtime/report.json
+          if git diff --cached --quiet; then
+            echo 'No vault state changes'
+            exit 0
+          fi
+          git commit -m 'Vault shadow observation'
+          git push origin HEAD:vault-room-dynamics
