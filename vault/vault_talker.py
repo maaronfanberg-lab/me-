@@ -125,8 +125,7 @@ def _profile(feed: dict, entity: str) -> dict:
 
 def _request(model_url: str, payload: dict, entity: str, attempt: int) -> str:
     schema = {"type": "object", "properties": {"utterance": {
-        "type": "string", "minLength": 12, "maxLength": MAX_UTTERANCE_CHARS,
-        "pattern": "^(I |I'm |I've |I'd |My )"
+        "type": "string", "minLength": 12, "maxLength": MAX_UTTERANCE_CHARS
     }}, "required": ["utterance"], "additionalProperties": False}
     prompt = (
         "Speak as the named Vault Room participant, directly and in first person. Start the utterance with I, I'm, I've, I'd, or My. "
@@ -184,7 +183,6 @@ def _acceptable(text: str, entity: str, recent: list[dict], live_context: list[d
         return False
     if re.search(rf"\b{re.escape(entity)}\s*[,!:;-]\s*(?:you|your|you're|you've|you'd)\b", low):
         return False
-    # Reject mind-reading formulations such as 'Sarah felt/thinks/wants'.
     if re.search(r"\b(?:sarah|mara|owen|jules)\b.{0,18}\b(?:felt|feels|thinks|thought|wants|wanted|believes|believed)\b", low):
         return False
     recent_text = _context_text(live_context)
