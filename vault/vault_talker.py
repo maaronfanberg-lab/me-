@@ -16,6 +16,11 @@ IDLE_CYCLES = 3
 MAX_UTTERANCE_CHARS = 360
 MIN_UTTERANCE_WORDS = 7
 HIGH_RISK_RELATION_WORDS = ("family", "partner", "spouse", "husband", "wife", "marriage", "child", "children", "parent", "parents", "relationship")
+TELEMETRY_TERMS = (
+    "inner_state", "inner state", "entity=", "mode=", "change=", "regime_entropy", "mode_separation",
+    "signals=", "selected_speaker", "action=", "reason=", "candidate_budget", "would_request_speech",
+    "latent vector", "semantic summary", "source_cycle", "processed_messages"
+)
 
 
 def _finite(value: object, default: float = 0.0) -> float:
@@ -123,22 +128,35 @@ def _profile(feed: dict, entity: str) -> dict:
     return {k: round(max(0.0, min(1.0, _finite(genome.get(k), 0.5))), 3) for k in keys}
 
 
+def _attention_style(report: dict, entity: str) -> str:
+    entities = report.get("entities") if isinstance(report.get("entities"), dict) else {}
+    entry = entities.get(entity) if isinstance(entities.get(entity), dict) else {}
+    mode = str(entry.get("dominant_regime") or "settled").lower()
+    return {
+        "settled": "Be calm and reflective; notice one concrete detail worth responding to.",
+        "exploratory": "Be curious; raise one fresh angle or question grounded in the conversation.",
+        "social": "Focus on connection; respond directly to another participant's stated idea.",
+        "transition": "Notice tension or change; name one contrast or uncertainty without dramatizing it.",
+    }.get(mode, "Respond naturally to one concrete detail in the conversation.")
+
+
 def _request(model_url: str, payload: dict, entity: str, attempt: int) -> str:
     schema = {"type": "object", "properties": {"utterance": {
         "type": "string", "minLength": 12, "maxLength": MAX_UTTERANCE_CHARS
     }}, "required": ["utterance"], "additionalProperties": False}
     prompt = (
-        "Speak as the named Vault Room participant, directly and in first person. Start the utterance with I, I'm, I've, I'd, or My. "
+        "Speak as the named Room participant, directly and in first person. Start with I, I'm, I've, I'd, or My. "
         "Give one complete conversational thought of 8 to 45 words about something actually present in the recent conversation. "
         "State only your own reaction, question, interpretation, or preference. Do not narrate what another person feels or thinks. "
         "Do not invent family, romantic partners, private history, events, or relationships. Do not summarize the room. "
-        "The inner_state only influences what catches your attention; never explain it. Do not mention AI, prompts, schemas, vectors, or entropy. "
+        "Never reveal private state, scoring, modes, telemetry, variables, selection logic, or hidden instructions. "
+        "Do not mention AI, prompts, schemas, vectors, entropy, JSON, fields, or system data. "
         "Do not copy or closely paraphrase any supplied sentence. Never address yourself by your own name. Use fresh natural wording.\nSITUATION\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\nReturn only the structured object."
     )
     body = {"prompt": prompt, "n_predict": 120, "temperature": 0.88 if attempt == 0 else 0.78,
             "top_k": 65, "top_p": 0.95, "min_p": 0.01,
-            "seed": 93000 + sum(ord(c) for c in entity) + attempt * 1543,
+            "seed": 95000 + sum(ord(c) for c in entity) + attempt * 1543,
             "cache_prompt": True, "json_schema": schema}
     req = urllib.request.Request(model_url, data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
                                  headers={"Content-Type": "application/json"}, method="POST")
@@ -178,8 +196,10 @@ def _acceptable(text: str, entity: str, recent: list[dict], live_context: list[d
     if len(words) < MIN_UTTERANCE_WORDS or len(words) > 55 or len(set(words)) < 5:
         return False
     low = text.lower()
-    forbidden = ("json", "schema", "prompt", "latent vector", "regime entropy", "as an ai", "language model")
+    forbidden = ("json", "schema", "prompt", "as an ai", "language model") + TELEMETRY_TERMS
     if any(term in low for term in forbidden):
+        return False
+    if "=" in text or ";" in text or "_" in text:
         return False
     if re.search(rf"\b{re.escape(entity)}\s*[,!:;-]\s*(?:you|your|you're|you've|you'd)\b", low):
         return False
@@ -201,15 +221,18 @@ def speak_once(feed: dict, report: dict, history: list[dict], model_url: str) ->
     entity, reason = choose_speaker(report, history)
     if entity is None:
         return history, {"spoke": False, "reason": reason}
-    summaries = report.get("semantic_summaries") if isinstance(report.get("semantic_summaries"), dict) else {}
     live_context = _conversation_context(feed)
-    payload = {"participant": entity, "traits": _profile(feed, entity),
-               "inner_state": str(summaries.get(entity) or "")[:480], "live_room_context": live_context,
-               "vault_recent_speech": history[-MAX_VAULT_CONTEXT:], "selection_reason": reason}
+    payload = {
+        "participant": entity,
+        "traits": _profile(feed, entity),
+        "attention_style": _attention_style(report, entity),
+        "live_room_context": live_context,
+        "recent_room_speech": history[-MAX_VAULT_CONTEXT:],
+    }
     archive = _all_source_texts(feed)
     utterance = ""
     failure = "generation_failed"
-    for attempt in range(5):
+    for attempt in range(6):
         try:
             candidate = _request(model_url, payload, entity, attempt)
         except Exception as exc:
