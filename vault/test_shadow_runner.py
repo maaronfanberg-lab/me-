@@ -1,20 +1,29 @@
 import unittest
+from pathlib import Path
 
 from room_dynamics import ENTITIES, LATENT_BOUND
 from shadow_runner import load_envelope, run_shadow, semantic_event_delta
 
 
 class ShadowRunnerTests(unittest.TestCase):
-    def sample_feed(self):
+    def sample_feed(self, count=2):
+        base = [
+            {"id": "m1", "speaker": "sarah", "text": "I wonder what changed?", "at": "2026-08-27T11:58:00Z"},
+            {"id": "m2", "speaker": "owen", "text": "I'm not sure. Let's step back.", "at": "2026-08-27T11:59:00Z"},
+        ]
+        if count > 2:
+            base = [
+                {"id": f"m{i}", "speaker": ("sarah", "mara", "owen", "jules")[i % 4],
+                 "text": "I wonder if this new change is strange, but maybe we should keep exploring together?",
+                 "at": "2026-08-27T11:59:00Z"}
+                for i in range(count)
+            ]
         return {
             "generated_at": "2026-08-27T12:00:00Z",
             "state": {"cycle": 10},
             "brain": {"active": "llama3.2-1b"},
             "minds": {"entities": {e: {"genome": {"curiosity": 0.8}} for e in ENTITIES}},
-            "conversation": [
-                {"id": "m1", "speaker": "sarah", "text": "I wonder what changed?", "at": "2026-08-27T11:58:00Z"},
-                {"id": "m2", "speaker": "owen", "text": "I'm not sure. Let's step back.", "at": "2026-08-27T11:59:00Z"},
-            ],
+            "conversation": base,
         }
 
     def test_semantics_not_cryptographic_noise(self):
@@ -25,7 +34,7 @@ class ShadowRunnerTests(unittest.TestCase):
 
     def test_shadow_never_requests_speech(self):
         feed = self.sample_feed()
-        env = load_envelope(__import__('pathlib').Path('/definitely/not/a/file'), feed)
+        env = load_envelope(Path('/definitely/not/a/file'), feed)
         new_env, report = run_shadow(feed, env)
         self.assertFalse(report["production_write_enabled"])
         self.assertFalse(report["llm_enabled"])
@@ -38,11 +47,20 @@ class ShadowRunnerTests(unittest.TestCase):
 
     def test_cursor_prevents_replay(self):
         feed = self.sample_feed()
-        env = load_envelope(__import__('pathlib').Path('/definitely/not/a/file'), feed)
+        env = load_envelope(Path('/definitely/not/a/file'), feed)
         env, first = run_shadow(feed, env)
         env, second = run_shadow(feed, env)
         self.assertEqual(first["processed_messages"], 2)
         self.assertEqual(second["processed_messages"], 0)
+
+    def test_bootstrap_does_not_saturate_latent_state(self):
+        feed = self.sample_feed(40)
+        env = load_envelope(Path('/definitely/not/a/file'), feed)
+        env, report = run_shadow(feed, env)
+        self.assertEqual(report["processed_messages"], 40)
+        for entity in ENTITIES:
+            self.assertLess(max(abs(v) for v in env["entities"][entity]["latent"]), 2.5)
+            self.assertGreaterEqual(report["entities"][entity]["regime_l1_change"], 0.0)
 
 
 if __name__ == "__main__":
