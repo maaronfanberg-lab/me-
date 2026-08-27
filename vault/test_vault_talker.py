@@ -20,13 +20,13 @@ class VaultTalkerTests(unittest.TestCase):
         self.assertEqual(reason, "latent_candidate")
 
     def test_idle_turn_is_bounded(self):
-        history = [{"source_cycle": 8, "speaker": "sarah", "text": "x"}]
+        history = [{"source_cycle": 10, "speaker": "sarah", "text": "x"}]
         entity, reason = choose_speaker(self.report(cycle=10), history)
         self.assertIsNone(entity)
         self.assertEqual(reason, "idle_cooldown")
 
     def test_idle_turn_uses_highest_score(self):
-        history = [{"source_cycle": 5, "speaker": "sarah", "text": "x"}]
+        history = [{"source_cycle": 9, "speaker": "sarah", "text": "x"}]
         entity, reason = choose_speaker(self.report(cycle=10), history)
         self.assertEqual(entity, "owen")
         self.assertEqual(reason, "bounded_idle_turn")
