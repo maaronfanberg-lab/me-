@@ -41,6 +41,11 @@ class Room2HistoryEntryTests(unittest.TestCase):
         self.assertEqual(clean, [])
         self.assertEqual(stats["removed"], 1)
 
+    def test_compact_text_keeps_concepts_not_sentence(self):
+        cue = room2_talker_entry._compact_text("I'm curious because renewal can change where our attention goes next week.")
+        self.assertEqual(cue, "curious because renewal change attention goes")
+        self.assertNotIn("where our attention goes next week", cue)
+
     def test_balanced_guard_allows_six_word_overlap(self):
         text = "I'm curious because renewal can change our focus today."
         source = [{"text": "renewal can change our focus today very quickly"}]
