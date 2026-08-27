@@ -29,24 +29,36 @@ class Room2HistoryEntryTests(unittest.TestCase):
         self.assertEqual(len(clean), 1)
         self.assertEqual(stats["removed"], 1)
 
-    def test_balanced_guard_allows_five_word_overlap(self):
-        text = "I'm curious about renewal changing our focus today."
-        source = [{"text": "renewal changing our focus today feels important"}]
-        self.assertFalse(room2_talker_entry._balanced_echo_guard(text, source, n=5))
+    def test_generic_boilerplate_is_quarantined(self):
+        value = [{"id": "a", "speaker": "mara", "text": "I'm grateful for the opportunity to share my perspective today.", "at": "2026-08-27T14:00:00Z"}]
+        clean, stats = history_sanitizer.sanitize_history(value)
+        self.assertEqual(clean, [])
+        self.assertEqual(stats["removed"], 1)
 
-    def test_balanced_guard_blocks_six_word_overlap(self):
+    def test_stitched_multiple_sentences_are_quarantined(self):
+        value = [{"id": "a", "speaker": "mara", "text": "I'm considering that idea carefully. That's great, Owen!", "at": "2026-08-27T14:00:00Z"}]
+        clean, stats = history_sanitizer.sanitize_history(value)
+        self.assertEqual(clean, [])
+        self.assertEqual(stats["removed"], 1)
+
+    def test_balanced_guard_allows_six_word_overlap(self):
         text = "I'm curious because renewal can change our focus today."
         source = [{"text": "renewal can change our focus today very quickly"}]
+        self.assertFalse(room2_talker_entry._balanced_echo_guard(text, source, n=5))
+
+    def test_balanced_guard_blocks_seven_word_overlap(self):
+        text = "I'm curious because renewal can change where our focus goes today."
+        source = [{"text": "renewal can change where our focus goes today quickly"}]
         self.assertTrue(room2_talker_entry._balanced_echo_guard(text, source, n=5))
 
-    def test_archive_guard_allows_seven_word_overlap(self):
-        text = "I'm thinking renewal can change where attention goes next."
-        source = [{"text": "renewal can change where attention goes next week"}]
-        self.assertFalse(room2_talker_entry._balanced_echo_guard(text, source, n=7))
-
-    def test_archive_guard_blocks_eight_word_overlap(self):
+    def test_archive_guard_allows_eight_word_overlap(self):
         text = "I'm thinking renewal can change where our attention goes next week."
         source = [{"text": "renewal can change where our attention goes next week quickly"}]
+        self.assertFalse(room2_talker_entry._balanced_echo_guard(text, source, n=7))
+
+    def test_archive_guard_blocks_nine_word_overlap(self):
+        text = "I'm thinking renewal can change where our attention goes next week slowly."
+        source = [{"text": "renewal can change where our attention goes next week slowly today"}]
         self.assertTrue(room2_talker_entry._balanced_echo_guard(text, source, n=7))
 
     def test_entry_sanitizes_history_argument(self):
