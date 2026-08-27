@@ -59,6 +59,24 @@ class Room2HistoryEntryTests(unittest.TestCase):
         self.assertEqual(cue, "curious because renewal change attention goes")
         self.assertNotIn("where our attention goes next week", cue)
 
+    def test_sarah_abandonment_phase_is_rare_and_state_dependent(self):
+        observables = [0.5] * 10
+        observables[1] = 0.70
+        observables[3] = 0.70
+        observables[6] = 0.70
+        observables[8] = 0.70
+        active_report = {"source_cycle": 8, "entities": {"sarah": {"observables": observables, "dominant_regime": "transition"}}}
+        quiet_report = {"source_cycle": 1, "entities": {"sarah": {"observables": observables, "dominant_regime": "transition"}}}
+        active, intensity = room2_talker_entry._sarah_abandonment_pressure(active_report)
+        quiet, _ = room2_talker_entry._sarah_abandonment_pressure(quiet_report)
+        self.assertTrue(active)
+        self.assertGreater(intensity, 0.5)
+        self.assertFalse(quiet)
+        style = room2_talker_entry._room2_attention_style(active_report, "sarah")
+        self.assertIn("hiss", style.lower())
+        self.assertIn("fear of being left", style.lower())
+        self.assertIn("anger", style.lower())
+
     def test_balanced_guard_allows_six_word_overlap(self):
         text = "I'm curious because renewal can change our focus today."
         source = [{"text": "renewal can change our focus today very quickly"}]
