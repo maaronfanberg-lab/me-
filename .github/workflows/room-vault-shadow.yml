@@ -39,7 +39,7 @@ jobs:
         working-directory: vault
         run: python3 shadow_runner.py runtime/production-feed.json --state runtime/shadow-state.json --report runtime/report.json
 
-      - name: Assert isolation invariants
+      - name: Assert isolation and bounded-decision invariants
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -48,11 +48,15 @@ jobs:
           assert r['production_write_enabled'] is False
           assert r['llm_enabled'] is False
           assert r['speech_requested'] is False
+          assert r['candidate_budget'] == 1
           assert set(r['entities']) == {'sarah','mara','owen','jules'}
-          for d in r['entities'].values():
+          assert set(r['candidates']) == set(r['entities'])
+          assert sum(bool(v['would_request_speech']) for v in r['candidates'].values()) <= 1
+          for entity, d in r['entities'].items():
               assert d['speech_requested'] is False
               assert 0.0 <= d['entropy'] <= 1.0
               assert abs(sum(d['regime_probabilities']) - 1.0) < 1e-9
+              assert len(r['semantic_summaries'][entity]) < 500
           PY
 
       - name: Persist vault-only state and report
@@ -66,5 +70,5 @@ jobs:
             echo 'No vault state changes'
             exit 0
           fi
-          git commit -m 'Vault shadow observation'
+          git commit -m 'Vault shadow observation [skip ci]'
           git push origin HEAD:vault-room-dynamics
