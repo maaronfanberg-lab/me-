@@ -44,6 +44,7 @@ jobs:
           server_bin=$(find .room2_model/runtime -type f -name 'llama-server' | head -1)
           test -n "$server_bin"
           chmod +x "$server_bin"
+          printf '%s\n' "$server_bin" > .room2_model/server-bin
           curl --fail --location --retry 6 --retry-delay 4 --connect-timeout 10 --max-time 240 \
             'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' \
             --output .room2_model/llama-3.2-1b-instruct-q4_k_m.gguf
@@ -53,10 +54,7 @@ jobs:
           ready=0
           for attempt in $(seq 1 120); do
             if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18081/health >/dev/null 2>&1; then ready=1; break; fi
-            if ! kill -0 "$(cat .room2_model/pid)" 2>/dev/null; then
-              cat .room2_model/server.log || true
-              break
-            fi
+            if ! kill -0 "$(cat .room2_model/pid)" 2>/dev/null; then cat .room2_model/server.log || true; break; fi
             sleep 1
           done
           test "$ready" -eq 1
@@ -71,22 +69,61 @@ jobs:
           mkdir -p vault/runtime
           stop_at=$((SECONDS + 17400))
           iteration=0
+
+          restart_model() {
+            echo 'ROOM 2 model health failed; restarting local server.'
+            if [ -f .room2_model/pid ]; then kill "$(cat .room2_model/pid)" 2>/dev/null || true; fi
+            server_bin=$(cat .room2_model/server-bin)
+            "$server_bin" -m .room2_model/llama-3.2-1b-instruct-q4_k_m.gguf --host 127.0.0.1 --port 18081 -c 8192 -np 1 >>.room2_model/server.log 2>&1 &
+            echo $! > .room2_model/pid
+            for attempt in $(seq 1 45); do
+              if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18081/health >/dev/null 2>&1; then return 0; fi
+              if ! kill -0 "$(cat .room2_model/pid)" 2>/dev/null; then break; fi
+              sleep 1
+            done
+            return 1
+          }
+
           while [ "$SECONDS" -lt "$stop_at" ]; do
             iteration=$((iteration + 1))
             echo "ROOM 2 live iteration $iteration"
 
-            timeout 35s git fetch origin main --depth=2
-            git show origin/main:room/feed.json > vault/runtime/production-feed.json
+            if ! curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18081/health >/dev/null 2>&1; then
+              restart_model || { cat .room2_model/server.log || true; exit 1; }
+            fi
+
+            if ! timeout 35s git fetch origin main --depth=2; then
+              echo 'Transient production fetch failure; preserving ROOM 2 state and retrying.'
+              sleep 20
+              continue
+            fi
+            if ! git show origin/main:room/feed.json > vault/runtime/production-feed.json; then
+              echo 'Production feed unavailable; preserving ROOM 2 state and retrying.'
+              sleep 20
+              continue
+            fi
             test -s vault/runtime/production-feed.json
+
             python3 - <<'PY'
-          import json
+          import json, sys
           from datetime import datetime, timezone
           from pathlib import Path
+          sys.path.insert(0,'vault')
+          from vault_talker import load_history
           src=Path('vault/runtime/production-feed.json')
           feed=json.loads(src.read_text())
-          assert isinstance(feed,dict)
-          assert isinstance(feed.get('conversation'),list)
+          if not isinstance(feed,dict) or not isinstance(feed.get('conversation'),list):
+              raise SystemExit('invalid production feed shape')
           original=feed.get('generated_at')
+          room2_path=Path('vault/runtime/vault-conversation.json')
+          room2=load_history(room2_path) if room2_path.exists() else []
+          merged=[]
+          for item in feed.get('conversation',[]):
+              if isinstance(item,dict): merged.append(dict(item))
+          for item in room2:
+              x=dict(item); x['origin']='room2'; merged.append(x)
+          merged.sort(key=lambda x: str(x.get('at') or ''))
+          feed['conversation']=merged[-1120:]
           feed['production_generated_at']=original
           feed['generated_at']=datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
           Path('vault/runtime/dynamics-feed.json').write_text(json.dumps(feed,ensure_ascii=False)+'\n')
@@ -112,13 +149,17 @@ jobs:
           assert all(x.get('speaker') in {'sarah','mara','owen','jules'} for x in h)
           assert all(12 <= len(str(x.get('text',''))) <= 360 for x in h)
           assert all(str(x.get('text','')).rstrip()[-1:] in '.?!' for x in h)
+          ids=[str(x.get('id') or '') for x in h]
+          assert len(ids)==len(set(ids))
           heartbeat={
-            'version':'room-2-heartbeat-v1',
+            'version':'room-2-heartbeat-v2',
             'at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
             'run_id':os.environ.get('ROOM2_RUN_ID'),
             'source_cycle':r.get('source_cycle'),
             'health':(r.get('health') or {}).get('status'),
             'conversation_size':len(h),
+            'llm_active':True,
+            'feedback_loop':True,
           }
           Path('vault/runtime/heartbeat.json').write_text(json.dumps(heartbeat,ensure_ascii=False,indent=2)+'\n')
           PY
@@ -144,6 +185,4 @@ jobs:
       - name: Stop model
         if: always()
         run: |
-          if [ -f .room2_model/pid ]; then
-            kill "$(cat .room2_model/pid)" 2>/dev/null || true
-          fi
+          if [ -f .room2_model/pid ]; then kill "$(cat .room2_model/pid)" 2>/dev/null || true; fi
