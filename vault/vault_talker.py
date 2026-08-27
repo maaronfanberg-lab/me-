@@ -164,7 +164,7 @@ def _has_ngram_echo(text: str, sources: list[dict], n: int = 5) -> bool:
     return False
 
 
-def _acceptable(text: str, entity: str, recent: list[dict], all_sources: list[dict]) -> bool:
+def _acceptable(text: str, entity: str, recent: list[dict], live_context: list[dict], archive: list[dict]) -> bool:
     if len(text) < 3 or len(text) > MAX_UTTERANCE_CHARS:
         return False
     low = text.lower()
@@ -173,7 +173,9 @@ def _acceptable(text: str, entity: str, recent: list[dict], all_sources: list[di
         return False
     if re.search(rf"\b{re.escape(entity)}\s*[,!:;-]\s*(?:you|your|you're|you've|you'd)\b", low):
         return False
-    if _has_ngram_echo(text, all_sources + recent[-12:]):
+    if _has_ngram_echo(text, live_context[-12:] + recent[-12:], n=5):
+        return False
+    if _has_ngram_echo(text, archive, n=7):
         return False
     normalized = re.sub(r"\W+", " ", low).strip()
     return all(normalized != re.sub(r"\W+", " ", str(item.get("text") or "").lower()).strip() for item in recent[-12:])
@@ -184,10 +186,11 @@ def speak_once(feed: dict, report: dict, history: list[dict], model_url: str) ->
     if entity is None:
         return history, {"spoke": False, "reason": reason}
     summaries = report.get("semantic_summaries") if isinstance(report.get("semantic_summaries"), dict) else {}
+    live_context = _conversation_context(feed)
     payload = {"participant": entity, "traits": _profile(feed, entity),
-               "inner_state": str(summaries.get(entity) or "")[:480], "live_room_context": _conversation_context(feed),
+               "inner_state": str(summaries.get(entity) or "")[:480], "live_room_context": live_context,
                "vault_recent_speech": history[-MAX_VAULT_CONTEXT:], "selection_reason": reason}
-    all_sources = _all_source_texts(feed)
+    archive = _all_source_texts(feed)
     utterance = ""
     failure = "generation_failed"
     for attempt in range(4):
@@ -196,7 +199,7 @@ def speak_once(feed: dict, report: dict, history: list[dict], model_url: str) ->
         except Exception as exc:
             failure = f"model_error:{type(exc).__name__}"
             continue
-        if _acceptable(candidate, entity, history, all_sources):
+        if _acceptable(candidate, entity, history, live_context, archive):
             utterance = candidate
             break
         failure = "quality_rejected"
