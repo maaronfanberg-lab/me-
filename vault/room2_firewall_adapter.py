@@ -6,8 +6,6 @@ import room2_runtime_firewall
 def validate(feed, report, history, speech, sanitizer, heartbeat):
     r=copy.deepcopy(report) if isinstance(report,dict) else report
     if isinstance(r,dict):
-        if str(r.get('version','')).startswith('room-2-shadow-v'):
-            r['version']='room-vault-shadow-v'+str(r.get('version')).rsplit('v',1)[-1]
         summaries=r.get('semantic_summaries') if isinstance(r.get('semantic_summaries'),dict) else {}
         entities=r.get('entities') if isinstance(r.get('entities'),dict) else {}
         for name,entry in entities.items():
