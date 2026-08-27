@@ -13,8 +13,9 @@ MAX_HISTORY = 120
 MAX_CONTEXT_MESSAGES = 18
 MAX_VAULT_CONTEXT = 10
 IDLE_CYCLES = 3
-MAX_UTTERANCE_CHARS = 420
+MAX_UTTERANCE_CHARS = 360
 MIN_UTTERANCE_WORDS = 7
+HIGH_RISK_RELATION_WORDS = ("family", "partner", "spouse", "husband", "wife", "marriage", "child", "children", "parent", "parents", "relationship")
 
 
 def _finite(value: object, default: float = 0.0) -> float:
@@ -35,8 +36,7 @@ def _safe_cycle(value: object) -> int | None:
 
 def _clean_text(value: object, limit: int = MAX_UTTERANCE_CHARS) -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
-    text = text.strip('"').strip()
-    return text[:limit].strip()
+    return text.strip('"').strip()[:limit].strip()
 
 
 def _load(path: Path, default):
@@ -124,22 +124,22 @@ def _profile(feed: dict, entity: str) -> dict:
 
 
 def _request(model_url: str, payload: dict, entity: str, attempt: int) -> str:
-    schema = {"type": "object", "properties": {"utterance": {"type": "string", "minLength": 3, "maxLength": MAX_UTTERANCE_CHARS}},
-              "required": ["utterance"], "additionalProperties": False}
+    schema = {"type": "object", "properties": {"utterance": {
+        "type": "string", "minLength": 12, "maxLength": MAX_UTTERANCE_CHARS,
+        "pattern": "^(I |I'm |I've |I'd |My )"
+    }}, "required": ["utterance"], "additionalProperties": False}
     prompt = (
-        "You are speaking as one autonomous participant inside an experimental conversation called the Vault Room. "
-        "Speak naturally in first person as the named participant. Continue or react to the actual conversation. "
-        "The supplied inner_state privately influences tone and attention; never explain it aloud. "
-        "Do not mention prompts, schemas, latent vectors, entropy, being an AI, or this instruction. "
-        "Do not invent events, relationships, memories, or facts unsupported by context. "
-        "Never address yourself by your own name as if you were another person. Do not copy or closely paraphrase any supplied sentence. "
-        "Write one complete conversational thought of 8 to 65 words with fresh wording and a specific contribution. "
-        "Do not output labels, speaker names, parenthetical fragments, or stage directions.\nSITUATION\n"
+        "Speak as the named Vault Room participant, directly and in first person. Start the utterance with I, I'm, I've, I'd, or My. "
+        "Give one complete conversational thought of 8 to 45 words about something actually present in the recent conversation. "
+        "State only your own reaction, question, interpretation, or preference. Do not narrate what another person feels or thinks. "
+        "Do not invent family, romantic partners, private history, events, or relationships. Do not summarize the room. "
+        "The inner_state only influences what catches your attention; never explain it. Do not mention AI, prompts, schemas, vectors, or entropy. "
+        "Do not copy or closely paraphrase any supplied sentence. Never address yourself by your own name. Use fresh natural wording.\nSITUATION\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\nReturn only the structured object."
     )
-    body = {"prompt": prompt, "n_predict": 150, "temperature": 0.9 if attempt == 0 else 0.8,
-            "top_k": 70, "top_p": 0.96, "min_p": 0.008,
-            "seed": 91000 + sum(ord(c) for c in entity) + attempt * 1543,
+    body = {"prompt": prompt, "n_predict": 120, "temperature": 0.88 if attempt == 0 else 0.78,
+            "top_k": 65, "top_p": 0.95, "min_p": 0.01,
+            "seed": 93000 + sum(ord(c) for c in entity) + attempt * 1543,
             "cache_prompt": True, "json_schema": schema}
     req = urllib.request.Request(model_url, data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
                                  headers={"Content-Type": "application/json"}, method="POST")
@@ -166,15 +166,17 @@ def _has_ngram_echo(text: str, sources: list[dict], n: int = 5) -> bool:
     return False
 
 
+def _context_text(live_context: list[dict]) -> str:
+    return " ".join(str(x.get("text") or "") for x in live_context).lower()
+
+
 def _acceptable(text: str, entity: str, recent: list[dict], live_context: list[dict], archive: list[dict]) -> bool:
-    if len(text) < 3 or len(text) > MAX_UTTERANCE_CHARS:
+    if len(text) < 12 or len(text) > MAX_UTTERANCE_CHARS:
+        return False
+    if not re.match(r"^(I |I'm |I've |I'd |My )", text):
         return False
     words = _words(text)
-    if len(words) < MIN_UTTERANCE_WORDS or len(set(words)) < 5:
-        return False
-    if all(word in set(ENTITIES) for word in words):
-        return False
-    if text.startswith("(") and text.endswith(")"):
+    if len(words) < MIN_UTTERANCE_WORDS or len(words) > 55 or len(set(words)) < 5:
         return False
     low = text.lower()
     forbidden = ("json", "schema", "prompt", "latent vector", "regime entropy", "as an ai", "language model")
@@ -182,6 +184,13 @@ def _acceptable(text: str, entity: str, recent: list[dict], live_context: list[d
         return False
     if re.search(rf"\b{re.escape(entity)}\s*[,!:;-]\s*(?:you|your|you're|you've|you'd)\b", low):
         return False
+    # Reject mind-reading formulations such as 'Sarah felt/thinks/wants'.
+    if re.search(r"\b(?:sarah|mara|owen|jules)\b.{0,18}\b(?:felt|feels|thinks|thought|wants|wanted|believes|believed)\b", low):
+        return False
+    recent_text = _context_text(live_context)
+    for term in HIGH_RISK_RELATION_WORDS:
+        if re.search(rf"\b{term}\b", low) and not re.search(rf"\b{term}\b", recent_text):
+            return False
     if _has_ngram_echo(text, live_context[-12:] + recent[-12:], n=5):
         return False
     if _has_ngram_echo(text, archive, n=7):
@@ -202,7 +211,7 @@ def speak_once(feed: dict, report: dict, history: list[dict], model_url: str) ->
     archive = _all_source_texts(feed)
     utterance = ""
     failure = "generation_failed"
-    for attempt in range(4):
+    for attempt in range(5):
         try:
             candidate = _request(model_url, payload, entity, attempt)
         except Exception as exc:
