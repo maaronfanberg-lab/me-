@@ -1,0 +1,51 @@
+name: One-shot grounded Room breakout repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'society/room-grounded-breakout-kick.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Replace random topic injection with grounded breakout
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/room_engine_v5_core.py')
+          s = p.read_text()
+          old = '''def breakout_subject(key):\n    return BREAKOUT_SUBJECTS[rr("breakout-subject", key).randrange(len(BREAKOUT_SUBJECTS))]\n'''
+          new = '''def breakout_subject(key):\n    """Escape a collapsed topic using grounded, low-frequency concepts only.\n\n    Never inject a random generic subject. Prefer unresolved/facet/shared concepts\n    already present in the active episode, then recent public semantic terms.\n    Repetition-heavy attractors are deliberately deprioritized.\n    """\n    try:\n        recent = list(msgs()[-12:])\n    except Exception:\n        recent = []\n    try:\n        topic = dict((state().get("topic_episode") or {}))\n    except Exception:\n        topic = {}\n\n    counts = {}\n    recency = {}\n    for index, message in enumerate(recent):\n        values = []\n        cognition = message.get("cognition") if isinstance(message, dict) else {}\n        cognition = cognition if isinstance(cognition, dict) else {}\n        declared = cognition.get("topic_terms")\n        if isinstance(declared, list):\n            values.extend(declared)\n        values.append(message.get("text", "") if isinstance(message, dict) else "")\n        for value in values:\n            for term in toks(value):\n                counts[term] = counts.get(term, 0) + 1\n                recency[term] = index\n\n    active = set(toks(" ".join(str(topic.get(k) or "") for k in ("root", "current_facet"))))\n    candidates = []\n    for field in ("unresolved", "facets", "shared_references", "recent_terms"):\n        values = topic.get(field)\n        if not isinstance(values, list):\n            continue\n        for value in values:\n            for term in toks(value):\n                if term not in candidates:\n                    candidates.append(term)\n\n    for message in reversed(recent):\n        cognition = message.get("cognition") if isinstance(message, dict) else {}\n        cognition = cognition if isinstance(cognition, dict) else {}\n        for value in cognition.get("topic_terms", []) if isinstance(cognition.get("topic_terms"), list) else []:\n            for term in toks(value):\n                if term not in candidates:\n                    candidates.append(term)\n\n    grounded = [\n        term for term in candidates\n        if term not in active and counts.get(term, 0) <= 2\n    ]\n    if grounded:\n        return max(grounded, key=lambda term: (recency.get(term, -1), -counts.get(term, 0), term))\n\n    alternatives = [term for term in counts if term not in active]\n    if alternatives:\n        return min(alternatives, key=lambda term: (counts.get(term, 0), -recency.get(term, -1), term))\n\n    # Cold-start fallback remains tied to existing episode state; no invented noun.\n    return str(topic.get("current_facet") or topic.get("root") or "conversation").strip().lower()\n'''
+          if old not in s:
+              raise SystemExit('expected breakout_subject anchor not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+      - name: Compile and verify no random breakout remains
+        shell: bash
+        run: |
+          python -m py_compile scripts/room_engine_v5_core.py
+          python - <<'PY'
+          from pathlib import Path
+          s = Path('scripts/room_engine_v5_core.py').read_text()
+          block = s.split('def breakout_subject(key):',1)[1].split('\ndef _simple_norm',1)[0]
+          assert 'BREAKOUT_SUBJECTS[' not in block
+          assert 'grounded, low-frequency concepts only' in block
+          print('PASS grounded breakout')
+          PY
+      - name: Commit permanent repair
+        shell: bash
+        run: |
+          git config user.name 'room-repair-bot'
+          git config user.email 'room-repair-bot@users.noreply.github.com'
+          git add scripts/room_engine_v5_core.py
+          git commit -m 'Ground Room topic breakouts in live state'
+          git pull --rebase origin main
+          git push origin HEAD:main
