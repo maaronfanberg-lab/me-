@@ -11,8 +11,12 @@ function fail(message) {
 
 if (!html.includes('<title>The Live Earth Oracle</title>')) fail('expected title is missing');
 if (!html.includes('Real data. Fake theory.')) fail('satire disclaimer is missing');
+if (!html.includes('MK II')) fail('Mk II marker is missing');
 
-const expectedStreams = ['market', 'crypto', 'aircraft', 'iss', 'quakes', 'kp', 'solar', 'weather', 'github'];
+const expectedStreams = [
+  'market','crypto','aircraft','iss','quakes','kp','solar','aurora',
+  'weather','air','tide','buoy','river','github'
+];
 for (const stream of expectedStreams) {
   if (!new RegExp(`\\b${stream}\\s*:`).test(html)) fail(`stream configuration missing: ${stream}`);
 }
@@ -20,6 +24,8 @@ for (const stream of expectedStreams) {
 const requiredReliabilityTokens = [
   'AbortController',
   "c.status=c.updated?'stale':'error'",
+  'async function guarded(k,fn)',
+  'if(state.running[k])return',
   'setTimeout(crypto,5000)',
   "document.visibilityState==='visible'",
   'Object.keys(jobs).forEach(k=>jobs[k]())',
@@ -37,6 +43,10 @@ const requiredSources = [
   'earthquake.usgs.gov',
   'services.swpc.noaa.gov',
   'api.open-meteo.com',
+  'air-quality-api.open-meteo.com',
+  'api.tidesandcurrents.noaa.gov',
+  'www.ndbc.noaa.gov/data/realtime2/44007.txt',
+  'waterservices.usgs.gov/nwis/iv/',
   'api.github.com/repos/maaronfanberg-lab/me-/commits',
 ];
 for (const source of requiredSources) {
