@@ -1,0 +1,66 @@
+name: One-shot Room cross-beat attractor repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'society/room-cross-beat-attractor-gate-kick.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Add cross-beat semantic attractor gate
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/room_expression_quality.py')
+          s = p.read_text()
+          anchor = '''def _low_substantive_novelty(utterance: str, prior_turns: list[dict]) -> bool:\n    # Only later voices get this stronger test. The first response can establish\n    # the subject; the third/fourth should contribute at least one new anchor.\n    if len(prior_turns) < 2:\n        return False\n    event_speaker = str((prior_turns[-1] or {}).get("speaker") or "").lower()\n    if event_speaker not in _AUTONOMOUS:\n        return False\n    current = _anchor_tokens(utterance)\n    if len(current) < 2:\n        return True\n    prior: set[str] = set()\n    for turn in prior_turns:\n        prior.update(_anchor_tokens(turn.get("text")))\n    novel = current - prior\n    return len(novel) < 1\n\n\n'''
+          addition = anchor + '''def _cross_beat_attractor_saturation(utterance: str, compact: dict) -> bool:\n    """Reject a turn made only of concepts already dominating recent beats."""\n    context = compact.get("context") if isinstance(compact.get("context"), list) else []\n    recent = [item for item in context[-6:] if isinstance(item, dict) and str(item.get("text") or "").strip()]\n    if len(recent) < 4:\n        return False\n    current = _anchor_tokens(utterance)\n    if not current:\n        return False\n    counts: dict[str, int] = {}\n    for item in recent:\n        for anchor in _anchor_tokens(item.get("text")):\n            counts[anchor] = counts.get(anchor, 0) + 1\n    saturated = {anchor for anchor, count in counts.items() if count >= 3}\n    if not saturated:\n        return False\n    # A reply may stay on the same subject, but it must introduce at least one\n    # substantive anchor not already dominating the recent conversation.\n    return current.issubset(saturated)\n\n\n'''
+          if 'def _cross_beat_attractor_saturation(' not in s:
+              if anchor not in s:
+                  raise SystemExit('novelty anchor missing')
+              s = s.replace(anchor, addition, 1)
+          quality_anchor = '''    if same_beat and _low_substantive_novelty(text, same_beat):\n        _escape_stale_context(compact, self_entity)\n        return "same_beat_low_novelty"\n\n'''
+          quality_replacement = quality_anchor + '''    if _cross_beat_attractor_saturation(text, compact):\n        _escape_stale_context(compact, self_entity)\n        return "cross_beat_attractor_saturation"\n\n'''
+          if 'return "cross_beat_attractor_saturation"' not in s:
+              if quality_anchor not in s:
+                  raise SystemExit('quality novelty anchor missing')
+              s = s.replace(quality_anchor, quality_replacement, 1)
+          p.write_text(s)
+      - name: Compile and test attractor gate
+        shell: bash
+        run: |
+          python -m py_compile scripts/room_expression_quality.py
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts')
+          import room_expression_quality as q
+          compact = {'context': [
+              {'speaker':'sarah','text':'The food truck nearby has good food.'},
+              {'speaker':'mara','text':'That food truck has several food options.'},
+              {'speaker':'owen','text':'The food truck is still nearby.'},
+              {'speaker':'jules','text':'I keep thinking about that nearby food truck.'},
+          ]}
+          assert q._cross_beat_attractor_saturation('The nearby food truck sounds good.', compact)
+          assert not q._cross_beat_attractor_saturation('The owner closes at midnight, which changes the plan.', compact)
+          assert not q._cross_beat_attractor_saturation('I disagree because the price doubled yesterday.', compact)
+          print('PASS cross-beat attractor gate')
+          PY
+      - name: Commit permanent repair
+        shell: bash
+        run: |
+          git config user.name 'room-repair-bot'
+          git config user.email 'room-repair-bot@users.noreply.github.com'
+          git add scripts/room_expression_quality.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Break saturated Room semantic attractors across beats'
+          git pull --rebase origin main
+          git push origin HEAD:main
