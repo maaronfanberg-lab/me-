@@ -1,0 +1,58 @@
+name: One-shot grounded Room quality recovery repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'society/room-ground-quality-recovery-kick.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Ground quality retry recovery in live conversation
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/room_expression_quality.py')
+          s = p.read_text()
+
+          marker = '_RECOVERY_SUBJECTS = ('
+          if marker in s:
+              start = s.index(marker)
+              end = s.index('\n_PRONOUN_R', start)
+              s = s[:start] + s[end + 1:]
+
+          start = s.index('def _recovery_subject(')
+          end = s.index('\ndef quality_issue', start)
+          new = '''def _recovery_subject(compact: dict, self_entity: str | None) -> str:\n    """Choose a recovery concept only from the conversation already in evidence."""\n    discussion = compact.get("discussion") if isinstance(compact.get("discussion"), dict) else {}\n    event = compact.get("event") if isinstance(compact.get("event"), dict) else None\n    context = compact.get("context") if isinstance(compact.get("context"), list) else []\n\n    current = set()\n    for value in (discussion.get("subject"), discussion.get("focus")):\n        current.update(_anchor_tokens(value))\n\n    candidates = []\n    for key in ("open_questions", "related", "shared"):\n        values = discussion.get(key)\n        if isinstance(values, list):\n            candidates.extend(values)\n    if event:\n        candidates.append(event.get("text"))\n        candidates.extend(event.get("cues") if isinstance(event.get("cues"), list) else [])\n    for item in reversed(context[-6:]):\n        if isinstance(item, dict):\n            candidates.append(item.get("text"))\n            candidates.extend(item.get("cues") if isinstance(item.get("cues"), list) else [])\n        else:\n            candidates.append(item)\n\n    for value in candidates:\n        anchors = sorted(_anchor_tokens(value))\n        for anchor in anchors:\n            if anchor not in current:\n                return anchor\n\n    for value in (discussion.get("focus"), discussion.get("subject")):\n        anchors = sorted(_anchor_tokens(value))\n        if anchors:\n            return anchors[0]\n    return "conversation"\n\n\ndef _escape_stale_context(compact: dict, self_entity: str | None) -> None:\n    """Retry from one grounded live edge without inventing a replacement subject."""\n    event = compact.get("event") if isinstance(compact.get("event"), dict) else None\n    fresh = _recovery_subject(compact, self_entity)\n\n    # Keep the newest event as the grounding edge. Remove older context only.\n    compact["context"] = [event] if event else []\n    compact["event"] = event\n    compact["discussion"] = {\n        "subject": fresh,\n        "focus": fresh,\n        "related": [],\n        "shared": [],\n        "open_questions": [],\n    }\n    # Preserve intent and personality state across retries. A quality rejection\n    # should change wording/angle, not erase who is speaking or what they wanted.\n'''
+          s = s[:start] + new + s[end:]
+          p.write_text(s)
+      - name: Compile and verify grounded recovery
+        shell: bash
+        run: |
+          python -m py_compile scripts/room_expression_quality.py
+          python - <<'PY'
+          from pathlib import Path
+          s = Path('scripts/room_expression_quality.py').read_text()
+          assert '_RECOVERY_SUBJECTS' not in s
+          assert 'Choose a recovery concept only from the conversation already in evidence.' in s
+          assert 'fresh = _recovery_subject(compact, self_entity)' in s
+          print('PASS grounded quality recovery')
+          PY
+      - name: Commit permanent repair
+        shell: bash
+        run: |
+          git config user.name 'room-repair-bot'
+          git config user.email 'room-repair-bot@users.noreply.github.com'
+          git add scripts/room_expression_quality.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Ground Room quality retries in live context'
+          git pull --rebase origin main
+          git push origin HEAD:main
