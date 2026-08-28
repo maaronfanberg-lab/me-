@@ -1,0 +1,116 @@
+name: One-shot evolving Room private self wiring
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-live-private-self-once.yml'
+      - 'society/room-live-private-self-kick.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 30
+      - name: Wire bounded evolving private self state into live cognition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import py_compile
+
+          core = Path('scripts/room_engine_v5_core.py')
+          s = core.read_text()
+          if 'import room_private_self_state as _private_self_state' not in s:
+              anchor = 'from room_private_model import run as model_run\n'
+              if anchor not in s: raise SystemExit('core import anchor missing')
+              s = s.replace(anchor, anchor + 'import room_private_self_state as _private_self_state\n', 1)
+
+          old = '''            "people": {},\n        }\n'''
+          new = '''            "people": {},\n            "private_self_state": _private_self_state.initial(P[entity], entity, ORDER),\n        }\n'''
+          if '"private_self_state": _private_self_state.initial' not in s:
+              if old not in s: raise SystemExit('fresh minds anchor missing')
+              s = s.replace(old, new, 1)
+
+          old = '''    rel = mind["entities"][entity]["people"][partner]\n    base = {\n'''
+          new = '''    rel = mind["entities"][entity]["people"][partner]\n    private_self_state = _private_self_state.model_slice(\n        mind["entities"][entity].get("private_self_state"), P[entity], entity, ORDER\n    )\n    base = {\n'''
+          if 'private_self_state = _private_self_state.model_slice' not in s:
+              if old not in s: raise SystemExit('sense state anchor missing')
+              s = s.replace(old, new, 1)
+
+          old = '''        "relationship": {k: rel.get(k) for k in ("exposure", "direct_familiarity", "trust", "predictability", "reciprocity", "warmth", "respect", "disclosure_depth", "tension")},\n    }\n'''
+          new = '''        "relationship": {k: rel.get(k) for k in ("exposure", "direct_familiarity", "trust", "predictability", "reciprocity", "warmth", "respect", "disclosure_depth", "tension")},\n        "private_self_state": private_self_state,\n    }\n'''
+          if '"private_self_state": private_self_state' not in s:
+              if old not in s: raise SystemExit('sense base anchor missing')
+              s = s.replace(old, new, 1)
+
+          thought_anchor = '''            "relationship": base.get("relationship"),\n            "mandatory_speech": True,\n        })\n'''
+          thought_new = '''            "relationship": base.get("relationship"),\n            "private_self_state": base.get("private_self_state"),\n            "mandatory_speech": True,\n        })\n'''
+          if s.count('"private_self_state": base.get("private_self_state")') < 1:
+              if thought_anchor not in s: raise SystemExit('thought payload anchor missing')
+              s = s.replace(thought_anchor, thought_new, 1)
+
+          # The second matching relationship payload is expression.
+          if s.count('"private_self_state": base.get("private_self_state")') < 2:
+              if thought_anchor not in s: raise SystemExit('expression payload anchor missing')
+              s = s.replace(thought_anchor, thought_new, 1)
+
+          core.write_text(s)
+
+          commit = Path('scripts/room_private_commit.py')
+          c = commit.read_text()
+          if 'import room_private_self_state as _private_self_state' not in c:
+              anchor = 'import room_topic_bounded as _bounded_topic\n'
+              if anchor not in c: raise SystemExit('commit import anchor missing')
+              c = c.replace(anchor, anchor + 'import room_private_self_state as _private_self_state\n', 1)
+
+          update_anchor = '''    S["topic_episode"] = topic\n    S["context_scope_version"] = CONTEXT_SCOPE_VERSION\n    for entity in c.ORDER:\n'''
+          update_block = '''    S["topic_episode"] = topic\n    S["context_scope_version"] = CONTEXT_SCOPE_VERSION\n\n    # Update each person's six-part private self only after all four public\n    # turns passed validation. The next beat receives only a bounded slice.\n    part_index = {(part.get("entity"), part.get("role")): part for part in parts}\n    for entity in c.ORDER:\n        comprehension_part = part_index.get((entity, "comprehension"), {})\n        comprehension_private = comprehension_part.get("private") if isinstance(comprehension_part.get("private"), dict) else {}\n        comprehension_source = comprehension_private.get("source") if isinstance(comprehension_private.get("source"), dict) else {}\n        perception = comprehension_source.get("social_observation") if isinstance(comprehension_source.get("social_observation"), dict) else {}\n        thought_part = part_index.get((entity, "thought"), {})\n        thought_private = thought_part.get("private") if isinstance(thought_part.get("private"), dict) else {}\n        deliberation = thought_private.get("deliberation") if isinstance(thought_private.get("deliberation"), dict) else {}\n        prior_private_self = M["entities"][entity].get("private_self_state")\n        M["entities"][entity]["private_self_state"] = _private_self_state.update(\n            prior_private_self, c.P[entity], entity, c.ORDER, perception, deliberation, V, cycle\n        )\n\n    for entity in c.ORDER:\n'''
+          if 'part_index = {(part.get("entity"), part.get("role")): part for part in parts}' not in c:
+              if update_anchor not in c: raise SystemExit('commit private state anchor missing')
+              c = c.replace(update_anchor, update_block, 1)
+
+          commit.write_text(c)
+
+          for path in (core, commit, Path('scripts/room_private_self_state.py')):
+              py_compile.compile(str(path), doraise=True)
+
+          import sys
+          sys.path.insert(0, 'scripts')
+          import room_private_self_state as ps
+          profile = {'psychology_v2': {'core_identity': 'Tester', 'private_self': {'who_i_am': 'Tester'}}}
+          st = ps.initial(profile, 'sarah', ('sarah','mara','owen','jules'))
+          st = ps.update(st, profile, 'sarah', ('sarah','mara','owen','jules'),
+                         {'focus':'evidence','new_details':['Mara changed her claim'],'confidence':0.8},
+                         {'action':'DISAGREE','preferred_partner':'mara','reason_summary':'The new claim conflicts with the earlier one.','new_information_goal':'Test the contradiction.'},
+                         [{'speaker':'mara','text':'I changed my mind about evidence','cognition':{'move_type':'disagree','topic_terms':['evidence']}}], 9)
+          assert st['last_updated_cycle'] == 9
+          assert 'conflicts' in st['what_i_currently_believe']
+          assert 'evidence' in st['models_of_others']['mara']['belief_hypothesis']
+          assert ps.model_slice(st, profile, 'sarah', ('sarah','mara','owen','jules'))['what_i_want']
+          print('EVOLVING_PRIVATE_SELF_OK')
+          PY
+
+          git config user.name 'room-private-self'
+          git config user.email 'actions@users.noreply.github.com'
+          git add scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_self_state.py
+          if git diff --cached --quiet; then
+            echo 'Already wired'
+            exit 0
+          fi
+          git commit -m 'Persist evolving six-part private self state'
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
