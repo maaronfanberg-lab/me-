@@ -1,0 +1,62 @@
+name: One-shot Room lexical degeneracy repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'society/room-lexical-degeneracy-gate-kick.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Reject short token-collapse loops
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/room_expression_quality.py')
+          s = p.read_text()
+          anchor = '''def _has_repeated_ngram(utterance: str, n: int = 6) -> bool:\n    words = _tokens(utterance)\n    if len(words) < n * 2:\n        return False\n    seen: dict[tuple[str, ...], int] = {}\n    for index in range(len(words) - n + 1):\n        gram = tuple(words[index:index + n])\n        previous = seen.get(gram)\n        if previous is not None and index - previous >= n:\n            return True\n        seen.setdefault(gram, index)\n    return False\n\n\n'''
+          addition = anchor + '''def _lexical_degeneracy(utterance: str) -> bool:\n    """Reject sampler collapse around one token before it becomes public speech."""\n    words = [word for word in _tokens(utterance) if word]\n    if len(words) < 4:\n        return False\n    counts: dict[str, int] = {}\n    for word in words:\n        counts[word] = counts.get(word, 0) + 1\n    peak = max(counts.values(), default=0)\n    if peak >= 4 and peak / max(1, len(words)) >= 0.40:\n        return True\n    if len(words) >= 6 and len(set(words)) <= 2:\n        return True\n    return False\n\n\n'''
+          if 'def _lexical_degeneracy(' not in s:
+              if anchor not in s:
+                  raise SystemExit('ngram anchor missing')
+              s = s.replace(anchor, addition, 1)
+          quality_anchor = '''    if _terminal_incomplete(text):\n        return "trailing_fragment"\n    if _has_repeated_ngram(text):\n'''
+          quality_replacement = '''    if _terminal_incomplete(text):\n        return "trailing_fragment"\n    if _lexical_degeneracy(text):\n        _escape_stale_context(compact, self_entity)\n        return "lexical_degeneracy"\n    if _has_repeated_ngram(text):\n'''
+          if 'return "lexical_degeneracy"' not in s:
+              if quality_anchor not in s:
+                  raise SystemExit('quality repetition anchor missing')
+              s = s.replace(quality_anchor, quality_replacement, 1)
+          p.write_text(s)
+      - name: Compile and test lexical degeneracy guard
+        shell: bash
+        run: |
+          python -m py_compile scripts/room_expression_quality.py
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts')
+          import room_expression_quality as q
+          assert q._lexical_degeneracy('think, think, think, think, think. This means everything.')
+          assert q._lexical_degeneracy('food food food food is food')
+          assert q._lexical_degeneracy('find food find food find food')
+          assert not q._lexical_degeneracy('I think the owner doubled the price yesterday.')
+          assert not q._lexical_degeneracy('That makes sense to me.')
+          print('PASS lexical degeneracy guard')
+          PY
+      - name: Commit permanent repair
+        shell: bash
+        run: |
+          git config user.name 'room-repair-bot'
+          git config user.email 'room-repair-bot@users.noreply.github.com'
+          git add scripts/room_expression_quality.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Reject Room short token-collapse loops'
+          git pull --rebase origin main
+          git push origin HEAD:main
