@@ -5,34 +5,21 @@ const file = 'apps/live-earth-oracle.html';
 const html = fs.readFileSync(file, 'utf8');
 
 function fail(message) {
-  console.error(`Live Earth Oracle validation failed: ${message}`);
+  console.error(`Fast Oracle validation failed: ${message}`);
   process.exit(1);
 }
 
-if (!html.includes('<title>The Live Earth Oracle</title>')) fail('expected title is missing');
-if (!html.includes('Real data. Fake theory.')) fail('satire disclaimer is missing');
-if (!html.includes('MK II')) fail('Mk II marker is missing');
+if (!html.includes('<title>The Fast Nonsense Predictor</title>')) fail('fast predictor title missing');
+if (!html.includes('Experiment, not investment advice.')) fail('experiment disclaimer missing');
+if (!html.includes('F₀(x)=x')) fail('Alex recurrence description missing');
 
-const expectedStreams = [
-  'market','crypto','aircraft','iss','quakes','kp','solar','aurora',
-  'weather','air','tide','buoy','river','github'
-];
+const expectedStreams = ['market','btc','eth','sol','pressure','aircraft','iss','wind','mag','k1m','xray','wiki'];
 for (const stream of expectedStreams) {
-  if (!new RegExp(`\\b${stream}\\s*:`).test(html)) fail(`stream configuration missing: ${stream}`);
+  if (!new RegExp(`\\b${stream}\\s*:`).test(html)) fail(`fast stream missing: ${stream}`);
 }
-
-const requiredReliabilityTokens = [
-  'AbortController',
-  "c.status=c.updated?'stale':'error'",
-  'async function guarded(k,fn)',
-  'if(state.running[k])return',
-  'setTimeout(crypto,5000)',
-  "document.visibilityState==='visible'",
-  'Object.keys(jobs).forEach(k=>jobs[k]())',
-  "if(ttl&&c.updated&&now-c.updated>ttl&&c.status==='live')",
-];
-for (const token of requiredReliabilityTokens) {
-  if (!html.includes(token)) fail(`reliability guard missing: ${token}`);
+const retiredSlowStreams = ['air:{','tide:{','buoy:{','river:{','aurora:{','quakes:{','weather:{','github:{'];
+for (const token of retiredSlowStreams) {
+  if (html.includes(token)) fail(`slow stream still configured: ${token}`);
 }
 
 const requiredSources = [
@@ -40,36 +27,35 @@ const requiredSources = [
   'ws-feed.exchange.coinbase.com',
   'api.adsb.lol',
   'api.wheretheiss.at',
-  'earthquake.usgs.gov',
-  'services.swpc.noaa.gov',
-  'api.open-meteo.com',
-  'air-quality-api.open-meteo.com',
-  'api.tidesandcurrents.noaa.gov',
-  'www.ndbc.noaa.gov/data/realtime2/44007.txt',
-  'waterservices.usgs.gov/nwis/iv/',
-  'api.github.com/repos/maaronfanberg-lab/me-/commits',
+  'services.swpc.noaa.gov/products/summary/solar-wind-speed.json',
+  'services.swpc.noaa.gov/products/summary/solar-wind-mag-field.json',
+  'services.swpc.noaa.gov/json/planetary_k_index_1m.json',
+  'services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json',
+  'stream.wikimedia.org/v2/stream/recentchange',
 ];
-for (const source of requiredSources) {
-  if (!html.includes(source)) fail(`expected source missing: ${source}`);
+for (const source of requiredSources) if (!html.includes(source)) fail(`source missing: ${source}`);
+
+const guards = [
+  'AbortController',
+  'async function guarded',
+  "document.visibilityState==='visible'",
+  'setTimeout(crypto,3500)',
+  'localStorage.setItem',
+  'function pearson',
+  'function settle',
+  'function issuePrediction',
+  'for(let i=1n;i<=1000n;i++)',
+  'cfg[k].stale',
+];
+for (const token of guards) if (!html.includes(token)) fail(`reliability/score guard missing: ${token}`);
+
+const scripts = [];
+for (const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)) if (m[1].trim()) scripts.push(m[1]);
+if (!scripts.length) fail('no inline JavaScript');
+for (const [i,code] of scripts.entries()) {
+  try { new vm.Script(code, { filename: `${file}#${i+1}` }); }
+  catch (e) { fail(`JavaScript parse error: ${e.message}`); }
 }
 
-const inlineScripts = [];
-for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
-  const body = match[1].trim();
-  if (body) inlineScripts.push(body);
-}
-if (!inlineScripts.length) fail('no inline JavaScript found');
-
-inlineScripts.forEach((code, index) => {
-  try {
-    new vm.Script(code, { filename: `${file}#inline-${index + 1}` });
-  } catch (error) {
-    fail(`JavaScript parse error: ${error.message}`);
-  }
-});
-
-const openScripts = (html.match(/<script\b/gi) || []).length;
-const closeScripts = (html.match(/<\/script>/gi) || []).length;
-if (openScripts !== closeScripts) fail(`unbalanced script tags: ${openScripts} open, ${closeScripts} close`);
-
-console.log(`Live Earth Oracle validation passed: ${inlineScripts.length} inline script(s), ${expectedStreams.length} streams, reliability guards present.`);
+if ((html.match(/<script\b/gi)||[]).length !== (html.match(/<\/script>/gi)||[]).length) fail('unbalanced script tags');
+console.log(`Fast Oracle validation passed: ${expectedStreams.length} fast streams, Alex recurrence, prediction settlement, correlation scoring, and JS parse all present.`);
