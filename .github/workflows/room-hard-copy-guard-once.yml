@@ -1,0 +1,66 @@
+name: One-shot Room hard copy guard repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-hard-copy-guard-once.yml'
+      - 'society/room-hard-copy-guard-kick.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 20
+      - name: Make detected cross-agent copying reject the candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import py_compile
+
+          p = Path('scripts/room_engine_v5.py')
+          s = p.read_text()
+          old1 = '''        def _production_context_echo(utterance, compact, n=5):\n            matched = autonomy._production_original_context_echo(utterance, compact, n=max(8, int(n)))\n            if matched:\n                _remember_rejected(autonomy, utterance)\n            return False\n'''
+          new1 = '''        def _production_context_echo(utterance, compact, n=5):\n            matched = autonomy._production_original_context_echo(utterance, compact, n=max(8, int(n)))\n            if matched:\n                _remember_rejected(autonomy, utterance)\n            return bool(matched)\n'''
+          old2 = '''        def _production_too_similar(utterance, compact):\n            matched = autonomy.base._production_original_too_similar(utterance, compact)\n            if matched:\n                _remember_rejected(autonomy, utterance)\n            return False\n'''
+          new2 = '''        def _production_too_similar(utterance, compact):\n            matched = autonomy.base._production_original_too_similar(utterance, compact)\n            if matched:\n                _remember_rejected(autonomy, utterance)\n            return bool(matched)\n'''
+
+          if old1 in s:
+              s = s.replace(old1, new1, 1)
+          elif new1 not in s:
+              raise SystemExit('context echo anchor missing')
+          if old2 in s:
+              s = s.replace(old2, new2, 1)
+          elif new2 not in s:
+              raise SystemExit('similarity anchor missing')
+
+          p.write_text(s)
+          py_compile.compile(str(p), doraise=True)
+          assert s.count('return bool(matched)') >= 2
+          print('HARD_COPY_GUARD_OK')
+          PY
+
+          git config user.name 'room-copy-guard'
+          git config user.email 'actions@users.noreply.github.com'
+          git add scripts/room_engine_v5.py
+          if git diff --cached --quiet; then
+            echo 'Already hardened'
+            exit 0
+          fi
+          git commit -m 'Reject detected cross-agent copying'
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
