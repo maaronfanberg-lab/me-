@@ -1,0 +1,63 @@
+name: One-shot Room internal move speech repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'society/room-block-internal-move-speech-kick.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Reject planner move labels leaking into public speech
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/room_expression_quality.py')
+          s = p.read_text()
+          anchor = '''def _self_perspective_leak(utterance: str, self_entity: str | None) -> bool:\n    """An autonomous speaker uses I/me/my for self, never its own proper name."""\n    name = str(self_entity or "").strip()\n    if not name:\n        return False\n    return bool(re.search(rf"\\b{re.escape(name)}\\b", str(utterance or ""), re.I))\n\n\n'''
+          addition = anchor + '''_INTERNAL_MOVE_SPEECH = re.compile(\n    r"\\b(?:i\\s+(?:want|need|plan|try|would\\s+like|would\\s+really\\s+like|['’]?d\\s+like)\\s+to\\s+)?"\n    r"(?:disclose|bridge|deepen|callback)\\s+(?:with|to|about)\\b"\n    r"|\\b(?:i\\s+(?:want|need|would\\s+like|would\\s+really\\s+like|['’]?d\\s+like)\\s+to\\s+)?repair\\s+with\\s+(?:you|sarah|mara|owen|jules|allen)\\b",\n    re.I,\n)\n\n\ndef _internal_move_speech_leak(utterance: str) -> bool:\n    """Reject public sentences that verbalize internal discourse-action labels."""\n    return bool(_INTERNAL_MOVE_SPEECH.search(str(utterance or "")))\n\n\n'''
+          if 'def _internal_move_speech_leak(' not in s:
+              if anchor not in s:
+                  raise SystemExit('perspective anchor missing')
+              s = s.replace(anchor, addition, 1)
+          quality_anchor = '''    if _self_perspective_leak(text, self_entity):\n        return "self_perspective_leak"\n'''
+          quality_replacement = quality_anchor + '''    if _internal_move_speech_leak(text):\n        return "internal_move_speech_leak"\n'''
+          if 'return "internal_move_speech_leak"' not in s:
+              if quality_anchor not in s:
+                  raise SystemExit('quality perspective anchor missing')
+              s = s.replace(quality_anchor, quality_replacement, 1)
+          p.write_text(s)
+      - name: Compile and test internal move boundary
+        shell: bash
+        run: |
+          python -m py_compile scripts/room_expression_quality.py
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts')
+          import room_expression_quality as q
+          assert q._internal_move_speech_leak('I want to disclose with Mara about gardens.')
+          assert q._internal_move_speech_leak("I'd really like to repair with you about gardens.")
+          assert q._internal_move_speech_leak('I need to bridge with Owen about this.')
+          assert not q._internal_move_speech_leak('I want to support you through this.')
+          assert not q._internal_move_speech_leak('I need to repair the garden fence.')
+          assert not q._internal_move_speech_leak('Can you disclose what happened?')
+          print('PASS internal move speech boundary')
+          PY
+      - name: Commit permanent repair
+        shell: bash
+        run: |
+          git config user.name 'room-repair-bot'
+          git config user.email 'room-repair-bot@users.noreply.github.com'
+          git add scripts/room_expression_quality.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Block Room internal move labels from public speech'
+          git pull --rebase origin main
+          git push origin HEAD:main
