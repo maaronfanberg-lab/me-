@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Unified Market Oracle</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<style>
+:root{--ink:#1b1b19;--dim:#6b6a66;--line:#dedcd6;--bg:#fbfbf9;--accent:#7a3b2e;--ok:#3d6b45;--bad:#9a3b2e;--wait:#b58a36}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink)}body{font-family:Georgia,'Times New Roman',serif}
+header{padding:34px 26px 8px;max-width:760px}h1{font-size:25px;font-weight:normal;margin:0 0 7px}.sub{font-size:14px;color:var(--dim);margin:0;max-width:690px;line-height:1.55}
+.topline{display:flex;gap:9px;align-items:center;margin-top:12px;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;flex-wrap:wrap}.pulse{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(61,107,69,.45);animation:pulse 1.8s infinite}@keyframes pulse{70%{box-shadow:0 0 0 7px rgba(61,107,69,0)}100%{box-shadow:0 0 0 0 rgba(61,107,69,0)}}
+.warn{margin:15px 26px 0;padding:10px 14px;border:1px solid var(--line);background:#f4f2ec;font-size:13px;color:var(--dim);line-height:1.5;max-width:680px}h2{font-size:13px;font-weight:normal;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;border-top:1px solid var(--line);padding-top:15px;margin:32px 26px 12px}.plate{padding:4px 26px 22px;overflow-x:auto}#eq{min-width:max-content}.katex{font-size:14px}.panel{padding:0 26px 24px;max-width:700px}.fld{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.lab{font-size:14px;line-height:1.35}.lab small{display:block;color:var(--dim);font-size:12px;font-style:italic;margin-top:2px}.ctl{display:flex;align-items:center;gap:6px;flex:0 0 auto}button{font-family:inherit;font-size:15px;min-width:44px;min-height:44px;background:#fff;border:1px solid var(--line);color:var(--ink);cursor:pointer;border-radius:3px}button:active{background:#eee}.val{min-width:70px;text-align:center;font-size:15px;font-variant-numeric:tabular-nums}input[type=text]{font-family:inherit;font-size:15px;width:100px;padding:9px;min-height:44px;border:1px solid var(--line);border-radius:3px;background:#fff;color:var(--ink);text-align:right}.toggle{padding:0 16px;font-size:14px}.toggle.on{background:var(--accent);color:#fff;border-color:var(--accent)}.live{font-size:15px;font-variant-numeric:tabular-nums;min-width:96px;text-align:right}.pend{color:var(--dim);font-style:italic;font-size:13px}.out{margin:4px 26px 18px;padding:20px;border:1px solid var(--line);background:#fff;max-width:640px}.big{font-size:33px;margin:6px 0 2px;font-variant-numeric:tabular-nums}.delta{font-size:15px;color:var(--dim)}.terms{margin-top:15px;font-size:13px;color:var(--dim);line-height:1.9;font-variant-numeric:tabular-nums}.terms b{color:var(--ink);font-weight:normal}.feeds{margin:0 26px 40px;max-width:680px;font-size:12.5px;color:var(--dim);line-height:1.75}.feeds div{padding:3px 0}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#bbb;margin-right:8px;vertical-align:middle}.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}.dot.wait{background:var(--wait)}.foot{padding:0 26px 60px;max-width:680px;font-size:13px;color:var(--dim);line-height:1.6;font-style:italic}.minor{font-size:11px;color:var(--dim);margin-left:6px}
+@media(max-width:560px){header{padding-top:25px}.fld{align-items:flex-start}.lab{max-width:60%}.live{min-width:82px}.big{font-size:29px}}
+</style>
+</head>
+<body>
+<header>
+<h1>The Unified Market Oracle</h1>
+<p class="sub">Seismic moment, geomagnetic disturbance, felid actuarial drift, culicid exposure, Maine respiratory emergency presentations, and a songbird arrival kernel, all exponentiated by the squared price–earnings multiple because apparently civilization had spare mathematics.</p>
+<div class="topline"><span class="pulse" id="pulse"></span><span id="liveState">live refresh enabled</span><span>•</span><span id="lastRefresh">starting…</span></div>
+</header>
+<div class="warn"><b>This is a joke.</b> None of these variables predicts any security's price, and nothing here is financial advice. The data feeds are real; every use made of them is not.</div>
+<h2>The formula</h2><div class="plate"><div id="eq"></div></div>
+<h2>Inputs</h2><div class="panel">
+<div class="fld"><div class="lab">Ticker<small id="feedT">connecting…</small></div><div class="ctl"><input type="text" id="tkr" value="WMT" style="text-align:left;width:78px"><button id="load" style="padding:0 12px">LOAD</button></div></div>
+<div class="fld"><div class="lab">Current price <i>S<sub>t</sub></i><small id="pxsrc">waiting for live market feed</small></div><div class="ctl"><input type="text" id="px" value="0.00"></div></div>
+<div class="fld"><div class="lab">P / E ratio<small>manual; intentionally left outside the market feed</small></div><div class="ctl"><input type="text" id="pe" value="3.20"></div></div>
+<div class="fld"><div class="lab">Ψ₁ Seismic moment, 24 h<small>USGS live feed</small></div><div class="ctl"><span class="live pend" id="l-q">…</span></div></div>
+<div class="fld"><div class="lab">Ψ₂ Planetary K-index<small>NOAA SWPC live feed</small></div><div class="ctl"><span class="live pend" id="l-k">…</span></div></div>
+<div class="fld"><div class="lab">Ψ₃ Mean cat lifespan, yrs<small>manual; no authoritative live series exists</small></div><div class="ctl"><button data-d="-0.1" data-t="cat">−</button><span class="val" id="v-cat">15.1</span><button data-d="0.1" data-t="cat">+</button></div></div>
+<div class="fld"><div class="lab">Ψ₄ Culicid index<small>modelled from live temperature and humidity</small></div><div class="ctl"><span class="live pend" id="l-m">…</span></div></div>
+<div class="fld"><div class="lab">Ψ₅ Maine ED visits, % respiratory<small>CDC NSSP public data; latest available observation</small></div><div class="ctl"><span class="live pend" id="l-e">…</span></div></div>
+<div class="fld"><div class="lab">𝕊 Minutes outdoors</div><div class="ctl"><button data-d="-5" data-t="min">−</button><span class="val" id="v-min">30</span><button data-d="5" data-t="min">+</button></div></div>
+<div class="fld"><div class="lab">𝕊 Perches overhead</div><div class="ctl"><button data-d="-1" data-t="perch">−</button><span class="val" id="v-perch">2</span><button data-d="1" data-t="perch">+</button></div></div>
+<div class="fld"><div class="lab">𝕊 Wearing a hat<small>annihilates the entire songbird kernel</small></div><div class="ctl"><button class="toggle" id="hat">no</button></div></div>
+</div>
+<h2>Forecast</h2><div class="out"><div style="font-size:13px;color:var(--dim)" id="hz">&nbsp;</div><div class="big" id="target">—</div><div class="delta" id="delta">&nbsp;</div><div class="terms" id="terms"></div></div>
+<h2>Feed status</h2><div class="feeds">
+<div><span class="dot wait" id="d-mkt"></span><span id="s-mkt">market bridge — waiting</span></div>
+<div><span class="dot wait" id="d-q"></span><span id="s-q">USGS earthquakes — waiting</span></div>
+<div><span class="dot wait" id="d-k"></span><span id="s-k">NOAA space weather — waiting</span></div>
+<div><span class="dot wait" id="d-m"></span><span id="s-m">Open-Meteo — waiting</span></div>
+<div><span class="dot wait" id="d-e"></span><span id="s-e">CDC NSSP — waiting</span></div>
+</div>
+<p class="foot">Ψ₁ uses the true moment–magnitude relation, M₀ = 10<sup>1.5M+9.1</sup> N·m. Every weight, mean and scale was chosen because it looked plausibly scientific at a distance. That distinction is the entire point.</p>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script>
+(function(){
+'use strict';
+var P1="\\tanh\\!\\left[\\tfrac{1}{\\sigma_M}\\!\\left(\\log_{10}\\!\\!\\sum_i 10^{1.5M_i+9.1}-\\mu_M\\right)\\right]";
+var P2="\\tfrac{1}{\\sigma_K}(K_p-\\mu_K)";
+var P3="\\tfrac{\\mathrm d}{\\mathrm dt}\\log L_{cat}(t)";
+var P4="\\tfrac{1}{\\lambda_B}\\int_{-\\infty}^{t}\\mathfrak B(T,RH)e^{-(t-t')/\\lambda_B}\\,dt'";
+var P5="\\left(\\mathfrak E_{ME}/\\mathrm{Pop}_{ME}-\\mathrm{seasonality}\\right)";
+var SK="\\left(1-e^{-\\Lambda_{songbird}(t,t+T)(1-\\mathbb 1_{hat})}\\right)";
+try{katex.render("\\widehat S_{t+h}=S_t\\exp\\!\\left[\\left(\\frac{P_t}{E_t}\\right)^2"+SK+"\\frac{\\omega_1"+P1+"+\\omega_2"+P2+"+\\omega_3"+P3+"+\\omega_4"+P4+"+\\omega_5"+P5+"}{\\sum_{k=1}^{5}|\\omega_k|}\\right]",document.getElementById('eq'),{displayMode:true,throwOnError:false});}catch(e){document.getElementById('eq').textContent='Formula renderer unavailable';}
+
+var st={cat:15.1,min:30,perch:2,hat:false,moment:null,kp:null,mos:null,er:null};
+var W={w1:.42,w2:-.17,w3:.28,w4:.11,w5:-.23};
+var K={muM:17.4,sigM:.85,muK:2.2,sigK:1.4,catRef:15,lamB:4,erRef:2.5,erScale:1.5};
+var WS=Object.keys(W).reduce(function(a,k){return a+Math.abs(W[k]);},0);
+var $=function(id){return document.getElementById(id)};
+var busy={market:false,q:false,k:false,m:false,e:false};
+var lastAny=0;
+function num(id,d){var v=parseFloat($(id).value);return isFinite(v)?v:d}
+function f(x,n){return Number(x).toFixed(n)}
+function lamp(k,state,msg){$('d-'+k).className='dot '+state;$('s-'+k).textContent=msg}
+function stamp(){lastAny=Date.now();$('lastRefresh').textContent='last data update '+new Date(lastAny).toLocaleTimeString()}
+function age(ts){return ts?Math.max(0,Math.round((Date.now()-ts)/1000)):0}
+function timeoutFetch(url,opts,ms){var c=new AbortController(),t=setTimeout(function(){c.abort()},ms||12000);opts=opts||{};opts.signal=c.signal;return fetch(url,opts).finally(function(){clearTimeout(t)})}
+function fetchJSON(url,ms){return timeoutFetch(url,{cache:'no-store',headers:{'Accept':'application/json'}},ms).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})}
+function compute(){
+ var p1=st.moment===null?0:Math.tanh((Math.log(st.moment)/Math.LN10-K.muM)/K.sigM);
+ var p2=st.kp===null?0:(st.kp-K.muK)/K.sigK;
+ var p3=Math.log(st.cat/K.catRef);
+ var p4=st.mos===null?0:st.mos/K.lamB;
+ var p5=st.er===null?0:(st.er-K.erRef)/K.erScale;
+ var lam=st.hat?0:.0009*st.min*(1+.8*st.perch),S=1-Math.exp(-lam);
+ var Xi=S*(W.w1*p1+W.w2*p2+W.w3*p3+W.w4*p4+W.w5*p5)/WS;
+ var pe=num('pe',3.2),px=num('px',0),e=pe*pe*Xi;if(e>4)e=4;if(e<-4)e=-4;
+ var tgt=px*Math.exp(e),d=tgt-px;
+ $('hz').textContent=$('tkr').value.toUpperCase()+' — horizon h';
+ $('target').textContent=px>0?'$'+f(tgt,2):'waiting for price';
+ $('delta').textContent=px>0?((d>=0?'+':'')+f(d,2)+'  ('+(d>=0?'+':'')+f(100*d/px,2)+'%)'):' ';
+ $('terms').innerHTML='Ψ₁ seismic <b>'+f(p1,4)+'</b><br>Ψ₂ geomagnetic <b>'+f(p2,4)+'</b><br>Ψ₃ felid <b>'+f(p3,4)+'</b><br>Ψ₄ culicid <b>'+f(p4,4)+'</b><br>Ψ₅ emergency <b>'+f(p5,4)+'</b><br>𝕊 arrival kernel <b>'+f(S,5)+'</b>'+(st.hat?' (hat)':'')+'<br>Ξ composite <b>'+f(Xi,6)+'</b><br>(P/E)²·Ξ <b>'+f(e,4)+'</b>';
+}
+
+Array.prototype.forEach.call(document.querySelectorAll('button[data-t]'),function(b){b.addEventListener('click',function(){var t=b.dataset.t;st[t]=Math.max(0,Math.round((st[t]+parseFloat(b.dataset.d))*100)/100);$('v-'+t).textContent=t==='cat'?f(st[t],1):st[t];compute()})});
+$('hat').addEventListener('click',function(){st.hat=!st.hat;this.textContent=st.hat?'yes':'no';this.className='toggle'+(st.hat?' on':'');compute()});
+['px','pe','tkr'].forEach(function(i){$(i).addEventListener('input',compute)});$('px').addEventListener('input',function(){$('pxsrc').textContent='manual override'});
+
+var MARKET='https://room-live-mirror.dfp6k69dw5.workers.dev/api/market';
+var marketUpdated=0;
+function loadQuote(force){
+ if(busy.market)return;busy.market=true;lamp('mkt','wait','market bridge — refreshing');
+ var s=$('tkr').value.trim().toUpperCase().replace(/[^A-Z0-9.^=-]/g,'').slice(0,18)||'WMT';$('tkr').value=s;$('feedT').textContent='loading '+s+'…';
+ var url=MARKET+'?symbol='+encodeURIComponent(s)+'&interval=1m&range=1d&prepost=1&fresh='+Date.now();
+ fetchJSON(url,10000).then(function(j){
+  var res=j&&j.payload&&j.payload.chart&&j.payload.chart.result&&j.payload.chart.result[0];if(!res)throw new Error('no chart result');
+  var meta=res.meta||{},q=res.indicators&&res.indicators.quote&&res.indicators.quote[0]||{},p=Number(meta.regularMarketPrice);
+  if(!isFinite(p)){var c=q.close||[];for(var i=c.length-1;i>=0;i--){var z=Number(c[i]);if(isFinite(z)){p=z;break}}}
+  if(!isFinite(p))throw new Error('no numeric price');
+  $('px').value=p.toFixed(2);$('pxsrc').textContent='live via market bridge';marketUpdated=Date.now();
+  var mt=Number(meta.regularMarketTime)||0,when=mt?new Date(mt*1000).toLocaleTimeString():'now';
+  $('feedT').textContent=s+' connected · '+when;lamp('mkt','ok','market bridge — '+s+' @ $'+p.toFixed(2)+' · polled '+new Date().toLocaleTimeString());stamp();compute();
+ }).catch(function(e){$('feedT').textContent='market bridge error';$('pxsrc').textContent=num('px',0)>0?'manual fallback':'unavailable';lamp('mkt','bad','market bridge — '+(e.name==='AbortError'?'timeout':e.message||e));compute()}).finally(function(){busy.market=false});
+}
+$('load').addEventListener('click',function(){loadQuote(true)});$('tkr').addEventListener('keydown',function(e){if(e.key==='Enter')loadQuote(true)});
+
+function loadQuakes(){if(busy.q)return;busy.q=true;lamp('q','wait','USGS earthquakes — refreshing');fetchJSON('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson?x='+Date.now(),12000).then(function(j){var tot=0,n=0,mx=-99;(j.features||[]).forEach(function(ft){var m=ft&&ft.properties&&ft.properties.mag;if(typeof m==='number'&&isFinite(m)){tot+=Math.pow(10,1.5*m+9.1);n++;if(m>mx)mx=m}});if(!(tot>0))throw new Error('no magnitudes');st.moment=tot;$('l-q').className='live';$('l-q').textContent=tot.toExponential(2);lamp('q','ok','USGS — '+n+' quakes / 24 h, max M'+mx.toFixed(1)+', ΣM₀ '+tot.toExponential(3)+' N·m');stamp();compute()}).catch(function(e){lamp('q','bad','USGS — '+(e.name==='AbortError'?'timeout':e.message||e))}).finally(function(){busy.q=false})}
+
+function loadKp(){if(busy.k)return;busy.k=true;lamp('k','wait','NOAA space weather — refreshing');fetchJSON('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json?x='+Date.now(),12000).then(function(rows){if(!rows||rows.length<2)throw new Error('empty response');var last=null,when='';for(var i=rows.length-1;i>0;i--){var v=parseFloat(rows[i][1]);if(isFinite(v)){last=v;when=rows[i][0];break}}if(last===null)throw new Error('no numeric Kp');st.kp=last;$('l-k').className='live';$('l-k').textContent=f(last,2);lamp('k','ok','NOAA SWPC — Kp '+f(last,2)+' at '+when+' UTC');stamp();compute()}).catch(function(e){lamp('k','bad','NOAA SWPC — '+(e.name==='AbortError'?'timeout':e.message||e))}).finally(function(){busy.k=false})}
+
+var loc={lat:43.661,lon:-70.255,label:'Portland ME'};
+function loadMosquito(){if(busy.m)return;busy.m=true;lamp('m','wait','Open-Meteo — refreshing');var url='https://api.open-meteo.com/v1/forecast?latitude='+loc.lat+'&longitude='+loc.lon+'&current=temperature_2m,relative_humidity_2m&timezone=auto&x='+Date.now();fetchJSON(url,12000).then(function(j){var c=j&&j.current;if(!c)throw new Error('no current block');var T=Number(c.temperature_2m),RH=Number(c.relative_humidity_2m);if(!isFinite(T)||!isFinite(RH))throw new Error('bad weather values');var therm=Math.max(0,Math.min(1,(T-10)/18))*Math.max(0,Math.min(1,(35-T)/10)),idx=8*therm*(RH/100);st.mos=idx;$('l-m').className='live';$('l-m').textContent=f(idx,2);lamp('m','ok','Open-Meteo — '+loc.label+' '+f(T,1)+'°C, '+f(RH,0)+'% RH → '+f(idx,2)+' bites/day');stamp();compute()}).catch(function(e){lamp('m','bad','Open-Meteo — '+(e.name==='AbortError'?'timeout':e.message||e))}).finally(function(){busy.m=false})}
+function initLocation(){if(!navigator.geolocation){loadMosquito();return}navigator.geolocation.getCurrentPosition(function(p){loc={lat:p.coords.latitude.toFixed(3),lon:p.coords.longitude.toFixed(3),label:'your location'};loadMosquito()},function(){loadMosquito()},{timeout:5000,maximumAge:900000})}
+
+function textVal(r,names){for(var i=0;i<names.length;i++){var k=names[i];if(r[k]!=null)return String(r[k])}return ''}
+function numericCandidate(r){var keys=Object.keys(r),best=null;for(var i=0;i<keys.length;i++){var k=keys[i].toLowerCase(),v=parseFloat(r[keys[i]]);if(!isFinite(v))continue;if(/percent|pct|proportion/.test(k)){best=v;break}}return best}
+function rowDate(r){var best='';Object.keys(r).forEach(function(k){if(/date|week|time|end/.test(k.toLowerCase())){var v=String(r[k]||'');if(/^20\d\d[-/]/.test(v)&&v>best)best=v}});return best}
+function pickER(rows){
+ var candidates=[];(rows||[]).forEach(function(r){var joined=Object.keys(r).map(function(k){return String(r[k])}).join(' | ');if(!/maine/i.test(joined))return;if(!/combined|respiratory/i.test(joined))return;var pct=numericCandidate(r);if(pct===null)return;candidates.push({pct:pct,date:rowDate(r),raw:r})});
+ if(!candidates.length){(rows||[]).forEach(function(r){var joined=Object.keys(r).map(function(k){return String(r[k])}).join(' | ');if(!/maine/i.test(joined))return;var pct=numericCandidate(r);if(pct!==null)candidates.push({pct:pct,date:rowDate(r),raw:r})})}
+ candidates.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:0});return candidates[0]||null;
+}
+function loadER(){if(busy.e)return;busy.e=true;lamp('e','wait','CDC NSSP — refreshing');var urls=['https://data.cdc.gov/resource/vjzj-u7u8.json?$limit=5000&x='+Date.now(),'https://data.cdc.gov/resource/7mra-9cq9.json?$limit=5000&x='+Date.now()];
+ function attempt(i){if(i>=urls.length)return Promise.reject(new Error('no usable CDC dataset response'));return fetchJSON(urls[i],16000).then(function(rows){var hit=pickER(rows);if(!hit)throw new Error('no Maine respiratory row');return hit}).catch(function(){return attempt(i+1)})}
+ attempt(0).then(function(hit){st.er=hit.pct;$('l-e').className='live';$('l-e').textContent=f(hit.pct,2)+'%';lamp('e','ok','CDC NSSP — Maine '+f(hit.pct,2)+'% respiratory ED visits'+(hit.date?' · '+hit.date.slice(0,10):''));stamp();compute()}).catch(function(e){$('l-e').className='live pend';$('l-e').textContent='—';lamp('e','bad','CDC NSSP — '+(e.name==='AbortError'?'timeout':e.message||e))}).finally(function(){busy.e=false})}
+
+function refreshAll(){loadQuote();loadQuakes();loadKp();loadMosquito();loadER()}
+function schedule(){setInterval(function(){if(!document.hidden)loadQuote()},15000);setInterval(function(){if(!document.hidden)loadQuakes()},300000);setInterval(function(){if(!document.hidden)loadKp()},300000);setInterval(function(){if(!document.hidden)loadMosquito()},300000);setInterval(function(){if(!document.hidden)loadER()},1800000);setInterval(function(){if(marketUpdated&&Date.now()-marketUpdated>90000){$('pulse').style.background='var(--wait)';$('liveState').textContent='market feed stale; retrying'}else{$('pulse').style.background='var(--ok)';$('liveState').textContent='live refresh enabled'}},5000)}
+document.addEventListener('visibilitychange',function(){if(!document.hidden){loadQuote();loadKp();loadMosquito()}});
+compute();loadQuote();loadQuakes();loadKp();initLocation();loadER();schedule();
+})();
+</script>
+</body>
+</html>
