@@ -1,0 +1,62 @@
+name: One-shot Room self-perspective repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'society/room-hard-self-perspective-kick.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Reject own-name perspective leakage
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/room_expression_quality.py')
+          s = p.read_text()
+          anchor = '''def _self_address(utterance: str, self_entity: str | None) -> bool:\n    name = str(self_entity or "").strip()\n    if not name:\n        return False\n    return bool(re.match(rf"^\\s*(?:hey\\s*[,!]?\\s*)?{re.escape(name)}\\b\\s*[,!:.-]", utterance, re.I))\n\n\n'''
+          replacement = anchor + '''def _self_perspective_leak(utterance: str, self_entity: str | None) -> bool:\n    """An autonomous speaker uses I/me/my for self, never its own proper name."""\n    name = str(self_entity or "").strip()\n    if not name:\n        return False\n    return bool(re.search(rf"\\b{re.escape(name)}\\b", str(utterance or ""), re.I))\n\n\n'''
+          if 'def _self_perspective_leak(' not in s:
+              if anchor not in s:
+                  raise SystemExit('self-address anchor missing')
+              s = s.replace(anchor, replacement, 1)
+          quality_anchor = '''    if _self_address(text, self_entity):\n        return "self_address"\n'''
+          quality_replacement = '''    if _self_perspective_leak(text, self_entity):\n        return "self_perspective_leak"\n'''
+          if quality_replacement not in s:
+              if quality_anchor not in s:
+                  raise SystemExit('quality self-address anchor missing')
+              s = s.replace(quality_anchor, quality_replacement, 1)
+          p.write_text(s)
+      - name: Compile and test perspective guard
+        shell: bash
+        run: |
+          python -m py_compile scripts/room_expression_quality.py
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts')
+          import room_expression_quality as q
+          assert q._self_perspective_leak('Sarah, can you tell me more?', 'sarah')
+          assert q._self_perspective_leak('I think Sarah has discovered something.', 'sarah')
+          assert q._self_perspective_leak("You're right about that, Owen.", 'owen')
+          assert not q._self_perspective_leak('Owen, can you tell me more?', 'sarah')
+          assert not q._self_perspective_leak('I think I discovered something.', 'sarah')
+          print('PASS hard self-perspective guard')
+          PY
+      - name: Commit permanent repair
+        shell: bash
+        run: |
+          git config user.name 'room-repair-bot'
+          git config user.email 'room-repair-bot@users.noreply.github.com'
+          git add scripts/room_expression_quality.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Reject Room self-perspective identity leakage'
+          git pull --rebase origin main
+          git push origin HEAD:main
