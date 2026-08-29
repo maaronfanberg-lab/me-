@@ -59,6 +59,45 @@ jobs:
           test -s apps/gods-eye-view-mobile/index.html
           echo 'Gods Eye View staged at /apps/gods-eye-view-mobile/'
 
+      - name: Rebase God's Eye View static paths for GitHub Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('apps/gods-eye-view-mobile')
+          base = '/me-/apps/gods-eye-view-mobile/'
+          prefixes = [
+              'assets/', 'cesium/', 'models/',
+              'mobile.css', 'manifest.webmanifest', 'sw.js',
+              'logo.svg', 'mic.svg', 'pin.svg', 'location.svg', 'visual-presets.svg'
+          ]
+
+          text_suffixes = {'.html', '.js', '.css', '.webmanifest', '.json'}
+          for p in root.rglob('*'):
+              if not p.is_file() or p.suffix.lower() not in text_suffixes:
+                  continue
+              try:
+                  s = p.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              original = s
+              for prefix in prefixes:
+                  s = s.replace(f'"/{prefix}', f'"{base}{prefix}')
+                  s = s.replace(f"'/{prefix}", f"'{base}{prefix}")
+                  s = s.replace(f'url(/{prefix}', f'url({base}{prefix}')
+              if s != original:
+                  p.write_text(s, encoding='utf-8')
+
+          index = (root / 'index.html').read_text(encoding='utf-8')
+          required = [base + 'assets/', base + 'mobile.css', base + 'manifest.webmanifest']
+          missing = [x for x in required if x not in index]
+          if missing:
+              raise SystemExit(f'GitHub Pages path rebase incomplete: {missing}')
+          print('Rebased God\'s Eye View assets for GitHub Pages subpath.')
+          PY
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
