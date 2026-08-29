@@ -33,32 +33,16 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_API_TOKEN/CF_API_TOKEN'; exit 1; }
           echo 'Cloudflare token is available. Google credentials are not required.'
 
-      - name: Select Fanberg Cloudflare account
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            -H 'Content-Type: application/json' \
-            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
-            > /tmp/cf-accounts.json
-          python3 - <<'PY' >> "$GITHUB_ENV"
-          import json
-          d=json.load(open('/tmp/cf-accounts.json'))
-          if not d.get('success'):
-              raise SystemExit('Cloudflare account lookup failed.')
-          matches=[a for a in d.get('result',[]) if 'fanberg' in str(a.get('name','')).lower()]
-          if len(matches) != 1:
-              raise SystemExit(f'Expected one Fanberg Cloudflare account, found {len(matches)}.')
-          a=matches[0]
-          print(f"CLOUDFLARE_ACCOUNT_ID={a['id']}")
-          print(f"CLOUDFLARE_ACCOUNT_NAME={a['name']}")
-          PY
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '24.14.0'
+
+      - name: Verify Wrangler authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest whoami
 
       - name: Build keyless mobile app
         working-directory: cloudflare/gods-eye-view-mobile
@@ -68,28 +52,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          code=$(curl -sS -o /tmp/pages-project.json -w '%{http_code}' \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            -H 'Content-Type: application/json' \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/gods-eye-view-mobile")
-          if [ "$code" = "404" ]; then
-            curl -fsS -X POST \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              -H 'Content-Type: application/json' \
-              --data '{"name":"gods-eye-view-mobile","production_branch":"main"}' \
-              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
-              > /tmp/pages-create.json
-            python3 - <<'PY'
-          import json
-          d=json.load(open('/tmp/pages-create.json'))
-          assert d.get('success'), d
-          print('Created Cloudflare Pages project.')
-          PY
-          elif [ "$code" = "200" ]; then
+          if npx --yes wrangler@latest pages project list 2>&1 | tee /tmp/pages-list.txt | grep -q 'gods-eye-view-mobile'; then
             echo 'Cloudflare Pages project already exists.'
           else
-            cat /tmp/pages-project.json
-            exit 1
+            npx --yes wrangler@latest pages project create gods-eye-view-mobile --production-branch main
           fi
 
       - name: Deploy to Cloudflare Pages
@@ -124,6 +90,5 @@ jobs:
           APP_URL: ${{ steps.deploy.outputs.url }}
         run: |
           echo "### God's Eye View Mobile deployed" >> "$GITHUB_STEP_SUMMARY"
-          echo "Cloudflare account: $CLOUDFLARE_ACCOUNT_NAME" >> "$GITHUB_STEP_SUMMARY"
           echo "Map: keyless OpenStreetMap + Re:Earth terrain" >> "$GITHUB_STEP_SUMMARY"
           echo "URL: $APP_URL" >> "$GITHUB_STEP_SUMMARY"
