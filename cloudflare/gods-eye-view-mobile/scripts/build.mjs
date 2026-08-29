@@ -79,6 +79,89 @@ if (main.includes("throw new Error('GOOGLE_MAPS_API_KEY not found")) {
 }
 writeFileSync(mainPath, main);
 
+// Mobile live-flight bridge. The upstream browser expects an OpenSky-shaped
+// snapshot from /api/opensky. GitHub Pages has no server proxy, and OpenSky's
+// current terms require a separate agreement for operational REST use. ADSB.lol
+// exposes an open ODbL API, so the phone build fetches the 250 nm view around
+// the camera directly and normalizes each aircraft into the state-vector shape
+// the existing renderer already understands.
+const flightsPath = join(work, 'src', 'data', 'flights.js');
+let flights = readFileSync(flightsPath, 'utf8');
+flights = flights.replace(
+  "const API_URL = '/api/opensky';",
+  "const API_URL = 'https://api.adsb.lol/v2';"
+);
+flights = flights.replace(
+`function _flightApiUrl(viewer) {
+  const cartographic = viewer?.camera?.positionCartographic;
+  if (!cartographic) return API_URL;
+  const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+  const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return API_URL;
+  const params = new URLSearchParams({
+    lat: latitude.toFixed(4),
+    lon: longitude.toFixed(4),
+  });
+  return \`${API_URL}?\${params}\`;
+}`,
+`function _flightApiUrl(viewer) {
+  const cartographic = viewer?.camera?.positionCartographic;
+  const latitude = cartographic ? Cesium.Math.toDegrees(cartographic.latitude) : 37.7749;
+  const longitude = cartographic ? Cesium.Math.toDegrees(cartographic.longitude) : -122.4194;
+  const lat = Number.isFinite(latitude) ? latitude : 37.7749;
+  const lon = Number.isFinite(longitude) ? longitude : -122.4194;
+  return \`${API_URL}/point/\${lat.toFixed(4)}/\${lon.toFixed(4)}/250\`;
+}
+
+function _adsbLolToStateVectorSnapshot(data) {
+  if (!data || !Array.isArray(data.ac)) return data;
+  const nowSec = Date.now() / 1000;
+  const ftToM = (v) => Number.isFinite(Number(v)) ? Number(v) * 0.3048 : null;
+  const fpmToMps = (v) => Number.isFinite(Number(v)) ? Number(v) * 0.00508 : null;
+  const ktToMps = (v) => Number.isFinite(Number(v)) ? Number(v) * 0.514444 : null;
+  const states = [];
+  for (const ac of data.ac) {
+    const lat = Number(ac?.lat);
+    const lon = Number(ac?.lon);
+    const hex = String(ac?.hex || '').trim().toLowerCase().replace(/^~/, '');
+    if (!hex || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const onGround = ac?.alt_baro === 'ground';
+    const baroAlt = onGround ? 0 : ftToM(ac?.alt_baro);
+    const geomAlt = ftToM(ac?.alt_geom);
+    const seenPos = Number(ac?.seen_pos);
+    const seen = Number(ac?.seen);
+    const timePosition = Number.isFinite(seenPos) ? nowSec - Math.max(0, seenPos) : nowSec;
+    const lastContact = Number.isFinite(seen) ? nowSec - Math.max(0, seen) : timePosition;
+    const state = new Array(18).fill(null);
+    state[0] = hex;
+    state[1] = String(ac?.flight || ac?.r || '').trim();
+    state[2] = '';
+    state[3] = timePosition;
+    state[4] = lastContact;
+    state[5] = lon;
+    state[6] = lat;
+    state[7] = baroAlt;
+    state[8] = onGround;
+    state[9] = ktToMps(ac?.gs);
+    state[10] = Number.isFinite(Number(ac?.track)) ? Number(ac.track) : null;
+    state[11] = fpmToMps(ac?.baro_rate ?? ac?.geom_rate);
+    state[13] = geomAlt;
+    states.push(state);
+  }
+  return { time: Math.floor(nowSec), states };
+}`
+);
+flights = flights.replace(
+  '      const data = await response.json();\n      updateSignal.throwIfAborted();',
+  '      let data = await response.json();\n      updateSignal.throwIfAborted();\n      data = _adsbLolToStateVectorSnapshot(data);'
+);
+flights = flights.replaceAll("'OpenSky Network'", "'ADSB.lol'");
+flights = flights.replaceAll('OpenSky Network', 'ADSB.lol');
+if (!flights.includes('_adsbLolToStateVectorSnapshot')) {
+  throw new Error('Upstream patch failed: ADSB.lol bridge was not installed');
+}
+writeFileSync(flightsPath, flights);
+
 execFileSync('npm', ['ci'], { cwd: work, stdio: 'inherit', env: process.env });
 execFileSync('npm', ['run', 'build'], { cwd: work, stdio: 'inherit', env: process.env });
 
@@ -99,4 +182,4 @@ writeFileSync(indexPath, html);
 
 writeFileSync(join(out, '_headers'), `/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: geolocation=(self), microphone=(self)\n\n/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n`);
 
-console.log('Keyless Cloudflare Pages bundle ready in dist/');
+console.log('Keyless mobile bundle ready in dist/ with ADSB.lol Live Flights');
