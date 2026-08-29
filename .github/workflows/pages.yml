@@ -31,6 +31,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: main
+
       - name: Bake newest Room snapshot when legacy launcher supports it
         run: |
           if grep -q '__ROOM_SNAPSHOT_B64__' apps/sarah-room.html; then
@@ -38,12 +39,34 @@ jobs:
           else
             echo 'Current Room launcher uses the live viewer; skipping legacy snapshot bake.'
           fi
+
+      - name: Set up Node for God's Eye View
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+
+      - name: Build keyless God's Eye View mobile
+        working-directory: cloudflare/gods-eye-view-mobile
+        run: npm run build
+
+      - name: Stage God's Eye View under Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf apps/gods-eye-view-mobile
+          mkdir -p apps/gods-eye-view-mobile
+          cp -a cloudflare/gods-eye-view-mobile/dist/. apps/gods-eye-view-mobile/
+          test -s apps/gods-eye-view-mobile/index.html
+          echo 'Gods Eye View staged at /apps/gods-eye-view-mobile/'
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
       - name: Upload site
         uses: actions/upload-pages-artifact@v4
         with:
           path: .
+
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
