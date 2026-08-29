@@ -21,17 +21,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN_RAW: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
       OPENSKY_AUTH_MODE: anon
     steps:
       - uses: actions/checkout@v6
 
-      - name: Check Cloudflare credential
+      - name: Normalize Cloudflare credential
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_API_TOKEN/CF_API_TOKEN'; exit 1; }
-          echo 'Cloudflare token is available. Google credentials are not required.'
+          raw="${CLOUDFLARE_API_TOKEN_RAW:-}"
+          test -n "$raw" || { echo 'Missing CLOUDFLARE_API_TOKEN/CF_API_TOKEN'; exit 1; }
+          token="$raw"
+          token="${token#Bearer }"
+          token="${token#bearer }"
+          token="$(printf '%s' "$token" | tr -d '\r\n')"
+          test -n "$token" || { echo 'Cloudflare token became empty after normalization'; exit 1; }
+          printf 'CLOUDFLARE_API_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+          echo 'Cloudflare token normalized. Google credentials are not required.'
 
       - name: Set up Node
         uses: actions/setup-node@v4
