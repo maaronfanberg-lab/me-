@@ -6,7 +6,6 @@ const root = process.cwd();
 const work = join(root, '.gev-upstream');
 const out = join(root, 'dist');
 const upstream = 'https://github.com/bilawalsidhu/gods-eye-view.git';
-
 rmSync(work, { recursive: true, force: true });
 rmSync(out, { recursive: true, force: true });
 execFileSync('git', ['clone', '--depth=1', upstream, work], { stdio: 'inherit' });
@@ -70,15 +69,22 @@ writeFileSync(mainPath, main);
 const flightsPath = join(work, 'src', 'data', 'flights.js');
 let flights = readFileSync(flightsPath, 'utf8');
 flights = flights.replace("const API_URL = '/api/opensky';", "const API_URL = 'https://api.adsb.lol/v2';");
-const functionStart = flights.indexOf('function _flightApiUrl(viewer) {');
-if (functionStart < 0) throw new Error('Could not locate _flightApiUrl');
-const nextFunction = flights.indexOf('\nfunction ', functionStart + 20);
-if (nextFunction < 0) throw new Error('Could not locate end of _flightApiUrl');
 const bridge = readFileSync(join(root, 'scripts', 'adsb-flight-bridge.txt'), 'utf8');
-flights = flights.slice(0, functionStart) + bridge + '\n' + flights.slice(nextFunction + 1);
-flights = flights.replace(
-  '      const data = await response.json();\n      updateSignal.throwIfAborted();',
-  '      let data = await response.json();\n      updateSignal.throwIfAborted();\n      data = _adsbLolToStateVectorSnapshot(data);'
+const apiMarker = "const API_URL = 'https://api.adsb.lol/v2';";
+if (!flights.includes(apiMarker)) throw new Error('Could not patch flight API URL');
+flights = flights.replace(apiMarker, apiMarker + '\n\n' + bridge);
+
+const fetchMarker = '      const response = await fetch(_flightApiUrl(viewer || _viewer), { signal: updateSignal });';
+if (!flights.includes(fetchMarker)) throw new Error('Could not locate flight fetch seam');
+const oldFlightUrlFn = /function _flightApiUrl\(viewer\) \{[\s\S]*?\n\}/;
+if (oldFlightUrlFn.test(flights)) {
+  const matches = flights.match(oldFlightUrlFn);
+  if (matches && !matches[0].includes('api.adsb.lol')) flights = flights.replace(oldFlightUrlFn, '');
+}
+const jsonMarker = '      const data = await response.json();\n      updateSignal.throwIfAborted();\n      if (!data || !Array.isArray(data.states)) {';
+if (!flights.includes(jsonMarker)) throw new Error('Could not locate flight JSON seam');
+flights = flights.replace(jsonMarker,
+  '      let data = await response.json();\n      updateSignal.throwIfAborted();\n      data = _adsbLolToStateVectorSnapshot(data);\n      if (!data || !Array.isArray(data.states)) {'
 );
 flights = flights.replaceAll("'OpenSky Network'", "'ADSB.lol'");
 flights = flights.replaceAll('OpenSky Network', 'ADSB.lol');
@@ -94,7 +100,6 @@ cpSync(upstreamDist, out, { recursive: true });
 cpSync(join(root, 'mobile.css'), join(out, 'mobile.css'));
 cpSync(join(root, 'manifest.webmanifest'), join(out, 'manifest.webmanifest'));
 cpSync(join(root, 'sw.js'), join(out, 'sw.js'));
-
 const indexPath = join(out, 'index.html');
 let html = readFileSync(indexPath, 'utf8');
 html = html.replace('</head>', `  <meta name="apple-mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n  <meta name="theme-color" content="#05070a">\n  <link rel="manifest" href="/manifest.webmanifest">\n  <link rel="stylesheet" href="/mobile.css">\n</head>`);
