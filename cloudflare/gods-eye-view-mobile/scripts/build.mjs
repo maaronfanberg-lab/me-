@@ -1,7 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-
 const root = process.cwd();
 const work = join(root, '.gev-upstream');
 const out = join(root, 'dist');
@@ -12,8 +11,7 @@ execFileSync('git', ['clone', '--depth=1', upstream, work], { stdio: 'inherit' }
 
 const mainPath = join(work, 'src', 'main.js');
 let main = readFileSync(mainPath, 'utf8');
-main = main.replace(
-`    // Set Google Maps API key for 3D Tiles
+main = main.replace(`    // Set Google Maps API key for 3D Tiles
     const googleApiKey = import.meta.env.GOOGLE_MAPS_API_KEY;
     if (!googleApiKey) {
       throw new Error('GOOGLE_MAPS_API_KEY not found. Set it as an environment variable.');
@@ -21,15 +19,12 @@ main = main.replace(
     Cesium.GoogleMaps.defaultApiKey = googleApiKey;
 
     // Expose API key globally for geocoding in locations.js
-    window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;`,
-`    const googleApiKey = String(import.meta.env.GOOGLE_MAPS_API_KEY || '').trim();
+    window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;`, `    const googleApiKey = String(import.meta.env.GOOGLE_MAPS_API_KEY || '').trim();
     if (googleApiKey) {
       Cesium.GoogleMaps.defaultApiKey = googleApiKey;
       window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
-    }`
-);
-main = main.replace(
-`    loaderStatus.textContent = 'Loading Google 3D Tiles...';
+    }`);
+main = main.replace(`    loaderStatus.textContent = 'Loading Google 3D Tiles...';
     let tileset = null;
     try {
       // Load Google Photorealistic 3D Tiles
@@ -46,8 +41,7 @@ main = main.replace(
       loaderStatus.textContent = \`Google 3D Tiles unavailable (\${tileErrorDetail}). Continuing in fallback mode...\`;
       // Keep Cesium globe visible as fallback instead of aborting the app.
       viewer.scene.globe.show = true;
-    }`,
-`    let tileset = null;
+    }`, `    let tileset = null;
     if (googleApiKey) {
       loaderStatus.textContent = 'Loading Google 3D Tiles...';
       try {
@@ -61,31 +55,25 @@ main = main.replace(
     } else {
       loaderStatus.textContent = 'Loading keyless OpenStreetMap globe...';
       viewer.scene.globe.show = true;
-    }`
-);
+    }`);
 if (main.includes("throw new Error('GOOGLE_MAPS_API_KEY not found")) throw new Error('Google hard-stop patch failed');
 writeFileSync(mainPath, main);
 
 const flightsPath = join(work, 'src', 'data', 'flights.js');
 let flights = readFileSync(flightsPath, 'utf8');
-flights = flights.replace("const API_URL = '/api/opensky';", "const API_URL = 'https://api.adsb.lol/v2';");
+const oldApi = "const API_URL = '/api/opensky';";
+if (!flights.includes(oldApi)) throw new Error('Could not locate flight API constant');
+flights = flights.replace(oldApi, "const API_URL = 'https://api.adsb.lol/v2';");
+const oldFnStart = flights.indexOf('function _flightApiUrl(viewer) {');
+if (oldFnStart < 0) throw new Error('Could not locate original flight URL function');
+const oldFnEndMarker = '\n}\n\n// ---------------------------------------------------------------------------\n// Click-to-track state';
+const oldFnEnd = flights.indexOf(oldFnEndMarker, oldFnStart);
+if (oldFnEnd < 0) throw new Error('Could not locate end of original flight URL function');
 const bridge = readFileSync(join(root, 'scripts', 'adsb-flight-bridge.txt'), 'utf8');
-const apiMarker = "const API_URL = 'https://api.adsb.lol/v2';";
-if (!flights.includes(apiMarker)) throw new Error('Could not patch flight API URL');
-flights = flights.replace(apiMarker, apiMarker + '\n\n' + bridge);
-
-const fetchMarker = '      const response = await fetch(_flightApiUrl(viewer || _viewer), { signal: updateSignal });';
-if (!flights.includes(fetchMarker)) throw new Error('Could not locate flight fetch seam');
-const oldFlightUrlFn = /function _flightApiUrl\(viewer\) \{[\s\S]*?\n\}/;
-if (oldFlightUrlFn.test(flights)) {
-  const matches = flights.match(oldFlightUrlFn);
-  if (matches && !matches[0].includes('api.adsb.lol')) flights = flights.replace(oldFlightUrlFn, '');
-}
+flights = flights.slice(0, oldFnStart) + bridge + '\n' + flights.slice(oldFnEnd + 2);
 const jsonMarker = '      const data = await response.json();\n      updateSignal.throwIfAborted();\n      if (!data || !Array.isArray(data.states)) {';
 if (!flights.includes(jsonMarker)) throw new Error('Could not locate flight JSON seam');
-flights = flights.replace(jsonMarker,
-  '      let data = await response.json();\n      updateSignal.throwIfAborted();\n      data = _adsbLolToStateVectorSnapshot(data);\n      if (!data || !Array.isArray(data.states)) {'
-);
+flights = flights.replace(jsonMarker, '      let data = await response.json();\n      updateSignal.throwIfAborted();\n      data = _adsbLolToStateVectorSnapshot(data);\n      if (!data || !Array.isArray(data.states)) {');
 flights = flights.replaceAll("'OpenSky Network'", "'ADSB.lol'");
 flights = flights.replaceAll('OpenSky Network', 'ADSB.lol');
 if (!flights.includes('_adsbLolToStateVectorSnapshot')) throw new Error('ADSB bridge patch failed');
