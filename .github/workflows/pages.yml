@@ -2,13 +2,11 @@ name: Deploy project home to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, gev-live-flights-build-fix]
     paths-ignore:
-      # Live Room data changes constantly and must not redeploy Pages every beat.
       - 'room/*.json'
       - 'room/**/*.json'
       - 'society/**'
-      - 'scripts/**'
   workflow_dispatch:
 
 permissions:
@@ -17,7 +15,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -27,10 +25,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout newest main
+      - name: Checkout newest ref
         uses: actions/checkout@v6
-        with:
-          ref: main
 
       - name: Bake newest Room snapshot when legacy launcher supports it
         run: |
@@ -57,7 +53,6 @@ jobs:
           mkdir -p apps/gods-eye-view-mobile
           cp -a cloudflare/gods-eye-view-mobile/dist/. apps/gods-eye-view-mobile/
           test -s apps/gods-eye-view-mobile/index.html
-          echo 'Gods Eye View staged at /apps/gods-eye-view-mobile/'
 
       - name: Rebase God's Eye View static paths for GitHub Pages
         shell: bash
@@ -65,47 +60,44 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
           root = Path('apps/gods-eye-view-mobile')
           base = '/me-/apps/gods-eye-view-mobile/'
-          prefixes = [
-              'assets/', 'cesium/', 'models/',
-              'mobile.css', 'manifest.webmanifest', 'sw.js',
-              'logo.svg', 'mic.svg', 'pin.svg', 'location.svg', 'visual-presets.svg'
-          ]
-
+          prefixes = ['assets/', 'cesium/', 'models/', 'mobile.css', 'manifest.webmanifest', 'sw.js', 'logo.svg', 'mic.svg', 'pin.svg', 'location.svg', 'visual-presets.svg']
           text_suffixes = {'.html', '.js', '.css', '.webmanifest', '.json'}
           for p in root.rglob('*'):
-              if not p.is_file() or p.suffix.lower() not in text_suffixes:
-                  continue
-              try:
-                  s = p.read_text(encoding='utf-8')
-              except UnicodeDecodeError:
-                  continue
+              if not p.is_file() or p.suffix.lower() not in text_suffixes: continue
+              try: s = p.read_text(encoding='utf-8')
+              except UnicodeDecodeError: continue
               original = s
               for prefix in prefixes:
                   s = s.replace(f'"/{prefix}', f'"{base}{prefix}')
                   s = s.replace(f"'/{prefix}", f"'{base}{prefix}")
                   s = s.replace(f'url(/{prefix}', f'url({base}{prefix}')
-              if s != original:
-                  p.write_text(s, encoding='utf-8')
-
+              if s != original: p.write_text(s, encoding='utf-8')
           index = (root / 'index.html').read_text(encoding='utf-8')
           required = [base + 'assets/', base + 'mobile.css', base + 'manifest.webmanifest']
           missing = [x for x in required if x not in index]
-          if missing:
-              raise SystemExit(f'GitHub Pages path rebase incomplete: {missing}')
-          print('Rebased God\'s Eye View assets for GitHub Pages subpath.')
+          if missing: raise SystemExit(f'GitHub Pages path rebase incomplete: {missing}')
           PY
 
+      - name: Verify ADSB live-flight bridge is bundled
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R -q 'api.adsb.lol/v2' apps/gods-eye-view-mobile/assets
+          echo 'ADSB.lol Live Flights bridge present in production bundle.'
+
       - name: Configure Pages
+        if: github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v5
 
       - name: Upload site
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v4
         with:
           path: .
 
       - name: Deploy Pages
+        if: github.ref == 'refs/heads/main'
         id: deployment
         uses: actions/deploy-pages@v4
