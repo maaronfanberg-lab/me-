@@ -22,19 +22,16 @@ jobs:
     timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
-      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-      CESIUM_ION_TOKEN: ${{ secrets.CESIUM_ION_TOKEN }}
       OPENSKY_AUTH_MODE: anon
     steps:
       - uses: actions/checkout@v6
 
-      - name: Check deployment credentials
+      - name: Check Cloudflare credential
         shell: bash
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_API_TOKEN/CF_API_TOKEN'; exit 1; }
-          test -n "$GOOGLE_MAPS_API_KEY" || { echo 'Missing GOOGLE_MAPS_API_KEY GitHub secret'; exit 1; }
-          echo 'Cloudflare token and Google Maps key are available.'
+          echo 'Cloudflare token is available. Google credentials are not required.'
 
       - name: Select Fanberg Cloudflare account
         shell: bash
@@ -63,7 +60,7 @@ jobs:
         with:
           node-version: '24.14.0'
 
-      - name: Build mobile app
+      - name: Build keyless mobile app
         working-directory: cloudflare/gods-eye-view-mobile
         run: npm run build
 
@@ -120,7 +117,7 @@ jobs:
           grep -q 'manifest.webmanifest' /tmp/index.html
           curl -fsS --retry 5 --retry-delay 2 "$APP_URL/mobile.css" -o /tmp/mobile.css
           test -s /tmp/mobile.css
-          echo "Verified live mobile app at $APP_URL"
+          echo "Verified live keyless mobile app at $APP_URL"
 
       - name: Summary
         env:
@@ -128,4 +125,5 @@ jobs:
         run: |
           echo "### God's Eye View Mobile deployed" >> "$GITHUB_STEP_SUMMARY"
           echo "Cloudflare account: $CLOUDFLARE_ACCOUNT_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "Map: keyless OpenStreetMap + Re:Earth terrain" >> "$GITHUB_STEP_SUMMARY"
           echo "URL: $APP_URL" >> "$GITHUB_STEP_SUMMARY"
