@@ -36,8 +36,9 @@ class ControlledSocialSpace(EnvBase):
 A two-agent social environment built with AgentSociety 2 EnvBase and @tool.
 
 Available tools:
-- observe_social_space(agent_id): read-only; returns only participant names and that agent's addressed inbox.
+- observe_social_space(agent_id): read-only; returns participant names and that agent's addressed inbox.
 - send_message(agent_id, recipient_id, content): mutating; sends one explicit message to the other registered participant.
+- consume_message(agent_id, message_id): mutating; removes one addressed message after it has been processed.
 
 Private cognition workspaces and memory files are not exposed by this environment.
 """
@@ -82,6 +83,17 @@ Private cognition workspaces and memory files are not exposed by this environmen
         self._next_message_id += 1
         self._inboxes[recipient_id].append(message)
         return {"success": True, "message": message}
+
+    @tool(readonly=False)
+    async def consume_message(self, agent_id: int, message_id: int) -> dict:
+        """Remove one addressed message after the recipient has processed it."""
+        self._require_agent(agent_id)
+        inbox = self._inboxes[agent_id]
+        for index, message in enumerate(inbox):
+            if int(message["id"]) == int(message_id):
+                removed = inbox.pop(index)
+                return {"success": True, "message": removed}
+        return {"success": False, "reason": "message_not_found", "message_id": int(message_id)}
 
     async def step(self, tick: int, t: datetime):
         """Advance environment time without generating messages or actions."""
