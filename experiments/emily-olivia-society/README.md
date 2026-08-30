@@ -20,6 +20,32 @@ Use upstream code first. Write local code only where an adapter is genuinely req
 - Exact upstream pins live in `upstreams.json`.
 - `bootstrap_upstreams.sh` installs AgentSociety 2 and checks out the pinned Stanford source without copying either project into this repository.
 
+## Build and runtime policy
+
+Cloudflare is not used to build or run this experiment.
+
+- GitHub stores the code.
+- GitHub Actions is manual-only and used for explicit foundation checks.
+- `runtime.sh` is the host-neutral launcher for a normal Linux machine or VPS.
+- `Dockerfile` packages the same runtime for any Docker-capable host.
+- Cloudflare may later be used only as an optional thin proxy/front door. It must not own the Python build.
+
+Local or VPS setup:
+
+```bash
+cd experiments/emily-olivia-society
+bash runtime.sh
+```
+
+Docker setup:
+
+```bash
+docker build -t emily-olivia-society .
+docker run --rm emily-olivia-society
+```
+
+Both launch paths currently initialize the two-agent society and exit before autonomous interaction.
+
 ## Layers
 
 ### Layer 1 — Foundation — COMPLETE
@@ -57,7 +83,7 @@ Add a simple read-only viewer for events, memories, and state. Observation must 
 
 ## Current launcher
 
-`run.py` already uses AgentSociety 2's `AgentSociety`, `CodeGenRouter`, and `SimpleSocialSpace` to initialize the two-agent environment. It intentionally stops before autonomous interaction.
+`run.py` uses AgentSociety 2's `AgentSociety`, `CodeGenRouter`, and `SimpleSocialSpace` to initialize the two-agent environment. It intentionally stops before autonomous interaction.
 
 ## Isolation rule
 
