@@ -1,0 +1,44 @@
+name: Emily Olivia Foundation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Bootstrap pinned research code
+        working-directory: experiments/emily-olivia-society
+        run: bash bootstrap_upstreams.sh
+
+      - name: Initialize Stanford cognition workspaces
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python init_cognition.py
+
+      - name: Verify two isolated Stanford workspaces
+        working-directory: experiments/emily-olivia-society
+        run: |
+          .venv-stanford/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+
+          expected = {"emily": ("Emily", 27), "olivia": ("Olivia", 29)}
+          root = Path("workspaces")
+          assert sorted(p.name for p in root.iterdir() if p.is_dir()) == ["emily", "olivia"]
+
+          for folder, (name, age) in expected.items():
+              scratch = json.loads((root / folder / "scratch.json").read_text())
+              assert scratch["first_name"] == name
+              assert scratch["age"] == age
+              assert (root / folder / "memory_stream" / "nodes.json").exists()
+              assert (root / folder / "memory_stream" / "embeddings.json").exists()
+
+          print("Layer 1-2 foundation verified for Emily and Olivia")
+          PY
