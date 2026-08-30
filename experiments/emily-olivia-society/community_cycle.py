@@ -57,6 +57,24 @@ def load_agents() -> list[CommunityAgent]:
     return out
 
 
+def latest_community_time_step(agents: list[CommunityAgent]) -> int:
+    """Return the highest Stanford memory timestamp already persisted."""
+    latest = 0
+    for agent in agents:
+        for node in agent.brain.memory_stream.seq_nodes:
+            latest = max(
+                latest,
+                int(getattr(node, "created", 0) or 0),
+                int(getattr(node, "last_retrieved", 0) or 0),
+            )
+    return latest
+
+
+def next_community_time_step(agents: list[CommunityAgent]) -> int:
+    """Return a monotonic next timestamp after all persisted community memory."""
+    return latest_community_time_step(agents) + 1
+
+
 def observation_text(agent: CommunityAgent, observation: dict) -> str:
     inbox = observation.get("inbox", [])
     if not inbox:
@@ -100,26 +118,27 @@ async def run_one_cycle() -> None:
     from controlled_social_space import ControlledSocialSpace
 
     agents = load_agents()
-    by_id = {agent.agent_id: agent for agent in agents}
     pairs = [(agent.agent_id, agent.name) for agent in agents]
     social = ControlledSocialSpace(pairs)
+    base_time_step = next_community_time_step(agents)
 
     cycle_log: list[dict] = []
 
-    for agent in agents:
+    for offset, agent in enumerate(agents):
         other = next(a for a in agents if a.agent_id != agent.agent_id)
+        time_step = base_time_step + offset
 
         # 1. Observe shared environment.
         observation = await social.observe_social_space(agent.agent_id)
 
         # 2. Remember the observation using Stanford's actual memory stream.
         memory = observation_text(agent, observation)
-        agent.brain.remember(memory, time_step=0)
+        agent.brain.remember(memory, time_step=time_step)
 
         # 3. Retrieve relevant memories using Stanford's actual retrieval path.
         retrieved = agent.brain.memory_stream.retrieve(
             [f"Current interaction with {other.name}"],
-            time_step=0,
+            time_step=time_step,
             n_count=12,
         )
         relevant = [
@@ -145,6 +164,7 @@ async def run_one_cycle() -> None:
         cycle_log.append(
             {
                 "agent": agent.name,
+                "time_step": time_step,
                 "observation": observation,
                 "retrieved_memories": relevant,
                 "action": action,
@@ -152,7 +172,15 @@ async def run_one_cycle() -> None:
             }
         )
 
-    print(json.dumps({"cycles": cycle_log}, indent=2))
+    print(
+        json.dumps(
+            {
+                "start_time_step": base_time_step,
+                "cycles": cycle_log,
+            },
+            indent=2,
+        )
+    )
 
 
 async def main() -> None:
