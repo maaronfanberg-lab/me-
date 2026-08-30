@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
+
+if not os.environ.get("AGENTSOCIETY_LLM_API_KEY") and os.environ.get("OPENAI_API_KEY"):
+    os.environ["AGENTSOCIETY_LLM_API_KEY"] = os.environ["OPENAI_API_KEY"]
 
 from controlled_social_space import ControlledSocialSpace
 
