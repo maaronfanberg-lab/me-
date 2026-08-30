@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 
-from community_cycle import load_agents
+from community_cycle import load_agents, next_community_time_step
 
 HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
@@ -39,6 +39,7 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
             "agent": agent.name,
             "status": "skipped",
             "reason": "no_prior_memories",
+            "time_step": time_step,
             "before": before,
             "retrieved_before": [],
         }
@@ -83,6 +84,7 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
     return {
         "agent": agent.name,
         "status": "reflected",
+        "time_step": time_step,
         "anchor": anchor,
         "before": before,
         "after_save": after_save,
@@ -100,14 +102,22 @@ def run_layer6() -> dict:
     if names != {"Emily", "Olivia"}:
         raise RuntimeError("Layer 6 expects exactly Emily and Olivia.")
 
+    base_time_step = next_community_time_step(agents)
     reports = []
-    for index, agent in enumerate(agents, start=10):
+    for offset, agent in enumerate(agents):
         other = next(a for a in agents if a.agent_id != agent.agent_id)
-        reports.append(reflect_and_verify(agent, other.name, time_step=index))
+        reports.append(
+            reflect_and_verify(
+                agent,
+                other.name,
+                time_step=base_time_step + offset,
+            )
+        )
 
     result = {
         "mode": "layer6_persistence_and_reflection",
         "autonomous_loop": False,
+        "start_time_step": base_time_step,
         "agents": reports,
     }
 
