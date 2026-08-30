@@ -1,6 +1,6 @@
-# Emily + Olivia Society
+# Emily + Olivia Community
 
-An isolated two-agent social simulation experiment built from research code rather than a home-grown agent framework.
+An isolated two-agent community experiment built from research code rather than a home-grown agent framework.
 
 This experiment is deliberately separate from The Room and from the BitNet experiment.
 
@@ -15,8 +15,8 @@ No personality traits, relationship history, goals, jobs, location, or backstory
 
 Use upstream code first. Write local code only where an adapter is genuinely required.
 
-- **Society/runtime:** Tsinghua AgentSociety 2 (`agentsociety2==2.8.4`)
-- **Individual cognition/memory:** Stanford HCI `genagents`, pinned to commit `96854071ef4c2d79c93144c973c7820722d52bab`
+- **Community runtime:** Tsinghua AgentSociety 2 (`agentsociety2==2.8.4`). The upstream Python class remains named `AgentSociety`; locally we call the project a community.
+- **Individual cognition/memory:** Stanford HCI `genagents`, pinned to commit `96854071ef4c2d79c93144c973c7820722d52bab`.
 - Exact upstream pins live in `upstreams.json`.
 - `bootstrap_upstreams.sh` installs AgentSociety 2 and checks out the pinned Stanford source without copying either project into this repository.
 
@@ -29,22 +29,6 @@ Cloudflare is not used to build or run this experiment.
 - `runtime.sh` is the host-neutral launcher for a normal Linux machine or VPS.
 - `Dockerfile` packages the same runtime for any Docker-capable host.
 - Cloudflare may later be used only as an optional thin proxy/front door. It must not own the Python build.
-
-Local or VPS setup:
-
-```bash
-cd experiments/emily-olivia-society
-bash runtime.sh
-```
-
-Docker setup:
-
-```bash
-docker build -t emily-olivia-society .
-docker run --rm emily-olivia-society
-```
-
-Both launch paths currently initialize the two-agent society and exit before autonomous interaction.
 
 ## Layers
 
@@ -59,44 +43,53 @@ Both launch paths currently initialize the two-agent society and exit before aut
 
 ### Layer 2 — Individual cognition — COMPLETE
 
-Use Stanford's actual `GenerativeAgent`, memory stream, persistence format, `remember`, and `reflect` machinery. Emily and Olivia have separate private Stanford-format workspaces.
+Stanford's actual `GenerativeAgent`, memory stream, persistence format, `remember`, `reflect`, retrieval, and interaction methods back each private workspace.
 
 ### Layer 3 — Social environment — COMPLETE
 
-The social layer now uses AgentSociety 2's `EnvBase`, `@tool`, and `CodeGenRouter` machinery through `controlled_social_space.py`.
-
-The boundary is private by default:
+The shared layer uses AgentSociety 2's `EnvBase`, `@tool`, and `CodeGenRouter` machinery through `controlled_social_space.py`.
 
 - `observe_social_space(agent_id)` is read-only.
-- An agent can see participant names and only messages addressed to her.
+- An agent sees participant names and only messages addressed to her.
 - `send_message(agent_id, recipient_id, content)` is the only social mutation.
-- Self-messaging is rejected.
-- Unknown agent IDs are rejected.
-- Empty messages are rejected.
-- Stanford cognition workspaces and memory files are never exposed through the social environment.
-- Advancing environment time does not automatically generate speech or actions.
+- Private Stanford cognition workspaces are never exposed through the shared environment.
 
-No autonomous interaction is enabled yet.
+### Layer 4 — Research-style agent cycle — COMPLETE
 
-### Layer 4 — Coordinator
+`community_cycle.py` implements one bounded cycle per agent:
 
-Use AgentSociety 2's society/coordinator execution model to advance one explicit step at a time and record a replayable trace.
+1. observe the controlled shared environment
+2. remember the observation with Stanford's memory stream
+3. retrieve relevant prior memories with Stanford retrieval
+4. choose a social action using Stanford's interaction/utterance code
+5. optionally send one addressed message through the AgentSociety-derived environment
+6. persist private memory back to that agent's Stanford workspace
 
-### Layer 5 — Interaction
+The cycle is explicit and bounded. It will not run at startup. It requires:
 
-Allow a first bounded Emily ↔ Olivia exchange. No indefinite autonomous loop yet.
+```bash
+.venv-stanford/bin/python community_cycle.py --one-cycle
+```
+
+If an agent has no new addressed message, the current Layer 4 behavior is `wait`; it does not invent a conversation opener. There is no indefinite autonomous loop.
+
+### Layer 5 — First bounded interaction
+
+Seed one explicit event or addressed message and allow the research-style cycle to produce the first Emily ↔ Olivia exchange. Still no indefinite loop.
 
 ### Layer 6 — Persistence and reflection
 
-Persist each agent's private memory separately, then verify later turns retrieve prior experiences and reflections rather than relying only on prompt history.
+Verify later cycles retrieve prior experiences and use Stanford reflection rather than relying only on current prompt context.
 
 ### Layer 7 — Observation
 
-Add a simple read-only viewer for events, memories, and state. Observation must not silently mutate the simulation.
+Add a read-only viewer for events, memories, and state. Observation must not silently mutate the community.
 
-## Current launcher
+## Current launchers
 
-`run.py` uses AgentSociety 2's `AgentSociety`, `CodeGenRouter`, and the controlled `EnvBase` social module to initialize the two-agent environment. It intentionally stops before autonomous interaction.
+`run.py` initializes the Emily + Olivia Community and controlled environment, then exits without autonomous interaction.
+
+`community_cycle.py --one-cycle` is the only path that permits one explicit observe → remember → retrieve → choose → act cycle per agent.
 
 ## Isolation rule
 
