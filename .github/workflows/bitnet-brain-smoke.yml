@@ -1,4 +1,4 @@
-name: BitNet brain smoke
+name: BitNet brain end-to-end
 
 on:
   push:
@@ -11,11 +11,76 @@ on:
       - '.github/workflows/bitnet-brain-smoke.yml'
 
 jobs:
-  static-smoke:
+  bitnet-live:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Validate launcher shell syntax
-        run: bash -n scripts/start_bitnet_brain.sh
-      - name: Validate Python probe syntax
-        run: python -m py_compile scripts/bitnet_brain_probe.py
+
+      - name: Validate experiment scripts
+        run: |
+          bash -n scripts/start_bitnet_brain.sh
+          python -m py_compile scripts/bitnet_brain_probe.py
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build git-lfs
+          python -m pip install --upgrade pip
+
+      - name: Clone Microsoft BitNet
+        run: git clone --recursive --depth 1 https://github.com/microsoft/BitNet.git "$RUNNER_TEMP/BitNet"
+
+      - name: Install BitNet Python dependencies
+        working-directory: ${{ runner.temp }}/BitNet
+        run: python -m pip install -r requirements.txt
+
+      - name: Download official BitNet 2B GGUF model
+        working-directory: ${{ runner.temp }}/BitNet
+        run: |
+          python -m huggingface_hub.commands.huggingface_cli download microsoft/BitNet-b1.58-2B-4T-gguf --local-dir models/BitNet-b1.58-2B-4T
+
+      - name: Build optimized I2_S runtime
+        working-directory: ${{ runner.temp }}/BitNet
+        run: python setup_env.py -md models/BitNet-b1.58-2B-4T -q i2_s
+
+      - name: Locate model
+        id: model
+        working-directory: ${{ runner.temp }}/BitNet
+        run: |
+          MODEL="$(find models/BitNet-b1.58-2B-4T -type f -name '*.gguf' | head -n 1)"
+          test -n "$MODEL"
+          echo "path=$PWD/$MODEL" >> "$GITHUB_OUTPUT"
+          echo "Using $MODEL"
+
+      - name: Launch BitNet server
+        env:
+          BITNET_ROOT: ${{ runner.temp }}/BitNet
+          BITNET_MODEL: ${{ steps.model.outputs.path }}
+          BITNET_HOST: 127.0.0.1
+          BITNET_PORT: '18080'
+          BITNET_THREADS: '2'
+          BITNET_CTX: '2048'
+        run: |
+          nohup bash scripts/start_bitnet_brain.sh > "$RUNNER_TEMP/bitnet-server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/bitnet-server.pid"
+
+      - name: Wait for BitNet health
+        run: |
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:18080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/bitnet-server.log" || true
+          exit 1
+
+      - name: Prove Room-compatible completion
+        env:
+          BITNET_URL: http://127.0.0.1:18080
+        run: python scripts/bitnet_brain_probe.py
+
+      - name: Show server log
+        if: always()
+        run: tail -n 200 "$RUNNER_TEMP/bitnet-server.log" || true
