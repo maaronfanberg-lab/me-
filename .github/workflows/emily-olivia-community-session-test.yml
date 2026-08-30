@@ -1,0 +1,89 @@
+name: Emily Olivia Community Session Test
+
+on:
+  push:
+    branches:
+      - experiment/emily-olivia-society
+    paths:
+      - .github/workflows/emily-olivia-community-session-test.yml
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  session-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      AGENTSOCIETY_LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out isolated community branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/emily-olivia-society
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Require model secret
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY repository secret is missing."
+            exit 1
+          fi
+
+      - name: Bootstrap pinned research code
+        working-directory: experiments/emily-olivia-society
+        run: bash bootstrap_upstreams.sh
+
+      - name: Restore latest successful community checkpoint
+        working-directory: experiments/emily-olivia-society
+        run: bash restore_latest_checkpoint.sh
+
+      - name: Initialize or preserve private cognition workspaces
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python init_cognition.py
+
+      - name: Run bounded persistent session
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python community_session.py --run --turns 8 --opener "Hello, Olivia."
+
+      - name: Verify session replay
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('replay/community_session.json')
+          if not path.is_file():
+              raise SystemExit('community_session.json was not produced')
+          data = json.loads(path.read_text())
+          turns = int(data.get('completed_reply_turns', 0))
+          if turns < 2:
+              raise SystemExit(f'Expected at least 2 completed reply turns; got {turns}')
+          print(f'Bounded session completed {turns} reply turns; stop_reason={data.get("stop_reason")}')
+          PY
+
+      - name: Verify persistence and reflection
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python persistence_reflection.py --run
+
+      - name: Generate read-only observer report
+        working-directory: experiments/emily-olivia-society
+        run: python3 observer.py > replay/observer.json
+
+      - name: Upload isolated session test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-community-session-test
+          path: |
+            experiments/emily-olivia-society/replay/
+            experiments/emily-olivia-society/workspaces/
+          if-no-files-found: error
+          retention-days: 7
