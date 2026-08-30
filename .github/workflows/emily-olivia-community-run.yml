@@ -1,0 +1,61 @@
+name: Emily Olivia Community Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      opener:
+        description: "Emily's opening message"
+        required: false
+        default: "Hello, Olivia."
+
+jobs:
+  community-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Check out isolated community branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/emily-olivia-society
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Require model secret
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY repository secret is missing."
+            exit 1
+          fi
+
+      - name: Bootstrap pinned research code
+        working-directory: experiments/emily-olivia-society
+        run: bash bootstrap_upstreams.sh
+
+      - name: Initialize private cognition workspaces
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python init_cognition.py
+
+      - name: Run first bounded exchange
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python first_exchange.py --run --opener "${{ github.event.inputs.opener }}"
+
+      - name: Verify persistence and reflection
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python persistence_reflection.py --run
+
+      - name: Generate read-only observer report
+        working-directory: experiments/emily-olivia-society
+        run: python3 observer.py > replay/observer.json
+
+      - name: Upload community results
+        uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-community-results
+          path: |
+            experiments/emily-olivia-society/replay/
+            experiments/emily-olivia-society/workspaces/
+          if-no-files-found: error
