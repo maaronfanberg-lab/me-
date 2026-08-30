@@ -19,7 +19,7 @@ def load_agents() -> list[dict]:
     data = json.loads((HERE / "agents.json").read_text(encoding="utf-8"))
     agents = data.get("agents")
     if not isinstance(agents, list) or len(agents) != 2:
-        raise RuntimeError("This experiment must contain exactly two agents.")
+        raise RuntimeError("This community must contain exactly two agents.")
     return agents
 
 
@@ -30,7 +30,9 @@ async def main() -> None:
     social_space = ControlledSocialSpace(agent_id_name_pairs=pairs)
     environment = CodeGenRouter(env_modules=[social_space])
 
-    society = AgentSociety(
+    # AgentSociety is the upstream Tsinghua runtime class. We call the project
+    # a community at our layer; the upstream class name is intentionally unchanged.
+    community_runtime = AgentSociety(
         agent_specs=agents,
         agent_class_name="PersonAgent",
         env_router=environment,
@@ -38,13 +40,14 @@ async def main() -> None:
         run_dir=RUN_DIR,
     )
 
-    await society.init()
+    await community_runtime.init()
     try:
-        print("Two-agent society initialized:", ", ".join(name for _, name in pairs))
-        print("Layer 3 social boundary active: addressed messages only; private memory is not exposed.")
-        print("No autonomous interaction is started by this launcher yet.")
+        print("Emily + Olivia Community initialized:", ", ".join(name for _, name in pairs))
+        print("Controlled social boundary active: addressed messages only; private memory is not exposed.")
+        print("No autonomous interaction is started by this launcher.")
+        print("Use community_cycle.py --one-cycle for one explicit research-style cycle.")
     finally:
-        await society.close()
+        await community_runtime.close()
 
 
 if __name__ == "__main__":
