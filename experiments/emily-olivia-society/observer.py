@@ -9,6 +9,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 WORKSPACES = HERE / "workspaces"
 REPLAY_DIR = HERE / "replay"
+OBSERVER_OUTPUT = "observer.json"
 
 
 def read_json(path: Path, default):
@@ -52,6 +53,11 @@ def snapshot_replays() -> list[dict]:
 
     out = []
     for path in sorted(REPLAY_DIR.glob("*.json")):
+        # When stdout is redirected to replay/observer.json, the shell creates
+        # that file before observer.py starts. Never let the observer try to
+        # parse or hash its own in-progress output.
+        if path.name == OBSERVER_OUTPUT:
+            continue
         out.append(
             {
                 "file": path.name,
