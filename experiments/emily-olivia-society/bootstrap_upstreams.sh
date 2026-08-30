@@ -37,6 +37,22 @@ if old not in text:
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 PY
 
+# Reflection has the same brittle JSON assumption. Preserve valid reflection
+# output, accept plain text as a single reflection, and otherwise return an
+# empty list so persistence verification can continue without inventing data.
+python3 - "$STANFORD_MEMORY" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = '''  def _func_clean_up(gpt_response, prompt=""): \n    return extract_first_json_dict(gpt_response)["reflection"]\n\n  def _get_fail_safe():\n    return []\n'''
+new = '''  def _func_clean_up(gpt_response, prompt=""): \n    parsed = extract_first_json_dict(gpt_response)\n    if isinstance(parsed, dict):\n      reflection = parsed.get("reflection")\n      if isinstance(reflection, list):\n        return reflection[:reflection_count]\n      if isinstance(reflection, str) and reflection.strip():\n        return [reflection.strip()]\n    if isinstance(gpt_response, str):\n      candidate = gpt_response.strip()\n      if candidate and not candidate.startswith("GENERATION ERROR:"):\n        return [candidate[:1000]]\n    return []\n\n  def _get_fail_safe():\n    return []\n'''
+if old not in text:
+    raise SystemExit("Pinned Stanford reflection parser changed; compatibility patch no longer applies cleanly.")
+path.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+
 # Stanford's pinned memory stream otherwise calls the OpenAI embeddings API
 # directly. For this bounded experiment, use a deterministic local hashed-token
 # embedding instead. This preserves stable cosine-similarity retrieval while
