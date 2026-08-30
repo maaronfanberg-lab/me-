@@ -44,23 +44,23 @@ jobs:
         working-directory: ${{ runner.temp }}/BitNet
         run: python setup_env.py -md models/BitNet-b1.58-2B-4T -q i2_s
 
-      - name: Locate model
+      - name: Verify exact I2_S model
         id: model
         working-directory: ${{ runner.temp }}/BitNet
         run: |
-          MODEL="$(find models/BitNet-b1.58-2B-4T -type f -name '*.gguf' | head -n 1)"
-          test -n "$MODEL"
-          echo "path=$PWD/$MODEL" >> "$GITHUB_OUTPUT"
+          MODEL="$PWD/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf"
+          test -s "$MODEL"
+          echo "path=$MODEL" >> "$GITHUB_OUTPUT"
           echo "Using $MODEL"
 
       - name: Launch BitNet server
         env:
-          BITNET_ROOT: ${{ runner.temp }}/BitNet
+          BITNET_HOME: ${{ runner.temp }}/BitNet
           BITNET_MODEL: ${{ steps.model.outputs.path }}
           BITNET_HOST: 127.0.0.1
           BITNET_PORT: '18080'
           BITNET_THREADS: '2'
-          BITNET_CTX: '2048'
+          BITNET_CTX_SIZE: '2048'
         run: |
           nohup bash scripts/start_bitnet_brain.sh > "$RUNNER_TEMP/bitnet-server.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/bitnet-server.pid"
@@ -70,6 +70,11 @@ jobs:
           for i in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:18080/health >/dev/null; then
               exit 0
+            fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/bitnet-server.pid")" 2>/dev/null; then
+              echo 'BitNet server exited before becoming healthy.' >&2
+              cat "$RUNNER_TEMP/bitnet-server.log" || true
+              exit 1
             fi
             sleep 2
           done
