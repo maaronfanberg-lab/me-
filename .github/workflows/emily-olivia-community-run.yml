@@ -7,6 +7,11 @@ on:
         description: "Emily's opening message"
         required: false
         default: "Hello, Olivia."
+  push:
+    branches:
+      - main
+    paths:
+      - .community-run-trigger
 
 permissions:
   actions: read
@@ -51,7 +56,12 @@ jobs:
 
       - name: Run first bounded exchange
         working-directory: experiments/emily-olivia-society
-        run: .venv-stanford/bin/python first_exchange.py --run --opener "${{ github.event.inputs.opener }}"
+        run: |
+          opener="${{ github.event.inputs.opener }}"
+          if [ -z "$opener" ]; then
+            opener="Hello, Olivia."
+          fi
+          .venv-stanford/bin/python first_exchange.py --run --opener "$opener"
 
       - name: Verify persistence and reflection
         working-directory: experiments/emily-olivia-society
