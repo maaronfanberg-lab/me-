@@ -1,0 +1,21 @@
+name: BitNet brain smoke
+
+on:
+  push:
+    branches:
+      - experiment/bitnet-brain
+  pull_request:
+    paths:
+      - 'scripts/start_bitnet_brain.sh'
+      - 'scripts/bitnet_brain_probe.py'
+      - '.github/workflows/bitnet-brain-smoke.yml'
+
+jobs:
+  static-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate launcher shell syntax
+        run: bash -n scripts/start_bitnet_brain.sh
+      - name: Validate Python probe syntax
+        run: python -m py_compile scripts/bitnet_brain_probe.py
