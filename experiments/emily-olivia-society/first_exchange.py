@@ -7,7 +7,12 @@ import json
 import subprocess
 from pathlib import Path
 
-from community_cycle import load_agents, observation_text, choose_action
+from community_cycle import (
+    load_agents,
+    observation_text,
+    choose_action,
+    next_community_time_step,
+)
 
 HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
@@ -99,6 +104,7 @@ async def process_one_reply(agent, other, social, time_step: int) -> dict:
 
     return {
         "agent": agent.name,
+        "time_step": time_step,
         "observation": observation,
         "retrieved_memories": relevant,
         "action": action,
@@ -111,11 +117,22 @@ async def run_first_exchange(opener: str) -> dict:
     emily = next(a for a in agents if a.name == "Emily")
     olivia = next(a for a in agents if a.name == "Olivia")
     social = SocialBridgeClient()
+    base_time_step = next_community_time_step(agents)
 
     try:
         seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
-        olivia_turn = await process_one_reply(olivia, emily, social, time_step=1)
-        emily_turn = await process_one_reply(emily, olivia, social, time_step=2)
+        olivia_turn = await process_one_reply(
+            olivia,
+            emily,
+            social,
+            time_step=base_time_step,
+        )
+        emily_turn = await process_one_reply(
+            emily,
+            olivia,
+            social,
+            time_step=base_time_step + 1,
+        )
     finally:
         social.close()
 
@@ -126,6 +143,7 @@ async def run_first_exchange(opener: str) -> dict:
             "reply_turns": 2,
             "autonomous_loop": False,
         },
+        "start_time_step": base_time_step,
         "seed": seed,
         "turns": [olivia_turn, emily_turn],
     }
