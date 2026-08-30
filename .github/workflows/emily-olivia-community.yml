@@ -1,0 +1,77 @@
+name: Emily Olivia Community Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      opener:
+        description: First message from Emily to Olivia
+        required: false
+        default: Hello, Olivia.
+      run_reflection:
+        description: Run Stanford persistence/reflection verification after the exchange
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  community:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Require model credential
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY repository secret is required for Stanford cognition."
+            exit 1
+          fi
+
+      - name: Bootstrap pinned research code
+        working-directory: experiments/emily-olivia-society
+        run: bash bootstrap_upstreams.sh
+
+      - name: Initialize private Stanford workspaces
+        working-directory: experiments/emily-olivia-society
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: .venv-stanford/bin/python init_cognition.py
+
+      - name: Run first bounded exchange
+        working-directory: experiments/emily-olivia-society
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: .venv-stanford/bin/python first_exchange.py --run --opener "${{ inputs.opener }}"
+
+      - name: Run persistence and reflection verification
+        if: ${{ inputs.run_reflection }}
+        working-directory: experiments/emily-olivia-society
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: .venv-stanford/bin/python persistence_reflection.py --run
+
+      - name: Produce read-only observer report
+        working-directory: experiments/emily-olivia-society
+        run: python3 observer.py > replay/observer.json
+
+      - name: Upload community replay and state
+        uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-community-${{ github.run_number }}
+          path: |
+            experiments/emily-olivia-society/replay/
+            experiments/emily-olivia-society/workspaces/emily/scratch.json
+            experiments/emily-olivia-society/workspaces/emily/memory_stream/nodes.json
+            experiments/emily-olivia-society/workspaces/olivia/scratch.json
+            experiments/emily-olivia-society/workspaces/olivia/memory_stream/nodes.json
+          if-no-files-found: error
+          retention-days: 30
