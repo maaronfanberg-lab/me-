@@ -4,11 +4,13 @@
 This does not call an LLM, add memories, reflect, or start social interaction.
 It only uses Stanford's GenerativeAgent class and save() format to create
 separate persistent agent workspaces.
+
+Existing complete workspaces are preserved. An incomplete existing workspace
+causes a hard failure rather than being overwritten.
 """
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -44,6 +46,21 @@ def load_profiles() -> list[dict]:
     return agents
 
 
+def workspace_state(workspace: Path) -> str:
+    if not workspace.exists():
+        return "missing"
+
+    required = [
+        workspace / "scratch.json",
+        workspace / "meta.json",
+        workspace / "memory_stream" / "nodes.json",
+        workspace / "memory_stream" / "embeddings.json",
+    ]
+    if all(path.exists() and path.stat().st_size > 0 for path in required):
+        return "complete"
+    return "incomplete"
+
+
 def main() -> None:
     if not STANFORD.exists():
         raise SystemExit("Run ./bootstrap_upstreams.sh first.")
@@ -60,6 +77,15 @@ def main() -> None:
         name = str(profile["name"])
         age = int(profile["age"])
         workspace = WORKSPACES / name.lower()
+        state = workspace_state(workspace)
+
+        if state == "complete":
+            print(f"Preserving existing Stanford cognition workspace: {name}")
+            continue
+        if state == "incomplete":
+            raise SystemExit(
+                f"Refusing to overwrite incomplete cognition workspace for {name}: {workspace}"
+            )
 
         agent = GenerativeAgent()
         agent.update_scratch({"first_name": name, "age": age})
