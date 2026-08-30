@@ -9,7 +9,7 @@ STANFORD_COMMIT="96854071ef4c2d79c93144c973c7820722d52bab"
 
 python3 -m venv "$AS_VENV"
 "$AS_VENV/bin/python" -m pip install --upgrade pip
-"$AS_VENV/bin/python" -m pip install "agentsociety2==2.8.4"
+"$AS_VENV/bin/python" -m pip install "agentsociety2==2.8.4" "mcp>=1.13.1,<2"
 
 mkdir -p "$VENDOR"
 if [[ ! -d "$VENDOR/stanford-genagents/.git" ]]; then
