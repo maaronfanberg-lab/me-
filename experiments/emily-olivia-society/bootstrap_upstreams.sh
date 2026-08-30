@@ -37,6 +37,24 @@ if old not in text:
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 PY
 
+# Stanford's pinned memory stream otherwise calls the OpenAI embeddings API
+# directly. For this bounded experiment, use a deterministic local hashed-token
+# embedding instead. This preserves stable cosine-similarity retrieval while
+# removing an unnecessary network/API-key failure point.
+STANFORD_GPT="$VENDOR/stanford-genagents/simulation_engine/gpt_structure.py"
+python3 - "$STANFORD_GPT" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = '''def get_text_embedding(text: str, \n                       model: str = "text-embedding-3-small") -> List[float]:\n  """Generate an embedding for the given text using OpenAI's API."""\n  if not isinstance(text, str) or not text.strip():\n    raise ValueError("Input text must be a non-empty string.")\n\n  text = text.replace("\\n", " ").strip()\n  response = openai.embeddings.create(\n    input=[text], model=model).data[0].embedding\n  return response\n'''
+new = '''def get_text_embedding(text: str, \n                       model: str = "text-embedding-3-small") -> List[float]:\n  """Generate a deterministic local embedding for bounded experiments."""\n  if not isinstance(text, str) or not text.strip():\n    raise ValueError("Input text must be a non-empty string.")\n\n  import hashlib\n  import math\n  import re\n\n  dims = 256\n  vector = [0.0] * dims\n  for token in re.findall(r"\\w+", text.lower()):\n    digest = hashlib.sha256(token.encode("utf-8")).digest()\n    index = int.from_bytes(digest[:4], "big") % dims\n    sign = 1.0 if digest[4] & 1 else -1.0\n    vector[index] += sign\n\n  norm = math.sqrt(sum(value * value for value in vector)) or 1.0\n  return [value / norm for value in vector]\n'''
+if old not in text:
+    raise SystemExit("Pinned Stanford embedding helper changed; local embedding patch no longer applies cleanly.")
+path.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+
 python3 -m venv "$STANFORD_VENV"
 "$STANFORD_VENV/bin/python" -m pip install --upgrade pip
 "$STANFORD_VENV/bin/python" -m pip install -r "$VENDOR/stanford-genagents/requirements.txt"
