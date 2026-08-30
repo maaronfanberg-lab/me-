@@ -123,9 +123,33 @@ If an agent has no prior memories yet, reflection is skipped rather than invente
 
 Implementation note: Stanford's current `GenerativeAgent.reflect(anchor, time_step)` forwards its second positional argument into the lower-level `reflection_count` slot. Layer 6 therefore calls Stanford's actual `MemoryStream.reflect(...)` directly with named `reflection_count`, `retrieval_count`, and `time_step` arguments. No reflection algorithm is reimplemented locally.
 
-### Layer 7 — Observation
+### Layer 7 — Read-only observation — COMPLETE
 
-Add a read-only viewer for events, memories, and state. Observation must not silently mutate the community.
+`observer.py` inspects persisted community state without importing or invoking either research runtime.
+
+It reads only:
+
+- `workspaces/emily/scratch.json`
+- `workspaces/emily/memory_stream/nodes.json`
+- Emily's embeddings/meta files for integrity hashes
+- the equivalent Olivia files
+- JSON replay files under `replay/`
+
+The observer never calls `remember`, `reflect`, retrieval, `utterance`, `send_message`, `consume_message`, or an environment step. It computes SHA-256 hashes before and after observation and aborts if persisted state changes while being observed.
+
+Full read-only view:
+
+```bash
+python3 observer.py
+```
+
+Compact status view:
+
+```bash
+python3 observer.py --summary
+```
+
+No model/API key is needed merely to observe persisted state.
 
 ## Current launchers
 
@@ -136,6 +160,8 @@ Add a read-only viewer for events, memories, and state. Observation must not sil
 `first_exchange.py --run` permits exactly the first bounded Emily ↔ Olivia exchange and then exits.
 
 `persistence_reflection.py --run` permits exactly one persistence/reflection verification pass for Emily and Olivia, then exits.
+
+`observer.py` is read-only and can inspect persisted state without starting cognition or interaction.
 
 ## Isolation rule
 
