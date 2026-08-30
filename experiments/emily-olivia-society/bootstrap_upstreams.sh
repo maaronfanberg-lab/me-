@@ -55,6 +55,24 @@ if old not in text:
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 PY
 
+# The pinned utterance parser also assumes every model response is a JSON
+# object containing an `utterance` key. API errors and ordinary text responses
+# violate that assumption, so normalize them to a harmless bounded reply rather
+# than crashing the entire social cycle.
+STANFORD_INTERACTION="$VENDOR/stanford-genagents/genagents/modules/interaction.py"
+python3 - "$STANFORD_INTERACTION" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = '''  def _func_clean_up(gpt_response, prompt=""): \n    utterance = extract_first_json_dict(gpt_response)["utterance"]\n    return utterance\n\n  def _get_fail_safe():\n    return None\n'''
+new = '''  def _func_clean_up(gpt_response, prompt=""): \n    parsed = extract_first_json_dict(gpt_response)\n    if isinstance(parsed, dict):\n      utterance = parsed.get("utterance")\n      if isinstance(utterance, str) and utterance.strip():\n        return utterance.strip()\n    if isinstance(gpt_response, str):\n      candidate = gpt_response.strip()\n      if candidate and not candidate.startswith("GENERATION ERROR:"):\n        return candidate[:1000]\n    return "I am here and listening."\n\n  def _get_fail_safe():\n    return "I am here and listening."\n'''
+if old not in text:
+    raise SystemExit("Pinned Stanford utterance parser changed; compatibility patch no longer applies cleanly.")
+path.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+
 python3 -m venv "$STANFORD_VENV"
 "$STANFORD_VENV/bin/python" -m pip install --upgrade pip
 "$STANFORD_VENV/bin/python" -m pip install -r "$VENDOR/stanford-genagents/requirements.txt"
