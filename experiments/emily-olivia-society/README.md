@@ -57,13 +57,26 @@ Both launch paths currently initialize the two-agent society and exit before aut
 - no autonomous interaction
 - no Room or BitNet imports
 
-### Layer 2 — Individual cognition
+### Layer 2 — Individual cognition — COMPLETE
 
-Use Stanford's actual `GenerativeAgent`, memory stream, `remember`, `reflect`, and persistence behavior. Add only the minimum settings/config adapter Stanford's repository requires.
+Use Stanford's actual `GenerativeAgent`, memory stream, persistence format, `remember`, and `reflect` machinery. Emily and Olivia have separate private Stanford-format workspaces.
 
-### Layer 3 — Social environment
+### Layer 3 — Social environment — COMPLETE
 
-Use AgentSociety 2's `SimpleSocialSpace` and environment/router machinery so Emily and Olivia can observe and address each other through a controlled shared environment.
+The social layer now uses AgentSociety 2's `EnvBase`, `@tool`, and `CodeGenRouter` machinery through `controlled_social_space.py`.
+
+The boundary is private by default:
+
+- `observe_social_space(agent_id)` is read-only.
+- An agent can see participant names and only messages addressed to her.
+- `send_message(agent_id, recipient_id, content)` is the only social mutation.
+- Self-messaging is rejected.
+- Unknown agent IDs are rejected.
+- Empty messages are rejected.
+- Stanford cognition workspaces and memory files are never exposed through the social environment.
+- Advancing environment time does not automatically generate speech or actions.
+
+No autonomous interaction is enabled yet.
 
 ### Layer 4 — Coordinator
 
@@ -83,7 +96,7 @@ Add a simple read-only viewer for events, memories, and state. Observation must 
 
 ## Current launcher
 
-`run.py` uses AgentSociety 2's `AgentSociety`, `CodeGenRouter`, and `SimpleSocialSpace` to initialize the two-agent environment. It intentionally stops before autonomous interaction.
+`run.py` uses AgentSociety 2's `AgentSociety`, `CodeGenRouter`, and the controlled `EnvBase` social module to initialize the two-agent environment. It intentionally stops before autonomous interaction.
 
 ## Isolation rule
 
