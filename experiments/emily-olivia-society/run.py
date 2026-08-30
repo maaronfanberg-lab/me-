@@ -6,9 +6,10 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from agentsociety2.contrib.env import SimpleSocialSpace
 from agentsociety2.env import CodeGenRouter
 from agentsociety2.society import AgentSociety
+
+from controlled_social_space import ControlledSocialSpace
 
 HERE = Path(__file__).resolve().parent
 RUN_DIR = HERE / "run"
@@ -26,9 +27,8 @@ async def main() -> None:
     agents = load_agents()
     pairs = [(int(agent["id"]), str(agent["profile"]["name"])) for agent in agents]
 
-    environment = CodeGenRouter(
-        env_modules=[SimpleSocialSpace(agent_id_name_pairs=pairs)]
-    )
+    social_space = ControlledSocialSpace(agent_id_name_pairs=pairs)
+    environment = CodeGenRouter(env_modules=[social_space])
 
     society = AgentSociety(
         agent_specs=agents,
@@ -41,6 +41,7 @@ async def main() -> None:
     await society.init()
     try:
         print("Two-agent society initialized:", ", ".join(name for _, name in pairs))
+        print("Layer 3 social boundary active: addressed messages only; private memory is not exposed.")
         print("No autonomous interaction is started by this launcher yet.")
     finally:
         await society.close()
