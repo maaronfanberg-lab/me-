@@ -96,9 +96,32 @@ The default neutral opener is `Hello, Olivia.` and can be replaced with `--opene
 
 There is still no indefinite autonomous loop.
 
-### Layer 6 — Persistence and reflection
+### Layer 6 — Persistence and reflection — COMPLETE
 
-Verify later cycles retrieve prior experiences and use Stanford reflection rather than relying only on current prompt context.
+`persistence_reflection.py` verifies that cognition survives beyond the current exchange instead of relying on prompt history alone.
+
+For each agent it:
+
+1. reloads the private Stanford workspace
+2. retrieves memories relevant to the other agent
+3. runs Stanford's real `MemoryStream.reflect(...)` with explicit named arguments
+4. adds generated reflection nodes to the same private memory stream
+5. saves the workspace
+6. reloads it through Stanford's `GenerativeAgent` loader
+7. verifies the reflection nodes survived the process boundary
+8. retrieves relevant memories again after reload
+9. writes the bounded verification report to `replay/layer6_reflection.json`
+10. stops
+
+Layer 6 is explicit and will not run automatically:
+
+```bash
+.venv-stanford/bin/python persistence_reflection.py --run
+```
+
+If an agent has no prior memories yet, reflection is skipped rather than invented.
+
+Implementation note: Stanford's current `GenerativeAgent.reflect(anchor, time_step)` forwards its second positional argument into the lower-level `reflection_count` slot. Layer 6 therefore calls Stanford's actual `MemoryStream.reflect(...)` directly with named `reflection_count`, `retrieval_count`, and `time_step` arguments. No reflection algorithm is reimplemented locally.
 
 ### Layer 7 — Observation
 
@@ -111,6 +134,8 @@ Add a read-only viewer for events, memories, and state. Observation must not sil
 `community_cycle.py --one-cycle` permits one explicit observe → remember → retrieve → choose → act cycle per agent.
 
 `first_exchange.py --run` permits exactly the first bounded Emily ↔ Olivia exchange and then exits.
+
+`persistence_reflection.py --run` permits exactly one persistence/reflection verification pass for Emily and Olivia, then exits.
 
 ## Isolation rule
 
