@@ -4,13 +4,71 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import subprocess
 from pathlib import Path
 
 from community_cycle import load_agents, observation_text, choose_action
-from controlled_social_space import ControlledSocialSpace
 
 HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
+AGENTSOCIETY_PYTHON = HERE / ".venv-agentsociety" / "bin" / "python"
+BRIDGE = HERE / "social_bridge.py"
+
+
+class SocialBridgeClient:
+    """Keep Stanford and AgentSociety dependencies in separate processes."""
+
+    def __init__(self) -> None:
+        if not AGENTSOCIETY_PYTHON.exists():
+            raise SystemExit("AgentSociety environment is missing. Run bootstrap_upstreams.sh first.")
+        self.proc = subprocess.Popen(
+            [str(AGENTSOCIETY_PYTHON), str(BRIDGE)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+
+    def _call(self, payload: dict) -> dict:
+        if self.proc.stdin is None or self.proc.stdout is None:
+            raise RuntimeError("Social bridge pipes are unavailable.")
+        self.proc.stdin.write(json.dumps(payload) + "\n")
+        self.proc.stdin.flush()
+        line = self.proc.stdout.readline()
+        if not line:
+            stderr = self.proc.stderr.read() if self.proc.stderr else ""
+            raise RuntimeError(f"Social bridge exited unexpectedly: {stderr.strip()}")
+        response = json.loads(line)
+        if not response.get("ok"):
+            raise RuntimeError(response.get("error", "Unknown social bridge error"))
+        return response.get("result")
+
+    async def observe_social_space(self, agent_id: int) -> dict:
+        return self._call({"op": "observe", "agent_id": agent_id})
+
+    async def send_message(self, agent_id: int, recipient_id: int, content: str) -> dict:
+        return self._call(
+            {
+                "op": "send",
+                "agent_id": agent_id,
+                "recipient_id": recipient_id,
+                "content": content,
+            }
+        )
+
+    async def consume_message(self, agent_id: int, message_id: int) -> dict:
+        return self._call(
+            {"op": "consume", "agent_id": agent_id, "message_id": message_id}
+        )
+
+    def close(self) -> None:
+        if self.proc.poll() is not None:
+            return
+        try:
+            self._call({"op": "close"})
+        finally:
+            self.proc.wait(timeout=10)
 
 
 async def process_one_reply(agent, other, social, time_step: int) -> dict:
@@ -52,11 +110,14 @@ async def run_first_exchange(opener: str) -> dict:
     agents = load_agents()
     emily = next(a for a in agents if a.name == "Emily")
     olivia = next(a for a in agents if a.name == "Olivia")
-    social = ControlledSocialSpace([(a.agent_id, a.name) for a in agents])
+    social = SocialBridgeClient()
 
-    seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
-    olivia_turn = await process_one_reply(olivia, emily, social, time_step=1)
-    emily_turn = await process_one_reply(emily, olivia, social, time_step=2)
+    try:
+        seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
+        olivia_turn = await process_one_reply(olivia, emily, social, time_step=1)
+        emily_turn = await process_one_reply(emily, olivia, social, time_step=2)
+    finally:
+        social.close()
 
     transcript = {
         "mode": "bounded_first_exchange",
