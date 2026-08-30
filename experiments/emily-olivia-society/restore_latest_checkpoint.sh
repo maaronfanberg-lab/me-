@@ -21,7 +21,6 @@ checkpoint_run="$(
   gh api --method GET \
     "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs" \
     -f status=success \
-    -f event=workflow_dispatch \
     -F per_page=20 \
     --jq '.workflow_runs[0].id // empty'
 )"
