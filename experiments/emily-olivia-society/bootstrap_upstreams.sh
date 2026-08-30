@@ -19,6 +19,24 @@ fi
 git -C "$VENDOR/stanford-genagents" fetch --all --tags --prune
 git -C "$VENDOR/stanford-genagents" checkout --detach "$STANFORD_COMMIT"
 
+# Compatibility patch for the pinned Stanford code. The upstream importance
+# parser assumes every model response contains a JSON object and crashes on
+# otherwise-valid non-JSON output. Keep the pinned source, but make its existing
+# fail-safe path return one neutral importance score per record.
+STANFORD_MEMORY="$VENDOR/stanford-genagents/genagents/modules/memory_stream.py"
+python3 - "$STANFORD_MEMORY" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = '''  def _func_clean_up(gpt_response, prompt=""): \n    gpt_response = extract_first_json_dict(gpt_response)\n    return list(gpt_response.values())\n\n  def _get_fail_safe():\n    return 25\n'''
+new = '''  def _func_clean_up(gpt_response, prompt=""): \n    gpt_response = extract_first_json_dict(gpt_response)\n    if not isinstance(gpt_response, dict):\n      return [25 for _ in records]\n    values = list(gpt_response.values())\n    if len(values) != len(records):\n      return [25 for _ in records]\n    return values\n\n  def _get_fail_safe():\n    return [25 for _ in records]\n'''
+if old not in text:
+    raise SystemExit("Pinned Stanford importance parser changed; compatibility patch no longer applies cleanly.")
+path.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+
 python3 -m venv "$STANFORD_VENV"
 "$STANFORD_VENV/bin/python" -m pip install --upgrade pip
 "$STANFORD_VENV/bin/python" -m pip install -r "$VENDOR/stanford-genagents/requirements.txt"
