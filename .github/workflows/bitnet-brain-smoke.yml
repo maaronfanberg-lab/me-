@@ -21,6 +21,7 @@ jobs:
         run: |
           bash -n scripts/start_bitnet_brain.sh
           python -m py_compile scripts/bitnet_brain_probe.py
+          python -m py_compile scripts/room_engine_v5.py scripts/room_social_v5.py scripts/room_private_model.py
 
       - name: Install build dependencies
         run: |
@@ -87,6 +88,38 @@ jobs:
         env:
           BITNET_URL: http://127.0.0.1:18080
         run: python scripts/bitnet_brain_probe.py
+
+      - name: Run one real Room v5 cognition beat on BitNet
+        env:
+          ROOM_MODEL_URL: http://127.0.0.1:18080
+          ROOM_CYCLE_KEY: bitnet-room-v5
+        run: |
+          set -euxo pipefail
+          rm -rf room_parts room_work
+          mkdir -p room_parts room_work
+          for n in $(seq 0 11); do
+            ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase sense
+          done
+          python3 scripts/room_engine_v5.py bus
+          for n in 0 1 3 4 6 7 9 10; do
+            ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json
+          done
+          python3 scripts/room_engine_v5.py bus2 --bus room_work/bus-sense.json
+          for n in 2 5 8 11; do
+            ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json
+          done
+          python3 scripts/room_engine_v5.py commit
+          python3 scripts/build_room_feed.py
+          python3 - <<'PY'
+          import json
+          s=json.load(open('room/state.json'))
+          assert s['version']=='room-cognition-v5'
+          assert s['beat_message_count']==4
+          assert set(s['beat_contributors'])=={'sarah','mara','owen','jules'}
+          msgs=s.get('messages') or s.get('conversation') or []
+          print('BITNET ROOM V5 PASS', s['cycle'], s['beat_contributors'])
+          print(json.dumps(msgs[-8:], ensure_ascii=False)[:12000])
+          PY
 
       - name: Show server log
         if: always()
