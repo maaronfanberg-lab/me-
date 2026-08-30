@@ -51,7 +51,8 @@ The shared layer uses AgentSociety 2's `EnvBase`, `@tool`, and `CodeGenRouter` m
 
 - `observe_social_space(agent_id)` is read-only.
 - An agent sees participant names and only messages addressed to her.
-- `send_message(agent_id, recipient_id, content)` is the only social mutation.
+- `send_message(agent_id, recipient_id, content)` is the social send operation.
+- `consume_message(agent_id, message_id)` removes a message after that recipient processes it, preventing duplicate replies on later cycles.
 - Private Stanford cognition workspaces are never exposed through the shared environment.
 
 ### Layer 4 — Research-style agent cycle — COMPLETE
@@ -73,9 +74,27 @@ The cycle is explicit and bounded. It will not run at startup. It requires:
 
 If an agent has no new addressed message, the current Layer 4 behavior is `wait`; it does not invent a conversation opener. There is no indefinite autonomous loop.
 
-### Layer 5 — First bounded interaction
+### Layer 5 — First bounded interaction — COMPLETE
 
-Seed one explicit event or addressed message and allow the research-style cycle to produce the first Emily ↔ Olivia exchange. Still no indefinite loop.
+`first_exchange.py` permits exactly one bounded exchange:
+
+1. one explicit opener from Emily to Olivia
+2. Olivia observes, remembers, retrieves, chooses, and may reply
+3. Emily observes Olivia's reply, remembers, retrieves, chooses, and may reply
+4. processed messages are consumed
+5. both private workspaces are persisted
+6. a replay is written to `replay/first_exchange.json`
+7. execution stops
+
+It will not start unless explicitly permitted:
+
+```bash
+.venv-stanford/bin/python first_exchange.py --run
+```
+
+The default neutral opener is `Hello, Olivia.` and can be replaced with `--opener`.
+
+There is still no indefinite autonomous loop.
 
 ### Layer 6 — Persistence and reflection
 
@@ -89,7 +108,9 @@ Add a read-only viewer for events, memories, and state. Observation must not sil
 
 `run.py` initializes the Emily + Olivia Community and controlled environment, then exits without autonomous interaction.
 
-`community_cycle.py --one-cycle` is the only path that permits one explicit observe → remember → retrieve → choose → act cycle per agent.
+`community_cycle.py --one-cycle` permits one explicit observe → remember → retrieve → choose → act cycle per agent.
+
+`first_exchange.py --run` permits exactly the first bounded Emily ↔ Olivia exchange and then exits.
 
 ## Isolation rule
 
