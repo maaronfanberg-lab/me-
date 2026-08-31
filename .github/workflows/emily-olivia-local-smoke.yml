@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/emily-olivia-local-smoke.yml'
+      - 'experiments/emily-olivia-society/bootstrap_upstreams.sh'
 
 permissions:
   contents: read
@@ -11,7 +12,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       OPENAI_API_KEY: local-no-api-key
       AGENTSOCIETY_LLM_API_KEY: local-no-api-key
@@ -31,8 +32,9 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v5
+            experiments/emily-olivia-society/.bootstrap-ready-v6
           key: community-runtime-bitnet-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
+          save-always: true
       - name: Bootstrap BitNet
         working-directory: experiments/emily-olivia-society
         run: bash bootstrap_upstreams.sh
