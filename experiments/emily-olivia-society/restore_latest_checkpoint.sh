@@ -83,6 +83,50 @@ print("Checkpoint workspace JSON validated.")
 PY
 
 social_state="$(find "$tmp_dir" -type f -path '*/replay/social_state.json' -print -quit)"
+
+# Older successful runs could contain syntactically valid but semantically poisoned
+# template output such as repeated {"utterance": 3}. Never restore that material.
+if ! python3 - "$candidate" "${social_state:-}" <<'PY'
+import pathlib, re, sys
+workspace = pathlib.Path(sys.argv[1])
+social = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else None
+patterns = [
+    re.compile(r'[\{\[]?\s*["\']?utter(?:ance)?["\']?\s*[:=]', re.I),
+    re.compile(r'\[\s*input\s*\]\s*:', re.I),
+]
+texts = []
+for path in workspace.rglob('*.json'):
+    try:
+        texts.append(path.read_text(encoding='utf-8', errors='replace'))
+    except OSError:
+        pass
+if social and social.is_file():
+    texts.append(social.read_text(encoding='utf-8', errors='replace'))
+hits = sum(len(p.findall(text)) for text in texts for p in patterns)
+if hits >= 2:
+    print(f'Checkpoint contamination detected ({hits} template-junk markers); refusing restore.', file=sys.stderr)
+    raise SystemExit(1)
+print('Checkpoint dialogue contamination check passed.')
+PY
+then
+  echo "Prior checkpoint is contaminated; starting Emily and Olivia from clean cognition instead."
+  rm -rf "$WORKSPACES"
+  rm -f "$REPLAY_DIR/social_state.json"
+  mkdir -p "$REPLAY_DIR"
+  cat > "$REPLAY_DIR/checkpoint_restore.json.tmp" <<JSON
+{
+  "mode": "checkpoint_restore",
+  "restored": false,
+  "source_run_id": $checkpoint_run,
+  "artifact": "$ARTIFACT_NAME",
+  "reason": "template_dialogue_contamination",
+  "social_state_restored": false
+}
+JSON
+  mv "$REPLAY_DIR/checkpoint_restore.json.tmp" "$REPLAY_DIR/checkpoint_restore.json"
+  exit 0
+fi
+
 social_restored=false
 if [[ -n "${social_state:-}" && -s "$social_state" ]]; then
   python3 - "$social_state" <<'PY'
@@ -99,7 +143,6 @@ PY
   social_restored=true
 fi
 
-# Do not destroy a live workspace until the downloaded checkpoint has passed all validation.
 new_workspaces="$HERE/.workspaces.restore.$$"
 rm -rf "$new_workspaces"
 cp -a "$candidate" "$new_workspaces"
