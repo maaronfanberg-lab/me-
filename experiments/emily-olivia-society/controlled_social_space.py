@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from agentsociety2.env import EnvBase, tool
 
+MAX_MESSAGE_CHARS = 12_000
+STATE_VERSION = 1
+
 
 class ControlledSocialSpace(EnvBase):
-    """Two-agent social boundary built with AgentSociety 2 environment tools.
-
-    This layer deliberately exposes only names and addressed message queues.
-    It never reads either agent's private Stanford workspace or memory files.
-    """
+    """Two-agent social boundary built with AgentSociety 2 environment tools."""
 
     def __init__(
         self,
@@ -22,10 +22,11 @@ class ControlledSocialSpace(EnvBase):
         super().__init__()
         if len(agent_id_name_pairs) != 2:
             raise ValueError("ControlledSocialSpace requires exactly two agents.")
-
         self._names = {int(agent_id): str(name) for agent_id, name in agent_id_name_pairs}
         if len(self._names) != 2:
             raise ValueError("Agent IDs must be unique.")
+        if any(not name.strip() for name in self._names.values()):
+            raise ValueError("Agent names must be non-empty.")
 
         self._state_path = Path(state_path) if state_path is not None else None
         self._inboxes: dict[int, list[dict]] = {agent_id: [] for agent_id in self._names}
@@ -55,33 +56,79 @@ Private cognition workspaces and memory files are not exposed by this environmen
         if agent_id not in self._names:
             raise ValueError(f"Unknown agent id: {agent_id}")
 
+    def _validate_message(self, message: object, expected_to: int) -> dict:
+        if not isinstance(message, dict):
+            raise ValueError("Persisted inbox message must be an object.")
+        required = ("id", "from_id", "from_name", "to_id", "to_name", "content")
+        if any(key not in message for key in required):
+            raise ValueError("Persisted inbox message is missing required fields.")
+        message_id = int(message["id"])
+        from_id = int(message["from_id"])
+        to_id = int(message["to_id"])
+        if message_id < 1 or from_id not in self._names or to_id not in self._names or to_id != expected_to or from_id == to_id:
+            raise ValueError("Persisted inbox message has invalid routing metadata.")
+        content = str(message["content"]).strip()
+        if not content or len(content) > MAX_MESSAGE_CHARS:
+            raise ValueError("Persisted inbox message has invalid content length.")
+        validated = dict(message)
+        validated.update({
+            "id": message_id,
+            "from_id": from_id,
+            "from_name": self._names[from_id],
+            "to_id": to_id,
+            "to_name": self._names[to_id],
+            "content": content,
+        })
+        return validated
+
     def _load_state(self) -> None:
         if self._state_path is None or not self._state_path.exists():
             return
         payload = json.loads(self._state_path.read_text(encoding="utf-8"))
-        inboxes = payload.get("inboxes", {})
+        if not isinstance(payload, dict) or int(payload.get("version", 0)) != STATE_VERSION:
+            raise ValueError("Unsupported or malformed social state.")
+        inboxes = payload.get("inboxes")
+        if not isinstance(inboxes, dict):
+            raise ValueError("Social state inboxes must be an object.")
+
         restored: dict[int, list[dict]] = {}
+        seen_ids: set[int] = set()
+        max_id = 0
         for agent_id in self._names:
-            restored[agent_id] = list(inboxes.get(str(agent_id), []))
+            raw_inbox = inboxes.get(str(agent_id), [])
+            if not isinstance(raw_inbox, list):
+                raise ValueError(f"Inbox for agent {agent_id} must be a list.")
+            restored[agent_id] = []
+            for raw_message in raw_inbox:
+                message = self._validate_message(raw_message, agent_id)
+                if message["id"] in seen_ids:
+                    raise ValueError(f"Duplicate persisted message id: {message['id']}")
+                seen_ids.add(message["id"])
+                max_id = max(max_id, message["id"])
+                restored[agent_id].append(message)
         self._inboxes = restored
-        self._next_message_id = max(1, int(payload.get("next_message_id", 1)))
+        declared_next = int(payload.get("next_message_id", 1))
+        self._next_message_id = max(1, declared_next, max_id + 1)
 
     def _save_state(self) -> None:
         if self._state_path is None:
             return
         self._state_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "version": 1,
+            "version": STATE_VERSION,
             "next_message_id": self._next_message_id,
             "inboxes": {str(agent_id): inbox for agent_id, inbox in self._inboxes.items()},
         }
         tmp_path = self._state_path.with_suffix(self._state_path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
         tmp_path.replace(self._state_path)
 
     @tool(readonly=True, kind="observe")
     async def observe_social_space(self, agent_id: int) -> dict:
-        """Observe public participant names and messages addressed to this agent."""
         self._require_agent(agent_id)
         return {
             "self": {"id": agent_id, "name": self._names[agent_id]},
@@ -94,7 +141,6 @@ Private cognition workspaces and memory files are not exposed by this environmen
 
     @tool(readonly=False)
     async def send_message(self, agent_id: int, recipient_id: int, content: str) -> dict:
-        """Send one addressed message to the other registered agent."""
         self._require_agent(agent_id)
         self._require_agent(recipient_id)
         if agent_id == recipient_id:
@@ -103,6 +149,8 @@ Private cognition workspaces and memory files are not exposed by this environmen
         text = str(content).strip()
         if not text:
             raise ValueError("Message content may not be empty.")
+        if len(text) > MAX_MESSAGE_CHARS:
+            raise ValueError(f"Message content exceeds {MAX_MESSAGE_CHARS} characters.")
 
         message = {
             "id": self._next_message_id,
@@ -111,6 +159,7 @@ Private cognition workspaces and memory files are not exposed by this environmen
             "to_id": recipient_id,
             "to_name": self._names[recipient_id],
             "content": text,
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         self._next_message_id += 1
         self._inboxes[recipient_id].append(message)
@@ -119,8 +168,9 @@ Private cognition workspaces and memory files are not exposed by this environmen
 
     @tool(readonly=False)
     async def consume_message(self, agent_id: int, message_id: int) -> dict:
-        """Remove one addressed message after the recipient has processed it."""
         self._require_agent(agent_id)
+        if int(message_id) < 1:
+            raise ValueError("message_id must be positive.")
         inbox = self._inboxes[agent_id]
         for index, message in enumerate(inbox):
             if int(message["id"]) == int(message_id):
@@ -130,5 +180,4 @@ Private cognition workspaces and memory files are not exposed by this environmen
         return {"success": False, "reason": "message_not_found", "message_id": int(message_id)}
 
     async def step(self, tick: int, t: datetime):
-        """Advance environment time without generating messages or actions."""
         self.t = t
