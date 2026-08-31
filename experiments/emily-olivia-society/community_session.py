@@ -29,6 +29,7 @@ async def run_community_session(
     opener: str,
     reply_turns: int,
     continuous_seconds: int = 0,
+    turn_delay_seconds: float = 0.0,
 ) -> dict:
     if continuous_seconds <= 0 and (reply_turns < 2 or reply_turns > MAX_REPLY_TURNS):
         raise ValueError(
@@ -36,6 +37,8 @@ async def run_community_session(
         )
     if continuous_seconds < 0:
         raise ValueError("continuous_seconds must be zero or greater.")
+    if turn_delay_seconds < 0:
+        raise ValueError("turn_delay_seconds must be zero or greater.")
 
     agents = load_agents()
     emily = next(agent for agent in agents if agent.name == "Emily")
@@ -83,8 +86,9 @@ async def run_community_session(
             )
 
         while True:
+            elapsed = time.monotonic() - started
             if continuous_seconds > 0:
-                if time.monotonic() - started >= continuous_seconds:
+                if elapsed >= continuous_seconds:
                     stop_reason = "continuous_window_complete"
                     break
             elif offset >= reply_turns:
@@ -111,6 +115,7 @@ async def run_community_session(
                         "start_time_step": base_time_step,
                         "completed_reply_turns": completed,
                         "continuous_seconds": continuous_seconds,
+                        "turn_delay_seconds": turn_delay_seconds,
                         "latest_turn": latest_turn,
                     },
                 )
@@ -128,6 +133,11 @@ async def run_community_session(
 
             current, other = other, current
             offset += 1
+
+            if continuous_seconds > 0 and turn_delay_seconds > 0:
+                remaining = continuous_seconds - (time.monotonic() - started)
+                if remaining > 0:
+                    await asyncio.sleep(min(turn_delay_seconds, remaining))
     finally:
         social.close()
 
@@ -142,6 +152,7 @@ async def run_community_session(
             "requested_reply_turns": reply_turns,
             "maximum_reply_turns": MAX_REPLY_TURNS,
             "continuous_seconds": continuous_seconds,
+            "turn_delay_seconds": turn_delay_seconds,
             "autonomous_loop": continuous_seconds > 0,
         },
         "resumed_social_state": resumed,
@@ -183,6 +194,12 @@ async def main() -> None:
         help="Keep Emily and Olivia alternating for this many seconds; 0 keeps bounded mode.",
     )
     parser.add_argument(
+        "--turn-delay-seconds",
+        type=float,
+        default=0.0,
+        help="Minimum pause between successful replies in continuous mode.",
+    )
+    parser.add_argument(
         "--run",
         action="store_true",
         help="Explicitly permit the requested community session.",
@@ -198,6 +215,7 @@ async def main() -> None:
         args.opener,
         args.turns,
         continuous_seconds=args.continuous_seconds,
+        turn_delay_seconds=args.turn_delay_seconds,
     )
     print(json.dumps(result, indent=2))
 
