@@ -10,7 +10,7 @@ BITNET_COMMIT="0b341e582afbf9e1011f24744b554c96a3477eb5"
 BITNET_DIR="$VENDOR/BitNet"
 MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
-READY_MARKER="$HERE/.bootstrap-ready-v5"
+READY_MARKER="$HERE/.bootstrap-ready-v6"
 
 if [[ -f "$READY_MARKER" && -x "$AS_VENV/bin/python" && -x "$STANFORD_VENV/bin/python" && -x "$BITNET_DIR/build/bin/llama-cli" && -s "$MODEL_FILE" ]]; then
   stanford_current="$(git -C "$VENDOR/stanford-genagents" rev-parse HEAD 2>/dev/null || true)"
@@ -65,7 +65,7 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 old = '''def gpt_request(prompt: str, \n                model: str = "gpt-4o", \n                max_tokens: int = 1500) -> str:\n  """Make a request to OpenAI's GPT model."""\n  if model == "o1-preview": \n    try:\n      client = openai.OpenAI(api_key=OPENAI_API_KEY)\n      response = client.chat.completions.create(\n        model=model,\n        messages=[{"role": "user", "content": prompt}]\n      )\n      return response.choices[0].message.content\n    except Exception as e:\n      return f"GENERATION ERROR: {str(e)}"\n\n  try:\n    client = openai.OpenAI(api_key=OPENAI_API_KEY)\n    response = client.chat.completions.create(\n      model=model,\n      messages=[{"role": "user", "content": prompt}],\n      max_tokens=max_tokens,\n      temperature=0.7\n    )\n    return response.choices[0].message.content\n  except Exception as e:\n    return f"GENERATION ERROR: {str(e)}"\n'''
-new = '''def gpt_request(prompt: str, \n                model: str = "community-bitnet", \n                max_tokens: int = 1500) -> str:\n  """Generate locally with Microsoft's BitNet b1.58; no paid API is required."""\n  try:\n    import os\n    import subprocess\n    from pathlib import Path\n    root = Path(os.environ["COMMUNITY_BITNET_ROOT"])\n    model_path = Path(os.environ["COMMUNITY_BITNET_MODEL"])\n    binary = root / "build" / "bin" / "llama-cli"\n    if not binary.exists():\n      raise FileNotFoundError(f"BitNet llama-cli not found: {binary}")\n    if not model_path.exists():\n      raise FileNotFoundError(f"BitNet model not found: {model_path}")\n    result = subprocess.run(\n      [str(binary), "-m", str(model_path), "-n", str(min(max_tokens, 256)),\n       "-t", str(max(2, min(6, os.cpu_count() or 2))), "-c", "4096",\n       "--temp", "0.7", "--no-display-prompt", "-p", prompt],\n      cwd=str(root), capture_output=True, text=True, timeout=180, check=True,\n    )\n    text = result.stdout.strip()\n    if not text:\n      raise RuntimeError("BitNet produced an empty response.")\n    return text\n  except Exception as e:\n    return f"GENERATION ERROR: {str(e)}"\n'''
+new = '''def gpt_request(prompt: str, \n                model: str = "community-bitnet", \n                max_tokens: int = 1500) -> str:\n  """Generate locally with Microsoft's BitNet b1.58; no paid API is required."""\n  try:\n    import os\n    import subprocess\n    from pathlib import Path\n    root = Path(os.environ["COMMUNITY_BITNET_ROOT"])\n    model_path = Path(os.environ["COMMUNITY_BITNET_MODEL"])\n    binary = root / "build" / "bin" / "llama-cli"\n    if not binary.exists():\n      raise FileNotFoundError(f"BitNet llama-cli not found: {binary}")\n    if not model_path.exists():\n      raise FileNotFoundError(f"BitNet model not found: {model_path}")\n    result = subprocess.run(\n      [str(binary), "-m", str(model_path), "-n", str(min(max_tokens, 64)),\n       "-t", str(max(4, min(6, os.cpu_count() or 4))), "-c", "2048",\n       "--temp", "0.7", "--no-display-prompt", "-p", prompt],\n      cwd=str(root), capture_output=True, text=True, timeout=900, check=True,\n    )\n    text = result.stdout.strip()\n    if not text:\n      raise RuntimeError("BitNet produced an empty response.")\n    return text\n  except Exception as e:\n    return f"GENERATION ERROR: {str(e)}"\n'''
 if old not in text:
     raise SystemExit("Pinned Stanford GPT request helper changed; BitNet patch no longer applies cleanly.")
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
@@ -118,13 +118,15 @@ pushd "$BITNET_DIR" >/dev/null
 "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s
 popd >/dev/null
 
+# Keep the probe deliberately tiny. The previous build completed successfully,
+# but the 24-token probe exceeded 180 seconds on a GitHub CPU runner.
 COMMUNITY_BITNET_ROOT="$BITNET_DIR" COMMUNITY_BITNET_MODEL="$MODEL_FILE" "$STANFORD_VENV/bin/python" - <<'PY'
 import os, subprocess
 binary = os.path.join(os.environ["COMMUNITY_BITNET_ROOT"], "build", "bin", "llama-cli")
 result = subprocess.run([
-    binary, "-m", os.environ["COMMUNITY_BITNET_MODEL"], "-n", "24", "-t", "2", "-c", "1024",
-    "--temp", "0", "--no-display-prompt", "-p", "Reply briefly: BitNet is working."
-], cwd=os.environ["COMMUNITY_BITNET_ROOT"], capture_output=True, text=True, timeout=180, check=True)
+    binary, "-m", os.environ["COMMUNITY_BITNET_MODEL"], "-n", "4", "-t", "4", "-c", "512",
+    "--temp", "0", "--no-display-prompt", "-p", "Say OK."
+], cwd=os.environ["COMMUNITY_BITNET_ROOT"], capture_output=True, text=True, timeout=900, check=True)
 text = result.stdout.strip()
 if not text:
     raise SystemExit("BitNet local probe produced no text.")
