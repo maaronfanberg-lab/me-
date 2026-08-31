@@ -45,15 +45,80 @@ def append_jsonl(path: Path, payload: dict) -> None:
 def publish_live_replay() -> None:
     """Best-effort live publish. A failed push must never stop the conversation."""
     try:
-        subprocess.run(["git", "config", "user.name", "github-actions[bot]"], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            ["git", "config", "user.name", "github-actions[bot]"],
+            cwd=REPO_ROOT,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [
+                "git",
+                "config",
+                "user.email",
+                "41898282+github-actions[bot]@users.noreply.github.com",
+            ],
+            cwd=REPO_ROOT,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         replay_glob = "experiments/emily-olivia-society/replay"
-        subprocess.run(["git", "add", "-f", replay_glob], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO_ROOT)
+        subprocess.run(
+            ["git", "add", "-f", replay_glob],
+            cwd=REPO_ROOT,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        diff = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=REPO_ROOT,
+        )
         if diff.returncode == 0:
             return
-        subprocess.run(["git", "commit", "-m", "Update Emily Olivia live replay [skip ci]"], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(["git", "push", "origin", "HEAD:main"], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+        commit = subprocess.run(
+            ["git", "commit", "-m", "Update Emily Olivia live replay [skip ci]"],
+            cwd=REPO_ROOT,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if commit.returncode != 0:
+            return
+
+        for attempt in range(1, 4):
+            pull = subprocess.run(
+                ["git", "pull", "--rebase", "origin", "main"],
+                cwd=REPO_ROOT,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+            if pull.returncode != 0:
+                subprocess.run(
+                    ["git", "rebase", "--abort"],
+                    cwd=REPO_ROOT,
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                time.sleep(attempt * 2)
+                continue
+
+            push = subprocess.run(
+                ["git", "push", "origin", "HEAD:main"],
+                cwd=REPO_ROOT,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+            if push.returncode == 0:
+                return
+            time.sleep(attempt * 2)
     except Exception:
         return
 
