@@ -82,6 +82,53 @@ git -C "$BITNET_DIR" submodule update --init --recursive
 
 "$STANFORD_VENV/bin/python" -m pip install --disable-pip-version-check -r "$BITNET_DIR/requirements.txt"
 
+# Ubuntu 24.04 BitNet users have repeatedly hit compiler-selection and
+# const-correctness failures. Prefer Clang 18 (the documented less-strict
+# working path), then 19, while still letting setup_env.py use its hard-coded
+# unversioned clang/clang++ names.
+COMPILER_BIN="$HERE/.bitnet-compiler-bin"
+rm -rf "$COMPILER_BIN"
+mkdir -p "$COMPILER_BIN"
+if command -v clang-18 >/dev/null 2>&1 && command -v clang++-18 >/dev/null 2>&1; then
+  ln -s "$(command -v clang-18)" "$COMPILER_BIN/clang"
+  ln -s "$(command -v clang++-18)" "$COMPILER_BIN/clang++"
+elif command -v clang-19 >/dev/null 2>&1 && command -v clang++-19 >/dev/null 2>&1; then
+  ln -s "$(command -v clang-19)" "$COMPILER_BIN/clang"
+  ln -s "$(command -v clang++-19)" "$COMPILER_BIN/clang++"
+elif command -v clang >/dev/null 2>&1 && command -v clang++ >/dev/null 2>&1; then
+  ln -s "$(command -v clang)" "$COMPILER_BIN/clang"
+  ln -s "$(command -v clang++)" "$COMPILER_BIN/clang++"
+else
+  echo "No usable Clang compiler found" >&2
+  exit 1
+fi
+export PATH="$COMPILER_BIN:$PATH"
+echo "BitNet compiler: $(clang --version | head -n 1)"
+
+# Clang 20 exposes a known upstream const-correctness bug in this source. The
+# pointer is read-only, so apply the same minimal fix documented by BitNet
+# Ubuntu users when the old line is present.
+BITNET_MAD="$BITNET_DIR/src/ggml-bitnet-mad.cpp"
+if [[ -f "$BITNET_MAD" ]]; then
+  "$STANFORD_VENV/bin/python" - "$BITNET_MAD" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = "int8_t * y_col = y + col * by;"
+new = "const int8_t * y_col = y + col * by;"
+if old in text:
+    text = text.replace(old, new)
+    path.write_text(text, encoding="utf-8")
+    print("Applied documented BitNet const-correctness patch.")
+elif new in text:
+    print("BitNet const-correctness patch already present.")
+else:
+    print("BitNet const-correctness target not present; continuing.")
+PY
+fi
+
 # GitHub-hosted x86 runners are not guaranteed to expose identical CPU feature
 # sets. llama.cpp defaults GGML_NATIVE=ON, so a cached executable built on one
 # runner can be unsafe on another. Patch the pinned setup script to build the
@@ -121,7 +168,14 @@ rm -rf "$BITNET_DIR/build"
 
 echo "Building portable BitNet runtime and regenerating tokenizer-correct I2_S GGUF..."
 pushd "$BITNET_DIR" >/dev/null
-"$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s
+if ! "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s; then
+  echo "BitNet build failed; compile.log follows:" >&2
+  echo "---------------- compile.log ----------------" >&2
+  tail -n 300 logs/compile.log 2>/dev/null || true
+  echo "---------------------------------------------" >&2
+  popd >/dev/null
+  exit 1
+fi
 popd >/dev/null
 
 restore_real_cli
