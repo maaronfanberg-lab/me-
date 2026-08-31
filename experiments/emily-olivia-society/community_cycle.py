@@ -11,6 +11,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 STANFORD = HERE / "vendor" / "stanford-genagents"
 WORKSPACES = HERE / "workspaces"
+MAX_UTTERANCE_CHARS = 12_000
 
 
 @dataclass
@@ -26,6 +27,12 @@ def load_specs() -> list[dict]:
     specs = raw.get("agents", [])
     if len(specs) != 2:
         raise RuntimeError("Emily + Olivia Community requires exactly two agents.")
+    ids = [int(spec["id"]) for spec in specs]
+    names = [str(spec["profile"]["name"]).strip() for spec in specs]
+    if len(set(ids)) != 2 or any(agent_id <= 0 for agent_id in ids):
+        raise RuntimeError("Community agent IDs must be two distinct positive integers.")
+    if len(set(names)) != 2 or any(not name for name in names):
+        raise RuntimeError("Community agent names must be two distinct non-empty strings.")
     return specs
 
 
@@ -38,17 +45,11 @@ def ensure_stanford_importable() -> None:
 def load_agents() -> list[CommunityAgent]:
     ensure_stanford_importable()
     from genagents.genagents import GenerativeAgent
-    import genagents.modules.interaction as interaction
-
-    # The pinned Stanford code uses the display label "GPT4o" in its settings,
-    # while OpenAI's API model identifier is "gpt-4o". Normalize it here so
-    # dialogue calls reach the model instead of silently falling back.
-    interaction.LLM_VERS = "gpt-4o"
 
     out: list[CommunityAgent] = []
     for spec in load_specs():
         agent_id = int(spec["id"])
-        name = str(spec["profile"]["name"])
+        name = str(spec["profile"]["name"]).strip()
         workspace = WORKSPACES / name.lower()
         if not (workspace / "scratch.json").exists():
             raise SystemExit("Run .venv-stanford/bin/python init_cognition.py first.")
@@ -64,7 +65,6 @@ def load_agents() -> list[CommunityAgent]:
 
 
 def latest_community_time_step(agents: list[CommunityAgent]) -> int:
-    """Return the highest Stanford memory timestamp already persisted."""
     latest = 0
     for agent in agents:
         for node in agent.brain.memory_stream.seq_nodes:
@@ -77,7 +77,6 @@ def latest_community_time_step(agents: list[CommunityAgent]) -> int:
 
 
 def next_community_time_step(agents: list[CommunityAgent]) -> int:
-    """Return a monotonic next timestamp after all persisted community memory."""
     return latest_community_time_step(agents) + 1
 
 
@@ -85,28 +84,17 @@ def observation_text(agent: CommunityAgent, observation: dict) -> str:
     inbox = observation.get("inbox", [])
     if not inbox:
         return f"{agent.name} observes that the community contains Emily and Olivia and there are no new addressed messages."
-
     latest = inbox[-1]
-    return (
-        f"{agent.name} observes a message from {latest['from_name']}: "
-        f"{latest['content']}"
-    )
+    return f"{agent.name} observes a message from {latest['from_name']}: {latest['content']}"
 
 
 def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgent) -> dict:
-    """Use Stanford's interaction code to produce one possible social action.
-
-    No action is generated when there is no new addressed message. This keeps
-    Layer 4 bounded and prevents boot-time autonomous conversation.
-    """
     inbox = observation.get("inbox", [])
     if not inbox:
         return {"type": "wait", "reason": "no_new_message"}
 
     latest = inbox[-1]
-    dialogue = [
-        [latest["from_name"], latest["content"]],
-    ]
+    dialogue = [[latest["from_name"], latest["content"]]]
     response = agent.brain.utterance(
         dialogue,
         context=(
@@ -115,8 +103,12 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
         ),
     )
     text = str(response).strip()
+    if text.startswith("GENERATION ERROR:"):
+        raise RuntimeError(text)
     if not text:
-        return {"type": "wait", "reason": "empty_utterance"}
+        raise RuntimeError(f"{agent.name} returned an empty local-model utterance.")
+    if len(text) > MAX_UTTERANCE_CHARS:
+        raise RuntimeError(f"{agent.name} returned an implausibly long utterance ({len(text)} chars).")
     return {"type": "message", "recipient_id": other.agent_id, "content": text}
 
 
@@ -127,25 +119,17 @@ async def run_one_cycle() -> None:
     pairs = [(agent.agent_id, agent.name) for agent in agents]
     social = ControlledSocialSpace(pairs)
     base_time_step = next_community_time_step(agents)
-
     cycle_log: list[dict] = []
 
     for offset, agent in enumerate(agents):
         other = next(a for a in agents if a.agent_id != agent.agent_id)
         time_step = base_time_step + offset
-
         observation = await social.observe_social_space(agent.agent_id)
         memory = observation_text(agent, observation)
         agent.brain.remember(memory, time_step=time_step)
-        retrieved = agent.brain.memory_stream.retrieve(
-            [f"Current interaction with {other.name}"],
-            time_step=time_step,
-            n_count=12,
-        )
-        relevant = [
-            node.content
-            for node in retrieved.get(f"Current interaction with {other.name}", [])
-        ]
+        query = f"Current interaction with {other.name}"
+        retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
+        relevant = [node.content for node in retrieved.get(query, [])]
         action = choose_action(agent, observation, other)
         action_result = None
         if action["type"] == "message":
@@ -154,35 +138,27 @@ async def run_one_cycle() -> None:
                 int(action["recipient_id"]),
                 str(action["content"]),
             )
+            if not action_result.get("success"):
+                raise RuntimeError(f"Message delivery failed for {agent.name}: {action_result!r}")
         agent.brain.save(str(agent.workspace))
-        cycle_log.append(
-            {
-                "agent": agent.name,
-                "time_step": time_step,
-                "observation": observation,
-                "retrieved_memories": relevant,
-                "action": action,
-                "action_result": action_result,
-            }
-        )
+        cycle_log.append({
+            "agent": agent.name,
+            "time_step": time_step,
+            "observation": observation,
+            "retrieved_memories": relevant,
+            "action": action,
+            "action_result": action_result,
+        })
 
     print(json.dumps({"start_time_step": base_time_step, "cycles": cycle_log}, indent=2))
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Run one bounded Emily + Olivia community cycle.")
-    parser.add_argument(
-        "--one-cycle",
-        action="store_true",
-        help="Explicitly permit exactly one observe→remember→retrieve→choose→act cycle per agent.",
-    )
+    parser.add_argument("--one-cycle", action="store_true", help="Permit exactly one bounded cycle per agent.")
     args = parser.parse_args()
-
     if not args.one_cycle:
-        raise SystemExit(
-            "Refusing to start automatically. Use --one-cycle to permit exactly one bounded cycle."
-        )
-
+        raise SystemExit("Refusing to start automatically. Use --one-cycle to permit exactly one bounded cycle.")
     await run_one_cycle()
 
 
