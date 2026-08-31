@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import selectors
 import subprocess
 from pathlib import Path
@@ -147,6 +148,21 @@ class SocialBridgeClient:
                         pass
 
 
+def _coerce_memory_importance(agent) -> None:
+    """Keep Stanford retrieval numeric even when the local model grades importance as text."""
+    for node in agent.brain.memory_stream.seq_nodes:
+        value = getattr(node, "importance", 0)
+        if isinstance(value, bool):
+            value = int(value)
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+        else:
+            match = re.search(r"-?\d+(?:\.\d+)?", str(value))
+            numeric = float(match.group(0)) if match else 0.0
+        numeric = max(0.0, min(100.0, numeric))
+        node.importance = int(numeric) if numeric.is_integer() else numeric
+
+
 async def process_one_reply(agent, other, social, time_step: int) -> dict:
     observation = await social.observe_social_space(agent.agent_id)
     inbox = observation.get("inbox", [])
@@ -156,6 +172,7 @@ async def process_one_reply(agent, other, social, time_step: int) -> dict:
     latest = inbox[-1]
     memory = observation_text(agent, observation)
     agent.brain.remember(memory, time_step=time_step)
+    _coerce_memory_importance(agent)
 
     query = f"Current interaction with {other.name}"
     retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
