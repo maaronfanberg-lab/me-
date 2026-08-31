@@ -16,6 +16,15 @@ MAX_REPLY_TURNS = 10
 DEFAULT_REPLY_TURNS = 8
 
 
+def write_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def append_jsonl(path: Path, payload: dict) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, separators=(",", ":")) + "\n")
+
+
 async def run_community_session(
     opener: str,
     reply_turns: int,
@@ -34,15 +43,26 @@ async def run_community_session(
     base_time_step = next_community_time_step(agents)
     social = SocialBridgeClient()
 
-    turns: list[dict] = []
+    REPLAY_DIR.mkdir(parents=True, exist_ok=True)
+    summary_path = REPLAY_DIR / "community_session.json"
+    stream_path = REPLAY_DIR / "community_session.jsonl"
+    if continuous_seconds > 0:
+        stream_path.write_text("", encoding="utf-8")
+
+    bounded_turns: list[dict] = []
     stop_reason = "turn_limit_reached"
     started = time.monotonic()
+    completed = 0
+    latest_turn: dict | None = None
 
     try:
         seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
         current = olivia
         other = emily
         offset = 0
+
+        if continuous_seconds > 0:
+            append_jsonl(stream_path, {"type": "seed", "seed": seed})
 
         while True:
             if continuous_seconds > 0:
@@ -59,7 +79,24 @@ async def run_community_session(
                 social,
                 time_step=base_time_step + offset,
             )
-            turns.append(turn)
+            completed += 1
+            latest_turn = turn
+
+            if continuous_seconds > 0:
+                append_jsonl(stream_path, {"type": "turn", "index": completed, "turn": turn})
+                write_json(
+                    summary_path,
+                    {
+                        "mode": "continuous_persistent_community_session",
+                        "status": "running",
+                        "start_time_step": base_time_step,
+                        "completed_reply_turns": completed,
+                        "continuous_seconds": continuous_seconds,
+                        "latest_turn": latest_turn,
+                    },
+                )
+            else:
+                bounded_turns.append(turn)
 
             action = turn.get("action", {})
             action_result = turn.get("action_result")
@@ -89,17 +126,18 @@ async def run_community_session(
             "autonomous_loop": continuous_seconds > 0,
         },
         "start_time_step": base_time_step,
-        "completed_reply_turns": len(turns),
+        "completed_reply_turns": completed,
         "stop_reason": stop_reason,
         "seed": seed,
-        "turns": turns,
+        "latest_turn": latest_turn,
     }
 
-    REPLAY_DIR.mkdir(parents=True, exist_ok=True)
-    (REPLAY_DIR / "community_session.json").write_text(
-        json.dumps(result, indent=2),
-        encoding="utf-8",
-    )
+    if continuous_seconds <= 0:
+        result["turns"] = bounded_turns
+
+    write_json(summary_path, result)
+    if continuous_seconds > 0:
+        append_jsonl(stream_path, {"type": "session_end", "summary": result})
     return result
 
 
