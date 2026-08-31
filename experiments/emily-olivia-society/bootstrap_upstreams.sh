@@ -66,6 +66,9 @@ if [[ ! -d "$BITNET_DIR/.git" ]]; then
   git clone --recursive "$BITNET_REPO" "$BITNET_DIR"
 else
   git -C "$BITNET_DIR" remote set-url origin "$BITNET_REPO"
+  # Cached BitNet builds modify generated tracked kernel files. Discard those
+  # build-time changes before switching to the tokenizer-fix commit.
+  git -C "$BITNET_DIR" reset --hard
 fi
 if [[ "$(git -C "$BITNET_DIR" rev-parse HEAD 2>/dev/null || true)" != "$BITNET_COMMIT" ]]; then
   git -C "$BITNET_DIR" fetch --depth 1 origin "$BITNET_COMMIT"
