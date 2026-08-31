@@ -89,6 +89,7 @@ async def run_community_session(
     latest_turn: dict | None = None
     resumed = False
     seed: dict = {}
+    dialogue_history: list[tuple[str, str]] = []
 
     try:
         pending: list[dict] = []
@@ -113,11 +114,13 @@ async def run_community_session(
             current = by_id[to_id]
             other = by_id[from_id]
             seed = {"success": True, "resumed": True, "message": message}
+            dialogue_history.append((other.name, str(message["content"])))
             resumed = True
         else:
             seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
             if seed.get("success") is not True:
                 raise RuntimeError("Seed message delivery failed.")
+            dialogue_history.append((emily.name, opener))
             current = olivia
             other = emily
 
@@ -149,9 +152,14 @@ async def run_community_session(
                 other,
                 social,
                 time_step=base_time_step + offset,
+                dialogue_history=dialogue_history,
             )
             completed += 1
             latest_turn = turn
+
+            action = turn.get("action", {})
+            if action.get("type") == "message":
+                dialogue_history.append((current.name, str(action.get("content", ""))))
 
             if continuous_seconds > 0:
                 append_jsonl(
@@ -180,7 +188,6 @@ async def run_community_session(
             else:
                 bounded_turns.append(turn)
 
-            action = turn.get("action", {})
             action_result = turn.get("action_result")
             if action.get("type") != "message":
                 stop_reason = str(action.get("reason", "agent_did_not_message"))
