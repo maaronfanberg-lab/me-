@@ -69,11 +69,22 @@ jobs:
           echo "run=$run" >> "$GITHUB_OUTPUT"
           echo "Central offset=$offset schedule=$schedule run=$run"
 
-      - name: Check out Community runtime from main
+      - name: Resolve Community checkout ref
+        if: steps.gate.outputs.run == 'true'
+        id: checkout-ref
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "ref=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out Community runtime
         if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ steps.checkout-ref.outputs.ref }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
