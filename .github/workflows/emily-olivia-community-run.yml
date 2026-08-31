@@ -12,16 +12,14 @@ on:
         required: false
         default: "8"
   schedule:
-    # Four Central-time handoff slots. Each slot has a CDT and CST UTC form;
-    # the first gate below keeps only the one matching the current UTC offset.
-    - cron: "0 10 * * *"   # 05:00 CDT
-    - cron: "0 11 * * *"   # 05:00 CST
-    - cron: "30 15 * * *"  # 10:30 CDT
-    - cron: "30 16 * * *"  # 10:30 CST
-    - cron: "0 21 * * *"   # 16:00 CDT
-    - cron: "0 22 * * *"   # 16:00 CST
-    - cron: "30 2 * * *"   # 21:30 CDT
-    - cron: "30 3 * * *"   # 21:30 CST
+    - cron: "0 10 * * *"
+    - cron: "0 11 * * *"
+    - cron: "30 15 * * *"
+    - cron: "30 16 * * *"
+    - cron: "0 21 * * *"
+    - cron: "0 22 * * *"
+    - cron: "30 2 * * *"
+    - cron: "30 3 * * *"
 
 concurrency:
   group: emily-olivia-community
@@ -36,11 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
-      # Stanford's pinned settings module expects these names to exist, but
-      # generation is now fully local through llama.cpp and never calls OpenAI.
       OPENAI_API_KEY: local-no-api-key
       AGENTSOCIETY_LLM_API_KEY: local-no-api-key
-      COMMUNITY_LOCAL_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
+      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
       GH_TOKEN: ${{ github.token }}
       TZ: America/Chicago
     steps:
@@ -52,16 +49,13 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           offset="$(date +%z)"
           schedule="${{ github.event.schedule }}"
           run=false
-
           case "$offset:$schedule" in
             '-0500:0 10 * * *'|'-0500:30 15 * * *'|'-0500:0 21 * * *'|'-0500:30 2 * * *') run=true ;;
             '-0600:0 11 * * *'|'-0600:30 16 * * *'|'-0600:0 22 * * *'|'-0600:30 3 * * *') run=true ;;
           esac
-
           echo "run=$run" >> "$GITHUB_OUTPUT"
           echo "Central offset=$offset schedule=$schedule run=$run"
 
@@ -74,7 +68,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Cache Community runtime and local model
+      - name: Cache Community runtime and BitNet
         if: steps.gate.outputs.run == 'true'
         uses: actions/cache@v4
         with:
@@ -83,10 +77,10 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v4
-          key: community-runtime-local-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
+            experiments/emily-olivia-society/.bootstrap-ready-v5
+          key: community-runtime-bitnet-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
 
-      - name: Bootstrap pinned research code and free local model
+      - name: Bootstrap pinned research code and free BitNet model
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: bash bootstrap_upstreams.sh
