@@ -1,11 +1,13 @@
 name: Emily Olivia BitNet Smoke
 
-# Manual probe trigger: 2026-08-31
 on:
+  workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
       - '.github/workflows/emily-olivia-local-smoke.yml'
-      - 'experiments/emily-olivia-society/bootstrap_upstreams.sh'
+      - 'experiments/emily-olivia-society/**'
 
 permissions:
   contents: read
@@ -35,7 +37,6 @@ jobs:
             experiments/emily-olivia-society/models
             experiments/emily-olivia-society/.bootstrap-ready-v6
           key: community-runtime-bitnet-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
-          save-always: true
       - name: Bootstrap BitNet
         working-directory: experiments/emily-olivia-society
         run: bash bootstrap_upstreams.sh
