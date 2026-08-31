@@ -10,7 +10,7 @@ BITNET_COMMIT="0b341e582afbf9e1011f24744b554c96a3477eb5"
 BITNET_DIR="$VENDOR/BitNet"
 MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
-MODEL_SOURCE_SENTINEL="$MODEL_DIR/model.safetensors"
+BITNET_GGUF_REPO="microsoft/BitNet-b1.58-2B-4T-gguf"
 READY_MARKER="$HERE/.bootstrap-ready-v8"
 
 restore_real_cli() {
@@ -72,26 +72,21 @@ git -C "$BITNET_DIR" submodule update --init --recursive
 
 "$STANFORD_VENV/bin/python" -m pip install --disable-pip-version-check -r "$BITNET_DIR/requirements.txt"
 
-# Download Microsoft's full source model only when the cached runtime does not
-# already contain a usable quantized GGUF. A missing generation marker must not
-# force a destructive re-quantization of a known-good cached model.
-if [[ ! -s "$MODEL_FILE" && ! -s "$MODEL_SOURCE_SENTINEL" ]]; then
-  echo "Downloading Microsoft's full BitNet b1.58 2B source model and tokenizer..."
+# Microsoft publishes the official I2_S GGUF directly. Use that artifact rather
+# than rebuilding a 1.58-bit model from the full source weights on every cache
+# miss. setup_env.py will still compile the pinned BitNet runtime, but because
+# MODEL_FILE already exists it skips the failing local llama-quantize pass.
+if [[ ! -s "$MODEL_FILE" ]]; then
+  echo "Downloading Microsoft's published BitNet I2_S GGUF..."
   "$STANFORD_VENV/bin/huggingface-cli" download \
-    microsoft/BitNet-b1.58-2B-4T \
+    "$BITNET_GGUF_REPO" \
+    ggml-model-i2_s.gguf \
     --local-dir "$MODEL_DIR"
 fi
 
 restore_real_cli
-if [[ ! -s "$MODEL_FILE" ]]; then
-  echo "Generating BitNet I2_S GGUF because no cached quantized model exists..."
-  rm -f "$MODEL_DIR/ggml-model-f32.gguf"
-  pushd "$BITNET_DIR" >/dev/null
-  "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s
-  popd >/dev/null
-  rm -f "$MODEL_DIR/ggml-model-f32.gguf"
-elif [[ ! -x "$BITNET_DIR/build/bin/llama-cli" || ! -x "$BITNET_DIR/build/bin/llama-server" ]]; then
-  echo "Building the full BitNet runtime once..."
+if [[ ! -x "$BITNET_DIR/build/bin/llama-cli" || ! -x "$BITNET_DIR/build/bin/llama-server" ]]; then
+  echo "Building the full BitNet runtime once around the published GGUF..."
   pushd "$BITNET_DIR" >/dev/null
   "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s
   popd >/dev/null
