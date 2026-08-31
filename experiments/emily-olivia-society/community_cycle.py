@@ -4,8 +4,9 @@ from __future__ import annotations
 """Runtime guard around the preserved Emily + Olivia dialogue generator.
 
 The implementation lives in community_cycle_impl.py.  This thin layer keeps the
-strict grounding validator, adds cross-speaker echo protection, and guarantees
-that the deterministic recovery path itself satisfies that same validator.
+strict grounding validator, adds cross-speaker echo protection, blocks internal
+self-repetition, and guarantees that deterministic recovery satisfies the same
+quality bar.
 """
 
 import asyncio
@@ -25,8 +26,33 @@ _DAY_BACKSTORY = re.compile(
 _RECOVERY_NOISE = {
     "anything", "doing", "fine", "glad", "good", "great", "like", "make", "making",
     "okay", "plan", "planning", "start", "starting", "thing", "things", "trying", "want",
-    "well", "going",
+    "well", "going", "detail", "details", "part", "parts", "next",
 }
+_VAGUE_ANCHORS = {
+    "anything", "detail", "details", "part", "parts", "something", "thing", "things",
+    "next", "that", "this", "it", "idea", "ideas",
+}
+
+
+def _has_internal_repetition(text: str) -> bool:
+    """Reject obvious repeated clauses/sentences inside a single generated utterance."""
+    pieces = [
+        " ".join(_base._normalize_words(piece))
+        for piece in re.split(r"[.!?;]+", str(text))
+        if " ".join(_base._normalize_words(piece))
+    ]
+    if len(pieces) >= 2 and len(set(pieces)) < len(pieces):
+        return True
+
+    words = _base._normalize_words(str(text))
+    for size in range(3, min(9, max(3, len(words) // 2 + 1))):
+        seen: set[tuple[str, ...]] = set()
+        for i in range(0, len(words) - size + 1):
+            gram = tuple(words[i : i + size])
+            if gram in seen:
+                return True
+            seen.add(gram)
+    return False
 
 
 def _is_usable_utterance(
@@ -35,8 +61,10 @@ def _is_usable_utterance(
     agent_name: str = "",
     other_name: str = "",
 ) -> bool:
-    """Keep the upstream validator strict and reject invented work lore on a blank check-in."""
+    """Keep the upstream validator strict and add repetition/backstory guards."""
     if not _original_usable(text, inbound, agent_name, other_name):
+        return False
+    if _has_internal_repetition(str(text)):
         return False
     if inbound and _impl._is_day_checkin(inbound) and _DAY_BACKSTORY.search(str(text)):
         return False
@@ -87,7 +115,7 @@ def _too_similar_to_own_history(
 def _recovery_anchor(inbound: str) -> str:
     anchors = _impl._grounding_words(inbound, limit=8)
     for word in reversed(anchors):
-        if word not in _RECOVERY_NOISE:
+        if word not in _RECOVERY_NOISE and word not in _VAGUE_ANCHORS:
             return word
     return ""
 
@@ -126,21 +154,21 @@ def _recovery_reply(
         ]
     elif _impl._is_open_question(inbound) and anchor:
         candidates = [
-            f"I haven't decided on the {anchor} details yet.",
             f"For {anchor}, I'd keep it simple at first.",
+            f"I'd probably start with one small piece of {anchor}.",
             f"The {anchor} part is what I'd think about first.",
         ]
     elif anchor:
         candidates = [
-            f"That makes sense about {anchor}. What happened next?",
-            f"The {anchor} part caught my attention. What do you think about it?",
-            f"I get what you mean about {anchor}. Where do you want to take it?",
+            f"What happened with {anchor} after that?",
+            f"What do you think about {anchor} now?",
+            f"Where do you want to take {anchor} from here?",
         ]
     else:
         candidates = [
-            "That makes sense. What are you thinking about now?",
-            "Fair enough. What happened next?",
-            "That makes sense. Where do you want to go from here?",
+            "What happened next?",
+            "What are you thinking about now?",
+            "Where do you want to go from here?",
         ]
 
     prior_lines = {
@@ -148,34 +176,30 @@ def _recovery_reply(
         for _speaker, text in (dialogue_history or [])
         if str(text).strip()
     }
+    other_name = "Olivia" if agent.name == "Emily" else "Emily"
     for candidate in candidates:
         normalized = " ".join(_base._normalize_words(candidate))
         if normalized in prior_lines:
             continue
         if _too_similar_to_own_history(candidate, agent.name, dialogue_history):
             continue
-        if _is_usable_utterance(candidate, inbound, agent.name, "Olivia" if agent.name == "Emily" else "Emily"):
+        if _is_usable_utterance(candidate, inbound, agent.name, other_name):
             return candidate
 
-    # These are deliberately acknowledgement-based because the preserved validator explicitly
-    # permits a short acknowledgement when an inbound line has no useful lexical anchor.
     for candidate in (
-        "That makes sense. What happened next?",
-        "Fair enough. What are you thinking now?",
+        "What happened next?",
+        "What are you thinking now?",
     ):
-        if _is_usable_utterance(candidate, inbound, agent.name, "Olivia" if agent.name == "Emily" else "Emily"):
+        if _is_usable_utterance(candidate, inbound, agent.name, other_name):
             return candidate
 
     raise RuntimeError(f"{agent.name} recovery could not produce a grounded natural-language utterance.")
 
 
-# Patch the preserved implementation in-place. Its direct generator resolves these names from
-# its module globals at call time, while base choose_action resolves the validator from _base.
 _impl._too_similar_to_own_history = _too_similar_to_own_history
 _impl._recovery_reply = _recovery_reply
 _base._is_usable_utterance = _is_usable_utterance
 
-# Explicit compatibility exports used by the rest of the Community runtime and smoke checks.
 CommunityAgent = _base.CommunityAgent
 load_agents = _impl.load_agents
 observation_text = _impl.observation_text
