@@ -12,9 +12,7 @@ BITNET_DIR="$VENDOR/BitNet"
 MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
 BITNET_SOURCE_REPO="microsoft/BitNet-b1.58-2B-4T"
-# Keep the workflow-compatible marker name until the workflow cache block is
-# migrated. The portable signature below is the real generation guard.
-READY_MARKER="$HERE/.bootstrap-ready-v8"
+READY_MARKER="$HERE/.bootstrap-ready-v9"
 PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v10"
 
 restore_real_cli() {
@@ -43,7 +41,7 @@ if runtime_ready; then
   exit 0
 fi
 
-rm -f "$HERE/.bootstrap-ready-v7" "$HERE/.bootstrap-ready-v9" "$READY_MARKER"
+rm -f "$HERE/.bootstrap-ready-v7" "$HERE/.bootstrap-ready-v8" "$READY_MARKER"
 mkdir -p "$VENDOR" "$MODEL_DIR"
 
 if [[ ! -x "$AS_VENV/bin/python" ]]; then
@@ -70,8 +68,6 @@ if [[ ! -d "$BITNET_DIR/.git" ]]; then
   git clone --recursive "$BITNET_REPO" "$BITNET_DIR"
 else
   git -C "$BITNET_DIR" remote set-url origin "$BITNET_REPO"
-  # Cached BitNet builds modify generated tracked kernel files. Discard those
-  # build-time changes before switching to the tokenizer-fix commit.
   git -C "$BITNET_DIR" reset --hard
 fi
 if [[ "$(git -C "$BITNET_DIR" rev-parse HEAD 2>/dev/null || true)" != "$BITNET_COMMIT" ]]; then
@@ -82,10 +78,6 @@ git -C "$BITNET_DIR" submodule update --init --recursive
 
 "$STANFORD_VENV/bin/python" -m pip install --disable-pip-version-check -r "$BITNET_DIR/requirements.txt"
 
-# Ubuntu 24.04 BitNet users have repeatedly hit compiler-selection and
-# const-correctness failures. Prefer Clang 18 (the documented less-strict
-# working path), then 19, while still letting setup_env.py use its hard-coded
-# unversioned clang/clang++ names.
 COMPILER_BIN="$HERE/.bitnet-compiler-bin"
 rm -rf "$COMPILER_BIN"
 mkdir -p "$COMPILER_BIN"
@@ -105,9 +97,6 @@ fi
 export PATH="$COMPILER_BIN:$PATH"
 echo "BitNet compiler: $(clang --version | head -n 1)"
 
-# Clang 20 exposes a known upstream const-correctness bug in this source. The
-# pointer is read-only, so apply the same minimal fix documented by BitNet
-# Ubuntu users when the old line is present.
 BITNET_MAD="$BITNET_DIR/src/ggml-bitnet-mad.cpp"
 if [[ -f "$BITNET_MAD" ]]; then
   "$STANFORD_VENV/bin/python" - "$BITNET_MAD" <<'PY'
@@ -129,10 +118,6 @@ else:
 PY
 fi
 
-# GitHub-hosted x86 runners are not guaranteed to expose identical CPU feature
-# sets. llama.cpp defaults GGML_NATIVE=ON, so a cached executable built on one
-# runner can be unsafe on another. Patch the pinned setup script to build the
-# reusable runtime with the explicit portable x86 feature set instead.
 BITNET_SETUP="$BITNET_DIR/setup_env.py"
 "$STANFORD_VENV/bin/python" - "$BITNET_SETUP" <<'PY'
 from pathlib import Path
@@ -152,9 +137,6 @@ if '"-DGGML_NATIVE=OFF"' not in path.read_text(encoding="utf-8"):
 print("BitNet setup patched with GGML_NATIVE=OFF for cross-runner cache safety.")
 PY
 
-# Microsoft's prebuilt GGUF is missing tokenizer.ggml.pre metadata and produces
-# repeated/garbled text with bitnet.cpp. Use the tokenizer-fix fork and
-# regenerate I2_S from the original model weights once, then cache the result.
 if [[ ! -f "$MODEL_DIR/config.json" || ! -f "$MODEL_DIR/tokenizer.json" ]]; then
   echo "Downloading original BitNet weights and tokenizer metadata..."
   "$STANFORD_VENV/bin/huggingface-cli" download \
@@ -162,7 +144,6 @@ if [[ ! -f "$MODEL_DIR/config.json" || ! -f "$MODEL_DIR/tokenizer.json" ]]; then
     --local-dir "$MODEL_DIR"
 fi
 
-# Reject any older published/native GGUF/build pair when entering this rebuild.
 rm -f "$MODEL_FILE" "$PORTABLE_BUILD_SIGNATURE"
 rm -rf "$BITNET_DIR/build"
 
