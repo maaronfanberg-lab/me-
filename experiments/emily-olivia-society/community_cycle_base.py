@@ -516,22 +516,5 @@ async def main() -> None:
     await run_one_cycle()
 
 
-async def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Run one bounded Emily + Olivia community cycle."
-    )
-    parser.add_argument(
-        "--one-cycle",
-        action="store_true",
-        help="Permit exactly one bounded cycle per agent.",
-    )
-    args = parser.parse_args()
-    if not args.one_cycle:
-        raise SystemExit(
-            "Refusing to start automatically. Use --one-cycle to permit exactly one bounded cycle."
-        )
-    await run_one_cycle()
-
-
 if __name__ == "__main__":
     asyncio.run(main())
