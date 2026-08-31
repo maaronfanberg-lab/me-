@@ -36,8 +36,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      AGENTSOCIETY_LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # Stanford's pinned settings module expects these names to exist, but
+      # generation is now fully local through llama.cpp and never calls OpenAI.
+      OPENAI_API_KEY: local-no-api-key
+      AGENTSOCIETY_LLM_API_KEY: local-no-api-key
+      COMMUNITY_LOCAL_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
       GH_TOKEN: ${{ github.token }}
       TZ: America/Chicago
     steps:
@@ -71,7 +74,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Cache Community runtime
+      - name: Cache Community runtime and local model
         if: steps.gate.outputs.run == 'true'
         uses: actions/cache@v4
         with:
@@ -79,18 +82,11 @@ jobs:
             experiments/emily-olivia-society/.venv-agentsociety
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
-            experiments/emily-olivia-society/.bootstrap-ready-v3
-          key: community-runtime-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v4
+          key: community-runtime-local-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
 
-      - name: Require model secret
-        if: steps.gate.outputs.run == 'true'
-        run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "OPENAI_API_KEY repository secret is missing."
-            exit 1
-          fi
-
-      - name: Bootstrap pinned research code
+      - name: Bootstrap pinned research code and free local model
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: bash bootstrap_upstreams.sh
