@@ -5,16 +5,20 @@ import asyncio
 import json
 import os
 import sys
+from pathlib import Path
 
 if not os.environ.get("AGENTSOCIETY_LLM_API_KEY") and os.environ.get("OPENAI_API_KEY"):
     os.environ["AGENTSOCIETY_LLM_API_KEY"] = os.environ["OPENAI_API_KEY"]
 
 from controlled_social_space import ControlledSocialSpace
 
+HERE = Path(__file__).resolve().parent
+SOCIAL_STATE = HERE / "replay" / "social_state.json"
+
 
 async def main() -> None:
     pairs = [(1, "Emily"), (2, "Olivia")]
-    social = ControlledSocialSpace(pairs)
+    social = ControlledSocialSpace(pairs, state_path=SOCIAL_STATE)
 
     for raw in sys.stdin:
         raw = raw.strip()
