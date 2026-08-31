@@ -34,11 +34,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
-      OPENAI_API_KEY: local-no-api-key
-      AGENTSOCIETY_LLM_API_KEY: local-no-api-key
       COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
       COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
       COMMUNITY_BITNET_PORT: '8080'
+      COMMUNITY_BITNET_START_TIMEOUT: '900'
+      COMMUNITY_GENERATION_TIMEOUT: '900'
+      COMMUNITY_MAX_TOKENS: '64'
       GH_TOKEN: ${{ github.token }}
       TZ: America/Chicago
     steps:
@@ -69,6 +70,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Validate Community Python before expensive work
+        if: steps.gate.outputs.run == 'true'
+        working-directory: experiments/emily-olivia-society
+        run: python3 -m py_compile bitnet_server.py patch_stanford_local.py community_session.py controlled_social_space.py restore_latest_checkpoint.sh 2>/dev/null || python3 -m py_compile bitnet_server.py patch_stanford_local.py community_session.py controlled_social_space.py
+
       - name: Restore Community runtime and BitNet
         id: bitnet-cache
         if: steps.gate.outputs.run == 'true'
@@ -79,15 +85,26 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v6
-          key: community-runtime-bitnet-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
+            experiments/emily-olivia-society/.bootstrap-ready-v7
+          key: community-runtime-bitnet-v7-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
           restore-keys: |
+            community-runtime-bitnet-v7-${{ runner.os }}-py311-
             community-runtime-bitnet-${{ runner.os }}-py311-
 
-      - name: Bootstrap pinned research code and free BitNet model
+      - name: Bootstrap pinned research code and free BitNet build
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
-        run: bash bootstrap_upstreams.sh
+        run: timeout 55m bash bootstrap_upstreams.sh
+
+      - name: Verify build artifacts before caching
+        if: steps.gate.outputs.run == 'true'
+        working-directory: experiments/emily-olivia-society
+        run: |
+          test -x vendor/BitNet/build/bin/llama-cli
+          test -x vendor/BitNet/build/bin/llama-server
+          test -s models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
+          test -f .bootstrap-ready-v7
+          grep -q 'COMMUNITY_BITNET_HTTP_V1' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Save Community runtime and BitNet immediately after bootstrap
         if: steps.gate.outputs.run == 'true' && steps.bitnet-cache.outputs.cache-hit != 'true'
@@ -98,20 +115,20 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v6
+            experiments/emily-olivia-society/.bootstrap-ready-v7
           key: ${{ steps.bitnet-cache.outputs.cache-primary-key }}
 
       - name: Start one persistent BitNet server
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
-        run: python3 bitnet_server.py start
+        run: timeout 20m python3 bitnet_server.py start
 
       - name: Confirm persistent BitNet server
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
           python3 bitnet_server.py status
-          python3 bitnet_server.py probe
+          timeout 16m python3 bitnet_server.py probe
 
       - name: Restore latest successful memory checkpoint
         if: steps.gate.outputs.run == 'true'
@@ -145,23 +162,23 @@ jobs:
               echo "Quiet time has begun."
               exit 0
             fi
-            continuous_seconds=19800
+            continuous_seconds=18600
             if [ "$seconds_until_quiet" -lt "$continuous_seconds" ]; then
               continuous_seconds="$seconds_until_quiet"
             fi
-            OPENER="Let's continue naturally from where we left off."
             .venv-stanford/bin/python community_session.py \
               --run \
               --continuous-seconds "$continuous_seconds" \
               --turn-delay-seconds 60 \
-              --opener "$OPENER"
+              --opener "Let's continue naturally from where we left off."
           else
             if [ -z "$OPENER" ]; then OPENER="Hello, Olivia."; fi
             if [ -z "$TURNS" ]; then TURNS="8"; fi
-            .venv-stanford/bin/python community_session.py \
-              --run \
-              --turns "$TURNS" \
-              --opener "$OPENER"
+            if ! [[ "$TURNS" =~ ^[0-9]+$ ]] || [ "$TURNS" -lt 2 ] || [ "$TURNS" -gt 10 ]; then
+              echo "turns must be an integer from 2 through 10" >&2
+              exit 2
+            fi
+            .venv-stanford/bin/python community_session.py --run --turns "$TURNS" --opener "$OPENER"
           fi
 
       - name: Verify persistence and reflection
@@ -169,20 +186,32 @@ jobs:
         working-directory: experiments/emily-olivia-society
         run: .venv-stanford/bin/python persistence_reflection.py --run
 
+      - name: Verify handoff evidence exists
+        if: steps.gate.outputs.run == 'true'
+        working-directory: experiments/emily-olivia-society
+        run: |
+          test -s replay/social_state.json
+          test -d workspaces/emily
+          test -d workspaces/olivia
+          python3 bitnet_server.py status
+
       - name: Generate compact read-only observer report
         if: always() && steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
-        run: python3 observer.py --summary > replay/observer.json
+        run: |
+          mkdir -p replay
+          python3 observer.py --summary > replay/observer.json || true
 
       - name: Upload community results
         if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: emily-olivia-community-results
+          retention-days: 14
           path: |
             experiments/emily-olivia-society/replay/
             experiments/emily-olivia-society/workspaces/
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Stop BitNet server
         if: always() && steps.gate.outputs.run == 'true'
