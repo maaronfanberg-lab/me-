@@ -126,18 +126,24 @@ def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max
     """Use llama-server's chat endpoint so the GGUF's own template serializes dialogue."""
     system = (
         f"You are {agent.name}. You are speaking privately with {other.name}. "
-        "Reply naturally and briefly to the other person. Do not repeat the prompt, "
-        "instructions, role labels, or the other person's whole message."
+        f"The latest message was written by {other.name}; answer that exact message and stay on its topic. "
+        "Reply naturally and briefly as one person in an ongoing conversation. Do not invent a different scenario, "
+        "give generic advice unrelated to the message, repeat the prompt, instructions, role labels, or the other person's whole message."
     )
-    return request_chat(system, inbound, max_tokens, 0.6)
+    user = f"{other.name} just said: {inbound}\n\nReply directly to {other.name}."
+    return request_chat(system, user, max_tokens, 0.5)
 
 
 def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
     max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
-    text = _chat_bitnet(agent, other, inbound, max_tokens)
-    if not _is_usable_utterance(text, inbound):
-        raise RuntimeError(f"BitNet returned template-like, echoed, or unusable dialogue: {text[:240]!r}")
-    return text
+    attempts: list[str] = []
+    for _ in range(3):
+        text = _chat_bitnet(agent, other, inbound, max_tokens).strip()
+        attempts.append(text)
+        if _is_usable_utterance(text, inbound):
+            return text
+    previews = " | ".join(repr(text[:160]) for text in attempts)
+    raise RuntimeError(f"BitNet returned unusable dialogue after 3 grounded attempts: {previews}")
 
 
 def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgent) -> dict:
