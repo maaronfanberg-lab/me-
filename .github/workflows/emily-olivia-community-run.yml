@@ -30,6 +30,7 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       AGENTSOCIETY_LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GH_TOKEN: ${{ github.token }}
+      TZ: America/Chicago
     steps:
       - name: Check out isolated community branch
         uses: actions/checkout@v4
@@ -68,10 +69,26 @@ jobs:
           OPENER="${{ github.event.inputs.opener }}"
           TURNS="${{ github.event.inputs.turns }}"
           if [ "${{ github.event_name }}" = "schedule" ]; then
+            hour="$(date +%H)"
+            if [ "$hour" -ge 22 ] || [ "$hour" -lt 5 ]; then
+              echo "Community quiet hours are 10:00 PM to 5:00 AM America/Chicago."
+              exit 0
+            fi
+            now_epoch="$(date +%s)"
+            quiet_epoch="$(date -d 'today 22:00' +%s)"
+            seconds_until_quiet="$((quiet_epoch - now_epoch))"
+            if [ "$seconds_until_quiet" -le 0 ]; then
+              echo "Quiet time has begun."
+              exit 0
+            fi
+            continuous_seconds=19800
+            if [ "$seconds_until_quiet" -lt "$continuous_seconds" ]; then
+              continuous_seconds="$seconds_until_quiet"
+            fi
             OPENER="Let's continue naturally from where we left off."
             .venv-stanford/bin/python community_session.py \
               --run \
-              --continuous-seconds 19800 \
+              --continuous-seconds "$continuous_seconds" \
               --opener "$OPENER"
           else
             if [ -z "$OPENER" ]; then OPENER="Hello, Olivia."; fi
