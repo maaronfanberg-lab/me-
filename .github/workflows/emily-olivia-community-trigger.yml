@@ -29,6 +29,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # One dispatch only; Community concurrency replaces stale runs.
+          # A valid pending social message still takes precedence inside the runtime. If
+          # checkpoint sanitation forces a clean restart, this gives Emily a concrete,
+          # ordinary opener instead of pretending there is clean context to resume.
           gh workflow run emily-olivia-community-run.yml \
             --repo "$GITHUB_REPOSITORY" \
-            --ref main
+            --ref main \
+            -f opener="Hey Olivia. How's your day going?"
