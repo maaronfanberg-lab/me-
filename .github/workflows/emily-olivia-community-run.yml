@@ -7,7 +7,7 @@ on:
       opener:
         description: "Emily's opening message"
         required: false
-        default: "Hello, Olivia."
+        default: "Olivia, what's something small that can make an ordinary day better?"
       turns:
         description: "Maximum reply turns (2-10) for manual bounded runs"
         required: false
@@ -182,7 +182,7 @@ jobs:
               --turn-delay-seconds 60 \
               --opener "Let's continue naturally from where we left off."
           else
-            [ -n "$OPENER" ] || OPENER="Hello, Olivia."
+            [ -n "$OPENER" ] || OPENER="Olivia, what's something small that can make an ordinary day better?"
             [ -n "$TURNS" ] || TURNS="8"
             if ! [[ "$TURNS" =~ ^[0-9]+$ ]] || [ "$TURNS" -lt 2 ] || [ "$TURNS" -gt 10 ]; then
               echo "turns must be an integer from 2 through 10" >&2
@@ -191,37 +191,46 @@ jobs:
             .venv-stanford/bin/python community_session.py --run --turns "$TURNS" --opener "$OPENER"
           fi
 
-      - name: Verify session integrity and natural dialogue
+      - name: Verify session integrity and grounded natural dialogue
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
           python3 - <<'PY'
-          import json, re
+          import json
           from pathlib import Path
+          from community_cycle import _is_usable_utterance
 
-          def assert_natural(text):
-              if not isinstance(text, str) or not text.strip(): raise SystemExit('empty dialogue')
-              lowered=text.lower()
-              forbidden=('generation error:','return only the words you would say','"utterance"',"'utterance'",'fill in >','[input]:')
-              if any(piece in lowered for piece in forbidden): raise SystemExit(f'template/echo dialogue: {text[:240]!r}')
-              labels=re.findall(r'(?im)^\s*(emily|olivia|user|assistant)\s*:', text)
-              if len(labels)>1: raise SystemExit(f'multi-speaker template dialogue: {text[:240]!r}')
-              if len(re.findall(r"[a-z0-9']+", lowered))<2: raise SystemExit(f'too little dialogue: {text!r}')
-
-          p=Path('replay/community_session.json')
+          p = Path('replay/community_session.json')
           if not p.is_file(): raise SystemExit('community_session.json missing')
-          d=json.loads(p.read_text())
+          d = json.loads(p.read_text())
           if d.get('status') != 'completed': raise SystemExit('community session did not complete cleanly')
-          if int(d.get('completed_reply_turns',0)) < 1: raise SystemExit('no completed reply turns')
-          turns=d.get('turns') or []
-          candidates=turns if turns else ([d.get('latest_turn')] if d.get('latest_turn') else [])
+          completed = int(d.get('completed_reply_turns', 0))
+          if completed < 1: raise SystemExit('no completed reply turns')
+          turns = d.get('turns') or []
+          if d.get('mode') == 'bounded_persistent_community_session':
+              requested = int(d.get('limits', {}).get('requested_reply_turns', 0))
+              if requested < 2 or completed != requested: raise SystemExit(f'bounded session stopped early: {completed}/{requested}')
+              if d.get('stop_reason') != 'turn_limit_reached': raise SystemExit(f'unexpected bounded stop reason: {d.get("stop_reason")!r}')
+              if len(turns) != requested: raise SystemExit('bounded turn evidence incomplete')
+              candidates = turns
+          else:
+              candidates = turns if turns else ([d.get('latest_turn')] if d.get('latest_turn') else [])
           if not candidates: raise SystemExit('no turn evidence persisted')
+
+          outputs = []
           for t in candidates:
-              action=t.get('action',{})
-              if action.get('type')=='message':
-                  assert_natural(action.get('content'))
-                  if t.get('action_result',{}).get('success') is not True: raise SystemExit('undelivered message in replay')
-                  if t.get('consumed_inbound') is not True: raise SystemExit('delivered reply did not consume inbound')
+              action = t.get('action', {})
+              if action.get('type') != 'message': raise SystemExit(f'non-message turn in completed session: {t!r}')
+              inbox = t.get('observation', {}).get('inbox', [])
+              if not isinstance(inbox, list) or not inbox: raise SystemExit(f'missing inbound evidence: {t!r}')
+              inbound = str(inbox[-1].get('content', ''))
+              content = str(action.get('content', ''))
+              if not _is_usable_utterance(content, inbound):
+                  raise SystemExit(f'ungrounded or unnatural dialogue: inbound={inbound[:180]!r} reply={content[:240]!r}')
+              if t.get('action_result', {}).get('success') is not True: raise SystemExit('undelivered message in replay')
+              if t.get('consumed_inbound') is not True: raise SystemExit('delivered reply did not consume inbound')
+              outputs.append(' '.join(content.lower().split()))
+          if len(set(outputs)) != len(outputs): raise SystemExit('duplicate reply detected in completed conversation')
           if Path('replay/community_session_error.json').exists(): raise SystemExit('community session error evidence exists')
           print(json.dumps(d, indent=2))
           PY
