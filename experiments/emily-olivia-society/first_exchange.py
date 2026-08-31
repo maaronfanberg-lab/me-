@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -26,6 +27,8 @@ class SocialBridgeClient:
     def __init__(self) -> None:
         if not AGENTSOCIETY_PYTHON.exists():
             raise SystemExit("AgentSociety environment is missing. Run bootstrap_upstreams.sh first.")
+        bridge_env = os.environ.copy()
+        bridge_env.setdefault("AGENTSOCIETY_LLM_API_KEY", "local-no-api-key")
         self.proc = subprocess.Popen(
             [str(AGENTSOCIETY_PYTHON), str(BRIDGE)],
             stdin=subprocess.PIPE,
@@ -33,6 +36,7 @@ class SocialBridgeClient:
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
+            env=bridge_env,
         )
 
     def _call(self, payload: dict) -> dict:
