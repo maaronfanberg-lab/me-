@@ -13,7 +13,7 @@ MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
 BITNET_SOURCE_REPO="microsoft/BitNet-b1.58-2B-4T"
 READY_MARKER="$HERE/.bootstrap-ready-v9"
-PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v11"
+PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v12"
 
 restore_real_cli() {
   if [[ -e "$BITNET_DIR/build/bin/llama-cli.real" ]]; then
@@ -118,6 +118,36 @@ else:
 PY
 fi
 
+# BitNet b1.58 2B 4T was trained with relu2. The pinned llama.cpp BitNet graph
+# hard-codes SiLU, which produces finite but incorrect logits. Patch only the
+# BitNet graph builder, using the RELU_SQR operation already present upstream.
+LLAMA_CPP="$BITNET_DIR/3rdparty/llama.cpp/src/llama.cpp"
+"$STANFORD_VENV/bin/python" - "$LLAMA_CPP" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+marker = "struct ggml_cgraph * build_bitnet_158()"
+start = text.find(marker)
+if start < 0:
+    raise SystemExit("Could not locate pinned build_bitnet_158 graph builder")
+end = text.find("struct ggml_cgraph *", start + len(marker))
+if end < 0:
+    end = len(text)
+segment = text[start:end]
+if "LLM_FFN_RELU_SQR" in segment:
+    print("BitNet relu2 graph patch already present.")
+else:
+    count = segment.count("LLM_FFN_SILU")
+    if count != 1:
+        raise SystemExit(f"Expected exactly one BitNet SiLU FFN activation, found {count}")
+    segment = segment.replace("LLM_FFN_SILU", "LLM_FFN_RELU_SQR", 1)
+    text = text[:start] + segment + text[end:]
+    path.write_text(text, encoding="utf-8")
+    print("Patched BitNet FFN activation from SiLU to relu2 (RELU_SQR).")
+PY
+
 BITNET_SETUP="$BITNET_DIR/setup_env.py"
 "$STANFORD_VENV/bin/python" - "$BITNET_SETUP" <<'PY'
 from pathlib import Path
@@ -131,29 +161,26 @@ if '"-DGGML_NATIVE=OFF"' not in text:
     if needle not in text:
         raise SystemExit("Could not locate pinned BitNet CMake argument list for portable-build patch")
     text = text.replace(needle, replacement, 1)
-    path.write_text(text, encoding="utf-8")
-if '"-DGGML_NATIVE=OFF"' not in path.read_text(encoding="utf-8"):
+
+# The generic HF converter has repeatedly rejected Microsoft's BitNet checkpoint
+# despite architecture aliases. The pinned BitNet fork ships a converter made
+# specifically for Microsoft's safetensors and tokenizer metadata, so use it for
+# the F32 staging GGUF before the existing I2_S quantization step.
+generic = '"utils/convert-hf-to-gguf-bitnet.py", model_dir, "--outtype", "f32"'
+microsoft = '"utils/convert-ms-to-gguf-bitnet.py", model_dir, "--outtype", "f32"'
+if microsoft not in text:
+    if generic not in text:
+        raise SystemExit("Could not locate pinned BitNet F32 conversion command")
+    text = text.replace(generic, microsoft, 1)
+
+updated = path.read_text(encoding="utf-8") if False else text
+path.write_text(updated, encoding="utf-8")
+check = path.read_text(encoding="utf-8")
+if '"-DGGML_NATIVE=OFF"' not in check:
     raise SystemExit("Portable BitNet build patch did not persist")
-print("BitNet setup patched with GGML_NATIVE=OFF for cross-runner cache safety.")
-PY
-
-BITNET_CONVERTER="$BITNET_DIR/utils/convert-hf-to-gguf-bitnet.py"
-"$STANFORD_VENV/bin/python" - "$BITNET_CONVERTER" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-old = '@Model.register("BitnetForCausalLM")'
-new = '@Model.register("BitnetForCausalLM", "BitNetForCausalLM")'
-if old in text:
-    text = text.replace(old, new, 1)
-    path.write_text(text, encoding="utf-8")
-elif new not in text:
-    raise SystemExit("Could not locate pinned BitNet architecture registration")
-if new not in path.read_text(encoding="utf-8"):
-    raise SystemExit("BitNet architecture alias patch did not persist")
-print("BitNet converter patched to accept Microsoft's BitNetForCausalLM architecture name.")
+if microsoft not in check:
+    raise SystemExit("Microsoft BitNet converter selection did not persist")
+print("BitNet setup patched for portable build and Microsoft-specific GGUF conversion.")
 PY
 
 if [[ ! -f "$MODEL_DIR/config.json" || ! -f "$MODEL_DIR/tokenizer.json" ]]; then
@@ -166,13 +193,17 @@ fi
 rm -f "$MODEL_FILE" "$PORTABLE_BUILD_SIGNATURE"
 rm -rf "$BITNET_DIR/build"
 
-echo "Building portable BitNet runtime and regenerating tokenizer-correct I2_S GGUF..."
+echo "Building portable relu2-correct BitNet runtime and regenerating tokenizer-correct I2_S GGUF..."
 pushd "$BITNET_DIR" >/dev/null
 if ! "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s; then
-  echo "BitNet build failed; compile.log follows:" >&2
-  echo "---------------- compile.log ----------------" >&2
-  tail -n 300 logs/compile.log 2>/dev/null || true
-  echo "---------------------------------------------" >&2
+  echo "BitNet setup failed; diagnostic logs follow:" >&2
+  for log_file in logs/generate_build_files.log logs/compile.log logs/convert_to_f32_gguf.log logs/quantize_to_i2s.log; do
+    if [[ -s "$log_file" ]]; then
+      echo "---------------- $log_file ----------------" >&2
+      tail -n 300 "$log_file" >&2 || true
+    fi
+  done
+  echo "------------------------------------------------" >&2
   popd >/dev/null
   exit 1
 fi
