@@ -6,7 +6,7 @@ VENDOR="$HERE/vendor"
 AS_VENV="$HERE/.venv-agentsociety"
 STANFORD_VENV="$HERE/.venv-stanford"
 STANFORD_COMMIT="96854071ef4c2d79c93144c973c7820722d52bab"
-READY_MARKER="$HERE/.bootstrap-ready-v2"
+READY_MARKER="$HERE/.bootstrap-ready-v3"
 
 if [[ -f "$READY_MARKER" && -x "$AS_VENV/bin/python" && -x "$STANFORD_VENV/bin/python" && -d "$VENDOR/stanford-genagents/.git" ]]; then
   current_commit="$(git -C "$VENDOR/stanford-genagents" rev-parse HEAD 2>/dev/null || true)"
@@ -50,7 +50,7 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 old = '''  def _func_clean_up(gpt_response, prompt=""): \n    return extract_first_json_dict(gpt_response)["reflection"]\n\n  def _get_fail_safe():\n    return []\n'''
-new = '''  def _func_clean_up(gpt_response, prompt=""): \n    parsed = extract_first_json_dict(gpt_response)\n    if isinstance(parsed, dict):\n      reflection = parsed.get("reflection")\n      if isinstance(reflection, list):\n        return reflection[:reflection_count]\n      if isinstance(reflection, str) and reflection.strip():\n        return [reflection.strip()]\n    if isinstance(gpt_response, str):\n      candidate = gpt_response.strip()\n      if candidate and not candidate.startswith("GENERATION ERROR:"):\n        return [candidate[:1000]]\n    return []\n\n  def _get_fail_safe():\n    return []\n'''
+new = '''  def _func_clean_up(gpt_response, prompt=""): \n    if isinstance(gpt_response, str) and gpt_response.strip().startswith("GENERATION ERROR:"):\n      raise RuntimeError(gpt_response.strip())\n    parsed = extract_first_json_dict(gpt_response)\n    if isinstance(parsed, dict):\n      reflection = parsed.get("reflection")\n      if isinstance(reflection, list):\n        return reflection[:reflection_count]\n      if isinstance(reflection, str) and reflection.strip():\n        return [reflection.strip()]\n    if isinstance(gpt_response, str):\n      candidate = gpt_response.strip()\n      if candidate:\n        return [candidate[:1000]]\n    return []\n\n  def _get_fail_safe():\n    return []\n'''
 if old not in text:
     raise SystemExit("Pinned Stanford reflection parser changed; compatibility patch no longer applies cleanly.")
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
@@ -78,7 +78,7 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 old = '''  def _func_clean_up(gpt_response, prompt=""): \n    utterance = extract_first_json_dict(gpt_response)["utterance"]\n    return utterance\n\n  def _get_fail_safe():\n    return None\n'''
-new = '''  def _func_clean_up(gpt_response, prompt=""): \n    parsed = extract_first_json_dict(gpt_response)\n    if isinstance(parsed, dict):\n      utterance = parsed.get("utterance")\n      if isinstance(utterance, str) and utterance.strip():\n        return utterance.strip()\n    if isinstance(gpt_response, str):\n      candidate = gpt_response.strip()\n      if candidate and not candidate.startswith("GENERATION ERROR:"):\n        return candidate[:1000]\n    return "I am here and listening."\n\n  def _get_fail_safe():\n    return "I am here and listening."\n'''
+new = '''  def _func_clean_up(gpt_response, prompt=""): \n    if isinstance(gpt_response, str) and gpt_response.strip().startswith("GENERATION ERROR:"):\n      raise RuntimeError(gpt_response.strip())\n    parsed = extract_first_json_dict(gpt_response)\n    if isinstance(parsed, dict):\n      utterance = parsed.get("utterance")\n      if isinstance(utterance, str) and utterance.strip():\n        return utterance.strip()\n    if isinstance(gpt_response, str):\n      candidate = gpt_response.strip()\n      if candidate:\n        return candidate[:1000]\n    raise RuntimeError("Model returned no usable utterance.")\n\n  def _get_fail_safe():\n    return None\n'''
 if old not in text:
     raise SystemExit("Pinned Stanford utterance parser changed; compatibility patch no longer applies cleanly.")
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
