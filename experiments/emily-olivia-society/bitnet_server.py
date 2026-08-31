@@ -28,6 +28,18 @@ MIN_MODEL_BYTES = 100_000_000
 
 
 def pid_alive(pid: int) -> bool:
+    # os.kill(pid, 0) reports Linux zombies as existing. That caused a crashed
+    # llama-server child to masquerade as "still starting" for the full health
+    # timeout. Reject zombies when procfs is available, then use the portable
+    # existence check as the fallback.
+    stat_path = Path(f"/proc/{pid}/stat")
+    if stat_path.exists():
+        try:
+            fields = stat_path.read_text(encoding="utf-8", errors="replace").split()
+            if len(fields) >= 3 and fields[2] == "Z":
+                return False
+        except OSError:
+            pass
     try:
         os.kill(pid, 0)
         return True
@@ -119,17 +131,44 @@ def request_completion(
     return text.strip()
 
 
-def wait_until_ready(timeout: int = START_TIMEOUT) -> None:
+def wait_until_ready(proc: subprocess.Popen[bytes], timeout: int = START_TIMEOUT) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        pid = saved_pid()
-        if pid is None:
-            raise RuntimeError(f"BitNet server exited before becoming ready. Log tail:\n{log_tail()}")
+        returncode = proc.poll()
+        if returncode is not None:
+            PID_FILE.unlink(missing_ok=True)
+            write_state(
+                running=False,
+                pid=None,
+                ready=False,
+                error="server exited during startup",
+                returncode=returncode,
+            )
+            raise RuntimeError(
+                f"BitNet server exited with code {returncode} before becoming ready. "
+                f"Log tail:\n{log_tail()}"
+            )
         if health(timeout=3):
-            write_state(running=True, pid=pid, ready=True)
+            write_state(running=True, pid=proc.pid, ready=True)
             return
         time.sleep(2)
-    write_state(running=True, pid=saved_pid(), ready=False, error="startup health timeout")
+
+    returncode = proc.poll()
+    if returncode is not None:
+        PID_FILE.unlink(missing_ok=True)
+        write_state(
+            running=False,
+            pid=None,
+            ready=False,
+            error="server exited during startup",
+            returncode=returncode,
+        )
+        raise RuntimeError(
+            f"BitNet server exited with code {returncode} before becoming ready. "
+            f"Log tail:\n{log_tail()}"
+        )
+
+    write_state(running=True, pid=proc.pid, ready=False, error="startup health timeout")
     raise TimeoutError(f"BitNet /health did not become ready in {timeout}s. Log tail:\n{log_tail()}")
 
 
@@ -167,7 +206,7 @@ def start() -> None:
     PID_FILE.write_text(str(proc.pid), encoding="utf-8")
     write_state(running=True, pid=proc.pid, ready=False, reused=False, threads=threads, command=cmd)
     print(f"Started persistent BitNet server as PID {proc.pid}")
-    wait_until_ready()
+    wait_until_ready(proc)
     print("BitNet server is healthy; Stanford requests will reuse the loaded model over localhost HTTP.")
 
 
