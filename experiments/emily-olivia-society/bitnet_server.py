@@ -7,7 +7,6 @@ import os
 import signal
 import socket
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -17,13 +16,14 @@ HERE = Path(__file__).resolve().parent
 ROOT = Path(os.environ.get("COMMUNITY_BITNET_ROOT", HERE / "vendor" / "BitNet"))
 MODEL = Path(os.environ.get("COMMUNITY_BITNET_MODEL", HERE / "models" / "BitNet-b1.58-2B-4T" / "ggml-model-i2_s.gguf"))
 SERVER = ROOT / "build" / "bin" / "llama-server"
-CLI = ROOT / "build" / "bin" / "llama-cli"
-REAL_CLI = ROOT / "build" / "bin" / "llama-cli.real"
 PID_FILE = HERE / ".bitnet-server.pid"
 LOG_FILE = HERE / "replay" / "bitnet-server.log"
+STATE_FILE = HERE / "replay" / "bitnet-server-state.json"
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
 BASE = f"http://{HOST}:{PORT}"
+START_TIMEOUT = int(os.environ.get("COMMUNITY_BITNET_START_TIMEOUT", "900"))
+REQUEST_TIMEOUT = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
 
 
 def pid_alive(pid: int) -> bool:
@@ -36,20 +36,46 @@ def pid_alive(pid: int) -> bool:
 
 def saved_pid() -> int | None:
     try:
-        pid = int(PID_FILE.read_text().strip())
+        pid = int(PID_FILE.read_text(encoding="utf-8").strip())
     except Exception:
+        PID_FILE.unlink(missing_ok=True)
         return None
-    return pid if pid_alive(pid) else None
+    if not pid_alive(pid):
+        PID_FILE.unlink(missing_ok=True)
+        return None
+    return pid
 
 
-def request_completion(prompt: str, n_predict: int, temperature: float, timeout: int = 900) -> str:
+def write_state(**values: object) -> None:
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    state = {"host": HOST, "port": PORT, "model": str(MODEL), **values}
+    STATE_FILE.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def port_open() -> bool:
+    try:
+        with socket.create_connection((HOST, PORT), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+def health(timeout: int = 3) -> bool:
+    try:
+        with urllib.request.urlopen(BASE + "/health", timeout=timeout) as response:
+            return 200 <= response.status < 300
+    except Exception:
+        return False
+
+
+def request_completion(prompt: str, n_predict: int, temperature: float, timeout: int = REQUEST_TIMEOUT) -> str:
     payload = json.dumps({
         "prompt": prompt,
-        "n_predict": n_predict,
-        "temperature": temperature,
+        "n_predict": max(1, min(int(n_predict), 256)),
+        "temperature": float(temperature),
         "stream": False,
         "cache_prompt": True,
-    }).encode()
+    }).encode("utf-8")
     req = urllib.request.Request(
         BASE + "/completion",
         data=payload,
@@ -64,73 +90,69 @@ def request_completion(prompt: str, n_predict: int, temperature: float, timeout:
     return text.strip()
 
 
-def wait_until_ready(timeout: int = 900) -> None:
+def wait_until_ready(timeout: int = START_TIMEOUT) -> None:
     deadline = time.monotonic() + timeout
-    last_error = None
+    last_error: Exception | None = None
     while time.monotonic() < deadline:
         pid = saved_pid()
         if pid is None:
-            raise RuntimeError("BitNet server exited before becoming ready")
+            tail = ""
+            if LOG_FILE.exists():
+                tail = LOG_FILE.read_text(encoding="utf-8", errors="replace")[-4000:]
+            raise RuntimeError(f"BitNet server exited before becoming ready. Log tail:\n{tail}")
         try:
-            with socket.create_connection((HOST, PORT), timeout=2):
-                pass
-            text = request_completion("Say OK.", 2, 0.0, timeout=120)
-            print("BITNET_SERVER_PROBE:", text[:200])
-            return
+            if health(timeout=3) or port_open():
+                write_state(running=True, pid=pid, ready=True)
+                return
         except Exception as exc:
             last_error = exc
-            time.sleep(5)
-    raise TimeoutError(f"BitNet server did not become ready in {timeout}s: {last_error}")
-
-
-def install_cli_proxy() -> None:
-    if not CLI.exists() and not REAL_CLI.exists():
-        raise FileNotFoundError(f"BitNet llama-cli not found: {CLI}")
-    proxy = Path(__file__).resolve()
-    if CLI.is_symlink() and CLI.resolve() == proxy:
-        return
-    if CLI.exists() or CLI.is_symlink():
-        if REAL_CLI.exists() or REAL_CLI.is_symlink():
-            REAL_CLI.unlink()
-        CLI.rename(REAL_CLI)
-    CLI.symlink_to(proxy)
+        time.sleep(2)
+    write_state(running=True, pid=saved_pid(), ready=False, error=str(last_error) if last_error else "startup timeout")
+    raise TimeoutError(f"BitNet server did not become ready in {timeout}s")
 
 
 def start() -> None:
     existing = saved_pid()
-    if existing is not None:
+    if existing is not None and (health() or port_open()):
         print(f"BitNet server already running as PID {existing}")
-        install_cli_proxy()
+        write_state(running=True, pid=existing, ready=True, reused=True)
         return
-    if not SERVER.exists():
-        raise FileNotFoundError(f"BitNet llama-server not found: {SERVER}")
-    if not MODEL.exists():
-        raise FileNotFoundError(f"BitNet model not found: {MODEL}")
+    if existing is not None:
+        stop()
+    if port_open():
+        raise RuntimeError(f"Port {PORT} is already in use by an unmanaged process")
+    if not SERVER.exists() or not os.access(SERVER, os.X_OK):
+        raise FileNotFoundError(f"Executable BitNet llama-server not found: {SERVER}")
+    if not MODEL.exists() or MODEL.stat().st_size == 0:
+        raise FileNotFoundError(f"BitNet model not found or empty: {MODEL}")
+
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LOG_FILE.write_text("", encoding="utf-8")
     log = LOG_FILE.open("ab", buffering=0)
     threads = max(4, min(6, os.cpu_count() or 4))
+    cmd = [
+        str(SERVER), "-m", str(MODEL), "-c", "2048", "-t", str(threads),
+        "-ngl", "0", "--host", HOST, "--port", str(PORT), "-cb",
+    ]
     proc = subprocess.Popen(
-        [
-            str(SERVER), "-m", str(MODEL), "-c", "2048", "-t", str(threads),
-            "-n", "128", "-ngl", "0", "--temp", "0.7",
-            "--host", HOST, "--port", str(PORT), "-cb",
-        ],
+        cmd,
         cwd=ROOT,
         stdout=log,
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    PID_FILE.write_text(str(proc.pid))
+    PID_FILE.write_text(str(proc.pid), encoding="utf-8")
+    write_state(running=True, pid=proc.pid, ready=False, reused=False, threads=threads, command=cmd)
     print(f"Started persistent BitNet server as PID {proc.pid}")
     wait_until_ready()
-    install_cli_proxy()
-    print("Installed llama-cli compatibility proxy; subsequent Stanford calls reuse the loaded model.")
+    print("BitNet server is ready; Stanford requests will reuse the loaded model over localhost HTTP.")
 
 
 def stop() -> None:
     pid = saved_pid()
     if pid is None:
         PID_FILE.unlink(missing_ok=True)
+        write_state(running=False, pid=None, ready=False)
         print("BitNet server is not running")
         return
     try:
@@ -146,58 +168,41 @@ def stop() -> None:
         except ProcessLookupError:
             pass
     PID_FILE.unlink(missing_ok=True)
+    write_state(running=False, pid=None, ready=False)
     print("Stopped BitNet server")
 
 
-def proxy_cli(argv: list[str]) -> int:
-    prompt = ""
-    n_predict = 64
-    temperature = 0.7
-    i = 0
-    while i < len(argv):
-        arg = argv[i]
-        if arg in ("-p", "--prompt") and i + 1 < len(argv):
-            prompt = argv[i + 1]
-            i += 2
-            continue
-        if arg in ("-n", "--n-predict") and i + 1 < len(argv):
-            n_predict = min(int(argv[i + 1]), 256)
-            i += 2
-            continue
-        if arg in ("--temp", "-temp", "--temperature") and i + 1 < len(argv):
-            temperature = float(argv[i + 1])
-            i += 2
-            continue
-        i += 1
-    if not prompt:
-        print("GENERATION ERROR: llama-cli proxy received no prompt", file=sys.stderr)
-        return 2
-    try:
-        print(request_completion(prompt, n_predict, temperature))
-        return 0
-    except Exception as exc:
-        print(f"GENERATION ERROR: persistent BitNet request failed: {exc}", file=sys.stderr)
-        return 1
+def status() -> int:
+    pid = saved_pid()
+    ready = bool(pid is not None and (health() or port_open()))
+    payload = {"running": pid is not None, "ready": ready, "pid": pid, "endpoint": BASE}
+    print(json.dumps(payload, sort_keys=True))
+    write_state(**payload)
+    return 0 if ready else 1
+
+
+def probe() -> None:
+    started = time.monotonic()
+    text = request_completion("Reply with only the word OK.", 2, 0.0)
+    elapsed = time.monotonic() - started
+    print("BITNET_SERVER_PROBE:", text[:200])
+    print(f"BITNET_SERVER_PROBE_SECONDS: {elapsed:.3f}")
+    write_state(running=True, pid=saved_pid(), ready=True, probe_seconds=round(elapsed, 3), probe_text=text[:200])
 
 
 def main() -> int:
-    # When invoked through the llama-cli symlink, behave like the small subset of
-    # llama-cli used by the pinned Stanford runtime.
-    if Path(sys.argv[0]).name == "llama-cli":
-        return proxy_cli(sys.argv[1:])
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Manage the Community's persistent localhost BitNet server.")
     parser.add_argument("command", choices=("start", "stop", "status", "probe"))
     args = parser.parse_args()
     if args.command == "start":
         start()
-    elif args.command == "stop":
+        return 0
+    if args.command == "stop":
         stop()
-    elif args.command == "status":
-        pid = saved_pid()
-        print(json.dumps({"running": pid is not None, "pid": pid, "endpoint": BASE}))
-        return 0 if pid is not None else 1
-    else:
-        print(request_completion("Say OK.", 2, 0.0))
+        return 0
+    if args.command == "status":
+        return status()
+    probe()
     return 0
 
 
