@@ -6,7 +6,17 @@ VENDOR="$HERE/vendor"
 AS_VENV="$HERE/.venv-agentsociety"
 STANFORD_VENV="$HERE/.venv-stanford"
 STANFORD_COMMIT="96854071ef4c2d79c93144c973c7820722d52bab"
+READY_MARKER="$HERE/.bootstrap-ready-v2"
 
+if [[ -f "$READY_MARKER" && -x "$AS_VENV/bin/python" && -x "$STANFORD_VENV/bin/python" && -d "$VENDOR/stanford-genagents/.git" ]]; then
+  current_commit="$(git -C "$VENDOR/stanford-genagents" rev-parse HEAD 2>/dev/null || true)"
+  if [[ "$current_commit" == "$STANFORD_COMMIT" ]]; then
+    echo "Reusing cached Community runtime environments."
+    exit 0
+  fi
+fi
+
+rm -f "$READY_MARKER"
 python3 -m venv "$AS_VENV"
 "$AS_VENV/bin/python" -m pip install --upgrade pip
 "$AS_VENV/bin/python" -m pip install "agentsociety2==2.8.4" "mcp>=1.13.1,<2"
@@ -19,10 +29,6 @@ fi
 git -C "$VENDOR/stanford-genagents" fetch --all --tags --prune
 git -C "$VENDOR/stanford-genagents" checkout --detach "$STANFORD_COMMIT"
 
-# Compatibility patch for the pinned Stanford code. The upstream importance
-# parser assumes every model response contains a JSON object and crashes on
-# otherwise-valid non-JSON output. Keep the pinned source, but make its existing
-# fail-safe path return one neutral importance score per record.
 STANFORD_MEMORY="$VENDOR/stanford-genagents/genagents/modules/memory_stream.py"
 python3 - "$STANFORD_MEMORY" <<'PY'
 from pathlib import Path
@@ -37,9 +43,6 @@ if old not in text:
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 PY
 
-# Reflection has the same brittle JSON assumption. Preserve valid reflection
-# output, accept plain text as a single reflection, and otherwise return an
-# empty list so persistence verification can continue without inventing data.
 python3 - "$STANFORD_MEMORY" <<'PY'
 from pathlib import Path
 import sys
@@ -53,10 +56,6 @@ if old not in text:
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 PY
 
-# Stanford's pinned memory stream otherwise calls the OpenAI embeddings API
-# directly. For this bounded experiment, use a deterministic local hashed-token
-# embedding instead. This preserves stable cosine-similarity retrieval while
-# removing an unnecessary network/API-key failure point.
 STANFORD_GPT="$VENDOR/stanford-genagents/simulation_engine/gpt_structure.py"
 python3 - "$STANFORD_GPT" <<'PY'
 from pathlib import Path
@@ -71,10 +70,6 @@ if old not in text:
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 PY
 
-# The pinned utterance parser also assumes every model response is a JSON
-# object containing an `utterance` key. API errors and ordinary text responses
-# violate that assumption, so normalize them to a harmless bounded reply rather
-# than crashing the entire social cycle.
 STANFORD_INTERACTION="$VENDOR/stanford-genagents/genagents/modules/interaction.py"
 python3 - "$STANFORD_INTERACTION" <<'PY'
 from pathlib import Path
@@ -93,6 +88,7 @@ python3 -m venv "$STANFORD_VENV"
 "$STANFORD_VENV/bin/python" -m pip install --upgrade pip
 "$STANFORD_VENV/bin/python" -m pip install -r "$VENDOR/stanford-genagents/requirements.txt"
 
+touch "$READY_MARKER"
 printf 'AgentSociety2: 2.8.4 -> %s\n' "$AS_VENV"
 printf 'Stanford genagents: %s -> %s\n' "$STANFORD_COMMIT" "$STANFORD_VENV"
 printf 'Initialize cognition with: %s init_cognition.py\n' "$STANFORD_VENV/bin/python"
