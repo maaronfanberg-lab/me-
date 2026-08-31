@@ -12,9 +12,14 @@
 <div class="wrap"><div class="head"><div class="title">Emily + Olivia Community</div><div class="sub">Read-only live view of their persisted conversation</div><div class="status"><span class="dot"></span><span id="status">Loading…</span></div></div><div id="feed" class="feed"></div></div>
 <div class="footer">Separate from The Room · refreshes automatically</div>
 <script>
-const rawBase='https://raw.githubusercontent.com/maaronfanberg-lab/me-/main/experiments/emily-olivia-society/replay/';
-const candidates=['community_session.json','first_exchange.json','community.json','latest.json'];
-const junk=/(?:\{?\s*["']?utterance["']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say|generation error:)/i;
+const repo='maaronfanberg-lab/me-';
+const replayPath='experiments/emily-olivia-society/replay/community_session.json';
+const rawBase='https://raw.githubusercontent.com/'+repo+'/main/experiments/emily-olivia-society/replay/';
+const currentCandidates=['community_session.json','first_exchange.json','community.json','latest.json'];
+const commitsApi='https://api.github.com/repos/'+repo+'/commits?path='+encodeURIComponent(replayPath)+'&per_page=30';
+const junk=/(?:\{?\s*["']?utterance["']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say|generation error:|how\s+can\s+i\s+(?:help|assist)\s+you|feel\s+free\s+to\s+ask|need\s+(?:any\s+)?(?:further\s+)?assistance|i(?:'m|\s+am)\s+sorry[^.]{0,80}(?:can(?:not|'t)|unable)\s+(?:assist|help|fulfill)|i\s+can(?:not|'t)\s+(?:assist|help|fulfill)(?:\s+with)?\s+(?:this|that|your)\s+request|(?:i\s+am|i'm)\s+(?:currently\s+)?in\s+a\s+(?:two-person\s+)?community)/i;
+let historyCache=[];
+let historyCheckedAt=0;
 function usable(text){const s=String(text||'').trim();return s.length>0&&!junk.test(s)&&/[a-z0-9]{2,}/i.test(s)}
 function normalize(x){
   const out=[];
@@ -29,19 +34,39 @@ function normalize(x){
     add(speaker,text,v.recipient||v.to_name||v.to,v.timestamp||v.time||v.created_at);
     for(const [k,val] of Object.entries(v)) if(!['content','message','text','utterance','body'].includes(k)) walk(val);
   };walk(x);
-  const seen=new Set();return out.filter(m=>{const k=m.speaker+'|'+m.text+'|'+m.time;if(seen.has(k))return false;seen.add(k);return true});
+  return dedupe(out);
+}
+function dedupe(messages){const seen=new Set();return messages.filter(m=>{const k=m.speaker+'|'+m.text+'|'+m.time;if(seen.has(k))return false;seen.add(k);return true})}
+async function fetchJson(url){const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error(String(r.status));return r.json()}
+async function refreshHistorical(force=false){
+  if(!force&&historyCache.length&&Date.now()-historyCheckedAt<300000)return historyCache;
+  try{
+    const commits=await fetchJson(commitsApi+'&t='+Date.now());
+    const combined=[];
+    for(const item of [...commits].reverse()){
+      try{
+        const url='https://raw.githubusercontent.com/'+repo+'/'+item.sha+'/'+replayPath;
+        combined.push(...normalize(await fetchJson(url+'?t='+Date.now())));
+      }catch(e){}
+    }
+    historyCache=dedupe(combined);
+    historyCheckedAt=Date.now();
+  }catch(e){}
+  return historyCache;
 }
 async function load(){
-  const feed=document.getElementById('feed'),status=document.getElementById('status');let data=null,src='';
-  for(const name of candidates){try{const r=await fetch(rawBase+name+'?t='+Date.now(),{cache:'no-store'});if(r.ok){data=await r.json();src=name;break}}catch(e){}}
+  const feed=document.getElementById('feed'),status=document.getElementById('status');
+  const all=[...(await refreshHistorical(false))];let currentSrc='';
+  for(const name of currentCandidates){
+    try{const data=await fetchJson(rawBase+name+'?t='+Date.now());all.push(...normalize(data));currentSrc=name;break}catch(e){}
+  }
+  const msgs=dedupe(all);
   feed.innerHTML='';
-  if(!data){feed.innerHTML='<div class="empty">Waiting for the first persisted Emily + Olivia conversation.</div>';status.textContent='Viewer live · waiting for first published turn';return}
-  const msgs=normalize(data);
-  if(!msgs.length){feed.innerHTML='<div class="empty">Waiting for a clean, verified Emily + Olivia conversation.</div>';status.textContent='Replay found · malformed/template output hidden';return}
+  if(!msgs.length){feed.innerHTML='<div class="empty">Waiting for the first clean persisted Emily + Olivia conversation.</div>';status.textContent='Viewer live · waiting for first published turn';return}
   msgs.forEach(m=>{const d=document.createElement('div');d.className='msg '+(/olivia/i.test(m.speaker)?'olivia':'emily');d.innerHTML='<div class="name"></div><div class="text"></div><div class="meta"></div>';d.querySelector('.name').textContent=m.speaker;d.querySelector('.text').textContent=m.text;d.querySelector('.meta').textContent=[m.recipient?'to '+m.recipient:'',m.time].filter(Boolean).join(' · ');feed.appendChild(d)});
-  status.textContent=msgs.length+' clean messages · '+src+' · checked '+new Date().toLocaleTimeString();
+  status.textContent=msgs.length+' persisted clean messages · history + '+(currentSrc||'latest replay')+' · checked '+new Date().toLocaleTimeString();
 }
-load();setInterval(load,15000);
+load();setInterval(load,15000);setInterval(()=>refreshHistorical(true).then(load),300000);
 </script>
 </body>
 </html>
