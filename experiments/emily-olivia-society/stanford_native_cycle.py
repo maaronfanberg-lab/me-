@@ -31,9 +31,9 @@ _is_usable_utterance = _base._is_usable_utterance
 
 _CONTROL_SCAFFOLD = re.compile(
     r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
-    r"(?im)^\s*(?:SELF|PARTNER|Self-reply|Answer|Example)\s*:|"
+    r"^\s*(?:SELF|PARTNER|Self-reply|Answer|Example)\s*:|"
     r"\[Fill\s+in\])",
-    re.IGNORECASE,
+    re.IGNORECASE | re.MULTILINE,
 )
 
 
