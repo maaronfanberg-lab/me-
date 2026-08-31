@@ -9,11 +9,11 @@ STANFORD_COMMIT="96854071ef4c2d79c93144c973c7820722d52bab"
 BITNET_REPO="https://github.com/raphaelbgr/BitNet.git"
 BITNET_COMMIT="baecdf7d1e4d404d30f80ae5b26f486ca833ae03"
 BITNET_DIR="$VENDOR/BitNet"
-MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
+MODEL_DIR="$HERE/models/Falcon3-1B-Instruct-1.58bit"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
-BITNET_SOURCE_REPO="microsoft/BitNet-b1.58-2B-4T"
-READY_MARKER="$HERE/.bootstrap-ready-v9"
-PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v12"
+BITNET_MODEL_REPO="tiiuae/Falcon3-1B-Instruct-1.58bit-GGUF"
+READY_MARKER="$HERE/.bootstrap-ready-v10"
+PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v13"
 
 restore_real_cli() {
   if [[ -e "$BITNET_DIR/build/bin/llama-cli.real" ]]; then
@@ -41,7 +41,7 @@ if runtime_ready; then
   exit 0
 fi
 
-rm -f "$HERE/.bootstrap-ready-v7" "$HERE/.bootstrap-ready-v8" "$READY_MARKER"
+rm -f "$HERE/.bootstrap-ready-v7" "$HERE/.bootstrap-ready-v8" "$HERE/.bootstrap-ready-v9" "$READY_MARKER"
 mkdir -p "$VENDOR" "$MODEL_DIR"
 
 if [[ ! -x "$AS_VENV/bin/python" ]]; then
@@ -118,9 +118,9 @@ else:
 PY
 fi
 
-# BitNet b1.58 2B 4T requires relu2. Verify the pinned llama.cpp BitNet graph
-# with a brace-balanced function scan. If an older pin still uses SiLU, patch
-# only build_bitnet_158() to the RELU_SQR operation already implemented there.
+# Verify the pinned llama.cpp BitNet graph uses relu2. If an older pin still
+# uses SiLU, patch only build_bitnet_158() to the RELU_SQR operation already
+# implemented by this runtime.
 LLAMA_CPP="$BITNET_DIR/3rdparty/llama.cpp/src/llama.cpp"
 "$STANFORD_VENV/bin/python" - "$LLAMA_CPP" <<'PY'
 from pathlib import Path
@@ -174,39 +174,30 @@ if '"-DGGML_NATIVE=OFF"' not in text:
     if needle not in text:
         raise SystemExit("Could not locate pinned BitNet CMake argument list for portable-build patch")
     text = text.replace(needle, replacement, 1)
-
-# The generic HF converter has repeatedly rejected Microsoft's BitNet checkpoint
-# despite architecture aliases. The pinned BitNet fork ships a converter made
-# specifically for Microsoft's safetensors and tokenizer metadata, so use it for
-# the F32 staging GGUF before the existing I2_S quantization step.
-generic = '"utils/convert-hf-to-gguf-bitnet.py", model_dir, "--outtype", "f32"'
-microsoft = '"utils/convert-ms-to-gguf-bitnet.py", model_dir, "--outtype", "f32"'
-if microsoft not in text:
-    if generic not in text:
-        raise SystemExit("Could not locate pinned BitNet F32 conversion command")
-    text = text.replace(generic, microsoft, 1)
-
-updated = text
-path.write_text(updated, encoding="utf-8")
-check = path.read_text(encoding="utf-8")
-if '"-DGGML_NATIVE=OFF"' not in check:
+    path.write_text(text, encoding="utf-8")
+if '"-DGGML_NATIVE=OFF"' not in path.read_text(encoding="utf-8"):
     raise SystemExit("Portable BitNet build patch did not persist")
-if microsoft not in check:
-    raise SystemExit("Microsoft BitNet converter selection did not persist")
-print("BitNet setup patched for portable build and Microsoft-specific GGUF conversion.")
+print("BitNet setup patched with GGML_NATIVE=OFF for cross-runner cache safety.")
 PY
 
-if [[ ! -f "$MODEL_DIR/config.json" || ! -f "$MODEL_DIR/tokenizer.json" ]]; then
-  echo "Downloading original BitNet weights and tokenizer metadata..."
+# Microsoft's public 2B-4T artifacts are currently corrupted. Use TII's
+# provider-published 1.58-bit instruct GGUF, which the pinned BitNet runtime
+# explicitly supports, and keep conversion out of this bootstrap entirely.
+if [[ ! -s "$MODEL_FILE" ]] || [[ "$(stat -c %s "$MODEL_FILE" 2>/dev/null || echo 0)" -lt 100000000 ]]; then
+  echo "Downloading provider-published Falcon3 1B Instruct I2_S GGUF..."
+  rm -f "$MODEL_FILE"
   "$STANFORD_VENV/bin/huggingface-cli" download \
-    "$BITNET_SOURCE_REPO" \
+    "$BITNET_MODEL_REPO" \
+    ggml-model-i2_s.gguf \
     --local-dir "$MODEL_DIR"
 fi
+[[ -s "$MODEL_FILE" ]] || { echo "Falcon3 BitNet GGUF download failed" >&2; exit 1; }
+[[ "$(stat -c %s "$MODEL_FILE")" -ge 100000000 ]] || { echo "Falcon3 BitNet GGUF is implausibly small" >&2; exit 1; }
 
-rm -f "$MODEL_FILE" "$PORTABLE_BUILD_SIGNATURE"
+rm -f "$PORTABLE_BUILD_SIGNATURE"
 rm -rf "$BITNET_DIR/build"
 
-echo "Building portable relu2-correct BitNet runtime and regenerating tokenizer-correct I2_S GGUF..."
+echo "Building portable BitNet runtime with provider-published Falcon3 I2_S GGUF..."
 pushd "$BITNET_DIR" >/dev/null
 if ! "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s; then
   echo "BitNet setup failed; diagnostic logs follow:" >&2
@@ -234,6 +225,7 @@ touch "$READY_MARKER"
 printf 'AgentSociety2: 2.8.4 -> %s\n' "$AS_VENV"
 printf 'Stanford genagents: %s -> %s\n' "$STANFORD_COMMIT" "$STANFORD_VENV"
 printf 'BitNet: %s -> %s\n' "$BITNET_COMMIT" "$BITNET_DIR"
+printf 'BitNet model repo: %s\n' "$BITNET_MODEL_REPO"
 printf 'BitNet model: %s\n' "$MODEL_FILE"
 printf 'Portable build signature: %s\n' "$PORTABLE_BUILD_SIGNATURE"
 printf 'Bootstrap marker: %s\n' "$READY_MARKER"
