@@ -12,6 +12,11 @@ on:
         description: "Maximum reply turns (2-10) for manual bounded runs"
         required: false
         default: "8"
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/emily-olivia-community-run.yml'
   schedule:
     - cron: "0 10 * * *"
     - cron: "0 11 * * *"
@@ -268,7 +273,8 @@ jobs:
           path: |
             experiments/emily-olivia-society/replay/
             experiments/emily-olivia-society/workspaces/
-          if-no-files-found: error
+            experiments/emily-olivia-society/vendor/BitNet/logs/
+          if-no-files-found: warn
 
       - name: Publish real replay to viewer
         if: steps.gate.outputs.run == 'true'
