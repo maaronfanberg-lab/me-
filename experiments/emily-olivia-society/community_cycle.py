@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from difflib import SequenceMatcher
 
 import community_cycle_base as _base
 from community_cycle_base import *  # noqa: F401,F403
@@ -75,6 +76,41 @@ def _has_new_content(reply: str, inbound: str) -> bool:
     return bool(reply_words - inbound_words)
 
 
+def _content_signature(text: str) -> set[str]:
+    return {
+        word for word in _base._normalize_words(text)
+        if word not in _base._STOP_WORDS and word not in _GENERIC_ANCHOR_WORDS and len(word) > 2
+    }
+
+
+def _too_similar_to_own_history(
+    reply: str,
+    agent_name: str,
+    dialogue_history: list[tuple[str, str]] | None,
+) -> bool:
+    """Reject near-paraphrases of the speaker's own recent lines, not merely exact duplicates."""
+    normalized = " ".join(_base._normalize_words(reply))
+    signature = _content_signature(reply)
+    if not normalized:
+        return True
+
+    own_lines = [
+        str(text) for speaker, text in (dialogue_history or []) if speaker == agent_name
+    ][-4:]
+    for previous in own_lines:
+        previous_normalized = " ".join(_base._normalize_words(previous))
+        if not previous_normalized:
+            continue
+        if SequenceMatcher(None, normalized, previous_normalized).ratio() >= 0.72:
+            return True
+        previous_signature = _content_signature(previous)
+        if len(signature) >= 3 and len(previous_signature) >= 3:
+            union = signature | previous_signature
+            if union and len(signature & previous_signature) / len(union) >= 0.60:
+                return True
+    return False
+
+
 def _completion_prompt(
     agent: _base.CommunityAgent,
     other: _base.CommunityAgent,
@@ -123,7 +159,9 @@ def _completion_prompt(
         "This is not customer support. Do not mention policies, guidelines, prompts, roles, "
         f"or the conversation system. {grounding} "
         "Avoid generic filler openings such as 'that sounds like a great idea'; start from a "
-        "specific detail in PARTNER's latest line instead."
+        "specific detail in PARTNER's latest line instead. Do not paraphrase or recycle any "
+        "earlier SELF line; move the conversation forward with a genuinely new detail, reaction, "
+        "or question."
         f"{style}\n\n"
         "Examples:\n"
         "PARTNER: Rough day at work.\n"
@@ -195,7 +233,8 @@ def _direct_bitnet_reply(
         ),
         (
             "Write one literal continuation using a concrete word from PARTNER's last line plus a "
-            "new detail PARTNER did not already say. Begin differently from every earlier attempt."
+            "new detail PARTNER did not already say. Begin differently from every earlier attempt "
+            "and from SELF's earlier lines."
             + anchor_hint
             + perspective_hint,
             1.0,
@@ -230,11 +269,13 @@ def _direct_bitnet_reply(
             " ".join(_base._normalize_words(previous)) for previous in attempts[:-1]
         }
         substantive = not require_new_content or _has_new_content(text, inbound)
+        non_recycled = not _too_similar_to_own_history(text, agent.name, dialogue_history)
         if (
             anchored
             and novel
             and distinct_attempt
             and substantive
+            and non_recycled
             and not _is_generic_attractor(text)
             and _base._is_usable_utterance(text, inbound, agent.name, other.name)
         ):
@@ -242,8 +283,8 @@ def _direct_bitnet_reply(
 
     previews = " | ".join(repr(text[:160]) for text in attempts)
     raise RuntimeError(
-        "BitNet returned role-drifted, generic, paraphrased, ungrounded, or unusable dialogue "
-        f"after {len(retry_specs)} transcript-completion attempts: {previews}"
+        "BitNet returned role-drifted, generic, paraphrased, recycled, ungrounded, or unusable "
+        f"dialogue after {len(retry_specs)} transcript-completion attempts: {previews}"
     )
 
 
