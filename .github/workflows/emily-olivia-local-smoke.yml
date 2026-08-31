@@ -50,10 +50,10 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v9
-          key: community-runtime-bitnet-v9-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+            experiments/emily-olivia-society/.bootstrap-ready-v8
+          key: community-runtime-bitnet-v8-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
           restore-keys: |
-            community-runtime-bitnet-v9-${{ runner.os }}-py311-
+            community-runtime-bitnet-v8-${{ runner.os }}-py311-
 
       - name: Bootstrap BitNet build without inference probe
         working-directory: experiments/emily-olivia-society
@@ -65,7 +65,8 @@ jobs:
           test -x vendor/BitNet/build/bin/llama-cli
           test -x vendor/BitNet/build/bin/llama-server
           test -s models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
-          test -f .bootstrap-ready-v9
+          test -f .bootstrap-ready-v8
+          test -f vendor/BitNet/.community-portable-build-v10
 
       - name: Save Community runtime and BitNet immediately after bootstrap
         if: ${{ steps.community-cache.outputs.cache-hit != 'true' }}
@@ -76,7 +77,7 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v9
+            experiments/emily-olivia-society/.bootstrap-ready-v8
           key: ${{ steps.community-cache.outputs.cache-primary-key }}
 
       - name: Record runner diagnostics
