@@ -21,7 +21,6 @@ _TEMPLATE_JUNK = re.compile(
     re.IGNORECASE,
 )
 _SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant|System)\s*:")
-EOT = "<|eot_id|>"
 
 
 @dataclass
@@ -63,7 +62,14 @@ def load_agents() -> list[CommunityAgent]:
         workspace = WORKSPACES / name.lower()
         if not (workspace / "scratch.json").exists():
             raise SystemExit("Run .venv-stanford/bin/python init_cognition.py first.")
-        out.append(CommunityAgent(agent_id=agent_id, name=name, workspace=workspace, brain=GenerativeAgent(str(workspace))))
+        out.append(
+            CommunityAgent(
+                agent_id=agent_id,
+                name=name,
+                workspace=workspace,
+                brain=GenerativeAgent(str(workspace)),
+            )
+        )
     return out
 
 
@@ -71,7 +77,11 @@ def latest_community_time_step(agents: list[CommunityAgent]) -> int:
     latest = 0
     for agent in agents:
         for node in agent.brain.memory_stream.seq_nodes:
-            latest = max(latest, int(getattr(node, "created", 0) or 0), int(getattr(node, "last_retrieved", 0) or 0))
+            latest = max(
+                latest,
+                int(getattr(node, "created", 0) or 0),
+                int(getattr(node, "last_retrieved", 0) or 0),
+            )
     return latest
 
 
@@ -112,20 +122,32 @@ def _is_usable_utterance(text: str, inbound: str = "") -> bool:
     return True
 
 
-def _completion_bitnet(prompt: str, max_tokens: int) -> str:
+def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max_tokens: int) -> str:
+    """Use llama-server's OpenAI-compatible chat route so the GGUF chat template is applied by the runtime."""
     port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
     timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
-    payload = json.dumps({
-        "prompt": prompt,
-        "n_predict": max_tokens,
-        "temperature": 0.6,
-        "top_p": 0.9,
-        "stream": False,
-        "cache_prompt": True,
-        "stop": [EOT, "\nUser:", "\nSystem:", "\nAssistant:"],
-    }).encode("utf-8")
+    payload = json.dumps(
+        {
+            "model": "community-bitnet",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        f"You are {agent.name}. You are speaking privately with {other.name}. "
+                        "Reply naturally and briefly to the other person. Do not repeat the prompt, "
+                        "instructions, role labels, or the other person's whole message."
+                    ),
+                },
+                {"role": "user", "content": inbound},
+            ],
+            "max_tokens": max_tokens,
+            "temperature": 0.6,
+            "top_p": 0.9,
+            "stream": False,
+        }
+    ).encode("utf-8")
     req = urllib.request.Request(
-        f"http://127.0.0.1:{port}/completion",
+        f"http://127.0.0.1:{port}/v1/chat/completions",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -133,27 +155,24 @@ def _completion_bitnet(prompt: str, max_tokens: int) -> str:
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")[:500]
+        raise RuntimeError(f"BitNet chat request failed with HTTP {exc.code}: {body}") from exc
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"BitNet completion request failed: {exc}") from exc
-    text = data.get("content")
+        raise RuntimeError(f"BitNet chat request failed: {exc}") from exc
+
+    try:
+        text = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(f"BitNet chat endpoint returned an unexpected payload: {data!r}") from exc
     if not isinstance(text, str):
-        raise RuntimeError(f"BitNet completion endpoint returned an unexpected payload: {data!r}")
+        raise RuntimeError(f"BitNet chat endpoint returned non-text content: {data!r}")
     return text.strip()
 
 
 def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
-    """Render Microsoft's published BitNet chat template explicitly before /completion."""
     max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
-    system = (
-        f"You are {agent.name}. You are having a private two-person conversation with {other.name}. "
-        "Answer naturally and briefly. Do not repeat instructions or the other person's message. "
-        "Do not output JSON, role labels, templates, metadata, or examples."
-    )
-    user = f"{other.name} says: {inbound}"
-    # microsoft/bitnet-b1.58-2B-4T tokenizer_config.json:
-    # Role-capitalized content + <|eot_id|>, followed by `Assistant: ` for generation.
-    prompt = f"System: {system}{EOT}User: {user}{EOT}Assistant: "
-    text = _completion_bitnet(prompt, max_tokens)
+    text = _chat_bitnet(agent, other, inbound, max_tokens)
     if not _is_usable_utterance(text, inbound):
         raise RuntimeError(f"BitNet returned template-like, echoed, or unusable dialogue: {text[:240]!r}")
     return text
@@ -169,7 +188,10 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
     dialogue = [[latest["from_name"], inbound]]
     response = agent.brain.utterance(
         dialogue,
-        context=f"You are {agent.name}. You are in a two-person community with {other.name}. Respond naturally to the addressed message.",
+        context=(
+            f"You are {agent.name}. You are in a two-person community with {other.name}. "
+            "Respond naturally to the addressed message."
+        ),
     )
     text = str(response).strip()
     if not _is_usable_utterance(text, inbound):
@@ -200,18 +222,24 @@ async def run_one_cycle() -> None:
         action = choose_action(agent, observation, other)
         action_result = None
         if action["type"] == "message":
-            action_result = await social.send_message(agent.agent_id, int(action["recipient_id"]), str(action["content"]))
+            action_result = await social.send_message(
+                agent.agent_id,
+                int(action["recipient_id"]),
+                str(action["content"]),
+            )
             if not action_result.get("success"):
                 raise RuntimeError(f"Message delivery failed for {agent.name}: {action_result!r}")
         agent.brain.save(str(agent.workspace))
-        cycle_log.append({
-            "agent": agent.name,
-            "time_step": time_step,
-            "observation": observation,
-            "retrieved_memories": relevant,
-            "action": action,
-            "action_result": action_result,
-        })
+        cycle_log.append(
+            {
+                "agent": agent.name,
+                "time_step": time_step,
+                "observation": observation,
+                "retrieved_memories": relevant,
+                "action": action,
+                "action_result": action_result,
+            }
+        )
 
     print(json.dumps({"start_time_step": base_time_step, "cycles": cycle_log}, indent=2))
 
