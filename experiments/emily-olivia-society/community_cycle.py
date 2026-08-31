@@ -4,7 +4,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
+import re
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,6 +16,10 @@ HERE = Path(__file__).resolve().parent
 STANFORD = HERE / "vendor" / "stanford-genagents"
 WORKSPACES = HERE / "workspaces"
 MAX_UTTERANCE_CHARS = 12_000
+_TEMPLATE_JUNK = re.compile(
+    r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:)",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -88,6 +96,60 @@ def observation_text(agent: CommunityAgent, observation: dict) -> str:
     return f"{agent.name} observes a message from {latest['from_name']}: {latest['content']}"
 
 
+def _is_usable_utterance(text: str) -> bool:
+    cleaned = text.strip()
+    if not cleaned or cleaned.startswith("GENERATION ERROR:"):
+        return False
+    if len(cleaned) > MAX_UTTERANCE_CHARS:
+        return False
+    if _TEMPLATE_JUNK.search(cleaned):
+        return False
+    alnum = sum(ch.isalnum() for ch in cleaned)
+    return alnum >= 3
+
+
+def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
+    """Ask BitNet for plain dialogue, bypassing Stanford's JSON-shaped utterance template."""
+    port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
+    timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
+    max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
+    prompt = (
+        f"You are {agent.name}, speaking privately with {other.name}.\n"
+        f"{other.name} said: {inbound}\n\n"
+        "Reply naturally in one short conversational message. "
+        "Return only the words you would say. Do not output JSON, labels, templates, braces, "
+        "examples, metadata, or the speaker's name.\n"
+        f"{agent.name}:"
+    )
+    payload = json.dumps(
+        {
+            "prompt": prompt,
+            "n_predict": max_tokens,
+            "temperature": 0.7,
+            "stream": False,
+            "cache_prompt": True,
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/completion",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Direct BitNet dialogue request failed: {exc}") from exc
+    text = data.get("content")
+    if not isinstance(text, str):
+        raise RuntimeError("Direct BitNet dialogue response had no text content.")
+    text = text.strip()
+    if not _is_usable_utterance(text):
+        raise RuntimeError(f"BitNet returned template-like or unusable dialogue: {text[:240]!r}")
+    return text
+
+
 def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgent) -> dict:
     inbox = observation.get("inbox", [])
     if not inbox:
@@ -103,12 +165,10 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
         ),
     )
     text = str(response).strip()
-    if text.startswith("GENERATION ERROR:"):
-        raise RuntimeError(text)
-    if not text:
-        raise RuntimeError(f"{agent.name} returned an empty local-model utterance.")
-    if len(text) > MAX_UTTERANCE_CHARS:
-        raise RuntimeError(f"{agent.name} returned an implausibly long utterance ({len(text)} chars).")
+    if not _is_usable_utterance(text):
+        text = _direct_bitnet_reply(agent, other, str(latest["content"]))
+    if not _is_usable_utterance(text):
+        raise RuntimeError(f"{agent.name} returned no usable natural-language utterance.")
     return {"type": "message", "recipient_id": other.agent_id, "content": text}
 
 
