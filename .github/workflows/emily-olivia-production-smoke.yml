@@ -34,6 +34,24 @@ jobs:
       - name: Bootstrap
         working-directory: experiments/emily-olivia-society
         run: bash bootstrap_upstreams.sh
+      - name: Direct OpenAI model probe
+        working-directory: experiments/emily-olivia-society
+        run: |
+          .venv-stanford/bin/python - <<'PY'
+          import os
+          import openai
+          client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+          try:
+              response = client.chat.completions.create(
+                  model="gpt-4o",
+                  messages=[{"role": "user", "content": "Reply with exactly: model-ok"}],
+                  max_tokens=20,
+              )
+              print("MODEL_PROBE:", response.choices[0].message.content)
+          except Exception as exc:
+              print("MODEL_PROBE_ERROR:", type(exc).__name__, str(exc))
+              raise
+          PY
       - name: Restore checkpoint
         working-directory: experiments/emily-olivia-society
         env:
