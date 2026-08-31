@@ -85,13 +85,24 @@ rm -rf "$WORKSPACES"
 cp -a "$candidate" "$WORKSPACES"
 
 mkdir -p "$REPLAY_DIR"
+social_state="$(find "$tmp_dir" -type f -path '*/replay/social_state.json' -print -quit)"
+if [[ -n "${social_state:-}" && -s "$social_state" ]]; then
+  cp "$social_state" "$REPLAY_DIR/social_state.json"
+  social_restored=true
+else
+  rm -f "$REPLAY_DIR/social_state.json"
+  social_restored=false
+fi
+
 cat > "$REPLAY_DIR/checkpoint_restore.json" <<JSON
 {
   "mode": "checkpoint_restore",
   "restored": true,
   "source_run_id": $checkpoint_run,
-  "artifact": "$ARTIFACT_NAME"
+  "artifact": "$ARTIFACT_NAME",
+  "social_state_restored": $social_restored
 }
 JSON
 
 echo "Restored Emily + Olivia workspaces from valid checkpoint run $checkpoint_run."
+echo "Persistent social state restored: $social_restored"
