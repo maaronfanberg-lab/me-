@@ -38,6 +38,7 @@ jobs:
       AGENTSOCIETY_LLM_API_KEY: local-no-api-key
       COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
       COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_PORT: '8080'
       GH_TOKEN: ${{ github.token }}
       TZ: America/Chicago
     steps:
@@ -80,6 +81,8 @@ jobs:
             experiments/emily-olivia-society/models
             experiments/emily-olivia-society/.bootstrap-ready-v6
           key: community-runtime-bitnet-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
+          restore-keys: |
+            community-runtime-bitnet-${{ runner.os }}-py311-
 
       - name: Bootstrap pinned research code and free BitNet model
         if: steps.gate.outputs.run == 'true'
@@ -96,7 +99,19 @@ jobs:
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
             experiments/emily-olivia-society/.bootstrap-ready-v6
-          key: community-runtime-bitnet-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
+          key: ${{ steps.bitnet-cache.outputs.cache-primary-key }}
+
+      - name: Start one persistent BitNet server
+        if: steps.gate.outputs.run == 'true'
+        working-directory: experiments/emily-olivia-society
+        run: python3 bitnet_server.py start
+
+      - name: Confirm persistent BitNet server
+        if: steps.gate.outputs.run == 'true'
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 bitnet_server.py status
+          python3 bitnet_server.py probe
 
       - name: Restore latest successful memory checkpoint
         if: steps.gate.outputs.run == 'true'
@@ -168,3 +183,8 @@ jobs:
             experiments/emily-olivia-society/replay/
             experiments/emily-olivia-society/workspaces/
           if-no-files-found: warn
+
+      - name: Stop BitNet server
+        if: always() && steps.gate.outputs.run == 'true'
+        working-directory: experiments/emily-olivia-society
+        run: python3 bitnet_server.py stop || true
