@@ -77,18 +77,28 @@ def health(timeout: int = 3) -> bool:
         return False
 
 
-def request_completion(prompt: str, n_predict: int, temperature: float, timeout: int = REQUEST_TIMEOUT) -> str:
+def request_completion(
+    prompt: str,
+    n_predict: int,
+    temperature: float,
+    timeout: int = REQUEST_TIMEOUT,
+    stop: list[str] | None = None,
+    cache_prompt: bool = True,
+) -> str:
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError("Completion prompt must be non-empty.")
     if not health(timeout=3):
         raise RuntimeError(f"BitNet server is not healthy before completion request. Log tail:\n{log_tail()}")
-    payload = json.dumps({
+    request_data = {
         "prompt": prompt,
         "n_predict": max(1, min(int(n_predict), 256)),
         "temperature": max(0.0, min(float(temperature), 2.0)),
         "stream": False,
-        "cache_prompt": True,
-    }).encode("utf-8")
+        "cache_prompt": bool(cache_prompt),
+    }
+    if stop:
+        request_data["stop"] = list(stop)
+    payload = json.dumps(request_data).encode("utf-8")
     req = urllib.request.Request(
         BASE + "/completion",
         data=payload,
@@ -196,7 +206,22 @@ def status() -> int:
 
 def probe() -> None:
     started = time.monotonic()
-    text = request_completion("Reply with only the word OK.", 2, 0.0)
+    prompt = (
+        "System: You are testing conversational BitNet inference. Reply naturally and briefly.<|eot_id|>"
+        "User: Say hello in one short sentence.<|eot_id|>"
+        "Assistant: "
+    )
+    text = request_completion(
+        prompt,
+        24,
+        0.0,
+        stop=["<|eot_id|>"],
+        cache_prompt=False,
+    )
+    lowered = text.lower()
+    forbidden = ("end of dialogue so far", "utterance", "[input]", "fill in >")
+    if any(marker in lowered for marker in forbidden):
+        raise RuntimeError(f"BitNet chat-format probe produced template junk: {text[:300]!r}")
     elapsed = time.monotonic() - started
     print("BITNET_SERVER_PROBE:", text[:200])
     print(f"BITNET_SERVER_PROBE_SECONDS: {elapsed:.3f}")
