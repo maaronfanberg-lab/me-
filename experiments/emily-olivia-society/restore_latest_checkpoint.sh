@@ -17,16 +17,36 @@ if [[ -z "${GH_TOKEN:-}" ]]; then
   exit 2
 fi
 
-checkpoint_run="$(
+current_run="${GITHUB_RUN_ID:-}"
+checkpoint_run=""
+
+mapfile -t candidate_runs < <(
   gh api --method GET \
     "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs" \
-    -f status=success \
-    -F per_page=20 \
-    --jq '.workflow_runs[0].id // empty'
-)"
+    -F per_page=30 \
+    --jq '.workflow_runs[] | select(.status == "completed") | .id'
+)
+
+for run_id in "${candidate_runs[@]:-}"; do
+  if [[ -n "$current_run" && "$run_id" == "$current_run" ]]; then
+    continue
+  fi
+
+  artifact_count="$(
+    gh api --method GET \
+      "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
+      -F per_page=100 \
+      --jq --arg name "$ARTIFACT_NAME" '[.artifacts[] | select(.name == $name and (.expired | not))] | length'
+  )"
+
+  if [[ "${artifact_count:-0}" -gt 0 ]]; then
+    checkpoint_run="$run_id"
+    break
+  fi
+done
 
 if [[ -z "$checkpoint_run" ]]; then
-  echo "No prior successful community checkpoint exists. Fresh initialization is allowed."
+  echo "No prior community checkpoint artifact exists. Fresh initialization is allowed."
   exit 0
 fi
 
@@ -74,4 +94,4 @@ cat > "$REPLAY_DIR/checkpoint_restore.json" <<JSON
 }
 JSON
 
-echo "Restored Emily + Olivia workspaces from successful run $checkpoint_run."
+echo "Restored Emily + Olivia workspaces from valid checkpoint run $checkpoint_run."
