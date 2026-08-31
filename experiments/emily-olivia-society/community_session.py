@@ -9,7 +9,7 @@ import time
 import uuid
 from pathlib import Path
 
-from community_cycle import load_agents, next_community_time_step
+from community_cycle import _is_usable_utterance, load_agents, next_community_time_step
 from first_exchange import SocialBridgeClient, process_one_reply
 
 HERE = Path(__file__).resolve().parent
@@ -46,6 +46,10 @@ def validate_opener(opener: str) -> str:
         raise ValueError("opener must not be empty.")
     if len(opener) > MAX_OPENER_CHARS:
         raise ValueError(f"opener exceeds {MAX_OPENER_CHARS} characters.")
+    if not _is_usable_utterance(opener):
+        raise ValueError(
+            "opener contains template, service-assistant, or otherwise unusable dialogue."
+        )
     return opener
 
 
@@ -83,6 +87,7 @@ async def run_community_session(
     session_id = f"{int(time.time())}-{uuid.uuid4().hex[:10]}"
 
     bounded_turns: list[dict] = []
+    discarded_pending_message_ids: list[int] = []
     stop_reason = "turn_limit_reached"
     started = time.monotonic()
     completed = 0
@@ -111,6 +116,20 @@ async def run_community_session(
             from_id = int(message["from_id"])
             if to_id not in by_id or from_id not in by_id or to_id == from_id:
                 raise RuntimeError("Persisted pending message has invalid routing.")
+            content = str(message.get("content", "")).strip()
+            if not _is_usable_utterance(content):
+                consume_result = await social.consume_message(to_id, int(message["id"]))
+                if consume_result.get("success") is not True:
+                    raise RuntimeError(
+                        "Failed to quarantine unusable persisted pending message."
+                    )
+                discarded_pending_message_ids.append(int(message["id"]))
+                pending = []
+
+        if pending:
+            message = pending[0]
+            to_id = int(message["to_id"])
+            from_id = int(message["from_id"])
             current = by_id[to_id]
             other = by_id[from_id]
             seed = {"success": True, "resumed": True, "message": message}
@@ -131,6 +150,7 @@ async def run_community_session(
                     "type": "session_start",
                     "session_id": session_id,
                     "resumed": resumed,
+                    "discarded_pending_message_ids": discarded_pending_message_ids,
                     "seed": seed,
                     "start_time_step": base_time_step,
                 },
@@ -159,7 +179,9 @@ async def run_community_session(
 
             action = turn.get("action", {})
             if action.get("type") == "message":
-                dialogue_history.append((current.name, str(action.get("content", ""))))
+                dialogue_history.append(
+                    (current.name, str(action.get("content", "")))
+                )
 
             if continuous_seconds > 0:
                 append_jsonl(
@@ -178,6 +200,7 @@ async def run_community_session(
                         "status": "running",
                         "session_id": session_id,
                         "resumed_social_state": resumed,
+                        "discarded_pending_message_ids": discarded_pending_message_ids,
                         "start_time_step": base_time_step,
                         "completed_reply_turns": completed,
                         "continuous_seconds": continuous_seconds,
@@ -214,6 +237,7 @@ async def run_community_session(
                 "error_type": type(exc).__name__,
                 "error": str(exc),
                 "resumed_social_state": resumed,
+                "discarded_pending_message_ids": discarded_pending_message_ids,
                 "completed_reply_turns": completed,
                 "latest_turn": latest_turn,
             },
@@ -240,6 +264,7 @@ async def run_community_session(
             "autonomous_loop": continuous_seconds > 0,
         },
         "resumed_social_state": resumed,
+        "discarded_pending_message_ids": discarded_pending_message_ids,
         "start_time_step": base_time_step,
         "completed_reply_turns": completed,
         "stop_reason": stop_reason,
@@ -268,7 +293,7 @@ async def main() -> None:
     parser.add_argument(
         "--opener",
         default="Hello, Olivia.",
-        help="Seed message used only when no pending social message can be resumed.",
+        help="Seed message used only when no valid pending social message can be resumed.",
     )
     parser.add_argument(
         "--turns",
