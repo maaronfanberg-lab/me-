@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import time
 from pathlib import Path
 
 from community_cycle import load_agents, next_community_time_step
@@ -15,11 +16,17 @@ MAX_REPLY_TURNS = 10
 DEFAULT_REPLY_TURNS = 8
 
 
-async def run_community_session(opener: str, reply_turns: int) -> dict:
-    if reply_turns < 2 or reply_turns > MAX_REPLY_TURNS:
+async def run_community_session(
+    opener: str,
+    reply_turns: int,
+    continuous_seconds: int = 0,
+) -> dict:
+    if continuous_seconds <= 0 and (reply_turns < 2 or reply_turns > MAX_REPLY_TURNS):
         raise ValueError(
             f"reply_turns must be between 2 and {MAX_REPLY_TURNS}; got {reply_turns}."
         )
+    if continuous_seconds < 0:
+        raise ValueError("continuous_seconds must be zero or greater.")
 
     agents = load_agents()
     emily = next(agent for agent in agents if agent.name == "Emily")
@@ -29,13 +36,23 @@ async def run_community_session(opener: str, reply_turns: int) -> dict:
 
     turns: list[dict] = []
     stop_reason = "turn_limit_reached"
+    started = time.monotonic()
 
     try:
         seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
         current = olivia
         other = emily
+        offset = 0
 
-        for offset in range(reply_turns):
+        while True:
+            if continuous_seconds > 0:
+                if time.monotonic() - started >= continuous_seconds:
+                    stop_reason = "continuous_window_complete"
+                    break
+            elif offset >= reply_turns:
+                stop_reason = "turn_limit_reached"
+                break
+
             turn = await process_one_reply(
                 current,
                 other,
@@ -54,16 +71,22 @@ async def run_community_session(opener: str, reply_turns: int) -> dict:
                 break
 
             current, other = other, current
+            offset += 1
     finally:
         social.close()
 
     result = {
-        "mode": "bounded_persistent_community_session",
+        "mode": (
+            "continuous_persistent_community_session"
+            if continuous_seconds > 0
+            else "bounded_persistent_community_session"
+        ),
         "limits": {
             "seed_messages": 1,
             "requested_reply_turns": reply_turns,
             "maximum_reply_turns": MAX_REPLY_TURNS,
-            "autonomous_loop": False,
+            "continuous_seconds": continuous_seconds,
+            "autonomous_loop": continuous_seconds > 0,
         },
         "start_time_step": base_time_step,
         "completed_reply_turns": len(turns),
@@ -82,7 +105,7 @@ async def run_community_session(opener: str, reply_turns: int) -> dict:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run one bounded persistent Emily + Olivia community session."
+        description="Run a persistent Emily + Olivia community session."
     )
     parser.add_argument(
         "--opener",
@@ -93,21 +116,31 @@ async def main() -> None:
         "--turns",
         type=int,
         default=DEFAULT_REPLY_TURNS,
-        help=f"Maximum reply turns after the seed message (2-{MAX_REPLY_TURNS}).",
+        help=f"Maximum reply turns after the seed message (2-{MAX_REPLY_TURNS}) in bounded mode.",
+    )
+    parser.add_argument(
+        "--continuous-seconds",
+        type=int,
+        default=0,
+        help="Keep Emily and Olivia alternating for this many seconds after one seed; 0 keeps bounded mode.",
     )
     parser.add_argument(
         "--run",
         action="store_true",
-        help="Explicitly permit one bounded multi-turn session, then stop.",
+        help="Explicitly permit the requested community session.",
     )
     args = parser.parse_args()
 
     if not args.run:
         raise SystemExit(
-            "Refusing to start automatically. Use --run for one bounded community session."
+            "Refusing to start automatically. Use --run to permit the community session."
         )
 
-    result = await run_community_session(args.opener, args.turns)
+    result = await run_community_session(
+        args.opener,
+        args.turns,
+        continuous_seconds=args.continuous_seconds,
+    )
     print(json.dumps(result, indent=2))
 
 
