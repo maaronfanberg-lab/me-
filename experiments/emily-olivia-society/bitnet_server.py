@@ -24,6 +24,7 @@ PORT = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
 BASE = f"http://{HOST}:{PORT}"
 START_TIMEOUT = int(os.environ.get("COMMUNITY_BITNET_START_TIMEOUT", "900"))
 REQUEST_TIMEOUT = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
+MIN_MODEL_BYTES = 100_000_000
 
 
 def pid_alive(pid: int) -> bool:
@@ -40,7 +41,7 @@ def saved_pid() -> int | None:
     except Exception:
         PID_FILE.unlink(missing_ok=True)
         return None
-    if not pid_alive(pid):
+    if pid <= 0 or not pid_alive(pid):
         PID_FILE.unlink(missing_ok=True)
         return None
     return pid
@@ -49,7 +50,15 @@ def saved_pid() -> int | None:
 def write_state(**values: object) -> None:
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     state = {"host": HOST, "port": PORT, "model": str(MODEL), **values}
-    STATE_FILE.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp = STATE_FILE.with_suffix(STATE_FILE.suffix + ".tmp")
+    tmp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(STATE_FILE)
+
+
+def log_tail(limit: int = 6000) -> str:
+    if not LOG_FILE.exists():
+        return ""
+    return LOG_FILE.read_text(encoding="utf-8", errors="replace")[-limit:]
 
 
 def port_open() -> bool:
@@ -69,10 +78,14 @@ def health(timeout: int = 3) -> bool:
 
 
 def request_completion(prompt: str, n_predict: int, temperature: float, timeout: int = REQUEST_TIMEOUT) -> str:
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("Completion prompt must be non-empty.")
+    if not health(timeout=3):
+        raise RuntimeError(f"BitNet server is not healthy before completion request. Log tail:\n{log_tail()}")
     payload = json.dumps({
         "prompt": prompt,
         "n_predict": max(1, min(int(n_predict), 256)),
-        "temperature": float(temperature),
+        "temperature": max(0.0, min(float(temperature), 2.0)),
         "stream": False,
         "cache_prompt": True,
     }).encode("utf-8")
@@ -82,8 +95,14 @@ def request_completion(prompt: str, n_predict: int, temperature: float, timeout:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout) as response:
-        data = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")[:4000]
+        raise RuntimeError(f"BitNet HTTP {exc.code}: {body}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"BitNet request failed: {exc.reason}; log tail:\n{log_tail()}") from exc
     text = data.get("content")
     if not isinstance(text, str) or not text.strip():
         raise RuntimeError(f"BitNet server returned no usable content: {data!r}")
@@ -92,39 +111,32 @@ def request_completion(prompt: str, n_predict: int, temperature: float, timeout:
 
 def wait_until_ready(timeout: int = START_TIMEOUT) -> None:
     deadline = time.monotonic() + timeout
-    last_error: Exception | None = None
     while time.monotonic() < deadline:
         pid = saved_pid()
         if pid is None:
-            tail = ""
-            if LOG_FILE.exists():
-                tail = LOG_FILE.read_text(encoding="utf-8", errors="replace")[-4000:]
-            raise RuntimeError(f"BitNet server exited before becoming ready. Log tail:\n{tail}")
-        try:
-            if health(timeout=3) or port_open():
-                write_state(running=True, pid=pid, ready=True)
-                return
-        except Exception as exc:
-            last_error = exc
+            raise RuntimeError(f"BitNet server exited before becoming ready. Log tail:\n{log_tail()}")
+        if health(timeout=3):
+            write_state(running=True, pid=pid, ready=True)
+            return
         time.sleep(2)
-    write_state(running=True, pid=saved_pid(), ready=False, error=str(last_error) if last_error else "startup timeout")
-    raise TimeoutError(f"BitNet server did not become ready in {timeout}s")
+    write_state(running=True, pid=saved_pid(), ready=False, error="startup health timeout")
+    raise TimeoutError(f"BitNet /health did not become ready in {timeout}s. Log tail:\n{log_tail()}")
 
 
 def start() -> None:
     existing = saved_pid()
-    if existing is not None and (health() or port_open()):
+    if existing is not None and health():
         print(f"BitNet server already running as PID {existing}")
         write_state(running=True, pid=existing, ready=True, reused=True)
         return
     if existing is not None:
         stop()
     if port_open():
-        raise RuntimeError(f"Port {PORT} is already in use by an unmanaged process")
+        raise RuntimeError(f"Port {PORT} is already in use by an unmanaged or unhealthy process")
     if not SERVER.exists() or not os.access(SERVER, os.X_OK):
         raise FileNotFoundError(f"Executable BitNet llama-server not found: {SERVER}")
-    if not MODEL.exists() or MODEL.stat().st_size == 0:
-        raise FileNotFoundError(f"BitNet model not found or empty: {MODEL}")
+    if not MODEL.exists() or MODEL.stat().st_size < MIN_MODEL_BYTES:
+        raise FileNotFoundError(f"BitNet model is missing or implausibly small: {MODEL}")
 
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     LOG_FILE.write_text("", encoding="utf-8")
@@ -141,11 +153,12 @@ def start() -> None:
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
+    log.close()
     PID_FILE.write_text(str(proc.pid), encoding="utf-8")
     write_state(running=True, pid=proc.pid, ready=False, reused=False, threads=threads, command=cmd)
     print(f"Started persistent BitNet server as PID {proc.pid}")
     wait_until_ready()
-    print("BitNet server is ready; Stanford requests will reuse the loaded model over localhost HTTP.")
+    print("BitNet server is healthy; Stanford requests will reuse the loaded model over localhost HTTP.")
 
 
 def stop() -> None:
@@ -174,8 +187,8 @@ def stop() -> None:
 
 def status() -> int:
     pid = saved_pid()
-    ready = bool(pid is not None and (health() or port_open()))
-    payload = {"running": pid is not None, "ready": ready, "pid": pid, "endpoint": BASE}
+    ready = bool(pid is not None and health())
+    payload = {"running": pid is not None, "ready": ready, "pid": pid, "endpoint": BASE, "port_open": port_open()}
     print(json.dumps(payload, sort_keys=True))
     write_state(**payload)
     return 0 if ready else 1
