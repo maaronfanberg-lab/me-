@@ -12,8 +12,12 @@ BITNET_DIR="$VENDOR/BitNet"
 MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
 BITNET_SOURCE_REPO="microsoft/BitNet-b1.58-2B-4T"
+# Microsoft BitNet issue #608 documents that current model checkpoints contain
+# zeroed MLP tensors and generate garbage. Pin the original verified-good model
+# revision instead of following mutable model main.
+BITNET_SOURCE_REVISION="9ff478e2487b"
 READY_MARKER="$HERE/.bootstrap-ready-v9"
-PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v13"
+PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v14"
 
 restore_real_cli() {
   if [[ -e "$BITNET_DIR/build/bin/llama-cli.real" ]]; then
@@ -195,10 +199,9 @@ if microsoft not in check:
 print("BitNet setup patched for portable build and Microsoft-specific GGUF conversion.")
 PY
 
-# Microsoft's current checkpoint stores packed BitNet weights as safetensors U8.
-# The fork's Microsoft-specific converter already defines DT_I2 on np.uint8, but
-# its safetensors dispatch table omits the U8 spelling. Wire U8 to DT_I2 so the
-# packed ternary weights are decoded by the converter it was designed for.
+# Microsoft's newer checkpoint format stores packed BitNet weights as U8. Keep
+# converter support for that format, but the production download below is pinned
+# to the verified-good pre-regression model revision from upstream issue #608.
 BITNET_MS_CONVERTER="$BITNET_DIR/utils/convert-ms-to-gguf-bitnet.py"
 "$STANFORD_VENV/bin/python" - "$BITNET_MS_CONVERTER" <<'PY'
 from pathlib import Path
@@ -219,12 +222,15 @@ if "'U8': DT_I2" not in check:
 print("Microsoft BitNet U8 safetensors mapping verified.")
 PY
 
-if [[ ! -f "$MODEL_DIR/config.json" || ! -f "$MODEL_DIR/tokenizer.json" ]]; then
-  echo "Downloading original BitNet weights and tokenizer metadata..."
-  "$STANFORD_VENV/bin/huggingface-cli" download \
-    "$BITNET_SOURCE_REPO" \
-    --local-dir "$MODEL_DIR"
-fi
+# Always refresh the model directory when the portable-build generation changes;
+# this prevents a broken mutable-main checkpoint from surviving a revision pin.
+rm -rf "$MODEL_DIR"
+mkdir -p "$MODEL_DIR"
+echo "Downloading verified-good BitNet weights and tokenizer metadata at revision $BITNET_SOURCE_REVISION..."
+"$STANFORD_VENV/bin/huggingface-cli" download \
+  "$BITNET_SOURCE_REPO" \
+  --revision "$BITNET_SOURCE_REVISION" \
+  --local-dir "$MODEL_DIR"
 
 rm -f "$MODEL_FILE" "$PORTABLE_BUILD_SIGNATURE"
 rm -rf "$BITNET_DIR/build"
@@ -257,6 +263,7 @@ touch "$READY_MARKER"
 printf 'AgentSociety2: 2.8.4 -> %s\n' "$AS_VENV"
 printf 'Stanford genagents: %s -> %s\n' "$STANFORD_COMMIT" "$STANFORD_VENV"
 printf 'BitNet: %s -> %s\n' "$BITNET_COMMIT" "$BITNET_DIR"
+printf 'BitNet source revision: %s@%s\n' "$BITNET_SOURCE_REPO" "$BITNET_SOURCE_REVISION"
 printf 'BitNet model: %s\n' "$MODEL_FILE"
 printf 'Portable build signature: %s\n' "$PORTABLE_BUILD_SIGNATURE"
 printf 'Bootstrap marker: %s\n' "$READY_MARKER"
