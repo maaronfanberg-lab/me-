@@ -38,6 +38,12 @@ def ensure_stanford_importable() -> None:
 def load_agents() -> list[CommunityAgent]:
     ensure_stanford_importable()
     from genagents.genagents import GenerativeAgent
+    import genagents.modules.interaction as interaction
+
+    # The pinned Stanford code uses the display label "GPT4o" in its settings,
+    # while OpenAI's API model identifier is "gpt-4o". Normalize it here so
+    # dialogue calls reach the model instead of silently falling back.
+    interaction.LLM_VERS = "gpt-4o"
 
     out: list[CommunityAgent] = []
     for spec in load_specs():
@@ -128,14 +134,9 @@ async def run_one_cycle() -> None:
         other = next(a for a in agents if a.agent_id != agent.agent_id)
         time_step = base_time_step + offset
 
-        # 1. Observe shared environment.
         observation = await social.observe_social_space(agent.agent_id)
-
-        # 2. Remember the observation using Stanford's actual memory stream.
         memory = observation_text(agent, observation)
         agent.brain.remember(memory, time_step=time_step)
-
-        # 3. Retrieve relevant memories using Stanford's actual retrieval path.
         retrieved = agent.brain.memory_stream.retrieve(
             [f"Current interaction with {other.name}"],
             time_step=time_step,
@@ -145,11 +146,7 @@ async def run_one_cycle() -> None:
             node.content
             for node in retrieved.get(f"Current interaction with {other.name}", [])
         ]
-
-        # 4. Think / choose an action through Stanford's interaction code.
         action = choose_action(agent, observation, other)
-
-        # 5. Act in the AgentSociety-derived social environment, if needed.
         action_result = None
         if action["type"] == "message":
             action_result = await social.send_message(
@@ -157,10 +154,7 @@ async def run_one_cycle() -> None:
                 int(action["recipient_id"]),
                 str(action["content"]),
             )
-
-        # 6. Persist private memory after the cycle.
         agent.brain.save(str(agent.workspace))
-
         cycle_log.append(
             {
                 "agent": agent.name,
@@ -172,15 +166,7 @@ async def run_one_cycle() -> None:
             }
         )
 
-    print(
-        json.dumps(
-            {
-                "start_time_step": base_time_step,
-                "cycles": cycle_log,
-            },
-            indent=2,
-        )
-    )
+    print(json.dumps({"start_time_step": base_time_step, "cycles": cycle_log}, indent=2))
 
 
 async def main() -> None:
