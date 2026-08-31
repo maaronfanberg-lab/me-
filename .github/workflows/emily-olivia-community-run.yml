@@ -11,6 +11,11 @@ on:
         description: "Maximum reply turns (2-10) for manual bounded runs"
         required: false
         default: "8"
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/emily-olivia-community-run.yml'
   schedule:
     - cron: "0 10 * * *"
     - cron: "0 11 * * *"
@@ -47,7 +52,7 @@ jobs:
         id: gate
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" != "schedule" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -73,7 +78,7 @@ jobs:
       - name: Validate Community Python before expensive work
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
-        run: python3 -m py_compile bitnet_server.py patch_stanford_local.py community_session.py controlled_social_space.py restore_latest_checkpoint.sh 2>/dev/null || python3 -m py_compile bitnet_server.py patch_stanford_local.py community_session.py controlled_social_space.py
+        run: python3 -m py_compile bitnet_server.py patch_stanford_local.py community_session.py controlled_social_space.py persistence_reflection.py
 
       - name: Restore Community runtime and BitNet
         id: bitnet-cache
@@ -104,7 +109,8 @@ jobs:
           test -x vendor/BitNet/build/bin/llama-server
           test -s models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
           test -f .bootstrap-ready-v7
-          grep -q 'COMMUNITY_BITNET_HTTP_V1' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+          grep -q 'COMMUNITY_BITNET_HTTP_V2' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+          ! grep -q 'client = openai.OpenAI' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Save Community runtime and BitNet immediately after bootstrap
         if: steps.gate.outputs.run == 'true' && steps.bitnet-cache.outputs.cache-hit != 'true'
@@ -191,6 +197,8 @@ jobs:
         working-directory: experiments/emily-olivia-society
         run: |
           test -s replay/social_state.json
+          test -s replay/checkpoint_restore.json
+          test -s replay/community_session.json
           test -d workspaces/emily
           test -d workspaces/olivia
           python3 bitnet_server.py status
