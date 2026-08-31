@@ -118,9 +118,9 @@ else:
 PY
 fi
 
-# BitNet b1.58 2B 4T was trained with relu2. The pinned llama.cpp BitNet graph
-# hard-codes SiLU, which produces finite but incorrect logits. Patch only the
-# BitNet graph builder, using the RELU_SQR operation already present upstream.
+# BitNet b1.58 2B 4T requires relu2. Verify the pinned llama.cpp BitNet graph
+# with a brace-balanced function scan. If an older pin still uses SiLU, patch
+# only build_bitnet_158() to the RELU_SQR operation already implemented there.
 LLAMA_CPP="$BITNET_DIR/3rdparty/llama.cpp/src/llama.cpp"
 "$STANFORD_VENV/bin/python" - "$LLAMA_CPP" <<'PY'
 from pathlib import Path
@@ -132,12 +132,25 @@ marker = "struct ggml_cgraph * build_bitnet_158()"
 start = text.find(marker)
 if start < 0:
     raise SystemExit("Could not locate pinned build_bitnet_158 graph builder")
-end = text.find("struct ggml_cgraph *", start + len(marker))
-if end < 0:
-    end = len(text)
+open_brace = text.find("{", start + len(marker))
+if open_brace < 0:
+    raise SystemExit("Could not locate opening brace for build_bitnet_158")
+depth = 0
+end = None
+for i in range(open_brace, len(text)):
+    ch = text[i]
+    if ch == "{":
+        depth += 1
+    elif ch == "}":
+        depth -= 1
+        if depth == 0:
+            end = i + 1
+            break
+if end is None:
+    raise SystemExit("Could not locate closing brace for build_bitnet_158")
 segment = text[start:end]
 if "LLM_FFN_RELU_SQR" in segment:
-    print("BitNet relu2 graph patch already present.")
+    print("BitNet relu2 graph verified.")
 else:
     count = segment.count("LLM_FFN_SILU")
     if count != 1:
@@ -173,7 +186,7 @@ if microsoft not in text:
         raise SystemExit("Could not locate pinned BitNet F32 conversion command")
     text = text.replace(generic, microsoft, 1)
 
-updated = path.read_text(encoding="utf-8") if False else text
+updated = text
 path.write_text(updated, encoding="utf-8")
 check = path.read_text(encoding="utf-8")
 if '"-DGGML_NATIVE=OFF"' not in check:
