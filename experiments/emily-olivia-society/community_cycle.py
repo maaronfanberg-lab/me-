@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 from difflib import SequenceMatcher
 
 import community_cycle_base as _base
@@ -24,9 +25,18 @@ _GENERIC_REPLY_LEADS = (
     "i've never done anything like that before",
     "i don't know what to say",
     "i dont know what to say",
+    "i'm not sure what to say",
+    "im not sure what to say",
     "i'm glad it's going well now",
     "im glad its going well now",
 )
+
+_ABSTRACT_LOOP_WORDS = {
+    "change", "changed", "changes", "changing", "different", "difference", "feel",
+    "feeling", "feelings", "perception", "perspective", "view", "views", "world",
+    "way", "ways", "look", "looking", "see", "seeing", "sure", "unsure", "uncertain",
+    "uncertainty", "think", "thinking", "thought", "thoughts", "everything",
+}
 
 _ADVICE_QUESTIONS = (
     "what would you suggest",
@@ -85,6 +95,33 @@ def _content_signature(text: str) -> set[str]:
         word for word in _base._normalize_words(text)
         if word not in _base._STOP_WORDS and word not in _GENERIC_ANCHOR_WORDS and len(word) > 2
     }
+
+
+def _is_stagnant_topic_loop(
+    reply: str,
+    inbound: str,
+    dialogue_history: list[tuple[str, str]] | None,
+) -> bool:
+    """Reject cross-speaker abstract loops that fail to add a concrete detail."""
+    recent = [str(text) for _speaker, text in (dialogue_history or []) if str(text).strip()][-5:]
+    if len(recent) < 4:
+        return False
+
+    signatures = [_content_signature(text) for text in recent]
+    counts = Counter(word for signature in signatures for word in signature)
+    repeated_theme = {word for word, count in counts.items() if count >= 2}
+    if not (repeated_theme & _ABSTRACT_LOOP_WORDS):
+        return False
+
+    reply_signature = _content_signature(reply)
+    if not (reply_signature & repeated_theme):
+        return False
+
+    historical_words = set().union(*signatures) if signatures else set()
+    inbound_signature = _content_signature(inbound)
+    fresh_words = reply_signature - historical_words - inbound_signature
+    fresh_concrete = fresh_words - _ABSTRACT_LOOP_WORDS
+    return not fresh_concrete
 
 
 def _too_similar_to_own_history(
@@ -156,7 +193,8 @@ def _completion_prompt(
         grounding = (
             "Stay on PARTNER's exact latest topic. Reuse a concrete idea from that line."
             f"{anchor_rule}{_perspective_rule(inbound)}{question_rule} Do not invent a new pet, "
-            "event, person, place, shared history, or unrelated scenario."
+            "person, place, shared history, or unrelated scenario. You may add a small ordinary "
+            "action, preference, or example from SELF when it directly answers the topic."
         )
 
     return (
@@ -169,7 +207,9 @@ def _completion_prompt(
         "Avoid generic filler openings such as 'that sounds like a great idea', 'I don't know "
         "what to say', or 'I'm glad it's going well now'. Start from a specific detail in "
         "PARTNER's latest line instead. Do not paraphrase or recycle any earlier SELF line; "
-        "move the conversation forward with a genuinely new detail, reaction, answer, or question."
+        "move the conversation forward with a genuinely new detail, reaction, answer, or question. "
+        "If the recent exchange is circling an abstract idea, break the loop with a concrete "
+        "everyday action, object, example, or specific question instead of another synonym."
         f"{style}\n\n"
         "Examples:\n"
         "PARTNER: Rough day at work.\n"
@@ -281,12 +321,14 @@ def _direct_bitnet_reply(
         }
         substantive = not require_new_content or _has_new_content(text, inbound)
         non_recycled = not _too_similar_to_own_history(text, agent.name, dialogue_history)
+        non_stagnant = not _is_stagnant_topic_loop(text, inbound, dialogue_history)
         if (
             anchored
             and novel
             and distinct_attempt
             and substantive
             and non_recycled
+            and non_stagnant
             and not _is_generic_attractor(text)
             and _base._is_usable_utterance(text, inbound, agent.name, other.name)
         ):
@@ -294,8 +336,8 @@ def _direct_bitnet_reply(
 
     previews = " | ".join(repr(text[:160]) for text in attempts)
     raise RuntimeError(
-        "BitNet returned role-drifted, generic, paraphrased, recycled, ungrounded, or unusable "
-        f"dialogue after {len(retry_specs)} move-diverse transcript-completion attempts: {previews}"
+        "BitNet returned role-drifted, generic, paraphrased, recycled, stagnant, ungrounded, or "
+        f"unusable dialogue after {len(retry_specs)} move-diverse transcript-completion attempts: {previews}"
     )
 
 
