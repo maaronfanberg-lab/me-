@@ -13,7 +13,7 @@ MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
 BITNET_SOURCE_REPO="microsoft/BitNet-b1.58-2B-4T"
 READY_MARKER="$HERE/.bootstrap-ready-v9"
-PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v12"
+PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v13"
 
 restore_real_cli() {
   if [[ -e "$BITNET_DIR/build/bin/llama-cli.real" ]]; then
@@ -186,14 +186,37 @@ if microsoft not in text:
         raise SystemExit("Could not locate pinned BitNet F32 conversion command")
     text = text.replace(generic, microsoft, 1)
 
-updated = text
-path.write_text(updated, encoding="utf-8")
+path.write_text(text, encoding="utf-8")
 check = path.read_text(encoding="utf-8")
 if '"-DGGML_NATIVE=OFF"' not in check:
     raise SystemExit("Portable BitNet build patch did not persist")
 if microsoft not in check:
     raise SystemExit("Microsoft BitNet converter selection did not persist")
 print("BitNet setup patched for portable build and Microsoft-specific GGUF conversion.")
+PY
+
+# Microsoft's current checkpoint stores packed BitNet weights as safetensors U8.
+# The fork's Microsoft-specific converter already defines DT_I2 on np.uint8, but
+# its safetensors dispatch table omits the U8 spelling. Wire U8 to DT_I2 so the
+# packed ternary weights are decoded by the converter it was designed for.
+BITNET_MS_CONVERTER="$BITNET_DIR/utils/convert-ms-to-gguf-bitnet.py"
+"$STANFORD_VENV/bin/python" - "$BITNET_MS_CONVERTER" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+needle = "    'I32': DT_I32,\n}"
+replacement = "    'I32': DT_I32,\n    'U8': DT_I2,\n}"
+if "'U8': DT_I2" not in text:
+    if needle not in text:
+        raise SystemExit("Could not locate Microsoft BitNet safetensors dtype table")
+    text = text.replace(needle, replacement, 1)
+    path.write_text(text, encoding="utf-8")
+check = path.read_text(encoding="utf-8")
+if "'U8': DT_I2" not in check:
+    raise SystemExit("Microsoft BitNet U8 safetensors patch did not persist")
+print("Microsoft BitNet U8 safetensors mapping verified.")
 PY
 
 if [[ ! -f "$MODEL_DIR/config.json" || ! -f "$MODEL_DIR/tokenizer.json" ]]; then
