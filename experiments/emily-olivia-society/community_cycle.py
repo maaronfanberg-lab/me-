@@ -16,11 +16,44 @@ HERE = Path(__file__).resolve().parent
 STANFORD = HERE / "vendor" / "stanford-genagents"
 WORKSPACES = HERE / "workspaces"
 MAX_UTTERANCE_CHARS = 12_000
+MAX_UTTERANCE_WORDS = 52
 _TEMPLATE_JUNK = re.compile(
     r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say|end\s+of\s+dialogue\s+so\s+far)",
     re.IGNORECASE,
 )
+_GENERIC_ASSISTANT_JUNK = re.compile(
+    r"(?:\bhow can i (?:assist|help)(?: you)?(?: today)?\b|"
+    r"\bi(?:'m| am) here to (?:assist|help)\b|"
+    r"\bi can (?:assist|help) you\b|"
+    r"\bwhat can i (?:assist|help) you with\b|"
+    r"\bwhat can i do for you\b|"
+    r"\bplease provide (?:me )?(?:with )?(?:the )?(?:specific )?(?:details|information)\b|"
+    r"\bassist with any (?:information|support)\b|"
+    r"\bsupport you need\b|"
+    r"\bas an ai\b)",
+    re.IGNORECASE,
+)
 _SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant|System)\s*:")
+_ACKNOWLEDGEMENT = re.compile(
+    r"\b(?:same here|me too|i agree|that makes sense|i get that|i understand|sounds good|fair enough|absolutely|definitely|exactly)\b",
+    re.IGNORECASE,
+)
+_STOP_WORDS = {
+    "a", "about", "am", "an", "and", "are", "as", "at", "be", "been", "but",
+    "can", "could", "did", "do", "does", "for", "from", "had", "has", "have",
+    "he", "her", "here", "hers", "him", "his", "i", "if", "in", "is", "it",
+    "its", "me", "might", "my", "not", "of", "on", "or", "our", "ours", "she",
+    "should", "so", "that", "the", "their", "theirs", "them", "then", "there",
+    "they", "this", "to", "too", "us", "very", "was", "we", "were", "what",
+    "when", "where", "which", "who", "why", "will", "with", "would", "you", "your",
+    "yours", "just", "really", "than",
+}
+_GREETING_SAFE_WORDS = {
+    "hello", "hi", "hey", "morning", "afternoon", "evening", "emily", "olivia",
+    "good", "great", "nice", "glad", "hear", "hearing", "see", "seeing", "meet",
+    "meeting", "back", "doing", "going", "well", "today", "thanks", "thank", "how",
+    "up", "fine", "okay", "ok", "likewise", "welcome",
+}
 
 
 @dataclass
@@ -101,19 +134,59 @@ def _normalize_words(text: str) -> list[str]:
     return re.findall(r"[a-z0-9']+", text.lower())
 
 
+def _content_words(text: str) -> set[str]:
+    return {
+        word
+        for word in _normalize_words(text)
+        if word not in _STOP_WORDS and word not in {"emily", "olivia"} and len(word) > 1
+    }
+
+
+def _is_greeting_only(text: str) -> bool:
+    words = _normalize_words(text)
+    if not words or len(words) > 14:
+        return False
+    meaningful = [word for word in words if word not in _STOP_WORDS]
+    if not meaningful:
+        return False
+    has_greeting = any(word in {"hello", "hi", "hey", "morning", "afternoon", "evening"} for word in words)
+    return has_greeting and all(word in _GREETING_SAFE_WORDS for word in meaningful)
+
+
 def _is_usable_utterance(text: str, inbound: str = "") -> bool:
+    if not isinstance(text, str):
+        return False
     cleaned = text.strip()
     if not cleaned or cleaned.startswith("GENERATION ERROR:") or len(cleaned) > MAX_UTTERANCE_CHARS:
         return False
-    if _TEMPLATE_JUNK.search(cleaned):
+    if _TEMPLATE_JUNK.search(cleaned) or _GENERIC_ASSISTANT_JUNK.search(cleaned):
         return False
     if len(_SPEAKER_LABEL.findall(cleaned)) > 1:
         return False
-    if sum(ch.isalnum() for ch in cleaned) < 3:
+    output_words = _normalize_words(cleaned)
+    if sum(ch.isalnum() for ch in cleaned) < 3 or len(output_words) < 2 or len(output_words) > MAX_UTTERANCE_WORDS:
         return False
+
     if inbound:
-        output_words = _normalize_words(cleaned)
         input_words = _normalize_words(inbound)
+
+        if _is_greeting_only(inbound):
+            meaningful_output = [word for word in output_words if word not in _STOP_WORDS]
+            has_greeting = any(
+                word in {"hello", "hi", "hey", "morning", "afternoon", "evening"}
+                for word in output_words
+            )
+            if not has_greeting:
+                return False
+            if any(word not in _GREETING_SAFE_WORDS for word in meaningful_output):
+                return False
+        else:
+            input_content = _content_words(inbound)
+            output_content = _content_words(cleaned)
+            if input_content and not (input_content & output_content):
+                if not (_ACKNOWLEDGEMENT.search(cleaned) and len(output_words) <= 14):
+                    return False
+
         if len(input_words) >= 5 and len(output_words) >= 5:
             common = len(set(output_words) & set(input_words))
             overlap = common / max(1, len(set(output_words)))
@@ -123,15 +196,26 @@ def _is_usable_utterance(text: str, inbound: str = "") -> bool:
 
 
 def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max_tokens: int) -> str:
-    """Use llama-server's chat endpoint so the GGUF's own template serializes dialogue."""
+    """Use llama-server chat with strict grounding to the addressed message."""
+    if _is_greeting_only(inbound):
+        grounding = (
+            "The message is only a greeting. Return a short greeting or ordinary greeting-small-talk response. "
+            "Do not introduce a pet, event, task, place, backstory, or unrelated topic."
+        )
+    else:
+        grounding = (
+            "Stay grounded in the exact message. Carry forward at least one meaningful idea or word from it. "
+            "Do not invent a new pet, event, person, place, shared history, or unrelated scenario."
+        )
     system = (
-        f"You are {agent.name}. You are speaking privately with {other.name}. "
-        f"The latest message was written by {other.name}; answer that exact message and stay on its topic. "
-        "Reply naturally and briefly as one person in an ongoing conversation. Do not invent a different scenario, "
-        "give generic advice unrelated to the message, repeat the prompt, instructions, role labels, or the other person's whole message."
+        f"You are {agent.name}, one participant in a private two-person conversation with {other.name}. "
+        "You are not a customer-service assistant, support agent, or generic helper. "
+        f"The latest message was written by {other.name}; answer that exact message. {grounding} "
+        "Use one or two natural sentences. Never offer generic assistance, ask what help is needed, repeat the prompt, "
+        "repeat role labels, or reproduce the other person's whole message."
     )
     user = f"{other.name} just said: {inbound}\n\nReply directly to {other.name}."
-    return request_chat(system, user, max_tokens, 0.5)
+    return request_chat(system, user, max_tokens, 0.45)
 
 
 def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
@@ -158,14 +242,14 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
         dialogue,
         context=(
             f"You are {agent.name}. You are in a two-person community with {other.name}. "
-            "Respond naturally to the addressed message."
+            "Respond naturally and specifically to the addressed message without inventing a different scenario."
         ),
     )
     text = str(response).strip()
     if not _is_usable_utterance(text, inbound):
         text = _direct_bitnet_reply(agent, other, inbound)
     if not _is_usable_utterance(text, inbound):
-        raise RuntimeError(f"{agent.name} returned no usable natural-language utterance.")
+        raise RuntimeError(f"{agent.name} returned no usable grounded natural-language utterance.")
     return {"type": "message", "recipient_id": other.agent_id, "content": text}
 
 
