@@ -137,8 +137,8 @@ jobs:
           PY
           test -d workspaces/emily
           test -d workspaces/olivia
-          timeout 2m python3 observer.py --summary > replay/observer-smoke.json
-          test -s replay/observer-smoke.json
+          timeout 2m python3 observer.py --summary > replay/observer.json
+          test -s replay/observer.json
 
       - name: Show BitNet log on failure
         if: failure()
