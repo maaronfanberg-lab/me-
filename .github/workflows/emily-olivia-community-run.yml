@@ -68,9 +68,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Cache Community runtime and BitNet
+      - name: Restore Community runtime and BitNet
+        id: bitnet-cache
         if: steps.gate.outputs.run == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             experiments/emily-olivia-society/.venv-agentsociety
@@ -84,6 +85,18 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: bash bootstrap_upstreams.sh
+
+      - name: Save Community runtime and BitNet immediately after bootstrap
+        if: steps.gate.outputs.run == 'true' && steps.bitnet-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v6
+          key: community-runtime-bitnet-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
 
       - name: Restore latest successful memory checkpoint
         if: steps.gate.outputs.run == 'true'
