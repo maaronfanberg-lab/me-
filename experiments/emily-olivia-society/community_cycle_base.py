@@ -21,6 +21,8 @@ MAX_ECP_TURNS = 10
 
 _TEMPLATE_JUNK = re.compile(
     r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|"
+    r"(?im:^\s*(?:answer|example|self-reply|self|partner)\s*:)|"
+    r"<\|(?:assistant|user|system|endoftext)?\|?>?|<\||"
     r"return\s+only\s+the\s+words\s+you\s+would\s+say|end\s+of\s+dialogue\s+so\s+far)",
     re.IGNORECASE,
 )
@@ -43,7 +45,7 @@ _ASSISTANTY_JUNK = re.compile(
     r"support\s+you\s+need)",
     re.IGNORECASE,
 )
-_SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant|System)\s*:")
+_SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant|System|SELF|PARTNER)\s*:")
 _REPLY_WRAPPER = re.compile(
     r"^\s*(?:<reply>\s*)?(.*?)(?:\s*</reply>)?\s*$",
     re.IGNORECASE | re.DOTALL,
@@ -289,7 +291,18 @@ def _request_transcript_completion(
             "top_p": 0.9,
             "stream": False,
             "cache_prompt": False,
-            "stop": ["\nPARTNER:", "<|endoftext|>"],
+            "stop": [
+                "\nPARTNER:",
+                "\nSELF:",
+                "\nAnswer:",
+                "\nExample:",
+                "\nSelf-reply:",
+                "<|assistant|>",
+                "<|user|>",
+                "<|system|>",
+                "<|endoftext|>",
+                "<|",
+            ],
         }
     ).encode("utf-8")
     req = urllib.request.Request(
@@ -484,6 +497,23 @@ async def run_one_cycle() -> None:
         )
 
     print(json.dumps({"start_time_step": base_time_step, "cycles": cycle_log}, indent=2))
+
+
+async def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Run one bounded Emily + Olivia community cycle."
+    )
+    parser.add_argument(
+        "--one-cycle",
+        action="store_true",
+        help="Permit exactly one bounded cycle per agent.",
+    )
+    args = parser.parse_args()
+    if not args.one_cycle:
+        raise SystemExit(
+            "Refusing to start automatically. Use --one-cycle to permit exactly one bounded cycle."
+        )
+    await run_one_cycle()
 
 
 async def main() -> None:
