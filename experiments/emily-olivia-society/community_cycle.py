@@ -32,11 +32,15 @@ _GENERIC_REPLY_LEADS = (
     "im glad its going well now",
 )
 
+# Words that can be perfectly natural once, but become low-information when a conversation
+# keeps recycling them without a concrete cause, object, action, or event.
 _ABSTRACT_LOOP_WORDS = {
     "change", "changed", "changes", "changing", "different", "difference", "feel",
     "feeling", "feelings", "perception", "perspective", "view", "views", "world",
     "way", "ways", "look", "looking", "see", "seeing", "sure", "unsure", "uncertain",
     "uncertainty", "think", "thinking", "thought", "thoughts", "everything",
+    "energy", "energetic", "energized", "energizing", "happy", "happiness",
+    "relaxed", "relaxing", "amazing", "doing", "done", "stuff",
 }
 
 _ADVICE_QUESTIONS = (
@@ -53,6 +57,11 @@ _DAY_CHECKINS = (
     "how are you",
     "how're you",
     "how have you been",
+    # Scheduled runs can legitimately start clean after a contaminated checkpoint is refused.
+    # In that case there is no earlier dialogue to continue, so treat the continuity seed as
+    # ordinary small talk rather than forcing nonsensical lexical grounding to "left off".
+    "let's continue naturally from where we left off",
+    "lets continue naturally from where we left off",
 )
 
 _INTENT_PHRASES = (
@@ -135,12 +144,24 @@ def _content_signature(text: str) -> set[str]:
     }
 
 
+def _has_scaffold_fragment(text: str) -> bool:
+    """Reject complete or truncated model-control/transcript markers before delivery."""
+    lowered = str(text).lower()
+    if "<|" in lowered or "|>" in lowered:
+        return True
+    stripped_lines = [line.strip().lower() for line in str(text).splitlines()]
+    return any(
+        line.startswith(("self:", "partner:", "self-reply:", "partner-reply:"))
+        for line in stripped_lines
+    )
+
+
 def _is_stagnant_topic_loop(
     reply: str,
     inbound: str,
     dialogue_history: list[tuple[str, str]] | None,
 ) -> bool:
-    """Reject cross-speaker abstract loops that fail to add a concrete detail."""
+    """Reject cross-speaker low-information loops that fail to add concrete detail."""
     recent = [str(text) for _speaker, text in (dialogue_history or []) if str(text).strip()][-5:]
     if len(recent) < 4:
         return False
@@ -155,11 +176,25 @@ def _is_stagnant_topic_loop(
     if not (reply_signature & repeated_theme):
         return False
 
-    historical_words = set().union(*signatures) if signatures else set()
+    # Long replies that repeat the same low-information state word are exactly the attractor
+    # seen in run #67 ("energy / feeling / doing things"). Do not let synonym inflation count
+    # as progress.
+    reply_counts = Counter(_base._normalize_words(reply))
+    repeated_low_info = {
+        word for word, count in reply_counts.items()
+        if count >= 2 and word in _ABSTRACT_LOOP_WORDS
+    }
     inbound_signature = _content_signature(inbound)
+    if repeated_low_info & inbound_signature and len(_base._normalize_words(reply)) > 14:
+        return True
+
+    historical_words = set().union(*signatures) if signatures else set()
     fresh_words = reply_signature - historical_words - inbound_signature
     fresh_concrete = fresh_words - _ABSTRACT_LOOP_WORDS
-    return not fresh_concrete
+    # One new concrete noun is enough for a short natural line. Longer replies need at least
+    # two genuinely new concrete details so a lone adjective cannot launder a repetitive loop.
+    min_fresh = 1 if len(_base._normalize_words(reply)) <= 12 else 2
+    return len(fresh_concrete) < min_fresh
 
 
 def _too_similar_to_own_history(
@@ -209,9 +244,9 @@ def _completion_prompt(
     if _is_day_checkin(inbound):
         grounding = (
             "PARTNER is making ordinary greeting small talk and asking how SELF is doing. "
-            "Answer that question naturally in the first clause, briefly. SELF may ask how "
-            "PARTNER is doing in return. Do not turn greeting words such as 'hey', 'day', or "
-            "'going' into abstract topics and do not invent a job, event, place, or backstory."
+            "Answer naturally and briefly with an ordinary present-moment detail. SELF may ask "
+            "how PARTNER is doing in return. Do not turn greeting or continuity words into "
+            "abstract topics and do not invent a job, event, place, or backstory."
         )
     elif _base._is_greeting_only(inbound):
         grounding = (
@@ -427,6 +462,7 @@ def _direct_bitnet_reply(
             and substantive
             and non_recycled
             and non_stagnant
+            and not _has_scaffold_fragment(text)
             and not _is_generic_attractor(text)
             and _base._is_usable_utterance(text, inbound, agent.name, other.name)
         ):
