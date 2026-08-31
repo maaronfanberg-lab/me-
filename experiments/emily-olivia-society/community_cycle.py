@@ -17,9 +17,10 @@ STANFORD = HERE / "vendor" / "stanford-genagents"
 WORKSPACES = HERE / "workspaces"
 MAX_UTTERANCE_CHARS = 12_000
 _TEMPLATE_JUNK = re.compile(
-    r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:)",
+    r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say)",
     re.IGNORECASE,
 )
+_SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant)\s*:")
 
 
 @dataclass
@@ -96,7 +97,11 @@ def observation_text(agent: CommunityAgent, observation: dict) -> str:
     return f"{agent.name} observes a message from {latest['from_name']}: {latest['content']}"
 
 
-def _is_usable_utterance(text: str) -> bool:
+def _normalize_words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9']+", text.lower())
+
+
+def _is_usable_utterance(text: str, inbound: str = "") -> bool:
     cleaned = text.strip()
     if not cleaned or cleaned.startswith("GENERATION ERROR:"):
         return False
@@ -104,34 +109,37 @@ def _is_usable_utterance(text: str) -> bool:
         return False
     if _TEMPLATE_JUNK.search(cleaned):
         return False
+    if len(_SPEAKER_LABEL.findall(cleaned)) > 1:
+        return False
     alnum = sum(ch.isalnum() for ch in cleaned)
-    return alnum >= 3
+    if alnum < 3:
+        return False
+    if inbound:
+        output_words = _normalize_words(cleaned)
+        input_words = _normalize_words(inbound)
+        if len(input_words) >= 5 and len(output_words) >= 5:
+            common = len(set(output_words) & set(input_words))
+            overlap = common / max(1, len(set(output_words)))
+            if overlap > 0.85 and len(output_words) >= len(input_words):
+                return False
+    return True
 
 
-def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
-    """Ask BitNet for plain dialogue, bypassing Stanford's JSON-shaped utterance template."""
+def _chat_bitnet(messages: list[dict], max_tokens: int) -> str:
     port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
     timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
-    max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
-    prompt = (
-        f"You are {agent.name}, speaking privately with {other.name}.\n"
-        f"{other.name} said: {inbound}\n\n"
-        "Reply naturally in one short conversational message. "
-        "Return only the words you would say. Do not output JSON, labels, templates, braces, "
-        "examples, metadata, or the speaker's name.\n"
-        f"{agent.name}:"
-    )
     payload = json.dumps(
         {
-            "prompt": prompt,
-            "n_predict": max_tokens,
-            "temperature": 0.7,
+            "model": "community-bitnet",
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": 0.6,
+            "top_p": 0.9,
             "stream": False,
-            "cache_prompt": True,
         }
     ).encode("utf-8")
     req = urllib.request.Request(
-        f"http://127.0.0.1:{port}/completion",
+        f"http://127.0.0.1:{port}/v1/chat/completions",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -140,13 +148,33 @@ def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: 
         with urllib.request.urlopen(req, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"Direct BitNet dialogue request failed: {exc}") from exc
-    text = data.get("content")
+        raise RuntimeError(f"BitNet chat request failed: {exc}") from exc
+    try:
+        text = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(f"BitNet chat endpoint returned an unexpected payload: {data!r}") from exc
     if not isinstance(text, str):
-        raise RuntimeError("Direct BitNet dialogue response had no text content.")
-    text = text.strip()
-    if not _is_usable_utterance(text):
-        raise RuntimeError(f"BitNet returned template-like or unusable dialogue: {text[:240]!r}")
+        raise RuntimeError("BitNet chat response had no text content.")
+    return text.strip()
+
+
+def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
+    """Use llama-server's chat endpoint so the model's own chat template is applied."""
+    max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                f"You are {agent.name}. You are having a private two-person conversation with {other.name}. "
+                "Answer naturally and briefly. Do not repeat instructions or the other person's message. "
+                "Do not output JSON, role labels, templates, metadata, or examples."
+            ),
+        },
+        {"role": "user", "content": inbound},
+    ]
+    text = _chat_bitnet(messages, max_tokens)
+    if not _is_usable_utterance(text, inbound):
+        raise RuntimeError(f"BitNet returned template-like, echoed, or unusable dialogue: {text[:240]!r}")
     return text
 
 
@@ -156,7 +184,8 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
         return {"type": "wait", "reason": "no_new_message"}
 
     latest = inbox[-1]
-    dialogue = [[latest["from_name"], latest["content"]]]
+    inbound = str(latest["content"])
+    dialogue = [[latest["from_name"], inbound]]
     response = agent.brain.utterance(
         dialogue,
         context=(
@@ -165,9 +194,9 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
         ),
     )
     text = str(response).strip()
-    if not _is_usable_utterance(text):
-        text = _direct_bitnet_reply(agent, other, str(latest["content"]))
-    if not _is_usable_utterance(text):
+    if not _is_usable_utterance(text, inbound):
+        text = _direct_bitnet_reply(agent, other, inbound)
+    if not _is_usable_utterance(text, inbound):
         raise RuntimeError(f"{agent.name} returned no usable natural-language utterance.")
     return {"type": "message", "recipient_id": other.agent_id, "content": text}
 
