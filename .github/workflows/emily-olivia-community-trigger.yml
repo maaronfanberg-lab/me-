@@ -28,6 +28,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # One dispatch only; Community concurrency replaces stale runs.
           gh workflow run emily-olivia-community-run.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main
