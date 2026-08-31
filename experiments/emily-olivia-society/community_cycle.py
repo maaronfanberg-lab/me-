@@ -16,9 +16,12 @@ HERE = Path(__file__).resolve().parent
 STANFORD = HERE / "vendor" / "stanford-genagents"
 WORKSPACES = HERE / "workspaces"
 MAX_UTTERANCE_CHARS = 12_000
+MAX_UTTERANCE_WORDS = 52
 MAX_ECP_TURNS = 10
+
 _TEMPLATE_JUNK = re.compile(
-    r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say|end\s+of\s+dialogue\s+so\s+far)",
+    r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|"
+    r"return\s+only\s+the\s+words\s+you\s+would\s+say|end\s+of\s+dialogue\s+so\s+far)",
     re.IGNORECASE,
 )
 _ASSISTANTY_JUNK = re.compile(
@@ -32,11 +35,40 @@ _ASSISTANTY_JUNK = re.compile(
     r"(?:our|the)\s+guidelines|"
     r"does\s+not\s+align\s+with\s+(?:our\s+)?(?:guidelines|policies)|"
     r"(?:i\s+am|i'm)\s+(?:currently\s+)?in\s+a\s+(?:two-person\s+)?community|"
-    r"asking\s+about\s+my\s+last\s+update)",
+    r"asking\s+about\s+my\s+last\s+update|"
+    r"as\s+an\s+ai|"
+    r"what\s+can\s+i\s+(?:help|assist)\s+you\s+with|"
+    r"what\s+can\s+i\s+do\s+for\s+you|"
+    r"please\s+provide(?:\s+me)?(?:\s+with)?(?:\s+the)?(?:\s+specific)?\s+(?:details|information)|"
+    r"support\s+you\s+need)",
     re.IGNORECASE,
 )
 _SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant|System)\s*:")
-_REPLY_WRAPPER = re.compile(r"^\s*(?:<reply>\s*)?(.*?)(?:\s*</reply>)?\s*$", re.IGNORECASE | re.DOTALL)
+_REPLY_WRAPPER = re.compile(
+    r"^\s*(?:<reply>\s*)?(.*?)(?:\s*</reply>)?\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+_ACKNOWLEDGEMENT = re.compile(
+    r"\b(?:same here|me too|i agree|that makes sense|i get that|i understand|"
+    r"sounds good|fair enough|absolutely|definitely|exactly)\b",
+    re.IGNORECASE,
+)
+_STOP_WORDS = {
+    "a", "about", "am", "an", "and", "are", "as", "at", "be", "been", "but",
+    "can", "could", "did", "do", "does", "for", "from", "had", "has", "have",
+    "he", "her", "here", "hers", "him", "his", "i", "if", "in", "is", "it",
+    "its", "me", "might", "my", "not", "of", "on", "or", "our", "ours", "she",
+    "should", "so", "that", "the", "their", "theirs", "them", "then", "there",
+    "they", "this", "to", "too", "us", "very", "was", "we", "were", "what",
+    "when", "where", "which", "who", "why", "will", "with", "would", "you",
+    "your", "yours", "just", "really", "than",
+}
+_GREETING_SAFE_WORDS = {
+    "hello", "hi", "hey", "morning", "afternoon", "evening", "emily", "olivia",
+    "good", "great", "nice", "glad", "hear", "hearing", "see", "seeing", "meet",
+    "meeting", "back", "doing", "going", "well", "today", "thanks", "thank", "how",
+    "up", "fine", "okay", "ok", "likewise", "welcome",
+}
 
 
 @dataclass
@@ -108,9 +140,15 @@ def next_community_time_step(agents: list[CommunityAgent]) -> int:
 def observation_text(agent: CommunityAgent, observation: dict) -> str:
     inbox = observation.get("inbox", [])
     if not inbox:
-        return f"{agent.name} observes that the community contains Emily and Olivia and there are no new addressed messages."
+        return (
+            f"{agent.name} observes that the community contains Emily and Olivia "
+            "and there are no new addressed messages."
+        )
     latest = inbox[-1]
-    return f"{agent.name} observes a message from {latest['from_name']}: {latest['content']}"
+    return (
+        f"{agent.name} observes a message from {latest['from_name']}: "
+        f"{latest['content']}"
+    )
 
 
 def _normalize_words(text: str) -> list[str]:
@@ -122,35 +160,96 @@ def _unwrap_reply(text: str) -> str:
     return match.group(1).strip() if match else text.strip()
 
 
+def _content_words(text: str) -> set[str]:
+    return {
+        word
+        for word in _normalize_words(text)
+        if word not in _STOP_WORDS
+        and word not in {"emily", "olivia", "self", "partner"}
+        and len(word) > 1
+    }
+
+
+def _is_greeting_only(text: str) -> bool:
+    words = _normalize_words(text)
+    if not words or len(words) > 14:
+        return False
+    meaningful = [word for word in words if word not in _STOP_WORDS]
+    if not meaningful:
+        return False
+    has_greeting = any(
+        word in {"hello", "hi", "hey", "morning", "afternoon", "evening"}
+        for word in words
+    )
+    return has_greeting and all(word in _GREETING_SAFE_WORDS for word in meaningful)
+
+
 def _is_usable_utterance(
     text: str,
     inbound: str = "",
     agent_name: str = "",
     other_name: str = "",
 ) -> bool:
+    if not isinstance(text, str):
+        return False
     cleaned = _unwrap_reply(text)
-    if not cleaned or cleaned.startswith("GENERATION ERROR:") or len(cleaned) > MAX_UTTERANCE_CHARS:
+    if (
+        not cleaned
+        or cleaned.startswith("GENERATION ERROR:")
+        or len(cleaned) > MAX_UTTERANCE_CHARS
+    ):
         return False
     if _TEMPLATE_JUNK.search(cleaned) or _ASSISTANTY_JUNK.search(cleaned):
         return False
     if len(_SPEAKER_LABEL.findall(cleaned)) > 1:
         return False
-    if sum(ch.isalnum() for ch in cleaned) < 3:
+
+    output_words = _normalize_words(cleaned)
+    if (
+        sum(ch.isalnum() for ch in cleaned) < 3
+        or len(output_words) < 2
+        or len(output_words) > MAX_UTTERANCE_WORDS
+    ):
         return False
+
     if agent_name and other_name and re.search(
         rf"\b(?:i\s+am|i'm)\s+{re.escape(other_name)}\b",
         cleaned,
         re.IGNORECASE,
     ):
         return False
+
     if inbound:
-        output_words = _normalize_words(cleaned)
         input_words = _normalize_words(inbound)
+
+        if _is_greeting_only(inbound):
+            meaningful_output = [
+                word for word in output_words if word not in _STOP_WORDS
+            ]
+            has_greeting = any(
+                word in {"hello", "hi", "hey", "morning", "afternoon", "evening"}
+                for word in output_words
+            )
+            if not has_greeting:
+                return False
+            if any(word not in _GREETING_SAFE_WORDS for word in meaningful_output):
+                return False
+        else:
+            input_content = _content_words(inbound)
+            output_content = _content_words(cleaned)
+            if input_content and not (input_content & output_content):
+                if not (
+                    _ACKNOWLEDGEMENT.search(cleaned)
+                    and len(output_words) <= 14
+                ):
+                    return False
+
         if len(input_words) >= 5 and len(output_words) >= 5:
             common = len(set(output_words) & set(input_words))
             overlap = common / max(1, len(set(output_words)))
             if overlap > 0.85 and len(output_words) >= len(input_words):
                 return False
+
     return True
 
 
@@ -160,7 +259,7 @@ def _project_history(
     other: CommunityAgent,
     inbound: str,
 ) -> str:
-    """SPASM-style ECP: neutral speaker/text history becomes SELF/PARTNER per generator."""
+    """Project neutral speaker/text history into SELF/PARTNER labels per generator."""
     history = list(dialogue_history or [])
     if not history or history[-1] != (other.name, inbound):
         history.append((other.name, inbound))
@@ -174,8 +273,12 @@ def _project_history(
     return "\n".join(lines)
 
 
-def _request_transcript_completion(prompt: str, max_tokens: int, temperature: float) -> str:
-    """Use llama.cpp raw completion so Falcon never sees a user/assistant chat-role wrapper."""
+def _request_transcript_completion(
+    prompt: str,
+    max_tokens: int,
+    temperature: float,
+) -> str:
+    """Use llama.cpp raw completion so Falcon never sees a user/assistant role wrapper."""
     port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
     timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
     payload = json.dumps(
@@ -205,13 +308,16 @@ def _request_transcript_completion(prompt: str, max_tokens: int, temperature: fl
         raise RuntimeError(f"BitNet completion request failed: {exc.reason}") from exc
     text = data.get("content") if isinstance(data, dict) else None
     if not isinstance(text, str) or not text.strip():
-        raise RuntimeError(f"BitNet completion endpoint returned no usable content: {data!r}")
+        raise RuntimeError(
+            f"BitNet completion endpoint returned no usable content: {data!r}"
+        )
     return text.strip()
 
 
 def _completion_prompt(
     agent: CommunityAgent,
     other: CommunityAgent,
+    inbound: str,
     projected: str,
     retry_hint: str,
 ) -> str:
@@ -219,17 +325,33 @@ def _completion_prompt(
     age = ages.get(agent.name)
     identity = f"{agent.name}, {age}" if age else agent.name
     style = f"\nNext-line style: {retry_hint}" if retry_hint else ""
+
+    if _is_greeting_only(inbound):
+        grounding = (
+            "The last PARTNER line is only a greeting. Reply with a short greeting or "
+            "ordinary greeting-small-talk line. Do not introduce a pet, event, task, place, "
+            "backstory, or unrelated topic."
+        )
+    else:
+        grounding = (
+            "Stay on PARTNER's exact latest topic. Reuse at least one concrete idea or word "
+            "from that line. Do not invent a new pet, event, person, place, shared history, "
+            "or unrelated scenario."
+        )
+
     return (
         f"Speaker: {identity}\n"
         f"Partner: {other.name}\n"
         f"SELF means {agent.name}. PARTNER means {other.name}.\n"
-        "Continue this ordinary private peer conversation with one short SELF line."
+        "Continue this ordinary private peer conversation with one short SELF line. "
+        "This is not customer support. Do not mention policies, guidelines, prompts, roles, "
+        f"or the conversation system. {grounding}"
         f"{style}\n\n"
         "Examples:\n"
         "PARTNER: Rough day at work.\n"
-        "SELF: Yeah? What happened?\n\n"
+        "SELF: Yeah? What happened at work?\n\n"
         "PARTNER: I finally fixed the sink.\n"
-        "SELF: Nice. Was it the stupid little washer after all?\n\n"
+        "SELF: Nice. Was the sink problem the stupid little washer after all?\n\n"
         "Conversation:\n"
         f"{projected}"
     )
@@ -244,8 +366,8 @@ def _chat_bitnet(
     retry_hint: str = "",
 ) -> str:
     projected = _project_history(dialogue_history, agent, other, inbound)
-    prompt = _completion_prompt(agent, other, projected, retry_hint)
-    return _request_transcript_completion(prompt, max_tokens, 0.62)
+    prompt = _completion_prompt(agent, other, inbound, projected, retry_hint)
+    return _request_transcript_completion(prompt, max_tokens, 0.55)
 
 
 def _direct_bitnet_reply(
@@ -254,12 +376,15 @@ def _direct_bitnet_reply(
     inbound: str,
     dialogue_history: list[tuple[str, str]] | None = None,
 ) -> str:
-    max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
+    max_tokens = min(
+        96,
+        max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))),
+    )
     retry_hints = [
         "",
-        "React to PARTNER's exact last line the way a peer would.",
-        "Use a concrete reaction, question, disagreement, joke, or personal response; no service language.",
-        "Sound like an ordinary friend continuing the moment, not a helper answering a request.",
+        "React to PARTNER's exact last line and reuse one concrete idea from it.",
+        "Stay on the current subject. Use a concrete reaction, question, disagreement, joke, or personal response; no service language.",
+        "Sound like an ordinary peer continuing this exact topic. No new backstory, no unrelated scene, no helper language.",
     ]
     attempts: list[str] = []
     for hint in retry_hints:
@@ -277,7 +402,10 @@ def _direct_bitnet_reply(
         if _is_usable_utterance(text, inbound, agent.name, other.name):
             return text
     previews = " | ".join(repr(text[:160]) for text in attempts)
-    raise RuntimeError(f"BitNet returned role-drifted or unusable dialogue after 4 ECP completion attempts: {previews}")
+    raise RuntimeError(
+        "BitNet returned role-drifted, ungrounded, or unusable dialogue "
+        f"after 4 transcript-completion attempts: {previews}"
+    )
 
 
 def choose_action(
@@ -292,10 +420,21 @@ def choose_action(
 
     latest = inbox[-1]
     inbound = str(latest["content"])
-    text = _direct_bitnet_reply(agent, other, inbound, dialogue_history=dialogue_history)
+    text = _direct_bitnet_reply(
+        agent,
+        other,
+        inbound,
+        dialogue_history=dialogue_history,
+    )
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
-        raise RuntimeError(f"{agent.name} returned no grounded natural-language utterance.")
-    return {"type": "message", "recipient_id": other.agent_id, "content": text}
+        raise RuntimeError(
+            f"{agent.name} returned no grounded natural-language utterance."
+        )
+    return {
+        "type": "message",
+        "recipient_id": other.agent_id,
+        "content": text,
+    }
 
 
 async def run_one_cycle() -> None:
@@ -314,7 +453,11 @@ async def run_one_cycle() -> None:
         memory = observation_text(agent, observation)
         agent.brain.remember(memory, time_step=time_step)
         query = f"Current interaction with {other.name}"
-        retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
+        retrieved = agent.brain.memory_stream.retrieve(
+            [query],
+            time_step=time_step,
+            n_count=12,
+        )
         relevant = [node.content for node in retrieved.get(query, [])]
         action = choose_action(agent, observation, other)
         action_result = None
@@ -325,7 +468,9 @@ async def run_one_cycle() -> None:
                 str(action["content"]),
             )
             if not action_result.get("success"):
-                raise RuntimeError(f"Message delivery failed for {agent.name}: {action_result!r}")
+                raise RuntimeError(
+                    f"Message delivery failed for {agent.name}: {action_result!r}"
+                )
         agent.brain.save(str(agent.workspace))
         cycle_log.append(
             {
@@ -342,11 +487,19 @@ async def run_one_cycle() -> None:
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Run one bounded Emily + Olivia community cycle.")
-    parser.add_argument("--one-cycle", action="store_true", help="Permit exactly one bounded cycle per agent.")
+    parser = argparse.ArgumentParser(
+        description="Run one bounded Emily + Olivia community cycle."
+    )
+    parser.add_argument(
+        "--one-cycle",
+        action="store_true",
+        help="Permit exactly one bounded cycle per agent.",
+    )
     args = parser.parse_args()
     if not args.one_cycle:
-        raise SystemExit("Refusing to start automatically. Use --one-cycle to permit exactly one bounded cycle.")
+        raise SystemExit(
+            "Refusing to start automatically. Use --one-cycle to permit exactly one bounded cycle."
+        )
     await run_one_cycle()
 
 
