@@ -67,7 +67,13 @@ jobs:
         run: |
           OPENER="${{ github.event.inputs.opener }}"
           TURNS="${{ github.event.inputs.turns }}"
-          if [ -z "$OPENER" ]; then OPENER="Hello, Olivia."; fi
+          if [ -z "$OPENER" ]; then
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              OPENER="Let's continue naturally from where we left off."
+            else
+              OPENER="Hello, Olivia."
+            fi
+          fi
           if [ -z "$TURNS" ]; then TURNS="8"; fi
           .venv-stanford/bin/python community_session.py --run --turns "$TURNS" --opener "$OPENER"
 
