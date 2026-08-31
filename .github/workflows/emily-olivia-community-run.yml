@@ -12,7 +12,16 @@ on:
         required: false
         default: "8"
   schedule:
-    - cron: "*/5 * * * *"
+    # Four Central-time handoff slots. Each slot has a CDT and CST UTC form;
+    # the first gate below keeps only the one matching the current UTC offset.
+    - cron: "0 10 * * *"   # 05:00 CDT
+    - cron: "0 11 * * *"   # 05:00 CST
+    - cron: "30 15 * * *"  # 10:30 CDT
+    - cron: "30 16 * * *"  # 10:30 CST
+    - cron: "0 21 * * *"   # 16:00 CDT
+    - cron: "0 22 * * *"   # 16:00 CST
+    - cron: "30 2 * * *"   # 21:30 CDT
+    - cron: "30 3 * * *"   # 21:30 CST
 
 concurrency:
   group: emily-olivia-community
@@ -32,16 +41,40 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TZ: America/Chicago
     steps:
+      - name: Gate Central-time handoff slot
+        id: gate
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          offset="$(date +%z)"
+          schedule="${{ github.event.schedule }}"
+          run=false
+
+          case "$offset:$schedule" in
+            '-0500:0 10 * * *'|'-0500:30 15 * * *'|'-0500:0 21 * * *'|'-0500:30 2 * * *') run=true ;;
+            '-0600:0 11 * * *'|'-0600:30 16 * * *'|'-0600:0 22 * * *'|'-0600:30 3 * * *') run=true ;;
+          esac
+
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "Central offset=$offset schedule=$schedule run=$run"
+
       - name: Check out isolated community branch
+        if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
           ref: experiment/emily-olivia-society
 
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: '3.11'
 
       - name: Require model secret
+        if: steps.gate.outputs.run == 'true'
         run: |
           if [ -z "$OPENAI_API_KEY" ]; then
             echo "OPENAI_API_KEY repository secret is missing."
@@ -49,10 +82,12 @@ jobs:
           fi
 
       - name: Bootstrap pinned research code
+        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: bash bootstrap_upstreams.sh
 
       - name: Restore latest successful memory checkpoint
+        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         env:
           COMMUNITY_WORKFLOW_FILE: emily-olivia-community-run.yml
@@ -60,10 +95,12 @@ jobs:
         run: bash restore_latest_checkpoint.sh
 
       - name: Initialize or preserve private cognition workspaces
+        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: .venv-stanford/bin/python init_cognition.py
 
       - name: Keep Emily and Olivia talking
+        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
           OPENER="${{ github.event.inputs.opener }}"
@@ -100,16 +137,17 @@ jobs:
           fi
 
       - name: Verify persistence and reflection
+        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: .venv-stanford/bin/python persistence_reflection.py --run
 
       - name: Generate compact read-only observer report
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: python3 observer.py --summary > replay/observer.json
 
       - name: Upload community results
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: emily-olivia-community-results
