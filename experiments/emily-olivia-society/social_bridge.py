@@ -3,8 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
+
+# AgentSociety2 validates that this variable exists at import time even though
+# this bridge only uses EnvBase/tool and never dispatches an LLM request.
+# Give it a local sentinel so the free BitNet path stays independent of OpenAI.
+os.environ.setdefault("AGENTSOCIETY_LLM_API_KEY", "local-bitnet-unused")
 
 from controlled_social_space import ControlledSocialSpace
 
