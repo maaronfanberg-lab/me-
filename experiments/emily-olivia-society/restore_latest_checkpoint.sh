@@ -84,32 +84,80 @@ PY
 
 social_state="$(find "$tmp_dir" -type f -path '*/replay/social_state.json' -print -quit)"
 
-# Older successful runs could contain syntactically valid but semantically poisoned
-# template output such as repeated {"utterance": 3}. Never restore that material.
+# JSON validity is not enough. Early successful runs contained syntactically valid
+# customer-service boilerplate, malformed reflection JSON, and short attractor loops that
+# repeatedly dragged Emily and Olivia back into unusable dialogue. Never restore those.
 if ! python3 - "$candidate" "${social_state:-}" <<'PY'
-import pathlib, re, sys
+import json
+import pathlib
+import re
+import sys
+
 workspace = pathlib.Path(sys.argv[1])
 social = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] else None
+
 patterns = [
-    re.compile(r'[\{\[]?\s*["\']?utter(?:ance)?["\']?\s*[:=]', re.I),
-    re.compile(r'\[\s*input\s*\]\s*:', re.I),
+    ("template_junk", re.compile(r'[\{\[]?\s*["\']?utter(?:ance)?["\']?\s*[:=]|\[\s*input\s*\]\s*:', re.I)),
+    ("service_language", re.compile(
+        r'how\s+can\s+i\s+(?:help|assist)\s+you|feel\s+free\s+to\s+ask|'
+        r'need\s+(?:any\s+)?(?:further\s+)?assistance|'
+        r'i(?:\'m|\s+am)\s+sorry[^.]{0,100}(?:can(?:not|\'t)|unable)\s+(?:assist|help|fulfill)|'
+        r'i\s+can(?:not|\'t)\s+(?:assist|help|fulfill)(?:\s+with)?\s+(?:this|that|your)\s+request|'
+        r'(?:i\s+am|i\'m)\s+(?:currently\s+)?in\s+a\s+(?:two-person\s+)?community|'
+        r'asking\s+about\s+my\s+last\s+update|as\s+an\s+ai',
+        re.I,
+    )),
+    ("dead_end_attractor", re.compile(
+        r'^\s*i(?:\'m|\s+am)\s+not\s+sure\s+what\s+to\s+say\.?\s*$|'
+        r'^\s*i(?:\'ve|\s+have)\s+been\s+trying(?:\.\s*i(?:\'ve|\s+have)\s+been\s+trying)*\.?\s*$',
+        re.I,
+    )),
 ]
-texts = []
-for path in workspace.rglob('*.json'):
-    try:
-        texts.append(path.read_text(encoding='utf-8', errors='replace'))
-    except OSError:
-        pass
+
+def classify(text: str):
+    text = str(text or "").strip()
+    if not text:
+        return None
+    if text.startswith("```"):
+        return "malformed_reflection_payload"
+    if re.match(r'^\{\s*["\']reflection["\']\s*:', text, re.I | re.S):
+        return "malformed_reflection_payload"
+    for name, pattern in patterns:
+        if pattern.search(text):
+            return name
+    return None
+
+bad = []
+for agent in ("emily", "olivia"):
+    nodes_path = workspace / agent / "memory_stream" / "nodes.json"
+    nodes = json.loads(nodes_path.read_text(encoding="utf-8"))
+    if not isinstance(nodes, list):
+        raise SystemExit(f"Unexpected memory schema for {agent}")
+    for node in nodes:
+        reason = classify(node.get("content", ""))
+        if reason:
+            bad.append((agent, reason, str(node.get("content", ""))[:180]))
+
 if social and social.is_file():
-    texts.append(social.read_text(encoding='utf-8', errors='replace'))
-hits = sum(len(p.findall(text)) for text in texts for p in patterns)
-if hits >= 2:
-    print(f'Checkpoint contamination detected ({hits} template-junk markers); refusing restore.', file=sys.stderr)
+    state = json.loads(social.read_text(encoding="utf-8"))
+    for inbox in (state.get("inboxes") or {}).values():
+        if not isinstance(inbox, list):
+            continue
+        for message in inbox:
+            reason = classify(message.get("content", ""))
+            if reason:
+                bad.append(("social_state", reason, str(message.get("content", ""))[:180]))
+
+if bad:
+    print(f"Checkpoint semantic contamination detected ({len(bad)} bad memories/messages); refusing restore.", file=sys.stderr)
+    for source, reason, preview in bad[:8]:
+        print(f"  {source}: {reason}: {preview!r}", file=sys.stderr)
     raise SystemExit(1)
-print('Checkpoint dialogue contamination check passed.')
+
+print("Checkpoint semantic dialogue validation passed.")
 PY
 then
-  echo "Prior checkpoint is contaminated; starting Emily and Olivia from clean cognition instead."
+  echo "Prior checkpoint is semantically contaminated; starting Emily and Olivia from clean cognition instead."
   rm -rf "$WORKSPACES"
   rm -f "$REPLAY_DIR/social_state.json"
   mkdir -p "$REPLAY_DIR"
@@ -119,7 +167,7 @@ then
   "restored": false,
   "source_run_id": $checkpoint_run,
   "artifact": "$ARTIFACT_NAME",
-  "reason": "template_dialogue_contamination",
+  "reason": "semantic_dialogue_contamination",
   "social_state_restored": false
 }
 JSON
