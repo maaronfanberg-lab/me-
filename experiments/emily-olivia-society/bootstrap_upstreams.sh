@@ -13,7 +13,7 @@ MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
 BITNET_SOURCE_REPO="microsoft/BitNet-b1.58-2B-4T"
 READY_MARKER="$HERE/.bootstrap-ready-v9"
-PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v10"
+PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v11"
 
 restore_real_cli() {
   if [[ -e "$BITNET_DIR/build/bin/llama-cli.real" ]]; then
@@ -135,6 +135,25 @@ if '"-DGGML_NATIVE=OFF"' not in text:
 if '"-DGGML_NATIVE=OFF"' not in path.read_text(encoding="utf-8"):
     raise SystemExit("Portable BitNet build patch did not persist")
 print("BitNet setup patched with GGML_NATIVE=OFF for cross-runner cache safety.")
+PY
+
+BITNET_CONVERTER="$BITNET_DIR/utils/convert-hf-to-gguf-bitnet.py"
+"$STANFORD_VENV/bin/python" - "$BITNET_CONVERTER" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = '@Model.register("BitnetForCausalLM")'
+new = '@Model.register("BitnetForCausalLM", "BitNetForCausalLM")'
+if old in text:
+    text = text.replace(old, new, 1)
+    path.write_text(text, encoding="utf-8")
+elif new not in text:
+    raise SystemExit("Could not locate pinned BitNet architecture registration")
+if new not in path.read_text(encoding="utf-8"):
+    raise SystemExit("BitNet architecture alias patch did not persist")
+print("BitNet converter patched to accept Microsoft's BitNetForCausalLM architecture name.")
 PY
 
 if [[ ! -f "$MODEL_DIR/config.json" || ! -f "$MODEL_DIR/tokenizer.json" ]]; then
