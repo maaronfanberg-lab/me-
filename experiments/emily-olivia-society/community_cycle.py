@@ -16,6 +16,7 @@ HERE = Path(__file__).resolve().parent
 STANFORD = HERE / "vendor" / "stanford-genagents"
 WORKSPACES = HERE / "workspaces"
 MAX_UTTERANCE_CHARS = 12_000
+MAX_ECP_TURNS = 10
 _TEMPLATE_JUNK = re.compile(
     r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say|end\s+of\s+dialogue\s+so\s+far)",
     re.IGNORECASE,
@@ -25,7 +26,7 @@ _ASSISTANTY_JUNK = re.compile(
     r"if\s+you\s+have\s+any\s+(?:other\s+)?questions|"
     r"if\s+you\s+need\s+(?:any\s+)?(?:further\s+)?assistance|"
     r"feel\s+free\s+to\s+ask|"
-    r"(?:i\s+am|i'm)\s+(?:here|happy)\s+to\s+(?:help|assist)|"
+    r"(?:i\s+am|i'm)\s+(?:here|happy)\s+to\s+(?:help|assist|listen)|"
     r"i(?:'m|\s+am)\s+sorry[^.]{0,80}(?:can(?:not|'t)|unable)\s+(?:assist|help|fulfill)|"
     r"i\s+can(?:not|'t)\s+(?:assist|help|fulfill)(?:\s+with)?\s+(?:this|that|your)\s+request|"
     r"(?:our|the)\s+guidelines|"
@@ -153,58 +154,97 @@ def _is_usable_utterance(
     return True
 
 
-def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max_tokens: int) -> str:
-    """Project neutral dialogue state into the current speaker's egocentric view."""
-    system = (
-        "This is a private peer-to-peer conversation, not a user-assistant support exchange. "
-        f"CURRENT_SPEAKER={agent.name}. OTHER_PERSON={other.name}. "
-        f"You are {agent.name}; never claim to be {other.name}. "
-        "Stay in first-person perspective as CURRENT_SPEAKER. Do not offer customer-service help, "
-        "mention policies or guidelines, describe the conversation system, or invent a fictional-character framing. "
-        "Respond to OTHER_PERSON's latest words with one natural conversational turn. "
-        "Output exactly <reply>your words</reply> and nothing else."
+def _self_card(agent: CommunityAgent, other: CommunityAgent) -> str:
+    ages = {"Emily": 27, "Olivia": 29}
+    age = ages.get(agent.name)
+    age_text = f", age {age}" if age else ""
+    return (
+        f"You are {agent.name}{age_text}. {other.name} is your peer. "
+        "This is ordinary private conversation between two people, not customer support. "
+        f"Speak only as {agent.name}, in first person, with a brief natural conversational turn."
     )
-    user = (
-        f"OTHER_PERSON={other.name}\n"
-        f"OTHER_LAST_MESSAGE={inbound}\n"
-        f"CURRENT_SPEAKER={agent.name}\n"
-        f"Write {agent.name}'s direct reply now."
-    )
-    return request_chat(system, user, max_tokens, 0.45)
 
 
-def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
+def _project_history(
+    dialogue_history: list[tuple[str, str]] | None,
+    agent: CommunityAgent,
+    other: CommunityAgent,
+    inbound: str,
+) -> str:
+    """SPASM-style ECP: neutral speaker/text history becomes SELF/PARTNER per generator."""
+    history = list(dialogue_history or [])
+    if not history or history[-1] != (other.name, inbound):
+        history.append((other.name, inbound))
+    history = history[-MAX_ECP_TURNS:]
+
+    lines: list[str] = []
+    for speaker, text in history:
+        label = "SELF" if speaker == agent.name else "PARTNER"
+        lines.append(f"{label}: {str(text).strip()}")
+    lines.append("SELF:")
+    return "\n".join(lines)
+
+
+def _chat_bitnet(
+    agent: CommunityAgent,
+    other: CommunityAgent,
+    inbound: str,
+    max_tokens: int,
+    dialogue_history: list[tuple[str, str]] | None = None,
+    retry_hint: str = "",
+) -> str:
+    system = _self_card(agent, other)
+    projected = _project_history(dialogue_history, agent, other, inbound)
+    if retry_hint:
+        projected += f"\nSTYLE_NOTE: {retry_hint}"
+    return request_chat(system, projected, max_tokens, 0.55)
+
+
+def _direct_bitnet_reply(
+    agent: CommunityAgent,
+    other: CommunityAgent,
+    inbound: str,
+    dialogue_history: list[tuple[str, str]] | None = None,
+) -> str:
     max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
+    retry_hints = [
+        "",
+        "Continue like a peer, not a helper. React to what PARTNER actually said.",
+        "Avoid canned support language. Prefer a concrete reaction, observation, question, disagreement, joke, or personal response.",
+        "Not 'I'm here to support you.' More like an ordinary friend or peer continuing this exact conversation.",
+    ]
     attempts: list[str] = []
-    for _ in range(4):
-        text = _unwrap_reply(_chat_bitnet(agent, other, inbound, max_tokens))
+    for hint in retry_hints:
+        text = _unwrap_reply(
+            _chat_bitnet(
+                agent,
+                other,
+                inbound,
+                max_tokens,
+                dialogue_history=dialogue_history,
+                retry_hint=hint,
+            )
+        )
         attempts.append(text)
         if _is_usable_utterance(text, inbound, agent.name, other.name):
             return text
     previews = " | ".join(repr(text[:160]) for text in attempts)
-    raise RuntimeError(f"BitNet returned role-drifted or unusable dialogue after 4 grounded attempts: {previews}")
+    raise RuntimeError(f"BitNet returned role-drifted or unusable dialogue after 4 ECP attempts: {previews}")
 
 
-def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgent) -> dict:
+def choose_action(
+    agent: CommunityAgent,
+    observation: dict,
+    other: CommunityAgent,
+    dialogue_history: list[tuple[str, str]] | None = None,
+) -> dict:
     inbox = observation.get("inbox", [])
     if not inbox:
         return {"type": "wait", "reason": "no_new_message"}
 
     latest = inbox[-1]
     inbound = str(latest["content"])
-    dialogue = [[latest["from_name"], inbound]]
-    response = agent.brain.utterance(
-        dialogue,
-        context=(
-            f"CURRENT_SPEAKER={agent.name}. OTHER_PERSON={other.name}. "
-            f"The latest message was written by {other.name}. "
-            "This is peer conversation, not customer support. Stay yourself, answer the latest message directly, "
-            "and never mirror the other person's identity or describe the conversation system."
-        ),
-    )
-    text = _unwrap_reply(str(response))
-    if not _is_usable_utterance(text, inbound, agent.name, other.name):
-        text = _direct_bitnet_reply(agent, other, inbound)
+    text = _direct_bitnet_reply(agent, other, inbound, dialogue_history=dialogue_history)
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
         raise RuntimeError(f"{agent.name} returned no grounded natural-language utterance.")
     return {"type": "message", "recipient_id": other.agent_id, "content": text}
