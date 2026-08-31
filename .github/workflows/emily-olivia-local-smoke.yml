@@ -21,6 +21,7 @@ jobs:
       AGENTSOCIETY_LLM_API_KEY: local-no-api-key
       COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
       COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_PORT: '8080'
       TZ: America/Chicago
     steps:
       - uses: actions/checkout@v4
@@ -43,14 +44,8 @@ jobs:
       - name: Bootstrap BitNet
         working-directory: experiments/emily-olivia-society
         run: bash bootstrap_upstreams.sh
-      - name: Initialize cognition
-        working-directory: experiments/emily-olivia-society
-        run: .venv-stanford/bin/python init_cognition.py
-      - name: Two-turn BitNet dialogue
-        working-directory: experiments/emily-olivia-society
-        run: .venv-stanford/bin/python community_session.py --run --turns 2 --opener "Hello, Olivia. This is our BitNet smoke test."
-      - name: Save Community runtime and BitNet
-        if: ${{ always() && steps.community-cache.outputs.cache-hit != 'true' }}
+      - name: Save Community runtime and BitNet immediately after bootstrap
+        if: ${{ steps.community-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
@@ -60,3 +55,30 @@ jobs:
             experiments/emily-olivia-society/models
             experiments/emily-olivia-society/.bootstrap-ready-v6
           key: ${{ steps.community-cache.outputs.cache-primary-key }}
+      - name: Start one persistent BitNet server
+        working-directory: experiments/emily-olivia-society
+        run: python3 bitnet_server.py start
+      - name: Confirm persistent BitNet server
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 bitnet_server.py status
+          python3 bitnet_server.py probe
+      - name: Initialize cognition
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python init_cognition.py
+      - name: Two-turn BitNet dialogue
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python community_session.py --run --turns 2 --opener "Hello, Olivia. This is our BitNet smoke test."
+      - name: Upload BitNet smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-bitnet-smoke
+          path: |
+            experiments/emily-olivia-society/replay/
+            experiments/emily-olivia-society/workspaces/
+          if-no-files-found: warn
+      - name: Stop BitNet server
+        if: always()
+        working-directory: experiments/emily-olivia-society
+        run: python3 bitnet_server.py stop || true
