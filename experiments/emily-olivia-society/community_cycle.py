@@ -17,7 +17,7 @@ STANFORD = HERE / "vendor" / "stanford-genagents"
 WORKSPACES = HERE / "workspaces"
 MAX_UTTERANCE_CHARS = 12_000
 _TEMPLATE_JUNK = re.compile(
-    r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say)",
+    r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say|end\s+of\s+dialogue\s+so\s+far)",
     re.IGNORECASE,
 )
 _SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant|System)\s*:")
@@ -123,31 +123,34 @@ def _is_usable_utterance(text: str, inbound: str = "") -> bool:
 
 
 def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max_tokens: int) -> str:
-    """Use llama-server's OpenAI-compatible chat route so the GGUF chat template is applied by the runtime."""
+    """Send Microsoft's documented BitNet chat serialization through llama-server /completion."""
     port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
     timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
+    system = (
+        f"You are {agent.name}. You are speaking privately with {other.name}. "
+        "Reply naturally and briefly to the other person. Do not repeat the prompt, "
+        "instructions, role labels, or the other person's whole message."
+    )
+    # microsoft/bitnet-b1.58-2B-4T tokenizer template serializes each message as
+    # Role: content<|eot_id|> and appends Assistant: for generation.
+    prompt = (
+        f"System: {system}<|eot_id|>"
+        f"User: {inbound.strip()}<|eot_id|>"
+        "Assistant: "
+    )
     payload = json.dumps(
         {
-            "model": "community-bitnet",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        f"You are {agent.name}. You are speaking privately with {other.name}. "
-                        "Reply naturally and briefly to the other person. Do not repeat the prompt, "
-                        "instructions, role labels, or the other person's whole message."
-                    ),
-                },
-                {"role": "user", "content": inbound},
-            ],
-            "max_tokens": max_tokens,
+            "prompt": prompt,
+            "n_predict": max_tokens,
             "temperature": 0.6,
             "top_p": 0.9,
+            "stop": ["<|eot_id|>"],
             "stream": False,
+            "cache_prompt": False,
         }
     ).encode("utf-8")
     req = urllib.request.Request(
-        f"http://127.0.0.1:{port}/v1/chat/completions",
+        f"http://127.0.0.1:{port}/completion",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -157,16 +160,13 @@ def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"BitNet chat request failed with HTTP {exc.code}: {body}") from exc
+        raise RuntimeError(f"BitNet completion request failed with HTTP {exc.code}: {body}") from exc
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"BitNet chat request failed: {exc}") from exc
+        raise RuntimeError(f"BitNet completion request failed: {exc}") from exc
 
-    try:
-        text = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError(f"BitNet chat endpoint returned an unexpected payload: {data!r}") from exc
+    text = data.get("content")
     if not isinstance(text, str):
-        raise RuntimeError(f"BitNet chat endpoint returned non-text content: {data!r}")
+        raise RuntimeError(f"BitNet completion endpoint returned non-text content: {data!r}")
     return text.strip()
 
 
