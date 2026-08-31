@@ -27,8 +27,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Cache Community runtime and BitNet
-        uses: actions/cache@v4
+      - name: Restore Community runtime and BitNet
+        id: community-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             experiments/emily-olivia-society/.venv-agentsociety
@@ -37,6 +38,8 @@ jobs:
             experiments/emily-olivia-society/models
             experiments/emily-olivia-society/.bootstrap-ready-v6
           key: community-runtime-bitnet-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
+          restore-keys: |
+            community-runtime-bitnet-${{ runner.os }}-py311-
       - name: Bootstrap BitNet
         working-directory: experiments/emily-olivia-society
         run: bash bootstrap_upstreams.sh
@@ -46,3 +49,14 @@ jobs:
       - name: Two-turn BitNet dialogue
         working-directory: experiments/emily-olivia-society
         run: .venv-stanford/bin/python community_session.py --run --turns 2 --opener "Hello, Olivia. This is our BitNet smoke test."
+      - name: Save Community runtime and BitNet
+        if: ${{ always() && steps.community-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v6
+          key: ${{ steps.community-cache.outputs.cache-primary-key }}
