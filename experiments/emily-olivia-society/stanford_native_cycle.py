@@ -26,15 +26,36 @@ observation_text = _base.observation_text
 next_community_time_step = _base.next_community_time_step
 latest_community_time_step = _base.latest_community_time_step
 
-# Kept for compatibility with the replay verifier/first_exchange import surface.
-_is_usable_utterance = _base._is_usable_utterance
-
 _CONTROL_SCAFFOLD = re.compile(
     r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
     r"^\s*(?:SELF|PARTNER|Self-reply|Answer|Example)\s*:|"
     r"\[Fill\s+in\])",
     re.IGNORECASE | re.MULTILINE,
 )
+
+
+def _is_usable_utterance(
+    text: str,
+    inbound: str = "",
+    agent_name: str = "",
+    other_name: str = "",
+) -> bool:
+    """Validate the output boundary without steering Stanford's wording.
+
+    The legacy validator required a reply to repeat a content word from the
+    incoming message. That was a local conversational heuristic, not part of
+    Stanford's architecture, and rejected natural indirect answers. Keep the
+    safety/format/role checks but let Stanford retrieval and cognition decide
+    what the response actually says.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return False
+    cleaned = _clean_boundary(text)
+    if not cleaned:
+        return False
+    # Passing an empty inbound intentionally disables the old lexical-overlap
+    # and greeting-shape steering while retaining junk, role, and size checks.
+    return _base._is_usable_utterance(cleaned, "", agent_name, other_name)
 
 
 def _grounding_words(text: str, limit: int = 6) -> list[str]:
@@ -119,11 +140,9 @@ def choose_action(
 
     text = _clean_boundary(agent.brain.utterance(dialogue, context=context))
 
-    if not text or not _base._is_usable_utterance(
-        text, inbound, agent.name, other.name
-    ):
+    if not _is_usable_utterance(text, inbound, agent.name, other.name):
         raise RuntimeError(
-            f"{agent.name} returned no grounded natural-language utterance."
+            f"{agent.name} returned no natural-language utterance that passed the output boundary."
         )
 
     return {
