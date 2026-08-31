@@ -108,12 +108,30 @@ jobs:
         working-directory: experiments/emily-olivia-society
         run: timeout 35m .venv-stanford/bin/python community_session.py --run --turns 2 --opener "Hello, Olivia. This is our BitNet smoke test."
 
-      - name: Verify real dialogue and persisted evidence
+      - name: Verify natural dialogue and persisted evidence
         working-directory: experiments/emily-olivia-society
         run: |
           python3 - <<'PY'
-          import json, math
+          import json, math, re
           from pathlib import Path
+
+          def assert_natural(text):
+              assert isinstance(text, str) and text.strip(), text
+              lowered = text.lower()
+              forbidden = (
+                  'generation error:',
+                  'return only the words you would say',
+                  '"utterance"',
+                  "'utterance'",
+                  'fill in >',
+                  '[input]:',
+              )
+              assert not any(piece in lowered for piece in forbidden), text
+              labels = re.findall(r'(?im)^\s*(emily|olivia|user|assistant)\s*:', text)
+              assert len(labels) <= 1, text
+              words = re.findall(r"[a-z0-9']+", lowered)
+              assert len(words) >= 2, text
+
           replay = Path('replay')
           session = json.loads((replay / 'community_session.json').read_text())
           assert session['completed_reply_turns'] >= 2, session
@@ -122,10 +140,9 @@ jobs:
           for turn in turns[:2]:
               action = turn.get('action', {})
               assert action.get('type') == 'message', turn
-              text = action.get('content')
-              assert isinstance(text, str) and text.strip(), turn
-              assert not text.strip().startswith('GENERATION ERROR:'), turn
+              assert_natural(action.get('content'))
               assert turn.get('action_result', {}).get('success') is True, turn
+              assert turn.get('consumed_inbound') is True, turn
           social = json.loads((replay / 'social_state.json').read_text())
           assert social.get('version') == 1, social
           assert isinstance(social.get('inboxes'), dict), social
@@ -133,7 +150,7 @@ jobs:
           seconds = state.get('probe_seconds')
           assert state.get('ready') is True, state
           assert isinstance(seconds, (int, float)) and math.isfinite(seconds) and seconds >= 0, state
-          print('Verified two real delivered replies, valid social state, and a timed healthy BitNet probe.')
+          print('Verified two delivered natural replies, valid persistence, and a timed healthy BitNet probe.')
           PY
           test -d workspaces/emily
           test -d workspaces/olivia
