@@ -22,8 +22,7 @@ checkpoint_run=""
 
 mapfile -t candidate_runs < <(
   gh api --method GET \
-    "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs" \
-    -F per_page=30 \
+    "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=30" \
     --jq '.workflow_runs[] | select(.status == "completed") | .id'
 )
 
@@ -34,9 +33,8 @@ for run_id in "${candidate_runs[@]:-}"; do
 
   artifact_count="$(
     gh api --method GET \
-      "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
-      -F per_page=100 \
-      --jq --arg name "$ARTIFACT_NAME" '[.artifacts[] | select(.name == $name and (.expired | not))] | length'
+      "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
+      --jq "[.artifacts[] | select(.name == \"$ARTIFACT_NAME\" and (.expired | not))] | length"
   )"
 
   if [[ "${artifact_count:-0}" -gt 0 ]]; then
