@@ -7,10 +7,10 @@ import json
 import os
 import re
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-
-from bitnet_server import request_chat
 
 HERE = Path(__file__).resolve().parent
 STANFORD = HERE / "vendor" / "stanford-genagents"
@@ -154,17 +154,6 @@ def _is_usable_utterance(
     return True
 
 
-def _self_card(agent: CommunityAgent, other: CommunityAgent) -> str:
-    ages = {"Emily": 27, "Olivia": 29}
-    age = ages.get(agent.name)
-    age_text = f", age {age}" if age else ""
-    return (
-        f"You are {agent.name}{age_text}. {other.name} is your peer. "
-        "This is ordinary private conversation between two people, not customer support. "
-        f"Speak only as {agent.name}, in first person, with a brief natural conversational turn."
-    )
-
-
 def _project_history(
     dialogue_history: list[tuple[str, str]] | None,
     agent: CommunityAgent,
@@ -185,6 +174,67 @@ def _project_history(
     return "\n".join(lines)
 
 
+def _request_transcript_completion(prompt: str, max_tokens: int, temperature: float) -> str:
+    """Use llama.cpp raw completion so Falcon never sees a user/assistant chat-role wrapper."""
+    port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
+    timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
+    payload = json.dumps(
+        {
+            "prompt": prompt,
+            "n_predict": max(1, min(int(max_tokens), 256)),
+            "temperature": max(0.0, min(float(temperature), 2.0)),
+            "top_p": 0.9,
+            "stream": False,
+            "cache_prompt": False,
+            "stop": ["\nPARTNER:", "<|endoftext|>"],
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/completion",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")[:4000]
+        raise RuntimeError(f"BitNet completion HTTP {exc.code}: {body}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"BitNet completion request failed: {exc.reason}") from exc
+    text = data.get("content") if isinstance(data, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        raise RuntimeError(f"BitNet completion endpoint returned no usable content: {data!r}")
+    return text.strip()
+
+
+def _completion_prompt(
+    agent: CommunityAgent,
+    other: CommunityAgent,
+    projected: str,
+    retry_hint: str,
+) -> str:
+    ages = {"Emily": 27, "Olivia": 29}
+    age = ages.get(agent.name)
+    identity = f"{agent.name}, {age}" if age else agent.name
+    style = f"\nNext-line style: {retry_hint}" if retry_hint else ""
+    return (
+        f"Speaker: {identity}\n"
+        f"Partner: {other.name}\n"
+        f"SELF means {agent.name}. PARTNER means {other.name}.\n"
+        "Continue this ordinary private peer conversation with one short SELF line."
+        f"{style}\n\n"
+        "Examples:\n"
+        "PARTNER: Rough day at work.\n"
+        "SELF: Yeah? What happened?\n\n"
+        "PARTNER: I finally fixed the sink.\n"
+        "SELF: Nice. Was it the stupid little washer after all?\n\n"
+        "Conversation:\n"
+        f"{projected}"
+    )
+
+
 def _chat_bitnet(
     agent: CommunityAgent,
     other: CommunityAgent,
@@ -193,11 +243,9 @@ def _chat_bitnet(
     dialogue_history: list[tuple[str, str]] | None = None,
     retry_hint: str = "",
 ) -> str:
-    system = _self_card(agent, other)
     projected = _project_history(dialogue_history, agent, other, inbound)
-    if retry_hint:
-        projected += f"\nSTYLE_NOTE: {retry_hint}"
-    return request_chat(system, projected, max_tokens, 0.55)
+    prompt = _completion_prompt(agent, other, projected, retry_hint)
+    return _request_transcript_completion(prompt, max_tokens, 0.62)
 
 
 def _direct_bitnet_reply(
@@ -209,9 +257,9 @@ def _direct_bitnet_reply(
     max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
     retry_hints = [
         "",
-        "Continue like a peer, not a helper. React to what PARTNER actually said.",
-        "Avoid canned support language. Prefer a concrete reaction, observation, question, disagreement, joke, or personal response.",
-        "Not 'I'm here to support you.' More like an ordinary friend or peer continuing this exact conversation.",
+        "React to PARTNER's exact last line the way a peer would.",
+        "Use a concrete reaction, question, disagreement, joke, or personal response; no service language.",
+        "Sound like an ordinary friend continuing the moment, not a helper answering a request.",
     ]
     attempts: list[str] = []
     for hint in retry_hints:
@@ -229,7 +277,7 @@ def _direct_bitnet_reply(
         if _is_usable_utterance(text, inbound, agent.name, other.name):
             return text
     previews = " | ".join(repr(text[:160]) for text in attempts)
-    raise RuntimeError(f"BitNet returned role-drifted or unusable dialogue after 4 ECP attempts: {previews}")
+    raise RuntimeError(f"BitNet returned role-drifted or unusable dialogue after 4 ECP completion attempts: {previews}")
 
 
 def choose_action(
