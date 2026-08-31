@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import json
 import os
+import subprocess
 import time
 import uuid
 from pathlib import Path
@@ -14,6 +15,7 @@ from first_exchange import SocialBridgeClient, process_one_reply
 
 HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
+REPO_ROOT = HERE.parents[1]
 MAX_REPLY_TURNS = 10
 DEFAULT_REPLY_TURNS = 8
 MAX_CONTINUOUS_SECONDS = 19800
@@ -40,6 +42,22 @@ def append_jsonl(path: Path, payload: dict) -> None:
         os.fsync(handle.fileno())
 
 
+def publish_live_replay() -> None:
+    """Best-effort live publish. A failed push must never stop the conversation."""
+    try:
+        subprocess.run(["git", "config", "user.name", "github-actions[bot]"], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        replay_glob = "experiments/emily-olivia-society/replay"
+        subprocess.run(["git", "add", "-f", replay_glob], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO_ROOT)
+        if diff.returncode == 0:
+            return
+        subprocess.run(["git", "commit", "-m", "Update Emily Olivia live replay [skip ci]"], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["git", "push", "origin", "HEAD:main"], cwd=REPO_ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+    except Exception:
+        return
+
+
 def validate_opener(opener: str) -> str:
     opener = opener.strip()
     if not opener:
@@ -47,31 +65,18 @@ def validate_opener(opener: str) -> str:
     if len(opener) > MAX_OPENER_CHARS:
         raise ValueError(f"opener exceeds {MAX_OPENER_CHARS} characters.")
     if not _is_usable_utterance(opener):
-        raise ValueError(
-            "opener contains template, service-assistant, or otherwise unusable dialogue."
-        )
+        raise ValueError("opener contains template, service-assistant, or otherwise unusable dialogue.")
     return opener
 
 
-async def run_community_session(
-    opener: str,
-    reply_turns: int,
-    continuous_seconds: int = 0,
-    turn_delay_seconds: float = 0.0,
-) -> dict:
+async def run_community_session(opener: str, reply_turns: int, continuous_seconds: int = 0, turn_delay_seconds: float = 0.0) -> dict:
     opener = validate_opener(opener)
     if continuous_seconds <= 0 and (reply_turns < 2 or reply_turns > MAX_REPLY_TURNS):
-        raise ValueError(
-            f"reply_turns must be between 2 and {MAX_REPLY_TURNS}; got {reply_turns}."
-        )
+        raise ValueError(f"reply_turns must be between 2 and {MAX_REPLY_TURNS}; got {reply_turns}.")
     if continuous_seconds < 0 or continuous_seconds > MAX_CONTINUOUS_SECONDS:
-        raise ValueError(
-            f"continuous_seconds must be between 0 and {MAX_CONTINUOUS_SECONDS}."
-        )
+        raise ValueError(f"continuous_seconds must be between 0 and {MAX_CONTINUOUS_SECONDS}.")
     if turn_delay_seconds < 0 or turn_delay_seconds > MAX_TURN_DELAY_SECONDS:
-        raise ValueError(
-            f"turn_delay_seconds must be between 0 and {MAX_TURN_DELAY_SECONDS:g}."
-        )
+        raise ValueError(f"turn_delay_seconds must be between 0 and {MAX_TURN_DELAY_SECONDS:g}.")
 
     agents = load_agents()
     emily = next(agent for agent in agents if agent.name == "Emily")
@@ -106,9 +111,7 @@ async def run_community_session(
             pending.extend(inbox)
 
         if len(pending) > 1:
-            raise RuntimeError(
-                "Multiple pending cross-agent messages found; refusing ambiguous resume."
-            )
+            raise RuntimeError("Multiple pending cross-agent messages found; refusing ambiguous resume.")
 
         if pending:
             message = pending[0]
@@ -120,9 +123,7 @@ async def run_community_session(
             if not _is_usable_utterance(content):
                 consume_result = await social.consume_message(to_id, int(message["id"]))
                 if consume_result.get("success") is not True:
-                    raise RuntimeError(
-                        "Failed to quarantine unusable persisted pending message."
-                    )
+                    raise RuntimeError("Failed to quarantine unusable persisted pending message.")
                 discarded_pending_message_ids.append(int(message["id"]))
                 pending = []
 
@@ -144,17 +145,7 @@ async def run_community_session(
             other = emily
 
         if continuous_seconds > 0:
-            append_jsonl(
-                stream_path,
-                {
-                    "type": "session_start",
-                    "session_id": session_id,
-                    "resumed": resumed,
-                    "discarded_pending_message_ids": discarded_pending_message_ids,
-                    "seed": seed,
-                    "start_time_step": base_time_step,
-                },
-            )
+            append_jsonl(stream_path, {"type": "session_start", "session_id": session_id, "resumed": resumed, "discarded_pending_message_ids": discarded_pending_message_ids, "seed": seed, "start_time_step": base_time_step})
 
         offset = 0
         while True:
@@ -167,47 +158,29 @@ async def run_community_session(
                 stop_reason = "turn_limit_reached"
                 break
 
-            turn = await process_one_reply(
-                current,
-                other,
-                social,
-                time_step=base_time_step + offset,
-                dialogue_history=dialogue_history,
-            )
+            turn = await process_one_reply(current, other, social, time_step=base_time_step + offset, dialogue_history=dialogue_history)
             completed += 1
             latest_turn = turn
 
             action = turn.get("action", {})
             if action.get("type") == "message":
-                dialogue_history.append(
-                    (current.name, str(action.get("content", "")))
-                )
+                dialogue_history.append((current.name, str(action.get("content", ""))))
 
             if continuous_seconds > 0:
-                append_jsonl(
-                    stream_path,
-                    {
-                        "type": "turn",
-                        "session_id": session_id,
-                        "index": completed,
-                        "turn": turn,
-                    },
-                )
-                atomic_write_json(
-                    summary_path,
-                    {
-                        "mode": "continuous_persistent_community_session",
-                        "status": "running",
-                        "session_id": session_id,
-                        "resumed_social_state": resumed,
-                        "discarded_pending_message_ids": discarded_pending_message_ids,
-                        "start_time_step": base_time_step,
-                        "completed_reply_turns": completed,
-                        "continuous_seconds": continuous_seconds,
-                        "turn_delay_seconds": turn_delay_seconds,
-                        "latest_turn": latest_turn,
-                    },
-                )
+                append_jsonl(stream_path, {"type": "turn", "session_id": session_id, "index": completed, "turn": turn})
+                atomic_write_json(summary_path, {
+                    "mode": "continuous_persistent_community_session",
+                    "status": "running",
+                    "session_id": session_id,
+                    "resumed_social_state": resumed,
+                    "discarded_pending_message_ids": discarded_pending_message_ids,
+                    "start_time_step": base_time_step,
+                    "completed_reply_turns": completed,
+                    "continuous_seconds": continuous_seconds,
+                    "turn_delay_seconds": turn_delay_seconds,
+                    "latest_turn": latest_turn,
+                })
+                publish_live_replay()
             else:
                 bounded_turns.append(turn)
 
@@ -229,29 +202,23 @@ async def run_community_session(
                 if remaining > 0:
                     await asyncio.sleep(min(turn_delay_seconds, remaining))
     except Exception as exc:
-        atomic_write_json(
-            error_path,
-            {
-                "session_id": session_id,
-                "status": "failed",
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-                "resumed_social_state": resumed,
-                "discarded_pending_message_ids": discarded_pending_message_ids,
-                "completed_reply_turns": completed,
-                "latest_turn": latest_turn,
-            },
-        )
+        atomic_write_json(error_path, {
+            "session_id": session_id,
+            "status": "failed",
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "resumed_social_state": resumed,
+            "discarded_pending_message_ids": discarded_pending_message_ids,
+            "completed_reply_turns": completed,
+            "latest_turn": latest_turn,
+        })
+        publish_live_replay()
         raise
     finally:
         social.close()
 
     result = {
-        "mode": (
-            "continuous_persistent_community_session"
-            if continuous_seconds > 0
-            else "bounded_persistent_community_session"
-        ),
+        "mode": "continuous_persistent_community_session" if continuous_seconds > 0 else "bounded_persistent_community_session",
         "status": "completed",
         "session_id": session_id,
         "limits": {
@@ -277,60 +244,26 @@ async def run_community_session(
 
     atomic_write_json(summary_path, result)
     if continuous_seconds > 0:
-        append_jsonl(
-            stream_path,
-            {"type": "session_end", "session_id": session_id, "summary": result},
-        )
+        append_jsonl(stream_path, {"type": "session_end", "session_id": session_id, "summary": result})
+        publish_live_replay()
     if error_path.exists():
         error_path.unlink()
     return result
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Run a persistent Emily + Olivia community session."
-    )
-    parser.add_argument(
-        "--opener",
-        default="Hello, Olivia.",
-        help="Seed message used only when no valid pending social message can be resumed.",
-    )
-    parser.add_argument(
-        "--turns",
-        type=int,
-        default=DEFAULT_REPLY_TURNS,
-        help=f"Maximum reply turns after the seed message (2-{MAX_REPLY_TURNS}) in bounded mode.",
-    )
-    parser.add_argument(
-        "--continuous-seconds",
-        type=int,
-        default=0,
-        help=f"Keep Emily and Olivia alternating for up to {MAX_CONTINUOUS_SECONDS} seconds; 0 keeps bounded mode.",
-    )
-    parser.add_argument(
-        "--turn-delay-seconds",
-        type=float,
-        default=0.0,
-        help="Minimum pause between successful replies in continuous mode.",
-    )
-    parser.add_argument(
-        "--run",
-        action="store_true",
-        help="Explicitly permit the requested community session.",
-    )
+    parser = argparse.ArgumentParser(description="Run a persistent Emily + Olivia community session.")
+    parser.add_argument("--opener", default="Hello, Olivia.", help="Seed message used only when no valid pending social message can be resumed.")
+    parser.add_argument("--turns", type=int, default=DEFAULT_REPLY_TURNS, help=f"Maximum reply turns after the seed message (2-{MAX_REPLY_TURNS}) in bounded mode.")
+    parser.add_argument("--continuous-seconds", type=int, default=0, help=f"Keep Emily and Olivia alternating for up to {MAX_CONTINUOUS_SECONDS} seconds; 0 keeps bounded mode.")
+    parser.add_argument("--turn-delay-seconds", type=float, default=0.0, help="Minimum pause between successful replies in continuous mode.")
+    parser.add_argument("--run", action="store_true", help="Explicitly permit the requested community session.")
     args = parser.parse_args()
 
     if not args.run:
-        raise SystemExit(
-            "Refusing to start automatically. Use --run to permit the community session."
-        )
+        raise SystemExit("Refusing to start automatically. Use --run to permit the community session.")
 
-    result = await run_community_session(
-        args.opener,
-        args.turns,
-        continuous_seconds=args.continuous_seconds,
-        turn_delay_seconds=args.turn_delay_seconds,
-    )
+    result = await run_community_session(args.opener, args.turns, continuous_seconds=args.continuous_seconds, turn_delay_seconds=args.turn_delay_seconds)
     print(json.dumps(result, indent=2))
 
 
