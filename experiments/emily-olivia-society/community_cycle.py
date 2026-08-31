@@ -16,6 +16,7 @@ HERE = Path(__file__).resolve().parent
 STANFORD = HERE / "vendor" / "stanford-genagents"
 WORKSPACES = HERE / "workspaces"
 MAX_UTTERANCE_CHARS = 12_000
+MAX_UTTERANCE_WORDS = 52
 _TEMPLATE_JUNK = re.compile(
     r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say|end\s+of\s+dialogue\s+so\s+far)",
     re.IGNORECASE,
@@ -31,11 +32,40 @@ _ASSISTANTY_JUNK = re.compile(
     r"(?:our|the)\s+guidelines|"
     r"does\s+not\s+align\s+with\s+(?:our\s+)?(?:guidelines|policies)|"
     r"(?:i\s+am|i'm)\s+(?:currently\s+)?in\s+a\s+(?:two-person\s+)?community|"
-    r"asking\s+about\s+my\s+last\s+update)",
+    r"asking\s+about\s+my\s+last\s+update|"
+    r"as\s+an\s+ai|"
+    r"what\s+can\s+i\s+(?:help|assist)\s+you\s+with|"
+    r"what\s+can\s+i\s+do\s+for\s+you|"
+    r"please\s+provide(?:\s+me)?(?:\s+with)?(?:\s+the)?(?:\s+specific)?\s+(?:details|information)|"
+    r"support\s+you\s+need)",
     re.IGNORECASE,
 )
 _SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant|System)\s*:")
-_REPLY_WRAPPER = re.compile(r"^\s*(?:<reply>\s*)?(.*?)(?:\s*</reply>)?\s*$", re.IGNORECASE | re.DOTALL)
+_REPLY_WRAPPER = re.compile(
+    r"^\s*(?:<reply>\s*)?(.*?)(?:\s*</reply>)?\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+_ACKNOWLEDGEMENT = re.compile(
+    r"\b(?:same here|me too|i agree|that makes sense|i get that|i understand|"
+    r"sounds good|fair enough|absolutely|definitely|exactly)\b",
+    re.IGNORECASE,
+)
+_STOP_WORDS = {
+    "a", "about", "am", "an", "and", "are", "as", "at", "be", "been", "but",
+    "can", "could", "did", "do", "does", "for", "from", "had", "has", "have",
+    "he", "her", "here", "hers", "him", "his", "i", "if", "in", "is", "it",
+    "its", "me", "might", "my", "not", "of", "on", "or", "our", "ours", "she",
+    "should", "so", "that", "the", "their", "theirs", "them", "then", "there",
+    "they", "this", "to", "too", "us", "very", "was", "we", "were", "what",
+    "when", "where", "which", "who", "why", "will", "with", "would", "you",
+    "your", "yours", "just", "really", "than",
+}
+_GREETING_SAFE_WORDS = {
+    "hello", "hi", "hey", "morning", "afternoon", "evening", "emily", "olivia",
+    "good", "great", "nice", "glad", "hear", "hearing", "see", "seeing", "meet",
+    "meeting", "back", "doing", "going", "well", "today", "thanks", "thank", "how",
+    "up", "fine", "okay", "ok", "likewise", "welcome",
+}
 
 
 @dataclass
@@ -121,30 +151,88 @@ def _unwrap_reply(text: str) -> str:
     return match.group(1).strip() if match else text.strip()
 
 
+def _content_words(text: str) -> set[str]:
+    return {
+        word
+        for word in _normalize_words(text)
+        if word not in _STOP_WORDS and word not in {"emily", "olivia"} and len(word) > 1
+    }
+
+
+def _is_greeting_only(text: str) -> bool:
+    words = _normalize_words(text)
+    if not words or len(words) > 14:
+        return False
+    meaningful = [word for word in words if word not in _STOP_WORDS]
+    if not meaningful:
+        return False
+    has_greeting = any(
+        word in {"hello", "hi", "hey", "morning", "afternoon", "evening"}
+        for word in words
+    )
+    return has_greeting and all(word in _GREETING_SAFE_WORDS for word in meaningful)
+
+
 def _is_usable_utterance(
     text: str,
     inbound: str = "",
     agent_name: str = "",
     other_name: str = "",
 ) -> bool:
+    if not isinstance(text, str):
+        return False
     cleaned = _unwrap_reply(text)
-    if not cleaned or cleaned.startswith("GENERATION ERROR:") or len(cleaned) > MAX_UTTERANCE_CHARS:
+    if (
+        not cleaned
+        or cleaned.startswith("GENERATION ERROR:")
+        or len(cleaned) > MAX_UTTERANCE_CHARS
+    ):
         return False
     if _TEMPLATE_JUNK.search(cleaned) or _ASSISTANTY_JUNK.search(cleaned):
         return False
     if len(_SPEAKER_LABEL.findall(cleaned)) > 1:
         return False
-    if sum(ch.isalnum() for ch in cleaned) < 3:
+
+    output_words = _normalize_words(cleaned)
+    if (
+        sum(ch.isalnum() for ch in cleaned) < 3
+        or len(output_words) < 2
+        or len(output_words) > MAX_UTTERANCE_WORDS
+    ):
         return False
+
     if agent_name and other_name and re.search(
         rf"\b(?:i\s+am|i'm)\s+{re.escape(other_name)}\b",
         cleaned,
         re.IGNORECASE,
     ):
         return False
+
     if inbound:
-        output_words = _normalize_words(cleaned)
         input_words = _normalize_words(inbound)
+
+        if _is_greeting_only(inbound):
+            meaningful_output = [
+                word for word in output_words if word not in _STOP_WORDS
+            ]
+            has_greeting = any(
+                word in {"hello", "hi", "hey", "morning", "afternoon", "evening"}
+                for word in output_words
+            )
+            if not has_greeting:
+                return False
+            if any(word not in _GREETING_SAFE_WORDS for word in meaningful_output):
+                return False
+        else:
+            input_content = _content_words(inbound)
+            output_content = _content_words(cleaned)
+            if input_content and not (input_content & output_content):
+                if not (
+                    _ACKNOWLEDGEMENT.search(cleaned)
+                    and len(output_words) <= 14
+                ):
+                    return False
+
         if len(input_words) >= 5 and len(output_words) >= 5:
             common = len(set(output_words) & set(input_words))
             overlap = common / max(1, len(set(output_words)))
@@ -153,16 +241,35 @@ def _is_usable_utterance(
     return True
 
 
-def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max_tokens: int) -> str:
-    """Project neutral dialogue state into the current speaker's egocentric view."""
+def _chat_bitnet(
+    agent: CommunityAgent,
+    other: CommunityAgent,
+    inbound: str,
+    max_tokens: int,
+) -> str:
+    """Generate one grounded peer reply through the GGUF's chat template."""
+    if _is_greeting_only(inbound):
+        grounding = (
+            "The message is only a greeting. Return a short greeting or ordinary "
+            "greeting-small-talk response. Do not introduce a pet, event, task, place, "
+            "backstory, or unrelated topic."
+        )
+    else:
+        grounding = (
+            "Stay grounded in the exact message. Carry forward at least one meaningful "
+            "idea or word from it. Do not invent a new pet, event, person, place, shared "
+            "history, or unrelated scenario."
+        )
+
     system = (
         "This is a private peer-to-peer conversation, not a user-assistant support exchange. "
         f"CURRENT_SPEAKER={agent.name}. OTHER_PERSON={other.name}. "
         f"You are {agent.name}; never claim to be {other.name}. "
-        "Stay in first-person perspective as CURRENT_SPEAKER. Do not offer customer-service help, "
-        "mention policies or guidelines, describe the conversation system, or invent a fictional-character framing. "
-        "Respond to OTHER_PERSON's latest words with one natural conversational turn. "
-        "Output exactly <reply>your words</reply> and nothing else."
+        "Stay in first-person perspective as CURRENT_SPEAKER. Do not offer customer-service "
+        "help, mention policies or guidelines, describe the conversation system, or invent a "
+        f"fictional-character framing. {grounding} "
+        "Use one or two natural sentences. Output exactly <reply>your words</reply> and "
+        "nothing else."
     )
     user = (
         f"OTHER_PERSON={other.name}\n"
@@ -173,8 +280,15 @@ def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max
     return request_chat(system, user, max_tokens, 0.45)
 
 
-def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
-    max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
+def _direct_bitnet_reply(
+    agent: CommunityAgent,
+    other: CommunityAgent,
+    inbound: str,
+) -> str:
+    max_tokens = min(
+        96,
+        max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))),
+    )
     attempts: list[str] = []
     for _ in range(4):
         text = _unwrap_reply(_chat_bitnet(agent, other, inbound, max_tokens))
@@ -182,10 +296,17 @@ def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: 
         if _is_usable_utterance(text, inbound, agent.name, other.name):
             return text
     previews = " | ".join(repr(text[:160]) for text in attempts)
-    raise RuntimeError(f"BitNet returned role-drifted or unusable dialogue after 4 grounded attempts: {previews}")
+    raise RuntimeError(
+        "BitNet returned role-drifted, ungrounded, or unusable dialogue "
+        f"after 4 attempts: {previews}"
+    )
 
 
-def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgent) -> dict:
+def choose_action(
+    agent: CommunityAgent,
+    observation: dict,
+    other: CommunityAgent,
+) -> dict:
     inbox = observation.get("inbox", [])
     if not inbox:
         return {"type": "wait", "reason": "no_new_message"}
@@ -198,16 +319,24 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
         context=(
             f"CURRENT_SPEAKER={agent.name}. OTHER_PERSON={other.name}. "
             f"The latest message was written by {other.name}. "
-            "This is peer conversation, not customer support. Stay yourself, answer the latest message directly, "
-            "and never mirror the other person's identity or describe the conversation system."
+            "This is peer conversation, not customer support. Stay yourself, answer the "
+            "latest message directly, keep its topic in view, do not invent a different "
+            "scenario, and never mirror the other person's identity or describe the "
+            "conversation system."
         ),
     )
     text = _unwrap_reply(str(response))
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
         text = _direct_bitnet_reply(agent, other, inbound)
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
-        raise RuntimeError(f"{agent.name} returned no grounded natural-language utterance.")
-    return {"type": "message", "recipient_id": other.agent_id, "content": text}
+        raise RuntimeError(
+            f"{agent.name} returned no usable grounded natural-language utterance."
+        )
+    return {
+        "type": "message",
+        "recipient_id": other.agent_id,
+        "content": text,
+    }
 
 
 async def run_one_cycle() -> None:
@@ -226,7 +355,11 @@ async def run_one_cycle() -> None:
         memory = observation_text(agent, observation)
         agent.brain.remember(memory, time_step=time_step)
         query = f"Current interaction with {other.name}"
-        retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
+        retrieved = agent.brain.memory_stream.retrieve(
+            [query],
+            time_step=time_step,
+            n_count=12,
+        )
         relevant = [node.content for node in retrieved.get(query, [])]
         action = choose_action(agent, observation, other)
         action_result = None
@@ -237,7 +370,9 @@ async def run_one_cycle() -> None:
                 str(action["content"]),
             )
             if not action_result.get("success"):
-                raise RuntimeError(f"Message delivery failed for {agent.name}: {action_result!r}")
+                raise RuntimeError(
+                    f"Message delivery failed for {agent.name}: {action_result!r}"
+                )
         agent.brain.save(str(agent.workspace))
         cycle_log.append(
             {
@@ -254,11 +389,19 @@ async def run_one_cycle() -> None:
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Run one bounded Emily + Olivia community cycle.")
-    parser.add_argument("--one-cycle", action="store_true", help="Permit exactly one bounded cycle per agent.")
+    parser = argparse.ArgumentParser(
+        description="Run one bounded Emily + Olivia community cycle."
+    )
+    parser.add_argument(
+        "--one-cycle",
+        action="store_true",
+        help="Permit exactly one bounded cycle per agent.",
+    )
     args = parser.parse_args()
     if not args.one_cycle:
-        raise SystemExit("Refusing to start automatically. Use --one-cycle to permit exactly one bounded cycle.")
+        raise SystemExit(
+            "Refusing to start automatically. Use --one-cycle to permit exactly one bounded cycle."
+        )
     await run_one_cycle()
 
 
