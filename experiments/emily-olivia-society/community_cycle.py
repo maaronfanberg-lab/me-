@@ -29,10 +29,13 @@ _ASSISTANTY_JUNK = re.compile(
     r"i(?:'m|\s+am)\s+sorry[^.]{0,80}(?:can(?:not|'t)|unable)\s+(?:assist|help|fulfill)|"
     r"i\s+can(?:not|'t)\s+(?:assist|help|fulfill)(?:\s+with)?\s+(?:this|that|your)\s+request|"
     r"(?:our|the)\s+guidelines|"
-    r"does\s+not\s+align\s+with\s+(?:our\s+)?(?:guidelines|policies))",
+    r"does\s+not\s+align\s+with\s+(?:our\s+)?(?:guidelines|policies)|"
+    r"(?:i\s+am|i'm)\s+(?:currently\s+)?in\s+a\s+(?:two-person\s+)?community|"
+    r"asking\s+about\s+my\s+last\s+update)",
     re.IGNORECASE,
 )
 _SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant|System)\s*:")
+_REPLY_WRAPPER = re.compile(r"^\s*(?:<reply>\s*)?(.*?)(?:\s*</reply>)?\s*$", re.IGNORECASE | re.DOTALL)
 
 
 @dataclass
@@ -113,8 +116,18 @@ def _normalize_words(text: str) -> list[str]:
     return re.findall(r"[a-z0-9']+", text.lower())
 
 
-def _is_usable_utterance(text: str, inbound: str = "") -> bool:
-    cleaned = text.strip()
+def _unwrap_reply(text: str) -> str:
+    match = _REPLY_WRAPPER.match(text.strip())
+    return match.group(1).strip() if match else text.strip()
+
+
+def _is_usable_utterance(
+    text: str,
+    inbound: str = "",
+    agent_name: str = "",
+    other_name: str = "",
+) -> bool:
+    cleaned = _unwrap_reply(text)
     if not cleaned or cleaned.startswith("GENERATION ERROR:") or len(cleaned) > MAX_UTTERANCE_CHARS:
         return False
     if _TEMPLATE_JUNK.search(cleaned) or _ASSISTANTY_JUNK.search(cleaned):
@@ -122,6 +135,12 @@ def _is_usable_utterance(text: str, inbound: str = "") -> bool:
     if len(_SPEAKER_LABEL.findall(cleaned)) > 1:
         return False
     if sum(ch.isalnum() for ch in cleaned) < 3:
+        return False
+    if agent_name and other_name and re.search(
+        rf"\b(?:i\s+am|i'm)\s+{re.escape(other_name)}\b",
+        cleaned,
+        re.IGNORECASE,
+    ):
         return False
     if inbound:
         output_words = _normalize_words(cleaned)
@@ -135,29 +154,35 @@ def _is_usable_utterance(text: str, inbound: str = "") -> bool:
 
 
 def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max_tokens: int) -> str:
-    """Use llama-server's chat endpoint so the GGUF's own template serializes dialogue."""
+    """Project neutral dialogue state into the current speaker's egocentric view."""
     system = (
-        f"You are {agent.name}. You are speaking privately with {other.name} as an equal peer, not as a customer-service assistant. "
-        f"The latest message was written by {other.name}; answer that exact message and stay on its topic. "
-        "Reply naturally and briefly as one person in an ongoing conversation. Continue the thought instead of offering services. "
-        "Do not ask how you can help, offer assistance, mention policies, guidelines, requests, fictional characters, or capabilities. "
-        "Do not invent a different scenario, give generic advice unrelated to the message, repeat the prompt, instructions, role labels, "
-        "or the other person's whole message. Do not apologize unless the other person's message clearly gives you something to apologize for."
+        "This is a private peer-to-peer conversation, not a user-assistant support exchange. "
+        f"CURRENT_SPEAKER={agent.name}. OTHER_PERSON={other.name}. "
+        f"You are {agent.name}; never claim to be {other.name}. "
+        "Stay in first-person perspective as CURRENT_SPEAKER. Do not offer customer-service help, "
+        "mention policies or guidelines, describe the conversation system, or invent a fictional-character framing. "
+        "Respond to OTHER_PERSON's latest words with one natural conversational turn. "
+        "Output exactly <reply>your words</reply> and nothing else."
     )
-    user = f"{other.name} just said: {inbound}\n\nReply directly to {other.name} as their conversational peer."
-    return request_chat(system, user, max_tokens, 0.5)
+    user = (
+        f"OTHER_PERSON={other.name}\n"
+        f"OTHER_LAST_MESSAGE={inbound}\n"
+        f"CURRENT_SPEAKER={agent.name}\n"
+        f"Write {agent.name}'s direct reply now."
+    )
+    return request_chat(system, user, max_tokens, 0.45)
 
 
 def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
     max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
     attempts: list[str] = []
-    for _ in range(3):
-        text = _chat_bitnet(agent, other, inbound, max_tokens).strip()
+    for _ in range(4):
+        text = _unwrap_reply(_chat_bitnet(agent, other, inbound, max_tokens))
         attempts.append(text)
-        if _is_usable_utterance(text, inbound):
+        if _is_usable_utterance(text, inbound, agent.name, other.name):
             return text
     previews = " | ".join(repr(text[:160]) for text in attempts)
-    raise RuntimeError(f"BitNet returned unusable dialogue after 3 grounded attempts: {previews}")
+    raise RuntimeError(f"BitNet returned role-drifted or unusable dialogue after 4 grounded attempts: {previews}")
 
 
 def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgent) -> dict:
@@ -171,15 +196,17 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
     response = agent.brain.utterance(
         dialogue,
         context=(
-            f"You are {agent.name}. You are in a two-person community with {other.name}. "
-            "Respond naturally to the addressed message as an equal conversational peer, not a customer-service assistant."
+            f"CURRENT_SPEAKER={agent.name}. OTHER_PERSON={other.name}. "
+            f"The latest message was written by {other.name}. "
+            "This is peer conversation, not customer support. Stay yourself, answer the latest message directly, "
+            "and never mirror the other person's identity or describe the conversation system."
         ),
     )
-    text = str(response).strip()
-    if not _is_usable_utterance(text, inbound):
+    text = _unwrap_reply(str(response))
+    if not _is_usable_utterance(text, inbound, agent.name, other.name):
         text = _direct_bitnet_reply(agent, other, inbound)
-    if not _is_usable_utterance(text, inbound):
-        raise RuntimeError(f"{agent.name} returned no usable natural-language utterance.")
+    if not _is_usable_utterance(text, inbound, agent.name, other.name):
+        raise RuntimeError(f"{agent.name} returned no grounded natural-language utterance.")
     return {"type": "message", "recipient_id": other.agent_id, "content": text}
 
 
