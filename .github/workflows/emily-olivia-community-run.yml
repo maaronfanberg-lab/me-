@@ -11,6 +11,12 @@ on:
         description: "Maximum reply turns (2-10)"
         required: false
         default: "8"
+  schedule:
+    - cron: "17 * * * *"
+
+concurrency:
+  group: emily-olivia-community
+  cancel-in-progress: false
 
 permissions:
   actions: read
