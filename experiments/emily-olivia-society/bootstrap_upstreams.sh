@@ -10,7 +10,8 @@ BITNET_COMMIT="0b341e582afbf9e1011f24744b554c96a3477eb5"
 BITNET_DIR="$VENDOR/BitNet"
 MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
-READY_MARKER="$HERE/.bootstrap-ready-v7"
+MODEL_SOURCE_SENTINEL="$MODEL_DIR/model.safetensors"
+READY_MARKER="$HERE/.bootstrap-ready-v8"
 
 restore_real_cli() {
   if [[ -e "$BITNET_DIR/build/bin/llama-cli.real" ]]; then
@@ -37,7 +38,7 @@ if runtime_ready; then
   exit 0
 fi
 
-rm -f "$READY_MARKER"
+rm -f "$HERE/.bootstrap-ready-v7" "$READY_MARKER"
 mkdir -p "$VENDOR" "$MODEL_DIR"
 
 if [[ ! -x "$AS_VENV/bin/python" ]]; then
@@ -71,16 +72,31 @@ git -C "$BITNET_DIR" submodule update --init --recursive
 
 "$STANFORD_VENV/bin/python" -m pip install --disable-pip-version-check -r "$BITNET_DIR/requirements.txt"
 
-if [[ ! -s "$MODEL_FILE" ]]; then
-  echo "Downloading Microsoft's BitNet b1.58 2B model..."
+# The prebuilt GGUF currently logs "missing pre-tokenizer type" in llama.cpp and
+# produces visibly degraded chat output. Build the GGUF from Microsoft's full
+# model repository instead so tokenizer metadata is embedded by BitNet's own
+# converter before quantization.
+if [[ ! -s "$MODEL_SOURCE_SENTINEL" ]]; then
+  echo "Downloading Microsoft's full BitNet b1.58 2B source model and tokenizer..."
   "$STANFORD_VENV/bin/huggingface-cli" download \
-    microsoft/BitNet-b1.58-2B-4T-gguf \
-    ggml-model-i2_s.gguf \
+    microsoft/BitNet-b1.58-2B-4T \
     --local-dir "$MODEL_DIR"
 fi
 
 restore_real_cli
-if [[ ! -x "$BITNET_DIR/build/bin/llama-cli" || ! -x "$BITNET_DIR/build/bin/llama-server" ]]; then
+need_model_regen=false
+if [[ ! -s "$MODEL_FILE" || ! -f "$READY_MARKER" ]]; then
+  need_model_regen=true
+fi
+
+if [[ "$need_model_regen" == true ]]; then
+  echo "Regenerating BitNet I2_S GGUF with tokenizer metadata..."
+  rm -f "$MODEL_FILE" "$MODEL_DIR/ggml-model-f32.gguf"
+  pushd "$BITNET_DIR" >/dev/null
+  "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s
+  popd >/dev/null
+  rm -f "$MODEL_DIR/ggml-model-f32.gguf"
+elif [[ ! -x "$BITNET_DIR/build/bin/llama-cli" || ! -x "$BITNET_DIR/build/bin/llama-server" ]]; then
   echo "Building the full BitNet runtime once..."
   pushd "$BITNET_DIR" >/dev/null
   "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s
@@ -94,8 +110,6 @@ restore_real_cli
 [[ -x "$BITNET_DIR/build/bin/llama-server" ]] || { echo "Missing BitNet llama-server after build" >&2; exit 1; }
 [[ -s "$MODEL_FILE" ]] || { echo "Missing BitNet model after setup" >&2; exit 1; }
 
-# Generation is deliberately NOT probed here. Build readiness and inference
-# readiness are separate gates so a slow model probe can never discard a good build.
 python3 "$HERE/patch_stanford_local.py"
 touch "$READY_MARKER"
 
