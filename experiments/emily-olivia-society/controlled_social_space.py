@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from pathlib import Path
 
 from agentsociety2.env import EnvBase, tool
 
@@ -12,7 +14,11 @@ class ControlledSocialSpace(EnvBase):
     It never reads either agent's private Stanford workspace or memory files.
     """
 
-    def __init__(self, agent_id_name_pairs: list[tuple[int, str]]):
+    def __init__(
+        self,
+        agent_id_name_pairs: list[tuple[int, str]],
+        state_path: str | Path | None = None,
+    ):
         super().__init__()
         if len(agent_id_name_pairs) != 2:
             raise ValueError("ControlledSocialSpace requires exactly two agents.")
@@ -21,9 +27,11 @@ class ControlledSocialSpace(EnvBase):
         if len(self._names) != 2:
             raise ValueError("Agent IDs must be unique.")
 
+        self._state_path = Path(state_path) if state_path is not None else None
         self._inboxes: dict[int, list[dict]] = {agent_id: [] for agent_id in self._names}
         self._next_message_id = 1
         self.t: datetime | None = None
+        self._load_state()
 
     @classmethod
     def description(cls) -> str:
@@ -46,6 +54,30 @@ Private cognition workspaces and memory files are not exposed by this environmen
     def _require_agent(self, agent_id: int) -> None:
         if agent_id not in self._names:
             raise ValueError(f"Unknown agent id: {agent_id}")
+
+    def _load_state(self) -> None:
+        if self._state_path is None or not self._state_path.exists():
+            return
+        payload = json.loads(self._state_path.read_text(encoding="utf-8"))
+        inboxes = payload.get("inboxes", {})
+        restored: dict[int, list[dict]] = {}
+        for agent_id in self._names:
+            restored[agent_id] = list(inboxes.get(str(agent_id), []))
+        self._inboxes = restored
+        self._next_message_id = max(1, int(payload.get("next_message_id", 1)))
+
+    def _save_state(self) -> None:
+        if self._state_path is None:
+            return
+        self._state_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": 1,
+            "next_message_id": self._next_message_id,
+            "inboxes": {str(agent_id): inbox for agent_id, inbox in self._inboxes.items()},
+        }
+        tmp_path = self._state_path.with_suffix(self._state_path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        tmp_path.replace(self._state_path)
 
     @tool(readonly=True, kind="observe")
     async def observe_social_space(self, agent_id: int) -> dict:
@@ -82,6 +114,7 @@ Private cognition workspaces and memory files are not exposed by this environmen
         }
         self._next_message_id += 1
         self._inboxes[recipient_id].append(message)
+        self._save_state()
         return {"success": True, "message": message}
 
     @tool(readonly=False)
@@ -92,6 +125,7 @@ Private cognition workspaces and memory files are not exposed by this environmen
         for index, message in enumerate(inbox):
             if int(message["id"]) == int(message_id):
                 removed = inbox.pop(index)
+                self._save_state()
                 return {"success": True, "message": removed}
         return {"success": False, "reason": "message_not_found", "message_id": int(message_id)}
 
