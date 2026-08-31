@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import json
 import os
+import selectors
 import subprocess
 from pathlib import Path
 
@@ -27,10 +28,17 @@ class SocialBridgeClient:
     def __init__(self) -> None:
         if not AGENTSOCIETY_PYTHON.exists():
             raise SystemExit("AgentSociety environment is missing. Run bootstrap_upstreams.sh first.")
+        try:
+            self.rpc_timeout = float(os.environ.get("COMMUNITY_SOCIAL_RPC_TIMEOUT", "30"))
+        except ValueError as exc:
+            raise RuntimeError("COMMUNITY_SOCIAL_RPC_TIMEOUT must be numeric.") from exc
+        if not 1 <= self.rpc_timeout <= 300:
+            raise RuntimeError("COMMUNITY_SOCIAL_RPC_TIMEOUT must be between 1 and 300 seconds.")
+
         bridge_env = os.environ.copy()
         bridge_env.setdefault("AGENTSOCIETY_LLM_API_KEY", "local-no-api-key")
         self.proc = subprocess.Popen(
-            [str(AGENTSOCIETY_PYTHON), str(BRIDGE)],
+            [str(AGENTSOCIETY_PYTHON), "-u", str(BRIDGE)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -38,20 +46,57 @@ class SocialBridgeClient:
             bufsize=1,
             env=bridge_env,
         )
+        if self.proc.stdout is None:
+            self._force_stop()
+            raise RuntimeError("Social bridge stdout is unavailable.")
+        self.selector = selectors.DefaultSelector()
+        self.selector.register(self.proc.stdout, selectors.EVENT_READ)
+
+    def _dead_error(self) -> RuntimeError:
+        stderr = ""
+        if self.proc.stderr is not None and self.proc.poll() is not None:
+            stderr = self.proc.stderr.read().strip()
+        detail = stderr or f"exit code {self.proc.returncode}"
+        return RuntimeError(f"Social bridge exited unexpectedly: {detail}")
 
     def _call(self, payload: dict) -> dict:
+        if self.proc.poll() is not None:
+            raise self._dead_error()
         if self.proc.stdin is None or self.proc.stdout is None:
             raise RuntimeError("Social bridge pipes are unavailable.")
-        self.proc.stdin.write(json.dumps(payload) + "\n")
-        self.proc.stdin.flush()
+
+        op = str(payload.get("op", "unknown"))
+        try:
+            self.proc.stdin.write(json.dumps(payload) + "\n")
+            self.proc.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            if self.proc.poll() is not None:
+                raise self._dead_error() from exc
+            raise RuntimeError(f"Social bridge write failed during {op}: {exc}") from exc
+
+        events = self.selector.select(timeout=self.rpc_timeout)
+        if not events:
+            if self.proc.poll() is not None:
+                raise self._dead_error()
+            raise TimeoutError(
+                f"Social bridge RPC '{op}' exceeded {self.rpc_timeout:g} seconds."
+            )
+
         line = self.proc.stdout.readline()
         if not line:
-            stderr = self.proc.stderr.read() if self.proc.stderr else ""
-            raise RuntimeError(f"Social bridge exited unexpectedly: {stderr.strip()}")
-        response = json.loads(line)
-        if not response.get("ok"):
-            raise RuntimeError(response.get("error", "Unknown social bridge error"))
-        return response.get("result")
+            raise self._dead_error()
+        try:
+            response = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Social bridge returned invalid JSON during {op}.") from exc
+        if not isinstance(response, dict):
+            raise RuntimeError(f"Social bridge returned a non-object response during {op}.")
+        if response.get("ok") is not True:
+            raise RuntimeError(str(response.get("error", "Unknown social bridge error")))
+        result = response.get("result")
+        if not isinstance(result, dict):
+            raise RuntimeError(f"Social bridge returned an invalid result during {op}.")
+        return result
 
     async def observe_social_space(self, agent_id: int) -> dict:
         return self._call({"op": "observe", "agent_id": agent_id})
@@ -71,13 +116,35 @@ class SocialBridgeClient:
             {"op": "consume", "agent_id": agent_id, "message_id": message_id}
         )
 
-    def close(self) -> None:
+    def _force_stop(self) -> None:
         if self.proc.poll() is not None:
             return
+        self.proc.terminate()
         try:
-            self._call({"op": "close"})
+            self.proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+            self.proc.wait(timeout=3)
+
+    def close(self) -> None:
+        try:
+            if self.proc.poll() is None:
+                try:
+                    self._call({"op": "close"})
+                    self.proc.wait(timeout=5)
+                except Exception:
+                    self._force_stop()
         finally:
-            self.proc.wait(timeout=10)
+            try:
+                self.selector.close()
+            except Exception:
+                pass
+            for stream in (self.proc.stdin, self.proc.stdout, self.proc.stderr):
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
 
 
 async def process_one_reply(agent, other, social, time_step: int) -> dict:
