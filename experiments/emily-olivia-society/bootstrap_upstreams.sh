@@ -72,11 +72,10 @@ git -C "$BITNET_DIR" submodule update --init --recursive
 
 "$STANFORD_VENV/bin/python" -m pip install --disable-pip-version-check -r "$BITNET_DIR/requirements.txt"
 
-# The prebuilt GGUF currently logs "missing pre-tokenizer type" in llama.cpp and
-# produces visibly degraded chat output. Build the GGUF from Microsoft's full
-# model repository instead so tokenizer metadata is embedded by BitNet's own
-# converter before quantization.
-if [[ ! -s "$MODEL_SOURCE_SENTINEL" ]]; then
+# Download Microsoft's full source model only when the cached runtime does not
+# already contain a usable quantized GGUF. A missing generation marker must not
+# force a destructive re-quantization of a known-good cached model.
+if [[ ! -s "$MODEL_FILE" && ! -s "$MODEL_SOURCE_SENTINEL" ]]; then
   echo "Downloading Microsoft's full BitNet b1.58 2B source model and tokenizer..."
   "$STANFORD_VENV/bin/huggingface-cli" download \
     microsoft/BitNet-b1.58-2B-4T \
@@ -84,14 +83,9 @@ if [[ ! -s "$MODEL_SOURCE_SENTINEL" ]]; then
 fi
 
 restore_real_cli
-need_model_regen=false
-if [[ ! -s "$MODEL_FILE" || ! -f "$READY_MARKER" ]]; then
-  need_model_regen=true
-fi
-
-if [[ "$need_model_regen" == true ]]; then
-  echo "Regenerating BitNet I2_S GGUF with tokenizer metadata..."
-  rm -f "$MODEL_FILE" "$MODEL_DIR/ggml-model-f32.gguf"
+if [[ ! -s "$MODEL_FILE" ]]; then
+  echo "Generating BitNet I2_S GGUF because no cached quantized model exists..."
+  rm -f "$MODEL_DIR/ggml-model-f32.gguf"
   pushd "$BITNET_DIR" >/dev/null
   "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s
   popd >/dev/null
@@ -102,7 +96,7 @@ elif [[ ! -x "$BITNET_DIR/build/bin/llama-cli" || ! -x "$BITNET_DIR/build/bin/ll
   "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s
   popd >/dev/null
 else
-  echo "Reusing compiled BitNet binaries."
+  echo "Reusing cached BitNet GGUF and compiled binaries."
 fi
 
 restore_real_cli
