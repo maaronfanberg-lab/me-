@@ -163,7 +163,13 @@ def _coerce_memory_importance(agent) -> None:
         node.importance = int(numeric) if numeric.is_integer() else numeric
 
 
-async def process_one_reply(agent, other, social, time_step: int) -> dict:
+async def process_one_reply(
+    agent,
+    other,
+    social,
+    time_step: int,
+    dialogue_history: list[tuple[str, str]] | None = None,
+) -> dict:
     observation = await social.observe_social_space(agent.agent_id)
     inbox = observation.get("inbox", [])
     if not inbox:
@@ -178,7 +184,7 @@ async def process_one_reply(agent, other, social, time_step: int) -> dict:
     retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
     relevant = [node.content for node in retrieved.get(query, [])]
 
-    action = choose_action(agent, observation, other)
+    action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
     result = None
     consumed = False
     if action["type"] == "message":
@@ -213,6 +219,7 @@ async def run_first_exchange(opener: str) -> dict:
     olivia = next(a for a in agents if a.name == "Olivia")
     social = SocialBridgeClient()
     base_time_step = next_community_time_step(agents)
+    dialogue_history: list[tuple[str, str]] = [(emily.name, opener)]
 
     try:
         seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
@@ -221,12 +228,16 @@ async def run_first_exchange(opener: str) -> dict:
             emily,
             social,
             time_step=base_time_step,
+            dialogue_history=dialogue_history,
         )
+        if olivia_turn.get("action", {}).get("type") == "message":
+            dialogue_history.append((olivia.name, str(olivia_turn["action"]["content"])))
         emily_turn = await process_one_reply(
             emily,
             olivia,
             social,
             time_step=base_time_step + 1,
+            dialogue_history=dialogue_history,
         )
     finally:
         social.close()
