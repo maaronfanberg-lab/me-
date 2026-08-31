@@ -7,7 +7,14 @@ on:
     paths:
       - '.github/workflows/emily-olivia-community-trigger.yml'
       - '.github/workflows/emily-olivia-community-run.yml'
-      - 'experiments/emily-olivia-society/**'
+      - 'experiments/emily-olivia-society/*.py'
+      - 'experiments/emily-olivia-society/*.sh'
+      - 'experiments/emily-olivia-society/agents.json'
+      - 'experiments/emily-olivia-society/upstreams.json'
+
+concurrency:
+  group: emily-olivia-community-trigger
+  cancel-in-progress: true
 
 permissions:
   actions: write
