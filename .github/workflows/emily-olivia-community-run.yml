@@ -29,7 +29,7 @@ on:
 
 concurrency:
   group: emily-olivia-community
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   actions: read
@@ -96,9 +96,10 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v8
-          key: community-runtime-bitnet-v8-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+            experiments/emily-olivia-society/.bootstrap-ready-v9
+          key: community-runtime-bitnet-v9-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
           restore-keys: |
+            community-runtime-bitnet-v9-${{ runner.os }}-py311-
             community-runtime-bitnet-v8-${{ runner.os }}-py311-
             community-runtime-bitnet-v7-${{ runner.os }}-py311-
             community-runtime-bitnet-${{ runner.os }}-py311-
@@ -115,7 +116,7 @@ jobs:
           test -x vendor/BitNet/build/bin/llama-cli
           test -x vendor/BitNet/build/bin/llama-server
           test -s models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
-          test -f .bootstrap-ready-v8
+          test -f .bootstrap-ready-v9
           grep -q 'COMMUNITY_BITNET_HTTP_V2' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Save runtime cache
@@ -127,7 +128,7 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v8
+            experiments/emily-olivia-society/.bootstrap-ready-v9
           key: ${{ steps.bitnet-cache.outputs.cache-primary-key }}
 
       - name: Start and probe BitNet
