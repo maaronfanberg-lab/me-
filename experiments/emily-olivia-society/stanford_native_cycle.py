@@ -3,6 +3,7 @@
 
 The cognitive work belongs to Stanford's GenerativeAgent. Local code here only:
 - translates our two-person social envelope into Stanford's dialogue shape;
+- maintains the original Generative Agents paper's broad daily-plan state;
 - calls GenerativeAgent.utterance(), which performs Stanford memory retrieval;
 - applies a narrow output-boundary check so model/control scaffolding is never spoken.
 
@@ -15,6 +16,7 @@ import asyncio
 import re
 
 import community_cycle_base as _base
+from paper_plan_adapter import planning_context
 
 CommunityAgent = _base.CommunityAgent
 load_agents = _base.load_agents
@@ -71,6 +73,17 @@ def _clean_boundary(text: object) -> str:
     return cleaned
 
 
+def _agent_time_step(agent: CommunityAgent) -> int:
+    latest = 0
+    for node in agent.brain.memory_stream.seq_nodes:
+        latest = max(
+            latest,
+            int(getattr(node, "created", 0) or 0),
+            int(getattr(node, "last_retrieved", 0) or 0),
+        )
+    return latest + 1
+
+
 def choose_action(
     agent: CommunityAgent,
     observation: dict,
@@ -89,13 +102,18 @@ def choose_action(
     agent.brain.update_scratch({"first_name": agent.name, "last_name": ""})
 
     dialogue = _stanford_dialogue(dialogue_history, other, inbound)
-    context = (
-        f"{agent.name} and {other.name} are peers having a private conversation. "
-        "Respond as yourself based on your memories and the conversation so far."
-    )
+    plan_context = planning_context(agent, other.name, _agent_time_step(agent))
+    context_parts = [
+        f"{agent.name} and {other.name} are peers having a private conversation.",
+        "Respond as yourself based on your memories, current private state, and the conversation so far.",
+    ]
+    if plan_context:
+        context_parts.append(plan_context)
+    context = " ".join(context_parts)
 
     # This is Stanford's actual interaction path. interaction.utterance() builds the
     # Stanford prompt and retrieves relevant memories before generating the line.
+    # The broad plan is cognitive context, never a required conversational move.
     text = _clean_boundary(agent.brain.utterance(dialogue, context=context))
 
     if not text or not _base._is_usable_utterance(
