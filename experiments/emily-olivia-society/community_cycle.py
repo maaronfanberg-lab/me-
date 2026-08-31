@@ -12,9 +12,10 @@ from community_cycle_base import *  # noqa: F401,F403
 _is_usable_utterance = _base._is_usable_utterance
 
 _GENERIC_ANCHOR_WORDS = {
-    "anything", "don't", "dont", "good", "great", "know", "little", "made", "make",
-    "makes", "maybe", "nice", "okay", "ok", "really", "something", "thing", "things",
-    "well", "what's", "that's", "i'm", "i've", "you're", "it's", "there's",
+    "anything", "don't", "dont", "good", "great", "hello", "hey", "hi", "know",
+    "little", "made", "make", "makes", "maybe", "nice", "okay", "ok", "really",
+    "something", "thing", "things", "well", "what's", "that's", "i'm", "i've",
+    "you're", "it's", "there's",
 }
 
 _GENERIC_REPLY_LEADS = (
@@ -45,6 +46,15 @@ _ADVICE_QUESTIONS = (
     "what do you recommend",
 )
 
+_DAY_CHECKINS = (
+    "how's your day",
+    "hows your day",
+    "how is your day",
+    "how are you",
+    "how're you",
+    "how have you been",
+)
+
 
 def _grounding_words(text: str, limit: int = 6) -> list[str]:
     ordered: list[str] = []
@@ -73,9 +83,21 @@ def _perspective_rule(inbound: str) -> str:
     return ""
 
 
+def _is_day_checkin(inbound: str) -> bool:
+    lowered = " ".join(inbound.lower().split())
+    return any(phrase in lowered for phrase in _DAY_CHECKINS)
+
+
 def _is_open_question(inbound: str) -> bool:
     lowered = " ".join(inbound.lower().split())
-    return lowered.startswith(("what ", "what's ", "whats ", "why ", "how ", "where ", "when ", "which ", "who "))
+    if _is_day_checkin(lowered):
+        return True
+    normalized = lowered.replace("!", ".").replace("?", ".")
+    starters = (
+        "what ", "what's ", "whats ", "why ", "how ", "how's ", "hows ",
+        "where ", "when ", "which ", "who ",
+    )
+    return any(part.strip().startswith(starters) for part in normalized.split(".") if part.strip())
 
 
 def _has_new_content(reply: str, inbound: str) -> bool:
@@ -168,7 +190,14 @@ def _completion_prompt(
         else ""
     )
 
-    if _base._is_greeting_only(inbound):
+    if _is_day_checkin(inbound):
+        grounding = (
+            "PARTNER is making ordinary greeting small talk and asking how SELF is doing. "
+            "Answer that question naturally in the first clause, briefly. SELF may ask how "
+            "PARTNER is doing in return. Do not turn greeting words such as 'hey', 'day', or "
+            "'going' into abstract topics and do not invent a job, event, place, or backstory."
+        )
+    elif _base._is_greeting_only(inbound):
         grounding = (
             "The last PARTNER line is only a greeting. Reply with a short greeting or "
             "ordinary greeting-small-talk line. Do not introduce a pet, event, task, place, "
@@ -278,21 +307,27 @@ def _recovery_reply(
     dialogue_history: list[tuple[str, str]] | None,
 ) -> str:
     """Return a grounded, nonfatal bridge when BitNet collapses into a bad-generation attractor."""
-    anchors = _grounding_words(inbound, limit=3)
-    anchor = anchors[0] if anchors else "that"
-    candidates = []
-    if _is_open_question(inbound):
-        candidates.extend([
-            f"For me, {anchor} usually gets easier once I make it concrete.",
-            f"I'd start with one small {anchor} step and see what changes.",
-            f"My first instinct is to make {anchor} simpler, not bigger.",
-        ])
+    if _is_day_checkin(inbound):
+        candidates = [
+            "Pretty good so far. How about you?",
+            "Good, actually. How's your day going?",
+            "Not bad. How are you doing?",
+        ]
     else:
-        candidates.extend([
-            f"What part of {anchor} feels most important to you right now?",
-            f"I keep coming back to the {anchor} part. What happened next?",
-            f"The {anchor} detail stands out to me. How are you reading it?",
-        ])
+        anchors = _grounding_words(inbound, limit=3)
+        anchor = anchors[0] if anchors else "that"
+        if _is_open_question(inbound):
+            candidates = [
+                f"I'd probably keep {anchor} simple and start with one small thing.",
+                f"For me, the {anchor} part matters most when it's concrete.",
+                f"My first instinct would be to make {anchor} more specific.",
+            ]
+        else:
+            candidates = [
+                f"What happened with the {anchor} part?",
+                f"How did the {anchor} part turn out?",
+                f"What do you make of the {anchor} part?",
+            ]
 
     prior_lines = {
         " ".join(_base._normalize_words(str(text)))
@@ -310,8 +345,7 @@ def _recovery_reply(
         if _base._is_usable_utterance(candidate, inbound):
             return candidate
 
-    # Last-resort liveness bridge. It is intentionally simple and grounded rather than fatal.
-    return f"Tell me more about the {anchor} part."
+    return "Tell me a little more about that."
 
 
 def _direct_bitnet_reply(
@@ -324,7 +358,8 @@ def _direct_bitnet_reply(
 
     max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
     anchors = _grounding_words(inbound)
-    require_anchor = bool(anchors) and not _base._is_greeting_only(inbound)
+    checkin = _is_day_checkin(inbound)
+    require_anchor = bool(anchors) and not _base._is_greeting_only(inbound) and not checkin
     require_new_content = _is_open_question(inbound)
     anchor_hint = (
         " Include one of these exact topic words: " + ", ".join(anchors) + "."
