@@ -15,6 +15,13 @@ _GENERIC_ANCHOR_WORDS = {
     "well", "what's", "that's", "i'm", "i've", "you're", "it's", "there's",
 }
 
+_ADVICE_QUESTIONS = (
+    "what would you suggest",
+    "what do you suggest",
+    "what would you recommend",
+    "what do you recommend",
+)
+
 
 def _grounding_words(text: str, limit: int = 6) -> list[str]:
     ordered: list[str] = []
@@ -30,6 +37,17 @@ def _grounding_words(text: str, limit: int = 6) -> list[str]:
     specific = [word for word in ordered if word not in _GENERIC_ANCHOR_WORDS]
     chosen = specific or ordered
     return chosen[: max(1, limit)]
+
+
+def _perspective_rule(inbound: str) -> str:
+    lowered = inbound.lower()
+    if any(question in lowered for question in _ADVICE_QUESTIONS):
+        return (
+            " PARTNER is asking SELF for advice about PARTNER's situation. Answer PARTNER "
+            "directly. Prefer a 'you could...' suggestion or a question about PARTNER. Do not "
+            "rewrite the suggestion as something SELF ('I') plans to do."
+        )
+    return ""
 
 
 def _completion_prompt(
@@ -61,8 +79,8 @@ def _completion_prompt(
             )
         grounding = (
             "Stay on PARTNER's exact latest topic. Reuse a concrete idea from that line."
-            f"{anchor_rule} Do not invent a new pet, event, person, place, shared history, "
-            "or unrelated scenario."
+            f"{anchor_rule}{_perspective_rule(inbound)} Do not invent a new pet, event, person, "
+            "place, shared history, or unrelated scenario."
         )
 
     return (
@@ -80,6 +98,8 @@ def _completion_prompt(
         "SELF: Nice. Was the sink problem the stupid little washer after all?\n\n"
         "PARTNER: Maybe doing one small thing can make a difference.\n"
         "SELF: I like that. Even a small difference can change the mood of a day.\n\n"
+        "PARTNER: What would you suggest I try next?\n"
+        "SELF: You could try one small change first and see whether it actually helps.\n\n"
         "Conversation:\n"
         f"{projected}"
     )
@@ -115,23 +135,27 @@ def _direct_bitnet_reply(
         if require_anchor
         else ""
     )
+    perspective_hint = _perspective_rule(inbound)
     retry_specs = [
         ("", 0.55),
         (
             "React directly to PARTNER's exact last line with a concrete peer response."
-            + anchor_hint,
+            + anchor_hint
+            + perspective_hint,
             0.35,
         ),
         (
             "Stay on the current subject. Give a concrete reaction or question, not a vague "
             "placeholder, not service language, and do not repeat any earlier line."
-            + anchor_hint,
+            + anchor_hint
+            + perspective_hint,
             0.20,
         ),
         (
             "Write one literal, direct continuation of PARTNER's last line. Do not repeat any "
             "earlier line. No new backstory, no unrelated scene, no helper language."
-            + anchor_hint,
+            + anchor_hint
+            + perspective_hint,
             0.0,
         ),
     ]
