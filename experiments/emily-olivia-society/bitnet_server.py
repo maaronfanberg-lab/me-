@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -14,7 +15,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(os.environ.get("COMMUNITY_BITNET_ROOT", HERE / "vendor" / "BitNet"))
-MODEL = Path(os.environ.get("COMMUNITY_BITNET_MODEL", HERE / "models" / "BitNet-b1.58-2B-4T" / "ggml-model-i2_s.gguf"))
+MODEL = Path(
+    os.environ.get(
+        "COMMUNITY_BITNET_MODEL",
+        HERE / "models" / "Falcon3-1B-Instruct-1.58bit" / "ggml-model-i2_s.gguf",
+    )
+)
 SERVER = ROOT / "build" / "bin" / "llama-server"
 PID_FILE = HERE / ".bitnet-server.pid"
 LOG_FILE = HERE / "replay" / "bitnet-server.log"
@@ -28,10 +34,8 @@ MIN_MODEL_BYTES = 100_000_000
 
 
 def pid_alive(pid: int) -> bool:
-    # os.kill(pid, 0) reports Linux zombies as existing. That caused a crashed
-    # llama-server child to masquerade as "still starting" for the full health
-    # timeout. Reject zombies when procfs is available, then use the portable
-    # existence check as the fallback.
+    # os.kill(pid, 0) reports Linux zombies as existing. Reject zombies when
+    # procfs is available, then use the portable existence check as fallback.
     stat_path = Path(f"/proc/{pid}/stat")
     if stat_path.exists():
         try:
@@ -89,30 +93,12 @@ def health(timeout: int = 3) -> bool:
         return False
 
 
-def request_completion(
-    prompt: str,
-    n_predict: int,
-    temperature: float,
-    timeout: int = REQUEST_TIMEOUT,
-    stop: list[str] | None = None,
-    cache_prompt: bool = True,
-) -> str:
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise ValueError("Completion prompt must be non-empty.")
+def _post_json(path: str, request_data: dict, timeout: int) -> dict:
     if not health(timeout=3):
-        raise RuntimeError(f"BitNet server is not healthy before completion request. Log tail:\n{log_tail()}")
-    request_data = {
-        "prompt": prompt,
-        "n_predict": max(1, min(int(n_predict), 256)),
-        "temperature": max(0.0, min(float(temperature), 2.0)),
-        "stream": False,
-        "cache_prompt": bool(cache_prompt),
-    }
-    if stop:
-        request_data["stop"] = list(stop)
+        raise RuntimeError(f"BitNet server is not healthy before request. Log tail:\n{log_tail()}")
     payload = json.dumps(request_data).encode("utf-8")
     req = urllib.request.Request(
-        BASE + "/completion",
+        BASE + path,
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -125,9 +111,79 @@ def request_completion(
         raise RuntimeError(f"BitNet HTTP {exc.code}: {body}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"BitNet request failed: {exc.reason}; log tail:\n{log_tail()}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"BitNet returned invalid JSON: {exc}; log tail:\n{log_tail()}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"BitNet returned a non-object JSON response: {data!r}")
+    return data
+
+
+def request_completion(
+    prompt: str,
+    n_predict: int,
+    temperature: float,
+    timeout: int = REQUEST_TIMEOUT,
+    stop: list[str] | None = None,
+    cache_prompt: bool = True,
+) -> str:
+    """Raw completion path retained for Stanford's upstream prompt machinery."""
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("Completion prompt must be non-empty.")
+    request_data = {
+        "prompt": prompt,
+        "n_predict": max(1, min(int(n_predict), 256)),
+        "temperature": max(0.0, min(float(temperature), 2.0)),
+        "stream": False,
+        "cache_prompt": bool(cache_prompt),
+    }
+    if stop:
+        request_data["stop"] = list(stop)
+    data = _post_json("/completion", request_data, timeout)
     text = data.get("content")
     if not isinstance(text, str) or not text.strip():
-        raise RuntimeError(f"BitNet server returned no usable content: {data!r}")
+        raise RuntimeError(f"BitNet server returned no usable completion content: {data!r}")
+    return text.strip()
+
+
+def request_chat_completion(
+    messages: list[dict[str, str]],
+    n_predict: int,
+    temperature: float,
+    timeout: int = REQUEST_TIMEOUT,
+    top_p: float = 0.9,
+) -> str:
+    """Use llama-server's OpenAI-compatible endpoint and the GGUF chat template."""
+    if not isinstance(messages, list) or not messages:
+        raise ValueError("Chat messages must be a non-empty list.")
+    normalized: list[dict[str, str]] = []
+    for item in messages:
+        if not isinstance(item, dict):
+            raise ValueError("Each chat message must be an object.")
+        role = str(item.get("role", "")).strip().lower()
+        content = str(item.get("content", "")).strip()
+        if role not in {"system", "user", "assistant"} or not content:
+            raise ValueError(f"Invalid chat message: {item!r}")
+        normalized.append({"role": role, "content": content})
+
+    data = _post_json(
+        "/v1/chat/completions",
+        {
+            "model": "community-bitnet",
+            "messages": normalized,
+            "max_tokens": max(1, min(int(n_predict), 256)),
+            "temperature": max(0.0, min(float(temperature), 2.0)),
+            "top_p": max(0.0, min(float(top_p), 1.0)),
+            "stream": False,
+        },
+        timeout,
+    )
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError(f"BitNet chat endpoint returned no choices: {data!r}")
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    text = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        raise RuntimeError(f"BitNet chat endpoint returned no usable text: {data!r}")
     return text.strip()
 
 
@@ -245,22 +301,21 @@ def status() -> int:
 
 def probe() -> None:
     started = time.monotonic()
-    prompt = (
-        "System: You are testing conversational BitNet inference. Reply naturally and briefly.<|eot_id|>"
-        "User: Say hello in one short sentence.<|eot_id|>"
-        "Assistant: "
-    )
-    text = request_completion(
-        prompt,
-        24,
-        0.0,
-        stop=["<|eot_id|>"],
-        cache_prompt=False,
+    text = request_chat_completion(
+        [
+            {"role": "system", "content": "You are testing conversational BitNet inference. Reply naturally and briefly."},
+            {"role": "user", "content": "Say hello in one short sentence."},
+        ],
+        n_predict=24,
+        temperature=0.0,
+        top_p=0.9,
     )
     lowered = text.lower()
-    forbidden = ("end of dialogue so far", "utterance", "[input]", "fill in >")
+    forbidden = ("end of dialogue so far", "utterance", "[input]", "fill in >", "system:", "user:", "assistant:")
     if any(marker in lowered for marker in forbidden):
         raise RuntimeError(f"BitNet chat-format probe produced template junk: {text[:300]!r}")
+    if len(re.findall(r"[a-z0-9']+", lowered)) < 2:
+        raise RuntimeError(f"BitNet chat-format probe produced too little language: {text!r}")
     elapsed = time.monotonic() - started
     print("BITNET_SERVER_PROBE:", text[:200])
     print(f"BITNET_SERVER_PROBE_SECONDS: {elapsed:.3f}")
