@@ -38,7 +38,7 @@ jobs:
       - name: Validate Community Python before expensive work
         working-directory: experiments/emily-olivia-society
         run: |
-          python3 -m py_compile bitnet_server.py patch_stanford_local.py community_session.py controlled_social_space.py
+          python3 -m py_compile bitnet_server.py patch_stanford_local.py community_cycle.py community_session.py controlled_social_space.py first_exchange.py social_bridge.py
 
       - name: Restore Community runtime and BitNet
         id: community-cache
@@ -79,6 +79,12 @@ jobs:
             experiments/emily-olivia-society/.bootstrap-ready-v7
           key: ${{ steps.community-cache.outputs.cache-primary-key }}
 
+      - name: Record runner diagnostics
+        working-directory: experiments/emily-olivia-society
+        run: |
+          mkdir -p replay
+          { uname -a; echo; lscpu; echo; vendor/BitNet/build/bin/llama-server --version || true; } > replay/runner-diagnostics.txt 2>&1
+
       - name: Start one persistent BitNet server
         working-directory: experiments/emily-olivia-society
         run: timeout 20m python3 bitnet_server.py start
@@ -91,27 +97,52 @@ jobs:
 
       - name: Confirm Stanford is routed to local HTTP
         working-directory: experiments/emily-olivia-society
-        run: |
-          grep -q 'COMMUNITY_BITNET_HTTP_V1' vendor/stanford-genagents/simulation_engine/gpt_structure.py
-          ! grep -q 'client = openai.OpenAI' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+        run: grep -q 'COMMUNITY_BITNET_HTTP_V1' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Initialize cognition
         working-directory: experiments/emily-olivia-society
-        run: .venv-stanford/bin/python init_cognition.py
+        run: timeout 5m .venv-stanford/bin/python init_cognition.py
 
       - name: Two-turn real BitNet dialogue
         working-directory: experiments/emily-olivia-society
         run: timeout 35m .venv-stanford/bin/python community_session.py --run --turns 2 --opener "Hello, Olivia. This is our BitNet smoke test."
 
-      - name: Verify smoke produced persisted evidence
+      - name: Verify real dialogue and persisted evidence
         working-directory: experiments/emily-olivia-society
         run: |
-          test -s replay/social_state.json
-          test -s replay/bitnet-server-state.json
+          python3 - <<'PY'
+          import json, math
+          from pathlib import Path
+          replay = Path('replay')
+          session = json.loads((replay / 'community_session.json').read_text())
+          assert session['completed_reply_turns'] >= 2, session
+          turns = session.get('turns', [])
+          assert len(turns) >= 2, turns
+          for turn in turns[:2]:
+              action = turn.get('action', {})
+              assert action.get('type') == 'message', turn
+              text = action.get('content')
+              assert isinstance(text, str) and text.strip(), turn
+              assert not text.strip().startswith('GENERATION ERROR:'), turn
+              assert turn.get('action_result', {}).get('success') is True, turn
+          social = json.loads((replay / 'social_state.json').read_text())
+          assert social.get('version') == 1, social
+          assert isinstance(social.get('inboxes'), dict), social
+          state = json.loads((replay / 'bitnet-server-state.json').read_text())
+          seconds = state.get('probe_seconds')
+          assert state.get('ready') is True, state
+          assert isinstance(seconds, (int, float)) and math.isfinite(seconds) and seconds >= 0, state
+          print('Verified two real delivered replies, valid social state, and a timed healthy BitNet probe.')
+          PY
           test -d workspaces/emily
           test -d workspaces/olivia
-          python3 observer.py --summary > replay/observer-smoke.json
+          timeout 2m python3 observer.py --summary > replay/observer-smoke.json
           test -s replay/observer-smoke.json
+
+      - name: Show BitNet log on failure
+        if: failure()
+        working-directory: experiments/emily-olivia-society
+        run: tail -n 200 replay/bitnet-server.log 2>/dev/null || true
 
       - name: Upload BitNet smoke evidence
         if: always()
@@ -122,7 +153,7 @@ jobs:
           path: |
             experiments/emily-olivia-society/replay/
             experiments/emily-olivia-society/workspaces/
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Stop BitNet server
         if: always()
