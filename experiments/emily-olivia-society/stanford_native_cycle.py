@@ -40,21 +40,14 @@ def _is_usable_utterance(
     agent_name: str = "",
     other_name: str = "",
 ) -> bool:
-    """Validate the output boundary without steering Stanford's wording.
-
-    The legacy validator required a reply to repeat a content word from the
-    incoming message. That was a local conversational heuristic, not part of
-    Stanford's architecture, and rejected natural indirect answers. Keep the
-    safety/format/role checks but let Stanford retrieval and cognition decide
-    what the response actually says.
-    """
+    """Validate the output boundary without steering Stanford's wording."""
     if not isinstance(text, str) or not text.strip():
         return False
     cleaned = _clean_boundary(text)
     if not cleaned:
         return False
-    # Passing an empty inbound intentionally disables the old lexical-overlap
-    # and greeting-shape steering while retaining junk, role, and size checks.
+    # Empty inbound disables legacy lexical-overlap/greeting steering while
+    # retaining junk, role, identity, size, and natural-language checks.
     return _base._is_usable_utterance(cleaned, "", agent_name, other_name)
 
 
@@ -123,9 +116,6 @@ def choose_action(
     agent.brain.update_scratch({"first_name": agent.name, "last_name": ""})
     time_step = _agent_time_step(agent)
 
-    # Paper order: accumulated observations can produce reflection before the
-    # next act. Reflections become memories, so Stanford retrieval can use them
-    # naturally when producing the action rather than us scripting the reply.
     maybe_reflect(agent, time_step)
 
     dialogue = _stanford_dialogue(dialogue_history, other, inbound)
@@ -138,11 +128,17 @@ def choose_action(
         context_parts.append(plan_context)
     context = " ".join(context_parts)
 
-    text = _clean_boundary(agent.brain.utterance(dialogue, context=context))
+    raw_text = agent.brain.utterance(dialogue, context=context)
+    text = _clean_boundary(raw_text)
 
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
+        # Failure evidence is deliberately included in the exception so CI logs
+        # reveal the model/parser boundary defect instead of forcing us to guess.
+        raw_preview = str(raw_text)[:700].replace("\n", "\\n")
+        clean_preview = str(text)[:700].replace("\n", "\\n")
         raise RuntimeError(
-            f"{agent.name} returned no natural-language utterance that passed the output boundary."
+            f"{agent.name} Stanford utterance rejected; "
+            f"raw={raw_preview!r}; cleaned={clean_preview!r}"
         )
 
     return {
