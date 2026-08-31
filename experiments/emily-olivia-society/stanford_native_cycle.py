@@ -4,6 +4,7 @@
 The cognitive work belongs to Stanford's GenerativeAgent. Local code here only:
 - translates our two-person social envelope into Stanford's dialogue shape;
 - maintains the original Generative Agents paper's broad daily-plan state;
+- periodically reflects after accumulated experience, as in the paper;
 - calls GenerativeAgent.utterance(), which performs Stanford memory retrieval;
 - applies a narrow output-boundary check so model/control scaffolding is never spoken.
 
@@ -17,6 +18,7 @@ import re
 
 import community_cycle_base as _base
 from paper_plan_adapter import planning_context
+from paper_reflection_adapter import maybe_reflect
 
 CommunityAgent = _base.CommunityAgent
 load_agents = _base.load_agents
@@ -60,7 +62,6 @@ def _stanford_dialogue(
     ]
     if not history or history[-1] != [other.name, inbound.strip()]:
         history.append([other.name, inbound.strip()])
-    # Stanford's own utterance code turns this dialogue into its retrieval anchor.
     return history[-20:]
 
 
@@ -98,11 +99,16 @@ def choose_action(
     if not inbound:
         return {"type": "wait", "reason": "empty_message"}
 
-    # Stanford's get_fullname() requires both keys. We keep identity minimal.
     agent.brain.update_scratch({"first_name": agent.name, "last_name": ""})
+    time_step = _agent_time_step(agent)
+
+    # Paper order: accumulated observations can produce reflection before the
+    # next act. Reflections become memories, so Stanford retrieval can use them
+    # naturally when producing the action rather than us scripting the reply.
+    maybe_reflect(agent, time_step)
 
     dialogue = _stanford_dialogue(dialogue_history, other, inbound)
-    plan_context = planning_context(agent, other.name, _agent_time_step(agent))
+    plan_context = planning_context(agent, other.name, time_step)
     context_parts = [
         f"{agent.name} and {other.name} are peers having a private conversation.",
         "Respond as yourself based on your memories, current private state, and the conversation so far.",
@@ -111,9 +117,6 @@ def choose_action(
         context_parts.append(plan_context)
     context = " ".join(context_parts)
 
-    # This is Stanford's actual interaction path. interaction.utterance() builds the
-    # Stanford prompt and retrieves relevant memories before generating the line.
-    # The broad plan is cognitive context, never a required conversational move.
     text = _clean_boundary(agent.brain.utterance(dialogue, context=context))
 
     if not text or not _base._is_usable_utterance(
@@ -131,7 +134,7 @@ def choose_action(
 
 
 async def run_one_cycle() -> None:
-    """Preserve the existing bounded social cycle, with Stanford choosing speech."""
+    """Preserve the bounded social envelope; Stanford drives cognition/speech."""
     from controlled_social_space import ControlledSocialSpace
 
     agents = load_agents()
