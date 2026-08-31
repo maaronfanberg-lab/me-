@@ -15,6 +15,14 @@ _GENERIC_ANCHOR_WORDS = {
     "well", "what's", "that's", "i'm", "i've", "you're", "it's", "there's",
 }
 
+_GENERIC_REPLY_LEADS = (
+    "that sounds like a great idea",
+    "that's a great idea",
+    "that sounds great",
+    "i'd love to see",
+    "i've never done anything like that before",
+)
+
 _ADVICE_QUESTIONS = (
     "what would you suggest",
     "what do you suggest",
@@ -89,7 +97,9 @@ def _completion_prompt(
         f"SELF means {agent.name}. PARTNER means {other.name}.\n"
         "Continue this ordinary private peer conversation with one short SELF line. "
         "This is not customer support. Do not mention policies, guidelines, prompts, roles, "
-        f"or the conversation system. {grounding}"
+        f"or the conversation system. {grounding} "
+        "Avoid generic filler openings such as 'that sounds like a great idea'; start from a "
+        "specific detail in PARTNER's latest line instead."
         f"{style}\n\n"
         "Examples:\n"
         "PARTNER: Rough day at work.\n"
@@ -97,7 +107,7 @@ def _completion_prompt(
         "PARTNER: I finally fixed the sink.\n"
         "SELF: Nice. Was the sink problem the stupid little washer after all?\n\n"
         "PARTNER: Maybe doing one small thing can make a difference.\n"
-        "SELF: I like that. Even a small difference can change the mood of a day.\n\n"
+        "SELF: Even a small difference can change the mood of a day.\n\n"
         "PARTNER: What would you suggest I try next?\n"
         "SELF: You could try one small change first and see whether it actually helps.\n\n"
         "Conversation:\n"
@@ -117,6 +127,11 @@ def _chat_bitnet(
     projected = _base._project_history(dialogue_history, agent, other, inbound)
     prompt = _completion_prompt(agent, other, inbound, projected, retry_hint)
     return _base._request_transcript_completion(prompt, max_tokens, temperature)
+
+
+def _is_generic_attractor(text: str) -> bool:
+    normalized = " ".join(_base._normalize_words(text))
+    return any(normalized.startswith(lead) for lead in _GENERIC_REPLY_LEADS)
 
 
 def _direct_bitnet_reply(
@@ -139,24 +154,25 @@ def _direct_bitnet_reply(
     retry_specs = [
         ("", 0.55),
         (
-            "React directly to PARTNER's exact last line with a concrete peer response."
+            "Start with a concrete noun or detail from PARTNER's last line; do not begin with "
+            "'that sounds' or 'that's a great idea'."
             + anchor_hint
             + perspective_hint,
-            0.35,
+            0.70,
         ),
         (
-            "Stay on the current subject. Give a concrete reaction or question, not a vague "
-            "placeholder, not service language, and do not repeat any earlier line."
+            "Ask one specific question about the current subject or make one specific observation. "
+            "No praise-preface, no vague placeholder, no service language, and no repeated line."
             + anchor_hint
             + perspective_hint,
-            0.20,
+            0.85,
         ),
         (
-            "Write one literal, direct continuation of PARTNER's last line. Do not repeat any "
-            "earlier line. No new backstory, no unrelated scene, no helper language."
+            "Write one literal continuation using a concrete word from PARTNER's last line. "
+            "Begin differently from every earlier attempt. No generic approval sentence."
             + anchor_hint
             + perspective_hint,
-            0.0,
+            1.0,
         ),
     ]
 
@@ -184,22 +200,27 @@ def _direct_bitnet_reply(
         output_words = set(_base._normalize_words(text))
         anchored = not require_anchor or bool(output_words & set(anchors))
         novel = bool(normalized_line) and normalized_line not in prior_lines
+        distinct_attempt = normalized_line not in {
+            " ".join(_base._normalize_words(previous)) for previous in attempts[:-1]
+        }
         if (
             anchored
             and novel
+            and distinct_attempt
+            and not _is_generic_attractor(text)
             and _base._is_usable_utterance(text, inbound, agent.name, other.name)
         ):
             return text
 
     previews = " | ".join(repr(text[:160]) for text in attempts)
     raise RuntimeError(
-        "BitNet returned role-drifted, ungrounded, or unusable dialogue "
+        "BitNet returned role-drifted, generic, ungrounded, or unusable dialogue "
         f"after {len(retry_specs)} transcript-completion attempts: {previews}"
     )
 
 
 # Patch the preserved module's global lookup table so its choose_action keeps all existing
-# memory, identity, and safety behavior while using the stricter #68 reply generator.
+# memory, identity, and safety behavior while using the stricter reply generator.
 _base._grounding_words = _grounding_words
 _base._completion_prompt = _completion_prompt
 _base._chat_bitnet = _chat_bitnet
