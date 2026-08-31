@@ -22,6 +22,10 @@ _GENERIC_REPLY_LEADS = (
     "that sounds great",
     "i'd love to see",
     "i've never done anything like that before",
+    "i don't know what to say",
+    "i dont know what to say",
+    "i'm glad it's going well now",
+    "im glad its going well now",
 )
 
 _ADVICE_QUESTIONS = (
@@ -121,7 +125,11 @@ def _completion_prompt(
     ages = {"Emily": 27, "Olivia": 29}
     age = ages.get(agent.name)
     identity = f"{agent.name}, {age}" if age else agent.name
-    style = f"\nNext-line style: {retry_hint}" if retry_hint else ""
+    style = (
+        "\nFor this attempt, follow this conversational move exactly: " + retry_hint
+        if retry_hint
+        else ""
+    )
 
     if _base._is_greeting_only(inbound):
         grounding = (
@@ -158,10 +166,10 @@ def _completion_prompt(
         "Continue this ordinary private peer conversation with one short SELF line. "
         "This is not customer support. Do not mention policies, guidelines, prompts, roles, "
         f"or the conversation system. {grounding} "
-        "Avoid generic filler openings such as 'that sounds like a great idea'; start from a "
-        "specific detail in PARTNER's latest line instead. Do not paraphrase or recycle any "
-        "earlier SELF line; move the conversation forward with a genuinely new detail, reaction, "
-        "or question."
+        "Avoid generic filler openings such as 'that sounds like a great idea', 'I don't know "
+        "what to say', or 'I'm glad it's going well now'. Start from a specific detail in "
+        "PARTNER's latest line instead. Do not paraphrase or recycle any earlier SELF line; "
+        "move the conversation forward with a genuinely new detail, reaction, answer, or question."
         f"{style}\n\n"
         "Examples:\n"
         "PARTNER: Rough day at work.\n"
@@ -196,6 +204,34 @@ def _is_generic_attractor(text: str) -> bool:
     return any(normalized.startswith(lead) for lead in _GENERIC_REPLY_LEADS)
 
 
+def _retry_specs(
+    inbound: str,
+    anchor_hint: str,
+    perspective_hint: str,
+) -> list[tuple[str, float]]:
+    common = anchor_hint + perspective_hint
+    if _is_open_question(inbound):
+        moves = [
+            "Answer PARTNER's question directly in the first clause. Give one concrete answer, not a question back.",
+            "Give a different direct answer using one specific everyday detail. Do not hedge or praise PARTNER's question.",
+            "Answer with a brief personal preference or example that SELF could plausibly say right now, without inventing shared history.",
+            "Offer a contrasting or slightly unexpected answer while staying on the exact topic.",
+            "Give one practical, specific answer and one short reason for it.",
+            "Answer in under 14 words with one concrete noun from PARTNER's topic and one genuinely new detail.",
+        ]
+    else:
+        moves = [
+            "React directly to PARTNER's last line with a concrete observation or feeling. Do not ask a question.",
+            "Ask one specific follow-up question about a concrete detail in PARTNER's last line. Do not praise or summarize first.",
+            "Add one brief personal reaction or example from SELF that connects to PARTNER's exact topic, without inventing shared history.",
+            "Offer a mild contrast, disagreement, or alternative interpretation of PARTNER's point while staying friendly.",
+            "Continue the topic by naming one likely consequence, next step, or concrete detail PARTNER has not already said.",
+            "Write a concise continuation under 14 words that uses a concrete topic word and advances the exchange.",
+        ]
+    temperatures = [0.55, 0.65, 0.72, 0.80, 0.88, 0.95]
+    return [(move + common, temp) for move, temp in zip(moves, temperatures)]
+
+
 def _direct_bitnet_reply(
     agent: _base.CommunityAgent,
     other: _base.CommunityAgent,
@@ -214,32 +250,7 @@ def _direct_bitnet_reply(
         else ""
     )
     perspective_hint = _perspective_rule(inbound)
-    retry_specs = [
-        ("", 0.55),
-        (
-            "Start with a concrete noun or detail from PARTNER's last line; do not begin with "
-            "'that sounds' or 'that's a great idea'."
-            + anchor_hint
-            + perspective_hint,
-            0.70,
-        ),
-        (
-            "Answer the substance of PARTNER's line with one new concrete detail. Ask one specific "
-            "question only if that is a natural continuation. No paraphrase, praise-preface, vague "
-            "placeholder, service language, or repeated line."
-            + anchor_hint
-            + perspective_hint,
-            0.85,
-        ),
-        (
-            "Write one literal continuation using a concrete word from PARTNER's last line plus a "
-            "new detail PARTNER did not already say. Begin differently from every earlier attempt "
-            "and from SELF's earlier lines."
-            + anchor_hint
-            + perspective_hint,
-            1.0,
-        ),
-    ]
+    retry_specs = _retry_specs(inbound, anchor_hint, perspective_hint)
 
     prior_lines = {
         " ".join(_base._normalize_words(str(text)))
@@ -284,7 +295,7 @@ def _direct_bitnet_reply(
     previews = " | ".join(repr(text[:160]) for text in attempts)
     raise RuntimeError(
         "BitNet returned role-drifted, generic, paraphrased, recycled, ungrounded, or unusable "
-        f"dialogue after {len(retry_specs)} transcript-completion attempts: {previews}"
+        f"dialogue after {len(retry_specs)} move-diverse transcript-completion attempts: {previews}"
     )
 
 
