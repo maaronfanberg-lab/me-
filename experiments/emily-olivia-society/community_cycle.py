@@ -20,6 +20,18 @@ _TEMPLATE_JUNK = re.compile(
     r"(?:\{?\s*[\"']?utterance[\"']?\s*[:=]|\{?\s*fill\s+in\s*>|\[?\s*input\s*\]?:|return\s+only\s+the\s+words\s+you\s+would\s+say|end\s+of\s+dialogue\s+so\s+far)",
     re.IGNORECASE,
 )
+_ASSISTANTY_JUNK = re.compile(
+    r"(?:how\s+can\s+i\s+(?:help|assist)\s+you|"
+    r"if\s+you\s+have\s+any\s+(?:other\s+)?questions|"
+    r"if\s+you\s+need\s+(?:any\s+)?(?:further\s+)?assistance|"
+    r"feel\s+free\s+to\s+ask|"
+    r"(?:i\s+am|i'm)\s+(?:here|happy)\s+to\s+(?:help|assist)|"
+    r"i(?:'m|\s+am)\s+sorry[^.]{0,80}(?:can(?:not|'t)|unable)\s+(?:assist|help|fulfill)|"
+    r"i\s+can(?:not|'t)\s+(?:assist|help|fulfill)(?:\s+with)?\s+(?:this|that|your)\s+request|"
+    r"(?:our|the)\s+guidelines|"
+    r"does\s+not\s+align\s+with\s+(?:our\s+)?(?:guidelines|policies))",
+    re.IGNORECASE,
+)
 _SPEAKER_LABEL = re.compile(r"(?im)^\s*(Emily|Olivia|User|Assistant|System)\s*:")
 
 
@@ -105,7 +117,7 @@ def _is_usable_utterance(text: str, inbound: str = "") -> bool:
     cleaned = text.strip()
     if not cleaned or cleaned.startswith("GENERATION ERROR:") or len(cleaned) > MAX_UTTERANCE_CHARS:
         return False
-    if _TEMPLATE_JUNK.search(cleaned):
+    if _TEMPLATE_JUNK.search(cleaned) or _ASSISTANTY_JUNK.search(cleaned):
         return False
     if len(_SPEAKER_LABEL.findall(cleaned)) > 1:
         return False
@@ -125,12 +137,14 @@ def _is_usable_utterance(text: str, inbound: str = "") -> bool:
 def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max_tokens: int) -> str:
     """Use llama-server's chat endpoint so the GGUF's own template serializes dialogue."""
     system = (
-        f"You are {agent.name}. You are speaking privately with {other.name}. "
+        f"You are {agent.name}. You are speaking privately with {other.name} as an equal peer, not as a customer-service assistant. "
         f"The latest message was written by {other.name}; answer that exact message and stay on its topic. "
-        "Reply naturally and briefly as one person in an ongoing conversation. Do not invent a different scenario, "
-        "give generic advice unrelated to the message, repeat the prompt, instructions, role labels, or the other person's whole message."
+        "Reply naturally and briefly as one person in an ongoing conversation. Continue the thought instead of offering services. "
+        "Do not ask how you can help, offer assistance, mention policies, guidelines, requests, fictional characters, or capabilities. "
+        "Do not invent a different scenario, give generic advice unrelated to the message, repeat the prompt, instructions, role labels, "
+        "or the other person's whole message. Do not apologize unless the other person's message clearly gives you something to apologize for."
     )
-    user = f"{other.name} just said: {inbound}\n\nReply directly to {other.name}."
+    user = f"{other.name} just said: {inbound}\n\nReply directly to {other.name} as their conversational peer."
     return request_chat(system, user, max_tokens, 0.5)
 
 
@@ -158,7 +172,7 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
         dialogue,
         context=(
             f"You are {agent.name}. You are in a two-person community with {other.name}. "
-            "Respond naturally to the addressed message."
+            "Respond naturally to the addressed message as an equal conversational peer, not a customer-service assistant."
         ),
     )
     text = str(response).strip()
