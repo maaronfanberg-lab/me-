@@ -163,14 +163,20 @@ async def process_one_reply(agent, other, social, time_step: int) -> dict:
 
     action = choose_action(agent, observation, other)
     result = None
+    consumed = False
     if action["type"] == "message":
         result = await social.send_message(
             agent.agent_id,
             int(action["recipient_id"]),
             str(action["content"]),
         )
+        if not isinstance(result, dict) or result.get("success") is not True:
+            raise RuntimeError(f"Message delivery failed for {agent.name}.")
+        consume_result = await social.consume_message(agent.agent_id, int(latest["id"]))
+        if consume_result.get("success") is not True:
+            raise RuntimeError(f"Message consume failed for {agent.name}.")
+        consumed = True
 
-    await social.consume_message(agent.agent_id, int(latest["id"]))
     agent.brain.save(str(agent.workspace))
 
     return {
@@ -180,6 +186,7 @@ async def process_one_reply(agent, other, social, time_step: int) -> dict:
         "retrieved_memories": relevant,
         "action": action,
         "action_result": result,
+        "consumed_inbound": consumed,
     }
 
 
