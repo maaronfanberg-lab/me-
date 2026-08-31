@@ -1,0 +1,43 @@
+name: Emily Olivia Local Smoke
+
+on:
+  push:
+    paths:
+      - '.github/workflows/emily-olivia-local-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENAI_API_KEY: local-no-api-key
+      AGENTSOCIETY_LLM_API_KEY: local-no-api-key
+      COMMUNITY_LOCAL_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      TZ: America/Chicago
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Cache Community runtime and local model
+        uses: actions/cache@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v4
+          key: community-runtime-local-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
+      - name: Bootstrap free local model
+        working-directory: experiments/emily-olivia-society
+        run: bash bootstrap_upstreams.sh
+      - name: Initialize cognition
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python init_cognition.py
+      - name: Two-turn local dialogue
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python community_session.py --run --turns 2 --opener "Hello, Olivia. This is our free local-model smoke test."
