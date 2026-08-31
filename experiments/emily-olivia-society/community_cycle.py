@@ -14,8 +14,8 @@ _is_usable_utterance = _base._is_usable_utterance
 _GENERIC_ANCHOR_WORDS = {
     "anything", "don't", "dont", "good", "great", "hello", "hey", "hi", "know",
     "little", "made", "make", "makes", "maybe", "nice", "okay", "ok", "really",
-    "something", "thing", "things", "well", "what's", "that's", "i'm", "i've",
-    "you're", "it's", "there's",
+    "small", "something", "start", "thing", "things", "thinking", "trying", "well",
+    "what's", "that's", "i'm", "i've", "you're", "it's", "there's",
 }
 
 _GENERIC_REPLY_LEADS = (
@@ -55,6 +55,17 @@ _DAY_CHECKINS = (
     "how have you been",
 )
 
+_INTENT_PHRASES = (
+    "thinking of",
+    "thinking about",
+    "trying to",
+    "want to",
+    "planning to",
+    "plan to",
+    "might try",
+    "going to try",
+)
+
 
 def _grounding_words(text: str, limit: int = 6) -> list[str]:
     ordered: list[str] = []
@@ -86,6 +97,11 @@ def _perspective_rule(inbound: str) -> str:
 def _is_day_checkin(inbound: str) -> bool:
     lowered = " ".join(inbound.lower().split())
     return any(phrase in lowered for phrase in _DAY_CHECKINS)
+
+
+def _is_intent_statement(inbound: str) -> bool:
+    lowered = " ".join(inbound.lower().split())
+    return any(phrase in lowered for phrase in _INTENT_PHRASES)
 
 
 def _is_open_question(inbound: str) -> bool:
@@ -313,21 +329,26 @@ def _recovery_reply(
             "Good, actually. How's your day going?",
             "Not bad. How are you doing?",
         ]
-    else:
+    elif _is_intent_statement(inbound):
+        candidates = [
+            "What made you want to try it?",
+            "Have you decided how you want to start?",
+            "What got you interested in that?",
+        ]
+    elif _is_open_question(inbound):
         anchors = _grounding_words(inbound, limit=3)
         anchor = anchors[0] if anchors else "that"
-        if _is_open_question(inbound):
-            candidates = [
-                f"I'd probably keep {anchor} simple and start with one small thing.",
-                f"For me, the {anchor} part matters most when it's concrete.",
-                f"My first instinct would be to make {anchor} more specific.",
-            ]
-        else:
-            candidates = [
-                f"What happened with the {anchor} part?",
-                f"How did the {anchor} part turn out?",
-                f"What do you make of the {anchor} part?",
-            ]
+        candidates = [
+            f"I'd probably keep {anchor} simple and start with one small thing.",
+            f"For me, the {anchor} part matters most when it's concrete.",
+            f"My first instinct would be to make {anchor} more specific.",
+        ]
+    else:
+        candidates = [
+            "What happened next?",
+            "How did that go?",
+            "What do you think about it now?",
+        ]
 
     prior_lines = {
         " ".join(_base._normalize_words(str(text)))
