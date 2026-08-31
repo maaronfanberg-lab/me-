@@ -58,6 +58,23 @@ def _perspective_rule(inbound: str) -> str:
     return ""
 
 
+def _is_open_question(inbound: str) -> bool:
+    lowered = " ".join(inbound.lower().split())
+    return lowered.startswith(("what ", "what's ", "whats ", "why ", "how ", "where ", "when ", "which ", "who "))
+
+
+def _has_new_content(reply: str, inbound: str) -> bool:
+    inbound_words = {
+        word for word in _base._normalize_words(inbound)
+        if word not in _base._STOP_WORDS and word not in _GENERIC_ANCHOR_WORDS and len(word) > 2
+    }
+    reply_words = {
+        word for word in _base._normalize_words(reply)
+        if word not in _base._STOP_WORDS and word not in _GENERIC_ANCHOR_WORDS and len(word) > 2
+    }
+    return bool(reply_words - inbound_words)
+
+
 def _completion_prompt(
     agent: _base.CommunityAgent,
     other: _base.CommunityAgent,
@@ -85,10 +102,17 @@ def _completion_prompt(
                 + ", ".join(anchors)
                 + "."
             )
+        question_rule = ""
+        if _is_open_question(inbound):
+            question_rule = (
+                " PARTNER asked an open question. Give an actual answer with at least one new, "
+                "specific detail that was not already in PARTNER's wording. Do not merely restate "
+                "or rephrase the question."
+            )
         grounding = (
             "Stay on PARTNER's exact latest topic. Reuse a concrete idea from that line."
-            f"{anchor_rule}{_perspective_rule(inbound)} Do not invent a new pet, event, person, "
-            "place, shared history, or unrelated scenario."
+            f"{anchor_rule}{_perspective_rule(inbound)}{question_rule} Do not invent a new pet, "
+            "event, person, place, shared history, or unrelated scenario."
         )
 
     return (
@@ -105,11 +129,11 @@ def _completion_prompt(
         "PARTNER: Rough day at work.\n"
         "SELF: Yeah? What happened at work?\n\n"
         "PARTNER: I finally fixed the sink.\n"
-        "SELF: Nice. Was the sink problem the stupid little washer after all?\n\n"
-        "PARTNER: Maybe doing one small thing can make a difference.\n"
-        "SELF: Even a small difference can change the mood of a day.\n\n"
-        "PARTNER: What would you suggest I try next?\n"
-        "SELF: You could try one small change first and see whether it actually helps.\n\n"
+        "SELF: Was it the washer under the faucet after all?\n\n"
+        "PARTNER: What's one tiny thing that makes mornings better?\n"
+        "SELF: Coffee before anyone starts talking to me.\n\n"
+        "PARTNER: The rain smells amazing today.\n"
+        "SELF: It does. The pavement almost smells earthy after the first few drops.\n\n"
         "Conversation:\n"
         f"{projected}"
     )
@@ -145,6 +169,7 @@ def _direct_bitnet_reply(
     max_tokens = min(96, max(16, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
     anchors = _grounding_words(inbound)
     require_anchor = bool(anchors) and not _base._is_greeting_only(inbound)
+    require_new_content = _is_open_question(inbound)
     anchor_hint = (
         " Include one of these exact topic words: " + ", ".join(anchors) + "."
         if require_anchor
@@ -161,15 +186,16 @@ def _direct_bitnet_reply(
             0.70,
         ),
         (
-            "Ask one specific question about the current subject or make one specific observation. "
-            "No praise-preface, no vague placeholder, no service language, and no repeated line."
+            "Answer the substance of PARTNER's line with one new concrete detail. Ask one specific "
+            "question only if that is a natural continuation. No paraphrase, praise-preface, vague "
+            "placeholder, service language, or repeated line."
             + anchor_hint
             + perspective_hint,
             0.85,
         ),
         (
-            "Write one literal continuation using a concrete word from PARTNER's last line. "
-            "Begin differently from every earlier attempt. No generic approval sentence."
+            "Write one literal continuation using a concrete word from PARTNER's last line plus a "
+            "new detail PARTNER did not already say. Begin differently from every earlier attempt."
             + anchor_hint
             + perspective_hint,
             1.0,
@@ -203,10 +229,12 @@ def _direct_bitnet_reply(
         distinct_attempt = normalized_line not in {
             " ".join(_base._normalize_words(previous)) for previous in attempts[:-1]
         }
+        substantive = not require_new_content or _has_new_content(text, inbound)
         if (
             anchored
             and novel
             and distinct_attempt
+            and substantive
             and not _is_generic_attractor(text)
             and _base._is_usable_utterance(text, inbound, agent.name, other.name)
         ):
@@ -214,7 +242,7 @@ def _direct_bitnet_reply(
 
     previews = " | ".join(repr(text[:160]) for text in attempts)
     raise RuntimeError(
-        "BitNet returned role-drifted, generic, ungrounded, or unusable dialogue "
+        "BitNet returned role-drifted, generic, paraphrased, ungrounded, or unusable dialogue "
         f"after {len(retry_specs)} transcript-completion attempts: {previews}"
     )
 
