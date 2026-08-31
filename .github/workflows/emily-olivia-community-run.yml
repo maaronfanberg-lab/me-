@@ -7,11 +7,7 @@ on:
       opener:
         description: "Emily's opening message"
         required: false
-        default: "Olivia, what's something small that can make an ordinary day better?"
-      turns:
-        description: "Maximum reply turns (2-10) for manual bounded runs"
-        required: false
-        default: "8"
+        default: "Let's continue naturally from where we left off."
   schedule:
     - cron: "0 10 * * *"
     - cron: "0 11 * * *"
@@ -158,38 +154,28 @@ jobs:
         working-directory: experiments/emily-olivia-society
         run: .venv-stanford/bin/python init_cognition.py
 
-      - name: Keep Emily and Olivia talking
+      - name: Keep Emily and Olivia talking continuously
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
-          OPENER="${{ github.event.inputs.opener }}"
-          TURNS="${{ github.event.inputs.turns }}"
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            hour="$(date +%H)"
-            if [ "$hour" -ge 22 ] || [ "$hour" -lt 5 ]; then
-              echo "Community quiet hours are 10:00 PM to 5:00 AM America/Chicago."
-              exit 0
-            fi
-            now_epoch="$(date +%s)"
-            quiet_epoch="$(date -d 'today 22:00' +%s)"
-            seconds_until_quiet="$((quiet_epoch - now_epoch))"
-            if [ "$seconds_until_quiet" -le 0 ]; then exit 0; fi
-            continuous_seconds=18000
-            if [ "$seconds_until_quiet" -lt "$continuous_seconds" ]; then continuous_seconds="$seconds_until_quiet"; fi
-            .venv-stanford/bin/python community_session.py \
-              --run \
-              --continuous-seconds "$continuous_seconds" \
-              --turn-delay-seconds 60 \
-              --opener "Let's continue naturally from where we left off."
-          else
-            [ -n "$OPENER" ] || OPENER="Olivia, what's something small that can make an ordinary day better?"
-            [ -n "$TURNS" ] || TURNS="8"
-            if ! [[ "$TURNS" =~ ^[0-9]+$ ]] || [ "$TURNS" -lt 2 ] || [ "$TURNS" -gt 10 ]; then
-              echo "turns must be an integer from 2 through 10" >&2
-              exit 2
-            fi
-            .venv-stanford/bin/python community_session.py --run --turns "$TURNS" --opener "$OPENER"
+          hour="$(date +%H)"
+          if [ "$hour" -ge 22 ] || [ "$hour" -lt 5 ]; then
+            echo "Community quiet hours are 10:00 PM to 5:00 AM America/Chicago."
+            exit 0
           fi
+          now_epoch="$(date +%s)"
+          quiet_epoch="$(date -d 'today 22:00' +%s)"
+          seconds_until_quiet="$((quiet_epoch - now_epoch))"
+          if [ "$seconds_until_quiet" -le 0 ]; then exit 0; fi
+          continuous_seconds=18000
+          if [ "$seconds_until_quiet" -lt "$continuous_seconds" ]; then continuous_seconds="$seconds_until_quiet"; fi
+          OPENER="${{ github.event.inputs.opener }}"
+          [ -n "$OPENER" ] || OPENER="Let's continue naturally from where we left off."
+          .venv-stanford/bin/python community_session.py \
+            --run \
+            --continuous-seconds "$continuous_seconds" \
+            --turn-delay-seconds 60 \
+            --opener "$OPENER"
 
       - name: Verify session integrity and grounded natural dialogue
         if: steps.gate.outputs.run == 'true'
@@ -199,7 +185,6 @@ jobs:
           import json
           from pathlib import Path
           from community_cycle import _is_usable_utterance
-
           p = Path('replay/community_session.json')
           if not p.is_file(): raise SystemExit('community_session.json missing')
           d = json.loads(p.read_text())
@@ -207,30 +192,21 @@ jobs:
           completed = int(d.get('completed_reply_turns', 0))
           if completed < 1: raise SystemExit('no completed reply turns')
           turns = d.get('turns') or []
-          if d.get('mode') == 'bounded_persistent_community_session':
-              requested = int(d.get('limits', {}).get('requested_reply_turns', 0))
-              if requested < 2 or completed != requested: raise SystemExit(f'bounded session stopped early: {completed}/{requested}')
-              if d.get('stop_reason') != 'turn_limit_reached': raise SystemExit(f'unexpected bounded stop reason: {d.get("stop_reason")!r}')
-              if len(turns) != requested: raise SystemExit('bounded turn evidence incomplete')
-              candidates = turns
-          else:
-              candidates = turns if turns else ([d.get('latest_turn')] if d.get('latest_turn') else [])
+          candidates = turns if turns else ([d.get('latest_turn')] if d.get('latest_turn') else [])
           if not candidates: raise SystemExit('no turn evidence persisted')
-
-          outputs = []
+          outputs=[]
           for t in candidates:
-              action = t.get('action', {})
-              if action.get('type') != 'message': raise SystemExit(f'non-message turn in completed session: {t!r}')
-              inbox = t.get('observation', {}).get('inbox', [])
-              if not isinstance(inbox, list) or not inbox: raise SystemExit(f'missing inbound evidence: {t!r}')
-              inbound = str(inbox[-1].get('content', ''))
-              content = str(action.get('content', ''))
-              if not _is_usable_utterance(content, inbound):
-                  raise SystemExit(f'ungrounded or unnatural dialogue: inbound={inbound[:180]!r} reply={content[:240]!r}')
-              if t.get('action_result', {}).get('success') is not True: raise SystemExit('undelivered message in replay')
+              action=t.get('action',{})
+              if action.get('type') != 'message': raise SystemExit(f'non-message turn: {t!r}')
+              inbox=t.get('observation',{}).get('inbox',[])
+              if not isinstance(inbox,list) or not inbox: raise SystemExit(f'missing inbound evidence: {t!r}')
+              inbound=str(inbox[-1].get('content',''))
+              content=str(action.get('content',''))
+              if not _is_usable_utterance(content,inbound): raise SystemExit(f'ungrounded or unnatural dialogue: inbound={inbound[:180]!r} reply={content[:240]!r}')
+              if t.get('action_result',{}).get('success') is not True: raise SystemExit('undelivered message in replay')
               if t.get('consumed_inbound') is not True: raise SystemExit('delivered reply did not consume inbound')
               outputs.append(' '.join(content.lower().split()))
-          if len(set(outputs)) != len(outputs): raise SystemExit('duplicate reply detected in completed conversation')
+          if len(set(outputs)) != len(outputs): raise SystemExit('duplicate reply detected')
           if Path('replay/community_session_error.json').exists(): raise SystemExit('community session error evidence exists')
           print(json.dumps(d, indent=2))
           PY
