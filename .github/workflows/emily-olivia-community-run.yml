@@ -12,11 +12,6 @@ on:
         description: "Maximum reply turns (2-10) for manual bounded runs"
         required: false
         default: "8"
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/emily-olivia-community-run.yml'
   schedule:
     - cron: "0 10 * * *"
     - cron: "0 11 * * *"
@@ -42,7 +37,7 @@ jobs:
     env:
       AGENTSOCIETY_LLM_API_KEY: local-bitnet-unused
       COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
-      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
       COMMUNITY_BITNET_PORT: '8080'
       COMMUNITY_BITNET_START_TIMEOUT: '900'
       COMMUNITY_GENERATION_TIMEOUT: '900'
@@ -96,13 +91,12 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v9
-          key: community-runtime-bitnet-v9-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+            experiments/emily-olivia-society/.bootstrap-ready-v10
+          key: community-runtime-bitnet-v10-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
           restore-keys: |
+            community-runtime-bitnet-v10-${{ runner.os }}-py311-
             community-runtime-bitnet-v9-${{ runner.os }}-py311-
             community-runtime-bitnet-v8-${{ runner.os }}-py311-
-            community-runtime-bitnet-v7-${{ runner.os }}-py311-
-            community-runtime-bitnet-${{ runner.os }}-py311-
 
       - name: Bootstrap pinned research code and BitNet
         if: steps.gate.outputs.run == 'true'
@@ -115,8 +109,8 @@ jobs:
         run: |
           test -x vendor/BitNet/build/bin/llama-cli
           test -x vendor/BitNet/build/bin/llama-server
-          test -s models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
-          test -f .bootstrap-ready-v9
+          test -s models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
+          test -f .bootstrap-ready-v10
           grep -q 'COMMUNITY_BITNET_HTTP_V2' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Save runtime cache
@@ -128,7 +122,7 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v9
+            experiments/emily-olivia-society/.bootstrap-ready-v10
           key: ${{ steps.bitnet-cache.outputs.cache-primary-key }}
 
       - name: Start and probe BitNet
