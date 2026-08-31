@@ -8,7 +8,7 @@ on:
         required: false
         default: "Hello, Olivia."
       turns:
-        description: "Maximum reply turns (2-10)"
+        description: "Maximum reply turns (2-10) for manual bounded runs"
         required: false
         default: "8"
   schedule:
@@ -25,7 +25,7 @@ permissions:
 jobs:
   community-run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 65
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       AGENTSOCIETY_LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -62,20 +62,25 @@ jobs:
         working-directory: experiments/emily-olivia-society
         run: .venv-stanford/bin/python init_cognition.py
 
-      - name: Run bounded persistent community session
+      - name: Keep Emily and Olivia talking
         working-directory: experiments/emily-olivia-society
         run: |
           OPENER="${{ github.event.inputs.opener }}"
           TURNS="${{ github.event.inputs.turns }}"
-          if [ -z "$OPENER" ]; then
-            if [ "${{ github.event_name }}" = "schedule" ]; then
-              OPENER="Let's continue naturally from where we left off."
-            else
-              OPENER="Hello, Olivia."
-            fi
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            OPENER="Let's continue naturally from where we left off."
+            .venv-stanford/bin/python community_session.py \
+              --run \
+              --continuous-seconds 3000 \
+              --opener "$OPENER"
+          else
+            if [ -z "$OPENER" ]; then OPENER="Hello, Olivia."; fi
+            if [ -z "$TURNS" ]; then TURNS="8"; fi
+            .venv-stanford/bin/python community_session.py \
+              --run \
+              --turns "$TURNS" \
+              --opener "$OPENER"
           fi
-          if [ -z "$TURNS" ]; then TURNS="8"; fi
-          .venv-stanford/bin/python community_session.py --run --turns "$TURNS" --opener "$OPENER"
 
       - name: Verify persistence and reflection
         working-directory: experiments/emily-olivia-society
