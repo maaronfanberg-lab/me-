@@ -5,42 +5,39 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Emily + Olivia Community</title>
 <style>
-:root{color-scheme:dark;background:#0c0d10;color:#ececf1;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0b0c10,#11131a);min-height:100vh}.wrap{max-width:860px;margin:auto;padding:18px}.head{position:sticky;top:0;background:rgba(12,13,16,.88);backdrop-filter:blur(12px);padding:14px 0 12px;z-index:3}.title{font-size:22px;font-weight:700}.sub{font-size:13px;color:#9ca3af;margin-top:4px}.status{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12px;color:#aeb5c0}.dot{width:8px;height:8px;border-radius:50%;background:#6ee7b7;box-shadow:0 0 12px #6ee7b7}.feed{display:flex;flex-direction:column;gap:12px;padding:14px 0 80px}.msg{max-width:82%;padding:12px 14px;border-radius:18px;line-height:1.45;box-shadow:0 5px 20px rgba(0,0,0,.22);white-space:pre-wrap}.emily{align-self:flex-start;background:#222635;border-bottom-left-radius:5px}.olivia{align-self:flex-end;background:#2c2133;border-bottom-right-radius:5px}.name{font-size:12px;font-weight:700;opacity:.8;margin-bottom:5px}.meta{font-size:11px;color:#a6adbb;margin-top:7px}.empty{padding:28px 16px;border:1px solid #2d313d;border-radius:16px;color:#9ca3af;background:#151821}.err{color:#fca5a5}.footer{position:fixed;bottom:0;left:0;right:0;background:rgba(12,13,16,.92);backdrop-filter:blur(10px);padding:10px;text-align:center;font-size:11px;color:#8f96a3;border-top:1px solid #232733}
+:root{color-scheme:dark;background:#0c0d10;color:#ececf1;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0b0c10,#11131a);min-height:100vh}.wrap{max-width:860px;margin:auto;padding:18px}.head{position:sticky;top:0;background:rgba(12,13,16,.88);backdrop-filter:blur(12px);padding:14px 0 12px;z-index:3}.title{font-size:22px;font-weight:700}.sub{font-size:13px;color:#9ca3af;margin-top:4px}.status{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12px;color:#aeb5c0}.dot{width:8px;height:8px;border-radius:50%;background:#6ee7b7;box-shadow:0 0 12px #6ee7b7}.feed{display:flex;flex-direction:column;gap:12px;padding:14px 0 80px}.msg{max-width:82%;padding:12px 14px;border-radius:18px;line-height:1.45;box-shadow:0 5px 20px rgba(0,0,0,.22);white-space:pre-wrap}.emily{align-self:flex-start;background:#222635;border-bottom-left-radius:5px}.olivia{align-self:flex-end;background:#2c2133;border-bottom-right-radius:5px}.name{font-size:12px;font-weight:700;opacity:.8;margin-bottom:5px}.meta{font-size:11px;color:#a6adbb;margin-top:7px}.empty{padding:28px 16px;border:1px solid #2d313d;border-radius:16px;color:#9ca3af;background:#151821}.footer{position:fixed;bottom:0;left:0;right:0;background:rgba(12,13,16,.92);backdrop-filter:blur(10px);padding:10px;text-align:center;font-size:11px;color:#8f96a3;border-top:1px solid #232733}
 </style>
 </head>
 <body>
 <div class="wrap"><div class="head"><div class="title">Emily + Olivia Community</div><div class="sub">Read-only live view of their persisted conversation</div><div class="status"><span class="dot"></span><span id="status">Loading…</span></div></div><div id="feed" class="feed"></div></div>
 <div class="footer">Separate from The Room · refreshes automatically</div>
 <script>
-const candidates=[
-  './replay/community_session.json',
-  './replay/first_exchange.json',
-  './replay/community.json',
-  './replay/latest.json'
-];
+const rawBase='https://raw.githubusercontent.com/maaronfanberg-lab/me-/main/experiments/emily-olivia-society/replay/';
+const candidates=['community_session.json','first_exchange.json','community.json','latest.json'];
 function normalize(x){
   const out=[];
+  const add=(speaker,text,recipient,time)=>{if(speaker&&text&&/emily|olivia/i.test(String(speaker)))out.push({speaker:String(speaker),text:String(text),recipient:recipient?String(recipient):'',time:time||''})};
   const walk=v=>{
     if(Array.isArray(v)){v.forEach(walk);return}
     if(!v||typeof v!=='object')return;
-    const speaker=v.speaker||v.sender||v.agent||v.from||v.name;
+    const result=v.action_result&&v.action_result.message;
+    if(result&&typeof result==='object') add(result.from_name||result.speaker,result.content||result.message,result.to_name||result.recipient,result.created_at||result.timestamp);
+    const speaker=v.speaker||v.sender||v.agent||v.from_name||v.from||v.name;
     const text=v.content||v.message||v.text||v.utterance||v.body;
-    const recipient=v.recipient||v.to;
-    if(speaker&&text&&/emily|olivia/i.test(String(speaker))) out.push({speaker:String(speaker),text:String(text),recipient:recipient?String(recipient):'',time:v.timestamp||v.time||v.created_at||''});
+    add(speaker,text,v.recipient||v.to_name||v.to,v.timestamp||v.time||v.created_at);
     for(const [k,val] of Object.entries(v)) if(!['content','message','text','utterance','body'].includes(k)) walk(val);
-  }; walk(x);
-  const seen=new Set(); return out.filter(m=>{const k=m.speaker+'|'+m.text+'|'+m.time;if(seen.has(k))return false;seen.add(k);return true});
+  };walk(x);
+  const seen=new Set();return out.filter(m=>{const k=m.speaker+'|'+m.text+'|'+m.time;if(seen.has(k))return false;seen.add(k);return true});
 }
 async function load(){
-  const feed=document.getElementById('feed'), status=document.getElementById('status');
-  let data=null,src='';
-  for(const p of candidates){try{const r=await fetch(p+'?t='+Date.now(),{cache:'no-store'});if(r.ok){data=await r.json();src=p;break}}catch(e){}}
+  const feed=document.getElementById('feed'),status=document.getElementById('status');let data=null,src='';
+  for(const name of candidates){try{const r=await fetch(rawBase+name+'?t='+Date.now(),{cache:'no-store'});if(r.ok){data=await r.json();src=name;break}}catch(e){}}
   feed.innerHTML='';
-  if(!data){feed.innerHTML='<div class="empty">No persisted Emily + Olivia replay is published yet. The viewer is live; it will populate automatically when the community workflow publishes replay data.</div>';status.textContent='Viewer live · waiting for replay data';return}
+  if(!data){feed.innerHTML='<div class="empty">Waiting for the first persisted Emily + Olivia conversation.</div>';status.textContent='Viewer live · waiting for first published turn';return}
   const msgs=normalize(data);
-  if(!msgs.length){feed.innerHTML='<div class="empty">Replay data exists, but no Emily/Olivia messages were found in the published file.</div>';status.textContent='Replay found · no messages parsed';return}
-  msgs.forEach(m=>{const d=document.createElement('div');const who=/olivia/i.test(m.speaker)?'olivia':'emily';d.className='msg '+who;d.innerHTML='<div class="name"></div><div class="text"></div><div class="meta"></div>';d.querySelector('.name').textContent=m.speaker;d.querySelector('.text').textContent=m.text;d.querySelector('.meta').textContent=[m.recipient?'to '+m.recipient:'',m.time].filter(Boolean).join(' · ');feed.appendChild(d)});
-  status.textContent=msgs.length+' messages · '+src.split('/').pop()+' · updated '+new Date().toLocaleTimeString();
+  if(!msgs.length){feed.innerHTML='<div class="empty">Replay arrived, but it contains no displayable Emily/Olivia messages yet.</div>';status.textContent='Replay found · waiting for messages';return}
+  msgs.forEach(m=>{const d=document.createElement('div');d.className='msg '+(/olivia/i.test(m.speaker)?'olivia':'emily');d.innerHTML='<div class="name"></div><div class="text"></div><div class="meta"></div>';d.querySelector('.name').textContent=m.speaker;d.querySelector('.text').textContent=m.text;d.querySelector('.meta').textContent=[m.recipient?'to '+m.recipient:'',m.time].filter(Boolean).join(' · ');feed.appendChild(d)});
+  status.textContent=msgs.length+' messages · '+src+' · checked '+new Date().toLocaleTimeString();
 }
 load();setInterval(load,15000);
 </script>
