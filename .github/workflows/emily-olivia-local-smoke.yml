@@ -9,6 +9,10 @@ on:
       - '.github/workflows/emily-olivia-local-smoke.yml'
       - 'experiments/emily-olivia-society/**'
 
+concurrency:
+  group: emily-olivia-bitnet-smoke
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -17,17 +21,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      OPENAI_API_KEY: local-no-api-key
-      AGENTSOCIETY_LLM_API_KEY: local-no-api-key
       COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
       COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
       COMMUNITY_BITNET_PORT: '8080'
+      COMMUNITY_BITNET_START_TIMEOUT: '900'
+      COMMUNITY_GENERATION_TIMEOUT: '900'
+      COMMUNITY_MAX_TOKENS: '64'
       TZ: America/Chicago
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Validate Community Python before expensive work
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 -m py_compile bitnet_server.py patch_stanford_local.py community_session.py controlled_social_space.py
+
       - name: Restore Community runtime and BitNet
         id: community-cache
         uses: actions/cache/restore@v4
@@ -37,13 +49,24 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v6
-          key: community-runtime-bitnet-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/upstreams.json') }}
+            experiments/emily-olivia-society/.bootstrap-ready-v7
+          key: community-runtime-bitnet-v7-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
           restore-keys: |
+            community-runtime-bitnet-v7-${{ runner.os }}-py311-
             community-runtime-bitnet-${{ runner.os }}-py311-
-      - name: Bootstrap BitNet
+
+      - name: Bootstrap BitNet build without inference probe
         working-directory: experiments/emily-olivia-society
-        run: bash bootstrap_upstreams.sh
+        run: timeout 55m bash bootstrap_upstreams.sh
+
+      - name: Verify build artifacts before caching
+        working-directory: experiments/emily-olivia-society
+        run: |
+          test -x vendor/BitNet/build/bin/llama-cli
+          test -x vendor/BitNet/build/bin/llama-server
+          test -s models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf
+          test -f .bootstrap-ready-v7
+
       - name: Save Community runtime and BitNet immediately after bootstrap
         if: ${{ steps.community-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
@@ -53,31 +76,54 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v6
+            experiments/emily-olivia-society/.bootstrap-ready-v7
           key: ${{ steps.community-cache.outputs.cache-primary-key }}
+
       - name: Start one persistent BitNet server
         working-directory: experiments/emily-olivia-society
-        run: python3 bitnet_server.py start
-      - name: Confirm persistent BitNet server
+        run: timeout 20m python3 bitnet_server.py start
+
+      - name: Confirm persistent BitNet server and timed inference
         working-directory: experiments/emily-olivia-society
         run: |
           python3 bitnet_server.py status
-          python3 bitnet_server.py probe
+          timeout 16m python3 bitnet_server.py probe
+
+      - name: Confirm Stanford is routed to local HTTP
+        working-directory: experiments/emily-olivia-society
+        run: |
+          grep -q 'COMMUNITY_BITNET_HTTP_V1' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+          ! grep -q 'client = openai.OpenAI' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+
       - name: Initialize cognition
         working-directory: experiments/emily-olivia-society
         run: .venv-stanford/bin/python init_cognition.py
-      - name: Two-turn BitNet dialogue
+
+      - name: Two-turn real BitNet dialogue
         working-directory: experiments/emily-olivia-society
-        run: .venv-stanford/bin/python community_session.py --run --turns 2 --opener "Hello, Olivia. This is our BitNet smoke test."
+        run: timeout 35m .venv-stanford/bin/python community_session.py --run --turns 2 --opener "Hello, Olivia. This is our BitNet smoke test."
+
+      - name: Verify smoke produced persisted evidence
+        working-directory: experiments/emily-olivia-society
+        run: |
+          test -s replay/social_state.json
+          test -s replay/bitnet-server-state.json
+          test -d workspaces/emily
+          test -d workspaces/olivia
+          python3 observer.py --summary > replay/observer-smoke.json
+          test -s replay/observer-smoke.json
+
       - name: Upload BitNet smoke evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: emily-olivia-bitnet-smoke
+          retention-days: 7
           path: |
             experiments/emily-olivia-society/replay/
             experiments/emily-olivia-society/workspaces/
-          if-no-files-found: warn
+          if-no-files-found: error
+
       - name: Stop BitNet server
         if: always()
         working-directory: experiments/emily-olivia-society
