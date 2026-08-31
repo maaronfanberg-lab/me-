@@ -40,6 +40,7 @@ async def run_community_session(
     agents = load_agents()
     emily = next(agent for agent in agents if agent.name == "Emily")
     olivia = next(agent for agent in agents if agent.name == "Olivia")
+    by_id = {emily.agent_id: emily, olivia.agent_id: olivia}
     base_time_step = next_community_time_step(agents)
     social = SocialBridgeClient()
 
@@ -54,15 +55,32 @@ async def run_community_session(
     started = time.monotonic()
     completed = 0
     latest_turn: dict | None = None
+    resumed = False
 
     try:
-        seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
-        current = olivia
-        other = emily
+        pending: list[dict] = []
+        for agent in (emily, olivia):
+            observation = await social.observe_social_space(agent.agent_id)
+            pending.extend(observation.get("inbox", []))
+
+        if pending:
+            message = max(pending, key=lambda item: int(item.get("id", 0)))
+            current = by_id[int(message["to_id"])]
+            other = by_id[int(message["from_id"])]
+            seed = {"success": True, "resumed": True, "message": message}
+            resumed = True
+        else:
+            seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
+            current = olivia
+            other = emily
+
         offset = 0
 
         if continuous_seconds > 0:
-            append_jsonl(stream_path, {"type": "seed", "seed": seed})
+            append_jsonl(
+                stream_path,
+                {"type": "resume" if resumed else "seed", "seed": seed},
+            )
 
         while True:
             if continuous_seconds > 0:
@@ -89,6 +107,7 @@ async def run_community_session(
                     {
                         "mode": "continuous_persistent_community_session",
                         "status": "running",
+                        "resumed_social_state": resumed,
                         "start_time_step": base_time_step,
                         "completed_reply_turns": completed,
                         "continuous_seconds": continuous_seconds,
@@ -119,12 +138,13 @@ async def run_community_session(
             else "bounded_persistent_community_session"
         ),
         "limits": {
-            "seed_messages": 1,
+            "seed_messages": 0 if resumed else 1,
             "requested_reply_turns": reply_turns,
             "maximum_reply_turns": MAX_REPLY_TURNS,
             "continuous_seconds": continuous_seconds,
             "autonomous_loop": continuous_seconds > 0,
         },
+        "resumed_social_state": resumed,
         "start_time_step": base_time_step,
         "completed_reply_turns": completed,
         "stop_reason": stop_reason,
@@ -148,7 +168,7 @@ async def main() -> None:
     parser.add_argument(
         "--opener",
         default="Hello, Olivia.",
-        help="The one explicit seed message from Emily to Olivia.",
+        help="Seed message used only when no pending social message can be resumed.",
     )
     parser.add_argument(
         "--turns",
@@ -160,7 +180,7 @@ async def main() -> None:
         "--continuous-seconds",
         type=int,
         default=0,
-        help="Keep Emily and Olivia alternating for this many seconds after one seed; 0 keeps bounded mode.",
+        help="Keep Emily and Olivia alternating for this many seconds; 0 keeps bounded mode.",
     )
     parser.add_argument(
         "--run",
