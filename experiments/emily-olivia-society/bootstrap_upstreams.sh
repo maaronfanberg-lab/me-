@@ -9,14 +9,11 @@ STANFORD_COMMIT="96854071ef4c2d79c93144c973c7820722d52bab"
 BITNET_REPO="https://github.com/raphaelbgr/BitNet.git"
 BITNET_COMMIT="baecdf7d1e4d404d30f80ae5b26f486ca833ae03"
 BITNET_DIR="$VENDOR/BitNet"
-MODEL_DIR="$HERE/models/BitNet-b1.58-2B-4T"
+MODEL_DIR="$HERE/models/Falcon3-1B-Instruct-1.58bit"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
-BITNET_SOURCE_REPO="microsoft/BitNet-b1.58-2B-4T"
-# Microsoft BitNet issue #608 documents that current model checkpoints contain
-# zeroed MLP tensors and generate garbage. Pin the original verified-good model
-# revision instead of following mutable model main.
-BITNET_SOURCE_REVISION="9ff478e2487b"
-READY_MARKER="$HERE/.bootstrap-ready-v9"
+BITNET_SOURCE_REPO="tiiuae/Falcon3-1B-Instruct-1.58bit-GGUF"
+BITNET_SOURCE_REVISION="4ec8c66"
+READY_MARKER="$HERE/.bootstrap-ready-v10"
 PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v14"
 
 restore_real_cli() {
@@ -41,11 +38,15 @@ runtime_ready() {
 restore_real_cli
 if runtime_ready; then
   python3 "$HERE/patch_stanford_local.py"
-  echo "Reusing cached portable Community runtime and BitNet build."
+  echo "Reusing cached portable Community runtime and Falcon BitNet build."
   exit 0
 fi
 
-rm -f "$HERE/.bootstrap-ready-v7" "$HERE/.bootstrap-ready-v8" "$READY_MARKER"
+rm -f \
+  "$HERE/.bootstrap-ready-v7" \
+  "$HERE/.bootstrap-ready-v8" \
+  "$HERE/.bootstrap-ready-v9" \
+  "$READY_MARKER"
 mkdir -p "$VENDOR" "$MODEL_DIR"
 
 if [[ ! -x "$AS_VENV/bin/python" ]]; then
@@ -122,49 +123,6 @@ else:
 PY
 fi
 
-# BitNet b1.58 2B 4T requires relu2. Verify the pinned llama.cpp BitNet graph
-# with a brace-balanced function scan. If an older pin still uses SiLU, patch
-# only build_bitnet_158() to the RELU_SQR operation already implemented there.
-LLAMA_CPP="$BITNET_DIR/3rdparty/llama.cpp/src/llama.cpp"
-"$STANFORD_VENV/bin/python" - "$LLAMA_CPP" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-marker = "struct ggml_cgraph * build_bitnet_158()"
-start = text.find(marker)
-if start < 0:
-    raise SystemExit("Could not locate pinned build_bitnet_158 graph builder")
-open_brace = text.find("{", start + len(marker))
-if open_brace < 0:
-    raise SystemExit("Could not locate opening brace for build_bitnet_158")
-depth = 0
-end = None
-for i in range(open_brace, len(text)):
-    ch = text[i]
-    if ch == "{":
-        depth += 1
-    elif ch == "}":
-        depth -= 1
-        if depth == 0:
-            end = i + 1
-            break
-if end is None:
-    raise SystemExit("Could not locate closing brace for build_bitnet_158")
-segment = text[start:end]
-if "LLM_FFN_RELU_SQR" in segment:
-    print("BitNet relu2 graph verified.")
-else:
-    count = segment.count("LLM_FFN_SILU")
-    if count != 1:
-        raise SystemExit(f"Expected exactly one BitNet SiLU FFN activation, found {count}")
-    segment = segment.replace("LLM_FFN_SILU", "LLM_FFN_RELU_SQR", 1)
-    text = text[:start] + segment + text[end:]
-    path.write_text(text, encoding="utf-8")
-    print("Patched BitNet FFN activation from SiLU to relu2 (RELU_SQR).")
-PY
-
 BITNET_SETUP="$BITNET_DIR/setup_env.py"
 "$STANFORD_VENV/bin/python" - "$BITNET_SETUP" <<'PY'
 from pathlib import Path
@@ -178,64 +136,32 @@ if '"-DGGML_NATIVE=OFF"' not in text:
     if needle not in text:
         raise SystemExit("Could not locate pinned BitNet CMake argument list for portable-build patch")
     text = text.replace(needle, replacement, 1)
+    path.write_text(text, encoding="utf-8")
 
-# The generic HF converter has repeatedly rejected Microsoft's BitNet checkpoint
-# despite architecture aliases. The pinned BitNet fork ships a converter made
-# specifically for Microsoft's safetensors and tokenizer metadata, so use it for
-# the F32 staging GGUF before the existing I2_S quantization step.
-generic = '"utils/convert-hf-to-gguf-bitnet.py", model_dir, "--outtype", "f32"'
-microsoft = '"utils/convert-ms-to-gguf-bitnet.py", model_dir, "--outtype", "f32"'
-if microsoft not in text:
-    if generic not in text:
-        raise SystemExit("Could not locate pinned BitNet F32 conversion command")
-    text = text.replace(generic, microsoft, 1)
-
-path.write_text(text, encoding="utf-8")
 check = path.read_text(encoding="utf-8")
 if '"-DGGML_NATIVE=OFF"' not in check:
     raise SystemExit("Portable BitNet build patch did not persist")
-if microsoft not in check:
-    raise SystemExit("Microsoft BitNet converter selection did not persist")
-print("BitNet setup patched for portable build and Microsoft-specific GGUF conversion.")
+print("BitNet setup patched for a portable GitHub Actions build.")
 PY
 
-# Microsoft's newer checkpoint format stores packed BitNet weights as U8. Keep
-# converter support for that format, but the production download below is pinned
-# to the verified-good pre-regression model revision from upstream issue #608.
-BITNET_MS_CONVERTER="$BITNET_DIR/utils/convert-ms-to-gguf-bitnet.py"
-"$STANFORD_VENV/bin/python" - "$BITNET_MS_CONVERTER" <<'PY'
-from pathlib import Path
-import sys
+if [[ ! -s "$MODEL_FILE" ]]; then
+  echo "Downloading pinned official Falcon3 1.58-bit GGUF..."
+  "$STANFORD_VENV/bin/huggingface-cli" download \
+    "$BITNET_SOURCE_REPO" \
+    "ggml-model-i2_s.gguf" \
+    --revision "$BITNET_SOURCE_REVISION" \
+    --local-dir "$MODEL_DIR"
+fi
 
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-needle = "    'I32': DT_I32,\n}"
-replacement = "    'I32': DT_I32,\n    'U8': DT_I2,\n}"
-if "'U8': DT_I2" not in text:
-    if needle not in text:
-        raise SystemExit("Could not locate Microsoft BitNet safetensors dtype table")
-    text = text.replace(needle, replacement, 1)
-    path.write_text(text, encoding="utf-8")
-check = path.read_text(encoding="utf-8")
-if "'U8': DT_I2" not in check:
-    raise SystemExit("Microsoft BitNet U8 safetensors patch did not persist")
-print("Microsoft BitNet U8 safetensors mapping verified.")
-PY
+[[ -s "$MODEL_FILE" ]] || {
+  echo "Pinned Falcon3 GGUF download did not produce $MODEL_FILE" >&2
+  exit 1
+}
 
-# Always refresh the model directory when the portable-build generation changes;
-# this prevents a broken mutable-main checkpoint from surviving a revision pin.
-rm -rf "$MODEL_DIR"
-mkdir -p "$MODEL_DIR"
-echo "Downloading verified-good BitNet weights and tokenizer metadata at revision $BITNET_SOURCE_REVISION..."
-"$STANFORD_VENV/bin/huggingface-cli" download \
-  "$BITNET_SOURCE_REPO" \
-  --revision "$BITNET_SOURCE_REVISION" \
-  --local-dir "$MODEL_DIR"
-
-rm -f "$MODEL_FILE" "$PORTABLE_BUILD_SIGNATURE"
+rm -f "$PORTABLE_BUILD_SIGNATURE"
 rm -rf "$BITNET_DIR/build"
 
-echo "Building portable relu2-correct BitNet runtime and regenerating tokenizer-correct I2_S GGUF..."
+echo "Building portable BitNet runtime for pinned Falcon3 GGUF..."
 pushd "$BITNET_DIR" >/dev/null
 if ! "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s; then
   echo "BitNet setup failed; diagnostic logs follow:" >&2
@@ -254,7 +180,7 @@ popd >/dev/null
 restore_real_cli
 [[ -x "$BITNET_DIR/build/bin/llama-cli" ]] || { echo "Missing BitNet llama-cli after build" >&2; exit 1; }
 [[ -x "$BITNET_DIR/build/bin/llama-server" ]] || { echo "Missing BitNet llama-server after build" >&2; exit 1; }
-[[ -s "$MODEL_FILE" ]] || { echo "Missing BitNet model after setup" >&2; exit 1; }
+[[ -s "$MODEL_FILE" ]] || { echo "Missing Falcon BitNet model after setup" >&2; exit 1; }
 
 touch "$PORTABLE_BUILD_SIGNATURE"
 python3 "$HERE/patch_stanford_local.py"
@@ -263,7 +189,6 @@ touch "$READY_MARKER"
 printf 'AgentSociety2: 2.8.4 -> %s\n' "$AS_VENV"
 printf 'Stanford genagents: %s -> %s\n' "$STANFORD_COMMIT" "$STANFORD_VENV"
 printf 'BitNet: %s -> %s\n' "$BITNET_COMMIT" "$BITNET_DIR"
-printf 'BitNet source revision: %s@%s\n' "$BITNET_SOURCE_REPO" "$BITNET_SOURCE_REVISION"
-printf 'BitNet model: %s\n' "$MODEL_FILE"
+printf 'Falcon BitNet model: %s @ %s -> %s\n' "$BITNET_SOURCE_REPO" "$BITNET_SOURCE_REVISION" "$MODEL_FILE"
 printf 'Portable build signature: %s\n' "$PORTABLE_BUILD_SIGNATURE"
 printf 'Bootstrap marker: %s\n' "$READY_MARKER"

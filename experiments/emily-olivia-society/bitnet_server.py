@@ -14,7 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(os.environ.get("COMMUNITY_BITNET_ROOT", HERE / "vendor" / "BitNet"))
-MODEL = Path(os.environ.get("COMMUNITY_BITNET_MODEL", HERE / "models" / "BitNet-b1.58-2B-4T" / "ggml-model-i2_s.gguf"))
+MODEL = Path(os.environ.get("COMMUNITY_BITNET_MODEL", HERE / "models" / "Falcon3-1B-Instruct-1.58bit" / "ggml-model-i2_s.gguf"))
 SERVER = ROOT / "build" / "bin" / "llama-server"
 PID_FILE = HERE / ".bitnet-server.pid"
 LOG_FILE = HERE / "replay" / "bitnet-server.log"
@@ -28,10 +28,6 @@ MIN_MODEL_BYTES = 100_000_000
 
 
 def pid_alive(pid: int) -> bool:
-    # os.kill(pid, 0) reports Linux zombies as existing. That caused a crashed
-    # llama-server child to masquerade as "still starting" for the full health
-    # timeout. Reject zombies when procfs is available, then use the portable
-    # existence check as the fallback.
     stat_path = Path(f"/proc/{pid}/stat")
     if stat_path.exists():
         try:
@@ -89,30 +85,30 @@ def health(timeout: int = 3) -> bool:
         return False
 
 
-def request_completion(
-    prompt: str,
-    n_predict: int,
+def request_chat(
+    system: str,
+    user: str,
+    max_tokens: int,
     temperature: float,
     timeout: int = REQUEST_TIMEOUT,
-    stop: list[str] | None = None,
-    cache_prompt: bool = True,
 ) -> str:
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise ValueError("Completion prompt must be non-empty.")
+    if not isinstance(user, str) or not user.strip():
+        raise ValueError("Chat user message must be non-empty.")
     if not health(timeout=3):
-        raise RuntimeError(f"BitNet server is not healthy before completion request. Log tail:\n{log_tail()}")
+        raise RuntimeError(f"BitNet server is not healthy before chat request. Log tail:\n{log_tail()}")
     request_data = {
-        "prompt": prompt,
-        "n_predict": max(1, min(int(n_predict), 256)),
+        "model": "community-bitnet",
+        "messages": [
+            {"role": "system", "content": system.strip()},
+            {"role": "user", "content": user.strip()},
+        ],
+        "max_tokens": max(1, min(int(max_tokens), 256)),
         "temperature": max(0.0, min(float(temperature), 2.0)),
         "stream": False,
-        "cache_prompt": bool(cache_prompt),
     }
-    if stop:
-        request_data["stop"] = list(stop)
     payload = json.dumps(request_data).encode("utf-8")
     req = urllib.request.Request(
-        BASE + "/completion",
+        BASE + "/v1/chat/completions",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -122,12 +118,16 @@ def request_completion(
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:4000]
-        raise RuntimeError(f"BitNet HTTP {exc.code}: {body}") from exc
+        raise RuntimeError(f"BitNet chat HTTP {exc.code}: {body}") from exc
     except urllib.error.URLError as exc:
-        raise RuntimeError(f"BitNet request failed: {exc.reason}; log tail:\n{log_tail()}") from exc
-    text = data.get("content")
+        raise RuntimeError(f"BitNet chat request failed: {exc.reason}; log tail:\n{log_tail()}") from exc
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError(f"BitNet chat endpoint returned no choices: {data!r}")
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    text = message.get("content") if isinstance(message, dict) else None
     if not isinstance(text, str) or not text.strip():
-        raise RuntimeError(f"BitNet server returned no usable content: {data!r}")
+        raise RuntimeError(f"BitNet chat endpoint returned no usable content: {data!r}")
     return text.strip()
 
 
@@ -137,16 +137,9 @@ def wait_until_ready(proc: subprocess.Popen[bytes], timeout: int = START_TIMEOUT
         returncode = proc.poll()
         if returncode is not None:
             PID_FILE.unlink(missing_ok=True)
-            write_state(
-                running=False,
-                pid=None,
-                ready=False,
-                error="server exited during startup",
-                returncode=returncode,
-            )
+            write_state(running=False, pid=None, ready=False, error="server exited during startup", returncode=returncode)
             raise RuntimeError(
-                f"BitNet server exited with code {returncode} before becoming ready. "
-                f"Log tail:\n{log_tail()}"
+                f"BitNet server exited with code {returncode} before becoming ready. Log tail:\n{log_tail()}"
             )
         if health(timeout=3):
             write_state(running=True, pid=proc.pid, ready=True)
@@ -156,16 +149,9 @@ def wait_until_ready(proc: subprocess.Popen[bytes], timeout: int = START_TIMEOUT
     returncode = proc.poll()
     if returncode is not None:
         PID_FILE.unlink(missing_ok=True)
-        write_state(
-            running=False,
-            pid=None,
-            ready=False,
-            error="server exited during startup",
-            returncode=returncode,
-        )
+        write_state(running=False, pid=None, ready=False, error="server exited during startup", returncode=returncode)
         raise RuntimeError(
-            f"BitNet server exited with code {returncode} before becoming ready. "
-            f"Log tail:\n{log_tail()}"
+            f"BitNet server exited with code {returncode} before becoming ready. Log tail:\n{log_tail()}"
         )
 
     write_state(running=True, pid=proc.pid, ready=False, error="startup health timeout")
@@ -245,22 +231,16 @@ def status() -> int:
 
 def probe() -> None:
     started = time.monotonic()
-    prompt = (
-        "System: You are testing conversational BitNet inference. Reply naturally and briefly.<|eot_id|>"
-        "User: Say hello in one short sentence.<|eot_id|>"
-        "Assistant: "
-    )
-    text = request_completion(
-        prompt,
+    text = request_chat(
+        "You are testing conversational BitNet inference. Reply naturally and briefly.",
+        "Say hello in one short sentence.",
         24,
         0.0,
-        stop=["<|eot_id|>"],
-        cache_prompt=False,
     )
     lowered = text.lower()
     forbidden = ("end of dialogue so far", "utterance", "[input]", "fill in >")
     if any(marker in lowered for marker in forbidden):
-        raise RuntimeError(f"BitNet chat-format probe produced template junk: {text[:300]!r}")
+        raise RuntimeError(f"BitNet chat probe produced template junk: {text[:300]!r}")
     elapsed = time.monotonic() - started
     print("BITNET_SERVER_PROBE:", text[:200])
     print(f"BITNET_SERVER_PROBE_SECONDS: {elapsed:.3f}")

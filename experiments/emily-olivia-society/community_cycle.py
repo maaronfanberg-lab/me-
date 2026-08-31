@@ -7,10 +7,10 @@ import json
 import os
 import re
 import sys
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+
+from bitnet_server import request_chat
 
 HERE = Path(__file__).resolve().parent
 STANFORD = HERE / "vendor" / "stanford-genagents"
@@ -123,51 +123,13 @@ def _is_usable_utterance(text: str, inbound: str = "") -> bool:
 
 
 def _chat_bitnet(agent: CommunityAgent, other: CommunityAgent, inbound: str, max_tokens: int) -> str:
-    """Send Microsoft's documented BitNet chat serialization through llama-server /completion."""
-    port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
-    timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
+    """Use llama-server's chat endpoint so the GGUF's own template serializes dialogue."""
     system = (
         f"You are {agent.name}. You are speaking privately with {other.name}. "
         "Reply naturally and briefly to the other person. Do not repeat the prompt, "
         "instructions, role labels, or the other person's whole message."
     )
-    # microsoft/bitnet-b1.58-2B-4T tokenizer template serializes each message as
-    # Role: content<|eot_id|> and appends Assistant: for generation.
-    prompt = (
-        f"System: {system}<|eot_id|>"
-        f"User: {inbound.strip()}<|eot_id|>"
-        "Assistant: "
-    )
-    payload = json.dumps(
-        {
-            "prompt": prompt,
-            "n_predict": max_tokens,
-            "temperature": 0.6,
-            "top_p": 0.9,
-            "stop": ["<|eot_id|>"],
-            "stream": False,
-            "cache_prompt": False,
-        }
-    ).encode("utf-8")
-    req = urllib.request.Request(
-        f"http://127.0.0.1:{port}/completion",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"BitNet completion request failed with HTTP {exc.code}: {body}") from exc
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"BitNet completion request failed: {exc}") from exc
-
-    text = data.get("content")
-    if not isinstance(text, str):
-        raise RuntimeError(f"BitNet completion endpoint returned non-text content: {data!r}")
-    return text.strip()
+    return request_chat(system, inbound, max_tokens, 0.6)
 
 
 def _direct_bitnet_reply(agent: CommunityAgent, other: CommunityAgent, inbound: str) -> str:
