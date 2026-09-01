@@ -6,8 +6,10 @@ on:
     paths:
       - 'experiments/emily-olivia-society/endogenous_workspace.py'
       - 'experiments/emily-olivia-society/endogenous_workspace_replay.py'
+      - 'experiments/emily-olivia-society/endogenous_workspace_tape.py'
       - 'experiments/emily-olivia-society/test_endogenous_workspace.py'
       - 'experiments/emily-olivia-society/test_endogenous_workspace_replay.py'
+      - 'experiments/emily-olivia-society/test_endogenous_workspace_tape.py'
       - '.github/workflows/emily-olivia-endogenous-workspace-test.yml'
   workflow_dispatch:
 
@@ -25,9 +27,15 @@ jobs:
           sparse-checkout: |
             experiments/emily-olivia-society/endogenous_workspace.py
             experiments/emily-olivia-society/endogenous_workspace_replay.py
+            experiments/emily-olivia-society/endogenous_workspace_tape.py
             experiments/emily-olivia-society/test_endogenous_workspace.py
             experiments/emily-olivia-society/test_endogenous_workspace_replay.py
+            experiments/emily-olivia-society/test_endogenous_workspace_tape.py
           sparse-checkout-cone-mode: false
       - name: Run deterministic workspace tests
         working-directory: experiments/emily-olivia-society
-        run: python3 -m unittest -v test_endogenous_workspace.py test_endogenous_workspace_replay.py
+        run: >-
+          python3 -m unittest -v
+          test_endogenous_workspace.py
+          test_endogenous_workspace_replay.py
+          test_endogenous_workspace_tape.py
