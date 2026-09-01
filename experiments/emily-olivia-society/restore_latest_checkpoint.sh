@@ -8,6 +8,14 @@ WORKFLOW_FILE="${COMMUNITY_WORKFLOW_FILE:-emily-olivia-community-run.yml}"
 ARTIFACT_NAME="${COMMUNITY_ARTIFACT_NAME:-emily-olivia-community-results}"
 COMPAT_MARKER_PATH="experiments/emily-olivia-society/checkpoint-schema-v2.marker"
 
+# Some older workflow revisions passed GitHub's numeric workflow id here. That
+# route produced a 404 from inside Actions even though the workflow itself was
+# running. The REST endpoint also accepts the stable workflow filename, so
+# normalize legacy numeric values before querying history.
+if [[ "$WORKFLOW_FILE" =~ ^[0-9]+$ ]]; then
+  WORKFLOW_FILE="emily-olivia-community-run.yml"
+fi
+
 if [[ -z "${GITHUB_REPOSITORY:-}" ]]; then
   echo "GITHUB_REPOSITORY is required to restore a checkpoint." >&2
   exit 2
