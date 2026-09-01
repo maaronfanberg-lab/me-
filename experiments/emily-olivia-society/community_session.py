@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
 import os
 import subprocess
@@ -107,82 +108,114 @@ def recent_dialogue_history(path: Path, limit: int = 12) -> list[tuple[str, str]
     return history[-limit:]
 
 
-def publish_live_replay() -> None:
-    """Best-effort live publish. A failed push must never stop the conversation."""
+def _contents_api_path(path: Path) -> str:
+    repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    if not repo:
+        raise RuntimeError("GITHUB_REPOSITORY is unavailable for live replay publishing.")
+    relative = path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    return f"repos/{repo}/contents/{relative}"
+
+
+def _remote_content_sha(api_path: str) -> tuple[str, bool]:
+    lookup = subprocess.run(
+        ["gh", "api", f"{api_path}?ref=main", "--jq", ".sha"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if lookup.returncode == 0:
+        return lookup.stdout.strip(), True
+    if "404" in lookup.stderr or "Not Found" in lookup.stderr:
+        return "", False
+    raise RuntimeError(lookup.stderr.strip() or "GitHub contents lookup failed.")
+
+
+def publish_live_replay(path: Path | None = None) -> bool:
+    """Best-effort publish of one small live JSON file through GitHub Contents API.
+
+    This deliberately does not commit or rebase the runner checkout: Emily and
+    Olivia mutate their cognition workspaces while talking, so rebasing that
+    dirty checkout can fail. Publishing only the current snapshot also avoids
+    recommitting the large historical JSONL stream and BitNet logs every turn.
+    """
+    target = path or (REPLAY_DIR / "community_session.json")
+    if not target.exists():
+        return False
+
     try:
-        subprocess.run(
-            ["git", "config", "user.name", "github-actions[bot]"],
-            cwd=REPO_ROOT,
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        subprocess.run(
-            [
-                "git",
-                "config",
-                "user.email",
-                "41898282+github-actions[bot]@users.noreply.github.com",
-            ],
-            cwd=REPO_ROOT,
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        replay_glob = "experiments/emily-olivia-society/replay"
-        subprocess.run(
-            ["git", "add", "-f", replay_glob],
-            cwd=REPO_ROOT,
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO_ROOT)
-        if diff.returncode == 0:
-            return
-        commit = subprocess.run(
-            ["git", "commit", "-m", "Update Emily Olivia live replay [skip ci]"],
-            cwd=REPO_ROOT,
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if commit.returncode != 0:
-            return
+        api_path = _contents_api_path(target)
+        encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    except Exception as exc:
+        print(f"WARNING: could not prepare live replay publish: {exc}", flush=True)
+        return False
 
-        for attempt in range(1, 4):
-            pull = subprocess.run(
-                ["git", "pull", "--rebase", "origin", "main"],
-                cwd=REPO_ROOT,
+    last_error = "unknown GitHub contents error"
+    for attempt in range(1, 4):
+        try:
+            sha, exists = _remote_content_sha(api_path)
+            payload = {
+                "message": "Update Emily Olivia live replay [skip ci]",
+                "content": encoded,
+                "branch": "main",
+            }
+            if exists and sha:
+                payload["sha"] = sha
+            write = subprocess.run(
+                ["gh", "api", "--method", "PUT", api_path, "--input", "-"],
+                input=json.dumps(payload),
                 check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
                 timeout=30,
             )
-            if pull.returncode != 0:
-                subprocess.run(
-                    ["git", "rebase", "--abort"],
-                    cwd=REPO_ROOT,
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                time.sleep(attempt * 2)
-                continue
+            if write.returncode == 0:
+                return True
+            last_error = write.stderr.strip() or f"GitHub contents PUT exited {write.returncode}"
+        except Exception as exc:
+            last_error = str(exc)
+        time.sleep(attempt * 2)
 
-            push = subprocess.run(
-                ["git", "push", "origin", "HEAD:main"],
-                cwd=REPO_ROOT,
+    print(f"WARNING: live replay publish failed after retries: {last_error}", flush=True)
+    return False
+
+
+def delete_live_replay_file(path: Path) -> bool:
+    """Best-effort removal of a stale public live-state marker from main."""
+    try:
+        api_path = _contents_api_path(path)
+    except Exception as exc:
+        print(f"WARNING: could not prepare live replay cleanup: {exc}", flush=True)
+        return False
+
+    last_error = "unknown GitHub contents error"
+    for attempt in range(1, 4):
+        try:
+            sha, exists = _remote_content_sha(api_path)
+            if not exists:
+                return True
+            payload = {
+                "message": "Clear stale Emily Olivia live error [skip ci]",
+                "sha": sha,
+                "branch": "main",
+            }
+            delete = subprocess.run(
+                ["gh", "api", "--method", "DELETE", api_path, "--input", "-"],
+                input=json.dumps(payload),
                 check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
                 timeout=30,
             )
-            if push.returncode == 0:
-                return
-            time.sleep(attempt * 2)
-    except Exception:
-        return
+            if delete.returncode == 0:
+                return True
+            last_error = delete.stderr.strip() or f"GitHub contents DELETE exited {delete.returncode}"
+        except Exception as exc:
+            last_error = str(exc)
+        time.sleep(attempt * 2)
+
+    print(f"WARNING: stale live replay cleanup failed after retries: {last_error}", flush=True)
+    return False
 
 
 def validate_opener(opener: str) -> str:
@@ -230,7 +263,14 @@ async def run_community_session(
     error_path = REPLAY_DIR / "community_session_error.json"
     session_id = f"{int(time.time())}-{uuid.uuid4().hex[:10]}"
 
+    # A healthy new session must not publicly inherit a failure marker from an
+    # older run. Clear both the checkout copy and the read-only viewer source.
+    error_path.unlink(missing_ok=True)
+    if continuous_seconds > 0:
+        delete_live_replay_file(error_path)
+
     bounded_turns: list[dict] = []
+    live_messages: list[dict] = []
     discarded_pending_message_ids: list[int] = []
     stop_reason = "turn_limit_reached"
     started = time.monotonic()
@@ -320,6 +360,10 @@ async def run_community_session(
             current = olivia
             other = emily
 
+        seed_message = seed.get("message") if isinstance(seed, dict) else None
+        if isinstance(seed_message, dict):
+            live_messages.append(seed_message)
+
         if continuous_seconds > 0:
             append_jsonl(
                 stream_path,
@@ -334,6 +378,26 @@ async def run_community_session(
                     "start_time_step": base_time_step,
                 },
             )
+            # Publish the new session immediately, before the first reply finishes.
+            atomic_write_json(
+                summary_path,
+                {
+                    "mode": "continuous_persistent_community_session",
+                    "status": "running",
+                    "session_id": session_id,
+                    "resumed_social_state": resumed,
+                    "autonomous_opening": autonomous_opening,
+                    "discarded_pending_message_ids": discarded_pending_message_ids,
+                    "start_time_step": base_time_step,
+                    "opening_turn": opening_turn,
+                    "completed_reply_turns": 0,
+                    "continuous_seconds": continuous_seconds,
+                    "turn_delay_seconds": turn_delay_seconds,
+                    "messages": live_messages,
+                    "latest_turn": None,
+                },
+            )
+            publish_live_replay()
 
         offset = 0
         while True:
@@ -360,6 +424,11 @@ async def run_community_session(
             if action.get("type") == "message":
                 dialogue_history.append((current.name, str(action.get("content", ""))))
 
+            action_result = turn.get("action_result")
+            delivered_message = action_result.get("message") if isinstance(action_result, dict) else None
+            if continuous_seconds > 0 and isinstance(delivered_message, dict):
+                live_messages.append(delivered_message)
+
             if continuous_seconds > 0:
                 append_jsonl(stream_path, {"type": "turn", "session_id": session_id, "index": completed, "turn": turn})
                 atomic_write_json(
@@ -376,6 +445,7 @@ async def run_community_session(
                         "completed_reply_turns": completed,
                         "continuous_seconds": continuous_seconds,
                         "turn_delay_seconds": turn_delay_seconds,
+                        "messages": live_messages,
                         "latest_turn": latest_turn,
                     },
                 )
@@ -383,7 +453,6 @@ async def run_community_session(
             else:
                 bounded_turns.append(turn)
 
-            action_result = turn.get("action_result")
             if action.get("type") != "message":
                 stop_reason = str(action.get("reason", "agent_did_not_message"))
                 break
@@ -413,10 +482,11 @@ async def run_community_session(
                 "discarded_pending_message_ids": discarded_pending_message_ids,
                 "opening_turn": opening_turn,
                 "completed_reply_turns": completed,
+                "messages": live_messages,
                 "latest_turn": latest_turn,
             },
         )
-        publish_live_replay()
+        publish_live_replay(error_path)
         raise
     finally:
         social.close()
@@ -445,7 +515,9 @@ async def run_community_session(
         "latest_turn": latest_turn,
     }
 
-    if continuous_seconds <= 0:
+    if continuous_seconds > 0:
+        result["messages"] = live_messages
+    else:
         result["turns"] = bounded_turns
 
     atomic_write_json(summary_path, result)
@@ -454,6 +526,8 @@ async def run_community_session(
         publish_live_replay()
     if error_path.exists():
         error_path.unlink()
+        if continuous_seconds > 0:
+            delete_live_replay_file(error_path)
     return result
 
 
