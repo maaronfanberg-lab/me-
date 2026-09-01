@@ -14,6 +14,7 @@ import re
 _MAX_BOUNDARY_ATTEMPTS = 3
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
+_GREETING_START = re.compile(r"^\s*(?:hi|hello|hey|oh\s*,?\s*hi)\b", re.IGNORECASE)
 _DIRECT_SELF_ADDRESS_START = re.compile(
     r"^\s*(?:(?:hi|hey|hello)\s*[,!:\-]?\s*)?{name}\b\s*[,!?:\-]",
     re.IGNORECASE,
@@ -95,6 +96,11 @@ def _reintroduces_known_self(text: str, agent_name: str, dialogue_history) -> bo
     return bool(re.search(rf"\b(?:i\s+am|i'm|my\s+name\s+is)\s+{re.escape(name)}\b", str(text or ""), re.IGNORECASE))
 
 
+def _is_mid_conversation_greeting_reset(text: str, dialogue_history) -> bool:
+    """A continuous exchange should not keep restarting with fresh greetings."""
+    return len(list(dialogue_history or [])) >= 4 and bool(_GREETING_START.search(str(text or "")))
+
+
 def _support_text(inbound: str, dialogue_history, cognitive_context: str) -> str:
     parts = [str(inbound or ""), str(cognitive_context or "")]
     for speaker, line in list(dialogue_history or [])[-12:]:
@@ -118,7 +124,6 @@ def _has_unsupported_role_claim(text: str, support_text: str) -> bool:
 
 
 def _has_phantom_live_interlocutor(text: str, support_text: str) -> bool:
-    """Reject claims of a currently visible third conversational participant without evidence."""
     if not _PHANTOM_LIVE_INTERLOCUTOR.search(str(text or "")):
         return False
     return not bool(_THIRD_INTERLOCUTOR_EVIDENCE.search(str(support_text or "")))
@@ -168,6 +173,9 @@ def install_spoken_action_guard(generator):
                 continue
             if _reintroduces_known_self(text, getattr(agent, "name", ""), dialogue_history):
                 rejected.append(f"self-reintroduction:{str(text)[:180]}")
+                continue
+            if _is_mid_conversation_greeting_reset(text, dialogue_history):
+                rejected.append(f"greeting-reset:{str(text)[:180]}")
                 continue
             if _contradicts_observed_presence(text, getattr(other, "name", ""), support):
                 rejected.append(f"presence-contradiction:{str(text)[:180]}")
