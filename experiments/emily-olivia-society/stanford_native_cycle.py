@@ -179,11 +179,22 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
     text = _clean_boundary(raw_text)
 
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
-        raw_preview = str(raw_text)[:700].replace("\n", "\\n")
-        clean_preview = str(text)[:700].replace("\n", "\\n")
-        raise RuntimeError(
-            f"{agent.name} Stanford utterance rejected; raw={raw_preview!r}; cleaned={clean_preview!r}"
+        retry_context = (
+            context
+            + " The previous candidate was rejected at the output boundary because it was malformed or pathologically repetitive."
+            + " Produce one fresh natural reply without repeating phrases."
         )
+        retry_raw = _utterance_with_clean_retrieval(agent, dialogue, retry_context)
+        retry_text = _clean_boundary(retry_raw)
+        if _is_usable_utterance(retry_text, inbound, agent.name, other.name):
+            text = retry_text
+        else:
+            raw_preview = str(raw_text)[:700].replace("\n", "\\n")
+            retry_preview = str(retry_raw)[:700].replace("\n", "\\n")
+            clean_preview = str(retry_text)[:700].replace("\n", "\\n")
+            raise RuntimeError(
+                f"{agent.name} Stanford utterance rejected twice; first={raw_preview!r}; retry={retry_preview!r}; cleaned_retry={clean_preview!r}"
+            )
 
     return {"type": "message", "recipient_id": other.agent_id, "content": text}
 
