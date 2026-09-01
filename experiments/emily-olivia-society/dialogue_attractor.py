@@ -19,6 +19,15 @@ _TEMPLATE_BLANK = re.compile(
 _TRAILING_CUTOFF = re.compile(r"(?:\.{3,}|…|--+|[,;:])\s*$")
 _GREETING_START = re.compile(r"^\s*(?:oh[\s,!]+)?(?:hi|hello|hey)\b", re.IGNORECASE)
 _FIRST_PERSON_MARKER = re.compile(r"\b(?:i|i'm|i've|i'd|i'll|my)\b", re.IGNORECASE)
+_FINITE_SHORT_CLAUSE = re.compile(
+    r"\b(?:am|is|are|was|were|have|has|had|do|does|did|can|could|will|would|"
+    r"should|may|might|must|love|loves|like|likes|want|wants|need|needs|know|knows|"
+    r"think|thinks|feel|feels|say|says|tell|tells|mean|means|go|goes|come|comes|"
+    r"i'm|i've|i'll|i'd|you're|you've|you'll|you'd|we're|we've|we'll|we'd|"
+    r"they're|they've|they'll|they'd|it's|that's|can't|don't|doesn't|didn't|won't|"
+    r"wouldn't|couldn't|shouldn't|isn't|aren't|wasn't|weren't)\b",
+    re.IGNORECASE,
+)
 _CONCRETE_AUTOBIOGRAPHY = re.compile(
     r"(?:\bi\s+(?:went|visited|travelled|traveled|moved|worked|lived|studied|"
     r"bought|owned|made|built|created)\b|"
@@ -98,7 +107,17 @@ def _pairs(tokens: tuple[str, ...]) -> set[tuple[str, str]]:
 
 def _is_bare_short_fragment(text: str) -> bool:
     words = normalized_words(text)
-    return 4 <= len(words) <= 7 and not bool(re.search(r"[?!.]\s*$", str(text or "").strip()))
+    if not 4 <= len(words) <= 7:
+        return False
+    cleaned = str(text or "").strip()
+    if re.search(r"[?!.]\s*$", cleaned):
+        return False
+    # Missing terminal punctuation is common in next-line completion and is not
+    # itself evidence of a fragment. Require the short output to lack a finite
+    # clause before rejecting it. This keeps noun debris out while allowing
+    # complete lines such as "I'm in love with you, Olivia" to reach the real
+    # echo/grounding checks that follow.
+    return not bool(_FINITE_SHORT_CLAUSE.search(cleaned))
 
 
 def _is_short_subset_echo(text: str, histories: list[str]) -> bool:
