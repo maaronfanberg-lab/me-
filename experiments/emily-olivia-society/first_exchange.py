@@ -164,6 +164,31 @@ def _coerce_memory_importance(agent) -> None:
         node.importance = int(numeric) if numeric.is_integer() else numeric
 
 
+def _memory_already_present(agent, memory: str, window: int = 32) -> bool:
+    """Make re-observing an unconsumed social message idempotent across restarts."""
+    target = str(memory or "").strip()
+    if not target:
+        return True
+    nodes = list(getattr(agent.brain.memory_stream, "seq_nodes", []) or [])
+    for node in reversed(nodes[-max(1, window):]):
+        if str(getattr(node, "content", "")).strip() == target:
+            return True
+    return False
+
+
+def _dedupe_retrieved_nodes(nodes) -> list:
+    """Do not amplify one identical memory merely because Stanford stored it twice."""
+    unique = []
+    seen: set[str] = set()
+    for node in nodes:
+        content = str(getattr(node, "content", "")).strip()
+        if not content or content in seen:
+            continue
+        seen.add(content)
+        unique.append(node)
+    return unique
+
+
 async def process_one_reply(
     agent,
     other,
@@ -178,12 +203,13 @@ async def process_one_reply(
 
     latest = inbox[-1]
     memory = observation_text(agent, observation)
-    agent.brain.remember(memory, time_step=time_step)
+    if not _memory_already_present(agent, memory):
+        agent.brain.remember(memory, time_step=time_step)
     _coerce_memory_importance(agent)
 
     query = f"Current interaction with {other.name}"
     retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
-    retrieved_nodes = list(retrieved.get(query, []))
+    retrieved_nodes = _dedupe_retrieved_nodes(list(retrieved.get(query, [])))
     relevant = [node.content for node in retrieved_nodes]
     retrieval_metadata = serialize_retrieval_evidence(retrieved_nodes, time_step)
 
