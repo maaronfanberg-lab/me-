@@ -21,12 +21,14 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       PREREG_COMMIT: ea69132cee9ce89bba3137c7d81ba81af0f3298b
+      EVALUATOR_COMMIT: cdc854ba3f2bede506134676197520caea932f58
       SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
       SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
-      - name: Check out offline evaluator from main
+      - name: Check out pinned offline evaluator
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.EVALUATOR_COMMIT }}
           fetch-depth: 1
           sparse-checkout-cone-mode: false
           sparse-checkout: |
@@ -51,7 +53,7 @@ jobs:
           esac
           echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
           echo "compare_status=$status" >> "$GITHUB_OUTPUT"
-          echo "Community run ${SOURCE_RUN_ID}: prereg comparison=$status eligible=$eligible"
+          echo "Community run ${SOURCE_RUN_ID}: prereg comparison=$status eligible=$eligible evaluator=${EVALUATOR_COMMIT}"
 
       - name: Read exact source artifact provenance
         if: steps.provenance.outputs.eligible == 'true'
