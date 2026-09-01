@@ -16,7 +16,11 @@ import asyncio
 import re
 
 import community_cycle_base as _base
-from paper_act_adapter import generate_spoken_action, research_source as act_research_source
+from paper_act_adapter import (
+    generate_spoken_action,
+    is_usable_spoken_action,
+    research_source as act_research_source,
+)
 from paper_plan_adapter import planning_context
 from paper_react_adapter import react_to_observation, react_to_presence, reaction_context
 from paper_reflection_adapter import maybe_reflect
@@ -90,7 +94,7 @@ def _is_usable_utterance(text: str, inbound: str = "", agent_name: str = "", oth
     cleaned = _clean_boundary(text, agent_name)
     if not cleaned or _has_pathological_repetition(cleaned):
         return False
-    return _base._is_usable_utterance(cleaned, inbound, agent_name, other_name)
+    return is_usable_spoken_action(cleaned, inbound, agent_name, other_name)
 
 
 def _grounding_words(text: str, limit: int = 6) -> list[str]:
