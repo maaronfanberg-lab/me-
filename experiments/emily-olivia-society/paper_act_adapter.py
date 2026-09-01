@@ -29,6 +29,14 @@ import community_cycle_base as _base
 
 _RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
 _MAX_HISTORY_TURNS = 12
+_PEER_META_DRIFT = re.compile(
+    r"(?:generate\s+(?:the\s+)?dialogue|fictional\s+interaction|"
+    r"noticed\s+the\s+conversation|communicat(?:e|ing)\s+effectively|"
+    r"share\s+more\s+about\s+your\s+preferences|"
+    r"preferred\s+(?:meal|food)\s+options|"
+    r"ensure\s+(?:we(?:'re|\s+are)|that\s+we)\s+communicat)",
+    re.IGNORECASE,
+)
 
 
 def _identity(agent) -> str:
@@ -163,6 +171,8 @@ def is_usable_spoken_action(
     """
     if not _base._is_usable_utterance(text, "", agent_name, other_name):
         return False
+    if _PEER_META_DRIFT.search(text):
+        return False
     inbound = str(inbound or "").strip()
     if not inbound:
         return True
@@ -182,6 +192,27 @@ def is_usable_spoken_action(
     return True
 
 
+def _is_recent_echo(text: str, dialogue_history) -> bool:
+    """Reject recent exact/near copies without steering what the replacement says."""
+    output_words = _base._normalize_words(text)
+    if not output_words:
+        return True
+    output_set = set(output_words)
+    for _speaker, prior in list(dialogue_history or [])[-_MAX_HISTORY_TURNS:]:
+        prior_words = _base._normalize_words(str(prior))
+        if not prior_words:
+            continue
+        if output_words == prior_words:
+            return True
+        if len(output_words) >= 4 and len(prior_words) >= 4:
+            prior_set = set(prior_words)
+            shared = len(output_set & prior_set)
+            smaller = max(1, min(len(output_set), len(prior_set)))
+            if shared / smaller >= 0.9 and abs(len(output_words) - len(prior_words)) <= 4:
+                return True
+    return False
+
+
 def generate_spoken_action(
     agent,
     other,
@@ -196,7 +227,10 @@ def generate_spoken_action(
         raw = _request_completion(prompt, agent.name, other.name)
         text = _clean_line(raw, agent.name)
         attempts.append(text or str(raw).strip())
-        if is_usable_spoken_action(text, inbound, agent.name, other.name):
+        if (
+            is_usable_spoken_action(text, inbound, agent.name, other.name)
+            and not _is_recent_echo(text, dialogue_history)
+        ):
             return text
 
     previews = " | ".join(repr(text[:220]) for text in attempts)
