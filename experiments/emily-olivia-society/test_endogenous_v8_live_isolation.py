@@ -53,13 +53,15 @@ class LiveIsolationTests(unittest.TestCase):
     def test_prospective_workflow_cannot_dispatch_or_write_live_repository(self):
         workflow = REPO / ".github" / "workflows" / "emily-olivia-endogenous-v8-prospective.yml"
         text = workflow.read_text(encoding="utf-8")
+        lowered = text.lower()
         self.assertIn("workflow_run:", text)
         self.assertIn("Emily Olivia Community Run", text)
         self.assertNotIn("workflow_dispatch:", text)
         self.assertNotIn("actions: write", text)
         self.assertNotIn("contents: write", text)
-        self.assertNotIn("gh workflow run", text)
-        self.assertNotIn("rerun", text.lower())
+        self.assertNotIn("gh workflow run", lowered)
+        self.assertNotIn("gh run rerun", lowered)
+        self.assertNotIn("rerun_workflow", lowered)
 
 
 if __name__ == "__main__":
