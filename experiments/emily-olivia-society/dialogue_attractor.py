@@ -1,16 +1,28 @@
 #!/usr/bin/env python3
-"""Generic recurring-content detection for Emily + Olivia dialogue.
+"""Generic dialogue-loop and grounding guards for Emily + Olivia.
 
-This module does not prescribe topics, moves, or replacement dialogue. It only
-recognizes when the model keeps recycling the same meaningful word-pairs across
-recent turns, including light morphological variants such as make/making.
+No rule here supplies dialogue, preferred topics, or conversational moves. The
+module only rejects structurally bad model samples so the same Stanford-derived
+prompt can be resampled.
 """
 from __future__ import annotations
 
 from collections import Counter
+from difflib import SequenceMatcher
 import re
 
 _WORD_RE = re.compile(r"[a-z]+(?:'[a-z]+)?", re.IGNORECASE)
+_TEMPLATE_BLANK = re.compile(
+    r"(?:_{2,}|\[\s*(?:blank|fill|insert)[^\]]*\]|\{\{[^}]*\}\}|<blank>)",
+    re.IGNORECASE,
+)
+_TRAILING_CUTOFF = re.compile(r"(?:\.{3,}|…|--+|[,;:])\s*$")
+_GREETING_START = re.compile(r"^\s*(?:oh[\s,!]+)?(?:hi|hello|hey)\b", re.IGNORECASE)
+_FIRST_PERSON_FACT = re.compile(
+    r"\b(?:i\s+(?:have|had|went|was|am|live|work|own|need|want|plan|remember)|"
+    r"i(?:'ve|'d|'ll|'m)\b|my\s+[a-z][a-z'-]*)",
+    re.IGNORECASE,
+)
 _STOP = {
     "a", "an", "and", "are", "as", "at", "be", "been", "being", "but", "by",
     "can", "could", "did", "do", "does", "doing", "for", "from", "had", "has",
@@ -19,19 +31,20 @@ _STOP = {
     "that", "the", "their", "theirs", "them", "they", "this", "to", "us", "was",
     "we", "were", "what", "when", "where", "which", "who", "why", "will", "with",
     "would", "you", "your", "yours", "emily", "olivia",
-    # Greeting/courtesy tokens are too common to carry an attractor signal.
     "hey", "hi", "hello", "yeah", "yes", "okay", "ok", "thanks", "thank", "sorry",
     "please", "oh", "uh", "well",
 }
+_CANONICAL_DROP = {
+    "emily", "olivia", "oh", "well", "okay", "ok", "hey", "hi", "hello", "please",
+}
+_SOCIAL_RESET_FILLER = {
+    "oh", "hi", "hello", "hey", "im", "i'm", "i", "am", "here", "happy", "glad",
+    "good", "great", "to", "be", "see", "you", "again", "okay", "ok", "well",
+    "emily", "olivia",
+}
 _IRREGULAR = {
-    "making": "make",
-    "taking": "take",
-    "having": "have",
-    "giving": "give",
-    "using": "use",
-    "moving": "move",
-    "going": "go",
-    "doing": "do",
+    "making": "make", "taking": "take", "having": "have", "giving": "give",
+    "using": "use", "moving": "move", "going": "go", "doing": "do",
 }
 
 
@@ -56,6 +69,14 @@ def _root(word: str) -> str:
     return word
 
 
+def normalized_words(text: str) -> tuple[str, ...]:
+    return tuple(raw.lower() for raw in _WORD_RE.findall(str(text or "")))
+
+
+def canonical_words(text: str) -> tuple[str, ...]:
+    return tuple(word for word in normalized_words(text) if word not in _CANONICAL_DROP)
+
+
 def content_tokens(text: str) -> tuple[str, ...]:
     tokens = []
     for raw in _WORD_RE.findall(str(text or "")):
@@ -74,72 +95,272 @@ def _pairs(tokens: tuple[str, ...]) -> set[tuple[str, str]]:
     }
 
 
-def candidate_repeats_recurring_attractor(
-    text: str,
-    dialogue_history,
-    history_limit: int = 12,
-) -> bool:
-    """Reject a candidate that would reinforce a recurring recent phrase cluster."""
+def _is_bare_short_fragment(text: str) -> bool:
+    words = normalized_words(text)
+    if not 4 <= len(words) <= 7:
+        return False
+    cleaned = str(text or "").strip()
+    return not bool(re.search(r"[?!.]\s*$", cleaned))
+
+
+def _is_short_subset_echo(text: str, histories: list[str]) -> bool:
+    candidate = canonical_words(text)
+    if not 3 <= len(candidate) <= 10:
+        return False
+    candidate_set = set(candidate)
+    for prior in histories:
+        prior_words = canonical_words(prior)
+        if len(prior_words) < 3:
+            continue
+        width = len(candidate)
+        if width <= len(prior_words):
+            for index in range(0, len(prior_words) - width + 1):
+                if prior_words[index : index + width] == candidate:
+                    return True
+        shared = len(candidate_set & set(prior_words))
+        if shared / max(1, len(candidate_set)) >= 0.90 and len(candidate) <= len(prior_words) + 2:
+            return True
+    return False
+
+
+def _is_cosmetic_echo(text: str, histories: list[str]) -> bool:
+    candidate = canonical_words(text)
+    if len(candidate) < 3:
+        return False
+    for prior in histories:
+        prior_words = canonical_words(prior)
+        if len(prior_words) < 3:
+            continue
+        if candidate == prior_words:
+            return True
+        smaller = min(len(candidate), len(prior_words))
+        if smaller <= 10 and SequenceMatcher(None, candidate, prior_words, autojunk=False).ratio() >= 0.88:
+            return True
+    return False
+
+
+def _is_long_refractory_echo(text: str, histories: list[str]) -> bool:
+    candidate = normalized_words(text)
+    if len(candidate) < 4:
+        return False
+    for prior in histories:
+        prior_words = normalized_words(prior)
+        if len(prior_words) < 4:
+            continue
+        smaller = min(len(candidate), len(prior_words))
+        matcher = SequenceMatcher(None, candidate, prior_words, autojunk=False)
+        if matcher.ratio() >= 0.82:
+            return True
+        if matcher.find_longest_match().size >= max(4, int(smaller * 0.76)):
+            return True
+    return False
+
+
+def _is_repeated_question_stem(text: str, histories: list[str]) -> bool:
+    if "?" not in str(text or ""):
+        return False
+    candidate = canonical_words(text)
+    if len(candidate) < 3:
+        return False
+    for prior in histories:
+        if "?" not in prior:
+            continue
+        prior_words = canonical_words(prior)
+        if len(prior_words) < 3:
+            continue
+        smaller = min(len(candidate), len(prior_words))
+        matcher = SequenceMatcher(None, candidate, prior_words, autojunk=False)
+        if matcher.ratio() >= 0.80:
+            return True
+        if matcher.find_longest_match().size >= max(3, int(smaller * 0.80)):
+            return True
+    return False
+
+
+def _is_social_reset(text: str, dialogue_history) -> bool:
+    history = list(dialogue_history or [])
+    if len(history) < 4 or not _GREETING_START.search(str(text or "")):
+        return False
+    words = normalized_words(text)
+    substance = [word for word in words if word not in _SOCIAL_RESET_FILLER]
+    return len(substance) <= 1
+
+
+def _recurring_content_blocker(text: str, histories: list[str]) -> str | None:
     candidate = content_tokens(text)
-    if len(candidate) < 2:
-        return False
+    if not candidate:
+        return None
 
-    histories = []
-    for _speaker, prior in list(dialogue_history or [])[-history_limit:]:
-        tokens = content_tokens(str(prior))
-        if tokens:
-            histories.append(tokens)
-    if len(histories) < 2:
-        return False
+    tokenized = [content_tokens(prior) for prior in histories]
+    tokenized = [tokens for tokens in tokenized if tokens]
+    if len(tokenized) < 2:
+        return None
 
-    pair_message_counts: Counter[tuple[str, str]] = Counter()
     token_message_counts: Counter[str] = Counter()
-    for tokens in histories:
-        pair_message_counts.update(_pairs(tokens))
+    pair_message_counts: Counter[tuple[str, str]] = Counter()
+    for tokens in tokenized:
         token_message_counts.update(set(tokens))
+        pair_message_counts.update(_pairs(tokens))
 
-    # If the same meaningful pair already appeared in two distinct recent
-    # messages, a third use is a recurring-content loop even when surrounding
-    # wording has been paraphrased.
+    if len(set(candidate)) == 1:
+        token = candidate[0]
+        if token_message_counts[token] >= 4:
+            return "single_token_attractor"
+
     if any(pair_message_counts[pair] >= 2 for pair in _pairs(candidate)):
-        return True
+        return "recurring_pair_attractor"
 
-    # Catch looser paraphrase attractors whose vocabulary is repeatedly drawn
-    # from the same small hot cluster without requiring a particular topic.
     candidate_set = set(candidate)
     hot = {token for token, count in token_message_counts.items() if count >= 3}
     shared = candidate_set & hot
-    return len(shared) >= 3 and len(shared) / max(1, len(candidate_set)) >= 0.45
+    if len(shared) >= 2 and len(shared) / max(1, len(candidate_set)) >= 0.60:
+        return "hot_topic_cluster"
+    return None
+
+
+def _is_role_swapped_fact(text: str, dialogue_history, agent_name: str) -> bool:
+    if not agent_name or not _FIRST_PERSON_FACT.search(str(text or "")):
+        return False
+    candidate = set(content_tokens(text))
+    if len(candidate) < 2:
+        return False
+    own_support = False
+    peer_match = False
+    for speaker, prior in list(dialogue_history or [])[-48:]:
+        prior_tokens = set(content_tokens(str(prior)))
+        if len(prior_tokens) < 2:
+            continue
+        shared = len(candidate & prior_tokens)
+        containment = shared / max(1, min(len(candidate), len(prior_tokens)))
+        if containment < 0.80:
+            continue
+        if str(speaker).strip() == agent_name:
+            own_support = True
+        else:
+            peer_match = True
+    return peer_match and not own_support
+
+
+def _is_unsupported_specificity(
+    text: str,
+    dialogue_history,
+    inbound: str,
+    cognitive_context: str,
+) -> bool:
+    candidate = set(content_tokens(text))
+    if len(candidate) < 2:
+        return False
+    support_text = " ".join(
+        [str(inbound or ""), str(cognitive_context or "")]
+        + [str(prior) for _speaker, prior in list(dialogue_history or [])[-6:]]
+    )
+    support = set(content_tokens(support_text))
+    if candidate & support:
+        return False
+    if _FIRST_PERSON_FACT.search(str(text or "")):
+        return True
+    if not str(inbound or "").strip() and len(candidate) >= 3:
+        return True
+    return len(candidate) >= 4
+
+
+def candidate_dialogue_blocker(
+    text: str,
+    dialogue_history,
+    *,
+    inbound: str = "",
+    cognitive_context: str = "",
+    agent_name: str = "",
+    history_limit: int = 48,
+) -> str | None:
+    """Return a structural rejection reason, or ``None`` for an acceptable candidate."""
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return "empty_candidate"
+    if _TEMPLATE_BLANK.search(cleaned):
+        return "template_blank_residue"
+    if _TRAILING_CUTOFF.search(cleaned):
+        return "unfinished_cutoff"
+    if _is_bare_short_fragment(cleaned):
+        return "bare_short_fragment"
+
+    history_rows = list(dialogue_history or [])[-max(1, history_limit):]
+    histories = [str(prior).strip() for _speaker, prior in history_rows if str(prior).strip()]
+    if _is_short_subset_echo(cleaned, histories):
+        return "short_subset_echo"
+    if _is_cosmetic_echo(cleaned, histories):
+        return "cosmetic_echo"
+    if _is_long_refractory_echo(cleaned, histories):
+        return "long_refractory_echo"
+    if _is_repeated_question_stem(cleaned, histories):
+        return "repeated_question_stem"
+    if _is_social_reset(cleaned, history_rows):
+        return "mid_conversation_social_reset"
+
+    recurring = _recurring_content_blocker(cleaned, histories[-24:])
+    if recurring:
+        return recurring
+    if _is_role_swapped_fact(cleaned, history_rows, agent_name):
+        return "role_swapped_personal_fact"
+    if _is_unsupported_specificity(cleaned, history_rows, inbound, cognitive_context):
+        return "unsupported_specificity"
+    return None
+
+
+def candidate_repeats_recurring_attractor(
+    text: str,
+    dialogue_history,
+    history_limit: int = 48,
+) -> bool:
+    """Backward-compatible boolean wrapper around the stricter dialogue guard."""
+    return candidate_dialogue_blocker(
+        text,
+        dialogue_history,
+        history_limit=history_limit,
+    ) is not None
 
 
 def detect_recurring_content_attractor(messages: list[str]) -> dict | None:
     """Detect a durable recurring-content loop in a recent message window."""
     tokenized = [content_tokens(text) for text in messages]
-    tokenized = [tokens for tokens in tokenized if len(tokens) >= 2]
+    tokenized = [tokens for tokens in tokenized if tokens]
     if len(tokenized) < 4:
         return None
 
+    token_message_counts: Counter[str] = Counter()
     pair_message_counts: Counter[tuple[str, str]] = Counter()
     for tokens in tokenized:
+        token_message_counts.update(set(tokens))
         pair_message_counts.update(_pairs(tokens))
 
-    recurring = [
+    recurring_pairs = [
         (pair, count)
         for pair, count in pair_message_counts.items()
         if count >= 3
     ]
-    recurring.sort(key=lambda item: (-item[1], item[0]))
+    recurring_pairs.sort(key=lambda item: (-item[1], item[0]))
+    recurring_tokens = [
+        (token, count)
+        for token, count in token_message_counts.items()
+        if count >= 6
+    ]
+    recurring_tokens.sort(key=lambda item: (-item[1], item[0]))
 
-    # One phrase in five messages, or two different phrases in at least three
-    # messages each, is strong enough to reject an interrupted checkpoint.
-    if recurring and (recurring[0][1] >= 5 or len(recurring) >= 2):
+    if recurring_pairs and (recurring_pairs[0][1] >= 5 or len(recurring_pairs) >= 2):
         return {
             "reason": "recurring_content_attractor",
-            "count": recurring[0][1],
-            "phrase": " ".join(recurring[0][0]),
+            "count": recurring_pairs[0][1],
+            "phrase": " ".join(recurring_pairs[0][0]),
             "recurring_pairs": [
                 {"phrase": " ".join(pair), "count": count}
-                for pair, count in recurring[:5]
+                for pair, count in recurring_pairs[:5]
             ],
+        }
+    if recurring_tokens:
+        return {
+            "reason": "recurring_single_token_attractor",
+            "count": recurring_tokens[0][1],
+            "phrase": recurring_tokens[0][0],
+            "recurring_pairs": [],
         }
     return None
