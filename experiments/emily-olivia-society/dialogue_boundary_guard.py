@@ -21,10 +21,16 @@ _PRESENCE_EVIDENCE = re.compile(r"(?:\bcommunity\s+contains\b|\bpresent\s+(?:tog
 _PRESENCE_CONTRADICTION = re.compile(r"(?:\bwhere\s+are\s+you\b|\bi\s+(?:can't|cannot)\s+(?:see|find)\s+you\b|\byou(?:'re|\s+are)\s+not\s+(?:here|visible)\b)", re.IGNORECASE)
 _MOVEMENT_PREMISE = re.compile(r"(?:\bwhere\s+are\s+you\s+going\b|\bwhere\s+did\s+you\s+go\b|\bare\s+you\s+leaving\b|\bwhen\s+are\s+you\s+leaving\b|\bwhy\s+are\s+you\s+leaving\b)", re.IGNORECASE)
 _MOVEMENT_EVIDENCE = re.compile(r"\b(?:go|going|went|leave|leaving|left|walk|walking|drive|driving|head|heading|move|moving|travel|travelling|traveling)\b", re.IGNORECASE)
-_UNSUPPORTED_ROLE_CLAIM = re.compile(
-    r"(?:\bi\s+am\s+(?:a\s+)?stranger\b|\bi(?:'ve|\s+have)?\s*(?:been\s+)?sent\s+(?:here\s+)?to\s+(?:observe|watch|monitor)\b|\bi\s+am\s+here\s+to\s+(?:observe|watch|monitor)\b|\bi\s+(?:was|am)\s+assigned\s+to\s+(?:observe|watch|monitor)\b)",
+_NOMINAL_FRAGMENT = re.compile(r"^\s*(?:the|a|an|this|that|your|my|our|their|his|her)\b[^.!?]{2,160}\bof\b[^.!?]*$", re.IGNORECASE)
+_FINITE_CLAUSE_MARKER = re.compile(
+    r"\b(?:am|is|are|was|were|have|has|had|do|does|did|can|could|will|would|should|may|might|must|"
+    r"feel|feels|felt|think|thinks|thought|know|knows|knew|want|wants|wanted|need|needs|needed|"
+    r"like|likes|liked|love|loves|loved|hate|hates|hated|seem|seems|seemed|sound|sounds|sounded|"
+    r"look|looks|looked|go|goes|went|come|comes|came|say|says|said|tell|tells|told|talk|talks|talked|"
+    r"speak|speaks|spoke|mean|means|meant|make|makes|made|take|takes|took|give|gives|gave)\b",
     re.IGNORECASE,
 )
+_UNSUPPORTED_ROLE_CLAIM = re.compile(r"(?:\bi\s+am\s+(?:a\s+)?stranger\b|\bi(?:'ve|\s+have)?\s*(?:been\s+)?sent\s+(?:here\s+)?to\s+(?:observe|watch|monitor)\b|\bi\s+am\s+here\s+to\s+(?:observe|watch|monitor)\b|\bi\s+(?:was|am)\s+assigned\s+to\s+(?:observe|watch|monitor)\b)", re.IGNORECASE)
 _ROLE_EVIDENCE = re.compile(r"(?:\bstranger\b|\bsent\b[^.]{0,80}\b(?:observe|watch|monitor)\b|\bassigned\b[^.]{0,80}\b(?:observe|watch|monitor)\b)", re.IGNORECASE)
 _PHANTOM_LIVE_INTERLOCUTOR = re.compile(r"\byou\s+(?:seem|appear)\s+to\s+be\s+(?:having\s+a\s+conversation|talking|speaking|chatting)\s+with\s+(?:someone|somebody)\b", re.IGNORECASE)
 _THIRD_INTERLOCUTOR_EVIDENCE = re.compile(r"\b(?:someone|somebody|another\s+person|third\s+person)\b[^.]{0,100}\b(?:talk|speak|chat|conversation)\b|\b(?:talk|speak|chat|conversation)\b[^.]{0,100}\b(?:someone|somebody|another\s+person|third\s+person)\b", re.IGNORECASE)
@@ -62,6 +68,13 @@ def _is_mid_conversation_greeting_reset(text: str, dialogue_history) -> bool:
     return len(list(dialogue_history or [])) >= 4 and bool(_GREETING_START.search(str(text or "")))
 
 
+def _is_nominal_fragment(text: str) -> bool:
+    candidate = str(text or "").strip()
+    if not _NOMINAL_FRAGMENT.match(candidate):
+        return False
+    return not bool(_FINITE_CLAUSE_MARKER.search(candidate))
+
+
 def _support_text(inbound: str, dialogue_history, cognitive_context: str) -> str:
     parts = [str(inbound or ""), str(cognitive_context or "")]
     for speaker, line in list(dialogue_history or [])[-12:]:
@@ -76,9 +89,7 @@ def _contradicts_observed_presence(text: str, other_name: str, support_text: str
 
 
 def _has_unsupported_movement_premise(text: str, support_text: str) -> bool:
-    if not _MOVEMENT_PREMISE.search(str(text or "")):
-        return False
-    return not bool(_MOVEMENT_EVIDENCE.search(str(support_text or "")))
+    return bool(_MOVEMENT_PREMISE.search(str(text or "")) and not _MOVEMENT_EVIDENCE.search(str(support_text or "")))
 
 
 def _has_unsupported_role_claim(text: str, support_text: str) -> bool:
@@ -127,6 +138,7 @@ def install_spoken_action_guard(generator):
                 (_addresses_self_as_peer(text, getattr(agent, "name", "")), "self-address"),
                 (_reintroduces_known_self(text, getattr(agent, "name", ""), dialogue_history), "self-reintroduction"),
                 (_is_mid_conversation_greeting_reset(text, dialogue_history), "greeting-reset"),
+                (_is_nominal_fragment(text), "nominal-fragment"),
                 (_contradicts_observed_presence(text, getattr(other, "name", ""), support), "presence-contradiction"),
                 (_has_unsupported_movement_premise(text, support), "unsupported-movement"),
                 (_has_unsupported_role_claim(text, support), "unsupported-role"),
