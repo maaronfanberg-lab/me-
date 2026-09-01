@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """Build a frozen Endogenous Workspace tape from one Community Run artifact.
 
-The Community artifact contains the full JSONL turn stream plus the final Emily
-and Olivia Stanford memory stores. This script joins already-recorded retrieval
-content back to real Stanford nodes and recovers the original node importance
-and creation time. It never calls an LLM, sends dialogue, writes Stanford
-memory, or enables Endogenous Workspace.
+New Community turns can carry retrieval-time Stanford metadata beside the
+already-recorded retrieval text. When present, this script verifies each
+content hash and uses that evidence directly. Legacy artifacts fall back to
+joining retrieval content against the final Stanford memory stores.
 
-Retrieval score itself is not persisted by Stanford, so retrieval order remains
-an explicitly labelled rank proxy. Unlike the earlier Git-history proxy, node
-importance and recency are real for every selected tick.
+No LLM is called, no dialogue is sent, no Stanford memory is written, and no
+workspace mechanism is enabled.
 """
 from __future__ import annotations
 
@@ -26,6 +24,10 @@ def _normalize(text: object) -> str:
     return " ".join(str(text or "").strip().split())
 
 
+def _text_hash(text: object) -> str:
+    return hashlib.sha256(_normalize(text).encode("utf-8", errors="replace")).hexdigest()[:20]
+
+
 def _candidate_id(source: str, text: str) -> str:
     payload = f"{source}\n{_normalize(text)}".encode("utf-8", errors="replace")
     return hashlib.sha256(payload).hexdigest()[:20]
@@ -39,6 +41,8 @@ def _rank_proxy(rank: int, count: int) -> float:
 
 def _read_nodes(root: Path, agent: str) -> dict[str, list[dict]]:
     path = root / "workspaces" / agent.lower() / "memory_stream" / "nodes.json"
+    if not path.is_file():
+        return {}
     rows = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(rows, list):
         raise ValueError(f"{path} must contain a node list")
@@ -90,14 +94,18 @@ def _choose_node(nodes: Iterable[dict], time_step: int) -> dict | None:
     return max(candidates, key=lambda node: int(node.get("created", 0) or 0))
 
 
+def _importance01(raw: object) -> tuple[float, float]:
+    try:
+        raw_importance = float(raw or 0.0)
+    except (TypeError, ValueError):
+        raw_importance = 0.0
+    return max(0.0, min(1.0, raw_importance / 100.0)), raw_importance
+
+
 def _candidate_row(node: Mapping, text: str, time_step: int, rank: int, count: int) -> dict:
     node_type = _normalize(node.get("node_type")) or "memory"
     source = f"memory:{node_type}"
-    try:
-        raw_importance = float(node.get("importance", 0.0) or 0.0)
-    except (TypeError, ValueError):
-        raw_importance = 0.0
-    importance = max(0.0, min(1.0, raw_importance / 100.0))
+    importance, raw_importance = _importance01(node.get("importance", 0.0))
     created = int(node.get("created", 0) or 0)
     age = max(0, int(time_step) - created)
     recency = 1.0 / (1.0 + age / 8.0)
@@ -110,10 +118,74 @@ def _candidate_row(node: Mapping, text: str, time_step: int, rank: int, count: i
         "retrieval_score": round(_rank_proxy(rank, count), 6),
         "retrieval_rank": rank,
         "metadata_recovered": True,
+        "metadata_source": "final_checkpoint_join",
         "stanford_node_id": node.get("node_id"),
         "stanford_created": created,
         "stanford_importance_raw": raw_importance,
     }
+
+
+def _candidate_row_from_recorded(
+    evidence: Mapping,
+    text: str,
+    time_step: int,
+    rank: int,
+    count: int,
+) -> dict | None:
+    if str(evidence.get("content_hash") or "") != _text_hash(text):
+        return None
+    try:
+        observed_step = int(evidence.get("observed_time_step"))
+        recorded_rank = int(evidence.get("retrieval_rank"))
+    except (TypeError, ValueError):
+        return None
+    if observed_step != int(time_step) or recorded_rank != int(rank):
+        return None
+    try:
+        created = int(evidence.get("stanford_created"))
+    except (TypeError, ValueError):
+        return None
+    if created > int(time_step):
+        return None
+    node_type = _normalize(evidence.get("stanford_node_type")) or "memory"
+    source = f"memory:{node_type}"
+    importance, raw_importance = _importance01(evidence.get("stanford_importance_raw"))
+    age = max(0, int(time_step) - created)
+    recency = 1.0 / (1.0 + age / 8.0)
+    return {
+        "id": _candidate_id(source, text),
+        "source": source,
+        "text": text,
+        "importance": round(importance, 6),
+        "recency": round(recency, 6),
+        "retrieval_score": round(_rank_proxy(rank, count), 6),
+        "retrieval_rank": rank,
+        "metadata_recovered": True,
+        "metadata_source": "retrieval_time_evidence",
+        "stanford_node_id": evidence.get("stanford_node_id"),
+        "stanford_created": created,
+        "stanford_last_retrieved": evidence.get("stanford_last_retrieved"),
+        "stanford_importance_raw": raw_importance,
+    }
+
+
+def _recorded_candidates(turn: Mapping, texts: list[str], time_step: int) -> list[dict] | None:
+    evidence_rows = turn.get("retrieved_memory_evidence")
+    if not isinstance(evidence_rows, list) or len(evidence_rows) != len(texts):
+        return None
+    candidates: list[dict] = []
+    seen: set[str] = set()
+    for rank, (text, evidence) in enumerate(zip(texts, evidence_rows), start=1):
+        if not isinstance(evidence, Mapping):
+            return None
+        candidate = _candidate_row_from_recorded(evidence, text, time_step, rank, len(texts))
+        if candidate is None:
+            return None
+        if text in seen:
+            continue
+        seen.add(text)
+        candidates.append(candidate)
+    return candidates or None
 
 
 def build_exact_tape(
@@ -131,6 +203,8 @@ def build_exact_tape(
     indexes = {name: _read_nodes(root, name) for name in ("Emily", "Olivia")}
     eligible_by_step: dict[int, dict] = {}
     rejected_turns = 0
+    retrieval_time_evidence_turns = 0
+    checkpoint_join_turns = 0
 
     for turn in _turn_rows(jsonl):
         agent = str(turn.get("agent") or "").strip()
@@ -147,32 +221,40 @@ def build_exact_tape(
         if not texts:
             continue
 
-        candidates: list[dict] = []
-        seen: set[str] = set()
-        exact = True
-        for rank, text in enumerate(texts, start=1):
-            if text in seen:
+        candidates = _recorded_candidates(turn, texts, time_step)
+        metadata_source = "retrieval_time_evidence"
+        if candidates is not None:
+            retrieval_time_evidence_turns += 1
+        else:
+            metadata_source = "final_checkpoint_join"
+            candidates = []
+            seen: set[str] = set()
+            exact = True
+            for rank, text in enumerate(texts, start=1):
+                if text in seen:
+                    continue
+                seen.add(text)
+                node = _choose_node(indexes[agent].get(text, []), time_step)
+                if node is None:
+                    exact = False
+                    break
+                candidates.append(_candidate_row(node, text, time_step, rank, len(texts)))
+            if not exact or not candidates:
+                rejected_turns += 1
                 continue
-            seen.add(text)
-            node = _choose_node(indexes[agent].get(text, []), time_step)
-            if node is None:
-                exact = False
-                break
-            candidates.append(_candidate_row(node, text, time_step, rank, len(texts)))
-        if not exact or not candidates:
-            rejected_turns += 1
-            continue
+            checkpoint_join_turns += 1
 
         eligible_by_step[time_step] = {
             "time_step": time_step,
             "agent": agent,
             "session_id": turn.get("_session_id"),
             "jsonl_line_index": int(turn.get("_line_index", 0)),
+            "metadata_source": metadata_source,
             "candidates": candidates,
         }
 
     if not eligible_by_step:
-        raise ValueError("artifact contains no turns whose retrievals exactly match Stanford nodes")
+        raise ValueError("artifact contains no turns with exact Stanford retrieval metadata")
 
     # Choose the newest longest contiguous block. This avoids mixing mutually
     # inconsistent historical branches that can coexist in an accumulated JSONL.
@@ -195,10 +277,18 @@ def build_exact_tape(
         )
 
     ticks = [eligible_by_step[step] for step in chosen_steps]
+    chosen_sources = {tick["metadata_source"] for tick in ticks}
+    if chosen_sources == {"retrieval_time_evidence"}:
+        metadata_mode = "retrieval_time_evidence"
+    elif chosen_sources == {"final_checkpoint_join"}:
+        metadata_mode = "final_checkpoint_join"
+    else:
+        metadata_mode = "hybrid_exact"
+
     return {
         "schema_version": SCHEMA_VERSION,
         "metadata": {
-            "source": "community_run_artifact_exact_stanford_join",
+            "source": "community_run_artifact_exact_stanford_evidence",
             "artifact_run_id": artifact_run_id,
             "artifact_sha256": artifact_sha256,
             "frozen": True,
@@ -207,6 +297,9 @@ def build_exact_tape(
             "time_step_start": ticks[0]["time_step"],
             "time_step_end": ticks[-1]["time_step"],
             "rejected_nonexact_turns": rejected_turns,
+            "retrieval_time_evidence_turns_seen": retrieval_time_evidence_turns,
+            "checkpoint_join_turns_seen": checkpoint_join_turns,
+            "chosen_metadata_mode": metadata_mode,
             "importance_mode": "actual_stanford_node_importance",
             "recency_mode": "derived_from_actual_stanford_created_time",
             "retrieval_score_mode": "rank_proxy_from_recorded_stanford_retrieval_order",
