@@ -90,7 +90,6 @@ def _clean_boundary(text: object, agent_name: str = "") -> str:
 
 
 def _is_usable_utterance(text: str, inbound: str = "", agent_name: str = "", other_name: str = "") -> bool:
-    """Boundary validation only; it does not dictate Stanford's wording."""
     if not isinstance(text, str) or not text.strip():
         return False
     cleaned = _clean_boundary(text, agent_name)
@@ -100,7 +99,6 @@ def _is_usable_utterance(text: str, inbound: str = "", agent_name: str = "", oth
 
 
 def _grounding_words(text: str, limit: int = 6) -> list[str]:
-    """Compatibility helper only; not used to steer generation."""
     words: list[str] = []
     for word in _base._normalize_words(text):
         if word in _base._STOP_WORDS or word in {"emily", "olivia"} or len(word) <= 1:
@@ -113,7 +111,6 @@ def _grounding_words(text: str, limit: int = 6) -> list[str]:
 
 
 def _cognitive_context(reaction: dict, plan_context: str) -> str:
-    """Expose social retrieval to speech while keeping the daily plan private."""
     _ = plan_context
     return reaction_context(reaction).strip()
 
@@ -125,7 +122,6 @@ def _generate_non_attractor_spoken_action(
     inbound: str,
     cognitive_context: str,
 ) -> str:
-    """Resample paper-derived speech whenever a structural dialogue blocker fires."""
     rejected: list[str] = []
     for _attempt in range(_MAX_ATTRACTOR_RESAMPLES):
         try:
@@ -196,6 +192,8 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
         "type": "message",
         "recipient_id": other.agent_id,
         "content": text,
+        "retrieved_memories": list(reaction.get("retrieved", [])),
+        "retrieved_memory_evidence": list(reaction.get("retrieved_evidence", [])),
         "cognition": {
             "reaction": reaction.get("mode"),
             "reflected": reflected,
@@ -241,6 +239,7 @@ def choose_opening_action(
         "content": text,
         "observation_memory": memory,
         "retrieved_memories": list(reaction.get("retrieved", [])),
+        "retrieved_memory_evidence": list(reaction.get("retrieved_evidence", [])),
         "cognition": {
             "reaction": reaction.get("mode"),
             "reflected": reflected,
@@ -251,7 +250,6 @@ def choose_opening_action(
 
 
 async def run_one_cycle() -> None:
-    """Observe -> remember -> retrieve/reflect/plan/react -> act."""
     from controlled_social_space import ControlledSocialSpace
 
     agents = load_agents()
