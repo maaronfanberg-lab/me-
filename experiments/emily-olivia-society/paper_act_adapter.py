@@ -58,6 +58,15 @@ _CONTEXT_DEPENDENT_OPENING = re.compile(
     r"that(?:'s|\s+is)\s+(?:true|right))\b",
     re.IGNORECASE,
 )
+_VAGUE_REFERENTIAL_START = re.compile(
+    r"^\s*(?:that(?:'s|\s+is)?|this(?:'s|\s+is)?|it(?:'s|\s+is)?)\b",
+    re.IGNORECASE,
+)
+_REFERENCE_FILLER = {
+    "that", "this", "it's", "thats", "that's", "is", "isnt", "isn't",
+    "not", "really", "very", "just", "what", "your", "youre", "you're",
+    "mine", "my", "the", "and", "but", "with", "from", "have", "has",
+}
 _INCOMPLETE_SPOKEN_END = re.compile(
     r"(?:[,;:]|\b(?:because|although|unless|until|while|when|if)\s*|"
     r"\b(?:feel|felt|seem|seemed)\s+like\s*)$",
@@ -123,7 +132,7 @@ def _paper_prompt(agent, other, dialogue_history, inbound: str, cognitive_contex
     )
 
 
-def _request_completion(prompt: str, agent_name: str, other_name: str) -> str:
+def _request_completion(prompt: str, agent_name: str, other_name: str) -> tuple[str, bool]:
     port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
     timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
     max_tokens = min(128, max(24, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
@@ -165,7 +174,9 @@ def _request_completion(prompt: str, agent_name: str, other_name: str) -> str:
     text = data.get("content") if isinstance(data, dict) else None
     if not isinstance(text, str):
         raise RuntimeError(f"BitNet paper-act completion returned malformed content: {data!r}")
-    return text.strip()
+    hit_limit = bool(data.get("stopped_limit")) or str(data.get("stop_type", "")).strip().lower() == "limit"
+    context_truncated = bool(data.get("truncated"))
+    return text.strip(), bool(hit_limit or context_truncated)
 
 
 def _clean_line(raw: object, agent_name: str) -> str:
@@ -226,6 +237,22 @@ def _is_context_dependent_opening(text: str, inbound: str, dialogue_history) -> 
     if any(str(speaker).strip() and str(line).strip() for speaker, line in (dialogue_history or [])):
         return False
     return bool(_CONTEXT_DEPENDENT_OPENING.search(str(text or "")))
+
+
+def _is_ungrounded_short_reference(text: str, inbound: str) -> bool:
+    """Reject tiny demonstrative replies that point at no content in the inbound line."""
+    inbound = str(inbound or "").strip()
+    if not inbound or not _VAGUE_REFERENTIAL_START.search(str(text or "")):
+        return False
+    output_words = _base._normalize_words(text)
+    if len(output_words) > 6 or _base._ACKNOWLEDGEMENT.search(text):
+        return False
+    input_words = _base._normalize_words(inbound)
+    output_content = {w for w in output_words if len(w) >= 4 and w not in _REFERENCE_FILLER}
+    input_content = {w for w in input_words if len(w) >= 4 and w not in _REFERENCE_FILLER}
+    if not output_content:
+        return False
+    return not bool(output_content & input_content)
 
 
 def _private_plan_items(cognitive_context: str) -> list[str]:
@@ -324,6 +351,8 @@ def is_usable_spoken_action(
         return False
     if input_words == output_words:
         return False
+    if _is_ungrounded_short_reference(text, inbound):
+        return False
 
     if len(input_words) >= 5 and len(output_words) >= 5:
         common = len(set(output_words) & set(input_words))
@@ -381,9 +410,11 @@ def generate_spoken_action(
     prompt = _paper_prompt(agent, other, dialogue_history, inbound, cognitive_context)
     attempts: list[str] = []
     for _ in range(_MAX_ACT_ATTEMPTS):
-        raw = _request_completion(prompt, agent.name, other.name)
+        raw, hit_limit = _request_completion(prompt, agent.name, other.name)
         text = _clean_line(raw, agent.name)
         attempts.append(text or str(raw).strip())
+        if hit_limit:
+            continue
         if (
             is_usable_spoken_action(text, inbound, agent.name, other.name)
             and not _is_recent_echo(text, dialogue_history)

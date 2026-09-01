@@ -7,8 +7,25 @@ on:
     paths:
       - '.github/workflows/emily-olivia-community-trigger.yml'
       - '.github/workflows/emily-olivia-community-run.yml'
-      - 'experiments/emily-olivia-society/*.py'
-      - 'experiments/emily-olivia-society/*.sh'
+      - 'experiments/emily-olivia-society/bitnet_server.py'
+      - 'experiments/emily-olivia-society/bootstrap_upstreams.sh'
+      - 'experiments/emily-olivia-society/checkpoint_attractor_guard.py'
+      - 'experiments/emily-olivia-society/community_cycle.py'
+      - 'experiments/emily-olivia-society/community_cycle_base.py'
+      - 'experiments/emily-olivia-society/community_session.py'
+      - 'experiments/emily-olivia-society/controlled_social_space.py'
+      - 'experiments/emily-olivia-society/first_exchange.py'
+      - 'experiments/emily-olivia-society/init_cognition.py'
+      - 'experiments/emily-olivia-society/paper_act_adapter.py'
+      - 'experiments/emily-olivia-society/paper_plan_adapter.py'
+      - 'experiments/emily-olivia-society/paper_react_adapter.py'
+      - 'experiments/emily-olivia-society/paper_reflection_adapter.py'
+      - 'experiments/emily-olivia-society/patch_stanford_local.py'
+      - 'experiments/emily-olivia-society/persistence_reflection.py'
+      - 'experiments/emily-olivia-society/reflection_hygiene.py'
+      - 'experiments/emily-olivia-society/restore_latest_checkpoint.sh'
+      - 'experiments/emily-olivia-society/social_bridge.py'
+      - 'experiments/emily-olivia-society/stanford_native_cycle.py'
       - 'experiments/emily-olivia-society/agents.json'
       - 'experiments/emily-olivia-society/upstreams.json'
 
@@ -24,7 +41,7 @@ jobs:
   dispatch-community:
     runs-on: ubuntu-latest
     steps:
-      - name: Preserve active Community runtime or dispatch one
+      - name: Preserve current Community runtime or replace stale one
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -37,18 +54,83 @@ jobs:
               --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending") | "\(.id) \(.head_sha) \(.status)"'
           )"
 
-          # An active conversation owns the Community slot regardless of which
-          # repository commit it started from. Code changes wait for the next
-          # natural Community startup; they must never terminate live cognition.
+          stale_lines=""
           if [ -n "$active_lines" ]; then
-            echo "An Emily + Olivia Community runtime already owns the slot; preserving it and not creating a duplicate:"
+            while read -r run_id head_sha status; do
+              [ -n "${run_id:-}" ] || continue
+              compare_status="$(
+                gh api --method GET \
+                  "repos/${GITHUB_REPOSITORY}/compare/${GITHUB_SHA}...${head_sha}" \
+                  --jq '.status' 2>/dev/null || printf 'unknown'
+              )"
+              if [ "$compare_status" != "identical" ] && [ "$compare_status" != "ahead" ]; then
+                stale_lines+="${run_id} ${head_sha} ${status}"$'\n'
+              fi
+            done <<< "$active_lines"
+          fi
+
+          if [ -n "$active_lines" ] && [ -z "$stale_lines" ]; then
+            echo "A current Emily + Olivia Community runtime already owns the slot; not creating a duplicate:"
             echo "$active_lines"
             exit 0
           fi
 
-          # A valid pending social message still takes precedence inside the runtime.
-          # A clean state opens autonomously through the Stanford chain; no authored
-          # default dialogue is supplied by the trigger.
+          if [ -n "$stale_lines" ]; then
+            echo "Replacing stale Community run(s) because a live-runtime file changed:"
+            printf '%s' "$stale_lines"
+            while read -r run_id head_sha status; do
+              [ -n "${run_id:-}" ] || continue
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" --silent || true
+            done <<< "$stale_lines"
+
+            for attempt in $(seq 1 6); do
+              stubborn=""
+              while read -r run_id head_sha status; do
+                [ -n "${run_id:-}" ] || continue
+                live_status="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status' 2>/dev/null || printf 'completed')"
+                if [ "$live_status" = "in_progress" ] || [ "$live_status" = "queued" ] || [ "$live_status" = "pending" ]; then
+                  stubborn+="${run_id} ${head_sha} ${live_status}"$'\n'
+                fi
+              done <<< "$stale_lines"
+              [ -z "$stubborn" ] && break
+              sleep 5
+            done
+
+            if [ -n "${stubborn:-}" ]; then
+              echo "Stale Community run(s) ignored graceful cancellation; force-cancelling only those runs:"
+              printf '%s' "$stubborn"
+              while read -r run_id head_sha status; do
+                [ -n "${run_id:-}" ] || continue
+                gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/force-cancel" --silent || true
+              done <<< "$stubborn"
+            fi
+
+            for attempt in $(seq 1 12); do
+              remaining=0
+              while read -r run_id head_sha status; do
+                [ -n "${run_id:-}" ] || continue
+                live_status="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status' 2>/dev/null || printf 'completed')"
+                if [ "$live_status" = "in_progress" ] || [ "$live_status" = "queued" ] || [ "$live_status" = "pending" ]; then remaining=$((remaining + 1)); fi
+              done <<< "$stale_lines"
+              [ "$remaining" -eq 0 ] && break
+              if [ "$attempt" -eq 12 ]; then
+                echo "Stale Community runtime did not leave the active state." >&2
+                exit 1
+              fi
+              sleep 5
+            done
+          fi
+
+          active_after="$(
+            gh api --method GET "$runs_api" \
+              --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending") | "\(.id) \(.head_sha) \(.status)"'
+          )"
+          if [ -n "$active_after" ]; then
+            echo "A Community runtime already owns the slot after handoff; not creating a duplicate:"
+            echo "$active_after"
+            exit 0
+          fi
+
           gh workflow run emily-olivia-community-run.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
