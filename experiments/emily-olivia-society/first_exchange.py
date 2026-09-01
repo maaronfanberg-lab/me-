@@ -218,6 +218,10 @@ async def process_one_reply(
 
 
 async def run_first_exchange(opener: str) -> dict:
+    opener = str(opener or "").strip()
+    if not opener:
+        raise ValueError("first_exchange requires an explicit opener; it has no canned default or fallback.")
+
     agents = load_agents()
     emily = next(a for a in agents if a.name == "Emily")
     olivia = next(a for a in agents if a.name == "Olivia")
@@ -270,8 +274,8 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="Run the first bounded Emily + Olivia exchange.")
     parser.add_argument(
         "--opener",
-        default="Hello, Olivia.",
-        help="The single initial message from Emily to Olivia.",
+        default="",
+        help="Explicit initial message from Emily to Olivia; no default dialogue is supplied.",
     )
     parser.add_argument(
         "--run",

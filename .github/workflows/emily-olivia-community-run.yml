@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       opener:
-        description: "Emily's opening message"
+        description: "Optional explicit Emily opening message; blank lets the Stanford chain open autonomously"
         required: false
-        default: "Let's continue naturally from where we left off."
+        default: ""
   schedule:
     - cron: "0 10 * * *"
     - cron: "0 11 * * *"
@@ -82,7 +82,12 @@ jobs:
       - name: Validate Community Python before expensive work
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
-        run: python3 -m py_compile bitnet_server.py patch_stanford_local.py community_cycle.py community_session.py controlled_social_space.py first_exchange.py social_bridge.py persistence_reflection.py observer.py
+        run: >-
+          python3 -m py_compile
+          bitnet_server.py patch_stanford_local.py community_cycle.py community_cycle_base.py
+          stanford_native_cycle.py paper_act_adapter.py paper_plan_adapter.py paper_react_adapter.py
+          paper_reflection_adapter.py community_session.py controlled_social_space.py first_exchange.py
+          social_bridge.py persistence_reflection.py observer.py
 
       - name: Restore Community runtime and BitNet
         id: bitnet-cache
@@ -177,7 +182,6 @@ jobs:
           continuous_seconds=18000
           if [ "$seconds_until_quiet" -lt "$continuous_seconds" ]; then continuous_seconds="$seconds_until_quiet"; fi
           OPENER="${{ github.event.inputs.opener }}"
-          [ -n "$OPENER" ] || OPENER="Let's continue naturally from where we left off."
           .venv-stanford/bin/python community_session.py \
             --run \
             --continuous-seconds "$continuous_seconds" \
@@ -198,6 +202,19 @@ jobs:
           if d.get('status') != 'completed': raise SystemExit('community session did not complete cleanly')
           completed = int(d.get('completed_reply_turns', 0))
           if completed < 1: raise SystemExit('no completed reply turns')
+          if not d.get('resumed_social_state') and not d.get('autonomous_opening'):
+              raise SystemExit('clean state did not create an autonomous Stanford opening')
+          if d.get('autonomous_opening'):
+              opening = d.get('opening_turn') or {}
+              action = opening.get('action', {})
+              content = str(action.get('content', ''))
+              if action.get('type') != 'message' or not _is_usable_utterance(content):
+                  raise SystemExit(f'unusable autonomous opening: {opening!r}')
+              if opening.get('action_result', {}).get('success') is not True:
+                  raise SystemExit('autonomous opening was not delivered')
+              cognition = action.get('cognition', {})
+              if cognition.get('act_research_source') != 'fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4':
+                  raise SystemExit('autonomous opening did not use pinned paper act source')
           turns = d.get('turns') or []
           candidates = turns if turns else ([d.get('latest_turn')] if d.get('latest_turn') else [])
           if not candidates: raise SystemExit('no turn evidence persisted')
@@ -210,6 +227,8 @@ jobs:
               inbound=str(inbox[-1].get('content',''))
               content=str(action.get('content',''))
               if not _is_usable_utterance(content,inbound): raise SystemExit(f'ungrounded or unnatural dialogue: inbound={inbound[:180]!r} reply={content[:240]!r}')
+              if action.get('cognition', {}).get('act_research_source') != 'fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4':
+                  raise SystemExit('reply did not use pinned paper act source')
               if t.get('action_result',{}).get('success') is not True: raise SystemExit('undelivered message in replay')
               if t.get('consumed_inbound') is not True: raise SystemExit('delivered reply did not consume inbound')
               outputs.append(' '.join(content.lower().split()))
