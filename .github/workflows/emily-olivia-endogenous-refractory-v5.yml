@@ -1,0 +1,96 @@
+name: Emily Olivia refractory selection v5
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/emily-olivia-society/endogenous_refractory_preregistration_v5.json'
+      - 'experiments/emily-olivia-society/endogenous_refractory_selection_v5.py'
+      - '.github/workflows/emily-olivia-endogenous-refractory-v5.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  frozen-block-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            experiments/emily-olivia-society/endogenous_workspace.py
+            experiments/emily-olivia-society/endogenous_workspace_replay.py
+            experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py
+            experiments/emily-olivia-society/endogenous_refractory_preregistration_v5.json
+            experiments/emily-olivia-society/endogenous_refractory_selection_v5.py
+          sparse-checkout-cone-mode: false
+
+      - name: Verify frozen source artifacts
+        run: |
+          verify_artifact() {
+            local run_id="$1" name="$2" expected_id="$3" expected_digest="$4"
+            local artifact_id digest
+            artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" --jq ".artifacts[] | select(.name == \"${name}\") | .id")"
+            digest="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" --jq ".artifacts[] | select(.name == \"${name}\") | .digest")"
+            test "$artifact_id" = "$expected_id"
+            test "$digest" = "sha256:${expected_digest}"
+          }
+          verify_artifact 33532383600 emily-olivia-community-results 9810274251 fac6b5a981eaf5171210b885dd519376536fd32e0ba223d98ab8b53a991f3d85
+          verify_artifact 33533326825 emily-olivia-community-results 9810957121 fdab00caf21df61e63802c33e7d2cd63c7e213cb463a3e81a780a719e0803c1f
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: emily-olivia-community-results
+          path: artifact-112
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 33532383600
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: emily-olivia-community-results
+          path: artifact-118
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 33533326825
+
+      - name: Compile frozen refractory experiment
+        working-directory: experiments/emily-olivia-society
+        run: python3 -m py_compile endogenous_refractory_selection_v5.py endogenous_workspace_artifact_tape.py
+
+      - name: Run locked refractory experiment
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 endogenous_refractory_selection_v5.py \
+            --prereg endogenous_refractory_preregistration_v5.json \
+            --historical-replica ../../artifact-112 \
+            --discovery-anchor ../../artifact-118 \
+            --out refractory-selection-v5.json
+
+      - name: Enforce offline boundary
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('refractory-selection-v5.json').read_text())
+          assert d['produced_dialogue'] is False
+          assert d['wrote_live_memory'] is False
+          assert d['activated_live_workspace'] is False
+          assert d['activated_shadow_mode'] is False
+          assert d['results']['shadow_mode_permitted'] is False
+          print(json.dumps({'blocks': d['blocks'], 'results': d['results']}, indent=2, sort_keys=True))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-refractory-selection-v5
+          path: experiments/emily-olivia-society/refractory-selection-v5.json
+          if-no-files-found: error
+          retention-days: 30
