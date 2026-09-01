@@ -16,7 +16,7 @@ import asyncio
 import re
 
 import community_cycle_base as _base
-from dialogue_attractor import candidate_repeats_recurring_attractor
+from dialogue_attractor import candidate_dialogue_blocker
 from paper_act_adapter import (
     generate_spoken_action,
     is_usable_spoken_action,
@@ -32,7 +32,7 @@ observation_text = _base.observation_text
 next_community_time_step = _base.next_community_time_step
 latest_community_time_step = _base.latest_community_time_step
 
-_MAX_ATTRACTOR_RESAMPLES = 4
+_MAX_ATTRACTOR_RESAMPLES = 8
 _CONTROL_SCAFFOLD = re.compile(
     r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
     r"^\s*(?:SELF|PARTNER|Self-reply|Partner-reply|Answer|Example)\s*:|"
@@ -125,11 +125,11 @@ def _generate_non_attractor_spoken_action(
     inbound: str,
     cognitive_context: str,
 ) -> str:
-    """Resample paper-derived speech if it reinforces a recurring phrase cluster.
+    """Resample paper-derived speech whenever a structural dialogue blocker fires.
 
-    This is a fail-closed diversity boundary. Every attempt uses the same
-    research-derived prompt and the model's own output; no authored fallback or
-    prescribed conversational move is introduced.
+    Every attempt uses the same research-derived prompt and the model's own
+    output. The guard only rejects bad samples; it never supplies replacement
+    dialogue or prescribes a conversational move.
     """
     rejected: list[str] = []
     for _attempt in range(_MAX_ATTRACTOR_RESAMPLES):
@@ -140,12 +140,19 @@ def _generate_non_attractor_spoken_action(
             inbound=inbound,
             cognitive_context=cognitive_context,
         )
-        if not candidate_repeats_recurring_attractor(text, dialogue_history):
+        blocker = candidate_dialogue_blocker(
+            text,
+            dialogue_history,
+            inbound=inbound,
+            cognitive_context=cognitive_context,
+            agent_name=agent.name,
+        )
+        if blocker is None:
             return text
-        rejected.append(text)
-    previews = " | ".join(repr(item[:180]) for item in rejected)
+        rejected.append(f"{blocker}: {text}")
+    previews = " | ".join(repr(item[:220]) for item in rejected)
     raise RuntimeError(
-        f"{agent.name} repeatedly reinforced a recent dialogue attractor after "
+        f"{agent.name} repeatedly hit structural dialogue blockers after "
         f"{_MAX_ATTRACTOR_RESAMPLES} paper-derived resamples: {previews}"
     )
 
@@ -171,12 +178,13 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
     reaction = react_to_observation(agent, other.name, inbound, time_step)
     reflected = maybe_reflect(agent, time_step)
     plan_context = planning_context(agent, other.name, time_step)
+    cognitive_context = _cognitive_context(reaction, plan_context)
     text = _generate_non_attractor_spoken_action(
         agent,
         other,
         dialogue_history=dialogue_history,
         inbound=inbound,
-        cognitive_context=_cognitive_context(reaction, plan_context),
+        cognitive_context=cognitive_context,
     )
     text = _clean_boundary(text, agent.name)
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
@@ -221,12 +229,13 @@ def choose_opening_action(
     reaction = react_to_presence(agent, other.name, time_step)
     reflected = maybe_reflect(agent, time_step)
     plan_context = planning_context(agent, other.name, time_step)
+    cognitive_context = _cognitive_context(reaction, plan_context)
     text = _generate_non_attractor_spoken_action(
         agent,
         other,
         dialogue_history=dialogue_history,
         inbound="",
-        cognitive_context=_cognitive_context(reaction, plan_context),
+        cognitive_context=cognitive_context,
     )
     text = _clean_boundary(text, agent.name)
     if not _is_usable_utterance(text, "", agent.name, other.name):
