@@ -47,7 +47,12 @@ jobs:
                 --silent || true
             done <<< "$active_lines"
 
-            for attempt in $(seq 1 18); do
+            # Give normal cancellation a short grace period so jobs can upload
+            # their final checkpoint artifact cleanly. Long-running Python can
+            # occasionally ignore that cancellation long enough to block every
+            # replacement run, so force-cancel only the Community runs that are
+            # still active after the grace period.
+            for attempt in $(seq 1 6); do
               active_count="$(
                 gh api --method GET "$runs_api" \
                   --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending")] | length'
@@ -55,8 +60,34 @@ jobs:
               if [ "${active_count:-0}" -eq 0 ]; then
                 break
               fi
-              if [ "$attempt" -eq 18 ]; then
-                echo "Old Community run did not leave the active state after cancellation." >&2
+              sleep 5
+            done
+
+            stubborn_lines="$(
+              gh api --method GET "$runs_api" \
+                --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending") | "\(.id) \(.head_sha) \(.status)"'
+            )"
+            if [ -n "$stubborn_lines" ]; then
+              echo "Community run(s) still active after normal cancellation; force-cancelling only those Community runs:"
+              echo "$stubborn_lines"
+              while read -r run_id head_sha status; do
+                [ -n "${run_id:-}" ] || continue
+                gh api --method POST \
+                  "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/force-cancel" \
+                  --silent || true
+              done <<< "$stubborn_lines"
+            fi
+
+            for attempt in $(seq 1 12); do
+              active_count="$(
+                gh api --method GET "$runs_api" \
+                  --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending")] | length'
+              )"
+              if [ "${active_count:-0}" -eq 0 ]; then
+                break
+              fi
+              if [ "$attempt" -eq 12 ]; then
+                echo "Old Community run did not leave the active state after force-cancellation." >&2
                 exit 1
               fi
               sleep 5
