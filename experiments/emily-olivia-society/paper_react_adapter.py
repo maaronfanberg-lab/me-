@@ -15,14 +15,24 @@ It never writes dialogue for the agents.
 """
 from __future__ import annotations
 
+from reflection_hygiene import is_clean_observation_text, is_clean_reflection_text
+
 _ORIGINAL_RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
 
 
 def _clean_memory_nodes(nodes):
+    """Expose only retrieval nodes that are structurally safe to feed back to speech."""
     out = []
     for node in nodes or []:
         content = str(getattr(node, "content", "") or "").strip()
-        if content and content not in out:
+        if not content:
+            continue
+        node_type = getattr(node, "node_type", None)
+        if node_type == "reflection" and not is_clean_reflection_text(content):
+            continue
+        if node_type == "observation" and not is_clean_observation_text(content):
+            continue
+        if content not in out:
             out.append(content)
     return out
 
