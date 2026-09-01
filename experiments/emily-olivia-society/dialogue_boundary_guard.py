@@ -12,6 +12,7 @@ from functools import wraps
 import re
 
 _MAX_BOUNDARY_ATTEMPTS = 3
+_SPEECH_EXHAUSTION_MARKER = "paper-derived Stanford act produced no usable spoken line"
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _GREETING_START = re.compile(r"^\s*(?:hi|hello|hey|oh\s*,?\s*hi)\b", re.IGNORECASE)
@@ -130,7 +131,13 @@ def install_spoken_action_guard(generator):
     def guarded(agent, other, dialogue_history=None, inbound: str = "", cognitive_context: str = ""):
         rejected: list[str] = []
         for _ in range(_MAX_BOUNDARY_ATTEMPTS):
-            text = generator(agent, other, dialogue_history=dialogue_history, inbound=inbound, cognitive_context=cognitive_context)
+            try:
+                text = generator(agent, other, dialogue_history=dialogue_history, inbound=inbound, cognitive_context=cognitive_context)
+            except RuntimeError as exc:
+                if _SPEECH_EXHAUSTION_MARKER in str(exc):
+                    rejected.append(f"speech-exhaustion:{str(exc)[:180]}")
+                    continue
+                raise
             support = _support_text(inbound, dialogue_history, cognitive_context)
             checks = (
                 (_addresses_self_as_peer(text, getattr(agent, "name", "")), "self-address"),
