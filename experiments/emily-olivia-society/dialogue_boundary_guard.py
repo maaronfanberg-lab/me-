@@ -23,6 +23,10 @@ _DIRECT_SELF_ADDRESS_START = re.compile(r"^\s*(?:(?:hi|hey|hello)\s*[,!:\-]?\s*)
 _SELF_VOCATIVE = re.compile(r"(?:^|[,;:!?]\s*|\b(?:hi|hey|hello)\s+){name}\b\s*[,!?.:]", re.IGNORECASE)
 _SELF_OBJECT_ROMANTIC = re.compile(r"\bi(?:'m|\s+am)\s+(?:not\s+)?in\s+love\s+with\s+me\b", re.IGNORECASE)
 _DEMOGRAPHIC_CLAIM = re.compile(r"\bi(?:'m|\s+am)\s+(?:a\s+)?(girl|woman|man|boy)\b", re.IGNORECASE)
+_DEMOGRAPHIC_GROUP_SELF = re.compile(
+    r"\b(?:i|i'm|i\s+am|my)\b[^.!?]{0,120}\b(?:rest|other)\s+of\s+the\s+(girls|women|boys|men)\b",
+    re.IGNORECASE,
+)
 _REFUSAL_HANDOFF = re.compile(r"(?:\bi\s+(?:don't|do\s+not)\s+know\s+how\s+to\s+answer\b|\b(?:could|can)\s+you\s+(?:try\s+)?asking\s+someone\s+else\b)", re.IGNORECASE)
 _PRESENCE_EVIDENCE = re.compile(r"(?:\bcommunity\s+contains\b|\bpresent\s+(?:together|in\s+the\s+private\s+two-person\s+community)\b)", re.IGNORECASE)
 _PRESENCE_CONTRADICTION = re.compile(r"(?:\bwhere\s+are\s+you\b|\bi\s+(?:can't|cannot)\s+(?:see|find)\s+you\b|\byou(?:'re|\s+are)\s+not\s+(?:here|visible)\b)", re.IGNORECASE)
@@ -118,16 +122,17 @@ def _has_self_object_role_confusion(text: str) -> bool:
 
 
 def _has_unsupported_demographic_claim(text: str, agent) -> bool:
-    match = _DEMOGRAPHIC_CLAIM.search(str(text or ""))
-    if not match:
+    direct = _DEMOGRAPHIC_CLAIM.search(str(text or ""))
+    grouped = _DEMOGRAPHIC_GROUP_SELF.search(str(text or ""))
+    if not direct and not grouped:
         return False
+    claim = (direct.group(1) if direct else grouped.group(1)).casefold()
     scratch = dict(getattr(getattr(agent, "brain", None), "scratch", {}) or {})
     stored = str(scratch.get("gender") or scratch.get("sex") or "").strip().casefold()
     if not stored:
         return True
-    claim = match.group(1).casefold()
-    female = {"female", "woman", "girl"}
-    male = {"male", "man", "boy"}
+    female = {"female", "woman", "women", "girl", "girls"}
+    male = {"male", "man", "men", "boy", "boys"}
     return not ((stored in female and claim in female) or (stored in male and claim in male))
 
 
