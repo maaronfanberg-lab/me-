@@ -6,6 +6,7 @@ WORKSPACES="$HERE/workspaces"
 REPLAY_DIR="$HERE/replay"
 WORKFLOW_FILE="${COMMUNITY_WORKFLOW_FILE:-emily-olivia-community-run.yml}"
 ARTIFACT_NAME="${COMMUNITY_ARTIFACT_NAME:-emily-olivia-community-results}"
+COMPAT_MARKER_PATH="experiments/emily-olivia-society/checkpoint-schema-v2.marker"
 
 if [[ -z "${GITHUB_REPOSITORY:-}" ]]; then
   echo "GITHUB_REPOSITORY is required to restore a checkpoint." >&2
@@ -22,16 +23,18 @@ checkpoint_conclusion=""
 # A Community run can preserve many valid live turns and then fail or be replaced
 # later in the same conversation step. Its uploaded workspace is still a valid
 # checkpoint candidate. Select completed runs by recency and let the semantic
-# validator below decide whether their state is safe to restore.
+# validator below decide whether their state is safe to restore. Checkpoint v2
+# intentionally quarantines runs from before private daily plans were isolated
+# from spoken-action context; preserving those old turns would faithfully carry
+# planner-generated topic invention into the corrected runtime.
 mapfile -t candidate_runs < <(
   gh api --method GET \
     "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=30" \
-    --jq '.workflow_runs[] | select(.status == "completed") | [.id, (.conclusion // "unknown")] | @tsv'
+    --jq '.workflow_runs[] | select(.status == "completed") | [.id, (.conclusion // "unknown"), .head_sha] | @tsv'
 )
 
 for candidate_info in "${candidate_runs[@]:-}"; do
-  run_id="${candidate_info%%$'\t'*}"
-  run_conclusion="${candidate_info#*$'\t'}"
+  IFS=$'\t' read -r run_id run_conclusion run_head_sha <<< "$candidate_info"
   if [[ -n "$current_run" && "$run_id" == "$current_run" ]]; then
     continue
   fi
@@ -40,15 +43,28 @@ for candidate_info in "${candidate_runs[@]:-}"; do
       "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
       --jq "[.artifacts[] | select(.name == \"$ARTIFACT_NAME\" and (.expired | not))] | length"
   )"
-  if [[ "${artifact_count:-0}" -gt 0 ]]; then
-    checkpoint_run="$run_id"
-    checkpoint_conclusion="$run_conclusion"
-    break
+  if [[ "${artifact_count:-0}" -le 0 ]]; then
+    continue
   fi
+
+  # The run's checked-out commit must contain the v2 marker. This is a clean,
+  # versioned compatibility boundary, not a content blacklist: pre-v2 memories
+  # are left untouched in their historical artifacts but are never loaded into
+  # a runtime whose speech/planning boundary has changed.
+  if ! gh api --method GET \
+      "repos/${GITHUB_REPOSITORY}/contents/${COMPAT_MARKER_PATH}?ref=${run_head_sha}" \
+      >/dev/null 2>&1; then
+    echo "Skipping checkpoint run $run_id: predates checkpoint compatibility v2."
+    continue
+  fi
+
+  checkpoint_run="$run_id"
+  checkpoint_conclusion="$run_conclusion"
+  break
 done
 
 if [[ -z "$checkpoint_run" ]]; then
-  echo "No prior completed Community checkpoint artifact exists. Starting from clean cognition and social state."
+  echo "No compatible completed Community checkpoint artifact exists. Starting from clean cognition and social state."
   rm -rf "$WORKSPACES"
   rm -f "$REPLAY_DIR/social_state.json"
   mkdir -p "$REPLAY_DIR"
@@ -59,7 +75,7 @@ if [[ -z "$checkpoint_run" ]]; then
   "source_run_id": null,
   "source_run_conclusion": null,
   "artifact": "$ARTIFACT_NAME",
-  "reason": "no_valid_checkpoint",
+  "reason": "no_compatible_checkpoint_v2",
   "social_state_restored": false
 }
 JSON
