@@ -6,6 +6,7 @@ The cognitive work belongs to Stanford's GenerativeAgent. Local code here only:
 - maintains the original Generative Agents paper's broad daily-plan state;
 - periodically reflects after accumulated experience, as in the paper;
 - calls GenerativeAgent.utterance(), which performs Stanford memory retrieval;
+- filters known poisoned prompt-scaffold memories at the utterance retrieval boundary;
 - applies a narrow output-boundary check so model/control scaffolding is never spoken.
 
 There are deliberately no canned replies, conversational-move prompts, topic-word
@@ -28,10 +29,52 @@ latest_community_time_step = _base.latest_community_time_step
 
 _CONTROL_SCAFFOLD = re.compile(
     r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
-    r"^\s*(?:SELF|PARTNER|Self-reply|Answer|Example)\s*:|"
+    r"^\s*(?:SELF|PARTNER|Self-reply|Partner-reply|Answer|Example)\s*:|"
     r"\[Fill\s+in\])",
     re.IGNORECASE | re.MULTILINE,
 )
+
+# These are memories created from model-control leakage, not genuine social experience.
+# Leaving them in Stanford retrieval creates a self-reinforcing prompt-contamination loop.
+_MEMORY_SCAFFOLD = re.compile(
+    r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
+    r"(?:^|\n)\s*(?:SELF|PARTNER|Self-reply|Partner-reply|Answer|Example)\s*:|"
+    r"\[Fill\s+in\])",
+    re.IGNORECASE,
+)
+
+
+def _has_pathological_repetition(text: str) -> bool:
+    """Reject obvious same-line generation collapse without steering normal wording."""
+    words = _base._normalize_words(text)
+    if len(words) < 8:
+        return False
+
+    # Catch repeated short n-grams such as the observed "I'd say ... I'd say ..." spiral.
+    for width in range(2, min(7, len(words) // 2 + 1)):
+        counts: dict[tuple[str, ...], int] = {}
+        for index in range(0, len(words) - width + 1):
+            gram = tuple(words[index : index + width])
+            counts[gram] = counts.get(gram, 0) + 1
+        if counts and max(counts.values()) >= 3:
+            return True
+
+    # Also reject a single phrase taking over most of a longer line even when punctuation
+    # makes the exact n-gram window slide slightly.
+    if len(words) >= 14:
+        counts: dict[str, int] = {}
+        for word in words:
+            counts[word] = counts.get(word, 0) + 1
+        if max(counts.values(), default=0) >= max(5, len(words) // 3):
+            return True
+    return False
+
+
+def _memory_is_contaminated(content: object) -> bool:
+    text = str(content or "").strip()
+    if not text:
+        return False
+    return bool(_MEMORY_SCAFFOLD.search(text) or _has_pathological_repetition(text))
 
 
 def _is_usable_utterance(
@@ -44,7 +87,7 @@ def _is_usable_utterance(
     if not isinstance(text, str) or not text.strip():
         return False
     cleaned = _clean_boundary(text)
-    if not cleaned:
+    if not cleaned or _has_pathological_repetition(cleaned):
         return False
     # Empty inbound disables legacy lexical-overlap/greeting steering while
     # retaining junk, role, identity, size, and natural-language checks.
@@ -72,7 +115,9 @@ def _stanford_dialogue(
     history = [
         [str(speaker).strip(), str(text).strip()]
         for speaker, text in (dialogue_history or [])
-        if str(speaker).strip() and str(text).strip()
+        if str(speaker).strip()
+        and str(text).strip()
+        and not _memory_is_contaminated(text)
     ]
     if not history or history[-1] != [other.name, inbound.strip()]:
         history.append([other.name, inbound.strip()])
@@ -99,6 +144,38 @@ def _agent_time_step(agent: CommunityAgent) -> int:
     return latest + 1
 
 
+def _utterance_with_clean_retrieval(agent: CommunityAgent, dialogue: list[list[str]], context: str):
+    """Run Stanford utterance while excluding only known poisoned memory nodes.
+
+    The memory store is not rewritten or deleted here. We filter the retrieval result for this
+    generation call, which preserves legitimate cognition while preventing old prompt scaffolding
+    from being injected back into the model prompt.
+    """
+    memory_stream = agent.brain.memory_stream
+    original_retrieve = memory_stream.retrieve
+
+    def clean_retrieve(*args, **kwargs):
+        result = original_retrieve(*args, **kwargs)
+        if not isinstance(result, dict):
+            return result
+        cleaned = {}
+        for key, nodes in result.items():
+            if not isinstance(nodes, list):
+                cleaned[key] = nodes
+                continue
+            cleaned[key] = [
+                node for node in nodes
+                if not _memory_is_contaminated(getattr(node, "content", ""))
+            ]
+        return cleaned
+
+    memory_stream.retrieve = clean_retrieve
+    try:
+        return agent.brain.utterance(dialogue, context=context)
+    finally:
+        memory_stream.retrieve = original_retrieve
+
+
 def choose_action(
     agent: CommunityAgent,
     observation: dict,
@@ -112,6 +189,10 @@ def choose_action(
     inbound = str(inbox[-1].get("content", "")).strip()
     if not inbound:
         return {"type": "wait", "reason": "empty_message"}
+    if _memory_is_contaminated(inbound):
+        raise RuntimeError(
+            f"{agent.name} received contaminated dialogue and refused to feed it back into Stanford."
+        )
 
     agent.brain.update_scratch({"first_name": agent.name, "last_name": ""})
     time_step = _agent_time_step(agent)
@@ -128,7 +209,7 @@ def choose_action(
         context_parts.append(plan_context)
     context = " ".join(context_parts)
 
-    raw_text = agent.brain.utterance(dialogue, context=context)
+    raw_text = _utterance_with_clean_retrieval(agent, dialogue, context)
     text = _clean_boundary(raw_text)
 
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
