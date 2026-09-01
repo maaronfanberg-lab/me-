@@ -16,7 +16,10 @@ from __future__ import annotations
 from reflection_hygiene import sanitize_memory_stream
 
 _RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
-_DEFAULT_THRESHOLD = 12
+# The original Generative Agents implementation uses an importance trigger of
+# 150 with individual event poignancy scored on a 1-10 scale.
+_DEFAULT_THRESHOLD = 150.0
+_LEGACY_LOW_THRESHOLD_MAX = 20.0
 _EMPTY_EMBEDDING_ERROR = "Input text must be a non-empty string."
 
 
@@ -26,15 +29,21 @@ def _latest_nodes(agent, count: int = 12):
 
 
 def _importance(node) -> float:
+    """Return paper-scale (0-10) importance for a Stanford memory node."""
     for attr in ("poignancy", "importance"):
         value = getattr(node, attr, None)
         try:
             if value is not None:
-                return float(value)
+                score = max(0.0, float(value))
+                # Stanford HCI/local patches may represent poignancy on 0-100.
+                # Normalize that larger scale before comparing with the paper's
+                # 150-point cumulative reflection trigger.
+                if score > 10.0:
+                    score /= 10.0
+                return min(10.0, score)
         except (TypeError, ValueError):
             pass
-    # genagents memories do not expose the paper's scratch counter directly.
-    # Treat each new observation as one unit so reflection remains periodic.
+    # If a node exposes no score at all, count it as one mundane experience.
     return 1.0
 
 
@@ -47,21 +56,29 @@ def _reflection_count(agent) -> int:
 
 
 def maybe_reflect(agent, time_step: int) -> bool:
-    """Run Stanford reflection when enough new experience has accumulated.
+    """Run Stanford reflection after paper-scale accumulated importance.
 
     This mirrors the paper's importance-threshold trigger rather than reflecting
     every turn. Reflection uses Stanford HCI MemoryStream directly with named
     arguments so the timestep cannot be confused with reflection_count.
 
-    Small local models can occasionally return blank, malformed, or parser-
-    scaffold items where Stanford expects natural-language reflection strings.
-    Such output is removed rather than becoming durable memory. Any valid
-    reflections produced in the same pass are preserved; no substitute insight
+    Earlier Community builds persisted a threshold of 12, which was mismatched
+    to Stanford's larger poignancy scale and could cause reflection after a
+    single observation. Treat that legacy low value as a migration marker and
+    restore the paper-scale threshold of 150. Blank or malformed reflection
+    output is removed rather than becoming durable memory; no substitute insight
     or authored fallback is invented.
     """
     scratch = agent.brain.scratch
     last_step = int(scratch.get("reflection_last_step", 0) or 0)
-    threshold = float(scratch.get("reflection_importance_threshold", _DEFAULT_THRESHOLD))
+    try:
+        threshold = float(
+            scratch.get("reflection_importance_threshold", _DEFAULT_THRESHOLD)
+        )
+    except (TypeError, ValueError):
+        threshold = _DEFAULT_THRESHOLD
+    if threshold <= _LEGACY_LOW_THRESHOLD_MAX:
+        threshold = _DEFAULT_THRESHOLD
 
     fresh = [
         node for node in _latest_nodes(agent, 24)
