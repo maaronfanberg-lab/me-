@@ -98,7 +98,7 @@ def maybe_reflect(agent, time_step: int) -> bool:
         try:
             agent.brain.memory_stream.reflect(
                 anchor=anchor,
-                reflection_count=3,
+                reflection_count=1,
                 retrieval_count=min(12, max(1, total_memories)),
                 time_step=time_step,
             )
