@@ -9,15 +9,15 @@ from __future__ import annotations
 import re
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
-_REPORTED_CONTENT = re.compile(
-    r"\b(?:it|the\s+(?:message|email|text|note))\s+says?\b",
-    re.IGNORECASE,
-)
-_LINK_OFFER = re.compile(
-    r"\b(?:here(?:'s|\s+is)|this\s+is)\s+(?:a|the)\s+link\b",
-    re.IGNORECASE,
-)
+_REPORTED_CONTENT = re.compile(r"\b(?:it|the\s+(?:message|email|text|note))\s+says?\b", re.IGNORECASE)
+_LINK_OFFER = re.compile(r"\b(?:here(?:'s|\s+is)|this\s+is)\s+(?:a|the)\s+link\b", re.IGNORECASE)
 _URL = re.compile(r"https?://[^\s)\]>'\"]+|www\.[^\s)\]>'\"]+", re.IGNORECASE)
+_MEDIA_ARTIFACT_CLAIM = re.compile(
+    r"\b(?:here(?:'s|\s+is)|i(?:'ve|\s+have)\s+attached|i(?:'m|\s+am)\s+sending|"
+    r"i\s+want\s+to\s+share)\b[^.!?]{0,100}\b(?:photo|picture|image|video|file|attachment)\b",
+    re.IGNORECASE,
+)
+_MEDIA_WORD = re.compile(r"\b(?:photo|picture|image|video|file|attachment)\b", re.IGNORECASE)
 _FILLER = {
     "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
     "has", "have", "he", "her", "here", "him", "his", "i", "in", "is", "it",
@@ -59,6 +59,13 @@ def _has_unsupported_link_offer(text: str, support_text: str) -> bool:
     return not urls.issubset(support_urls)
 
 
+def _has_unsupported_media_artifact(text: str, support_text: str) -> bool:
+    candidate = str(text or "")
+    if not _MEDIA_ARTIFACT_CLAIM.search(candidate):
+        return False
+    return not bool(_MEDIA_WORD.search(str(support_text or "")))
+
+
 def candidate_external_grounding_blocker(
     text: str,
     support_text: str,
@@ -71,4 +78,6 @@ def candidate_external_grounding_blocker(
         return "unsupported-reported-content"
     if _has_unsupported_link_offer(text, support_text):
         return "unsupported-link-offer"
+    if _has_unsupported_media_artifact(text, support_text):
+        return "unsupported-media-artifact"
     return None
