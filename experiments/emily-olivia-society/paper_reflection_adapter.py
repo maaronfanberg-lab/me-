@@ -66,9 +66,11 @@ def maybe_reflect(agent, time_step: int) -> bool:
     Earlier Community builds persisted a threshold of 12, which was mismatched
     to Stanford's larger poignancy scale and could cause reflection after a
     single observation. Treat that legacy low value as a migration marker and
-    restore the paper-scale threshold of 150. Blank or malformed reflection
-    output is removed rather than becoming durable memory; no substitute insight
-    or authored fallback is invented.
+    restore the paper-scale threshold of 150. The local 1B model is asked for
+    one insight per event so the singular Stanford prompt can finish inside the
+    bounded generation budget instead of truncating a three-item batch. Blank or
+    malformed output is removed rather than becoming durable memory; no
+    substitute insight or authored fallback is invented.
     """
     scratch = agent.brain.scratch
     last_step = int(scratch.get("reflection_last_step", 0) or 0)
@@ -104,7 +106,7 @@ def maybe_reflect(agent, time_step: int) -> bool:
     try:
         agent.brain.memory_stream.reflect(
             anchor=anchor,
-            reflection_count=3,
+            reflection_count=1,
             retrieval_count=min(12, max(1, total_memories)),
             time_step=time_step,
         )
