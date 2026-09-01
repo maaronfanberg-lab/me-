@@ -1,0 +1,51 @@
+{
+  "experiment": "endogenous_semantic_refractory_v8_prospective",
+  "preregistered_after_development_calibration": true,
+  "development_pin": "experiments/emily-olivia-society/endogenous_semantic_refractory_calibration_v7_pin.json",
+  "candidate": {
+    "refractory_decay": 0.5,
+    "refractory_penalty": 1.0,
+    "k": 4
+  },
+  "evidence": {
+    "required_source": "native_retrieval_time_metadata",
+    "legacy_checkpoint_reconstruction_allowed": false,
+    "must_postdate_preregistration_commit": true,
+    "minimum_exact_turns": 12,
+    "one_contiguous_session_epoch": true,
+    "accumulated_copy_counts_as_new_replica": false,
+    "content_hash_verification_required": true
+  },
+  "metrics": {
+    "semantic_representation": "dialogue_attractor.content_tokens adjacent meaningful rooted pairs",
+    "relative_pair_overlap_reduction_minimum": 0.20,
+    "immediate_retrieval_utility_ratio_minimum": 0.95,
+    "future_rank_utility_ratio_minimum": 0.95,
+    "future_horizon_ticks": 4,
+    "future_discount": 0.8
+  },
+  "fail_closed_conditions": [
+    "missing native retrieval metadata",
+    "content hash mismatch",
+    "fewer than 12 exact usable turns",
+    "mixed or ambiguous session epoch",
+    "artifact predates preregistration",
+    "candidate parameters differ from preregistration",
+    "metric computation is non-finite or baseline denominator is invalid"
+  ],
+  "required_boundaries": {
+    "produced_dialogue": false,
+    "wrote_live_memory": false,
+    "activated_live_workspace": false,
+    "activated_shadow_mode_during_test": false,
+    "starts_community_run": false,
+    "alters_the_room": false
+  },
+  "decision": {
+    "all_gates_required": true,
+    "prospective_pass_can_permit_observational_shadow_only": true,
+    "prospective_pass_can_permit_live_behavioral_influence": false,
+    "default_shadow_mode_permitted": false,
+    "default_live_activation_permitted": false
+  }
+}
