@@ -7,6 +7,12 @@ on:
       - 'experiments/emily-olivia-society/endogenous_semantic_refractory_v8_preregistration.json'
       - 'experiments/emily-olivia-society/endogenous_semantic_refractory_v8_gate_state.json'
       - 'experiments/emily-olivia-society/test_endogenous_semantic_refractory_v8.py'
+      - 'experiments/emily-olivia-society/test_endogenous_v8_live_isolation.py'
+      - 'experiments/emily-olivia-society/stanford_native_cycle.py'
+      - 'experiments/emily-olivia-society/community_cycle.py'
+      - 'experiments/emily-olivia-society/community_session.py'
+      - 'experiments/emily-olivia-society/first_exchange.py'
+      - '.github/workflows/emily-olivia-endogenous-v8-prospective.yml'
       - '.github/workflows/emily-olivia-endogenous-v8-test.yml'
   workflow_dispatch:
 
@@ -23,6 +29,7 @@ jobs:
           fetch-depth: 1
           sparse-checkout-cone-mode: false
           sparse-checkout: |
+            .github/workflows/emily-olivia-endogenous-v8-prospective.yml
             experiments/emily-olivia-society/dialogue_attractor.py
             experiments/emily-olivia-society/endogenous_workspace.py
             experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py
@@ -32,16 +39,22 @@ jobs:
             experiments/emily-olivia-society/endogenous_semantic_refractory_v8.py
             experiments/emily-olivia-society/endogenous_semantic_refractory_v8_preregistration.json
             experiments/emily-olivia-society/endogenous_semantic_refractory_v8_gate_state.json
+            experiments/emily-olivia-society/stanford_native_cycle.py
+            experiments/emily-olivia-society/community_cycle.py
+            experiments/emily-olivia-society/community_session.py
+            experiments/emily-olivia-society/first_exchange.py
             experiments/emily-olivia-society/test_endogenous_semantic_refractory_v8.py
-      - name: Compile prospective evaluator
+            experiments/emily-olivia-society/test_endogenous_v8_live_isolation.py
+      - name: Compile prospective evaluator and guards
         working-directory: experiments/emily-olivia-society
         run: |
           python3 -m py_compile \
             endogenous_semantic_refractory_v8.py \
-            test_endogenous_semantic_refractory_v8.py
+            test_endogenous_semantic_refractory_v8.py \
+            test_endogenous_v8_live_isolation.py
       - name: Run prospective fail-closed tests
         working-directory: experiments/emily-olivia-society
-        run: python3 -m unittest -v test_endogenous_semantic_refractory_v8.py
+        run: python3 -m unittest -v test_endogenous_semantic_refractory_v8.py test_endogenous_v8_live_isolation.py
       - name: Enforce inactive gate state
         working-directory: experiments/emily-olivia-society
         run: |
