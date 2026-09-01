@@ -58,7 +58,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 1,
+  "completed_reply_turns": 2,
   "continuous_seconds": 18000,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -79,15 +79,24 @@
       "to_name": "Emily",
       "content": "Emily, I'm here. What's the matter? You always talk to me, but... where are you right now?",
       "created_at": "2026-09-01T19:15:00.244170+00:00"
+    },
+    {
+      "id": 3,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "I'm here. Olivia, are you ok? You can talk to me.",
+      "created_at": "2026-09-01T19:15:04.197414+00:00"
     }
   ],
   "latest_turn": {
-    "agent": "Olivia",
-    "time_step": 2,
+    "agent": "Emily",
+    "time_step": 3,
     "observation": {
       "self": {
-        "id": 2,
-        "name": "Olivia"
+        "id": 1,
+        "name": "Emily"
       },
       "participants": [
         {
@@ -101,52 +110,63 @@
       ],
       "inbox": [
         {
-          "id": 1,
-          "from_id": 1,
-          "from_name": "Emily",
-          "to_id": 2,
-          "to_name": "Olivia",
-          "content": "Olivia, where are you?",
-          "created_at": "2026-09-01T19:14:52.372395+00:00"
+          "id": 2,
+          "from_id": 2,
+          "from_name": "Olivia",
+          "to_id": 1,
+          "to_name": "Emily",
+          "content": "Emily, I'm here. What's the matter? You always talk to me, but... where are you right now?",
+          "created_at": "2026-09-01T19:15:00.244170+00:00"
         }
       ]
     },
     "retrieved_memories": [
-      "Olivia observes a message from Emily: Olivia, where are you?"
+      "Emily observes that the community contains Emily and Olivia and there are no new addressed messages.",
+      "Emily observes a message from Olivia: Emily, I'm here. What's the matter? You always talk to me, but... where are you right now?"
     ],
     "retrieved_memory_evidence": [
       {
         "retrieval_rank": 1,
-        "content_hash": "b56231083be070bbc0a8",
+        "content_hash": "921549e26cae5d2dfee6",
         "stanford_node_id": 0,
         "stanford_node_type": "observation",
-        "stanford_importance_raw": 90.0,
-        "stanford_created": 2,
-        "stanford_last_retrieved": 2,
-        "observed_time_step": 2
+        "stanford_importance_raw": 25.0,
+        "stanford_created": 1,
+        "stanford_last_retrieved": 1,
+        "observed_time_step": 3
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "183edb46608f9c90921c",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 3
       }
     ],
     "action": {
       "type": "message",
-      "recipient_id": 1,
-      "content": "Emily, I'm here. What's the matter? You always talk to me, but... where are you right now?",
+      "recipient_id": 2,
+      "content": "I'm here. Olivia, are you ok? You can talk to me.",
       "cognition": {
-        "reaction": "chat with Emily",
+        "reaction": "chat with Olivia",
         "reflected": false,
-        "plan_present": false,
+        "plan_present": true,
         "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
       }
     },
     "action_result": {
       "success": true,
       "message": {
-        "id": 2,
-        "from_id": 2,
-        "from_name": "Olivia",
-        "to_id": 1,
-        "to_name": "Emily",
-        "content": "Emily, I'm here. What's the matter? You always talk to me, but... where are you right now?",
-        "created_at": "2026-09-01T19:15:00.244170+00:00"
+        "id": 3,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "I'm here. Olivia, are you ok? You can talk to me.",
+        "created_at": "2026-09-01T19:15:04.197414+00:00"
       }
     },
     "consumed_inbound": true
