@@ -12,6 +12,7 @@ from reflection_hygiene import sanitize_memory_stream
 HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
 _EMPTY_EMBEDDING_ERROR = "Input text must be a non-empty string."
+_MAX_REFLECTION_ATTEMPTS = 8
 
 
 def node_counts(brain) -> dict[str, int]:
@@ -34,13 +35,7 @@ def relevant_memories(agent, other_name: str, time_step: int, n_count: int = 12)
 
 
 def _run_reflection_pass(agent, anchor: str, time_step: int, retrieval_count: int) -> None:
-    """Run one Stanford reflection pass and discard malformed generated nodes.
-
-    A malformed item may be appended immediately before Stanford's embedding
-    boundary rejects it. The hygiene pass removes such partial/parser-scaffold
-    nodes and preserves any valid reflections already produced. No substitute
-    reflection content is generated.
-    """
+    """Run one Stanford reflection pass and discard malformed generated nodes."""
     install_natural_reflection_parser()
     try:
         agent.brain.memory_stream.reflect(
@@ -71,23 +66,26 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
             "retrieved_before": [],
         }
 
-    anchor = f"What can {agent.name} infer from her interactions with {other_name}?"
+    anchor = f"{agent.name}'s higher-level understanding of interactions with {other_name}"
     retrieval_count = min(12, max(1, before["total"]))
 
-    # Resample the same research-shaped reflection request only when an entire
-    # pass yields no clean reflection. This is not authored fallback content.
-    for attempt in range(3):
+    # Resample only when a complete pass yields no clean reflection. The guarded
+    # parser may accept the model's own declarative prose, but malformed or
+    # question-shaped output remains rejected. Every retry stays at the same
+    # logical timestep and no fallback reflection content is authored here.
+    for _attempt in range(_MAX_REFLECTION_ATTEMPTS):
         _run_reflection_pass(
             agent,
             anchor,
-            time_step=time_step + attempt,
+            time_step=time_step,
             retrieval_count=retrieval_count,
         )
         if node_counts(agent.brain)["reflection"] > before["reflection"]:
             break
     else:
         raise RuntimeError(
-            f"Stanford reflection produced no clean persisted insight for {agent.name} after 3 attempts."
+            f"Stanford reflection produced no clean persisted insight for {agent.name} after "
+            f"{_MAX_REFLECTION_ATTEMPTS} same-anchor attempts."
         )
 
     agent.brain.save(str(agent.workspace))
@@ -99,9 +97,6 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
         if node.node_type == "reflection"
     ][before["reflection"] :]
 
-    # Reload from disk using Stanford's own persistence loader. This verifies
-    # the reflection survives process boundaries rather than merely existing
-    # in the current Python object.
     from genagents.genagents import GenerativeAgent
 
     reloaded = GenerativeAgent(str(agent.workspace))
@@ -110,7 +105,7 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
     relevant_after_reload = relevant_memories(
         type("ReloadedAgent", (), {"brain": reloaded})(),
         other_name,
-        time_step + 3,
+        time_step,
     )
 
     if after_reload["reflection"] < after_save["reflection"]:

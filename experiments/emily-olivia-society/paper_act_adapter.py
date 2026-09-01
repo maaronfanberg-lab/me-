@@ -19,6 +19,7 @@ never produces a usable line.
 """
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 import json
 import os
 import re
@@ -154,10 +155,6 @@ def _request_completion(prompt: str, agent_name: str, other_name: str) -> str:
     text = data.get("content") if isinstance(data, dict) else None
     if not isinstance(text, str):
         raise RuntimeError(f"BitNet paper-act completion returned malformed content: {data!r}")
-    # A valid stochastic sample can immediately hit a role/quote stop token. In
-    # that case llama-server returns an empty string. Let the paper-act caller
-    # treat it as an unusable sample and resample the same research-derived
-    # prompt rather than turning one empty draw into a session-wide failure.
     return text.strip()
 
 
@@ -167,8 +164,6 @@ def _clean_line(raw: object, agent_name: str) -> str:
     text = raw.strip().lstrip('"').strip()
     if not text:
         return ""
-    # The paper's own clean-up takes text only up to the next quote. Do the same,
-    # then keep only the completed spoken line if the model emits extra text.
     text = text.split('"', 1)[0].strip()
     text = text.splitlines()[0].strip() if text.splitlines() else ""
     text = re.sub(rf"^\s*{re.escape(agent_name)}\s*:\s*", "", text, flags=re.IGNORECASE).strip()
@@ -176,13 +171,7 @@ def _clean_line(raw: object, agent_name: str) -> str:
 
 
 def _is_sentence_like_short_turn(text: str) -> bool:
-    """Permit genuine terse speech while rejecting bare topic labels.
-
-    Small local models sometimes emit note-like noun phrases such as
-    ``Morning routine``. Those are not conversational turns. Short greetings,
-    acknowledgements, and contracted spoken clauses remain valid. This is a
-    structural quality boundary only; it supplies no replacement wording.
-    """
+    """Permit genuine terse speech while rejecting bare topic labels."""
     words = _base._normalize_words(text)
     if len(words) >= 4:
         return True
@@ -260,15 +249,7 @@ def is_usable_spoken_action(
     agent_name: str = "",
     other_name: str = "",
 ) -> bool:
-    """Validate a paper-derived line without dictating its vocabulary.
-
-    The older local dialogue gate required an output to reuse a literal content
-    word from the inbound message. That is useful for a tightly steered fallback
-    generator but wrong for the paper's transcript-completion act: a natural
-    reply can be semantically relevant with zero lexical overlap. Keep the
-    structural, role-drift, length, and service-language checks by validating
-    with an empty inbound, then independently reject direct/near-direct echoes.
-    """
+    """Validate a paper-derived line without dictating its vocabulary."""
     if not _base._is_usable_utterance(text, "", agent_name, other_name):
         return False
     if _CONTROL_SCAFFOLD.search(text) or _has_pathological_repetition(text):
@@ -297,7 +278,12 @@ def is_usable_spoken_action(
 
 
 def _is_recent_echo(text: str, dialogue_history) -> bool:
-    """Reject recent exact/near copies without steering what the replacement says."""
+    """Reject exact, subset, and long-sequence copies of recent dialogue.
+
+    This is a diversity boundary, not a topic or vocabulary requirement. A
+    small local model can otherwise shorten the previous speaker's sentence by
+    one clause on every turn and pass a literal exact-match check forever.
+    """
     output_words = _base._normalize_words(text)
     if not output_words:
         return True
@@ -308,12 +294,23 @@ def _is_recent_echo(text: str, dialogue_history) -> bool:
             continue
         if output_words == prior_words:
             return True
-        if len(output_words) >= 4 and len(prior_words) >= 4:
-            prior_set = set(prior_words)
-            shared = len(output_set & prior_set)
-            smaller = max(1, min(len(output_set), len(prior_set)))
-            if shared / smaller >= 0.9 and abs(len(output_words) - len(prior_words)) <= 4:
-                return True
+
+        smaller_len = min(len(output_words), len(prior_words))
+        if smaller_len < 8:
+            continue
+
+        matcher = SequenceMatcher(None, output_words, prior_words, autojunk=False)
+        longest = matcher.find_longest_match().size
+        if longest >= max(8, int(smaller_len * 0.65)):
+            return True
+        if matcher.ratio() >= 0.78:
+            return True
+
+        prior_set = set(prior_words)
+        shared = len(output_set & prior_set)
+        smaller_unique = max(1, min(len(output_set), len(prior_set)))
+        if shared / smaller_unique >= 0.88:
+            return True
     return False
 
 
