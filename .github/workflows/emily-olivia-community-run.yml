@@ -24,9 +24,9 @@ jobs:
     env:
       AGENTSOCIETY_LLM_API_KEY: local-bitnet-unused
       COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
-      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf
       COMMUNITY_BITNET_PORT: '8080'
-      COMMUNITY_BITNET_START_TIMEOUT: '900'
+      COMMUNITY_BITNET_START_TIMEOUT: '1200'
       COMMUNITY_GENERATION_TIMEOUT: '900'
       COMMUNITY_SOCIAL_RPC_TIMEOUT: '60'
       COMMUNITY_MAX_TOKENS: '64'
@@ -62,22 +62,24 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v11
-          key: community-runtime-bitnet-v11-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+            experiments/emily-olivia-society/.bootstrap-ready-v12
+          key: community-runtime-bitnet-v12-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
           restore-keys: |
+            community-runtime-bitnet-v12-${{ runner.os }}-py311-
             community-runtime-bitnet-v11-${{ runner.os }}-py311-
 
-      - name: Bootstrap pinned research code and BitNet
+      - name: Bootstrap pinned research code and Falcon3 10B BitNet
         working-directory: experiments/emily-olivia-society
-        run: timeout 55m bash bootstrap_upstreams.sh
+        run: timeout 65m bash bootstrap_upstreams.sh
 
       - name: Verify build artifacts before caching
         working-directory: experiments/emily-olivia-society
         run: |
           test -x vendor/BitNet/build/bin/llama-cli
           test -x vendor/BitNet/build/bin/llama-server
-          test -s models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
-          test -f .bootstrap-ready-v11
+          test -s models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf
+          test -f .bootstrap-ready-v12
+          echo 'e37945ee82693a6541b5fa5484f0e24787c04a9ce95e6e377f68a6b15f139c1f  models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf' | sha256sum -c -
           grep -q 'COMMUNITY_BITNET_HTTP_V4' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Save runtime cache
@@ -89,7 +91,7 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v11
+            experiments/emily-olivia-society/.bootstrap-ready-v12
           key: ${{ steps.bitnet-cache.outputs.cache-primary-key }}
 
       - name: Start and probe BitNet
@@ -130,7 +132,7 @@ jobs:
           OPENER="${{ github.event.inputs.opener }}"
           .venv-stanford/bin/python community_session.py \
             --run \
-            --continuous-seconds 19200 \
+            --continuous-seconds 17400 \
             --turn-delay-seconds 0 \
             --opener "$OPENER"
 
