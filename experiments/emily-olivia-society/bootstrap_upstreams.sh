@@ -6,6 +6,9 @@ VENDOR="$HERE/vendor"
 AS_VENV="$HERE/.venv-agentsociety"
 STANFORD_VENV="$HERE/.venv-stanford"
 STANFORD_COMMIT="96854071ef4c2d79c93144c973c7820722d52bab"
+PAPER_REPO="https://github.com/joonspk-research/generative_agents.git"
+PAPER_COMMIT="fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+PAPER_DIR="$VENDOR/stanford-generative-agents-paper"
 BITNET_REPO="https://github.com/raphaelbgr/BitNet.git"
 BITNET_COMMIT="baecdf7d1e4d404d30f80ae5b26f486ca833ae03"
 BITNET_DIR="$VENDOR/BitNet"
@@ -13,7 +16,7 @@ MODEL_DIR="$HERE/models/Falcon3-1B-Instruct-1.58bit"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
 BITNET_SOURCE_REPO="tiiuae/Falcon3-1B-Instruct-1.58bit-GGUF"
 BITNET_SOURCE_REVISION="4ec8c66"
-READY_MARKER="$HERE/.bootstrap-ready-v10"
+READY_MARKER="$HERE/.bootstrap-ready-v11"
 PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v14"
 
 restore_real_cli() {
@@ -32,13 +35,14 @@ runtime_ready() {
   [[ -x "$BITNET_DIR/build/bin/llama-server" ]] || return 1
   [[ -s "$MODEL_FILE" ]] || return 1
   [[ "$(git -C "$VENDOR/stanford-genagents" rev-parse HEAD 2>/dev/null || true)" == "$STANFORD_COMMIT" ]] || return 1
+  [[ "$(git -C "$PAPER_DIR" rev-parse HEAD 2>/dev/null || true)" == "$PAPER_COMMIT" ]] || return 1
   [[ "$(git -C "$BITNET_DIR" rev-parse HEAD 2>/dev/null || true)" == "$BITNET_COMMIT" ]] || return 1
 }
 
 restore_real_cli
 if runtime_ready; then
   python3 "$HERE/patch_stanford_local.py"
-  echo "Reusing cached portable Community runtime and Falcon BitNet build."
+  echo "Reusing cached portable Community runtime and pinned Stanford sources."
   exit 0
 fi
 
@@ -46,6 +50,7 @@ rm -f \
   "$HERE/.bootstrap-ready-v7" \
   "$HERE/.bootstrap-ready-v8" \
   "$HERE/.bootstrap-ready-v9" \
+  "$HERE/.bootstrap-ready-v10" \
   "$READY_MARKER"
 mkdir -p "$VENDOR" "$MODEL_DIR"
 
@@ -62,6 +67,22 @@ if [[ "$(git -C "$VENDOR/stanford-genagents" rev-parse HEAD 2>/dev/null || true)
   git -C "$VENDOR/stanford-genagents" fetch --depth 1 origin "$STANFORD_COMMIT"
   git -C "$VENDOR/stanford-genagents" checkout --detach "$STANFORD_COMMIT"
 fi
+
+# Keep the original paper implementation beside the later Stanford HCI package.
+# We do not install its old web/game dependency stack; adapters can reuse the
+# pinned Apache-2.0 source/templates while the modern genagents runtime handles
+# memory, retrieval, reflection, and utterance generation.
+if [[ ! -d "$PAPER_DIR/.git" ]]; then
+  git clone "$PAPER_REPO" "$PAPER_DIR"
+fi
+if [[ "$(git -C "$PAPER_DIR" rev-parse HEAD 2>/dev/null || true)" != "$PAPER_COMMIT" ]]; then
+  git -C "$PAPER_DIR" fetch --depth 1 origin "$PAPER_COMMIT"
+  git -C "$PAPER_DIR" checkout --detach "$PAPER_COMMIT"
+fi
+[[ "$(git -C "$PAPER_DIR" rev-parse HEAD)" == "$PAPER_COMMIT" ]] || {
+  echo "Original Stanford Generative Agents source is not at pinned commit $PAPER_COMMIT" >&2
+  exit 1
+}
 
 if [[ ! -x "$STANFORD_VENV/bin/python" ]]; then
   python3 -m venv "$STANFORD_VENV"
@@ -188,6 +209,7 @@ touch "$READY_MARKER"
 
 printf 'AgentSociety2: 2.8.4 -> %s\n' "$AS_VENV"
 printf 'Stanford genagents: %s -> %s\n' "$STANFORD_COMMIT" "$STANFORD_VENV"
+printf 'Stanford paper source: %s -> %s\n' "$PAPER_COMMIT" "$PAPER_DIR"
 printf 'BitNet: %s -> %s\n' "$BITNET_COMMIT" "$BITNET_DIR"
 printf 'Falcon BitNet model: %s @ %s -> %s\n' "$BITNET_SOURCE_REPO" "$BITNET_SOURCE_REVISION" "$MODEL_FILE"
 printf 'Portable build signature: %s\n' "$PORTABLE_BUILD_SIGNATURE"
