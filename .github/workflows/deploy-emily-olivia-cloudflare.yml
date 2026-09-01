@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'cloudflare/emily-olivia-community/**'
+      - 'experiments/emily-olivia-society/viewer.html'
       - '.github/workflows/deploy-emily-olivia-cloudflare.yml'
   workflow_dispatch:
 
@@ -47,7 +48,7 @@ jobs:
         shell: bash
         run: npx --yes wrangler@latest whoami
 
-      - name: Deploy persistent community
+      - name: Deploy read-only Community replay viewer
         id: deploy
         working-directory: cloudflare/emily-olivia-community
         shell: bash
@@ -59,24 +60,27 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed URL: $url"
 
-      - name: Start Emily and Olivia
+      - name: Verify exact-replay surface and retired generator
         env:
           APP_URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --retry 8 --retry-delay 2 "$APP_URL/start" | tee /tmp/start.json
-          grep -q '"running": true' /tmp/start.json
-          sleep 5
-          curl -fsS "$APP_URL/state" | tee /tmp/state.json
-          grep -q '"running": true' /tmp/state.json
-          echo "Persistent community started at $APP_URL"
+          curl -fsS --retry 8 --retry-delay 2 "$APP_URL/" | tee /tmp/viewer.html
+          grep -q 'Read-only live view of their persisted conversation' /tmp/viewer.html
+          curl -fsS --retry 8 --retry-delay 2 "$APP_URL/state" | tee /tmp/state.json
+          python3 -m json.tool /tmp/state.json >/dev/null
+          code=$(curl -sS -o /tmp/start-retired.txt -w '%{http_code}' "$APP_URL/start")
+          test "$code" = "410" || { echo "Expected retired /start to return 410, got $code"; exit 1; }
+          grep -q 'Retired duplicate generator' /tmp/start-retired.txt
 
       - name: Summary
         env:
           APP_URL: ${{ steps.deploy.outputs.url }}
         run: |
-          echo "### Emily + Olivia Cloudflare community" >> "$GITHUB_STEP_SUMMARY"
-          echo "Persistent Durable Object loop started." >> "$GITHUB_STEP_SUMMARY"
+          echo "### Emily + Olivia Cloudflare viewer" >> "$GITHUB_STEP_SUMMARY"
+          echo "Read-only mirror of the persisted Stanford Community replay." >> "$GITHUB_STEP_SUMMARY"
+          echo "No independent Cloudflare conversation generator is started." >> "$GITHUB_STEP_SUMMARY"
           echo "Viewer: $APP_URL/" >> "$GITHUB_STEP_SUMMARY"
-          echo "State: $APP_URL/state" >> "$GITHUB_STEP_SUMMARY"
+          echo "Snapshot: $APP_URL/state" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact stream: $APP_URL/stream" >> "$GITHUB_STEP_SUMMARY"
