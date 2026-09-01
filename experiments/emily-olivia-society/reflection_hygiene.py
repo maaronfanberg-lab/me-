@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Reflection-memory hygiene for the Emily + Olivia Stanford runtime.
+"""Memory hygiene for the Emily + Olivia Stanford runtime.
 
-The local BitNet model occasionally returns parser scaffolding or malformed JSON
-where Stanford expects one natural-language reflection string. Such output is
-not cognition and must never become durable autobiographical memory.
+The local BitNet model can occasionally return parser scaffolding, malformed
+reflection output, or a spoken line that accidentally contains serialized
+memory text. None of those artifacts should become durable autobiographical
+memory.
 
-This module does not generate, rewrite, or replace memories. It only removes
-malformed reflection nodes while preserving observations and clean reflections.
+This module never generates, rewrites, or replaces memories. It removes only
+malformed reflection nodes and demonstrably corrupted message-observation nodes,
+while preserving clean observations and clean reflections.
 """
 from __future__ import annotations
 
@@ -27,6 +29,18 @@ _INTERROGATIVE_START = re.compile(
     r"^(?:what|why|how|when|where|who|which|would|could|should|can|do|does|did|is|are|am|was|were|will|have|has|had)\b",
     re.IGNORECASE,
 )
+_MESSAGE_OBSERVATION = re.compile(
+    r"^(?:Emily|Olivia) observes a message from (?:Emily|Olivia):\s*(.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+_FUSED_OBSERVATION = re.compile(
+    r"\|\s*(?:Emily|Olivia)\s+observes(?:\s+a\s+message\s+from|\s+that)\b",
+    re.IGNORECASE,
+)
+_INCOMPLETE_MESSAGE_END = re.compile(
+    r"(?:[,;:]|\b(?:because|although|unless|until|while|when|if)\s*|\b(?:feel|felt|seem|seemed)\s+like\s*)$",
+    re.IGNORECASE,
+)
 
 
 def is_clean_reflection_text(content: object) -> bool:
@@ -41,6 +55,8 @@ def is_clean_reflection_text(content: object) -> bool:
     lowered = text.casefold()
     if any(marker in lowered for marker in _PROMPT_OR_FORMAT_MARKERS):
         return False
+    if _FUSED_OBSERVATION.search(text):
+        return False
     # Stanford reflection memory should contain an insight, not the model echoing
     # or inventing a focal-point question. Question-shaped nodes are prompt/model
     # scaffolding and become retrieval poison if persisted as autobiographical fact.
@@ -53,11 +69,39 @@ def is_clean_reflection_text(content: object) -> bool:
     return True
 
 
-def sanitize_memory_stream(memory_stream) -> list[str]:
-    """Remove malformed reflection nodes and rebuild Stanford's indices.
+def is_clean_observation_text(content: object) -> bool:
+    """Reject only message observations that are provably serialization/cutoff debris.
 
-    Returns the removed reflection contents as diagnostic evidence. No new
-    content is generated and observation nodes are never removed here.
+    Presence/no-message observations and other normal Stanford observations are
+    left alone. For addressed-message observations, a second serialized
+    ``Emily/Olivia observes`` clause or a strong truncation suffix proves that
+    the delivered model line was not a complete peer utterance.
+    """
+    if not isinstance(content, str):
+        return False
+    text = content.strip()
+    if not text:
+        return False
+    match = _MESSAGE_OBSERVATION.match(text)
+    if not match:
+        return True
+    message = match.group(1).strip()
+    if not message:
+        return False
+    if _FUSED_OBSERVATION.search(message):
+        return False
+    if _INCOMPLETE_MESSAGE_END.search(message):
+        return False
+    return True
+
+
+def sanitize_memory_stream(memory_stream) -> list[str]:
+    """Remove malformed derived cognition and corrupted message observations.
+
+    Returns removed contents as diagnostic evidence. Nothing is rewritten or
+    replaced. Clean observation evidence is preserved; only observations that
+    contain serialized peer-memory scaffolding or a strong cutoff marker are
+    removed, along with malformed reflections.
     """
     original_nodes = list(memory_stream.seq_nodes)
     kept = []
@@ -66,10 +110,15 @@ def sanitize_memory_stream(memory_stream) -> list[str]:
 
     for node in original_nodes:
         old_id = int(getattr(node, "node_id", len(kept)))
-        if getattr(node, "node_type", None) == "reflection" and not is_clean_reflection_text(
-            getattr(node, "content", None)
-        ):
-            removed.append(str(getattr(node, "content", ""))[:500])
+        node_type = getattr(node, "node_type", None)
+        content = getattr(node, "content", None)
+        invalid = (
+            node_type == "reflection" and not is_clean_reflection_text(content)
+        ) or (
+            node_type == "observation" and not is_clean_observation_text(content)
+        )
+        if invalid:
+            removed.append(str(content or "")[:500])
             continue
         old_to_new[old_id] = len(kept)
         kept.append(node)
