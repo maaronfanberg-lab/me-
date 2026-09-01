@@ -40,7 +40,6 @@ _CONTROL_SCAFFOLD = re.compile(
     r"\[Fill\s+in\])",
     re.IGNORECASE | re.MULTILINE,
 )
-
 _MEMORY_SCAFFOLD = re.compile(
     r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
     r"(?:^|\n)\s*(?:SELF|PARTNER|Self-reply|Partner-reply|Answer|Example)\s*:|"
@@ -126,14 +125,7 @@ def _generate_non_attractor_spoken_action(
     inbound: str,
     cognitive_context: str,
 ) -> str:
-    """Resample paper-derived speech whenever a structural dialogue blocker fires.
-
-    Every attempt uses the same research-derived prompt and the model's own
-    output. The guard only rejects bad samples; it never supplies replacement
-    dialogue or prescribes a conversational move. Exhaustion of the inner
-    stochastic paper sampler is itself retryable here; transport/runtime errors
-    still propagate immediately.
-    """
+    """Resample paper-derived speech whenever a structural dialogue blocker fires."""
     rejected: list[str] = []
     for _attempt in range(_MAX_ATTRACTOR_RESAMPLES):
         try:
@@ -228,14 +220,6 @@ def choose_opening_action(
     memory = observation_text(agent, observation)
     agent.brain.remember(memory, time_step=time_step)
 
-    query = f"Current interaction with {other.name}"
-    retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
-    relevant = [
-        str(getattr(node, "content", "")).strip()
-        for node in retrieved.get(query, [])
-        if str(getattr(node, "content", "")).strip()
-    ]
-
     reaction = react_to_presence(agent, other.name, time_step)
     reflected = maybe_reflect(agent, time_step)
     plan_context = planning_context(agent, other.name, time_step)
@@ -256,7 +240,7 @@ def choose_opening_action(
         "recipient_id": other.agent_id,
         "content": text,
         "observation_memory": memory,
-        "retrieved_memories": relevant,
+        "retrieved_memories": list(reaction.get("retrieved", [])),
         "cognition": {
             "reaction": reaction.get("mode"),
             "reflected": reflected,
