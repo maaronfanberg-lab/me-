@@ -11,6 +11,8 @@ from difflib import SequenceMatcher
 from functools import wraps
 import re
 
+from external_reality_guard import candidate_external_grounding_blocker
+
 _MAX_BOUNDARY_ATTEMPTS = 3
 _SPEECH_EXHAUSTION_MARKER = "paper-derived Stanford act produced no usable spoken line"
 
@@ -173,7 +175,14 @@ def install_spoken_action_guard(generator):
                     continue
                 raise
             support = _support_text(inbound, dialogue_history, cognitive_context)
+            external_reason = candidate_external_grounding_blocker(
+                text,
+                support,
+                agent_name=getattr(agent, "name", ""),
+                other_name=getattr(other, "name", ""),
+            )
             checks = (
+                (external_reason is not None, external_reason or "external-grounding"),
                 (_addresses_self_as_peer(text, getattr(agent, "name", "")), "self-address"),
                 (_reintroduces_known_self(text, getattr(agent, "name", ""), dialogue_history), "self-reintroduction"),
                 (_has_self_object_role_confusion(text), "self-object-role-confusion"),
