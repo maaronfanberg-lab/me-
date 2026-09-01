@@ -27,7 +27,7 @@ jobs:
       COMMUNITY_BITNET_PORT: '8080'
       COMMUNITY_BITNET_START_TIMEOUT: '900'
       COMMUNITY_GENERATION_TIMEOUT: '900'
-      COMMUNITY_MAX_TOKENS: '64'
+      COMMUNITY_MAX_TOKENS: '128'
       TZ: America/Chicago
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
       - name: Validate Community Python before expensive work
         working-directory: experiments/emily-olivia-society
         run: |
-          python3 -m py_compile bitnet_server.py patch_stanford_local.py community_cycle.py community_session.py controlled_social_space.py first_exchange.py social_bridge.py
+          python3 -m py_compile bitnet_server.py patch_stanford_local.py community_cycle.py community_session.py controlled_social_space.py first_exchange.py social_bridge.py paper_plan_adapter.py paper_react_adapter.py paper_reflection_adapter.py stanford_native_cycle.py
 
       - name: Restore Community runtime and BitNet
         id: community-cache
