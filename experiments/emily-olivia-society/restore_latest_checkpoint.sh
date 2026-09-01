@@ -18,15 +18,29 @@ if [[ -z "${GH_TOKEN:-}" ]]; then
 fi
 
 current_run="${GITHUB_RUN_ID:-}"
+excluded_runs="${COMMUNITY_EXCLUDED_RUNS:-}"
 checkpoint_run=""
 checkpoint_conclusion=""
+
+retry_older_checkpoint() {
+  local bad_run="$1"
+  local reason="$2"
+  echo "Skipping checkpoint run $bad_run: $reason"
+  if [[ -n "${tmp_dir:-}" ]]; then
+    rm -rf "$tmp_dir"
+  fi
+  trap - EXIT
+  export COMMUNITY_EXCLUDED_RUNS="${excluded_runs:+$excluded_runs }$bad_run"
+  exec bash "$0"
+}
+
 # A Community run can preserve many valid live turns and then fail or be replaced
 # later in the same conversation step. Its uploaded workspace is still a valid
-# checkpoint candidate. Select completed runs by recency and let the semantic
-# validator below decide whether their state is safe to restore. Checkpoint v2
-# intentionally quarantines runs from before private daily plans were isolated
-# from spoken-action context; preserving those old turns would faithfully carry
-# planner-generated topic invention into the corrected runtime.
+# checkpoint candidate. Select completed runs by recency and let the structural
+# and semantic validators below decide whether their state is safe to restore.
+# Checkpoint v2 intentionally quarantines runs from before private daily plans
+# were isolated from spoken-action context; preserving those old turns would
+# faithfully carry planner-generated topic invention into the corrected runtime.
 mapfile -t candidate_runs < <(
   gh api --method GET \
     "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=30" \
@@ -38,6 +52,10 @@ for candidate_info in "${candidate_runs[@]:-}"; do
   if [[ -n "$current_run" && "$run_id" == "$current_run" ]]; then
     continue
   fi
+  case " $excluded_runs " in
+    *" $run_id "*) continue ;;
+  esac
+
   artifact_count="$(
     gh api --method GET \
       "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
@@ -64,7 +82,7 @@ for candidate_info in "${candidate_runs[@]:-}"; do
 done
 
 if [[ -z "$checkpoint_run" ]]; then
-  echo "No compatible completed Community checkpoint artifact exists. Starting from clean cognition and social state."
+  echo "No compatible valid Community checkpoint artifact remains. Starting from clean cognition and social state."
   rm -rf "$WORKSPACES"
   rm -f "$REPLAY_DIR/social_state.json"
   mkdir -p "$REPLAY_DIR"
@@ -75,7 +93,8 @@ if [[ -z "$checkpoint_run" ]]; then
   "source_run_id": null,
   "source_run_conclusion": null,
   "artifact": "$ARTIFACT_NAME",
-  "reason": "no_compatible_checkpoint_v2",
+  "reason": "no_compatible_valid_checkpoint_v2",
+  "excluded_run_ids": "${excluded_runs}",
   "social_state_restored": false
 }
 JSON
@@ -86,15 +105,16 @@ fi
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
-gh run download "$checkpoint_run" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT_NAME" --dir "$tmp_dir"
+if ! gh run download "$checkpoint_run" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT_NAME" --dir "$tmp_dir"; then
+  retry_older_checkpoint "$checkpoint_run" "artifact download failed"
+fi
 
 candidate="$tmp_dir/workspaces"
 if [[ ! -d "$candidate" ]]; then
   candidate="$(find "$tmp_dir" -type d -name workspaces -print -quit)"
 fi
 if [[ -z "${candidate:-}" || ! -d "$candidate" ]]; then
-  echo "Checkpoint artifact $ARTIFACT_NAME from run $checkpoint_run contains no workspaces directory." >&2
-  exit 3
+  retry_older_checkpoint "$checkpoint_run" "artifact contains no workspaces directory"
 fi
 
 required_files=()
@@ -108,24 +128,28 @@ for agent in emily olivia; do
 done
 for required in "${required_files[@]}"; do
   if [[ ! -s "$required" ]]; then
-    echo "Checkpoint is incomplete: missing or empty $required" >&2
-    exit 4
+    retry_older_checkpoint "$checkpoint_run" "checkpoint is incomplete: missing or empty $required"
   fi
 done
 
-python3 - "${required_files[@]}" <<'PY'
+if ! python3 - "${required_files[@]}" <<'PY'
 import json, sys
 for raw in sys.argv[1:]:
     with open(raw, encoding="utf-8") as handle:
         json.load(handle)
 print("Checkpoint workspace JSON validated.")
 PY
+then
+  retry_older_checkpoint "$checkpoint_run" "workspace JSON is malformed"
+fi
 
 social_state="$(find "$tmp_dir" -type f -path '*/replay/social_state.json' -print -quit)"
 
 # JSON validity is not enough. Early runs contained syntactically valid
-# customer-service boilerplate, malformed reflection JSON, and short attractor loops that
-# repeatedly dragged Emily and Olivia back into unusable dialogue. Never restore those.
+# customer-service boilerplate, malformed reflection JSON, and short attractor
+# loops that repeatedly dragged Emily and Olivia back into unusable dialogue.
+# A contaminated candidate is skipped so an older compatible checkpoint still
+# gets a chance before the runtime falls back to a clean start.
 if ! python3 - "$candidate" "${social_state:-}" <<'PY'
 import json
 import pathlib
@@ -196,28 +220,12 @@ if bad:
 print("Checkpoint semantic dialogue validation passed.")
 PY
 then
-  echo "Prior checkpoint is semantically contaminated; starting Emily and Olivia from clean cognition instead."
-  rm -rf "$WORKSPACES"
-  rm -f "$REPLAY_DIR/social_state.json"
-  mkdir -p "$REPLAY_DIR"
-  cat > "$REPLAY_DIR/checkpoint_restore.json.tmp" <<JSON
-{
-  "mode": "checkpoint_restore",
-  "restored": false,
-  "source_run_id": $checkpoint_run,
-  "source_run_conclusion": "$checkpoint_conclusion",
-  "artifact": "$ARTIFACT_NAME",
-  "reason": "semantic_dialogue_contamination",
-  "social_state_restored": false
-}
-JSON
-  mv "$REPLAY_DIR/checkpoint_restore.json.tmp" "$REPLAY_DIR/checkpoint_restore.json"
-  exit 0
+  retry_older_checkpoint "$checkpoint_run" "semantic dialogue contamination"
 fi
 
 social_restored=false
 if [[ -n "${social_state:-}" && -s "$social_state" ]]; then
-  python3 - "$social_state" <<'PY'
+  if python3 - "$social_state" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as handle:
     state = json.load(handle)
@@ -228,7 +236,12 @@ if not isinstance(inboxes, dict) or not all(isinstance(inboxes.get(key, []), lis
     raise SystemExit("Invalid social state inbox schema")
 print("Checkpoint social state JSON validated.")
 PY
-  social_restored=true
+  then
+    social_restored=true
+  else
+    echo "Checkpoint run $checkpoint_run has invalid social state; restoring cognition without social inbox state."
+    social_state=""
+  fi
 fi
 
 new_workspaces="$HERE/.workspaces.restore.$$"
@@ -252,6 +265,7 @@ cat > "$REPLAY_DIR/checkpoint_restore.json.tmp" <<JSON
   "source_run_id": $checkpoint_run,
   "source_run_conclusion": "$checkpoint_conclusion",
   "artifact": "$ARTIFACT_NAME",
+  "excluded_run_ids": "${excluded_runs}",
   "social_state_restored": $social_restored
 }
 JSON
