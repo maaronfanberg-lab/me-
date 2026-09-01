@@ -19,6 +19,7 @@ import re
 
 from dialogue_attractor import content_tokens
 from reflection_hygiene import is_clean_observation_text, is_clean_reflection_text
+from retrieval_evidence import serialize_retrieval_evidence
 
 _ORIGINAL_RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
 _MESSAGE_OBSERVATION_PREFIX = re.compile(
@@ -33,13 +34,11 @@ _AMBIENT_NO_MESSAGE = re.compile(
 
 
 def _semantic_tokens(content: str) -> set[str]:
-    """Compare retrieved substance rather than Stanford's observation wrapper."""
     text = _MESSAGE_OBSERVATION_PREFIX.sub("", str(content or "").strip())
     return set(content_tokens(text))
 
 
 def _too_similar(candidate: set[str], selected: list[set[str]]) -> bool:
-    """Keep Stanford rank order while preventing one paraphrase cluster monopolizing context."""
     if len(candidate) < 3:
         return False
     for prior in selected:
@@ -57,14 +56,9 @@ def _too_similar(candidate: set[str], selected: list[set[str]]) -> bool:
 
 
 def _clean_memory_nodes(nodes, *, include_ambient: bool):
-    """Expose a structurally clean, non-redundant slice of Stanford retrieval.
-
-    The underlying retrieval ranking is left intact. We only remove unsafe
-    serialization, irrelevant no-message observations, exact duplicates, and
-    near-duplicate paraphrases. No memory is authored or rewritten and no topic
-    is preferred.
-    """
-    out: list[str] = []
+    """Return the exact selected Stanford nodes after hygiene/diversity filtering."""
+    out = []
+    seen_content: set[str] = set()
     selected_tokens: list[set[str]] = []
     for node in nodes or []:
         content = str(getattr(node, "content", "") or "").strip()
@@ -77,12 +71,13 @@ def _clean_memory_nodes(nodes, *, include_ambient: bool):
             continue
         if not include_ambient and node_type == "observation" and _AMBIENT_NO_MESSAGE.search(content):
             continue
-        if content in out:
+        if content in seen_content:
             continue
         tokens = _semantic_tokens(content)
         if _too_similar(tokens, selected_tokens):
             continue
-        out.append(content)
+        out.append(node)
+        seen_content.add(content)
         selected_tokens.append(tokens)
     return out
 
@@ -97,12 +92,14 @@ def _reaction(
     include_ambient: bool,
 ) -> dict:
     retrieved = agent.brain.memory_stream.retrieve([focal], time_step=time_step, n_count=16)
-    memories = _clean_memory_nodes(retrieved.get(focal, []), include_ambient=include_ambient)
+    selected_nodes = _clean_memory_nodes(retrieved.get(focal, []), include_ambient=include_ambient)
+    memories = [str(getattr(node, "content", "") or "").strip() for node in selected_nodes]
     reaction = {
         "event": event,
         "source": other_name,
         "mode": f"chat with {other_name}",
         "retrieved": memories,
+        "retrieved_evidence": serialize_retrieval_evidence(selected_nodes, time_step),
     }
     agent.brain.update_scratch(
         {
@@ -115,7 +112,6 @@ def _reaction(
 
 
 def react_to_observation(agent, other_name: str, inbound: str, time_step: int) -> dict:
-    """Retrieve context for an addressed message and select the paper-style reaction."""
     focal = (
         f"{other_name} said to {agent.name}: {inbound}\n"
         f"What memories and thoughts are relevant to how {agent.name} should react?"
@@ -131,13 +127,7 @@ def react_to_observation(agent, other_name: str, inbound: str, time_step: int) -
 
 
 def react_to_presence(agent, other_name: str, time_step: int) -> dict:
-    """Select the paper-style reaction when a clean session has no inbox.
-
-    Presence remains the current observed social event, but sterile no-message
-    observations are not fed back to the small language model as autobiographical
-    retrieval. This preserves the Stanford reaction boundary without inviting
-    the model to literalize runtime bookkeeping as conversation content.
-    """
+    """Select the paper-style reaction when a clean session has no inbox."""
     event = f"{other_name} is present in the private two-person community; no addressed message is pending."
     focal = (
         f"{agent.name} and {other_name} are present together with no addressed message pending. "
