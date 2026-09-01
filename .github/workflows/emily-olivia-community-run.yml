@@ -143,7 +143,7 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         env:
-          COMMUNITY_WORKFLOW_FILE: emily-olivia-community-run.yml
+          COMMUNITY_WORKFLOW_FILE: '345955962'
           COMMUNITY_ARTIFACT_NAME: emily-olivia-community-results
         run: bash restore_latest_checkpoint.sh
 
@@ -285,8 +285,11 @@ jobs:
       - name: Publish real replay to viewer
         if: always() && steps.gate.outputs.run == 'true'
         run: |
-          test -s experiments/emily-olivia-society/replay/community_session.json
-          test -s experiments/emily-olivia-society/replay/community_session.jsonl
+          if [ ! -s experiments/emily-olivia-society/replay/community_session.json ] || \
+             [ ! -s experiments/emily-olivia-society/replay/community_session.jsonl ]; then
+            echo "No valid replay stream exists for this interrupted pre-session run; skipping publish."
+            exit 0
+          fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f \
@@ -295,7 +298,7 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Update Emily Olivia live replay [skip ci]"
           for attempt in 1 2 3; do
-            if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then exit 0; fi
             git rebase --abort || true
             sleep $((attempt*5))
           done
