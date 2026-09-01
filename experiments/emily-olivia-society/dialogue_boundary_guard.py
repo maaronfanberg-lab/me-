@@ -7,6 +7,7 @@ the same Stanford-derived generator for another stochastic sample.
 """
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 from functools import wraps
 import re
 
@@ -46,8 +47,12 @@ _CONCRETE_SETTING_ANCHOR = re.compile(
 )
 
 
+def _word_list(text: object) -> list[str]:
+    return [match.group(0).casefold() for match in _WORD.finditer(str(text or ""))]
+
+
 def _words(text: object) -> set[str]:
-    return {match.group(0).casefold() for match in _WORD.finditer(str(text or ""))}
+    return set(_word_list(text))
 
 
 def _addresses_self_as_peer(text: str, agent_name: str) -> bool:
@@ -82,6 +87,25 @@ def _contradicts_observed_presence(text: str, other_name: str, support_text: str
     if not other or other not in support.casefold() or not _PRESENCE_EVIDENCE.search(support):
         return False
     return bool(_PRESENCE_CONTRADICTION.search(str(text or "")))
+
+
+def _is_short_recent_echo(text: str, dialogue_history) -> bool:
+    """Catch compact near-copies that the long-form attractor check intentionally skips."""
+    output = _word_list(text)
+    if len(output) < 3 or len(output) > 7:
+        return False
+    for _speaker, prior in list(dialogue_history or [])[-6:]:
+        previous = _word_list(prior)
+        if len(previous) < 3:
+            continue
+        smaller = min(len(output), len(previous))
+        if smaller < 3:
+            continue
+        if output == previous[: len(output)] or previous == output[: len(previous)]:
+            return True
+        if SequenceMatcher(None, output, previous, autojunk=False).ratio() >= 0.74:
+            return True
+    return False
 
 
 def _location_phrase_words(phrase: str) -> set[str]:
@@ -138,6 +162,9 @@ def install_spoken_action_guard(generator):
                 continue
             if _contradicts_observed_presence(text, getattr(other, "name", ""), support):
                 rejected.append(f"presence-contradiction:{str(text)[:180]}")
+                continue
+            if _is_short_recent_echo(text, dialogue_history):
+                rejected.append(f"short-echo:{str(text)[:180]}")
                 continue
             if _has_unsupported_concrete_setting(
                 text,
