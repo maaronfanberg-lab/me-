@@ -20,6 +20,12 @@ HERE = Path(__file__).resolve().parent
 WORKSPACES = HERE / "workspaces"
 REPLAY = HERE / "replay"
 RESTORE_REPORT = REPLAY / "checkpoint_restore.json"
+_RESET_REPLAY_FILES = (
+    "social_state.json",
+    "community_session.json",
+    "community_session.jsonl",
+    "community_session_error.json",
+)
 
 _MESSAGE_RE = re.compile(
     r"\bobserves\s+a\s+message\s+from\s+(?:Emily|Olivia)\s*:\s*(.+)$",
@@ -128,18 +134,27 @@ def reject_interrupted_checkpoint_attractor() -> dict | None:
     if not detections:
         return None
 
+    # The cognition, social state, and replay transcript are one continuity epoch.
+    # Keeping the old JSONL after rejecting cognition makes the next paper-derived
+    # opening compare itself against the very attractor we just rejected. Historical
+    # evidence remains in Git history and the source workflow artifact.
     shutil.rmtree(WORKSPACES, ignore_errors=True)
-    social_state = REPLAY / "social_state.json"
-    try:
-        social_state.unlink()
-    except FileNotFoundError:
-        pass
+    cleared_replay_files: list[str] = []
+    for filename in _RESET_REPLAY_FILES:
+        path = REPLAY / filename
+        try:
+            path.unlink()
+            cleared_replay_files.append(filename)
+        except FileNotFoundError:
+            pass
 
     report.update(
         {
             "restored": False,
             "reason": "interrupted_checkpoint_dialogue_attractor",
             "social_state_restored": False,
+            "replay_epoch_reset": True,
+            "cleared_replay_files": cleared_replay_files,
             "rejected_attractors": detections,
         }
     )
