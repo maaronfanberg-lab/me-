@@ -11,8 +11,6 @@ import subprocess
 from pathlib import Path
 
 from community_cycle import (
-    _grounding_words,
-    _is_usable_utterance,
     load_agents,
     observation_text,
     choose_action,
@@ -165,55 +163,6 @@ def _coerce_memory_importance(agent) -> None:
         node.importance = int(numeric) if numeric.is_integer() else numeric
 
 
-def _thin_acknowledgement_bridge(
-    agent,
-    other,
-    inbound: str,
-    dialogue_history: list[tuple[str, str]] | None,
-) -> dict | None:
-    """Bridge a conversational dead end back to the last concrete topic without inventing lore."""
-    words = re.findall(r"[a-z0-9']+", inbound.lower())
-    if len(words) > 6 or not re.match(r"^\s*(?:yeah|yes|yep|right|true|sure|exactly|it is|that's true|that is true)\b", inbound, re.I):
-        return None
-
-    prior_texts = [
-        str(text).strip()
-        for _speaker, text in (dialogue_history or [])[:-1]
-        if str(text).strip()
-    ]
-    topic = prior_texts[-1] if prior_texts else ""
-    anchors = _grounding_words(topic, limit=4)
-    lowered_topic = topic.lower()
-
-    if "work" in lowered_topic or "working" in lowered_topic:
-        candidates = [
-            "Yeah. What are you working on first?",
-            "Yeah. What kind of work are you getting back to?",
-            "Yeah. Is there a part of work you're looking forward to?",
-        ]
-    elif anchors:
-        anchor = anchors[0]
-        candidates = [
-            f"Yeah. What about {anchor} stands out to you?",
-            f"Yeah. How's the {anchor} part going?",
-            f"Yeah. What do you like most about {anchor}?",
-        ]
-    else:
-        candidates = [
-            "Yeah. What are you up to today?",
-            "Yeah. How's the rest of your day looking?",
-        ]
-
-    for text in candidates:
-        if _is_usable_utterance(text, inbound, agent.name, other.name):
-            return {
-                "type": "message",
-                "recipient_id": other.agent_id,
-                "content": text,
-            }
-    return None
-
-
 async def process_one_reply(
     agent,
     other,
@@ -235,19 +184,10 @@ async def process_one_reply(
     retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
     relevant = [node.content for node in retrieved.get(query, [])]
 
-    try:
-        action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
-    except RuntimeError as exc:
-        if "returned no grounded natural-language utterance" not in str(exc):
-            raise
-        action = _thin_acknowledgement_bridge(
-            agent,
-            other,
-            str(latest.get("content", "")),
-            dialogue_history,
-        )
-        if action is None:
-            raise
+    # There is intentionally no authored fallback here. If Stanford cognition
+    # cannot produce an action, the run fails with its evidence intact rather
+    # than replacing the agent's speech with local canned dialogue.
+    action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
 
     result = None
     consumed = False
