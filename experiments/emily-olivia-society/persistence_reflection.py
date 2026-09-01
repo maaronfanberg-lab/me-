@@ -9,6 +9,7 @@ from community_cycle import load_agents, next_community_time_step
 
 HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
+_EMPTY_EMBEDDING_ERROR = "Input text must be a non-empty string."
 
 
 def node_counts(brain) -> dict[str, int]:
@@ -30,6 +31,26 @@ def relevant_memories(agent, other_name: str, time_step: int, n_count: int = 12)
     return [node.content for node in retrieved.get(query, [])]
 
 
+def _run_reflection_pass(agent, anchor: str, time_step: int, retrieval_count: int) -> None:
+    """Run one Stanford reflection pass while discarding only blank generated items.
+
+    MemoryStream writes each reflection before moving to the next item. If Falcon
+    returns a blank later in the list, Stanford's embedding boundary raises before
+    that blank can be stored. We keep any valid reflections already written and
+    suppress only that exact empty-input failure. No substitute reflection is made.
+    """
+    try:
+        agent.brain.memory_stream.reflect(
+            anchor=anchor,
+            reflection_count=3,
+            retrieval_count=retrieval_count,
+            time_step=time_step,
+        )
+    except ValueError as exc:
+        if str(exc) != _EMPTY_EMBEDDING_ERROR:
+            raise
+
+
 def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
     before = node_counts(agent.brain)
     relevant_before = relevant_memories(agent, other_name, time_step)
@@ -45,17 +66,24 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
         }
 
     anchor = f"What can {agent.name} infer from her interactions with {other_name}?"
+    retrieval_count = min(12, max(1, before["total"]))
 
-    # Use Stanford's MemoryStream.reflect directly with named arguments.
-    # GenerativeAgent.reflect currently forwards time_step positionally into
-    # the reflection_count slot, so the lower-level upstream method is the
-    # faithful and unambiguous path here.
-    agent.brain.memory_stream.reflect(
-        anchor=anchor,
-        reflection_count=3,
-        retrieval_count=min(12, max(1, before["total"])),
-        time_step=time_step,
-    )
+    # Resample the same research-shaped reflection request only when an entire
+    # pass yields no non-empty reflection. This is not authored fallback content.
+    for attempt in range(3):
+        _run_reflection_pass(
+            agent,
+            anchor,
+            time_step=time_step + attempt,
+            retrieval_count=retrieval_count,
+        )
+        if node_counts(agent.brain)["reflection"] > before["reflection"]:
+            break
+    else:
+        raise RuntimeError(
+            f"Stanford reflection produced no non-empty persisted insight for {agent.name} after 3 attempts."
+        )
+
     agent.brain.save(str(agent.workspace))
 
     after_save = node_counts(agent.brain)
@@ -75,11 +103,13 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
     relevant_after_reload = relevant_memories(
         type("ReloadedAgent", (), {"brain": reloaded})(),
         other_name,
-        time_step + 1,
+        time_step + 3,
     )
 
     if after_reload["reflection"] < after_save["reflection"]:
         raise RuntimeError(f"Reflection persistence verification failed for {agent.name}.")
+    if not new_reflections or not all(str(item).strip() for item in new_reflections):
+        raise RuntimeError(f"Non-empty reflection verification failed for {agent.name}.")
 
     return {
         "agent": agent.name,
