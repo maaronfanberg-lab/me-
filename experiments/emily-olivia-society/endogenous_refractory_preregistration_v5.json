@@ -6,7 +6,9 @@
   "parameters": {
     "k": 4,
     "refractory_decay": 0.72,
-    "refractory_penalty": 0.18
+    "refractory_penalty": 0.18,
+    "future_horizon_ticks": 4,
+    "future_discount": 0.8
   },
   "frozen_evidence": [
     {
@@ -36,5 +38,5 @@
     "refractory_penalty": 0.0,
     "must_exactly_match_retrieval_baseline": true
   },
-  "interpretation": "Refractory selection advances only if it reduces consecutive top-K memory-set overlap by at least 0.10 absolute while retaining at least 90% of both immediate retrieval score and discounted future retrieval-rank utility on BOTH frozen evidence blocks. A zero-penalty ablation must collapse exactly to ordinary retrieval. Passing permits a later prospective replication test, not live or shadow activation."
+  "interpretation": "Refractory selection advances only if it reduces consecutive top-K memory-set overlap by at least 0.10 absolute while retaining at least 90% of both immediate retrieval score and discounted future retrieval-rank utility on BOTH frozen evidence blocks. Future utility uses a four-tick horizon with 0.8 per-tick discount. A zero-penalty ablation must collapse exactly to ordinary retrieval. Passing permits a later prospective replication test, not live or shadow activation."
 }
