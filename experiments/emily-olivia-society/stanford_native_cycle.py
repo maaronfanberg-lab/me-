@@ -111,8 +111,16 @@ def _grounding_words(text: str, limit: int = 6) -> list[str]:
 
 
 def _cognitive_context(reaction: dict, plan_context: str) -> str:
-    parts = [reaction_context(reaction).strip(), str(plan_context or "").strip()]
-    return " ".join(part for part in parts if part)
+    """Expose social retrieval to speech while keeping the daily plan private.
+
+    The planning stage still runs and persists before every act. The original
+    next-line conversation prompt is grounded in retrieved social information;
+    piping the private daily agenda into that prompt lets a small local model
+    mistake planner state for something it should say aloud. Keep the plan in
+    cognition/scratch, but do not serialize it into spoken-action context.
+    """
+    _ = plan_context  # Deliberately private; retained to make the boundary explicit.
+    return reaction_context(reaction).strip()
 
 
 def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgent, dialogue_history=None) -> dict:
