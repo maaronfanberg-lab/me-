@@ -21,6 +21,15 @@ _SELF_VOCATIVE = re.compile(
     r"(?:^|[,;:!?]\s*|\b(?:hi|hey|hello)\s+){name}\b\s*[,!?.:]",
     re.IGNORECASE,
 )
+_PRESENCE_EVIDENCE = re.compile(
+    r"(?:\bcommunity\s+contains\b|\bpresent\s+(?:together|in\s+the\s+private\s+two-person\s+community)\b)",
+    re.IGNORECASE,
+)
+_PRESENCE_CONTRADICTION = re.compile(
+    r"(?:\bwhere\s+are\s+you\b|\bi\s+(?:can't|cannot)\s+(?:see|find)\s+you\b|"
+    r"\byou(?:'re|\s+are)\s+not\s+(?:here|visible)\b)",
+    re.IGNORECASE,
+)
 
 _LOCATION_HEAD = (
     r"(?:town|city|hospital|school|office|center|centre|park|cafe|café|"
@@ -64,6 +73,15 @@ def _support_text(inbound: str, dialogue_history, cognitive_context: str) -> str
         parts.append(str(speaker or ""))
         parts.append(str(line or ""))
     return "\n".join(parts)
+
+
+def _contradicts_observed_presence(text: str, other_name: str, support_text: str) -> bool:
+    """Reject claims that the addressed peer is absent when presence is observed."""
+    other = str(other_name or "").strip().casefold()
+    support = str(support_text or "")
+    if not other or other not in support.casefold() or not _PRESENCE_EVIDENCE.search(support):
+        return False
+    return bool(_PRESENCE_CONTRADICTION.search(str(text or "")))
 
 
 def _location_phrase_words(phrase: str) -> set[str]:
@@ -114,8 +132,12 @@ def install_spoken_action_guard(generator):
                 inbound=inbound,
                 cognitive_context=cognitive_context,
             )
+            support = _support_text(inbound, dialogue_history, cognitive_context)
             if _addresses_self_as_peer(text, getattr(agent, "name", "")):
                 rejected.append(f"self-address:{str(text)[:180]}")
+                continue
+            if _contradicts_observed_presence(text, getattr(other, "name", ""), support):
+                rejected.append(f"presence-contradiction:{str(text)[:180]}")
                 continue
             if _has_unsupported_concrete_setting(
                 text,
