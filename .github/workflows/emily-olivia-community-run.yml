@@ -288,8 +288,8 @@ jobs:
         env:
           SESSION_OUTCOME: ${{ steps.session.outcome }}
         run: |
-          if [ "$SESSION_OUTCOME" = "skipped" ]; then
-            echo "Conversation step never ran; refusing to republish stale checkout replay."
+          if [ "$SESSION_OUTCOME" != "success" ]; then
+            echo "Community session outcome is $SESSION_OUTCOME; refusing to publish a failed or skipped replay."
             exit 0
           fi
           if [ ! -s experiments/emily-olivia-society/replay/community_session.json ] || \
