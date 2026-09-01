@@ -19,8 +19,6 @@ fi
 
 reset_clean() {
   local reason="$1"
-  local source_run_id="${2:-null}"
-  local source_conclusion="${3:-}"
   rm -rf "$WORKSPACES"
   rm -f "$REPLAY_DIR/social_state.json"
   mkdir -p "$REPLAY_DIR"
@@ -28,8 +26,8 @@ reset_clean() {
 {
   "mode": "checkpoint_restore",
   "restored": false,
-  "source_run_id": $source_run_id,
-  "source_run_conclusion": ${source_conclusion:+"\"$source_conclusion\""}${source_conclusion:-null},
+  "source_run_id": null,
+  "source_run_conclusion": null,
   "artifact": "$ARTIFACT_NAME",
   "reason": "$reason",
   "social_state_restored": false
