@@ -17,6 +17,18 @@ def replace_once(path: Path, old: str, new: str, marker: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def replace_one_of(path: Path, olds: tuple[str, ...], new: str, marker: str) -> None:
+    """Apply an idempotent upgrade from pristine or previously patched cached source."""
+    text = path.read_text(encoding="utf-8")
+    if marker in text:
+        return
+    for old in olds:
+        if old in text:
+            path.write_text(text.replace(old, new, 1), encoding="utf-8")
+            return
+    raise SystemExit(f"Pinned Stanford source changed; no supported patch target found in {path}")
+
+
 def patch_gpt() -> None:
     path = STANFORD / "simulation_engine" / "gpt_structure.py"
     text = path.read_text(encoding="utf-8")
@@ -46,10 +58,13 @@ def patch_gpt() -> None:
 
 def patch_memory() -> None:
     path = STANFORD / "genagents" / "modules" / "memory_stream.py"
-    replace_once(
+    pristine = '''  def _func_clean_up(gpt_response, prompt=""): \n    gpt_response = extract_first_json_dict(gpt_response)\n    return list(gpt_response.values())\n\n  def _get_fail_safe():\n    return 25\n'''
+    previous_patch = '''  def _func_clean_up(gpt_response, prompt=""): \n    gpt_response = extract_first_json_dict(gpt_response)\n    if not isinstance(gpt_response, dict):\n      return [25 for _ in records]\n    values = list(gpt_response.values())\n    if len(values) != len(records):\n      return [25 for _ in records]\n    return values\n\n  def _get_fail_safe():\n    return [25 for _ in records]\n'''
+    numeric_patch = '''  def _func_clean_up(gpt_response, prompt=""): \n    gpt_response = extract_first_json_dict(gpt_response)\n    if not isinstance(gpt_response, dict):\n      return [25 for _ in records]\n    values = list(gpt_response.values())\n    if len(values) != len(records):\n      return [25 for _ in records]\n    cleaned = []\n    for value in values:\n      try:\n        score = float(value)\n      except (TypeError, ValueError):\n        score = 25.0\n      cleaned.append(max(0.0, min(100.0, score)))\n    return cleaned\n\n  def _get_fail_safe():\n    return [25 for _ in records]\n'''
+    replace_one_of(
         path,
-        '''  def _func_clean_up(gpt_response, prompt=""): \n    gpt_response = extract_first_json_dict(gpt_response)\n    return list(gpt_response.values())\n\n  def _get_fail_safe():\n    return 25\n''',
-        '''  def _func_clean_up(gpt_response, prompt=""): \n    gpt_response = extract_first_json_dict(gpt_response)\n    if not isinstance(gpt_response, dict):\n      return [25 for _ in records]\n    values = list(gpt_response.values())\n    if len(values) != len(records):\n      return [25 for _ in records]\n    cleaned = []\n    for value in values:\n      try:\n        score = float(value)\n      except (TypeError, ValueError):\n        score = 25.0\n      cleaned.append(max(0.0, min(100.0, score)))\n    return cleaned\n\n  def _get_fail_safe():\n    return [25 for _ in records]\n''',
+        (pristine, previous_patch),
+        numeric_patch,
         "cleaned.append(max(0.0, min(100.0, score)))",
     )
     replace_once(
