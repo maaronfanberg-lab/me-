@@ -7,7 +7,9 @@ on:
       - main
     paths:
       - '.github/workflows/emily-olivia-local-smoke.yml'
-      - 'experiments/emily-olivia-society/**'
+      - 'experiments/emily-olivia-society/**/*.py'
+      - 'experiments/emily-olivia-society/**/*.sh'
+      - 'experiments/emily-olivia-society/upstreams.json'
 
 concurrency:
   group: emily-olivia-bitnet-smoke
@@ -39,7 +41,7 @@ jobs:
       - name: Validate Community Python before expensive work
         working-directory: experiments/emily-olivia-society
         run: |
-          python3 -m py_compile bitnet_server.py patch_stanford_local.py community_cycle.py community_session.py controlled_social_space.py first_exchange.py social_bridge.py paper_plan_adapter.py paper_react_adapter.py paper_reflection_adapter.py stanford_native_cycle.py
+          python3 -m py_compile bitnet_server.py patch_stanford_local.py community_cycle.py community_session.py controlled_social_space.py first_exchange.py social_bridge.py paper_act_adapter.py paper_plan_adapter.py paper_react_adapter.py paper_reflection_adapter.py persistence_reflection.py stanford_native_cycle.py
 
       - name: Restore Community runtime and BitNet
         id: community-cache
@@ -104,47 +106,58 @@ jobs:
         working-directory: experiments/emily-olivia-society
         run: |
           rm -rf workspaces
-          rm -f replay/social_state.json replay/community_session.json replay/community_session.jsonl replay/community_session_error.json
+          rm -f replay/social_state.json replay/community_session.json replay/community_session.jsonl replay/community_session_error.json replay/layer6_reflection.json
 
       - name: Initialize cognition
         working-directory: experiments/emily-olivia-society
         run: timeout 5m .venv-stanford/bin/python init_cognition.py
 
-      - name: Two-turn real BitNet dialogue
+      - name: Six-turn autonomous real BitNet dialogue
         working-directory: experiments/emily-olivia-society
-        run: >-
-          timeout 35m .venv-stanford/bin/python community_session.py --run --turns 2
-          --opener "Olivia, what's something small that can make an ordinary day better?"
+        run: timeout 50m .venv-stanford/bin/python community_session.py --run --turns 6
 
-      - name: Verify grounded natural dialogue and persisted evidence
+      - name: Verify natural non-rut dialogue and persisted evidence
         working-directory: experiments/emily-olivia-society
         run: |
           python3 - <<'PY'
           import json, math
           from pathlib import Path
-          from community_cycle import _is_usable_utterance
+          from paper_act_adapter import _is_recent_echo, is_usable_spoken_action
 
+          PAPER_COMMIT = 'fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4'
           replay = Path('replay')
           session = json.loads((replay / 'community_session.json').read_text())
           assert session.get('status') == 'completed', session
           assert session.get('resumed_social_state') is False, session
+          assert session.get('autonomous_opening') is True, session
           assert session.get('discarded_pending_message_ids') == [], session
-          assert session['completed_reply_turns'] == 2, session
+          assert session['completed_reply_turns'] == 6, session
           turns = session.get('turns', [])
-          assert len(turns) == 2, turns
-          outputs = []
+          assert len(turns) == 6, turns
+
+          opening = session.get('opening_turn') or {}
+          opening_action = opening.get('action', {})
+          opening_text = str(opening_action.get('content', '')).strip()
+          assert opening_text, opening
+          assert opening_action.get('cognition', {}).get('act_research_source') == PAPER_COMMIT, opening
+          history = [('Emily', opening_text)]
+
           for turn in turns:
               action = turn.get('action', {})
               assert action.get('type') == 'message', turn
+              assert action.get('cognition', {}).get('act_research_source') == PAPER_COMMIT, turn
               inbox = turn.get('observation', {}).get('inbox', [])
               assert isinstance(inbox, list) and inbox, turn
               inbound = str(inbox[-1].get('content', ''))
-              content = str(action.get('content', ''))
-              assert _is_usable_utterance(content, inbound), (inbound, content)
+              content = str(action.get('content', '')).strip()
+              agent_name = str(turn.get('agent', '')).strip()
+              other_name = str(inbox[-1].get('from_name', '')).strip()
+              assert is_usable_spoken_action(content, inbound, agent_name, other_name), (inbound, content)
+              assert not _is_recent_echo(content, history), (history, content)
               assert turn.get('action_result', {}).get('success') is True, turn
               assert turn.get('consumed_inbound') is True, turn
-              outputs.append(' '.join(content.lower().split()))
-          assert len(set(outputs)) == len(outputs), outputs
+              history.append((agent_name, content))
+
           social = json.loads((replay / 'social_state.json').read_text())
           assert social.get('version') == 1, social
           assert isinstance(social.get('inboxes'), dict), social
@@ -153,12 +166,37 @@ jobs:
           assert state.get('ready') is True, state
           assert isinstance(seconds, (int, float)) and math.isfinite(seconds) and seconds >= 0, state
           print(json.dumps(session, indent=2))
-          print('Verified two delivered, distinct, grounded natural replies and a timed healthy BitNet probe.')
+          print('Verified autonomous Stanford-paper dialogue with six delivered replies and no recent-line rut.')
           PY
           test -d workspaces/emily
           test -d workspaces/olivia
           timeout 2m python3 observer.py --summary > replay/observer.json
           test -s replay/observer.json
+
+      - name: Verify Stanford reflection persistence
+        working-directory: experiments/emily-olivia-society
+        run: |
+          timeout 20m .venv-stanford/bin/python persistence_reflection.py --run
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('replay/layer6_reflection.json').read_text())
+          agents = report.get('agents', [])
+          assert len(agents) == 2, report
+          for agent in agents:
+              assert agent.get('status') == 'reflected', agent
+              assert agent.get('persisted') is True, agent
+              reflections = agent.get('new_reflections') or []
+              assert reflections, agent
+              for item in reflections:
+                  text = str(item).strip()
+                  assert text, agent
+                  assert '```' not in text, text
+                  assert not text.startswith(('{', '[')), text
+          print(json.dumps(report, indent=2))
+          print('Verified non-empty Stanford reflections persist and reload without JSON-fence contamination.')
+          PY
 
       - name: Show BitNet build and server logs on failure
         if: failure()
