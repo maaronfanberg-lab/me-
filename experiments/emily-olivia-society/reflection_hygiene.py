@@ -23,10 +23,14 @@ _PROMPT_OR_FORMAT_MARKERS = (
     "what higher-level insight should",
     "what higher-level insights should",
 )
+_INTERROGATIVE_START = re.compile(
+    r"^(?:what|why|how|when|where|who|which|would|could|should|can|do|does|did|is|are|am|was|were|will|have|has|had)\b",
+    re.IGNORECASE,
+)
 
 
 def is_clean_reflection_text(content: object) -> bool:
-    """Return True only for a plausible natural-language reflection string."""
+    """Return True only for a plausible natural-language reflection insight."""
     if not isinstance(content, str):
         return False
     text = content.strip()
@@ -36,6 +40,11 @@ def is_clean_reflection_text(content: object) -> bool:
         return False
     lowered = text.casefold()
     if any(marker in lowered for marker in _PROMPT_OR_FORMAT_MARKERS):
+        return False
+    # Stanford reflection memory should contain an insight, not the model echoing
+    # or inventing a focal-point question. Question-shaped nodes are prompt/model
+    # scaffolding and become retrieval poison if persisted as autobiographical fact.
+    if text.endswith("?") or _INTERROGATIVE_START.match(text):
         return False
     # Reflections are higher-level thoughts. Tiny fragments are almost always a
     # truncated parser/model failure, not a usable insight.
