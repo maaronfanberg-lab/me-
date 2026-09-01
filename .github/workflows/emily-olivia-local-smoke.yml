@@ -66,7 +66,7 @@ jobs:
           test -x vendor/BitNet/build/bin/llama-server
           test -s models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
           test -f .bootstrap-ready-v11
-          grep -q 'COMMUNITY_BITNET_HTTP_V3' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+          grep -q 'COMMUNITY_BITNET_HTTP_V4' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Save Community runtime and BitNet immediately after bootstrap
         if: ${{ steps.community-cache.outputs.cache-hit != 'true' }}
@@ -98,7 +98,7 @@ jobs:
 
       - name: Confirm Stanford is routed to local HTTP
         working-directory: experiments/emily-olivia-society
-        run: grep -q 'COMMUNITY_BITNET_HTTP_V3' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+        run: grep -q 'COMMUNITY_BITNET_HTTP_V4' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Reset smoke-only cognition and social state
         working-directory: experiments/emily-olivia-society
