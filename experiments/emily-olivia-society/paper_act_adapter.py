@@ -123,8 +123,12 @@ def _request_completion(prompt: str, agent_name: str, other_name: str) -> str:
         raise RuntimeError(f"BitNet paper-act completion request failed: {exc.reason}") from exc
 
     text = data.get("content") if isinstance(data, dict) else None
-    if not isinstance(text, str) or not text.strip():
-        raise RuntimeError(f"BitNet paper-act completion returned no content: {data!r}")
+    if not isinstance(text, str):
+        raise RuntimeError(f"BitNet paper-act completion returned malformed content: {data!r}")
+    # A valid llama.cpp response can stop immediately on a stop token and contain
+    # an empty string. That is one unusable sample, not a transport failure. Let
+    # generate_spoken_action consume this attempt and resample the identical
+    # paper-derived prompt rather than crashing the entire Community session.
     return text.strip()
 
 
