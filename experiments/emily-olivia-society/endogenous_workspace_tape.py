@@ -17,7 +17,6 @@ import json
 from pathlib import Path
 from typing import Iterable, Mapping
 
-from community_cycle import load_agents
 from endogenous_workspace import memory_candidate
 
 TAPE_SCHEMA_VERSION = 1
@@ -118,8 +117,6 @@ def build_tape(turns: Iterable[Mapping], agents: Iterable[object], source: str =
             seen.add(text)
             nodes = indexes[agent_name].get(text, [])
             if nodes:
-                # If duplicate text exists as multiple Stanford nodes, prefer the
-                # most recent node that already existed by this replay time step.
                 eligible = [node for node in nodes if int(getattr(node, "created", 0) or 0) <= time_step]
                 node = max(eligible or nodes, key=lambda item: int(getattr(item, "created", 0) or 0))
                 candidate = memory_candidate(node, time_step)
@@ -128,8 +125,6 @@ def build_tape(turns: Iterable[Mapping], agents: Iterable[object], source: str =
                 unmatched += 1
 
             if candidate is None:
-                # Preserve the already-retrieved content but mark metadata as
-                # unknown rather than fabricating Stanford importance.
                 candidates.append(
                     {
                         "id": f"unmatched:{agent_name}:{time_step}:{rank}",
@@ -191,6 +186,10 @@ def main() -> None:
         help="Allow a tape with fewer than two recovered turns (useful only for recorder debugging).",
     )
     args = parser.parse_args()
+
+    # Keep the heavy Community/Stanford dependency out of module import so the
+    # recorder's pure reconstruction logic can be unit-tested in isolation.
+    from community_cycle import load_agents
 
     turns = read_replay_turns(args.replay)
     tape = build_tape(turns, load_agents(), source=str(args.replay))
