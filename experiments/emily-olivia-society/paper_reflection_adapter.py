@@ -13,6 +13,8 @@ while delegating retrieval and reflection storage to Stanford HCI genagents.
 """
 from __future__ import annotations
 
+from reflection_hygiene import sanitize_memory_stream
+
 _RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
 _DEFAULT_THRESHOLD = 12
 _EMPTY_EMBEDDING_ERROR = "Input text must be a non-empty string."
@@ -51,10 +53,11 @@ def maybe_reflect(agent, time_step: int) -> bool:
     every turn. Reflection uses Stanford HCI MemoryStream directly with named
     arguments so the timestep cannot be confused with reflection_count.
 
-    Small local models can occasionally return an empty item inside an otherwise
-    valid reflection list. Stanford rejects that item at the embedding boundary.
-    We preserve any valid reflections already written, discard the blank failure,
-    and let conversation continue rather than inventing substitute reflection text.
+    Small local models can occasionally return blank, malformed, or parser-
+    scaffold items where Stanford expects natural-language reflection strings.
+    Such output is removed rather than becoming durable memory. Any valid
+    reflections produced in the same pass are preserved; no substitute insight
+    or authored fallback is invented.
     """
     scratch = agent.brain.scratch
     last_step = int(scratch.get("reflection_last_step", 0) or 0)
@@ -89,9 +92,10 @@ def maybe_reflect(agent, time_step: int) -> bool:
     except ValueError as exc:
         if str(exc) != _EMPTY_EMBEDDING_ERROR:
             raise
-        # A blank generated item is never inserted because embedding rejects it.
-        # Valid items generated before it remain in the stream and are preserved.
+        # Stanford can append a malformed node immediately before its embedding
+        # boundary rejects it. The hygiene pass below removes that partial node.
 
+    sanitize_memory_stream(agent.brain.memory_stream)
     after_reflections = _reflection_count(agent)
     agent.brain.update_scratch({
         "reflection_last_step": time_step,
