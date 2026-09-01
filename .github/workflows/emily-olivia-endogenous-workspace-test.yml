@@ -1,0 +1,29 @@
+name: Emily Olivia endogenous workspace tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/emily-olivia-society/endogenous_workspace.py'
+      - 'experiments/emily-olivia-society/test_endogenous_workspace.py'
+      - '.github/workflows/emily-olivia-endogenous-workspace-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            experiments/emily-olivia-society/endogenous_workspace.py
+            experiments/emily-olivia-society/test_endogenous_workspace.py
+          sparse-checkout-cone-mode: false
+      - name: Run deterministic workspace tests
+        working-directory: experiments/emily-olivia-society
+        run: python3 -m unittest -v test_endogenous_workspace.py
