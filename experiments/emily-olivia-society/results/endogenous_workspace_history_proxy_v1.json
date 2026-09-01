@@ -1,0 +1,54 @@
+{
+  "evidence_version": 1,
+  "workflow_run_id": 33533315897,
+  "artifact_id": 9810597568,
+  "artifact_sha256": "ddac578ec0940b90dd22957063839b96470ad3d1ed1f0a027ee003c1b91ffdb2",
+  "experiment": "endogenous_workspace_scarcity_consolidation_history_proxy_v1",
+  "primary_metric": "future_retrieval_credit_hit_rate_delta_b_minus_c",
+  "produced_dialogue": false,
+  "wrote_live_memory": false,
+  "activated_live_workspace": false,
+  "tape": {
+    "session_id": "1788278704-a538121eec",
+    "tick_count": 32,
+    "history_snapshot_count": 32,
+    "history_first_commit": "2f2740388117cae84088d3ba771d69fd530838a0",
+    "history_last_commit": "68bfe2a12a81979b6a1fcd6e93db94318d035cf5",
+    "history_transport": "github_api_path_history",
+    "retrieval_score_mode": "rank_proxy_from_recorded_stanford_retrieval_order",
+    "importance_mode": "neutral_constant_0.5_historical_value_unavailable",
+    "recency_mode": "neutral_constant_0.5_historical_value_unavailable",
+    "proxy_limitations_acknowledged": true
+  },
+  "preregistered_thresholds": {
+    "minimum_effect_size": 0.1,
+    "future_horizon_ticks": 4,
+    "seeds": [11, 23, 37, 53, 71, 89, 107, 131],
+    "minimum_positive_seeds": 6,
+    "k": 4,
+    "minimum_tape_ticks": 8,
+    "fail_if_ignition_retrieval_rank_correlation_exceeds": 0.9,
+    "maximum_yoke_fallback_rate": 0.25
+  },
+  "result": {
+    "status": "NOT_SUPPORTED_BY_PROXY_TRIAL",
+    "median_primary_effect": 0.0,
+    "minimum_effect_required": 0.1,
+    "positive_seed_count": 0,
+    "minimum_positive_seeds_required": 6,
+    "rank_relabel_invalid": false,
+    "structural_invalid": false,
+    "yoke_invalid": false
+  },
+  "seed_results": [
+    {"seed": 11, "b_hit_rate": 0.928571, "c_hit_rate": 0.928571, "delta": 0.0, "b_hits": 26, "c_hits": 26, "credits_each": 28, "rank_correlation": 0.03965825046539265, "yoke_fallback_rate": 0.0},
+    {"seed": 23, "b_hit_rate": 0.928571, "c_hit_rate": 0.928571, "delta": 0.0, "b_hits": 26, "c_hits": 26, "credits_each": 28, "rank_correlation": 0.03965825046539265, "yoke_fallback_rate": 0.0},
+    {"seed": 37, "b_hit_rate": 0.928571, "c_hit_rate": 0.928571, "delta": 0.0, "b_hits": 26, "c_hits": 26, "credits_each": 28, "rank_correlation": 0.03965825046539265, "yoke_fallback_rate": 0.0},
+    {"seed": 53, "b_hit_rate": 0.928571, "c_hit_rate": 0.928571, "delta": 0.0, "b_hits": 26, "c_hits": 26, "credits_each": 28, "rank_correlation": 0.03965825046539265, "yoke_fallback_rate": 0.0},
+    {"seed": 71, "b_hit_rate": 0.928571, "c_hit_rate": 0.928571, "delta": 0.0, "b_hits": 26, "c_hits": 26, "credits_each": 28, "rank_correlation": 0.03965825046539265, "yoke_fallback_rate": 0.0},
+    {"seed": 89, "b_hit_rate": 0.928571, "c_hit_rate": 0.928571, "delta": 0.0, "b_hits": 26, "c_hits": 26, "credits_each": 28, "rank_correlation": 0.03965825046539265, "yoke_fallback_rate": 0.0},
+    {"seed": 107, "b_hit_rate": 0.928571, "c_hit_rate": 0.928571, "delta": 0.0, "b_hits": 26, "c_hits": 26, "credits_each": 28, "rank_correlation": 0.03965825046539265, "yoke_fallback_rate": 0.0},
+    {"seed": 131, "b_hit_rate": 0.928571, "c_hit_rate": 0.928571, "delta": 0.0, "b_hits": 26, "c_hits": 26, "credits_each": 28, "rank_correlation": 0.03965825046539265, "yoke_fallback_rate": 0.0}
+  ],
+  "interpretation": "Under the locked historical proxy test, scarcity consolidation selected memories that reappeared within the future retrieval horizon at exactly the same rate as the matched yoked-shuffle control. The mechanism therefore earned no permission to advance toward live activation. This result is limited by unavailable historical Stanford importance/recency values and is evidence against the current content-selection rule under this proxy, not against all endogenous-workspace designs."
+}
