@@ -154,6 +154,35 @@ def _clean_line(raw: object, agent_name: str) -> str:
     return _base._unwrap_reply(text).strip()
 
 
+def _short_topic_fragment_is_grounded(text: str, inbound: str) -> bool:
+    """Fail closed on long tangents after a short bare topic fragment.
+
+    A fragment such as ``Morning routine`` does not provide enough syntax for a
+    semantic classifier, and requiring literal word reuse for every reply makes
+    conversation robotic. Keep freedom for concise natural responses. Only when
+    the model launches into a longer answer do we require one content-word anchor
+    to the fragment (or a short acknowledgement), which blocks unrelated invented
+    scenes without prescribing the replacement wording.
+    """
+    inbound = str(inbound or "").strip()
+    if not inbound or inbound[-1:] in ".?!":
+        return True
+    input_words = _base._normalize_words(inbound)
+    input_content = _base._content_words(inbound)
+    if not input_content or len(input_words) > 6 or len(input_content) > 3:
+        return True
+
+    output_words = _base._normalize_words(text)
+    output_content = _base._content_words(text)
+    if input_content & output_content:
+        return True
+    if len(output_words) <= 12:
+        return True
+    if _base._ACKNOWLEDGEMENT.search(text) and len(output_words) <= 18:
+        return True
+    return False
+
+
 def is_usable_spoken_action(
     text: str,
     inbound: str = "",
@@ -166,8 +195,8 @@ def is_usable_spoken_action(
     word from the inbound message. That is useful for a tightly steered fallback
     generator but wrong for the paper's transcript-completion act: a natural
     reply can be semantically relevant with zero lexical overlap. Keep the
-    structural, role-drift, length, and service-language checks by validating
-    with an empty inbound, then independently reject direct/near-direct echoes.
+    structural, role-drift, length, and service-language checks, reject only
+    direct/near-direct echoes, and apply a narrow fragment-grounding boundary.
     """
     if not _base._is_usable_utterance(text, "", agent_name, other_name):
         return False
@@ -182,6 +211,8 @@ def is_usable_spoken_action(
     if not input_words or not output_words:
         return False
     if input_words == output_words:
+        return False
+    if not _short_topic_fragment_is_grounded(text, inbound):
         return False
 
     if len(input_words) >= 5 and len(output_words) >= 5:
