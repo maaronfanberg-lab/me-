@@ -31,6 +31,18 @@ _PRESENCE_CONTRADICTION = re.compile(
     r"\byou(?:'re|\s+are)\s+not\s+(?:here|visible)\b)",
     re.IGNORECASE,
 )
+_UNSUPPORTED_ROLE_CLAIM = re.compile(
+    r"(?:\bi\s+am\s+(?:a\s+)?stranger\b|"
+    r"\bi(?:'ve|\s+have)?\s*(?:been\s+)?sent\s+(?:here\s+)?to\s+(?:observe|watch|monitor)\b|"
+    r"\bi\s+am\s+here\s+to\s+(?:observe|watch|monitor)\b|"
+    r"\bi\s+(?:was|am)\s+assigned\s+to\s+(?:observe|watch|monitor)\b)",
+    re.IGNORECASE,
+)
+_ROLE_EVIDENCE = re.compile(
+    r"(?:\bstranger\b|\bsent\b[^.]{0,80}\b(?:observe|watch|monitor)\b|"
+    r"\bassigned\b[^.]{0,80}\b(?:observe|watch|monitor)\b)",
+    re.IGNORECASE,
+)
 
 _LOCATION_HEAD = (
     r"(?:town|city|hospital|school|office|center|centre|park|cafe|café|"
@@ -101,6 +113,13 @@ def _contradicts_observed_presence(text: str, other_name: str, support_text: str
     if not other or other not in support.casefold() or not _PRESENCE_EVIDENCE.search(support):
         return False
     return bool(_PRESENCE_CONTRADICTION.search(str(text or "")))
+
+
+def _has_unsupported_role_claim(text: str, support_text: str) -> bool:
+    """Reject invented first-person roles or missions absent from evidence."""
+    if not _UNSUPPORTED_ROLE_CLAIM.search(str(text or "")):
+        return False
+    return not bool(_ROLE_EVIDENCE.search(str(support_text or "")))
 
 
 def _is_short_recent_echo(text: str, dialogue_history) -> bool:
@@ -179,6 +198,9 @@ def install_spoken_action_guard(generator):
                 continue
             if _contradicts_observed_presence(text, getattr(other, "name", ""), support):
                 rejected.append(f"presence-contradiction:{str(text)[:180]}")
+                continue
+            if _has_unsupported_role_claim(text, support):
+                rejected.append(f"unsupported-role:{str(text)[:180]}")
                 continue
             if _is_short_recent_echo(text, dialogue_history):
                 rejected.append(f"short-echo:{str(text)[:180]}")
