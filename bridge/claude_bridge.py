@@ -13,15 +13,7 @@ from datetime import datetime, timezone
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-opus-4-6"
-COPILOT_CLAUDE_CANDIDATES = (
-    "claude-sonnet-4.6",
-    "claude-opus-4.5",
-    "claude-sonnet-4.5",
-    "claude-haiku-4.5",
-    "claude-opus-4.6",
-    "claude-sonnet-5",
-    "claude-opus-5",
-)
+AUTO_ATTEMPTS = 3
 
 
 def utc_now():
@@ -94,18 +86,71 @@ def ask_anthropic(data, prompt, key):
     }
 
 
-def _ordered_claude_models(data):
-    requested = str(data.get("model") or "").strip()
-    models = []
-    if requested.startswith("claude-"):
-        models.append(requested)
-    for model in COPILOT_CLAUDE_CANDIDATES:
-        if model not in models:
-            models.append(model)
-    return models
+def _assistant_text_from_jsonl(stdout):
+    chunks = []
+    for line in str(stdout or "").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "assistant.message":
+            continue
+        data = event.get("data")
+        if not isinstance(data, dict):
+            continue
+        content = data.get("content")
+        if isinstance(content, str) and content.strip():
+            chunks.append(content.strip())
+    return "\n".join(chunks).strip()
 
 
-def ask_copilot_claude(data, prompt):
+def _string_value(value):
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, dict):
+        return ""
+    for key in ("stringValue", "string_value", "value"):
+        item = value.get(key)
+        if isinstance(item, str):
+            return item
+    return ""
+
+
+def _collect_response_models(obj, found):
+    if isinstance(obj, dict):
+        direct = obj.get("gen_ai.response.model")
+        direct_text = _string_value(direct)
+        if direct_text:
+            found.add(direct_text)
+        if obj.get("key") == "gen_ai.response.model":
+            text = _string_value(obj.get("value"))
+            if text:
+                found.add(text)
+        for value in obj.values():
+            _collect_response_models(value, found)
+    elif isinstance(obj, list):
+        for value in obj:
+            _collect_response_models(value, found)
+
+
+def _response_models_from_otel(path):
+    found = set()
+    if not path.exists():
+        return []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        _collect_response_models(payload, found)
+    return sorted(found)
+
+
+def _all_models_are_claude(models):
+    return bool(models) and all("claude" in str(model).casefold() for model in models)
+
+
+def ask_copilot_verified_claude(data, prompt):
     binary = shutil.which("copilot")
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     if not binary:
@@ -116,25 +161,35 @@ def ask_copilot_claude(data, prompt):
     system = str(data.get("system") or default_system())
     user_text = build_user_text(data, prompt)
     envelope = (
-        "You are being invoked specifically as Claude through GitHub Copilot CLI, acting as a read-only peer reviewer.\n"
-        "Do not use tools, do not modify files, and do not ask questions. Everything needed is embedded below.\n\n"
+        "Read-only peer review. Do not use tools, modify files, or ask questions. "
+        "Everything needed is embedded below.\n\n"
         f"SYSTEM INSTRUCTIONS FROM BRIDGE:\n{system}\n\n"
         f"REQUEST ENVELOPE:\n{user_text}\n"
     )
 
-    env = os.environ.copy()
-    env.setdefault("COPILOT_GITHUB_TOKEN", token)
-    failures = []
-    with tempfile.TemporaryDirectory(prefix="claude-bridge-review-") as temp_dir:
-        for model in _ordered_claude_models(data):
+    base_env = os.environ.copy()
+    base_env.setdefault("COPILOT_GITHUB_TOKEN", token)
+    attempts = []
+
+    with tempfile.TemporaryDirectory(prefix="claude-bridge-audit-") as temp_dir_raw:
+        temp_dir = pathlib.Path(temp_dir_raw)
+        for attempt in range(1, AUTO_ATTEMPTS + 1):
+            otel_path = temp_dir / f"otel-{attempt}.jsonl"
+            env = base_env.copy()
+            env["COPILOT_OTEL_ENABLED"] = "true"
+            env["COPILOT_OTEL_EXPORTER_TYPE"] = "file"
+            env["COPILOT_OTEL_FILE_EXPORTER_PATH"] = str(otel_path)
+            env["OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"] = "false"
+
             proc = subprocess.run(
                 [
                     binary,
                     "-p",
                     envelope,
-                    "-s",
                     "--model",
-                    model,
+                    "auto",
+                    "--output-format",
+                    "json",
                     "--no-ask-user",
                     "--no-custom-instructions",
                     "--no-color",
@@ -147,20 +202,33 @@ def ask_copilot_claude(data, prompt):
                 timeout=180,
                 check=False,
             )
-            response = proc.stdout.strip()
-            if proc.returncode == 0 and response:
+            response = _assistant_text_from_jsonl(proc.stdout)
+            models = _response_models_from_otel(otel_path)
+            attempts.append({
+                "attempt": attempt,
+                "returncode": proc.returncode,
+                "resolved_models": models,
+                "had_response": bool(response),
+            })
+
+            if proc.returncode == 0 and response and _all_models_are_claude(models):
                 return {
                     "ok": True,
-                    "transport": "github-copilot-cli",
-                    "model": model,
+                    "transport": "github-copilot-auto-verified-by-otel",
+                    "model": models[-1],
+                    "resolved_models": models,
                     "response": response,
-                    "claude_models_tried": [entry["model"] for entry in failures] + [model],
+                    "routing_attempts": attempts,
                 }
-            detail = (proc.stderr.strip() or proc.stdout.strip() or f"exit code {proc.returncode}")[:1200]
-            failures.append({"model": model, "detail": detail})
 
-    compact = " | ".join(f"{x['model']}: {x['detail']}" for x in failures)
-    raise RuntimeError(f"No explicit Claude model was available through Copilot CLI: {compact[:6000]}")
+    summary = "; ".join(
+        f"attempt {item['attempt']}: models={item['resolved_models'] or ['unverified']} rc={item['returncode']}"
+        for item in attempts
+    )
+    raise RuntimeError(
+        "Copilot auto-routing produced no telemetry-verified Claude answer after "
+        f"{AUTO_ATTEMPTS} attempts; discarded every unverified/non-Claude response. {summary}"
+    )
 
 
 def main():
@@ -181,7 +249,7 @@ def main():
         if key:
             answer = ask_anthropic(data, prompt, key)
         else:
-            answer = ask_copilot_claude(data, prompt)
+            answer = ask_copilot_verified_claude(data, prompt)
         result.update(answer)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
