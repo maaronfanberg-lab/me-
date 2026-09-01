@@ -45,6 +45,12 @@ _SHORT_SPOKEN_CLAUSE = re.compile(
     r"couldn't|shouldn't|isn't|aren't|wasn't|weren't)\b",
     re.IGNORECASE,
 )
+_CONTROL_SCAFFOLD = re.compile(
+    r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
+    r"^\s*(?:SELF|PARTNER|Self-reply|Partner-reply|Answer|Example)\s*:|"
+    r"\[Fill\s+in\])",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def _identity(agent) -> str:
@@ -178,6 +184,27 @@ def _is_sentence_like_short_turn(text: str) -> bool:
     return bool(_SHORT_SPOKEN_CLAUSE.search(text))
 
 
+def _has_pathological_repetition(text: str) -> bool:
+    """Mirror the outer runtime's repetition safety check inside resampling."""
+    words = _base._normalize_words(text)
+    if len(words) < 8:
+        return False
+    for width in range(2, min(7, len(words) // 2 + 1)):
+        counts: dict[tuple[str, ...], int] = {}
+        for index in range(0, len(words) - width + 1):
+            gram = tuple(words[index : index + width])
+            counts[gram] = counts.get(gram, 0) + 1
+        if counts and max(counts.values()) >= 3:
+            return True
+    if len(words) >= 14:
+        counts: dict[str, int] = {}
+        for word in words:
+            counts[word] = counts.get(word, 0) + 1
+        if max(counts.values(), default=0) >= max(5, len(words) // 3):
+            return True
+    return False
+
+
 def is_usable_spoken_action(
     text: str,
     inbound: str = "",
@@ -194,6 +221,8 @@ def is_usable_spoken_action(
     with an empty inbound, then independently reject direct/near-direct echoes.
     """
     if not _base._is_usable_utterance(text, "", agent_name, other_name):
+        return False
+    if _CONTROL_SCAFFOLD.search(text) or _has_pathological_repetition(text):
         return False
     if _PEER_META_DRIFT.search(text):
         return False
