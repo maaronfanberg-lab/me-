@@ -32,14 +32,14 @@ def replace_one_of(path: Path, olds: tuple[str, ...], new: str, marker: str) -> 
 def patch_gpt() -> None:
     path = STANFORD / "simulation_engine" / "gpt_structure.py"
     text = path.read_text(encoding="utf-8")
-    marker = "COMMUNITY_BITNET_CHAT_V7"
+    marker = "COMMUNITY_BITNET_CHAT_V8"
     if marker in text:
         return
 
-    # The pinned BitNet llama-server exposes the documented OpenAI-compatible
-    # chat-completions route, which applies Falcon's native chat template.
-    # Stanford still owns prompt assembly; local generation simply routes the
-    # completed prompt through the persistent BitNet server.
+    # Stanford assembles a complete task instruction. Falcon's documented chat
+    # usage places the task in the user role, while llama-server applies the
+    # model's native chat template. Keep Stanford's instruction unchanged and
+    # avoid injecting a generic system persona.
     pattern = re.compile(r"def gpt_request\(.*?(?=\ndef get_text_embedding\()", re.S)
     match = pattern.search(text)
     if not match:
@@ -47,7 +47,7 @@ def patch_gpt() -> None:
     replacement = '''def gpt_request(prompt: str,
                 model: str = "community-bitnet",
                 max_tokens: int = 1500) -> str:
-  # COMMUNITY_BITNET_CHAT_V7; COMMUNITY_BITNET_HTTP_V4 compatibility marker.
+  # COMMUNITY_BITNET_CHAT_V8; COMMUNITY_BITNET_HTTP_V4 compatibility marker.
   try:
     import json
     import os
@@ -56,7 +56,7 @@ def patch_gpt() -> None:
     payload = json.dumps({
       "model": model,
       "messages": [
-        {"role": "system", "content": prompt},
+        {"role": "user", "content": prompt},
       ],
       "max_tokens": min(int(max_tokens), max(128, int(os.environ.get("COMMUNITY_MAX_TOKENS", "96")))),
       "temperature": 0.7,
