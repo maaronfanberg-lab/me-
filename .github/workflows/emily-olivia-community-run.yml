@@ -1,4 +1,4 @@
-# Emily + Olivia continuous community runtime
+# Emily + Olivia near-continuous community runtime
 name: Emily Olivia Community Run
 
 on:
@@ -8,15 +8,6 @@ on:
         description: "Optional explicit Emily opening message; blank lets the Stanford chain open autonomously"
         required: false
         default: ""
-  schedule:
-    - cron: "0 10 * * *"
-    - cron: "0 11 * * *"
-    - cron: "30 15 * * *"
-    - cron: "30 16 * * *"
-    - cron: "0 21 * * *"
-    - cron: "0 22 * * *"
-    - cron: "30 2 * * *"
-    - cron: "30 3 * * *"
 
 concurrency:
   group: emily-olivia-community
@@ -29,7 +20,7 @@ permissions:
 jobs:
   community-run:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 355
     env:
       AGENTSOCIETY_LLM_API_KEY: local-bitnet-unused
       COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
@@ -42,56 +33,28 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TZ: America/Chicago
     steps:
-      - name: Gate Central-time handoff slot
-        id: gate
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" != "schedule" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          offset="$(date +%z)"
-          schedule="${{ github.event.schedule }}"
-          run=false
-          case "$offset:$schedule" in
-            '-0500:0 10 * * *'|'-0500:30 15 * * *'|'-0500:0 21 * * *'|'-0500:30 2 * * *') run=true ;;
-            '-0600:0 11 * * *'|'-0600:30 16 * * *'|'-0600:0 22 * * *'|'-0600:30 3 * * *') run=true ;;
-          esac
-          if [ "$run" = true ]; then
-            hour="$(date +%H)"
-            if [ "$hour" -ge 22 ] || [ "$hour" -lt 5 ]; then
-              echo "Scheduled Community handoff arrived during quiet hours; skipping delayed run."
-              run=false
-            fi
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          echo "Central offset=$offset schedule=$schedule run=$run"
-
       - name: Check out triggering Community runtime
-        if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 2
 
       - uses: actions/setup-python@v5
-        if: steps.gate.outputs.run == 'true'
         with:
           python-version: '3.11'
 
       - name: Validate Community Python before expensive work
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: >-
           python3 -m py_compile
           bitnet_server.py patch_stanford_local.py community_cycle.py community_cycle_base.py
           stanford_native_cycle.py paper_act_adapter.py paper_plan_adapter.py paper_react_adapter.py
           paper_reflection_adapter.py community_session.py controlled_social_space.py first_exchange.py
-          social_bridge.py persistence_reflection.py observer.py
+          social_bridge.py persistence_reflection.py observer.py dialogue_boundary_guard.py
+          external_reality_guard.py
 
       - name: Restore Community runtime and BitNet
         id: bitnet-cache
-        if: steps.gate.outputs.run == 'true'
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -105,12 +68,10 @@ jobs:
             community-runtime-bitnet-v11-${{ runner.os }}-py311-
 
       - name: Bootstrap pinned research code and BitNet
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: timeout 55m bash bootstrap_upstreams.sh
 
       - name: Verify build artifacts before caching
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
           test -x vendor/BitNet/build/bin/llama-cli
@@ -120,7 +81,7 @@ jobs:
           grep -q 'COMMUNITY_BITNET_HTTP_V4' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Save runtime cache
-        if: steps.gate.outputs.run == 'true' && steps.bitnet-cache.outputs.cache-hit != 'true'
+        if: steps.bitnet-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: |
@@ -132,7 +93,6 @@ jobs:
           key: ${{ steps.bitnet-cache.outputs.cache-primary-key }}
 
       - name: Start and probe BitNet
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
           timeout 20m python3 bitnet_server.py start
@@ -140,7 +100,6 @@ jobs:
           timeout 16m python3 bitnet_server.py probe
 
       - name: Restore latest successful memory checkpoint
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         env:
           COMMUNITY_WORKFLOW_FILE: 'emily-olivia-community-run.yml'
@@ -148,7 +107,6 @@ jobs:
         run: bash restore_latest_checkpoint.sh
 
       - name: Validate restore evidence
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
           python3 - <<'PY'
@@ -162,35 +120,21 @@ jobs:
           PY
 
       - name: Initialize or preserve cognition
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: .venv-stanford/bin/python init_cognition.py
 
       - name: Keep Emily and Olivia talking continuously
         id: session
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
-          hour="$(date +%H)"
-          if [ "$hour" -ge 22 ] || [ "$hour" -lt 5 ]; then
-            echo "Community quiet hours are 10:00 PM to 5:00 AM America/Chicago."
-            exit 0
-          fi
-          now_epoch="$(date +%s)"
-          quiet_epoch="$(date -d 'today 22:00' +%s)"
-          seconds_until_quiet="$((quiet_epoch - now_epoch))"
-          if [ "$seconds_until_quiet" -le 0 ]; then exit 0; fi
-          continuous_seconds=18000
-          if [ "$seconds_until_quiet" -lt "$continuous_seconds" ]; then continuous_seconds="$seconds_until_quiet"; fi
           OPENER="${{ github.event.inputs.opener }}"
           .venv-stanford/bin/python community_session.py \
             --run \
-            --continuous-seconds "$continuous_seconds" \
+            --continuous-seconds 19200 \
             --turn-delay-seconds 0 \
             --opener "$OPENER"
 
       - name: Verify session integrity and grounded natural dialogue
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
           python3 - <<'PY'
@@ -260,12 +204,10 @@ jobs:
           PY
 
       - name: Verify persistence and reflection
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: .venv-stanford/bin/python persistence_reflection.py --run
 
       - name: Verify handoff evidence exists
-        if: steps.gate.outputs.run == 'true'
         working-directory: experiments/emily-olivia-society
         run: |
           test -s replay/social_state.json
@@ -288,12 +230,12 @@ jobs:
           python3 bitnet_server.py status
 
       - name: Generate observer report
-        if: always() && steps.gate.outputs.run == 'true'
+        if: always()
         working-directory: experiments/emily-olivia-society
         run: python3 observer.py --summary > replay/observer.json || true
 
       - name: Upload community results
-        if: always() && steps.gate.outputs.run == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: emily-olivia-community-results
@@ -305,7 +247,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Publish real replay to viewer
-        if: always() && steps.gate.outputs.run == 'true'
+        if: always()
         env:
           SESSION_OUTCOME: ${{ steps.session.outcome }}
         run: |
@@ -334,6 +276,6 @@ jobs:
           exit 1
 
       - name: Stop BitNet server
-        if: always() && steps.gate.outputs.run == 'true'
+        if: always()
         working-directory: experiments/emily-olivia-society
         run: python3 bitnet_server.py stop || true
