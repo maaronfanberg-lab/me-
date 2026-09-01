@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generic dialogue-loop and grounding guards for Emily + Olivia.
+"""Generic refractory and grounding guards for Emily + Olivia.
 
-No rule here supplies dialogue, preferred topics, or conversational moves. The
-module only rejects structurally bad model samples so the same Stanford-derived
-prompt can be resampled.
+These checks never write dialogue or prescribe a topic. They only reject
+structurally bad model samples so the same Stanford-derived prompt can be
+sampled again.
 """
 from __future__ import annotations
 
@@ -18,9 +18,19 @@ _TEMPLATE_BLANK = re.compile(
 )
 _TRAILING_CUTOFF = re.compile(r"(?:\.{3,}|…|--+|[,;:])\s*$")
 _GREETING_START = re.compile(r"^\s*(?:oh[\s,!]+)?(?:hi|hello|hey)\b", re.IGNORECASE)
-_FIRST_PERSON_FACT = re.compile(
-    r"\b(?:i\s+(?:have|had|went|was|am|live|work|own|need|want|plan|remember)|"
-    r"i(?:'ve|'d|'ll|'m)\b|my\s+[a-z][a-z'-]*)",
+_FIRST_PERSON_MARKER = re.compile(r"\b(?:i|i'm|i've|i'd|i'll|my)\b", re.IGNORECASE)
+_CONCRETE_AUTOBIOGRAPHY = re.compile(
+    r"(?:\bi\s+(?:went|visited|travelled|traveled|moved|worked|lived|studied|"
+    r"bought|owned|made|built|created)\b|"
+    r"\bi(?:'ve|\s+have)\s+(?:got|bought|owned|made|built|created|visited|"
+    r"worked|lived|studied)\b|"
+    r"\bi\s+(?:just\s+)?got\s+(?:a|an|the)\b|"
+    r"\bmy\s+(?:sister|brother|mother|mom|father|dad|parent|parents|husband|"
+    r"wife|partner|boyfriend|girlfriend|child|children|son|daughter|boss|"
+    r"coworker|roommate|house|home|apartment|car|computer|job|office|school)\b|"
+    r"\b(?:last\s+(?:night|week|weekend|month|year)|"
+    r"for\s+(?:(?:a|an|one|two|three|several|many|\d+)\s+)?(?:days|weeks|months|years)|"
+    r"\d+\s+years?\s+ago)\b)",
     re.IGNORECASE,
 )
 _STOP = {
@@ -30,22 +40,17 @@ _STOP = {
     "is", "it", "its", "me", "my", "of", "on", "or", "our", "ours", "she", "so",
     "that", "the", "their", "theirs", "them", "they", "this", "to", "us", "was",
     "we", "were", "what", "when", "where", "which", "who", "why", "will", "with",
-    "would", "you", "your", "yours", "emily", "olivia",
-    "hey", "hi", "hello", "yeah", "yes", "okay", "ok", "thanks", "thank", "sorry",
-    "please", "oh", "uh", "well",
+    "would", "should", "you", "your", "yours", "emily", "olivia", "hey", "hi",
+    "hello", "yeah", "yes", "okay", "ok", "thanks", "thank", "sorry", "please",
+    "oh", "uh", "well", "just", "really", "very",
 }
-_CANONICAL_DROP = {
-    "emily", "olivia", "oh", "well", "okay", "ok", "hey", "hi", "hello", "please",
-}
+_CANONICAL_DROP = {"emily", "olivia", "oh", "well", "okay", "ok", "hey", "hi", "hello", "please"}
 _SOCIAL_RESET_FILLER = {
     "oh", "hi", "hello", "hey", "im", "i'm", "i", "am", "here", "happy", "glad",
     "good", "great", "to", "be", "see", "you", "again", "okay", "ok", "well",
     "emily", "olivia",
 }
-_IRREGULAR = {
-    "making": "make", "taking": "take", "having": "have", "giving": "give",
-    "using": "use", "moving": "move", "going": "go", "doing": "do",
-}
+_IRREGULAR = {"making": "make", "taking": "take", "having": "have", "giving": "give", "using": "use", "moving": "move", "going": "go", "doing": "do"}
 
 
 def _root(word: str) -> str:
@@ -78,7 +83,7 @@ def canonical_words(text: str) -> tuple[str, ...]:
 
 
 def content_tokens(text: str) -> tuple[str, ...]:
-    tokens = []
+    tokens: list[str] = []
     for raw in _WORD_RE.findall(str(text or "")):
         rooted = _root(raw)
         if rooted in _STOP or len(rooted) < 3:
@@ -88,19 +93,12 @@ def content_tokens(text: str) -> tuple[str, ...]:
 
 
 def _pairs(tokens: tuple[str, ...]) -> set[tuple[str, str]]:
-    return {
-        (tokens[index], tokens[index + 1])
-        for index in range(len(tokens) - 1)
-        if tokens[index] != tokens[index + 1]
-    }
+    return {(tokens[i], tokens[i + 1]) for i in range(len(tokens) - 1) if tokens[i] != tokens[i + 1]}
 
 
 def _is_bare_short_fragment(text: str) -> bool:
     words = normalized_words(text)
-    if not 4 <= len(words) <= 7:
-        return False
-    cleaned = str(text or "").strip()
-    return not bool(re.search(r"[?!.]\s*$", cleaned))
+    return 4 <= len(words) <= 7 and not bool(re.search(r"[?!.]\s*$", str(text or "").strip()))
 
 
 def _is_short_subset_echo(text: str, histories: list[str]) -> bool:
@@ -109,16 +107,15 @@ def _is_short_subset_echo(text: str, histories: list[str]) -> bool:
         return False
     candidate_set = set(candidate)
     for prior in histories:
-        prior_words = canonical_words(prior)
-        if len(prior_words) < 3:
+        previous = canonical_words(prior)
+        if len(previous) < 3:
             continue
         width = len(candidate)
-        if width <= len(prior_words):
-            for index in range(0, len(prior_words) - width + 1):
-                if prior_words[index : index + width] == candidate:
+        if width <= len(previous):
+            for i in range(len(previous) - width + 1):
+                if previous[i : i + width] == candidate:
                     return True
-        shared = len(candidate_set & set(prior_words))
-        if shared / max(1, len(candidate_set)) >= 0.90 and len(candidate) <= len(prior_words) + 2:
+        if len(candidate_set & set(previous)) / max(1, len(candidate_set)) >= 0.90 and len(candidate) <= len(previous) + 2:
             return True
     return False
 
@@ -128,13 +125,12 @@ def _is_cosmetic_echo(text: str, histories: list[str]) -> bool:
     if len(candidate) < 3:
         return False
     for prior in histories:
-        prior_words = canonical_words(prior)
-        if len(prior_words) < 3:
+        previous = canonical_words(prior)
+        if len(previous) < 3:
             continue
-        if candidate == prior_words:
+        if candidate == previous:
             return True
-        smaller = min(len(candidate), len(prior_words))
-        if smaller <= 10 and SequenceMatcher(None, candidate, prior_words, autojunk=False).ratio() >= 0.88:
+        if min(len(candidate), len(previous)) <= 10 and SequenceMatcher(None, candidate, previous, autojunk=False).ratio() >= 0.88:
             return True
     return False
 
@@ -144,14 +140,12 @@ def _is_long_refractory_echo(text: str, histories: list[str]) -> bool:
     if len(candidate) < 4:
         return False
     for prior in histories:
-        prior_words = normalized_words(prior)
-        if len(prior_words) < 4:
+        previous = normalized_words(prior)
+        if len(previous) < 4:
             continue
-        smaller = min(len(candidate), len(prior_words))
-        matcher = SequenceMatcher(None, candidate, prior_words, autojunk=False)
-        if matcher.ratio() >= 0.82:
-            return True
-        if matcher.find_longest_match().size >= max(4, int(smaller * 0.76)):
+        smaller = min(len(candidate), len(previous))
+        matcher = SequenceMatcher(None, candidate, previous, autojunk=False)
+        if matcher.ratio() >= 0.82 or matcher.find_longest_match().size >= max(4, int(smaller * 0.76)):
             return True
     return False
 
@@ -165,14 +159,12 @@ def _is_repeated_question_stem(text: str, histories: list[str]) -> bool:
     for prior in histories:
         if "?" not in prior:
             continue
-        prior_words = canonical_words(prior)
-        if len(prior_words) < 3:
+        previous = canonical_words(prior)
+        if len(previous) < 3:
             continue
-        smaller = min(len(candidate), len(prior_words))
-        matcher = SequenceMatcher(None, candidate, prior_words, autojunk=False)
-        if matcher.ratio() >= 0.80:
-            return True
-        if matcher.find_longest_match().size >= max(3, int(smaller * 0.80)):
+        smaller = min(len(candidate), len(previous))
+        matcher = SequenceMatcher(None, candidate, previous, autojunk=False)
+        if matcher.ratio() >= 0.80 or matcher.find_longest_match().size >= max(3, int(smaller * 0.80)):
             return True
     return False
 
@@ -181,37 +173,26 @@ def _is_social_reset(text: str, dialogue_history) -> bool:
     history = list(dialogue_history or [])
     if len(history) < 4 or not _GREETING_START.search(str(text or "")):
         return False
-    words = normalized_words(text)
-    substance = [word for word in words if word not in _SOCIAL_RESET_FILLER]
+    substance = [word for word in normalized_words(text) if word not in _SOCIAL_RESET_FILLER]
     return len(substance) <= 1
 
 
 def _recurring_content_blocker(text: str, histories: list[str]) -> str | None:
     candidate = content_tokens(text)
-    if not candidate:
+    tokenized = [tokens for tokens in (content_tokens(prior) for prior in histories) if tokens]
+    if not candidate or len(tokenized) < 2:
         return None
-
-    tokenized = [content_tokens(prior) for prior in histories]
-    tokenized = [tokens for tokens in tokenized if tokens]
-    if len(tokenized) < 2:
-        return None
-
-    token_message_counts: Counter[str] = Counter()
-    pair_message_counts: Counter[tuple[str, str]] = Counter()
+    token_counts: Counter[str] = Counter()
+    pair_counts: Counter[tuple[str, str]] = Counter()
     for tokens in tokenized:
-        token_message_counts.update(set(tokens))
-        pair_message_counts.update(_pairs(tokens))
-
-    if len(set(candidate)) == 1:
-        token = candidate[0]
-        if token_message_counts[token] >= 4:
-            return "single_token_attractor"
-
-    if any(pair_message_counts[pair] >= 2 for pair in _pairs(candidate)):
+        token_counts.update(set(tokens))
+        pair_counts.update(_pairs(tokens))
+    if len(set(candidate)) == 1 and token_counts[candidate[0]] >= 4:
+        return "single_token_attractor"
+    if any(pair_counts[pair] >= 2 for pair in _pairs(candidate)):
         return "recurring_pair_attractor"
-
     candidate_set = set(candidate)
-    hot = {token for token, count in token_message_counts.items() if count >= 3}
+    hot = {token for token, count in token_counts.items() if count >= 3}
     shared = candidate_set & hot
     if len(shared) >= 2 and len(shared) / max(1, len(candidate_set)) >= 0.60:
         return "hot_topic_cluster"
@@ -219,7 +200,7 @@ def _recurring_content_blocker(text: str, histories: list[str]) -> str | None:
 
 
 def _is_role_swapped_fact(text: str, dialogue_history, agent_name: str) -> bool:
-    if not agent_name or not _FIRST_PERSON_FACT.search(str(text or "")):
+    if not agent_name or not _FIRST_PERSON_MARKER.search(str(text or "")):
         return False
     candidate = set(content_tokens(text))
     if len(candidate) < 2:
@@ -230,8 +211,7 @@ def _is_role_swapped_fact(text: str, dialogue_history, agent_name: str) -> bool:
         prior_tokens = set(content_tokens(str(prior)))
         if len(prior_tokens) < 2:
             continue
-        shared = len(candidate & prior_tokens)
-        containment = shared / max(1, min(len(candidate), len(prior_tokens)))
+        containment = len(candidate & prior_tokens) / max(1, min(len(candidate), len(prior_tokens)))
         if containment < 0.80:
             continue
         if str(speaker).strip() == agent_name:
@@ -241,39 +221,16 @@ def _is_role_swapped_fact(text: str, dialogue_history, agent_name: str) -> bool:
     return peer_match and not own_support
 
 
-def _is_unsupported_specificity(
-    text: str,
-    dialogue_history,
-    inbound: str,
-    cognitive_context: str,
-) -> bool:
+def _is_unsupported_concrete_biography(text: str, dialogue_history, inbound: str, cognitive_context: str) -> bool:
     candidate = set(content_tokens(text))
-    if len(candidate) < 2:
+    if len(candidate) < 2 or not _CONCRETE_AUTOBIOGRAPHY.search(str(text or "")):
         return False
-    support_text = " ".join(
-        [str(inbound or ""), str(cognitive_context or "")]
-        + [str(prior) for _speaker, prior in list(dialogue_history or [])[-6:]]
-    )
+    support_text = " ".join([str(inbound or ""), str(cognitive_context or "")] + [str(prior) for _speaker, prior in list(dialogue_history or [])[-8:]])
     support = set(content_tokens(support_text))
-    if candidate & support:
-        return False
-    if _FIRST_PERSON_FACT.search(str(text or "")):
-        return True
-    if not str(inbound or "").strip() and len(candidate) >= 3:
-        return True
-    return len(candidate) >= 4
+    return not bool(candidate & support)
 
 
-def candidate_dialogue_blocker(
-    text: str,
-    dialogue_history,
-    *,
-    inbound: str = "",
-    cognitive_context: str = "",
-    agent_name: str = "",
-    history_limit: int = 48,
-) -> str | None:
-    """Return a structural rejection reason, or ``None`` for an acceptable candidate."""
+def candidate_dialogue_blocker(text: str, dialogue_history, *, inbound: str = "", cognitive_context: str = "", agent_name: str = "", history_limit: int = 48) -> str | None:
     cleaned = str(text or "").strip()
     if not cleaned:
         return "empty_candidate"
@@ -283,7 +240,6 @@ def candidate_dialogue_blocker(
         return "unfinished_cutoff"
     if _is_bare_short_fragment(cleaned):
         return "bare_short_fragment"
-
     history_rows = list(dialogue_history or [])[-max(1, history_limit):]
     histories = [str(prior).strip() for _speaker, prior in history_rows if str(prior).strip()]
     if _is_short_subset_echo(cleaned, histories):
@@ -296,71 +252,33 @@ def candidate_dialogue_blocker(
         return "repeated_question_stem"
     if _is_social_reset(cleaned, history_rows):
         return "mid_conversation_social_reset"
-
     recurring = _recurring_content_blocker(cleaned, histories[-24:])
     if recurring:
         return recurring
     if _is_role_swapped_fact(cleaned, history_rows, agent_name):
         return "role_swapped_personal_fact"
-    if _is_unsupported_specificity(cleaned, history_rows, inbound, cognitive_context):
-        return "unsupported_specificity"
+    if _is_unsupported_concrete_biography(cleaned, history_rows, inbound, cognitive_context):
+        return "unsupported_concrete_biography"
     return None
 
 
-def candidate_repeats_recurring_attractor(
-    text: str,
-    dialogue_history,
-    history_limit: int = 48,
-) -> bool:
-    """Backward-compatible boolean wrapper around the stricter dialogue guard."""
-    return candidate_dialogue_blocker(
-        text,
-        dialogue_history,
-        history_limit=history_limit,
-    ) is not None
+def candidate_repeats_recurring_attractor(text: str, dialogue_history, history_limit: int = 48) -> bool:
+    return candidate_dialogue_blocker(text, dialogue_history, history_limit=history_limit) is not None
 
 
 def detect_recurring_content_attractor(messages: list[str]) -> dict | None:
-    """Detect a durable recurring-content loop in a recent message window."""
-    tokenized = [content_tokens(text) for text in messages]
-    tokenized = [tokens for tokens in tokenized if tokens]
+    tokenized = [tokens for tokens in (content_tokens(text) for text in messages) if tokens]
     if len(tokenized) < 4:
         return None
-
-    token_message_counts: Counter[str] = Counter()
-    pair_message_counts: Counter[tuple[str, str]] = Counter()
+    token_counts: Counter[str] = Counter()
+    pair_counts: Counter[tuple[str, str]] = Counter()
     for tokens in tokenized:
-        token_message_counts.update(set(tokens))
-        pair_message_counts.update(_pairs(tokens))
-
-    recurring_pairs = [
-        (pair, count)
-        for pair, count in pair_message_counts.items()
-        if count >= 3
-    ]
-    recurring_pairs.sort(key=lambda item: (-item[1], item[0]))
-    recurring_tokens = [
-        (token, count)
-        for token, count in token_message_counts.items()
-        if count >= 6
-    ]
-    recurring_tokens.sort(key=lambda item: (-item[1], item[0]))
-
+        token_counts.update(set(tokens))
+        pair_counts.update(_pairs(tokens))
+    recurring_pairs = sorted(((pair, count) for pair, count in pair_counts.items() if count >= 3), key=lambda x: (-x[1], x[0]))
+    recurring_tokens = sorted(((token, count) for token, count in token_counts.items() if count >= 6), key=lambda x: (-x[1], x[0]))
     if recurring_pairs and (recurring_pairs[0][1] >= 5 or len(recurring_pairs) >= 2):
-        return {
-            "reason": "recurring_content_attractor",
-            "count": recurring_pairs[0][1],
-            "phrase": " ".join(recurring_pairs[0][0]),
-            "recurring_pairs": [
-                {"phrase": " ".join(pair), "count": count}
-                for pair, count in recurring_pairs[:5]
-            ],
-        }
+        return {"reason": "recurring_content_attractor", "count": recurring_pairs[0][1], "phrase": " ".join(recurring_pairs[0][0]), "recurring_pairs": [{"phrase": " ".join(pair), "count": count} for pair, count in recurring_pairs[:5]]}
     if recurring_tokens:
-        return {
-            "reason": "recurring_single_token_attractor",
-            "count": recurring_tokens[0][1],
-            "phrase": recurring_tokens[0][0],
-            "recurring_pairs": [],
-        }
+        return {"reason": "recurring_single_token_attractor", "count": recurring_tokens[0][1], "phrase": recurring_tokens[0][0], "recurring_pairs": []}
     return None
