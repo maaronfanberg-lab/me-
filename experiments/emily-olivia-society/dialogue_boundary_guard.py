@@ -16,6 +16,7 @@ _SPEECH_EXHAUSTION_MARKER = "paper-derived Stanford act produced no usable spoke
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _GREETING_START = re.compile(r"^\s*(?:hi|hello|hey|oh\s*,?\s*hi)\b", re.IGNORECASE)
+_MID_TURN_GREETING = re.compile(r"[.!?]\s+(?:oh\s*,?\s*)?(?:hi|hello|hey)\b", re.IGNORECASE)
 _DIRECT_SELF_ADDRESS_START = re.compile(r"^\s*(?:(?:hi|hey|hello)\s*[,!:\-]?\s*)?{name}\b\s*[,!?:\-]", re.IGNORECASE)
 _SELF_VOCATIVE = re.compile(r"(?:^|[,;:!?]\s*|\b(?:hi|hey|hello)\s+){name}\b\s*[,!?.:]", re.IGNORECASE)
 _SELF_OBJECT_ROMANTIC = re.compile(r"\bi(?:'m|\s+am)\s+(?:not\s+)?in\s+love\s+with\s+me\b", re.IGNORECASE)
@@ -66,6 +67,10 @@ def _reintroduces_known_self(text: str, agent_name: str, dialogue_history) -> bo
 
 def _is_mid_conversation_greeting_reset(text: str, dialogue_history) -> bool:
     return len(list(dialogue_history or [])) >= 4 and bool(_GREETING_START.search(str(text or "")))
+
+
+def _has_mid_turn_greeting_reset(text: str, dialogue_history) -> bool:
+    return bool(list(dialogue_history or []) and _MID_TURN_GREETING.search(str(text or "")))
 
 
 def _is_nominal_fragment(text: str) -> bool:
@@ -174,6 +179,7 @@ def install_spoken_action_guard(generator):
                 (_has_self_object_role_confusion(text), "self-object-role-confusion"),
                 (_has_unsupported_demographic_claim(text, agent), "unsupported-demographic"),
                 (_has_refusal_handoff(text), "refusal-handoff"),
+                (_has_mid_turn_greeting_reset(text, dialogue_history), "mid-turn-greeting-reset"),
                 (_is_mid_conversation_greeting_reset(text, dialogue_history), "greeting-reset"),
                 (_is_nominal_fragment(text), "nominal-fragment"),
                 (_contradicts_observed_presence(text, getattr(other, "name", ""), support), "presence-contradiction"),
