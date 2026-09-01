@@ -11,6 +11,7 @@ import re
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _REPORTED_CONTENT = re.compile(r"\b(?:it|the\s+(?:message|email|text|note))\s+says?\b", re.IGNORECASE)
 _LINK_OFFER = re.compile(r"\b(?:here(?:'s|\s+is)|this\s+is)\s+(?:a|the)\s+link\b", re.IGNORECASE)
+_CLICK_LINK_REQUEST = re.compile(r"\b(?:click|open|follow)\s+(?:the|this|that)\s+link\b", re.IGNORECASE)
 _URL = re.compile(r"https?://[^\s)\]>'\"]+|www\.[^\s)\]>'\"]+", re.IGNORECASE)
 _MEDIA_ARTIFACT_CLAIM = re.compile(
     r"\b(?:here(?:'s|\s+is)|i(?:'ve|\s+have)\s+attached|i(?:'m|\s+am)\s+sending|"
@@ -59,6 +60,12 @@ def _has_unsupported_link_offer(text: str, support_text: str) -> bool:
     return not urls.issubset(support_urls)
 
 
+def _has_nonexistent_link_action(text: str, support_text: str) -> bool:
+    if not _CLICK_LINK_REQUEST.search(str(text or "")):
+        return False
+    return not bool(_URL.search(str(support_text or "")))
+
+
 def _has_unsupported_media_artifact(text: str, support_text: str) -> bool:
     candidate = str(text or "")
     if not _MEDIA_ARTIFACT_CLAIM.search(candidate):
@@ -78,6 +85,8 @@ def candidate_external_grounding_blocker(
         return "unsupported-reported-content"
     if _has_unsupported_link_offer(text, support_text):
         return "unsupported-link-offer"
+    if _has_nonexistent_link_action(text, support_text):
+        return "nonexistent-link-action"
     if _has_unsupported_media_artifact(text, support_text):
         return "unsupported-media-artifact"
     return None
