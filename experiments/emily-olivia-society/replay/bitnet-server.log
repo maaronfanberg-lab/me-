@@ -2260,3 +2260,29 @@ slot print_timing: id  0 | task 199 |
       total time =    4934.28 ms /   502 tokens
 srv  update_slots: all slots are idle
 request: POST /completion 127.0.0.1 200
+slot launch_slot_: id  0 | task 234 | processing task
+slot update_slots: id  0 | task 234 | tokenizing prompt, len = 1
+slot update_slots: id  0 | task 234 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 164
+slot update_slots: id  0 | task 234 | kv cache rm [0, end)
+slot update_slots: id  0 | task 234 | prompt processing progress, n_past = 164, n_tokens = 164, progress = 1.000000
+slot update_slots: id  0 | task 234 | prompt done, n_past = 164, n_tokens = 164
+slot      release: id  0 | task 234 | stop processing: n_past = 176, truncated = 0
+slot print_timing: id  0 | task 234 | 
+prompt eval time =    1175.67 ms /   164 tokens (    7.17 ms per token,   139.49 tokens per second)
+       eval time =     431.61 ms /    13 tokens (   33.20 ms per token,    30.12 tokens per second)
+      total time =    1607.28 ms /   177 tokens
+srv  update_slots: all slots are idle
+request: POST /v1/chat/completions 127.0.0.1 200
+slot launch_slot_: id  0 | task 248 | processing task
+slot update_slots: id  0 | task 248 | tokenizing prompt, len = 1
+slot update_slots: id  0 | task 248 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 564
+slot update_slots: id  0 | task 248 | kv cache rm [0, end)
+slot update_slots: id  0 | task 248 | prompt processing progress, n_past = 564, n_tokens = 564, progress = 1.000000
+slot update_slots: id  0 | task 248 | prompt done, n_past = 564, n_tokens = 564
+slot      release: id  0 | task 248 | stop processing: n_past = 624, truncated = 0
+slot print_timing: id  0 | task 248 | 
+prompt eval time =    4478.58 ms /   564 tokens (    7.94 ms per token,   125.93 tokens per second)
+       eval time =    2288.88 ms /    61 tokens (   37.52 ms per token,    26.65 tokens per second)
+      total time =    6767.46 ms /   625 tokens
+srv  update_slots: all slots are idle
+request: POST /completion 127.0.0.1 200
