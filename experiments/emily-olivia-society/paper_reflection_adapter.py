@@ -13,6 +13,7 @@ while delegating retrieval and reflection storage to Stanford HCI genagents.
 """
 from __future__ import annotations
 
+from reflection_generation import install_natural_reflection_parser
 from reflection_hygiene import sanitize_memory_stream
 
 _RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
@@ -99,6 +100,7 @@ def maybe_reflect(agent, time_step: int) -> bool:
     )
     before_reflections = _reflection_count(agent)
     total_memories = len(list(agent.brain.memory_stream.seq_nodes))
+    install_natural_reflection_parser()
     try:
         agent.brain.memory_stream.reflect(
             anchor=anchor,

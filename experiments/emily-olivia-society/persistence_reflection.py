@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from community_cycle import load_agents, next_community_time_step
+from reflection_generation import install_natural_reflection_parser
 from reflection_hygiene import sanitize_memory_stream
 
 HERE = Path(__file__).resolve().parent
@@ -40,6 +41,7 @@ def _run_reflection_pass(agent, anchor: str, time_step: int, retrieval_count: in
     nodes and preserves any valid reflections already produced. No substitute
     reflection content is generated.
     """
+    install_natural_reflection_parser()
     try:
         agent.brain.memory_stream.reflect(
             anchor=anchor,
