@@ -40,7 +40,7 @@ def _run_reflection_pass(agent, anchor: str, time_step: int, retrieval_count: in
     try:
         agent.brain.memory_stream.reflect(
             anchor=anchor,
-            reflection_count=3,
+            reflection_count=1,
             retrieval_count=retrieval_count,
             time_step=time_step,
         )
