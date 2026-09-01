@@ -26,6 +26,7 @@ DEFAULT_REPLY_TURNS = 8
 MAX_CONTINUOUS_SECONDS = 19800
 MAX_TURN_DELAY_SECONDS = 3600.0
 MAX_OPENER_CHARS = 12000
+_LEGACY_CANNED_OPENER = "Let's continue naturally from where we left off."
 
 
 def atomic_write_json(path: Path, payload: dict) -> None:
@@ -129,6 +130,12 @@ def validate_opener(opener: str) -> str:
     """Validate an explicitly supplied seed; blank means autonomous clean start."""
     opener = str(opener or "").strip()
     if not opener:
+        return ""
+    # GitHub reruns freeze the workflow definition from the original run. Run
+    # #95 therefore still passes the pre-fix canned default even while checking
+    # out current main. Quarantine exactly that historical input as no opener;
+    # it must never be delivered, remembered, or published as agent dialogue.
+    if opener.casefold() == _LEGACY_CANNED_OPENER.casefold():
         return ""
     if len(opener) > MAX_OPENER_CHARS:
         raise ValueError(f"opener exceeds {MAX_OPENER_CHARS} characters.")
