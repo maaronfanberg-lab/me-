@@ -75,7 +75,7 @@ def _is_usable_utterance(text: str, inbound: str = "", agent_name: str = "", oth
     cleaned = _clean_boundary(text)
     if not cleaned or _has_pathological_repetition(cleaned):
         return False
-    return _base._is_usable_utterance(cleaned, "", agent_name, other_name)
+    return _base._is_usable_utterance(cleaned, inbound, agent_name, other_name)
 
 
 def _grounding_words(text: str, limit: int = 6) -> list[str]:
