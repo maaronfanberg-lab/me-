@@ -10,7 +10,12 @@ import time
 import uuid
 from pathlib import Path
 
-from community_cycle import _is_usable_utterance, load_agents, next_community_time_step
+from community_cycle import (
+    _is_usable_utterance,
+    choose_opening_action,
+    load_agents,
+    next_community_time_step,
+)
 from first_exchange import SocialBridgeClient, process_one_reply
 
 HERE = Path(__file__).resolve().parent
@@ -72,10 +77,7 @@ def publish_live_replay() -> None:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        diff = subprocess.run(
-            ["git", "diff", "--cached", "--quiet"],
-            cwd=REPO_ROOT,
-        )
+        diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO_ROOT)
         if diff.returncode == 0:
             return
         commit = subprocess.run(
@@ -124,9 +126,10 @@ def publish_live_replay() -> None:
 
 
 def validate_opener(opener: str) -> str:
-    opener = opener.strip()
+    """Validate an explicitly supplied seed; blank means autonomous clean start."""
+    opener = str(opener or "").strip()
     if not opener:
-        raise ValueError("opener must not be empty.")
+        return ""
     if len(opener) > MAX_OPENER_CHARS:
         raise ValueError(f"opener exceeds {MAX_OPENER_CHARS} characters.")
     if not _is_usable_utterance(opener):
@@ -134,7 +137,12 @@ def validate_opener(opener: str) -> str:
     return opener
 
 
-async def run_community_session(opener: str, reply_turns: int, continuous_seconds: int = 0, turn_delay_seconds: float = 0.0) -> dict:
+async def run_community_session(
+    opener: str,
+    reply_turns: int,
+    continuous_seconds: int = 0,
+    turn_delay_seconds: float = 0.0,
+) -> dict:
     opener = validate_opener(opener)
     if continuous_seconds <= 0 and (reply_turns < 2 or reply_turns > MAX_REPLY_TURNS):
         raise ValueError(f"reply_turns must be between 2 and {MAX_REPLY_TURNS}; got {reply_turns}.")
@@ -162,9 +170,12 @@ async def run_community_session(opener: str, reply_turns: int, continuous_second
     started = time.monotonic()
     completed = 0
     latest_turn: dict | None = None
+    opening_turn: dict | None = None
     resumed = False
+    autonomous_opening = False
     seed: dict = {}
     dialogue_history: list[tuple[str, str]] = []
+    reply_time_offset = 0
 
     try:
         pending: list[dict] = []
@@ -202,15 +213,59 @@ async def run_community_session(opener: str, reply_turns: int, continuous_second
             dialogue_history.append((other.name, str(message["content"])))
             resumed = True
         else:
-            seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
-            if seed.get("success") is not True:
-                raise RuntimeError("Seed message delivery failed.")
-            dialogue_history.append((emily.name, opener))
+            if opener:
+                seed = await social.send_message(emily.agent_id, olivia.agent_id, opener)
+                if seed.get("success") is not True:
+                    raise RuntimeError("Explicit seed message delivery failed.")
+                dialogue_history.append((emily.name, opener))
+            else:
+                opening_observation = await social.observe_social_space(emily.agent_id)
+                if opening_observation.get("inbox"):
+                    raise RuntimeError("Social state changed while preparing autonomous opening.")
+                opening_action = choose_opening_action(
+                    emily,
+                    opening_observation,
+                    olivia,
+                    time_step=base_time_step,
+                    dialogue_history=dialogue_history,
+                )
+                seed = await social.send_message(
+                    emily.agent_id,
+                    int(opening_action["recipient_id"]),
+                    str(opening_action["content"]),
+                )
+                if seed.get("success") is not True:
+                    raise RuntimeError("Autonomous opening delivery failed.")
+                emily.brain.save(str(emily.workspace))
+                dialogue_history.append((emily.name, str(opening_action["content"])))
+                opening_turn = {
+                    "agent": emily.name,
+                    "time_step": base_time_step,
+                    "observation": opening_observation,
+                    "retrieved_memories": opening_action.get("retrieved_memories", []),
+                    "action": opening_action,
+                    "action_result": seed,
+                    "consumed_inbound": None,
+                }
+                autonomous_opening = True
+                reply_time_offset = 1
             current = olivia
             other = emily
 
         if continuous_seconds > 0:
-            append_jsonl(stream_path, {"type": "session_start", "session_id": session_id, "resumed": resumed, "discarded_pending_message_ids": discarded_pending_message_ids, "seed": seed, "start_time_step": base_time_step})
+            append_jsonl(
+                stream_path,
+                {
+                    "type": "session_start",
+                    "session_id": session_id,
+                    "resumed": resumed,
+                    "autonomous_opening": autonomous_opening,
+                    "discarded_pending_message_ids": discarded_pending_message_ids,
+                    "seed": seed,
+                    "opening_turn": opening_turn,
+                    "start_time_step": base_time_step,
+                },
+            )
 
         offset = 0
         while True:
@@ -223,7 +278,13 @@ async def run_community_session(opener: str, reply_turns: int, continuous_second
                 stop_reason = "turn_limit_reached"
                 break
 
-            turn = await process_one_reply(current, other, social, time_step=base_time_step + offset, dialogue_history=dialogue_history)
+            turn = await process_one_reply(
+                current,
+                other,
+                social,
+                time_step=base_time_step + reply_time_offset + offset,
+                dialogue_history=dialogue_history,
+            )
             completed += 1
             latest_turn = turn
 
@@ -233,18 +294,23 @@ async def run_community_session(opener: str, reply_turns: int, continuous_second
 
             if continuous_seconds > 0:
                 append_jsonl(stream_path, {"type": "turn", "session_id": session_id, "index": completed, "turn": turn})
-                atomic_write_json(summary_path, {
-                    "mode": "continuous_persistent_community_session",
-                    "status": "running",
-                    "session_id": session_id,
-                    "resumed_social_state": resumed,
-                    "discarded_pending_message_ids": discarded_pending_message_ids,
-                    "start_time_step": base_time_step,
-                    "completed_reply_turns": completed,
-                    "continuous_seconds": continuous_seconds,
-                    "turn_delay_seconds": turn_delay_seconds,
-                    "latest_turn": latest_turn,
-                })
+                atomic_write_json(
+                    summary_path,
+                    {
+                        "mode": "continuous_persistent_community_session",
+                        "status": "running",
+                        "session_id": session_id,
+                        "resumed_social_state": resumed,
+                        "autonomous_opening": autonomous_opening,
+                        "discarded_pending_message_ids": discarded_pending_message_ids,
+                        "start_time_step": base_time_step,
+                        "opening_turn": opening_turn,
+                        "completed_reply_turns": completed,
+                        "continuous_seconds": continuous_seconds,
+                        "turn_delay_seconds": turn_delay_seconds,
+                        "latest_turn": latest_turn,
+                    },
+                )
                 publish_live_replay()
             else:
                 bounded_turns.append(turn)
@@ -267,16 +333,21 @@ async def run_community_session(opener: str, reply_turns: int, continuous_second
                 if remaining > 0:
                     await asyncio.sleep(min(turn_delay_seconds, remaining))
     except Exception as exc:
-        atomic_write_json(error_path, {
-            "session_id": session_id,
-            "status": "failed",
-            "error_type": type(exc).__name__,
-            "error": str(exc),
-            "resumed_social_state": resumed,
-            "discarded_pending_message_ids": discarded_pending_message_ids,
-            "completed_reply_turns": completed,
-            "latest_turn": latest_turn,
-        })
+        atomic_write_json(
+            error_path,
+            {
+                "session_id": session_id,
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "resumed_social_state": resumed,
+                "autonomous_opening": autonomous_opening,
+                "discarded_pending_message_ids": discarded_pending_message_ids,
+                "opening_turn": opening_turn,
+                "completed_reply_turns": completed,
+                "latest_turn": latest_turn,
+            },
+        )
         publish_live_replay()
         raise
     finally:
@@ -296,8 +367,10 @@ async def run_community_session(opener: str, reply_turns: int, continuous_second
             "autonomous_loop": continuous_seconds > 0,
         },
         "resumed_social_state": resumed,
+        "autonomous_opening": autonomous_opening,
         "discarded_pending_message_ids": discarded_pending_message_ids,
         "start_time_step": base_time_step,
+        "opening_turn": opening_turn,
         "completed_reply_turns": completed,
         "stop_reason": stop_reason,
         "seed": seed,
@@ -318,17 +391,41 @@ async def run_community_session(opener: str, reply_turns: int, continuous_second
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Run a persistent Emily + Olivia community session.")
-    parser.add_argument("--opener", default="Hello, Olivia.", help="Seed message used only when no valid pending social message can be resumed.")
-    parser.add_argument("--turns", type=int, default=DEFAULT_REPLY_TURNS, help=f"Maximum reply turns after the seed message (2-{MAX_REPLY_TURNS}) in bounded mode.")
-    parser.add_argument("--continuous-seconds", type=int, default=0, help=f"Keep Emily and Olivia alternating for up to {MAX_CONTINUOUS_SECONDS} seconds; 0 keeps bounded mode.")
-    parser.add_argument("--turn-delay-seconds", type=float, default=0.0, help="Minimum pause between successful replies in continuous mode.")
+    parser.add_argument(
+        "--opener",
+        default="",
+        help="Optional explicit Emily seed. Blank starts autonomously through the Stanford chain.",
+    )
+    parser.add_argument(
+        "--turns",
+        type=int,
+        default=DEFAULT_REPLY_TURNS,
+        help=f"Maximum reply turns after the seed message (2-{MAX_REPLY_TURNS}) in bounded mode.",
+    )
+    parser.add_argument(
+        "--continuous-seconds",
+        type=int,
+        default=0,
+        help=f"Keep Emily and Olivia alternating for up to {MAX_CONTINUOUS_SECONDS} seconds; 0 keeps bounded mode.",
+    )
+    parser.add_argument(
+        "--turn-delay-seconds",
+        type=float,
+        default=0.0,
+        help="Minimum pause between successful replies in continuous mode.",
+    )
     parser.add_argument("--run", action="store_true", help="Explicitly permit the requested community session.")
     args = parser.parse_args()
 
     if not args.run:
         raise SystemExit("Refusing to start automatically. Use --run to permit the community session.")
 
-    result = await run_community_session(args.opener, args.turns, continuous_seconds=args.continuous_seconds, turn_delay_seconds=args.turn_delay_seconds)
+    result = await run_community_session(
+        args.opener,
+        args.turns,
+        continuous_seconds=args.continuous_seconds,
+        turn_delay_seconds=args.turn_delay_seconds,
+    )
     print(json.dumps(result, indent=2))
 
 
