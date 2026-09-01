@@ -26,7 +26,6 @@ llama_model_loader: - kv  13:            tokenizer.ggml.add_space_prefix bool   
 llama_model_loader: - kv  14:                       tokenizer.ggml.model str              = gpt2
 llama_model_loader: - kv  15:                         tokenizer.ggml.pre str              = falcon3
 llama_model_loader: - kv  16:                      tokenizer.ggml.tokens arr[str,131072]  = [">>TITLE<<", ">>ABSTRACT<<", ">>INTR...
-request: GET /health 127.0.0.1 503
 llama_model_loader: - kv  17:                  tokenizer.ggml.token_type arr[i32,131072]  = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, ...
 llama_model_loader: - kv  18:                      tokenizer.ggml.merges arr[str,128810]  = ["N E", "Ġ Ġ", "Ġ t", "Ġ a", "> >...
 llama_model_loader: - kv  19:                tokenizer.ggml.eos_token_id u32              = 11
@@ -2152,60 +2151,34 @@ slot update_slots: id  0 | task 0 | prompt processing progress, n_past = 37, n_t
 slot update_slots: id  0 | task 0 | prompt done, n_past = 37, n_tokens = 37
 slot      release: id  0 | task 0 | stop processing: n_past = 39, truncated = 0
 slot print_timing: id  0 | task 0 | 
-prompt eval time =     202.94 ms /    37 tokens (    5.48 ms per token,   182.32 tokens per second)
-       eval time =      47.56 ms /     3 tokens (   15.85 ms per token,    63.08 tokens per second)
-      total time =     250.50 ms /    40 tokens
+prompt eval time =     279.63 ms /    37 tokens (    7.56 ms per token,   132.32 tokens per second)
+       eval time =      67.68 ms /     3 tokens (   22.56 ms per token,    44.33 tokens per second)
+      total time =     347.31 ms /    40 tokens
 srv  update_slots: all slots are idle
 request: POST /v1/chat/completions 127.0.0.1 200
 slot launch_slot_: id  0 | task 4 | processing task
 slot update_slots: id  0 | task 4 | tokenizing prompt, len = 1
-slot update_slots: id  0 | task 4 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 194
+slot update_slots: id  0 | task 4 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 155
 slot update_slots: id  0 | task 4 | kv cache rm [0, end)
-slot update_slots: id  0 | task 4 | prompt processing progress, n_past = 194, n_tokens = 194, progress = 1.000000
-slot update_slots: id  0 | task 4 | prompt done, n_past = 194, n_tokens = 194
-slot      release: id  0 | task 4 | stop processing: n_past = 305, truncated = 0
+slot update_slots: id  0 | task 4 | prompt processing progress, n_past = 155, n_tokens = 155, progress = 1.000000
+slot update_slots: id  0 | task 4 | prompt done, n_past = 155, n_tokens = 155
+slot      release: id  0 | task 4 | stop processing: n_past = 168, truncated = 0
 slot print_timing: id  0 | task 4 | 
-prompt eval time =    1054.51 ms /   194 tokens (    5.44 ms per token,   183.97 tokens per second)
-       eval time =    3020.50 ms /   112 tokens (   26.97 ms per token,    37.08 tokens per second)
-      total time =    4075.01 ms /   306 tokens
+prompt eval time =    1175.35 ms /   155 tokens (    7.58 ms per token,   131.88 tokens per second)
+       eval time =     480.61 ms /    14 tokens (   34.33 ms per token,    29.13 tokens per second)
+      total time =    1655.95 ms /   169 tokens
 srv  update_slots: all slots are idle
 request: POST /v1/chat/completions 127.0.0.1 200
-slot launch_slot_: id  0 | task 117 | processing task
-slot update_slots: id  0 | task 117 | tokenizing prompt, len = 1
-slot update_slots: id  0 | task 117 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 425
-slot update_slots: id  0 | task 117 | kv cache rm [0, end)
-slot update_slots: id  0 | task 117 | prompt processing progress, n_past = 425, n_tokens = 425, progress = 1.000000
-slot update_slots: id  0 | task 117 | prompt done, n_past = 425, n_tokens = 425
-slot      release: id  0 | task 117 | stop processing: n_past = 443, truncated = 0
-slot print_timing: id  0 | task 117 | 
-prompt eval time =    2908.08 ms /   425 tokens (    6.84 ms per token,   146.14 tokens per second)
-       eval time =     490.94 ms /    19 tokens (   25.84 ms per token,    38.70 tokens per second)
-      total time =    3399.01 ms /   444 tokens
-srv  update_slots: all slots are idle
-request: POST /completion 127.0.0.1 200
-slot launch_slot_: id  0 | task 137 | processing task
-slot update_slots: id  0 | task 137 | tokenizing prompt, len = 1
-slot update_slots: id  0 | task 137 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 149
-slot update_slots: id  0 | task 137 | kv cache rm [0, end)
-slot update_slots: id  0 | task 137 | prompt processing progress, n_past = 149, n_tokens = 149, progress = 1.000000
-slot update_slots: id  0 | task 137 | prompt done, n_past = 149, n_tokens = 149
-slot      release: id  0 | task 137 | stop processing: n_past = 163, truncated = 0
-slot print_timing: id  0 | task 137 | 
-prompt eval time =     906.18 ms /   149 tokens (    6.08 ms per token,   164.43 tokens per second)
-       eval time =     369.13 ms /    15 tokens (   24.61 ms per token,    40.64 tokens per second)
-      total time =    1275.31 ms /   164 tokens
-srv  update_slots: all slots are idle
-request: POST /v1/chat/completions 127.0.0.1 200
-slot launch_slot_: id  0 | task 153 | processing task
-slot update_slots: id  0 | task 153 | tokenizing prompt, len = 1
-slot update_slots: id  0 | task 153 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 409
-slot update_slots: id  0 | task 153 | kv cache rm [0, end)
-slot update_slots: id  0 | task 153 | prompt processing progress, n_past = 409, n_tokens = 409, progress = 1.000000
-slot update_slots: id  0 | task 153 | prompt done, n_past = 409, n_tokens = 409
-slot      release: id  0 | task 153 | stop processing: n_past = 417, truncated = 0
-slot print_timing: id  0 | task 153 | 
-prompt eval time =    2726.38 ms /   409 tokens (    6.67 ms per token,   150.02 tokens per second)
-       eval time =     218.34 ms /     9 tokens (   24.26 ms per token,    41.22 tokens per second)
-      total time =    2944.71 ms /   418 tokens
+slot launch_slot_: id  0 | task 19 | processing task
+slot update_slots: id  0 | task 19 | tokenizing prompt, len = 1
+slot update_slots: id  0 | task 19 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 358
+slot update_slots: id  0 | task 19 | kv cache rm [0, end)
+slot update_slots: id  0 | task 19 | prompt processing progress, n_past = 358, n_tokens = 358, progress = 1.000000
+slot update_slots: id  0 | task 19 | prompt done, n_past = 358, n_tokens = 358
+slot      release: id  0 | task 19 | stop processing: n_past = 378, truncated = 0
+slot print_timing: id  0 | task 19 | 
+prompt eval time =    2893.97 ms /   358 tokens (    8.08 ms per token,   123.71 tokens per second)
+       eval time =     768.22 ms /    21 tokens (   36.58 ms per token,    27.34 tokens per second)
+      total time =    3662.19 ms /   379 tokens
 srv  update_slots: all slots are idle
 request: POST /completion 127.0.0.1 200
