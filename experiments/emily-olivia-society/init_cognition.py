@@ -2,10 +2,11 @@
 """Layer 2 bootstrap: create Emily and Olivia using Stanford HCI genagents.
 
 This does not call an LLM, add memories, reflect, or start social interaction.
-It only uses Stanford's GenerativeAgent class and save() format to create
+It only uses Stanford's GenerativeAgent and save() format to create
 separate persistent agent workspaces.
 
-Existing complete workspaces are preserved. An incomplete existing workspace
+Existing complete workspaces are preserved. Malformed derived reflection nodes
+are removed without touching observations. An incomplete existing workspace
 causes a hard failure rather than being overwritten.
 """
 from __future__ import annotations
@@ -13,6 +14,8 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+
+from reflection_hygiene import sanitize_memory_stream
 
 HERE = Path(__file__).resolve().parent
 STANFORD = HERE / "vendor" / "stanford-genagents"
@@ -80,6 +83,13 @@ def main() -> None:
         state = workspace_state(workspace)
 
         if state == "complete":
+            agent = GenerativeAgent(str(workspace))
+            removed = sanitize_memory_stream(agent.memory_stream)
+            if removed:
+                agent.save(str(workspace))
+                print(
+                    f"Sanitized {len(removed)} malformed Stanford reflection node(s) for {name}."
+                )
             print(f"Preserving existing Stanford cognition workspace: {name}")
             continue
         if state == "incomplete":
