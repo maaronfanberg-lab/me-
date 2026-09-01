@@ -1,0 +1,76 @@
+name: Emily Olivia prediction-error replication v3
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/emily-olivia-society/endogenous_workspace_replication_v3.py'
+      - 'experiments/emily-olivia-society/endogenous_workspace_preregistration_v3.json'
+      - '.github/workflows/emily-olivia-endogenous-replication-v3.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  replication-ablation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            experiments/emily-olivia-society/endogenous_workspace.py
+            experiments/emily-olivia-society/endogenous_workspace_replay.py
+            experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py
+            experiments/emily-olivia-society/endogenous_workspace_trial_v2.py
+            experiments/emily-olivia-society/endogenous_workspace_replication_v3.py
+            experiments/emily-olivia-society/endogenous_workspace_preregistration_v3.json
+          sparse-checkout-cone-mode: false
+
+      - name: Compile locked offline instrument
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 -m py_compile \
+            endogenous_workspace.py \
+            endogenous_workspace_replay.py \
+            endogenous_workspace_artifact_tape.py \
+            endogenous_workspace_trial_v2.py \
+            endogenous_workspace_replication_v3.py
+
+      - name: Run independent replication and destructive ablations
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 endogenous_workspace_replication_v3.py \
+            --prereg endogenous_workspace_preregistration_v3.json \
+            --out replication-ablation-v3.json
+
+      - name: Validate experimental boundary
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('replication-ablation-v3.json').read_text())
+          assert d['produced_dialogue'] is False
+          assert d['wrote_live_memory'] is False
+          assert d['activated_live_workspace'] is False
+          assert d['results']['status'] in {
+              'SUPPORTED_FOR_SHADOW_MODE',
+              'DO_NOT_ENTER_SHADOW_MODE',
+              'INSUFFICIENT_INDEPENDENT_ARTIFACTS',
+          }
+          print(json.dumps({'selection_manifest': d.get('selection_manifest'), 'aggregate': d.get('aggregate'), 'results': d['results']}, indent=2, sort_keys=True))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-prediction-error-replication-v3
+          path: experiments/emily-olivia-society/replication-ablation-v3.json
+          if-no-files-found: error
+          retention-days: 30
