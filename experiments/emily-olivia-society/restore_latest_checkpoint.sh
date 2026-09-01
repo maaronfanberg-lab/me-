@@ -40,7 +40,21 @@ for run_id in "${candidate_runs[@]:-}"; do
 done
 
 if [[ -z "$checkpoint_run" ]]; then
-  echo "No prior successful community checkpoint artifact exists. Fresh initialization is allowed."
+  echo "No prior successful community checkpoint artifact exists. Starting from clean cognition and social state."
+  rm -rf "$WORKSPACES"
+  rm -f "$REPLAY_DIR/social_state.json"
+  mkdir -p "$REPLAY_DIR"
+  cat > "$REPLAY_DIR/checkpoint_restore.json.tmp" <<JSON
+{
+  "mode": "checkpoint_restore",
+  "restored": false,
+  "source_run_id": null,
+  "artifact": "$ARTIFACT_NAME",
+  "reason": "no_valid_checkpoint",
+  "social_state_restored": false
+}
+JSON
+  mv "$REPLAY_DIR/checkpoint_restore.json.tmp" "$REPLAY_DIR/checkpoint_restore.json"
   exit 0
 fi
 
