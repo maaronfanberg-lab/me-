@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""External-reality grounding checks for Emily + Olivia dialogue.
+"""External-reality and role-grounding checks for Emily + Olivia dialogue.
 
 This module never authors replacement dialogue. It only classifies model output
-whose claimed external evidence is absent from the current social evidence.
+whose claimed external evidence or conversational role is absent from the
+current social evidence.
 """
 from __future__ import annotations
 
@@ -19,6 +20,12 @@ _MEDIA_ARTIFACT_CLAIM = re.compile(
     re.IGNORECASE,
 )
 _MEDIA_WORD = re.compile(r"\b(?:photo|picture|image|video|file|attachment)\b", re.IGNORECASE)
+_SERVICE_RESPONSE_TEMPLATE = re.compile(
+    r"(?:\bthank\s+you\s+for\s+your\s+response\b|"
+    r"\bi\s+will\s+be\s+happy\s+to\s+answer\s+(?:any\s+)?questions\b|"
+    r"\bplease\s+let\s+me\s+know\s+if\s+you\s+have\s+(?:any\s+)?questions\b)",
+    re.IGNORECASE,
+)
 _FILLER = {
     "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
     "has", "have", "he", "her", "here", "him", "his", "i", "in", "is", "it",
@@ -81,6 +88,8 @@ def candidate_external_grounding_blocker(
     other_name: str = "",
 ) -> str | None:
     _ = (agent_name, other_name)
+    if _SERVICE_RESPONSE_TEMPLATE.search(str(text or "")):
+        return "service-response-template"
     if _has_unsupported_reported_content(text, support_text):
         return "unsupported-reported-content"
     if _has_unsupported_link_offer(text, support_text):
