@@ -1,0 +1,78 @@
+name: Emily Olivia offline workspace history trial
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/emily-olivia-society/endogenous_workspace.py'
+      - 'experiments/emily-olivia-society/endogenous_workspace_replay.py'
+      - 'experiments/emily-olivia-society/endogenous_workspace_history_tape.py'
+      - 'experiments/emily-olivia-society/endogenous_workspace_trial.py'
+      - 'experiments/emily-olivia-society/endogenous_workspace_preregistration_v1.json'
+      - '.github/workflows/emily-olivia-endogenous-history-trial.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  historical-proxy-trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            experiments/emily-olivia-society/endogenous_workspace.py
+            experiments/emily-olivia-society/endogenous_workspace_replay.py
+            experiments/emily-olivia-society/endogenous_workspace_history_tape.py
+            experiments/emily-olivia-society/endogenous_workspace_trial.py
+            experiments/emily-olivia-society/endogenous_workspace_preregistration_v1.json
+          sparse-checkout-cone-mode: false
+
+      - name: Recover multi-turn tape from replay commit history
+        working-directory: experiments/emily-olivia-society
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 endogenous_workspace_history_tape.py \
+            --out historical-proxy-tape.json \
+            --max-commits 100 \
+            --min-ticks 8
+
+      - name: Run locked eight-seed A/B/C proxy trial
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 endogenous_workspace_trial.py \
+            --tape historical-proxy-tape.json \
+            --prereg endogenous_workspace_preregistration_v1.json \
+            --out historical-proxy-trial.json
+
+      - name: Validate trial structure without forcing a positive result
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('historical-proxy-trial.json').read_text())
+          assert result['produced_dialogue'] is False
+          assert result['wrote_live_memory'] is False
+          assert result['activated_live_workspace'] is False
+          assert len(result['seeds']) == 8
+          assert result['results']['status'] in {
+              'SUPPORTED_FOR_NEXT_OFFLINE_STAGE',
+              'NOT_SUPPORTED_BY_PROXY_TRIAL',
+          }
+          print(json.dumps(result['results'], indent=2, sort_keys=True))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-endogenous-history-proxy
+          path: |
+            experiments/emily-olivia-society/historical-proxy-tape.json
+            experiments/emily-olivia-society/historical-proxy-trial.json
+          if-no-files-found: error
+          retention-days: 30
