@@ -145,30 +145,7 @@ jobs:
         env:
           COMMUNITY_WORKFLOW_FILE: 'emily-olivia-community-run.yml'
           COMMUNITY_ARTIFACT_NAME: emily-olivia-community-results
-        run: |
-          if bash restore_latest_checkpoint.sh; then
-            exit 0
-          fi
-          echo "Checkpoint history API is unavailable; starting this run from clean cognition instead of blocking conversation."
-          rm -rf workspaces
-          mkdir -p replay
-          rm -f \
-            replay/social_state.json \
-            replay/checkpoint_session.json \
-            replay/community_session.json \
-            replay/community_session.jsonl \
-            replay/community_session_error.json
-          cat > replay/checkpoint_restore.json <<'JSON'
-          {
-            "mode": "checkpoint_restore",
-            "restored": false,
-            "source_run_id": null,
-            "source_run_conclusion": null,
-            "artifact": "emily-olivia-community-results",
-            "reason": "checkpoint_history_api_unavailable_clean_start",
-            "social_state_restored": false
-          }
-          JSON
+        run: bash restore_latest_checkpoint.sh
 
       - name: Validate restore evidence
         if: steps.gate.outputs.run == 'true'
