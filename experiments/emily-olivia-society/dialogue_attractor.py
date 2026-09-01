@@ -17,8 +17,18 @@ _TEMPLATE_BLANK = re.compile(
     re.IGNORECASE,
 )
 _TRAILING_CUTOFF = re.compile(r"(?:\.{3,}|…|--+|[,;:])\s*$")
+_DANGLING_DETERMINER = re.compile(r"\b(?:the|a|an)\s*$", re.IGNORECASE)
 _GREETING_START = re.compile(r"^\s*(?:oh[\s,!]+)?(?:hi|hello|hey)\b", re.IGNORECASE)
 _FIRST_PERSON_MARKER = re.compile(r"\b(?:i|i'm|i've|i'd|i'll|my)\b", re.IGNORECASE)
+_FINITE_SHORT_CLAUSE = re.compile(
+    r"\b(?:am|is|are|was|were|have|has|had|do|does|did|can|could|will|would|"
+    r"should|may|might|must|love|loves|like|likes|want|wants|need|needs|know|knows|"
+    r"think|thinks|feel|feels|say|says|tell|tells|mean|means|go|goes|come|comes|"
+    r"i'm|i've|i'll|i'd|you're|you've|you'll|you'd|we're|we've|we'll|we'd|"
+    r"they're|they've|they'll|they'd|it's|that's|can't|don't|doesn't|didn't|won't|"
+    r"wouldn't|couldn't|shouldn't|isn't|aren't|wasn't|weren't)\b",
+    re.IGNORECASE,
+)
 _CONCRETE_AUTOBIOGRAPHY = re.compile(
     r"(?:\bi\s+(?:went|visited|travelled|traveled|moved|worked|lived|studied|"
     r"bought|owned|made|built|created)\b|"
@@ -98,7 +108,12 @@ def _pairs(tokens: tuple[str, ...]) -> set[tuple[str, str]]:
 
 def _is_bare_short_fragment(text: str) -> bool:
     words = normalized_words(text)
-    return 4 <= len(words) <= 7 and not bool(re.search(r"[?!.]\s*$", str(text or "").strip()))
+    if not 4 <= len(words) <= 7:
+        return False
+    cleaned = str(text or "").strip()
+    if re.search(r"[?!.]\s*$", cleaned):
+        return False
+    return not bool(_FINITE_SHORT_CLAUSE.search(cleaned))
 
 
 def _is_short_subset_echo(text: str, histories: list[str]) -> bool:
@@ -236,7 +251,7 @@ def candidate_dialogue_blocker(text: str, dialogue_history, *, inbound: str = ""
         return "empty_candidate"
     if _TEMPLATE_BLANK.search(cleaned):
         return "template_blank_residue"
-    if _TRAILING_CUTOFF.search(cleaned):
+    if _TRAILING_CUTOFF.search(cleaned) or _DANGLING_DETERMINER.search(cleaned):
         return "unfinished_cutoff"
     if _is_bare_short_fragment(cleaned):
         return "bare_short_fragment"

@@ -18,6 +18,8 @@ _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _GREETING_START = re.compile(r"^\s*(?:hi|hello|hey|oh\s*,?\s*hi)\b", re.IGNORECASE)
 _DIRECT_SELF_ADDRESS_START = re.compile(r"^\s*(?:(?:hi|hey|hello)\s*[,!:\-]?\s*)?{name}\b\s*[,!?:\-]", re.IGNORECASE)
 _SELF_VOCATIVE = re.compile(r"(?:^|[,;:!?]\s*|\b(?:hi|hey|hello)\s+){name}\b\s*[,!?.:]", re.IGNORECASE)
+_SELF_OBJECT_ROMANTIC = re.compile(r"\bi(?:'m|\s+am)\s+(?:not\s+)?in\s+love\s+with\s+me\b", re.IGNORECASE)
+_DEMOGRAPHIC_CLAIM = re.compile(r"\bi(?:'m|\s+am)\s+(?:a\s+)?(girl|woman|man|boy)\b", re.IGNORECASE)
 _PRESENCE_EVIDENCE = re.compile(r"(?:\bcommunity\s+contains\b|\bpresent\s+(?:together|in\s+the\s+private\s+two-person\s+community)\b)", re.IGNORECASE)
 _PRESENCE_CONTRADICTION = re.compile(r"(?:\bwhere\s+are\s+you\b|\bi\s+(?:can't|cannot)\s+(?:see|find)\s+you\b|\byou(?:'re|\s+are)\s+not\s+(?:here|visible)\b)", re.IGNORECASE)
 _MOVEMENT_PREMISE = re.compile(r"(?:\bwhere\s+are\s+you\s+going\b|\bwhere\s+did\s+you\s+go\b|\bare\s+you\s+leaving\b|\bwhen\s+are\s+you\s+leaving\b|\bwhy\s+are\s+you\s+leaving\b)", re.IGNORECASE)
@@ -30,6 +32,7 @@ _PHANTOM_LIVE_INTERLOCUTOR = re.compile(r"\byou\s+(?:seem|appear)\s+to\s+be\s+(?
 _THIRD_INTERLOCUTOR_EVIDENCE = re.compile(r"\b(?:someone|somebody|another\s+person|third\s+person)\b[^.]{0,100}\b(?:talk|speak|chat|conversation)\b|\b(?:talk|speak|chat|conversation)\b[^.]{0,100}\b(?:someone|somebody|another\s+person|third\s+person)\b", re.IGNORECASE)
 _DELEGATION_CLAIM = re.compile(r"(?:\bi\s+was\s+sent\s+here\s+by\s+(?:someone|somebody|them)\b|\b(?:someone|somebody|they)\s+(?:sent|brought|placed|left)\s+me\s+(?:here|there)\b|\bthey\s+(?:have\s+)?left\s+me\s+here\b)", re.IGNORECASE)
 _DELEGATION_EVIDENCE = re.compile(r"(?:\bsent\s+here\s+by\b|\b(?:sent|brought|placed|left)\s+me\s+(?:here|there)\b)", re.IGNORECASE)
+_PERSONAL_BACKSTORY = re.compile(r"(?:\bi\s+(?:just\s+)?(?:had|have|got)\s+(?:this|a|the)\s+friend\b|\bmy\s+friend\b)", re.IGNORECASE)
 
 _LOCATION_HEAD = r"(?:town|city|hospital|school|office|center|centre|park|cafe|café|restaurant|store|shop|house|home|apartment|library|church|clinic|beach|station|airport|hotel|room|kitchen|garden|neighbou?rhood|street|market|mall|gym|bar|pub|theat(?:er|re)|museum)"
 _CONCRETE_SETTING_ANCHOR = re.compile(rf"\b(?:at|from|inside|outside|near|around|through|into|onto|to|back\s+to|during|after|before)\s+(?:(?:the|a|an|your|my|our|their|his|her)\s+)?((?:[A-Za-z][A-Za-z'-]*\s+){{0,2}}{_LOCATION_HEAD})\b", re.IGNORECASE)
@@ -95,8 +98,29 @@ def _has_phantom_live_interlocutor(text: str, support_text: str) -> bool:
 
 
 def _has_unsupported_delegation(text: str, support_text: str) -> bool:
-    """Reject invented claims that an unseen third party sent, placed, or abandoned the speaker."""
     return bool(_DELEGATION_CLAIM.search(str(text or "")) and not _DELEGATION_EVIDENCE.search(str(support_text or "")))
+
+
+def _has_unsupported_personal_backstory(text: str, support_text: str) -> bool:
+    return bool(_PERSONAL_BACKSTORY.search(str(text or "")) and not _PERSONAL_BACKSTORY.search(str(support_text or "")))
+
+
+def _has_self_object_role_confusion(text: str) -> bool:
+    return bool(_SELF_OBJECT_ROMANTIC.search(str(text or "")))
+
+
+def _has_unsupported_demographic_claim(text: str, agent) -> bool:
+    match = _DEMOGRAPHIC_CLAIM.search(str(text or ""))
+    if not match:
+        return False
+    scratch = dict(getattr(getattr(agent, "brain", None), "scratch", {}) or {})
+    stored = str(scratch.get("gender") or scratch.get("sex") or "").strip().casefold()
+    if not stored:
+        return True
+    claim = match.group(1).casefold()
+    female = {"female", "woman", "girl"}
+    male = {"male", "man", "boy"}
+    return not ((stored in female and claim in female) or (stored in male and claim in male))
 
 
 def _is_short_recent_echo(text: str, dialogue_history) -> bool:
@@ -142,6 +166,8 @@ def install_spoken_action_guard(generator):
             checks = (
                 (_addresses_self_as_peer(text, getattr(agent, "name", "")), "self-address"),
                 (_reintroduces_known_self(text, getattr(agent, "name", ""), dialogue_history), "self-reintroduction"),
+                (_has_self_object_role_confusion(text), "self-object-role-confusion"),
+                (_has_unsupported_demographic_claim(text, agent), "unsupported-demographic"),
                 (_is_mid_conversation_greeting_reset(text, dialogue_history), "greeting-reset"),
                 (_is_nominal_fragment(text), "nominal-fragment"),
                 (_contradicts_observed_presence(text, getattr(other, "name", ""), support), "presence-contradiction"),
@@ -149,6 +175,7 @@ def install_spoken_action_guard(generator):
                 (_has_unsupported_role_claim(text, support), "unsupported-role"),
                 (_has_phantom_live_interlocutor(text, support), "phantom-interlocutor"),
                 (_has_unsupported_delegation(text, support), "unsupported-delegation"),
+                (_has_unsupported_personal_backstory(text, support), "unsupported-backstory"),
                 (_is_short_recent_echo(text, dialogue_history), "short-echo"),
                 (_has_unsupported_concrete_setting(text, inbound, dialogue_history, cognitive_context), "unsupported-setting"),
             )

@@ -16,12 +16,12 @@ from community_cycle import (
     choose_action,
     next_community_time_step,
 )
-from retrieval_evidence import serialize_retrieval_evidence
 
 HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
 AGENTSOCIETY_PYTHON = HERE / ".venv-agentsociety" / "bin" / "python"
 BRIDGE = HERE / "social_bridge.py"
+_MAX_RECOVERABLE_SPEECH_ATTEMPTS = 3
 _RECOVERABLE_SPEECH_FAILURE_MARKERS = (
     "paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary",
     "repeatedly hit structural dialogue blockers after",
@@ -181,19 +181,6 @@ def _memory_already_present(agent, memory: str, window: int = 32) -> bool:
     return False
 
 
-def _dedupe_retrieved_nodes(nodes) -> list:
-    """Do not amplify one identical memory merely because Stanford stored it twice."""
-    unique = []
-    seen: set[str] = set()
-    for node in nodes:
-        content = str(getattr(node, "content", "")).strip()
-        if not content or content in seen:
-            continue
-        seen.add(content)
-        unique.append(node)
-    return unique
-
-
 def _recoverable_speech_failure(exc: RuntimeError) -> bool:
     message = str(exc)
     return any(marker in message for marker in _RECOVERABLE_SPEECH_FAILURE_MARKERS)
@@ -217,34 +204,41 @@ async def process_one_reply(
         agent.brain.remember(memory, time_step=time_step)
     _coerce_memory_importance(agent)
 
-    query = f"Current interaction with {other.name}"
-    retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
-    retrieved_nodes = _dedupe_retrieved_nodes(list(retrieved.get(query, [])))
-    relevant = [node.content for node in retrieved_nodes]
-    retrieval_metadata = serialize_retrieval_evidence(retrieved_nodes, time_step)
+    # No authored fallback is used. A recoverable speech-boundary exhaustion
+    # keeps the exact inbound unread and retries the full Stanford-derived act
+    # on that same turn. Only after a bounded number of fresh stochastic passes
+    # do we defer the message for a later pulse/run.
+    generation_errors: list[str] = []
+    action = None
+    for _speech_attempt in range(_MAX_RECOVERABLE_SPEECH_ATTEMPTS):
+        try:
+            action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
+            break
+        except RuntimeError as exc:
+            if not _recoverable_speech_failure(exc):
+                raise
+            generation_errors.append(str(exc))
 
-    # There is intentionally no authored fallback here. If repeated stochastic
-    # Stanford speech generation exhausts itself, preserve the unread inbound
-    # and persist cognition so a later pulse/run can try again. Transport,
-    # contamination, and other runtime errors still fail closed immediately.
-    try:
-        action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
-    except RuntimeError as exc:
-        if not _recoverable_speech_failure(exc):
-            raise
+    if action is None:
         agent.brain.save(str(agent.workspace))
         return {
             "agent": agent.name,
             "time_step": time_step,
             "observation": observation,
-            "retrieved_memories": relevant,
-            "retrieved_memory_evidence": retrieval_metadata,
+            "retrieved_memories": [],
+            "retrieved_memory_evidence": [],
             "action": {"type": "wait", "reason": "speech_generation_deferred"},
             "action_result": None,
             "consumed_inbound": False,
             "generation_deferred": True,
-            "generation_error": str(exc),
+            "generation_attempts": _MAX_RECOVERABLE_SPEECH_ATTEMPTS,
+            "generation_error": " || ".join(generation_errors),
         }
+
+    # The act itself carries the exact filtered Stanford reaction retrieval that
+    # reached the speech prompt. Do not run a second retrieval just for reporting.
+    relevant = list(action.get("retrieved_memories", []) or [])
+    retrieval_metadata = list(action.get("retrieved_memory_evidence", []) or [])
 
     result = None
     consumed = False
