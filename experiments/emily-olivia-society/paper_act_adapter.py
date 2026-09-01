@@ -58,7 +58,17 @@ _CONTEXT_DEPENDENT_OPENING = re.compile(
     r"that(?:'s|\s+is)\s+(?:true|right))\b",
     re.IGNORECASE,
 )
+_INCOMPLETE_SPOKEN_END = re.compile(
+    r"(?:[,;:]|\b(?:because|although|unless|until|while|when|if)\s*|"
+    r"\b(?:feel|felt|seem|seemed)\s+like\s*)$",
+    re.IGNORECASE,
+)
+_MEMORY_SERIALIZATION_LEAK = re.compile(
+    r"(?:^|\|)\s*(?:Emily|Olivia)\s+observes(?:\s+a\s+message\s+from|\s+that)\b",
+    re.IGNORECASE,
+)
 _PLAN_MARKER = "current broad-strokes plan:"
+_RETRIEVED_MARKER = "relevant retrieved memories:"
 
 
 def _identity(agent) -> str:
@@ -180,6 +190,14 @@ def _is_sentence_like_short_turn(text: str) -> bool:
     return bool(_SHORT_SPOKEN_CLAUSE.search(text))
 
 
+def _looks_complete_spoken_turn(text: str) -> bool:
+    """Reject strong signs that token cutoff ended the model in mid-clause."""
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return False
+    return not bool(_INCOMPLETE_SPOKEN_END.search(cleaned))
+
+
 def _has_pathological_repetition(text: str) -> bool:
     """Mirror the outer runtime's repetition safety check inside resampling."""
     words = _base._normalize_words(text)
@@ -243,6 +261,40 @@ def _is_private_plan_echo(text: str, cognitive_context: str) -> bool:
     return False
 
 
+def _is_retrieved_memory_echo(text: str, cognitive_context: str) -> bool:
+    """Reject long speech copied verbatim or nearly verbatim from retrieved memory."""
+    output_words = _base._normalize_words(text)
+    if len(output_words) < 8:
+        return False
+    context = str(cognitive_context or "").strip()
+    if not context:
+        return False
+
+    context_words = _base._normalize_words(context)
+    width = len(output_words)
+    if width <= len(context_words):
+        for index in range(0, len(context_words) - width + 1):
+            if context_words[index : index + width] == output_words:
+                return True
+
+    lowered = context.casefold()
+    marker_index = lowered.find(_RETRIEVED_MARKER)
+    if marker_index < 0:
+        return False
+    tail = context[marker_index + len(_RETRIEVED_MARKER) :]
+    for item in tail.split(" | "):
+        memory_words = _base._normalize_words(item)
+        smaller_len = min(len(output_words), len(memory_words))
+        if smaller_len < 8:
+            continue
+        matcher = SequenceMatcher(None, output_words, memory_words, autojunk=False)
+        if matcher.ratio() >= 0.82:
+            return True
+        if matcher.find_longest_match().size >= max(8, int(smaller_len * 0.72)):
+            return True
+    return False
+
+
 def is_usable_spoken_action(
     text: str,
     inbound: str = "",
@@ -254,7 +306,11 @@ def is_usable_spoken_action(
         return False
     if _CONTROL_SCAFFOLD.search(text) or _has_pathological_repetition(text):
         return False
+    if _MEMORY_SERIALIZATION_LEAK.search(text):
+        return False
     if _PEER_META_DRIFT.search(text):
+        return False
+    if not _looks_complete_spoken_turn(text):
         return False
     if not _is_sentence_like_short_turn(text):
         return False
@@ -333,6 +389,7 @@ def generate_spoken_action(
             and not _is_recent_echo(text, dialogue_history)
             and not _is_context_dependent_opening(text, inbound, dialogue_history)
             and not _is_private_plan_echo(text, cognitive_context)
+            and not _is_retrieved_memory_echo(text, cognitive_context)
         ):
             return text
 
