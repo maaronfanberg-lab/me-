@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from community_cycle import load_agents, next_community_time_step
+from reflection_hygiene import sanitize_memory_stream
 
 HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
@@ -32,12 +33,12 @@ def relevant_memories(agent, other_name: str, time_step: int, n_count: int = 12)
 
 
 def _run_reflection_pass(agent, anchor: str, time_step: int, retrieval_count: int) -> None:
-    """Run one Stanford reflection pass while discarding only blank generated items.
+    """Run one Stanford reflection pass and discard malformed generated nodes.
 
-    MemoryStream writes each reflection before moving to the next item. If Falcon
-    returns a blank later in the list, Stanford's embedding boundary raises before
-    that blank can be stored. We keep any valid reflections already written and
-    suppress only that exact empty-input failure. No substitute reflection is made.
+    A malformed item may be appended immediately before Stanford's embedding
+    boundary rejects it. The hygiene pass removes such partial/parser-scaffold
+    nodes and preserves any valid reflections already produced. No substitute
+    reflection content is generated.
     """
     try:
         agent.brain.memory_stream.reflect(
@@ -49,9 +50,12 @@ def _run_reflection_pass(agent, anchor: str, time_step: int, retrieval_count: in
     except ValueError as exc:
         if str(exc) != _EMPTY_EMBEDDING_ERROR:
             raise
+    finally:
+        sanitize_memory_stream(agent.brain.memory_stream)
 
 
 def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
+    sanitize_memory_stream(agent.brain.memory_stream)
     before = node_counts(agent.brain)
     relevant_before = relevant_memories(agent, other_name, time_step)
 
@@ -69,7 +73,7 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
     retrieval_count = min(12, max(1, before["total"]))
 
     # Resample the same research-shaped reflection request only when an entire
-    # pass yields no non-empty reflection. This is not authored fallback content.
+    # pass yields no clean reflection. This is not authored fallback content.
     for attempt in range(3):
         _run_reflection_pass(
             agent,
@@ -81,7 +85,7 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
             break
     else:
         raise RuntimeError(
-            f"Stanford reflection produced no non-empty persisted insight for {agent.name} after 3 attempts."
+            f"Stanford reflection produced no clean persisted insight for {agent.name} after 3 attempts."
         )
 
     agent.brain.save(str(agent.workspace))
@@ -99,6 +103,7 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
     from genagents.genagents import GenerativeAgent
 
     reloaded = GenerativeAgent(str(agent.workspace))
+    sanitize_memory_stream(reloaded.memory_stream)
     after_reload = node_counts(reloaded)
     relevant_after_reload = relevant_memories(
         type("ReloadedAgent", (), {"brain": reloaded})(),
@@ -109,7 +114,7 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
     if after_reload["reflection"] < after_save["reflection"]:
         raise RuntimeError(f"Reflection persistence verification failed for {agent.name}.")
     if not new_reflections or not all(str(item).strip() for item in new_reflections):
-        raise RuntimeError(f"Non-empty reflection verification failed for {agent.name}.")
+        raise RuntimeError(f"Clean reflection verification failed for {agent.name}.")
 
     return {
         "agent": agent.name,
