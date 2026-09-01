@@ -166,6 +166,7 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
     dialogue = _stanford_dialogue(dialogue_history, other, inbound)
     context_parts = [
         f"{agent.name} and {other.name} are peers having a private conversation.",
+        "They talk like two friends sharing ordinary thoughts, opinions, interests, and experiences.",
         "Respond as yourself based on your memories, current private state, and the conversation so far.",
     ]
     react_context = reaction_context(reaction)
@@ -180,10 +181,9 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
 
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
         retry_context = (
-            context
-            + f" Continue the private conversation directly as {agent.name} speaking to {other.name}."
-            + f" Reply to {other.name}'s latest message, not to a description of a task."
-            + " Give only the conversational reply and do not discuss instructions, fictional characters, requests, assistance, policies, or text generation."
+            f"{agent.name} and {other.name} are two friends continuing the same private conversation. "
+            f"{other.name} just said: {inbound} "
+            f"{agent.name} stays with that subject and answers from their own memories, opinions, and current state."
         )
         retry_raw = _utterance_with_clean_retrieval(agent, dialogue, retry_context)
         retry_text = _clean_boundary(retry_raw)
