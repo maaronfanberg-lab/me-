@@ -13,7 +13,15 @@ from datetime import datetime, timezone
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-opus-4-6"
-COPILOT_CLAUDE_MODEL = "claude-sonnet-4.6"
+COPILOT_CLAUDE_CANDIDATES = (
+    "claude-sonnet-4.6",
+    "claude-opus-4.5",
+    "claude-sonnet-4.5",
+    "claude-haiku-4.5",
+    "claude-opus-4.6",
+    "claude-sonnet-5",
+    "claude-opus-5",
+)
 
 
 def utc_now():
@@ -86,6 +94,17 @@ def ask_anthropic(data, prompt, key):
     }
 
 
+def _ordered_claude_models(data):
+    requested = str(data.get("model") or "").strip()
+    models = []
+    if requested.startswith("claude-"):
+        models.append(requested)
+    for model in COPILOT_CLAUDE_CANDIDATES:
+        if model not in models:
+            models.append(model)
+    return models
+
+
 def ask_copilot_claude(data, prompt):
     binary = shutil.which("copilot")
     token = os.environ.get("GITHUB_TOKEN", "").strip()
@@ -105,37 +124,43 @@ def ask_copilot_claude(data, prompt):
 
     env = os.environ.copy()
     env.setdefault("COPILOT_GITHUB_TOKEN", token)
+    failures = []
     with tempfile.TemporaryDirectory(prefix="claude-bridge-review-") as temp_dir:
-        proc = subprocess.run(
-            [
-                binary,
-                "-p",
-                envelope,
-                "-s",
-                "--model",
-                COPILOT_CLAUDE_MODEL,
-                "--no-ask-user",
-                "--no-custom-instructions",
-                "--no-color",
-            ],
-            cwd=temp_dir,
-            env=env,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=180,
-            check=False,
-        )
-    response = proc.stdout.strip()
-    if proc.returncode != 0 or not response:
-        detail = proc.stderr.strip() or proc.stdout.strip() or f"exit code {proc.returncode}"
-        raise RuntimeError(f"Copilot Claude fallback failed: {detail[:4000]}")
-    return {
-        "ok": True,
-        "transport": "github-copilot-cli",
-        "model": COPILOT_CLAUDE_MODEL,
-        "response": response,
-    }
+        for model in _ordered_claude_models(data):
+            proc = subprocess.run(
+                [
+                    binary,
+                    "-p",
+                    envelope,
+                    "-s",
+                    "--model",
+                    model,
+                    "--no-ask-user",
+                    "--no-custom-instructions",
+                    "--no-color",
+                ],
+                cwd=temp_dir,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=180,
+                check=False,
+            )
+            response = proc.stdout.strip()
+            if proc.returncode == 0 and response:
+                return {
+                    "ok": True,
+                    "transport": "github-copilot-cli",
+                    "model": model,
+                    "response": response,
+                    "claude_models_tried": [entry["model"] for entry in failures] + [model],
+                }
+            detail = (proc.stderr.strip() or proc.stdout.strip() or f"exit code {proc.returncode}")[:1200]
+            failures.append({"model": model, "detail": detail})
+
+    compact = " | ".join(f"{x['model']}: {x['detail']}" for x in failures)
+    raise RuntimeError(f"No explicit Claude model was available through Copilot CLI: {compact[:6000]}")
 
 
 def main():
