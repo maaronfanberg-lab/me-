@@ -16,6 +16,7 @@ from community_cycle import (
     choose_action,
     next_community_time_step,
 )
+from retrieval_evidence import serialize_retrieval_evidence
 
 HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
@@ -182,7 +183,9 @@ async def process_one_reply(
 
     query = f"Current interaction with {other.name}"
     retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
-    relevant = [node.content for node in retrieved.get(query, [])]
+    retrieved_nodes = list(retrieved.get(query, []))
+    relevant = [node.content for node in retrieved_nodes]
+    retrieval_metadata = serialize_retrieval_evidence(retrieved_nodes, time_step)
 
     # There is intentionally no authored fallback here. If Stanford cognition
     # cannot produce an action, the run fails with its evidence intact rather
@@ -211,6 +214,7 @@ async def process_one_reply(
         "time_step": time_step,
         "observation": observation,
         "retrieved_memories": relevant,
+        "retrieved_memory_evidence": retrieval_metadata,
         "action": action,
         "action_result": result,
         "consumed_inbound": consumed,
