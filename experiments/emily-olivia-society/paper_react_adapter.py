@@ -60,9 +60,9 @@ def _clean_memory_nodes(nodes, *, include_ambient: bool):
     """Expose a structurally clean, non-redundant slice of Stanford retrieval.
 
     The underlying retrieval ranking is left intact. We only remove unsafe
-    serialization, irrelevant no-message observations during an addressed turn,
-    exact duplicates, and near-duplicate paraphrases. No memory is authored or
-    rewritten and no topic is preferred.
+    serialization, irrelevant no-message observations, exact duplicates, and
+    near-duplicate paraphrases. No memory is authored or rewritten and no topic
+    is preferred.
     """
     out: list[str] = []
     selected_tokens: list[set[str]] = []
@@ -96,9 +96,6 @@ def _reaction(
     *,
     include_ambient: bool,
 ) -> dict:
-    # Retrieve a wider ranked pool, then expose only a diverse clean slice. This
-    # preserves Stanford retrieval semantics while preventing redundant memories
-    # from crowding every useful alternative out of the small model's context.
     retrieved = agent.brain.memory_stream.retrieve([focal], time_step=time_step, n_count=16)
     memories = _clean_memory_nodes(retrieved.get(focal, []), include_ambient=include_ambient)
     reaction = {
@@ -136,9 +133,10 @@ def react_to_observation(agent, other_name: str, inbound: str, time_step: int) -
 def react_to_presence(agent, other_name: str, time_step: int) -> dict:
     """Select the paper-style reaction when a clean session has no inbox.
 
-    Presence is an observed environment fact, not authored dialogue. In this
-    dedicated two-person space, choosing to chat is the map-free analogue of the
-    paper planner deciding to initiate conversation with a nearby persona.
+    Presence remains the current observed social event, but sterile no-message
+    observations are not fed back to the small language model as autobiographical
+    retrieval. This preserves the Stanford reaction boundary without inviting
+    the model to literalize runtime bookkeeping as conversation content.
     """
     event = f"{other_name} is present in the private two-person community; no addressed message is pending."
     focal = (
@@ -151,7 +149,7 @@ def react_to_presence(agent, other_name: str, time_step: int) -> dict:
         event,
         focal,
         time_step,
-        include_ambient=True,
+        include_ambient=False,
     )
 
 
