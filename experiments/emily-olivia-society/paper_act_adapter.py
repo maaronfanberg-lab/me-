@@ -123,8 +123,12 @@ def _request_completion(prompt: str, agent_name: str, other_name: str) -> str:
         raise RuntimeError(f"BitNet paper-act completion request failed: {exc.reason}") from exc
 
     text = data.get("content") if isinstance(data, dict) else None
-    if not isinstance(text, str) or not text.strip():
-        raise RuntimeError(f"BitNet paper-act completion returned no content: {data!r}")
+    if not isinstance(text, str):
+        raise RuntimeError(f"BitNet paper-act completion returned malformed content: {data!r}")
+    # A valid stochastic sample can immediately hit a role/quote stop token. In
+    # that case llama-server returns an empty string. Let the paper-act caller
+    # treat it as an unusable sample and resample the same research-derived
+    # prompt rather than turning one empty draw into a session-wide failure.
     return text.strip()
 
 
