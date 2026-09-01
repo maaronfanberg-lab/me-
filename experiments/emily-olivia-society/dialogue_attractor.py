@@ -17,6 +17,7 @@ _TEMPLATE_BLANK = re.compile(
     re.IGNORECASE,
 )
 _TRAILING_CUTOFF = re.compile(r"(?:\.{3,}|…|--+|[,;:])\s*$")
+_DANGLING_DETERMINER = re.compile(r"\b(?:the|a|an)\s*$", re.IGNORECASE)
 _GREETING_START = re.compile(r"^\s*(?:oh[\s,!]+)?(?:hi|hello|hey)\b", re.IGNORECASE)
 _FIRST_PERSON_MARKER = re.compile(r"\b(?:i|i'm|i've|i'd|i'll|my)\b", re.IGNORECASE)
 _FINITE_SHORT_CLAUSE = re.compile(
@@ -112,11 +113,6 @@ def _is_bare_short_fragment(text: str) -> bool:
     cleaned = str(text or "").strip()
     if re.search(r"[?!.]\s*$", cleaned):
         return False
-    # Missing terminal punctuation is common in next-line completion and is not
-    # itself evidence of a fragment. Require the short output to lack a finite
-    # clause before rejecting it. This keeps noun debris out while allowing
-    # complete lines such as "I'm in love with you, Olivia" to reach the real
-    # echo/grounding checks that follow.
     return not bool(_FINITE_SHORT_CLAUSE.search(cleaned))
 
 
@@ -255,7 +251,7 @@ def candidate_dialogue_blocker(text: str, dialogue_history, *, inbound: str = ""
         return "empty_candidate"
     if _TEMPLATE_BLANK.search(cleaned):
         return "template_blank_residue"
-    if _TRAILING_CUTOFF.search(cleaned):
+    if _TRAILING_CUTOFF.search(cleaned) or _DANGLING_DETERMINER.search(cleaned):
         return "unfinished_cutoff"
     if _is_bare_short_fragment(cleaned):
         return "bare_short_fragment"
