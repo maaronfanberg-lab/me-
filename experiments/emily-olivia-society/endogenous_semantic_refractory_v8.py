@@ -39,6 +39,18 @@ def _utc(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _session_started_at(session_id: str) -> datetime:
+    """Decode community_session.py's '<unix-seconds>-<nonce>' session identity."""
+    prefix = str(session_id or "").split("-", 1)[0].strip()
+    try:
+        epoch = int(prefix)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("v8 session_id lacks the Community runtime Unix-time prefix") from exc
+    if epoch <= 0:
+        raise ValueError("v8 session_id has an invalid Unix-time prefix")
+    return datetime.fromtimestamp(epoch, tz=timezone.utc)
+
+
 def load_locked_prereg(path: str | Path) -> dict:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(payload, Mapping) or payload.get("experiment") != EXPECTED_EXPERIMENT:
@@ -99,13 +111,19 @@ def build_native_only_tape(
     session_ids = {str(tick.get("session_id") or "").strip() for tick in ticks}
     if "" in session_ids or len(session_ids) != 1:
         raise ValueError("v8 prospective evidence must come from exactly one named session epoch")
+    session_id = next(iter(session_ids))
+    session_started_at = _session_started_at(session_id)
+    if session_started_at <= _utc(PREREG_COMMITTED_AT):
+        raise ValueError("selected Community session began before the v8 preregistration boundary")
+
     steps = [int(tick["time_step"]) for tick in ticks]
     if any(current != previous + 1 for previous, current in zip(steps, steps[1:])):
         raise ValueError("v8 prospective evidence must be one contiguous time-step block")
 
     return normalize_tape(raw), {
         **dict(metadata),
-        "session_id": next(iter(session_ids)),
+        "session_id": session_id,
+        "session_started_at": session_started_at.isoformat().replace("+00:00", "Z"),
         "artifact_created_at": artifact_created_at,
         "preregistration_commit": PREREG_COMMIT,
         "preregistration_committed_at": PREREG_COMMITTED_AT,
