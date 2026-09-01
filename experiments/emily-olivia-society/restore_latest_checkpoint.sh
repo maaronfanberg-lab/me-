@@ -21,7 +21,7 @@ checkpoint_run=""
 mapfile -t candidate_runs < <(
   gh api --method GET \
     "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=30" \
-    --jq '.workflow_runs[] | select(.status == "completed" and .conclusion == "success") | .id'
+    --jq '.workflow_runs[] | select(.status == "completed") | .id'
 )
 
 for run_id in "${candidate_runs[@]:-}"; do
@@ -40,7 +40,7 @@ for run_id in "${candidate_runs[@]:-}"; do
 done
 
 if [[ -z "$checkpoint_run" ]]; then
-  echo "No prior successful community checkpoint artifact exists. Starting from clean cognition and social state."
+  echo "No prior completed community checkpoint artifact exists. Starting from clean cognition and social state."
   rm -rf "$WORKSPACES"
   rm -f "$REPLAY_DIR/social_state.json"
   mkdir -p "$REPLAY_DIR"
@@ -98,7 +98,7 @@ PY
 
 social_state="$(find "$tmp_dir" -type f -path '*/replay/social_state.json' -print -quit)"
 
-# JSON validity is not enough. Early successful runs contained syntactically valid
+# JSON validity is not enough. Early completed runs contained syntactically valid
 # customer-service boilerplate, malformed reflection JSON, and short attractor loops that
 # repeatedly dragged Emily and Olivia back into unusable dialogue. Never restore those.
 if ! python3 - "$candidate" "${social_state:-}" <<'PY'
@@ -230,5 +230,5 @@ cat > "$REPLAY_DIR/checkpoint_restore.json.tmp" <<JSON
 JSON
 mv "$REPLAY_DIR/checkpoint_restore.json.tmp" "$REPLAY_DIR/checkpoint_restore.json"
 
-echo "Restored Emily + Olivia workspaces from successful valid checkpoint run $checkpoint_run."
+echo "Restored Emily + Olivia workspaces from completed valid checkpoint run $checkpoint_run."
 echo "Persistent social state restored: $social_restored"
