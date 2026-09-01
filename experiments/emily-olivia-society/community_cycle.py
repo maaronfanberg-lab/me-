@@ -12,7 +12,12 @@ from __future__ import annotations
 
 import asyncio
 
+from dialogue_boundary_guard import install_spoken_action_guard
 import stanford_native_cycle as _native
+
+# Keep the Stanford/paper act path intact, but fail closed and resample the same
+# stochastic generator when the live replay proves identity or grounding drift.
+_native.generate_spoken_action = install_spoken_action_guard(_native.generate_spoken_action)
 
 CommunityAgent = _native.CommunityAgent
 load_agents = _native.load_agents
