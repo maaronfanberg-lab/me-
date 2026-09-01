@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
 AGENTSOCIETY_PYTHON = HERE / ".venv-agentsociety" / "bin" / "python"
 BRIDGE = HERE / "social_bridge.py"
+_MAX_RECOVERABLE_SPEECH_ATTEMPTS = 3
 _RECOVERABLE_SPEECH_FAILURE_MARKERS = (
     "paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary",
     "repeatedly hit structural dialogue blockers after",
@@ -223,15 +224,22 @@ async def process_one_reply(
     relevant = [node.content for node in retrieved_nodes]
     retrieval_metadata = serialize_retrieval_evidence(retrieved_nodes, time_step)
 
-    # There is intentionally no authored fallback here. If repeated stochastic
-    # Stanford speech generation exhausts itself, preserve the unread inbound
-    # and persist cognition so a later pulse/run can try again. Transport,
-    # contamination, and other runtime errors still fail closed immediately.
-    try:
-        action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
-    except RuntimeError as exc:
-        if not _recoverable_speech_failure(exc):
-            raise
+    # No authored fallback is used. A recoverable speech-boundary exhaustion
+    # keeps the exact inbound unread and retries the full Stanford-derived act
+    # on that same turn. Only after a bounded number of fresh stochastic passes
+    # do we defer the message for a later pulse/run.
+    generation_errors: list[str] = []
+    action = None
+    for _speech_attempt in range(_MAX_RECOVERABLE_SPEECH_ATTEMPTS):
+        try:
+            action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
+            break
+        except RuntimeError as exc:
+            if not _recoverable_speech_failure(exc):
+                raise
+            generation_errors.append(str(exc))
+
+    if action is None:
         agent.brain.save(str(agent.workspace))
         return {
             "agent": agent.name,
@@ -243,7 +251,8 @@ async def process_one_reply(
             "action_result": None,
             "consumed_inbound": False,
             "generation_deferred": True,
-            "generation_error": str(exc),
+            "generation_attempts": _MAX_RECOVERABLE_SPEECH_ATTEMPTS,
+            "generation_error": " || ".join(generation_errors),
         }
 
     result = None
