@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'experiments/emily-olivia-society/retrieval_evidence.py'
+      - 'experiments/emily-olivia-society/first_exchange.py'
       - 'experiments/emily-olivia-society/test_retrieval_evidence.py'
       - 'experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py'
       - 'experiments/emily-olivia-society/test_endogenous_workspace_artifact_tape.py'
@@ -24,14 +25,15 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             experiments/emily-olivia-society/retrieval_evidence.py
+            experiments/emily-olivia-society/first_exchange.py
             experiments/emily-olivia-society/test_retrieval_evidence.py
             experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py
             experiments/emily-olivia-society/test_endogenous_workspace_artifact_tape.py
           sparse-checkout-cone-mode: false
 
-      - name: Compile passive evidence code
+      - name: Compile passive evidence code and live integration
         working-directory: experiments/emily-olivia-society
-        run: python3 -m py_compile retrieval_evidence.py endogenous_workspace_artifact_tape.py
+        run: python3 -m py_compile retrieval_evidence.py first_exchange.py endogenous_workspace_artifact_tape.py
 
       - name: Prove retrieval evidence is passive and directly replayable
         working-directory: experiments/emily-olivia-society
