@@ -1,0 +1,38 @@
+name: Emily Olivia retrieval evidence test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/emily-olivia-society/retrieval_evidence.py'
+      - 'experiments/emily-olivia-society/test_retrieval_evidence.py'
+      - 'experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py'
+      - 'experiments/emily-olivia-society/test_endogenous_workspace_artifact_tape.py'
+      - '.github/workflows/emily-olivia-retrieval-evidence-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  passive-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            experiments/emily-olivia-society/retrieval_evidence.py
+            experiments/emily-olivia-society/test_retrieval_evidence.py
+            experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py
+            experiments/emily-olivia-society/test_endogenous_workspace_artifact_tape.py
+          sparse-checkout-cone-mode: false
+
+      - name: Compile passive evidence code
+        working-directory: experiments/emily-olivia-society
+        run: python3 -m py_compile retrieval_evidence.py endogenous_workspace_artifact_tape.py
+
+      - name: Prove retrieval evidence is passive and directly replayable
+        working-directory: experiments/emily-olivia-society
+        run: python3 -m unittest -v test_retrieval_evidence.py test_endogenous_workspace_artifact_tape.py
