@@ -15,6 +15,7 @@ from __future__ import annotations
 
 _RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
 _DEFAULT_THRESHOLD = 12
+_EMPTY_EMBEDDING_ERROR = "Input text must be a non-empty string."
 
 
 def _latest_nodes(agent, count: int = 12):
@@ -35,13 +36,25 @@ def _importance(node) -> float:
     return 1.0
 
 
+def _reflection_count(agent) -> int:
+    return sum(
+        1
+        for node in agent.brain.memory_stream.seq_nodes
+        if getattr(node, "node_type", None) == "reflection"
+    )
+
+
 def maybe_reflect(agent, time_step: int) -> bool:
     """Run Stanford reflection when enough new experience has accumulated.
 
     This mirrors the paper's importance-threshold trigger rather than reflecting
-    every turn. The reflection itself is Stanford HCI GenerativeAgent.reflect(),
-    which retrieves relevant memories and writes generated insights back into
-    the memory stream.
+    every turn. Reflection uses Stanford HCI MemoryStream directly with named
+    arguments so the timestep cannot be confused with reflection_count.
+
+    Small local models can occasionally return an empty item inside an otherwise
+    valid reflection list. Stanford rejects that item at the embedding boundary.
+    We preserve any valid reflections already written, discard the blank failure,
+    and let conversation continue rather than inventing substitute reflection text.
     """
     scratch = agent.brain.scratch
     last_step = int(scratch.get("reflection_last_step", 0) or 0)
@@ -64,11 +77,26 @@ def maybe_reflect(agent, time_step: int) -> bool:
         f"What higher-level insight should {agent.name} draw from these recent experiences? "
         + " | ".join(anchor_parts)
     )
-    agent.brain.reflect(anchor, time_step=time_step)
+    before_reflections = _reflection_count(agent)
+    total_memories = len(list(agent.brain.memory_stream.seq_nodes))
+    try:
+        agent.brain.memory_stream.reflect(
+            anchor=anchor,
+            reflection_count=3,
+            retrieval_count=min(12, max(1, total_memories)),
+            time_step=time_step,
+        )
+    except ValueError as exc:
+        if str(exc) != _EMPTY_EMBEDDING_ERROR:
+            raise
+        # A blank generated item is never inserted because embedding rejects it.
+        # Valid items generated before it remain in the stream and are preserved.
+
+    after_reflections = _reflection_count(agent)
     agent.brain.update_scratch({
         "reflection_last_step": time_step,
         "reflection_importance_threshold": threshold,
         "reflection_research_source": _RESEARCH_COMMIT,
     })
     agent.brain.save(str(agent.workspace))
-    return True
+    return after_reflections > before_reflections
