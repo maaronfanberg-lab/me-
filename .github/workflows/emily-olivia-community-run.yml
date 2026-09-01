@@ -203,6 +203,8 @@ jobs:
           if d.get('status') != 'completed': raise SystemExit('community session did not complete cleanly')
           completed = int(d.get('completed_reply_turns', 0))
           if completed < 1: raise SystemExit('no completed reply turns')
+          session_id = str(d.get('session_id', '')).strip()
+          if not session_id: raise SystemExit('community session id missing')
           if not d.get('resumed_social_state') and not d.get('autonomous_opening'):
               raise SystemExit('clean state did not create an autonomous Stanford opening')
           if d.get('autonomous_opening'):
@@ -216,8 +218,27 @@ jobs:
               cognition = action.get('cognition', {})
               if cognition.get('act_research_source') != 'fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4':
                   raise SystemExit('autonomous opening did not use pinned paper act source')
-          turns = d.get('turns') or []
-          candidates = turns if turns else ([d.get('latest_turn')] if d.get('latest_turn') else [])
+
+          if d.get('mode') == 'continuous_persistent_community_session':
+              stream = Path('replay/community_session.jsonl')
+              if not stream.is_file(): raise SystemExit('continuous session JSONL missing')
+              candidates=[]
+              for raw in stream.read_text().splitlines():
+                  raw=raw.strip()
+                  if not raw: continue
+                  row=json.loads(raw)
+                  if row.get('type') != 'turn' or str(row.get('session_id','')) != session_id:
+                      continue
+                  turn=row.get('turn')
+                  if not isinstance(turn,dict): raise SystemExit('malformed turn record in current session')
+                  candidates.append(turn)
+              if len(candidates) != completed:
+                  raise SystemExit(f'current-session turn count mismatch: summary={completed} jsonl={len(candidates)}')
+          else:
+              candidates=d.get('turns') or []
+              if len(candidates) != completed:
+                  raise SystemExit(f'bounded turn count mismatch: summary={completed} turns={len(candidates)}')
+
           if not candidates: raise SystemExit('no turn evidence persisted')
           outputs=[]
           for t in candidates:
