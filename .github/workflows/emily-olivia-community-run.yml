@@ -1,4 +1,4 @@
-# Emily + Olivia near-continuous community runtime
+# Emily + Olivia unbounded-handoff community runtime
 name: Emily Olivia Community Run
 
 on:
@@ -279,3 +279,26 @@ jobs:
         if: always()
         working-directory: experiments/emily-olivia-society
         run: python3 bitnet_server.py stop || true
+
+      - name: Queue next Community handoff
+        if: always() && steps.session.outcome != 'skipped' && steps.session.outcome != 'cancelled'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs_api="repos/${GITHUB_REPOSITORY}/actions/workflows/emily-olivia-community-run.yml/runs?per_page=30"
+          successor="$(
+            gh api --method GET "$runs_api" \
+              --jq '.workflow_runs[] | select((.status == "in_progress" or .status == "queued" or .status == "pending") and .id != (env.GITHUB_RUN_ID | tonumber)) | .id' \
+              | head -n 1
+          )"
+          if [ -n "$successor" ]; then
+            echo "Community successor already exists as run $successor; not dispatching a duplicate."
+            exit 0
+          fi
+          echo "Queueing the next Emily + Olivia handoff; total conversation has no turn ceiling."
+          gh workflow run emily-olivia-community-run.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f opener=""
