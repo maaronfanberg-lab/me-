@@ -18,6 +18,7 @@ _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _GREETING_START = re.compile(r"^\s*(?:hi|hello|hey|oh\s*,?\s*hi)\b", re.IGNORECASE)
 _DIRECT_SELF_ADDRESS_START = re.compile(r"^\s*(?:(?:hi|hey|hello)\s*[,!:\-]?\s*)?{name}\b\s*[,!?:\-]", re.IGNORECASE)
 _SELF_VOCATIVE = re.compile(r"(?:^|[,;:!?]\s*|\b(?:hi|hey|hello)\s+){name}\b\s*[,!?.:]", re.IGNORECASE)
+_SELF_OBJECT_ROMANTIC = re.compile(r"\bi(?:'m|\s+am)\s+(?:not\s+)?in\s+love\s+with\s+me\b", re.IGNORECASE)
 _PRESENCE_EVIDENCE = re.compile(r"(?:\bcommunity\s+contains\b|\bpresent\s+(?:together|in\s+the\s+private\s+two-person\s+community)\b)", re.IGNORECASE)
 _PRESENCE_CONTRADICTION = re.compile(r"(?:\bwhere\s+are\s+you\b|\bi\s+(?:can't|cannot)\s+(?:see|find)\s+you\b|\byou(?:'re|\s+are)\s+not\s+(?:here|visible)\b)", re.IGNORECASE)
 _MOVEMENT_PREMISE = re.compile(r"(?:\bwhere\s+are\s+you\s+going\b|\bwhere\s+did\s+you\s+go\b|\bare\s+you\s+leaving\b|\bwhen\s+are\s+you\s+leaving\b|\bwhy\s+are\s+you\s+leaving\b)", re.IGNORECASE)
@@ -103,6 +104,10 @@ def _has_unsupported_personal_backstory(text: str, support_text: str) -> bool:
     return bool(_PERSONAL_BACKSTORY.search(str(text or "")) and not _PERSONAL_BACKSTORY.search(str(support_text or "")))
 
 
+def _has_self_object_role_confusion(text: str) -> bool:
+    return bool(_SELF_OBJECT_ROMANTIC.search(str(text or "")))
+
+
 def _is_short_recent_echo(text: str, dialogue_history) -> bool:
     output = _word_list(text)
     if len(output) < 3 or len(output) > 7:
@@ -146,6 +151,7 @@ def install_spoken_action_guard(generator):
             checks = (
                 (_addresses_self_as_peer(text, getattr(agent, "name", "")), "self-address"),
                 (_reintroduces_known_self(text, getattr(agent, "name", ""), dialogue_history), "self-reintroduction"),
+                (_has_self_object_role_confusion(text), "self-object-role-confusion"),
                 (_is_mid_conversation_greeting_reset(text, dialogue_history), "greeting-reset"),
                 (_is_nominal_fragment(text), "nominal-fragment"),
                 (_contradicts_observed_presence(text, getattr(other, "name", ""), support), "presence-contradiction"),
