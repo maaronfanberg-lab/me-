@@ -29,12 +29,20 @@ import community_cycle_base as _base
 
 _RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
 _MAX_HISTORY_TURNS = 12
+_MAX_ACT_ATTEMPTS = 8
 _PEER_META_DRIFT = re.compile(
     r"(?:generate\s+(?:the\s+)?dialogue|fictional\s+interaction|"
     r"noticed\s+the\s+conversation|communicat(?:e|ing)\s+effectively|"
     r"share\s+more\s+about\s+your\s+preferences|"
     r"preferred\s+(?:meal|food)\s+options|"
     r"ensure\s+(?:we(?:'re|\s+are)|that\s+we)\s+communicat)",
+    re.IGNORECASE,
+)
+_SHORT_SPOKEN_CLAUSE = re.compile(
+    r"\b(?:i(?:'m|'d|'ll|'ve)|you(?:'re|'d|'ll|'ve)|we(?:'re|'d|'ll|'ve)|"
+    r"it(?:'s|'d|'ll)|that(?:'s|'d)|this(?:'s|'d)|they(?:'re|'d|'ll|'ve)|"
+    r"he(?:'s|'d|'ll)|she(?:'s|'d|'ll)|can't|don't|didn't|won't|wouldn't|"
+    r"couldn't|shouldn't|isn't|aren't|wasn't|weren't)\b",
     re.IGNORECASE,
 )
 
@@ -154,6 +162,22 @@ def _clean_line(raw: object, agent_name: str) -> str:
     return _base._unwrap_reply(text).strip()
 
 
+def _is_sentence_like_short_turn(text: str) -> bool:
+    """Permit genuine terse speech while rejecting bare topic labels.
+
+    Small local models sometimes emit note-like noun phrases such as
+    ``Morning routine``. Those are not conversational turns. Short greetings,
+    acknowledgements, and contracted spoken clauses remain valid. This is a
+    structural quality boundary only; it supplies no replacement wording.
+    """
+    words = _base._normalize_words(text)
+    if len(words) >= 4:
+        return True
+    if _base._is_greeting_only(text) or _base._ACKNOWLEDGEMENT.search(text):
+        return True
+    return bool(_SHORT_SPOKEN_CLAUSE.search(text))
+
+
 def is_usable_spoken_action(
     text: str,
     inbound: str = "",
@@ -172,6 +196,8 @@ def is_usable_spoken_action(
     if not _base._is_usable_utterance(text, "", agent_name, other_name):
         return False
     if _PEER_META_DRIFT.search(text):
+        return False
+    if not _is_sentence_like_short_turn(text):
         return False
     inbound = str(inbound or "").strip()
     if not inbound:
@@ -223,7 +249,7 @@ def generate_spoken_action(
     """Generate one spoken action with the paper's next-line completion shape."""
     prompt = _paper_prompt(agent, other, dialogue_history, inbound, cognitive_context)
     attempts: list[str] = []
-    for _ in range(5):
+    for _ in range(_MAX_ACT_ATTEMPTS):
         raw = _request_completion(prompt, agent.name, other.name)
         text = _clean_line(raw, agent.name)
         attempts.append(text or str(raw).strip())
@@ -235,7 +261,8 @@ def generate_spoken_action(
 
     previews = " | ".join(repr(text[:220]) for text in attempts)
     raise RuntimeError(
-        f"{agent.name} paper-derived Stanford act produced no usable spoken line after 5 same-prompt attempts: {previews}"
+        f"{agent.name} paper-derived Stanford act produced no usable spoken line after "
+        f"{_MAX_ACT_ATTEMPTS} same-prompt attempts: {previews}"
     )
 
 
