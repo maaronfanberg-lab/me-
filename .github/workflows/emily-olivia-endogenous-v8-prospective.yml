@@ -1,0 +1,173 @@
+name: Emily Olivia endogenous v8 prospective evaluator
+
+on:
+  workflow_run:
+    workflows: ['Emily Olivia Community Run']
+    types: [completed]
+
+# Deliberately no contents:write and no actions:write. This workflow can observe
+# a completed Community run, upload its own result artifact, and report status.
+# It cannot dispatch/rerun Community or change live cognition/replay files.
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  prospective-evaluation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PREREG_COMMIT: ea69132cee9ce89bba3137c7d81ba81af0f3298b
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Check out offline evaluator from main
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            experiments/emily-olivia-society/dialogue_attractor.py
+            experiments/emily-olivia-society/endogenous_workspace.py
+            experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py
+            experiments/emily-olivia-society/endogenous_workspace_replay.py
+            experiments/emily-olivia-society/endogenous_refractory_selection_v5.py
+            experiments/emily-olivia-society/endogenous_semantic_refractory_v6.py
+            experiments/emily-olivia-society/endogenous_semantic_refractory_v8.py
+            experiments/emily-olivia-society/endogenous_semantic_refractory_v8_preregistration.json
+
+      - name: Prove Community head contains the preregistration boundary
+        id: provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PREREG_COMMIT}...${SOURCE_HEAD_SHA}" --jq '.status')"
+          case "$status" in
+            ahead|identical) eligible=true ;;
+            *) eligible=false ;;
+          esac
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+          echo "compare_status=$status" >> "$GITHUB_OUTPUT"
+          echo "Community run ${SOURCE_RUN_ID}: prereg comparison=$status eligible=$eligible"
+
+      - name: Read exact source artifact provenance
+        if: steps.provenance.outputs.eligible == 'true'
+        id: artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          row="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name == "emily-olivia-community-results") | [.id,.digest,.created_at] | @tsv' \
+            | head -n 1)"
+          if [ -z "$row" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No Community result artifact exists; this completion is not prospective evidence."
+            exit 0
+          fi
+          IFS=$'\t' read -r artifact_id digest created_at <<< "$row"
+          digest="${digest#sha256:}"
+          test -n "$artifact_id"
+          test "${#digest}" -eq 64
+          test -n "$created_at"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
+          echo "created_at=$created_at" >> "$GITHUB_OUTPUT"
+
+      - name: Download this completed Community artifact only
+        if: steps.provenance.outputs.eligible == 'true' && steps.artifact.outputs.found == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: emily-olivia-community-results
+          path: prospective-community-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Compile native-only evaluator
+        if: steps.provenance.outputs.eligible == 'true' && steps.artifact.outputs.found == 'true'
+        working-directory: experiments/emily-olivia-society
+        run: python3 -m py_compile endogenous_semantic_refractory_v8.py
+
+      - name: Evaluate without mutating the Community
+        if: steps.provenance.outputs.eligible == 'true' && steps.artifact.outputs.found == 'true'
+        id: evaluate
+        shell: bash
+        run: |
+          set +e
+          python3 experiments/emily-olivia-society/endogenous_semantic_refractory_v8.py \
+            --prereg experiments/emily-olivia-society/endogenous_semantic_refractory_v8_preregistration.json \
+            --artifact-root prospective-community-artifact \
+            --run-id "$SOURCE_RUN_ID" \
+            --artifact-id "${{ steps.artifact.outputs.artifact_id }}" \
+            --artifact-sha256 "${{ steps.artifact.outputs.sha256 }}" \
+            --artifact-created-at "${{ steps.artifact.outputs.created_at }}" \
+            --artifact-head-sha "$SOURCE_HEAD_SHA" \
+            --out v8-prospective-result.json \
+            >v8-evaluator.log 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            python3 - "$rc" <<'PY'
+          import json, pathlib, sys
+          log=pathlib.Path('v8-evaluator.log').read_text(errors='replace').strip()
+          payload={
+            'experiment':'endogenous_semantic_refractory_v8_prospective',
+            'evidence_role':'prospective_candidate_rejected_fail_closed',
+            'source_run_id':int(__import__('os').environ['SOURCE_RUN_ID']),
+            'evaluator_exit_code':int(sys.argv[1]),
+            'reason':log[-1200:] or 'native prospective evaluator rejected the artifact',
+            'results':{
+              'prospective_gate_passed':False,
+              'observational_shadow_mode_permitted':False,
+              'live_behavioral_influence_permitted':False,
+              'status':'EVIDENCE_NOT_QUALIFYING'
+            },
+            'produced_dialogue':False,
+            'wrote_live_memory':False,
+            'activated_live_workspace':False,
+            'activated_shadow_mode_during_test':False,
+            'started_community_run':False,
+            'altered_the_room':False
+          }
+          pathlib.Path('v8-prospective-result.json').write_text(json.dumps(payload,indent=2,sort_keys=True)+'\n')
+          PY
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('v8-prospective-result.json').read_text())
+          assert d.get('produced_dialogue') is False
+          assert d.get('wrote_live_memory') is False
+          assert d.get('activated_live_workspace') is False
+          assert d.get('activated_shadow_mode_during_test') is False
+          assert d.get('started_community_run') is False
+          assert d.get('altered_the_room') is False
+          assert d['results']['live_behavioral_influence_permitted'] is False
+          print(json.dumps({'results':d['results'],'metrics':d.get('metrics')},indent=2,sort_keys=True))
+          PY
+
+      - name: Upload immutable prospective result
+        if: steps.provenance.outputs.eligible == 'true' && steps.artifact.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-v8-prospective-${{ github.event.workflow_run.id }}
+          path: v8-prospective-result.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Report gate result on tracking issue
+        if: steps.provenance.outputs.eligible == 'true' && steps.artifact.outputs.found == 'true'
+        shell: bash
+        run: |
+          body="$(python3 - <<'PY'
+          import json
+          d=json.load(open('v8-prospective-result.json'))
+          r=d['results']
+          m=d.get('metrics') or {}
+          print(f"v8 prospective evaluation of Community run {d.get('source',{}).get('community_run_id', d.get('source_run_id'))}: **{r['status']}**. Shadow permitted by this single gate: `{str(r['observational_shadow_mode_permitted']).lower()}`. Live behavioral influence: `false`. Relative semantic-overlap reduction: `{m.get('relative_pair_overlap_reduction','n/a')}`; immediate utility ratio: `{m.get('immediate_retrieval_utility_ratio','n/a')}`; future utility ratio: `{m.get('future_rank_utility_ratio','n/a')}`.")
+          PY
+          )"
+          gh issue comment 261 --repo "$GITHUB_REPOSITORY" --body "$body"
