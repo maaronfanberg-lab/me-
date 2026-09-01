@@ -94,6 +94,17 @@ def _has_unsupported_residence(text: str, support_text: str) -> bool:
     return not place_words.issubset(_content_words(support_text))
 
 
+def _splits_current_peer_identity(text: str, other_name: str) -> bool:
+    other = str(other_name or "").strip()
+    if not other:
+        return False
+    pattern = re.compile(
+        rf"\b(?:a|the)\s+(?:woman|man|girl|boy|person)\s+(?:named|called)\s+{re.escape(other)}\b",
+        re.IGNORECASE,
+    )
+    return bool(pattern.search(str(text or "")))
+
+
 def candidate_external_grounding_blocker(
     text: str,
     support_text: str,
@@ -101,9 +112,11 @@ def candidate_external_grounding_blocker(
     agent_name: str = "",
     other_name: str = "",
 ) -> str | None:
-    _ = (agent_name, other_name)
+    _ = agent_name
     if _SERVICE_RESPONSE_TEMPLATE.search(str(text or "")):
         return "service-response-template"
+    if _splits_current_peer_identity(text, other_name):
+        return "same-name-peer-split"
     if _has_unsupported_reported_content(text, support_text):
         return "unsupported-reported-content"
     if _has_unsupported_link_offer(text, support_text):
