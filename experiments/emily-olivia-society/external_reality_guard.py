@@ -13,6 +13,11 @@ _REPORTED_CONTENT = re.compile(
     r"\b(?:it|the\s+(?:message|email|text|note))\s+says?\b",
     re.IGNORECASE,
 )
+_LINK_OFFER = re.compile(
+    r"\b(?:here(?:'s|\s+is)|this\s+is)\s+(?:a|the)\s+link\b",
+    re.IGNORECASE,
+)
+_URL = re.compile(r"https?://[^\s)\]>'\"]+|www\.[^\s)\]>'\"]+", re.IGNORECASE)
 _FILLER = {
     "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
     "has", "have", "he", "her", "here", "him", "his", "i", "in", "is", "it",
@@ -31,12 +36,6 @@ def _content_words(text: object) -> set[str]:
 
 
 def _has_unsupported_reported_content(text: str, support_text: str) -> bool:
-    """Reject invented quoted/reported message contents.
-
-    A next-line completion may discuss reported content only when its substantive
-    words are already present in the inbound/history/retrieved evidence. This is
-    an evidence boundary, not a topic rule.
-    """
     candidate = str(text or "")
     match = _REPORTED_CONTENT.search(candidate)
     if not match:
@@ -49,6 +48,17 @@ def _has_unsupported_reported_content(text: str, support_text: str) -> bool:
     return shared / max(1, len(reported_words)) < 0.5
 
 
+def _has_unsupported_link_offer(text: str, support_text: str) -> bool:
+    candidate = str(text or "")
+    if not _LINK_OFFER.search(candidate):
+        return False
+    urls = {url.casefold() for url in _URL.findall(candidate)}
+    if not urls:
+        return True
+    support_urls = {url.casefold() for url in _URL.findall(str(support_text or ""))}
+    return not urls.issubset(support_urls)
+
+
 def candidate_external_grounding_blocker(
     text: str,
     support_text: str,
@@ -59,4 +69,6 @@ def candidate_external_grounding_blocker(
     _ = (agent_name, other_name)
     if _has_unsupported_reported_content(text, support_text):
         return "unsupported-reported-content"
+    if _has_unsupported_link_offer(text, support_text):
+        return "unsupported-link-offer"
     return None
