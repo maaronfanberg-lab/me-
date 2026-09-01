@@ -67,12 +67,12 @@ jobs:
           echo "run=$run" >> "$GITHUB_OUTPUT"
           echo "Central offset=$offset schedule=$schedule run=$run"
 
-      - name: Check out Community runtime from main
+      - name: Check out triggering Community runtime
         if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
-          ref: main
-          fetch-depth: 1
+          ref: ${{ github.sha }}
+          fetch-depth: 2
 
       - uses: actions/setup-python@v5
         if: steps.gate.outputs.run == 'true'
