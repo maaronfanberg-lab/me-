@@ -72,6 +72,20 @@ def _addresses_self_as_peer(text: str, agent_name: str) -> bool:
     return bool(start.search(candidate) or vocative.search(candidate))
 
 
+def _reintroduces_known_self(text: str, agent_name: str, dialogue_history) -> bool:
+    """Reject identity resets once the two known peers are already conversing."""
+    if not list(dialogue_history or []):
+        return False
+    name = str(agent_name or "").strip()
+    if not name:
+        return False
+    pattern = re.compile(
+        rf"\b(?:i\s+am|i'm|my\s+name\s+is)\s+{re.escape(name)}\b",
+        re.IGNORECASE,
+    )
+    return bool(pattern.search(str(text or "")))
+
+
 def _support_text(inbound: str, dialogue_history, cognitive_context: str) -> str:
     parts = [str(inbound or ""), str(cognitive_context or "")]
     for speaker, line in list(dialogue_history or [])[-12:]:
@@ -159,6 +173,9 @@ def install_spoken_action_guard(generator):
             support = _support_text(inbound, dialogue_history, cognitive_context)
             if _addresses_self_as_peer(text, getattr(agent, "name", "")):
                 rejected.append(f"self-address:{str(text)[:180]}")
+                continue
+            if _reintroduces_known_self(text, getattr(agent, "name", ""), dialogue_history):
+                rejected.append(f"self-reintroduction:{str(text)[:180]}")
                 continue
             if _contradicts_observed_presence(text, getattr(other, "name", ""), support):
                 rejected.append(f"presence-contradiction:{str(text)[:180]}")
