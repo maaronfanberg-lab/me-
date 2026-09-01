@@ -105,7 +105,7 @@ jobs:
           test -x vendor/BitNet/build/bin/llama-server
           test -s models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
           test -f .bootstrap-ready-v11
-          grep -q 'COMMUNITY_BITNET_HTTP_V3' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+          grep -q 'COMMUNITY_BITNET_HTTP_V4' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Save runtime cache
         if: steps.gate.outputs.run == 'true' && steps.bitnet-cache.outputs.cache-hit != 'true'
