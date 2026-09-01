@@ -1,0 +1,37 @@
+{
+  "evidence_version": 6,
+  "experiment": "endogenous_semantic_refractory_v6",
+  "workflow_run_id": 33537603588,
+  "workflow_job_id": 99955642667,
+  "result_artifact_id": 9812263728,
+  "result_artifact_sha256": "13fde8e1a9bdc8e274cde7fc94eb6242b4f24dff8aaa518af135d6687a6da27c",
+  "produced_dialogue": false,
+  "wrote_live_memory": false,
+  "activated_live_workspace": false,
+  "activated_shadow_mode": false,
+  "status": "NOT_SUPPORTED_BY_FROZEN_BLOCKS",
+  "gate_diagnostic": "INFEASIBLE_ABSOLUTE_OVERLAP_REDUCTION_THRESHOLD",
+  "historical_replica": {
+    "community_run_number": 112,
+    "tick_count": 58,
+    "baseline_consecutive_meaningful_pair_overlap": 0.065803,
+    "semantic_refractory_consecutive_meaningful_pair_overlap": 0.065687,
+    "absolute_overlap_reduction": 0.000116,
+    "preregistered_absolute_reduction_required": 0.10,
+    "immediate_retrieval_utility_ratio": 0.99898,
+    "future_rank_utility_ratio": 1.003783,
+    "sanity_zero_penalty_matches_retrieval": true
+  },
+  "discovery_anchor": {
+    "community_run_number": 118,
+    "tick_count": 14,
+    "baseline_consecutive_meaningful_pair_overlap": 0.08378,
+    "semantic_refractory_consecutive_meaningful_pair_overlap": 0.076659,
+    "absolute_overlap_reduction": 0.007121,
+    "preregistered_absolute_reduction_required": 0.10,
+    "immediate_retrieval_utility_ratio": 0.996241,
+    "future_rank_utility_ratio": 0.995536,
+    "sanity_zero_penalty_matches_retrieval": true
+  },
+  "interpretation": "The locked v6 experiment correctly failed, but its primary absolute overlap-reduction gate was impossible on both frozen blocks because baseline meaningful-pair overlap was below 0.10 before any intervention. The tested 0.18 pair-level refractory penalty preserved essentially all retrieval utility and produced only a tiny reduction in semantic overlap. These frozen blocks are therefore demoted to development/calibration evidence. No retrospective gate rewrite is allowed. Any revised semantic mechanism must be calibrated transparently here and then tested on a new prospective retrieval-time-evidence block before it can advance. Shadow and live modes remain forbidden."
+}
