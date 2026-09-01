@@ -8,6 +8,7 @@ import os
 import subprocess
 import time
 import uuid
+from collections import deque
 from pathlib import Path
 
 from community_cycle import (
@@ -46,6 +47,64 @@ def append_jsonl(path: Path, payload: dict) -> None:
         handle.write(json.dumps(payload, separators=(",", ":")) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def recent_dialogue_history(path: Path, limit: int = 12) -> list[tuple[str, str]]:
+    """Recover recent delivered dialogue so restart-time generation sees its own past."""
+    if limit <= 0 or not path.exists():
+        return []
+
+    tail: deque[str] = deque(maxlen=max(64, limit * 8))
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if line:
+                    tail.append(line)
+    except OSError:
+        return []
+
+    history: list[tuple[str, str]] = []
+    seen: set[tuple[object, ...]] = set()
+    for line in tail:
+        try:
+            row = json.loads(line)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(row, dict):
+            continue
+
+        message = None
+        if row.get("type") == "session_start":
+            seed = row.get("seed")
+            if isinstance(seed, dict):
+                message = seed.get("message")
+        elif row.get("type") == "turn":
+            turn = row.get("turn")
+            if isinstance(turn, dict):
+                action_result = turn.get("action_result")
+                if isinstance(action_result, dict):
+                    message = action_result.get("message")
+
+        if not isinstance(message, dict):
+            continue
+        speaker = str(message.get("from_name", "")).strip()
+        content = str(message.get("content", "")).strip()
+        if speaker not in {"Emily", "Olivia"} or not _is_usable_utterance(content):
+            continue
+
+        message_id = message.get("id")
+        key = (
+            ("id", message_id, speaker, content)
+            if message_id is not None
+            else ("text", speaker, content)
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        history.append((speaker, content))
+
+    return history[-limit:]
 
 
 def publish_live_replay() -> None:
@@ -181,7 +240,7 @@ async def run_community_session(
     resumed = False
     autonomous_opening = False
     seed: dict = {}
-    dialogue_history: list[tuple[str, str]] = []
+    dialogue_history: list[tuple[str, str]] = recent_dialogue_history(stream_path)
     reply_time_offset = 0
 
     try:
@@ -217,7 +276,9 @@ async def run_community_session(
             current = by_id[to_id]
             other = by_id[from_id]
             seed = {"success": True, "resumed": True, "message": message}
-            dialogue_history.append((other.name, str(message["content"])))
+            pending_history = (other.name, str(message["content"]))
+            if not dialogue_history or dialogue_history[-1] != pending_history:
+                dialogue_history.append(pending_history)
             resumed = True
         else:
             if opener:
