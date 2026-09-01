@@ -226,15 +226,14 @@ def patch_memory() -> None:
         numeric_patch,
         "cleaned.append(max(0.0, min(100.0, score)))",
     )
-    replace_once(
-        path,
-        '''  def _func_clean_up(gpt_response, prompt=""): 
+
+    pristine_reflection = '''  def _func_clean_up(gpt_response, prompt=""): 
     return extract_first_json_dict(gpt_response)["reflection"]
 
   def _get_fail_safe():
     return []
-''',
-        '''  def _func_clean_up(gpt_response, prompt=""): 
+'''
+    previous_reflection_patch = '''  def _func_clean_up(gpt_response, prompt=""): 
     if isinstance(gpt_response, str) and gpt_response.strip().startswith("GENERATION ERROR:"):
       raise RuntimeError(gpt_response.strip())
     parsed = extract_first_json_dict(gpt_response)
@@ -250,8 +249,41 @@ def patch_memory() -> None:
 
   def _get_fail_safe():
     return []
-''',
-        "return [gpt_response.strip()[:1000]]",
+'''
+    clean_reflection_patch = '''  def _func_clean_up(gpt_response, prompt=""): 
+    if isinstance(gpt_response, str) and gpt_response.strip().startswith("GENERATION ERROR:"):
+      raise RuntimeError(gpt_response.strip())
+    parsed = extract_first_json_dict(gpt_response)
+    if not isinstance(parsed, dict):
+      return []
+    reflection = parsed.get("reflection")
+    items = reflection if isinstance(reflection, list) else [reflection]
+    cleaned = []
+    for item in items:
+      text = ""
+      if isinstance(item, str):
+        text = item.strip()
+      elif isinstance(item, dict):
+        for key in ("insight", "reflection", "thought", "sentence"):
+          value = item.get(key)
+          if isinstance(value, str) and value.strip():
+            text = value.strip()
+            break
+      if not text or "```" in text or text.lstrip().startswith(("{", "[")):
+        continue
+      cleaned.append(text[:1000])
+      if len(cleaned) >= reflection_count:
+        break
+    return cleaned
+
+  def _get_fail_safe():
+    return []
+'''
+    replace_one_of(
+        path,
+        (pristine_reflection, previous_reflection_patch),
+        clean_reflection_patch,
+        'for key in ("insight", "reflection", "thought", "sentence")',
     )
 
 
