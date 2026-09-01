@@ -24,24 +24,49 @@ jobs:
   dispatch-community:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch Community runtime only when idle
+      - name: Replace stale Community runtime after relevant code change
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          active_count="$(
-            gh api --method GET \
-              "repos/${GITHUB_REPOSITORY}/actions/workflows/emily-olivia-community-run.yml/runs?per_page=30" \
-              --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending")] | length'
+          set -euo pipefail
+
+          runs_api="repos/${GITHUB_REPOSITORY}/actions/workflows/emily-olivia-community-run.yml/runs?per_page=30"
+          active_lines="$(
+            gh api --method GET "$runs_api" \
+              --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending") | "\(.id) \(.head_sha) \(.status)"'
           )"
-          if [ "${active_count:-0}" -gt 0 ]; then
-            echo "Emily + Olivia Community already has an active or queued run; skipping duplicate dispatch."
-            exit 0
+
+          if [ -n "$active_lines" ]; then
+            echo "Replacing older active Community run(s) so the relevant code change can take effect:"
+            echo "$active_lines"
+            while read -r run_id head_sha status; do
+              [ -n "${run_id:-}" ] || continue
+              gh api --method POST \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" \
+                --silent || true
+            done <<< "$active_lines"
+
+            for attempt in $(seq 1 18); do
+              active_count="$(
+                gh api --method GET "$runs_api" \
+                  --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending")] | length'
+              )"
+              if [ "${active_count:-0}" -eq 0 ]; then
+                break
+              fi
+              if [ "$attempt" -eq 18 ]; then
+                echo "Old Community run did not leave the active state after cancellation." >&2
+                exit 1
+              fi
+              sleep 5
+            done
           fi
 
-          # A valid pending social message still takes precedence inside the runtime. If
-          # checkpoint sanitation forces a clean restart, this gives Emily a concrete,
-          # ordinary opener instead of pretending there is clean context to resume.
+          # A valid pending social message still takes precedence inside the runtime.
+          # A clean state opens autonomously through the Stanford chain; no authored
+          # default dialogue is supplied by the trigger.
           gh workflow run emily-olivia-community-run.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
-            -f opener="Hey Olivia. How's your day going?"
+            -f opener=""
