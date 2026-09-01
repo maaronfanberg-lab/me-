@@ -57,6 +57,13 @@ jobs:
             '-0500:0 10 * * *'|'-0500:30 15 * * *'|'-0500:0 21 * * *'|'-0500:30 2 * * *') run=true ;;
             '-0600:0 11 * * *'|'-0600:30 16 * * *'|'-0600:0 22 * * *'|'-0600:30 3 * * *') run=true ;;
           esac
+          if [ "$run" = true ]; then
+            hour="$(date +%H)"
+            if [ "$hour" -ge 22 ] || [ "$hour" -lt 5 ]; then
+              echo "Scheduled Community handoff arrived during quiet hours; skipping delayed run."
+              run=false
+            fi
+          fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
           echo "Central offset=$offset schedule=$schedule run=$run"
 
