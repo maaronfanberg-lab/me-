@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Fail-closed dialogue guards for the paper-derived spoken-action generator.
+"""Fail-closed grounding guards for paper-derived Emily + Olivia speech.
 
-These checks do not author or rewrite dialogue. They only reject two concrete
-generation failures observed in the live replay and ask the same stochastic
-paper-derived generator for another sample.
+These checks never write replacement dialogue. They reject concrete role or
+world-state claims that are unsupported by the current social evidence and ask
+the same Stanford-derived generator for another stochastic sample.
 """
 from __future__ import annotations
 
@@ -12,17 +12,29 @@ import re
 
 _MAX_BOUNDARY_ATTEMPTS = 3
 
-_DIRECT_SELF_ADDRESS = re.compile(
+_WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
+_DIRECT_SELF_ADDRESS_START = re.compile(
     r"^\s*(?:(?:hi|hey|hello)\s*[,!:\-]?\s*)?{name}\b\s*[,!?:\-]",
     re.IGNORECASE,
 )
-_CONCRETE_SETTING_ANCHOR = re.compile(
-    r"\b(?:at|from|inside|outside|near|during|after|before)\s+"
-    r"(?:the|a|an|your|my|our|their|his|her)\s+"
-    r"([A-Za-z][A-Za-z'-]{2,})\b",
+_SELF_VOCATIVE = re.compile(
+    r"(?:^|[,;:!?]\s*|\b(?:hi|hey|hello)\s+){name}\b\s*[,!?.:]",
     re.IGNORECASE,
 )
-_WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
+
+_LOCATION_HEAD = (
+    r"(?:town|city|hospital|school|office|center|centre|park|cafe|café|"
+    r"restaurant|store|shop|house|home|apartment|library|church|clinic|"
+    r"beach|station|airport|hotel|room|kitchen|garden|neighbou?rhood|"
+    r"street|market|mall|gym|bar|pub|theat(?:er|re)|museum)"
+)
+_CONCRETE_SETTING_ANCHOR = re.compile(
+    rf"\b(?:at|from|inside|outside|near|around|through|into|onto|to|back\s+to|"
+    rf"during|after|before)\s+"
+    rf"(?:(?:the|a|an|your|my|our|their|his|her)\s+)?"
+    rf"((?:[A-Za-z][A-Za-z'-]*\s+){{0,2}}{_LOCATION_HEAD})\b",
+    re.IGNORECASE,
+)
 
 
 def _words(text: object) -> set[str]:
@@ -30,15 +42,20 @@ def _words(text: object) -> set[str]:
 
 
 def _addresses_self_as_peer(text: str, agent_name: str) -> bool:
-    """Catch direct-address role inversion such as Olivia saying 'Hi, Olivia!'."""
+    """Catch role inversion, including mid-sentence self-vocatives."""
     name = str(agent_name or "").strip()
     if not name:
         return False
-    pattern = re.compile(
-        _DIRECT_SELF_ADDRESS.pattern.format(name=re.escape(name)),
-        _DIRECT_SELF_ADDRESS.flags,
+    start = re.compile(
+        _DIRECT_SELF_ADDRESS_START.pattern.format(name=re.escape(name)),
+        _DIRECT_SELF_ADDRESS_START.flags,
     )
-    return bool(pattern.search(str(text or "")))
+    vocative = re.compile(
+        _SELF_VOCATIVE.pattern.format(name=re.escape(name)),
+        _SELF_VOCATIVE.flags,
+    )
+    candidate = str(text or "")
+    return bool(start.search(candidate) or vocative.search(candidate))
 
 
 def _support_text(inbound: str, dialogue_history, cognitive_context: str) -> str:
@@ -49,25 +66,28 @@ def _support_text(inbound: str, dialogue_history, cognitive_context: str) -> str
     return "\n".join(parts)
 
 
+def _location_phrase_words(phrase: str) -> set[str]:
+    return _words(phrase)
+
+
 def _has_unsupported_concrete_setting(
     text: str,
     inbound: str,
     dialogue_history,
     cognitive_context: str,
 ) -> bool:
-    """Reject concrete setting/event anchors absent from available evidence.
+    """Reject location claims that are absent from available evidence.
 
-    This deliberately does not require general lexical overlap or prescribe
-    topics. It only catches anchored claims such as "at the hospital" when the
-    hospital is nowhere in the inbound message, recent dialogue, or retrieved
-    cognitive context.
+    A clean opening often has almost no support text. That is precisely when
+    grounding must be strict, not disabled. A detected concrete location is
+    therefore unsupported when no evidence words exist.
     """
     support_words = _words(_support_text(inbound, dialogue_history, cognitive_context))
-    if not support_words:
-        return False
     for match in _CONCRETE_SETTING_ANCHOR.finditer(str(text or "")):
-        anchor = match.group(1).casefold()
-        if anchor not in support_words:
+        phrase_words = _location_phrase_words(match.group(1))
+        if not phrase_words:
+            continue
+        if not support_words or not phrase_words.issubset(support_words):
             return True
     return False
 
