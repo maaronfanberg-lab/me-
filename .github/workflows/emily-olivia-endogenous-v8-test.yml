@@ -1,0 +1,58 @@
+name: Emily Olivia endogenous v8 gate test
+
+on:
+  push:
+    paths:
+      - 'experiments/emily-olivia-society/endogenous_semantic_refractory_v8.py'
+      - 'experiments/emily-olivia-society/endogenous_semantic_refractory_v8_preregistration.json'
+      - 'experiments/emily-olivia-society/endogenous_semantic_refractory_v8_gate_state.json'
+      - 'experiments/emily-olivia-society/test_endogenous_semantic_refractory_v8.py'
+      - '.github/workflows/emily-olivia-endogenous-v8-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fail-closed-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            experiments/emily-olivia-society/dialogue_attractor.py
+            experiments/emily-olivia-society/endogenous_workspace.py
+            experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py
+            experiments/emily-olivia-society/endogenous_workspace_replay.py
+            experiments/emily-olivia-society/endogenous_refractory_selection_v5.py
+            experiments/emily-olivia-society/endogenous_semantic_refractory_v6.py
+            experiments/emily-olivia-society/endogenous_semantic_refractory_v8.py
+            experiments/emily-olivia-society/endogenous_semantic_refractory_v8_preregistration.json
+            experiments/emily-olivia-society/endogenous_semantic_refractory_v8_gate_state.json
+            experiments/emily-olivia-society/test_endogenous_semantic_refractory_v8.py
+      - name: Compile prospective evaluator
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 -m py_compile \
+            endogenous_semantic_refractory_v8.py \
+            test_endogenous_semantic_refractory_v8.py
+      - name: Run prospective fail-closed tests
+        working-directory: experiments/emily-olivia-society
+        run: python3 -m unittest -v test_endogenous_semantic_refractory_v8.py
+      - name: Enforce inactive gate state
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          state=json.loads(Path('endogenous_semantic_refractory_v8_gate_state.json').read_text())
+          assert state['permissions']['observational_shadow_mode_permitted'] is False
+          assert state['permissions']['live_behavioral_influence_permitted'] is False
+          assert state['permissions']['endogenous_workspace_live_activation_permitted'] is False
+          assert state['invariants']['community_run_started_by_gate'] is False
+          assert state['invariants']['the_room_touched'] is False
+          print('v8 gate remains observationally and behaviorally inactive')
+          PY
