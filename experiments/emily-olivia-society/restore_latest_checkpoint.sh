@@ -20,8 +20,13 @@ fi
 reset_clean() {
   local reason="$1"
   rm -rf "$WORKSPACES"
-  rm -f "$REPLAY_DIR/social_state.json"
   mkdir -p "$REPLAY_DIR"
+  rm -f \
+    "$REPLAY_DIR/social_state.json" \
+    "$REPLAY_DIR/checkpoint_session.json" \
+    "$REPLAY_DIR/community_session.json" \
+    "$REPLAY_DIR/community_session.jsonl" \
+    "$REPLAY_DIR/community_session_error.json"
   cat > "$REPLAY_DIR/checkpoint_restore.json.tmp" <<JSON
 {
   "mode": "checkpoint_restore",
@@ -91,7 +96,7 @@ for agent in ("emily", "olivia"):
 
 if social and social.is_file():
     state = json.loads(social.read_text(encoding="utf-8"))
-    inboxes = state.get("inboxes")
+    inboxes = state.get("inboxes") if isinstance(state, dict) else None
     if not isinstance(state, dict) or state.get("version") != 1 or not isinstance(inboxes, dict):
         raise SystemExit("Invalid social state schema")
     if not all(isinstance(inboxes.get(key, []), list) for key in ("1", "2")):
@@ -109,7 +114,7 @@ if bad:
     for source, reason, preview in bad[:8]:
         print(f"  {source}: {reason}: {preview!r}", file=sys.stderr)
     raise SystemExit(1)
-print("Checkpoint semantic dialogue validation passed.")
+print("Checkpoint structural memory validation passed.")
 PY
 }
 
@@ -118,14 +123,19 @@ checkpoint_run=""
 checkpoint_conclusion=""
 candidate=""
 social_state=""
+checkpoint_summary=""
+checkpoint_history=""
+checkpoint_message_count=0
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
+# Only a successfully completed workflow is eligible to become durable cognition.
+# Cancelled/failed artifacts remain diagnostic evidence, never continuity state.
 mapfile -t candidate_runs < <(
   gh api --method GET \
     "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=30" \
-    --jq '.workflow_runs[] | select(.status == "completed") | [.id, (.conclusion // "unknown"), .head_sha] | @tsv'
+    --jq '.workflow_runs[] | select(.status == "completed" and .conclusion == "success") | [.id, .conclusion, .head_sha] | @tsv'
 )
 
 for candidate_info in "${candidate_runs[@]:-}"; do
@@ -203,23 +213,66 @@ PY
     continue
   fi
 
-  social_candidate="$(find "$run_dir" -type f -path '*/replay/social_state.json' -print -quit)"
-  if ! validate_semantics "$workspace_candidate" "${social_candidate:-}"; then
-    echo "Skipping checkpoint run $run_id: semantic validation failed."
+  replay_candidate="$(find "$run_dir" -type d -name replay -print -quit)"
+  summary_candidate=""
+  error_candidate=""
+  social_candidate=""
+  if [[ -n "${replay_candidate:-}" && -d "$replay_candidate" ]]; then
+    summary_candidate="$replay_candidate/community_session.json"
+    error_candidate="$replay_candidate/community_session_error.json"
+    social_candidate="$replay_candidate/social_state.json"
+  fi
+  if [[ -z "$summary_candidate" || ! -s "$summary_candidate" ]]; then
+    echo "Skipping checkpoint run $run_id: artifact contains no completed session summary."
     rm -rf "$run_dir"
     continue
   fi
 
+  if ! validate_semantics "$workspace_candidate" "${social_candidate:-}"; then
+    echo "Skipping checkpoint run $run_id: structural memory validation failed."
+    rm -rf "$run_dir"
+    continue
+  fi
+
+  history_candidate="$run_dir/validated-checkpoint-history.jsonl"
+  validator_args=(
+    --workspace "$workspace_candidate"
+    --summary "$summary_candidate"
+    --history-output "$history_candidate"
+  )
+  if [[ -s "${social_candidate:-}" ]]; then
+    validator_args+=(--social "$social_candidate")
+  fi
+  if [[ -e "$error_candidate" ]]; then
+    validator_args+=(--error "$error_candidate")
+  fi
+
+  if ! validation_json="$(python3 checkpoint_validation.py "${validator_args[@]}")"; then
+    echo "Skipping checkpoint run $run_id: completed-session validation failed."
+    rm -rf "$run_dir"
+    continue
+  fi
+
+  social_ok="$(python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("social_state_restorable") else "false")' <<< "$validation_json")"
+  message_count="$(python3 -c 'import json,sys; print(int(json.load(sys.stdin).get("message_count", 0)))' <<< "$validation_json")"
+
   checkpoint_run="$run_id"
   checkpoint_conclusion="$run_conclusion"
   candidate="$workspace_candidate"
-  social_state="${social_candidate:-}"
+  checkpoint_summary="$summary_candidate"
+  checkpoint_history="$history_candidate"
+  checkpoint_message_count="$message_count"
+  if [[ "$social_ok" == "true" ]]; then
+    social_state="${social_candidate:-}"
+  else
+    social_state=""
+  fi
   break
 done
 
 if [[ -z "$checkpoint_run" ]]; then
-  echo "No structurally and semantically valid v2 checkpoint exists. Starting from clean cognition and social state."
-  reset_clean "no_valid_checkpoint_v2"
+  echo "No successful, completed, semantically clean v2 checkpoint exists. Starting from clean cognition and social state."
+  reset_clean "no_valid_successful_checkpoint_v2"
   exit 0
 fi
 
@@ -230,6 +283,12 @@ rm -rf "$WORKSPACES"
 mv "$new_workspaces" "$WORKSPACES"
 
 mkdir -p "$REPLAY_DIR"
+rm -f "$REPLAY_DIR/community_session.json" "$REPLAY_DIR/community_session_error.json"
+cp "$checkpoint_summary" "$REPLAY_DIR/checkpoint_session.json.tmp"
+mv "$REPLAY_DIR/checkpoint_session.json.tmp" "$REPLAY_DIR/checkpoint_session.json"
+cp "$checkpoint_history" "$REPLAY_DIR/community_session.jsonl.tmp"
+mv "$REPLAY_DIR/community_session.jsonl.tmp" "$REPLAY_DIR/community_session.jsonl"
+
 social_restored=false
 if [[ -n "$social_state" && -s "$social_state" ]]; then
   cp "$social_state" "$REPLAY_DIR/social_state.json.tmp"
@@ -246,10 +305,13 @@ cat > "$REPLAY_DIR/checkpoint_restore.json.tmp" <<JSON
   "source_run_id": $checkpoint_run,
   "source_run_conclusion": "$checkpoint_conclusion",
   "artifact": "$ARTIFACT_NAME",
+  "validated_message_count": $checkpoint_message_count,
+  "history_scoped_to_checkpoint": true,
   "social_state_restored": $social_restored
 }
 JSON
 mv "$REPLAY_DIR/checkpoint_restore.json.tmp" "$REPLAY_DIR/checkpoint_restore.json"
 
-echo "Restored Emily + Olivia workspaces from valid v2 checkpoint run $checkpoint_run (conclusion=$checkpoint_conclusion)."
+echo "Restored Emily + Olivia workspaces from successful validated v2 checkpoint run $checkpoint_run."
+echo "Checkpoint dialogue history scoped to that exact completed session: $checkpoint_message_count messages"
 echo "Persistent social state restored: $social_restored"
