@@ -47,13 +47,7 @@ def _reaction(agent, other_name: str, event: str, focal: str, time_step: int) ->
 
 
 def react_to_observation(agent, other_name: str, inbound: str, time_step: int) -> dict:
-    """Retrieve context for an addressed message and select the paper-style reaction.
-
-    In the original simulation `_should_react` may choose chat, wait, or keep the
-    current plan depending on a retrieved event and spatial/activity state. In
-    this dedicated two-person conversation an addressed inbound message is the
-    social event, so the corresponding valid reaction is `chat with <person>`.
-    """
+    """Retrieve context for an addressed message and select the paper-style reaction."""
     focal = (
         f"{other_name} said to {agent.name}: {inbound}\n"
         f"What memories and thoughts are relevant to how {agent.name} should react?"
@@ -62,7 +56,7 @@ def react_to_observation(agent, other_name: str, inbound: str, time_step: int) -
 
 
 def react_to_presence(agent, other_name: str, time_step: int) -> dict:
-    """Select the paper-style social reaction when a clean session has no inbox.
+    """Select the paper-style reaction when a clean session has no inbox.
 
     Presence is an observed environment fact, not authored dialogue. In this
     dedicated two-person space, choosing to chat is the map-free analogue of the
@@ -77,12 +71,8 @@ def react_to_presence(agent, other_name: str, time_step: int) -> dict:
 
 
 def reaction_context(reaction: dict) -> str:
-    """Expose retrieved cognitive context, never a scripted conversational move."""
-    mode = str(reaction.get("mode") or "").strip()
+    """Expose retrieved substance without leaking planner/control wording into speech."""
     memories = [str(x).strip() for x in reaction.get("retrieved", []) if str(x).strip()]
-    parts = []
-    if mode:
-        parts.append(f"Current reaction selected by the social planner: {mode}.")
-    if memories:
-        parts.append("Relevant retrieved memories: " + " | ".join(memories[:6]))
-    return " ".join(parts)
+    if not memories:
+        return ""
+    return "Relevant retrieved memories: " + " | ".join(memories[:6])
