@@ -34,18 +34,19 @@ def relevant_memories(agent, other_name: str, time_step: int, n_count: int = 12)
 
 
 def _run_reflection_pass(agent, anchor: str, time_step: int, retrieval_count: int) -> None:
-    """Run one Stanford reflection pass and discard malformed generated nodes.
+    """Run one bounded Stanford reflection insight and discard malformed nodes.
 
-    A malformed item may be appended immediately before Stanford's embedding
-    boundary rejects it. The hygiene pass removes such partial/parser-scaffold
-    nodes and preserves any valid reflections already produced. No substitute
-    reflection content is generated.
+    The local 1B model is deliberately asked for one insight through Stanford's
+    singular reflection prompt. Requesting a three-item batch repeatedly hit the
+    128-token generation ceiling and left a truncated response that hygiene had
+    to reject. This changes only the requested count, not the retrieved records,
+    research prompt path, importance scoring, or persistence semantics.
     """
     install_natural_reflection_parser()
     try:
         agent.brain.memory_stream.reflect(
             anchor=anchor,
-            reflection_count=3,
+            reflection_count=1,
             retrieval_count=retrieval_count,
             time_step=time_step,
         )
@@ -74,8 +75,8 @@ def reflect_and_verify(agent, other_name: str, time_step: int) -> dict:
     anchor = f"What can {agent.name} infer from her interactions with {other_name}?"
     retrieval_count = min(12, max(1, before["total"]))
 
-    # Resample the same research-shaped reflection request only when an entire
-    # pass yields no clean reflection. This is not authored fallback content.
+    # Resample the same singular research-shaped reflection request only when an
+    # entire pass yields no clean reflection. This is not authored fallback.
     for attempt in range(3):
         _run_reflection_pass(
             agent,
