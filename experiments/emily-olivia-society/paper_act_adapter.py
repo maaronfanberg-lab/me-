@@ -7,12 +7,12 @@ Upstream research source:
   Apache-2.0
 
 The original paper's conversation path generates the next line by ending the
-prompt at ``<persona name>: \"`` and completing that line.  That shape is a much
+prompt at ``<persona name>: \"`` and completing that line. That shape is a much
 better fit for the small local Falcon model than the later Stanford HCI JSON
 utterance prompt, which can drift into self-description instead of dialogue.
 
 This adapter keeps the paper's next-line completion boundary while using the
-current Community's Stanford HCI memory/retrieval/reflection state.  It contains
+current Community's Stanford HCI memory/retrieval/reflection state. It contains
 no authored example dialogue, conversational-move recipes, or fallback replies.
 Retries resample the same research-derived prompt and fail closed if the model
 never produces a usable line.
@@ -142,6 +142,42 @@ def _clean_line(raw: object, agent_name: str) -> str:
     return _base._unwrap_reply(text).strip()
 
 
+def is_usable_spoken_action(
+    text: str,
+    inbound: str = "",
+    agent_name: str = "",
+    other_name: str = "",
+) -> bool:
+    """Validate a paper-derived line without dictating its vocabulary.
+
+    The older local dialogue gate required an output to reuse a literal content
+    word from the inbound message. That is useful for a tightly steered fallback
+    generator but wrong for the paper's transcript-completion act: a natural
+    reply can be semantically relevant with zero lexical overlap. Keep the
+    structural, role-drift, length, and service-language checks by validating
+    with an empty inbound, then independently reject direct/near-direct echoes.
+    """
+    if not _base._is_usable_utterance(text, "", agent_name, other_name):
+        return False
+    inbound = str(inbound or "").strip()
+    if not inbound:
+        return True
+
+    input_words = _base._normalize_words(inbound)
+    output_words = _base._normalize_words(text)
+    if not input_words or not output_words:
+        return False
+    if input_words == output_words:
+        return False
+
+    if len(input_words) >= 5 and len(output_words) >= 5:
+        common = len(set(output_words) & set(input_words))
+        overlap = common / max(1, len(set(output_words)))
+        if overlap > 0.85 and len(output_words) >= len(input_words):
+            return False
+    return True
+
+
 def generate_spoken_action(
     agent,
     other,
@@ -156,7 +192,7 @@ def generate_spoken_action(
         raw = _request_completion(prompt, agent.name, other.name)
         text = _clean_line(raw, agent.name)
         attempts.append(text or str(raw).strip())
-        if _base._is_usable_utterance(text, inbound, agent.name, other.name):
+        if is_usable_spoken_action(text, inbound, agent.name, other.name):
             return text
 
     previews = " | ".join(repr(text[:220]) for text in attempts)
