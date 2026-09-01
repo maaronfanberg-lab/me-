@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""Thin Emily + Olivia adapter around Stanford HCI genagents.
+"""Emily + Olivia Stanford-chain adapter.
 
 The live cognitive chain is intentionally research-shaped:
   observe -> remember -> retrieve -> reflect -> plan/react -> act
 
-Stanford's GenerativeAgent and memory stream remain in charge of memory,
-retrieval, reflection, and utterance generation. The original 2023 Generative
-Agents planner supplies the planning/reaction structure adapted to this
-maze-free two-person social space.
-
-There are deliberately no canned replies, conversational-move prompts, topic-word
-requirements, paraphrase recipes, or hand-written recovery dialogue here.
+Stanford HCI genagents owns persistent memory, retrieval, and reflection. The
+original 2023 Generative Agents source supplies the map-free planning/reaction
+structure and the spoken next-line act boundary. There are deliberately no
+canned replies, conversational-move prompts, topic-word requirements,
+paraphrase recipes, or hand-written recovery dialogue here.
 """
 from __future__ import annotations
 
@@ -18,8 +16,9 @@ import asyncio
 import re
 
 import community_cycle_base as _base
+from paper_act_adapter import generate_spoken_action, research_source as act_research_source
 from paper_plan_adapter import planning_context
-from paper_react_adapter import react_to_observation, reaction_context
+from paper_react_adapter import react_to_observation, react_to_presence, reaction_context
 from paper_reflection_adapter import maybe_reflect
 
 CommunityAgent = _base.CommunityAgent
@@ -68,6 +67,22 @@ def _memory_is_contaminated(content: object) -> bool:
     return bool(text and (_MEMORY_SCAFFOLD.search(text) or _has_pathological_repetition(text)))
 
 
+def _clean_boundary(text: object, agent_name: str = "") -> str:
+    if not isinstance(text, str):
+        return ""
+    cleaned = _base._unwrap_reply(text).strip()
+    if agent_name:
+        self_prefix = re.compile(rf"^\s*{re.escape(agent_name)}\s*:\s*", re.IGNORECASE)
+        match = self_prefix.match(cleaned)
+        if match:
+            cleaned = cleaned[match.end() :].strip()
+            if self_prefix.match(cleaned):
+                return ""
+    if _CONTROL_SCAFFOLD.search(cleaned):
+        return ""
+    return cleaned
+
+
 def _is_usable_utterance(text: str, inbound: str = "", agent_name: str = "", other_name: str = "") -> bool:
     """Boundary validation only; it does not dictate Stanford's wording."""
     if not isinstance(text, str) or not text.strip():
@@ -79,7 +94,7 @@ def _is_usable_utterance(text: str, inbound: str = "", agent_name: str = "", oth
 
 
 def _grounding_words(text: str, limit: int = 6) -> list[str]:
-    """Compatibility helper only; not used to steer Stanford generation."""
+    """Compatibility helper only; not used to steer generation."""
     words: list[str] = []
     for word in _base._normalize_words(text):
         if word in _base._STOP_WORDS or word in {"emily", "olivia"} or len(word) <= 1:
@@ -91,67 +106,13 @@ def _grounding_words(text: str, limit: int = 6) -> list[str]:
     return words
 
 
-def _stanford_dialogue(dialogue_history, other: CommunityAgent, inbound: str) -> list[list[str]]:
-    history = [
-        [str(speaker).strip(), str(text).strip()]
-        for speaker, text in (dialogue_history or [])
-        if str(speaker).strip() and str(text).strip() and not _memory_is_contaminated(text)
-    ]
-    if not history or history[-1] != [other.name, inbound.strip()]:
-        history.append([other.name, inbound.strip()])
-    return history[-20:]
-
-
-def _clean_boundary(text: object, agent_name: str = "") -> str:
-    if not isinstance(text, str):
-        return ""
-    cleaned = _base._unwrap_reply(text).strip()
-    if agent_name:
-        self_prefix = re.compile(rf"^\s*{re.escape(agent_name)}\s*:\s*", re.IGNORECASE)
-        match = self_prefix.match(cleaned)
-        if match:
-            cleaned = cleaned[match.end() :].strip()
-            # One harmless self-label is normalization; repeated speaker labels
-            # are structural residue and still fail the boundary.
-            if self_prefix.match(cleaned):
-                return ""
-    if _CONTROL_SCAFFOLD.search(cleaned):
-        return ""
-    return cleaned
-
-
-def _agent_time_step(agent: CommunityAgent) -> int:
-    latest = 0
-    for node in agent.brain.memory_stream.seq_nodes:
-        latest = max(latest, int(getattr(node, "created", 0) or 0), int(getattr(node, "last_retrieved", 0) or 0))
-    return latest + 1
-
-
-def _utterance_with_clean_retrieval(agent: CommunityAgent, dialogue: list[list[str]], context: str):
-    """Run Stanford utterance while excluding only known poisoned memory nodes."""
-    memory_stream = agent.brain.memory_stream
-    original_retrieve = memory_stream.retrieve
-
-    def clean_retrieve(*args, **kwargs):
-        result = original_retrieve(*args, **kwargs)
-        if not isinstance(result, dict):
-            return result
-        cleaned = {}
-        for key, nodes in result.items():
-            if not isinstance(nodes, list):
-                cleaned[key] = nodes
-                continue
-            cleaned[key] = [node for node in nodes if not _memory_is_contaminated(getattr(node, "content", ""))]
-        return cleaned
-
-    memory_stream.retrieve = clean_retrieve
-    try:
-        return agent.brain.utterance(dialogue, context=context)
-    finally:
-        memory_stream.retrieve = original_retrieve
+def _cognitive_context(reaction: dict, plan_context: str) -> str:
+    parts = [reaction_context(reaction).strip(), str(plan_context or "").strip()]
+    return " ".join(part for part in parts if part)
 
 
 def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgent, dialogue_history=None) -> dict:
+    """Complete retrieve/reflect/plan/react and emit one paper-derived spoken act."""
     inbox = observation.get("inbox", [])
     if not inbox:
         return {"type": "wait", "reason": "no_new_message"}
@@ -163,51 +124,88 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
         raise RuntimeError(f"{agent.name} received contaminated dialogue and refused to feed it back into Stanford.")
 
     agent.brain.update_scratch({"first_name": agent.name, "last_name": ""})
-    time_step = _agent_time_step(agent)
+    time_step = max(
+        int(getattr(node, "created", 0) or 0)
+        for node in (list(agent.brain.memory_stream.seq_nodes) or [type("N", (), {"created": 0})()])
+    ) + 1
 
-    # Stanford/paper chain: retrieve around the current event, allow accumulated
-    # experience to become reflection, then combine broad plan + selected reaction
-    # before Stanford interaction turns that private cognition into an action.
     reaction = react_to_observation(agent, other.name, inbound, time_step)
-    maybe_reflect(agent, time_step)
+    reflected = maybe_reflect(agent, time_step)
     plan_context = planning_context(agent, other.name, time_step)
-
-    dialogue = _stanford_dialogue(dialogue_history, other, inbound)
-    context_parts = [
-        f"You are {agent.name}. {other.name} is the other person in this private conversation.",
-        f"{other.name} speaks to you, and your words are {agent.name}'s own first-person response.",
-        "Talk like a friend sharing ordinary thoughts, opinions, interests, and experiences.",
-        "Use your memories, current private state, and the conversation so far.",
-    ]
-    react_context = reaction_context(reaction)
-    if react_context:
-        context_parts.append(react_context)
-    if plan_context:
-        context_parts.append(plan_context)
-    context = " ".join(context_parts)
-
-    raw_text = _utterance_with_clean_retrieval(agent, dialogue, context)
-    text = _clean_boundary(raw_text, agent.name)
-
+    text = generate_spoken_action(
+        agent,
+        other,
+        dialogue_history=dialogue_history,
+        inbound=inbound,
+        cognitive_context=_cognitive_context(reaction, plan_context),
+    )
+    text = _clean_boundary(text, agent.name)
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
-        retry_context = (
-            f"You are {agent.name}, replying to {other.name} in the same private conversation. "
-            f"{other.name} just said: {inbound} "
-            f"Your reply is {agent.name}'s own first-person response to {other.name}, staying with that subject and your own memories, opinions, and current state."
-        )
-        retry_raw = _utterance_with_clean_retrieval(agent, dialogue, retry_context)
-        retry_text = _clean_boundary(retry_raw, agent.name)
-        if _is_usable_utterance(retry_text, inbound, agent.name, other.name):
-            text = retry_text
-        else:
-            raw_preview = str(raw_text)[:700].replace("\n", "\\n")
-            retry_preview = str(retry_raw)[:700].replace("\n", "\\n")
-            clean_preview = str(retry_text)[:700].replace("\n", "\\n")
-            raise RuntimeError(
-                f"{agent.name} Stanford utterance rejected twice; first={raw_preview!r}; retry={retry_preview!r}; cleaned_retry={clean_preview!r}"
-            )
+        raise RuntimeError(f"{agent.name} paper-derived Stanford act failed the dialogue boundary.")
 
-    return {"type": "message", "recipient_id": other.agent_id, "content": text}
+    return {
+        "type": "message",
+        "recipient_id": other.agent_id,
+        "content": text,
+        "cognition": {
+            "reaction": reaction.get("mode"),
+            "reflected": reflected,
+            "plan_present": bool(plan_context),
+            "act_research_source": act_research_source(),
+        },
+    }
+
+
+def choose_opening_action(
+    agent: CommunityAgent,
+    observation: dict,
+    other: CommunityAgent,
+    time_step: int,
+    dialogue_history=None,
+) -> dict:
+    """Run the full chain for a clean session and autonomously create its first act."""
+    inbox = observation.get("inbox", [])
+    if inbox:
+        raise RuntimeError("Autonomous opening requires a clean inbox.")
+
+    memory = observation_text(agent, observation)
+    agent.brain.remember(memory, time_step=time_step)
+
+    query = f"Current interaction with {other.name}"
+    retrieved = agent.brain.memory_stream.retrieve([query], time_step=time_step, n_count=12)
+    relevant = [
+        str(getattr(node, "content", "")).strip()
+        for node in retrieved.get(query, [])
+        if str(getattr(node, "content", "")).strip()
+    ]
+
+    reaction = react_to_presence(agent, other.name, time_step)
+    reflected = maybe_reflect(agent, time_step)
+    plan_context = planning_context(agent, other.name, time_step)
+    text = generate_spoken_action(
+        agent,
+        other,
+        dialogue_history=dialogue_history,
+        inbound="",
+        cognitive_context=_cognitive_context(reaction, plan_context),
+    )
+    text = _clean_boundary(text, agent.name)
+    if not _is_usable_utterance(text, "", agent.name, other.name):
+        raise RuntimeError(f"{agent.name} autonomous paper-derived opening failed the dialogue boundary.")
+
+    return {
+        "type": "message",
+        "recipient_id": other.agent_id,
+        "content": text,
+        "observation_memory": memory,
+        "retrieved_memories": relevant,
+        "cognition": {
+            "reaction": reaction.get("mode"),
+            "reflected": reflected,
+            "plan_present": bool(plan_context),
+            "act_research_source": act_research_source(),
+        },
+    }
 
 
 async def run_one_cycle() -> None:
@@ -221,9 +219,12 @@ async def run_one_cycle() -> None:
     for offset, agent in enumerate(agents):
         other = next(a for a in agents if a.agent_id != agent.agent_id)
         observation = await social.observe_social_space(agent.agent_id)
-        memory = observation_text(agent, observation)
-        agent.brain.remember(memory, time_step=base_time_step + offset)
-        action = choose_action(agent, observation, other)
+        if not observation.get("inbox") and offset == 0:
+            action = choose_opening_action(agent, observation, other, base_time_step + offset)
+        else:
+            memory = observation_text(agent, observation)
+            agent.brain.remember(memory, time_step=base_time_step + offset)
+            action = choose_action(agent, observation, other)
         if action["type"] == "message":
             await social.send_message(agent.agent_id, int(action["recipient_id"]), str(action["content"]))
         agent.brain.save(str(agent.workspace))
