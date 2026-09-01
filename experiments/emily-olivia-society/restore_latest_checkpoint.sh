@@ -18,13 +18,20 @@ fi
 
 current_run="${GITHUB_RUN_ID:-}"
 checkpoint_run=""
+checkpoint_conclusion=""
+# A Community run can preserve many valid live turns and then fail or be replaced
+# later in the same conversation step. Its uploaded workspace is still a valid
+# checkpoint candidate. Select completed runs by recency and let the semantic
+# validator below decide whether their state is safe to restore.
 mapfile -t candidate_runs < <(
   gh api --method GET \
     "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=30" \
-    --jq '.workflow_runs[] | select(.status == "completed" and .conclusion == "success") | .id'
+    --jq '.workflow_runs[] | select(.status == "completed") | [.id, (.conclusion // "unknown")] | @tsv'
 )
 
-for run_id in "${candidate_runs[@]:-}"; do
+for candidate_info in "${candidate_runs[@]:-}"; do
+  run_id="${candidate_info%%$'\t'*}"
+  run_conclusion="${candidate_info#*$'\t'}"
   if [[ -n "$current_run" && "$run_id" == "$current_run" ]]; then
     continue
   fi
@@ -35,12 +42,13 @@ for run_id in "${candidate_runs[@]:-}"; do
   )"
   if [[ "${artifact_count:-0}" -gt 0 ]]; then
     checkpoint_run="$run_id"
+    checkpoint_conclusion="$run_conclusion"
     break
   fi
 done
 
 if [[ -z "$checkpoint_run" ]]; then
-  echo "No prior successful community checkpoint artifact exists. Starting from clean cognition and social state."
+  echo "No prior completed Community checkpoint artifact exists. Starting from clean cognition and social state."
   rm -rf "$WORKSPACES"
   rm -f "$REPLAY_DIR/social_state.json"
   mkdir -p "$REPLAY_DIR"
@@ -49,6 +57,7 @@ if [[ -z "$checkpoint_run" ]]; then
   "mode": "checkpoint_restore",
   "restored": false,
   "source_run_id": null,
+  "source_run_conclusion": null,
   "artifact": "$ARTIFACT_NAME",
   "reason": "no_valid_checkpoint",
   "social_state_restored": false
@@ -98,7 +107,7 @@ PY
 
 social_state="$(find "$tmp_dir" -type f -path '*/replay/social_state.json' -print -quit)"
 
-# JSON validity is not enough. Early successful runs contained syntactically valid
+# JSON validity is not enough. Early runs contained syntactically valid
 # customer-service boilerplate, malformed reflection JSON, and short attractor loops that
 # repeatedly dragged Emily and Olivia back into unusable dialogue. Never restore those.
 if ! python3 - "$candidate" "${social_state:-}" <<'PY'
@@ -180,6 +189,7 @@ then
   "mode": "checkpoint_restore",
   "restored": false,
   "source_run_id": $checkpoint_run,
+  "source_run_conclusion": "$checkpoint_conclusion",
   "artifact": "$ARTIFACT_NAME",
   "reason": "semantic_dialogue_contamination",
   "social_state_restored": false
@@ -224,11 +234,12 @@ cat > "$REPLAY_DIR/checkpoint_restore.json.tmp" <<JSON
   "mode": "checkpoint_restore",
   "restored": true,
   "source_run_id": $checkpoint_run,
+  "source_run_conclusion": "$checkpoint_conclusion",
   "artifact": "$ARTIFACT_NAME",
   "social_state_restored": $social_restored
 }
 JSON
 mv "$REPLAY_DIR/checkpoint_restore.json.tmp" "$REPLAY_DIR/checkpoint_restore.json"
 
-echo "Restored Emily + Olivia workspaces from successful valid checkpoint run $checkpoint_run."
+echo "Restored Emily + Olivia workspaces from valid checkpoint run $checkpoint_run (conclusion=$checkpoint_conclusion)."
 echo "Persistent social state restored: $social_restored"
