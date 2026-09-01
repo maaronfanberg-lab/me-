@@ -87,10 +87,10 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v10
-          key: community-runtime-bitnet-v10-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+            experiments/emily-olivia-society/.bootstrap-ready-v11
+          key: community-runtime-bitnet-v11-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
           restore-keys: |
-            community-runtime-bitnet-v10-${{ runner.os }}-py311-
+            community-runtime-bitnet-v11-${{ runner.os }}-py311-
 
       - name: Bootstrap pinned research code and BitNet
         if: steps.gate.outputs.run == 'true'
@@ -104,7 +104,7 @@ jobs:
           test -x vendor/BitNet/build/bin/llama-cli
           test -x vendor/BitNet/build/bin/llama-server
           test -s models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
-          test -f .bootstrap-ready-v10
+          test -f .bootstrap-ready-v11
           grep -q 'COMMUNITY_BITNET_HTTP_V3' vendor/stanford-genagents/simulation_engine/gpt_structure.py
 
       - name: Save runtime cache
@@ -116,7 +116,7 @@ jobs:
             experiments/emily-olivia-society/.venv-stanford
             experiments/emily-olivia-society/vendor
             experiments/emily-olivia-society/models
-            experiments/emily-olivia-society/.bootstrap-ready-v10
+            experiments/emily-olivia-society/.bootstrap-ready-v11
           key: ${{ steps.bitnet-cache.outputs.cache-primary-key }}
 
       - name: Start and probe BitNet
