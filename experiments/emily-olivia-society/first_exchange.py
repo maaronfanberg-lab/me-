@@ -22,6 +22,11 @@ HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
 AGENTSOCIETY_PYTHON = HERE / ".venv-agentsociety" / "bin" / "python"
 BRIDGE = HERE / "social_bridge.py"
+_RECOVERABLE_SPEECH_FAILURE_MARKERS = (
+    "paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary",
+    "repeatedly hit structural dialogue blockers after",
+    "paper-derived Stanford act failed the dialogue boundary",
+)
 
 
 class SocialBridgeClient:
@@ -189,6 +194,11 @@ def _dedupe_retrieved_nodes(nodes) -> list:
     return unique
 
 
+def _recoverable_speech_failure(exc: RuntimeError) -> bool:
+    message = str(exc)
+    return any(marker in message for marker in _RECOVERABLE_SPEECH_FAILURE_MARKERS)
+
+
 async def process_one_reply(
     agent,
     other,
@@ -213,10 +223,28 @@ async def process_one_reply(
     relevant = [node.content for node in retrieved_nodes]
     retrieval_metadata = serialize_retrieval_evidence(retrieved_nodes, time_step)
 
-    # There is intentionally no authored fallback here. If Stanford cognition
-    # cannot produce an action, the run fails with its evidence intact rather
-    # than replacing the agent's speech with local canned dialogue.
-    action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
+    # There is intentionally no authored fallback here. If repeated stochastic
+    # Stanford speech generation exhausts itself, preserve the unread inbound
+    # and persist cognition so a later pulse/run can try again. Transport,
+    # contamination, and other runtime errors still fail closed immediately.
+    try:
+        action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
+    except RuntimeError as exc:
+        if not _recoverable_speech_failure(exc):
+            raise
+        agent.brain.save(str(agent.workspace))
+        return {
+            "agent": agent.name,
+            "time_step": time_step,
+            "observation": observation,
+            "retrieved_memories": relevant,
+            "retrieved_memory_evidence": retrieval_metadata,
+            "action": {"type": "wait", "reason": "speech_generation_deferred"},
+            "action_result": None,
+            "consumed_inbound": False,
+            "generation_deferred": True,
+            "generation_error": str(exc),
+        }
 
     result = None
     consumed = False
