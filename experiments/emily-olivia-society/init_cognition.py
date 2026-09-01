@@ -6,8 +6,10 @@ It only uses Stanford's GenerativeAgent and save() format to create
 separate persistent agent workspaces.
 
 Existing complete workspaces are preserved. Malformed derived reflection nodes
-are removed without touching observations. An incomplete existing workspace
-causes a hard failure rather than being overwritten.
+are removed without touching observations. Interrupted restored checkpoints that
+are demonstrably trapped in a repeated-short-question attractor are rejected
+before initialization. An incomplete existing workspace causes a hard failure
+rather than being overwritten.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ import json
 import sys
 from pathlib import Path
 
+from checkpoint_attractor_guard import reject_interrupted_checkpoint_attractor
 from reflection_hygiene import sanitize_memory_stream
 
 HERE = Path(__file__).resolve().parent
@@ -70,6 +73,13 @@ def main() -> None:
 
     ensure_stanford_settings()
     sys.path.insert(0, str(STANFORD))
+
+    rejected = reject_interrupted_checkpoint_attractor()
+    if rejected:
+        print(
+            "Rejected interrupted Community checkpoint trapped in a repeated "
+            "short-question attractor; initializing clean cognition."
+        )
 
     from genagents.genagents import GenerativeAgent
 
