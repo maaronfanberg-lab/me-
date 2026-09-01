@@ -2182,3 +2182,29 @@ slot print_timing: id  0 | task 23 |
       total time =    3883.83 ms /   421 tokens
 srv  update_slots: all slots are idle
 request: POST /completion 127.0.0.1 200
+slot launch_slot_: id  0 | task 75 | processing task
+slot update_slots: id  0 | task 75 | tokenizing prompt, len = 1
+slot update_slots: id  0 | task 75 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 181
+slot update_slots: id  0 | task 75 | kv cache rm [0, end)
+slot update_slots: id  0 | task 75 | prompt processing progress, n_past = 181, n_tokens = 181, progress = 1.000000
+slot update_slots: id  0 | task 75 | prompt done, n_past = 181, n_tokens = 181
+slot      release: id  0 | task 75 | stop processing: n_past = 203, truncated = 0
+slot print_timing: id  0 | task 75 | 
+prompt eval time =    1115.51 ms /   181 tokens (    6.16 ms per token,   162.26 tokens per second)
+       eval time =     745.40 ms /    23 tokens (   32.41 ms per token,    30.86 tokens per second)
+      total time =    1860.91 ms /   204 tokens
+srv  update_slots: all slots are idle
+request: POST /v1/chat/completions 127.0.0.1 200
+slot launch_slot_: id  0 | task 99 | processing task
+slot update_slots: id  0 | task 99 | tokenizing prompt, len = 1
+slot update_slots: id  0 | task 99 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 435
+slot update_slots: id  0 | task 99 | kv cache rm [0, end)
+slot update_slots: id  0 | task 99 | prompt processing progress, n_past = 435, n_tokens = 435, progress = 1.000000
+slot update_slots: id  0 | task 99 | prompt done, n_past = 435, n_tokens = 435
+slot      release: id  0 | task 99 | stop processing: n_past = 441, truncated = 0
+slot print_timing: id  0 | task 99 | 
+prompt eval time =    2890.80 ms /   435 tokens (    6.65 ms per token,   150.48 tokens per second)
+       eval time =     184.94 ms /     7 tokens (   26.42 ms per token,    37.85 tokens per second)
+      total time =    3075.74 ms /   442 tokens
+srv  update_slots: all slots are idle
+request: POST /completion 127.0.0.1 200
