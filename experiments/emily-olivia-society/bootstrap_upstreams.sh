@@ -12,12 +12,13 @@ PAPER_DIR="$VENDOR/stanford-generative-agents-paper"
 BITNET_REPO="https://github.com/raphaelbgr/BitNet.git"
 BITNET_COMMIT="baecdf7d1e4d404d30f80ae5b26f486ca833ae03"
 BITNET_DIR="$VENDOR/BitNet"
-MODEL_DIR="$HERE/models/Falcon3-1B-Instruct-1.58bit"
+MODEL_DIR="$HERE/models/Falcon3-10B-Instruct-1.58bit"
 MODEL_FILE="$MODEL_DIR/ggml-model-i2_s.gguf"
-BITNET_SOURCE_REPO="tiiuae/Falcon3-1B-Instruct-1.58bit-GGUF"
-BITNET_SOURCE_REVISION="4ec8c66"
-READY_MARKER="$HERE/.bootstrap-ready-v11"
-PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v14"
+BITNET_SOURCE_REPO="tiiuae/Falcon3-10B-Instruct-1.58bit-GGUF"
+BITNET_SOURCE_REVISION="f3ff637"
+BITNET_SOURCE_SHA256="e37945ee82693a6541b5fa5484f0e24787c04a9ce95e6e377f68a6b15f139c1f"
+READY_MARKER="$HERE/.bootstrap-ready-v12"
+PORTABLE_BUILD_SIGNATURE="$BITNET_DIR/.community-portable-build-v15"
 
 restore_real_cli() {
   if [[ -e "$BITNET_DIR/build/bin/llama-cli.real" ]]; then
@@ -34,6 +35,7 @@ runtime_ready() {
   [[ -x "$BITNET_DIR/build/bin/llama-cli" ]] || return 1
   [[ -x "$BITNET_DIR/build/bin/llama-server" ]] || return 1
   [[ -s "$MODEL_FILE" ]] || return 1
+  [[ "$(sha256sum "$MODEL_FILE" | awk '{print $1}')" == "$BITNET_SOURCE_SHA256" ]] || return 1
   [[ "$(git -C "$VENDOR/stanford-genagents" rev-parse HEAD 2>/dev/null || true)" == "$STANFORD_COMMIT" ]] || return 1
   [[ "$(git -C "$PAPER_DIR" rev-parse HEAD 2>/dev/null || true)" == "$PAPER_COMMIT" ]] || return 1
   [[ "$(git -C "$BITNET_DIR" rev-parse HEAD 2>/dev/null || true)" == "$BITNET_COMMIT" ]] || return 1
@@ -42,7 +44,7 @@ runtime_ready() {
 restore_real_cli
 if runtime_ready; then
   python3 "$HERE/patch_stanford_local.py"
-  echo "Reusing cached portable Community runtime and pinned Stanford sources."
+  echo "Reusing cached portable Community runtime, Falcon3 10B, and pinned Stanford sources."
   exit 0
 fi
 
@@ -51,7 +53,11 @@ rm -f \
   "$HERE/.bootstrap-ready-v8" \
   "$HERE/.bootstrap-ready-v9" \
   "$HERE/.bootstrap-ready-v10" \
+  "$HERE/.bootstrap-ready-v11" \
   "$READY_MARKER"
+# A restored v11 cache may still contain the retired 1B GGUF. Remove it before
+# downloading the 3.99 GB 10B model so the standard GitHub runner keeps ample disk headroom.
+rm -rf "$HERE/models/Falcon3-1B-Instruct-1.58bit"
 mkdir -p "$VENDOR" "$MODEL_DIR"
 
 if [[ ! -x "$AS_VENV/bin/python" ]]; then
@@ -166,7 +172,7 @@ print("BitNet setup patched for a portable GitHub Actions build.")
 PY
 
 if [[ ! -s "$MODEL_FILE" ]]; then
-  echo "Downloading pinned official Falcon3 1.58-bit GGUF..."
+  echo "Downloading pinned official Falcon3 10B Instruct 1.58-bit GGUF..."
   "$STANFORD_VENV/bin/huggingface-cli" download \
     "$BITNET_SOURCE_REPO" \
     "ggml-model-i2_s.gguf" \
@@ -175,14 +181,19 @@ if [[ ! -s "$MODEL_FILE" ]]; then
 fi
 
 [[ -s "$MODEL_FILE" ]] || {
-  echo "Pinned Falcon3 GGUF download did not produce $MODEL_FILE" >&2
+  echo "Pinned Falcon3 10B GGUF download did not produce $MODEL_FILE" >&2
+  exit 1
+}
+MODEL_SHA256="$(sha256sum "$MODEL_FILE" | awk '{print $1}')"
+[[ "$MODEL_SHA256" == "$BITNET_SOURCE_SHA256" ]] || {
+  echo "Falcon3 10B GGUF checksum mismatch: expected $BITNET_SOURCE_SHA256, got $MODEL_SHA256" >&2
   exit 1
 }
 
 rm -f "$PORTABLE_BUILD_SIGNATURE"
 rm -rf "$BITNET_DIR/build"
 
-echo "Building portable BitNet runtime for pinned Falcon3 GGUF..."
+echo "Building portable BitNet runtime for pinned Falcon3 10B GGUF..."
 pushd "$BITNET_DIR" >/dev/null
 if ! "$STANFORD_VENV/bin/python" setup_env.py -md "$MODEL_DIR" -q i2_s; then
   echo "BitNet setup failed; diagnostic logs follow:" >&2
@@ -201,7 +212,7 @@ popd >/dev/null
 restore_real_cli
 [[ -x "$BITNET_DIR/build/bin/llama-cli" ]] || { echo "Missing BitNet llama-cli after build" >&2; exit 1; }
 [[ -x "$BITNET_DIR/build/bin/llama-server" ]] || { echo "Missing BitNet llama-server after build" >&2; exit 1; }
-[[ -s "$MODEL_FILE" ]] || { echo "Missing Falcon BitNet model after setup" >&2; exit 1; }
+[[ -s "$MODEL_FILE" ]] || { echo "Missing Falcon3 10B BitNet model after setup" >&2; exit 1; }
 
 touch "$PORTABLE_BUILD_SIGNATURE"
 python3 "$HERE/patch_stanford_local.py"
@@ -211,6 +222,7 @@ printf 'AgentSociety2: 2.8.4 -> %s\n' "$AS_VENV"
 printf 'Stanford genagents: %s -> %s\n' "$STANFORD_COMMIT" "$STANFORD_VENV"
 printf 'Stanford paper source: %s -> %s\n' "$PAPER_COMMIT" "$PAPER_DIR"
 printf 'BitNet: %s -> %s\n' "$BITNET_COMMIT" "$BITNET_DIR"
-printf 'Falcon BitNet model: %s @ %s -> %s\n' "$BITNET_SOURCE_REPO" "$BITNET_SOURCE_REVISION" "$MODEL_FILE"
+printf 'Falcon3 10B BitNet model: %s @ %s -> %s\n' "$BITNET_SOURCE_REPO" "$BITNET_SOURCE_REVISION" "$MODEL_FILE"
+printf 'Falcon3 10B SHA256: %s\n' "$BITNET_SOURCE_SHA256"
 printf 'Portable build signature: %s\n' "$PORTABLE_BUILD_SIGNATURE"
 printf 'Bootstrap marker: %s\n' "$READY_MARKER"
