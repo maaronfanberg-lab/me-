@@ -16,6 +16,7 @@ import asyncio
 import re
 
 import community_cycle_base as _base
+from dialogue_attractor import candidate_repeats_recurring_attractor
 from paper_act_adapter import (
     generate_spoken_action,
     is_usable_spoken_action,
@@ -31,6 +32,7 @@ observation_text = _base.observation_text
 next_community_time_step = _base.next_community_time_step
 latest_community_time_step = _base.latest_community_time_step
 
+_MAX_ATTRACTOR_RESAMPLES = 4
 _CONTROL_SCAFFOLD = re.compile(
     r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
     r"^\s*(?:SELF|PARTNER|Self-reply|Partner-reply|Answer|Example)\s*:|"
@@ -111,16 +113,41 @@ def _grounding_words(text: str, limit: int = 6) -> list[str]:
 
 
 def _cognitive_context(reaction: dict, plan_context: str) -> str:
-    """Expose social retrieval to speech while keeping the daily plan private.
-
-    The planning stage still runs and persists before every act. The original
-    next-line conversation prompt is grounded in retrieved social information;
-    piping the private daily agenda into that prompt lets a small local model
-    mistake planner state for something it should say aloud. Keep the plan in
-    cognition/scratch, but do not serialize it into spoken-action context.
-    """
-    _ = plan_context  # Deliberately private; retained to make the boundary explicit.
+    """Expose social retrieval to speech while keeping the daily plan private."""
+    _ = plan_context
     return reaction_context(reaction).strip()
+
+
+def _generate_non_attractor_spoken_action(
+    agent: CommunityAgent,
+    other: CommunityAgent,
+    dialogue_history,
+    inbound: str,
+    cognitive_context: str,
+) -> str:
+    """Resample paper-derived speech if it reinforces a recurring phrase cluster.
+
+    This is a fail-closed diversity boundary. Every attempt uses the same
+    research-derived prompt and the model's own output; no authored fallback or
+    prescribed conversational move is introduced.
+    """
+    rejected: list[str] = []
+    for _attempt in range(_MAX_ATTRACTOR_RESAMPLES):
+        text = generate_spoken_action(
+            agent,
+            other,
+            dialogue_history=dialogue_history,
+            inbound=inbound,
+            cognitive_context=cognitive_context,
+        )
+        if not candidate_repeats_recurring_attractor(text, dialogue_history):
+            return text
+        rejected.append(text)
+    previews = " | ".join(repr(item[:180]) for item in rejected)
+    raise RuntimeError(
+        f"{agent.name} repeatedly reinforced a recent dialogue attractor after "
+        f"{_MAX_ATTRACTOR_RESAMPLES} paper-derived resamples: {previews}"
+    )
 
 
 def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgent, dialogue_history=None) -> dict:
@@ -144,7 +171,7 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
     reaction = react_to_observation(agent, other.name, inbound, time_step)
     reflected = maybe_reflect(agent, time_step)
     plan_context = planning_context(agent, other.name, time_step)
-    text = generate_spoken_action(
+    text = _generate_non_attractor_spoken_action(
         agent,
         other,
         dialogue_history=dialogue_history,
@@ -194,7 +221,7 @@ def choose_opening_action(
     reaction = react_to_presence(agent, other.name, time_step)
     reflected = maybe_reflect(agent, time_step)
     plan_context = planning_context(agent, other.name, time_step)
-    text = generate_spoken_action(
+    text = _generate_non_attractor_spoken_action(
         agent,
         other,
         dialogue_history=dialogue_history,
