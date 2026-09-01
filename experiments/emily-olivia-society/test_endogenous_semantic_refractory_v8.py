@@ -16,6 +16,8 @@ from endogenous_semantic_refractory_v8 import (
 
 HERE = Path(__file__).resolve().parent
 PREREG = HERE / "endogenous_semantic_refractory_v8_preregistration.json"
+POST_SESSION = "1788292800-prospective"
+PRE_SESSION = "1788289000-legacy"
 
 
 def _hash(text: str) -> str:
@@ -27,7 +29,7 @@ def _artifact(root: Path, *, sessions=None, break_hash_at=None, omit_evidence_at
     replay = root / "replay"
     replay.mkdir(parents=True, exist_ok=True)
     rows = []
-    sessions = sessions or ["prospective-session"] * 12
+    sessions = sessions or [POST_SESSION] * 12
     for index in range(12):
         step = 100 + index
         # Deliberately recycle one semantic pair across multiple candidate IDs so
@@ -90,7 +92,8 @@ class ProspectiveV8Tests(unittest.TestCase):
             )
             self.assertEqual(len(tape["ticks"]), 12)
             self.assertEqual(metadata["chosen_metadata_mode"], "retrieval_time_evidence")
-            self.assertEqual(metadata["session_id"], "prospective-session")
+            self.assertEqual(metadata["session_id"], POST_SESSION)
+            self.assertEqual(metadata["session_started_at"], "2026-09-01T20:00:00Z")
 
     def test_artifact_at_or_before_prereg_boundary_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -105,10 +108,23 @@ class ProspectiveV8Tests(unittest.TestCase):
                     min_ticks=12,
                 )
 
+    def test_postdated_zip_cannot_smuggle_a_pre_preregistration_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _artifact(root, sessions=[PRE_SESSION] * 12)
+            with self.assertRaisesRegex(ValueError, "session began before"):
+                build_native_only_tape(
+                    root,
+                    run_id=999,
+                    artifact_sha256="a" * 64,
+                    artifact_created_at="2026-09-01T20:00:00Z",
+                    min_ticks=12,
+                )
+
     def test_mixed_session_epoch_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            sessions = ["session-a"] * 6 + ["session-b"] * 6
+            sessions = ["1788292800-sessiona"] * 6 + ["1788292801-sessionb"] * 6
             _artifact(root, sessions=sessions)
             with self.assertRaisesRegex(ValueError, "one named session"):
                 build_native_only_tape(
