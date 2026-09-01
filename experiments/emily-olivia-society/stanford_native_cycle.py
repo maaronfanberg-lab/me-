@@ -72,7 +72,7 @@ def _is_usable_utterance(text: str, inbound: str = "", agent_name: str = "", oth
     """Boundary validation only; it does not dictate Stanford's wording."""
     if not isinstance(text, str) or not text.strip():
         return False
-    cleaned = _clean_boundary(text)
+    cleaned = _clean_boundary(text, agent_name)
     if not cleaned or _has_pathological_repetition(cleaned):
         return False
     return _base._is_usable_utterance(cleaned, inbound, agent_name, other_name)
@@ -102,10 +102,19 @@ def _stanford_dialogue(dialogue_history, other: CommunityAgent, inbound: str) ->
     return history[-20:]
 
 
-def _clean_boundary(text: object) -> str:
+def _clean_boundary(text: object, agent_name: str = "") -> str:
     if not isinstance(text, str):
         return ""
     cleaned = _base._unwrap_reply(text).strip()
+    if agent_name:
+        self_prefix = re.compile(rf"^\s*{re.escape(agent_name)}\s*:\s*", re.IGNORECASE)
+        match = self_prefix.match(cleaned)
+        if match:
+            cleaned = cleaned[match.end() :].strip()
+            # One harmless self-label is normalization; repeated speaker labels
+            # are structural residue and still fail the boundary.
+            if self_prefix.match(cleaned):
+                return ""
     if _CONTROL_SCAFFOLD.search(cleaned):
         return ""
     return cleaned
@@ -177,7 +186,7 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
     context = " ".join(context_parts)
 
     raw_text = _utterance_with_clean_retrieval(agent, dialogue, context)
-    text = _clean_boundary(raw_text)
+    text = _clean_boundary(raw_text, agent.name)
 
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
         retry_context = (
@@ -186,7 +195,7 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
             f"{agent.name} stays with that subject and answers from their own memories, opinions, and current state."
         )
         retry_raw = _utterance_with_clean_retrieval(agent, dialogue, retry_context)
-        retry_text = _clean_boundary(retry_raw)
+        retry_text = _clean_boundary(retry_raw, agent.name)
         if _is_usable_utterance(retry_text, inbound, agent.name, other.name):
             text = retry_text
         else:
