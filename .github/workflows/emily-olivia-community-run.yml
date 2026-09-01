@@ -283,7 +283,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Publish real replay to viewer
-        if: steps.gate.outputs.run == 'true'
+        if: always() && steps.gate.outputs.run == 'true'
         run: |
           test -s experiments/emily-olivia-society/replay/community_session.json
           test -s experiments/emily-olivia-society/replay/community_session.jsonl
