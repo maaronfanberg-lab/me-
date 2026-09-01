@@ -2208,3 +2208,29 @@ slot print_timing: id  0 | task 89 |
       total time =    7010.82 ms /   926 tokens
 srv  update_slots: all slots are idle
 request: POST /completion 127.0.0.1 200
+slot launch_slot_: id  0 | task 111 | processing task
+slot update_slots: id  0 | task 111 | tokenizing prompt, len = 1
+slot update_slots: id  0 | task 111 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 151
+slot update_slots: id  0 | task 111 | kv cache rm [0, end)
+slot update_slots: id  0 | task 111 | prompt processing progress, n_past = 151, n_tokens = 151, progress = 1.000000
+slot update_slots: id  0 | task 111 | prompt done, n_past = 151, n_tokens = 151
+slot      release: id  0 | task 111 | stop processing: n_past = 169, truncated = 0
+slot print_timing: id  0 | task 111 | 
+prompt eval time =     924.86 ms /   151 tokens (    6.12 ms per token,   163.27 tokens per second)
+       eval time =     477.97 ms /    19 tokens (   25.16 ms per token,    39.75 tokens per second)
+      total time =    1402.83 ms /   170 tokens
+srv  update_slots: all slots are idle
+request: POST /v1/chat/completions 127.0.0.1 200
+slot launch_slot_: id  0 | task 131 | processing task
+slot update_slots: id  0 | task 131 | tokenizing prompt, len = 1
+slot update_slots: id  0 | task 131 | prompt tokenized, n_ctx_slot = 2048, n_keep = 0, n_prompt_tokens = 953
+slot update_slots: id  0 | task 131 | kv cache rm [0, end)
+slot update_slots: id  0 | task 131 | prompt processing progress, n_past = 953, n_tokens = 953, progress = 1.000000
+slot update_slots: id  0 | task 131 | prompt done, n_past = 953, n_tokens = 953
+slot      release: id  0 | task 131 | stop processing: n_past = 983, truncated = 0
+slot print_timing: id  0 | task 131 | 
+prompt eval time =    6782.27 ms /   953 tokens (    7.12 ms per token,   140.51 tokens per second)
+       eval time =     901.46 ms /    31 tokens (   29.08 ms per token,    34.39 tokens per second)
+      total time =    7683.73 ms /   984 tokens
+srv  update_slots: all slots are idle
+request: POST /completion 127.0.0.1 200
