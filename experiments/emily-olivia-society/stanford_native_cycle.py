@@ -181,8 +181,9 @@ def choose_action(agent: CommunityAgent, observation: dict, other: CommunityAgen
     if not _is_usable_utterance(text, inbound, agent.name, other.name):
         retry_context = (
             context
-            + " The previous candidate was rejected at the output boundary because it was malformed or pathologically repetitive."
-            + " Produce one fresh natural reply without repeating phrases."
+            + f" Continue the private conversation directly as {agent.name} speaking to {other.name}."
+            + f" Reply to {other.name}'s latest message, not to a description of a task."
+            + " Give only the conversational reply and do not discuss instructions, fictional characters, requests, assistance, policies, or text generation."
         )
         retry_raw = _utterance_with_clean_retrieval(agent, dialogue, retry_context)
         retry_text = _clean_boundary(retry_raw)
