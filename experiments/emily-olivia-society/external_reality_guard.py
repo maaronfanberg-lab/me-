@@ -26,12 +26,16 @@ _SERVICE_RESPONSE_TEMPLATE = re.compile(
     r"\bplease\s+let\s+me\s+know\s+if\s+you\s+have\s+(?:any\s+)?questions\b)",
     re.IGNORECASE,
 )
+_RESIDENCE_CLAIM = re.compile(
+    r"\bi\s+(?:live|reside)\s+in\s+([A-Za-z][A-Za-z .'-]{1,60}?)(?=[.!?]|$)",
+    re.IGNORECASE,
+)
 _FILLER = {
     "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
     "has", "have", "he", "her", "here", "him", "his", "i", "in", "is", "it",
     "its", "me", "my", "of", "on", "or", "our", "she", "that", "the", "their",
     "them", "they", "this", "to", "us", "was", "we", "were", "with", "you",
-    "your", "says", "say", "said",
+    "your", "says", "say", "said", "live", "reside",
 }
 
 
@@ -80,6 +84,16 @@ def _has_unsupported_media_artifact(text: str, support_text: str) -> bool:
     return not bool(_MEDIA_WORD.search(str(support_text or "")))
 
 
+def _has_unsupported_residence(text: str, support_text: str) -> bool:
+    match = _RESIDENCE_CLAIM.search(str(text or ""))
+    if not match:
+        return False
+    place_words = _content_words(match.group(1))
+    if not place_words:
+        return False
+    return not place_words.issubset(_content_words(support_text))
+
+
 def candidate_external_grounding_blocker(
     text: str,
     support_text: str,
@@ -98,4 +112,6 @@ def candidate_external_grounding_blocker(
         return "nonexistent-link-action"
     if _has_unsupported_media_artifact(text, support_text):
         return "unsupported-media-artifact"
+    if _has_unsupported_residence(text, support_text):
+        return "unsupported-residence"
     return None
