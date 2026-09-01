@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Reject semantically stuck interrupted Community checkpoints before reuse.
 
-This guard is intentionally narrow. It does not judge topics or author replacement
-memories. It only detects a repeated-short-question attractor in an interrupted
-checkpoint, the failure mode where several variants of the same question become
-self-reinforcing observations across restarts.
+The guard does not judge topics or author replacement memories. It detects two
+generic failure shapes in interrupted checkpoints: repeated short-question
+variants and recurring meaningful phrase clusters that have become self-
+reinforcing observations across restarts.
 """
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ import re
 import shutil
 from collections import Counter
 from pathlib import Path
+
+from dialogue_attractor import detect_recurring_content_attractor
 
 HERE = Path(__file__).resolve().parent
 WORKSPACES = HERE / "workspaces"
@@ -118,9 +120,10 @@ def reject_interrupted_checkpoint_attractor() -> dict | None:
     for agent_name in ("emily", "olivia"):
         messages = _recent_messages(WORKSPACES / agent_name)
         found = detect_question_attractor(messages)
+        if not found:
+            found = detect_recurring_content_attractor(messages)
         if found:
-            found = {"agent": agent_name, **found}
-            detections.append(found)
+            detections.append({"agent": agent_name, **found})
 
     if not detections:
         return None
@@ -135,7 +138,7 @@ def reject_interrupted_checkpoint_attractor() -> dict | None:
     report.update(
         {
             "restored": False,
-            "reason": "interrupted_checkpoint_question_attractor",
+            "reason": "interrupted_checkpoint_dialogue_attractor",
             "social_state_restored": False,
             "rejected_attractors": detections,
         }
