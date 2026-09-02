@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 1,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,158 @@
       "to_name": "Olivia",
       "content": "Hello, how are you doing today?",
       "created_at": "2026-09-02T10:13:46.017838+00:00"
+    },
+    {
+      "id": "alex-reply-d0141294c056466f9725a673d5210564",
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 3,
+      "to_name": "Alex",
+      "content": "Good morning, how are you doing today?",
+      "created_at": "2026-09-02T10:14:50.673020+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 2,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": "alex-2gu3xN9rtgxj",
+          "from_id": 3,
+          "from_name": "Alex",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Good morning Emily and Olivia!",
+          "created_at": "2026-09-02T10:10:34+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Olivia observes a message from Alex: Good morning Emily and Olivia!",
+      "Olivia observes a message from Emily: Hello, how are you doing today?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "46eb88b5aa63c98f6f53",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 95.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "566c77d9a57da15af70f",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 3,
+      "content": "Good morning, how are you doing today?",
+      "retrieved_memories": [
+        "Olivia observes a message from Alex: Good morning Emily and Olivia!",
+        "Olivia observes a message from Emily: Hello, how are you doing today?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "46eb88b5aa63c98f6f53",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 95.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "566c77d9a57da15af70f",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Alex",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": "alex-reply-d0141294c056466f9725a673d5210564",
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 3,
+        "to_name": "Alex",
+        "content": "Good morning, how are you doing today?",
+        "created_at": "2026-09-02T10:14:50.673020+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": {
+      "id": "2gu3xN9rtgxj",
+      "speaker": "Alex",
+      "text": "Good morning Emily and Olivia!",
+      "target": "both",
+      "at": "2026-09-02T10:10:34+00:00",
+      "source_url": "https://ntfy.sh/eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
+    },
+    "interrupted_inbound": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hello, how are you doing today?",
+      "created_at": "2026-09-02T10:13:46.017838+00:00"
+    },
+    "continuation_relay": {
+      "success": true,
+      "message": {
+        "id": 2,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Good morning, how are you doing today?",
+        "created_at": "2026-09-02T10:14:50.673149+00:00"
+      }
+    },
+    "external_ack": {
+      "acknowledged": 1
+    }
+  }
 }
