@@ -226,6 +226,18 @@ def _alex_observation(base: dict, agent, item: dict) -> dict:
     }
 
 
+async def _choose_with_recovery(agent, observation: dict, partner, dialogue_history):
+    errors: list[str] = []
+    for _speech_attempt in range(_MAX_RECOVERABLE_SPEECH_ATTEMPTS):
+        try:
+            return choose_action(agent, observation, partner, dialogue_history=dialogue_history), errors
+        except RuntimeError as exc:
+            if not _recoverable_speech_failure(exc):
+                raise
+            errors.append(str(exc))
+    return None, errors
+
+
 async def process_one_reply(
     agent,
     other,
@@ -233,28 +245,31 @@ async def process_one_reply(
     time_step: int,
     dialogue_history: list[tuple[str, str]] | None = None,
 ) -> dict:
-    observation = await social.observe_social_space(agent.agent_id)
-    inbox = observation.get("inbox", [])
+    peer_observation = await social.observe_social_space(agent.agent_id)
+    peer_inbox = peer_observation.get("inbox", [])
     alex_item = await social.first_alex_for(agent.name)
-    interrupted_inbound = None
-    partner = other
 
+    external_action = None
+    external_result = None
+    external_ack = None
+    external_generation_errors: list[str] = []
+
+    # Alex is a side-channel participant, not a substitute for the pending
+    # Emily<->Olivia turn. Answer Alex through the same Stanford cognition, but
+    # leave the peer message untouched and do not inject Alex or the reply into
+    # the autonomous pair's dialogue history.
     if alex_item is not None:
-        if inbox:
-            interrupted_inbound = dict(inbox[-1])
-            interrupted_memory = observation_text(agent, observation)
-            if not _memory_already_present(agent, interrupted_memory):
-                agent.brain.remember(interrupted_memory, time_step=time_step)
-            interrupted_consume = await social.consume_message(agent.agent_id, int(interrupted_inbound["id"]))
-            if interrupted_consume.get("success") is not True:
-                raise RuntimeError(f"Failed to consume interrupted peer message for {agent.name}.")
-        observation = _alex_observation(observation, agent, alex_item)
-        inbox = observation["inbox"]
-        partner = AlexParticipant()
-        if dialogue_history is not None:
-            human_line = (ALEX_NAME, str(alex_item["text"]))
-            if not dialogue_history or dialogue_history[-1] != human_line:
-                dialogue_history.append(human_line)
+        if peer_inbox:
+            peer_memory = observation_text(agent, peer_observation)
+            if not _memory_already_present(agent, peer_memory):
+                agent.brain.remember(peer_memory, time_step=time_step)
+
+        alex_observation = _alex_observation(peer_observation, agent, alex_item)
+        alex_memory = observation_text(agent, alex_observation)
+        if not _memory_already_present(agent, alex_memory):
+            agent.brain.remember(alex_memory, time_step=time_step)
+        _coerce_memory_importance(agent)
+
         if str(alex_item.get("target")) == "both":
             other_memory = f"{other.name} observes a message from Alex: {alex_item['text']}"
             if not _memory_already_present(other, other_memory):
@@ -262,39 +277,76 @@ async def process_one_reply(
                 _coerce_memory_importance(other)
                 other.brain.save(str(other.workspace))
 
-    if not inbox:
-        return {"agent": agent.name, "action": {"type": "wait", "reason": "no_new_message"}}
+        external_action, external_generation_errors = await _choose_with_recovery(
+            agent,
+            alex_observation,
+            AlexParticipant(),
+            dialogue_history,
+        )
+        if external_action is not None and external_action.get("type") == "message":
+            external_result = {
+                "success": True,
+                "message": {
+                    "id": f"alex-reply-{uuid.uuid4().hex}",
+                    "from_id": agent.agent_id,
+                    "from_name": agent.name,
+                    "to_id": ALEX_ID,
+                    "to_name": ALEX_NAME,
+                    "content": str(external_action["content"]),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            }
+            external_ack = await social.acknowledge_alex(str(alex_item["id"]))
+            if int(external_ack.get("acknowledged", 0) or 0) < 1:
+                raise RuntimeError("Alex turn was answered but could not be acknowledged.")
 
-    latest = inbox[-1]
-    memory = observation_text(agent, observation)
+    if not peer_inbox:
+        agent.brain.save(str(agent.workspace))
+        return {
+            "agent": agent.name,
+            "time_step": time_step,
+            "observation": peer_observation,
+            "retrieved_memories": [],
+            "retrieved_memory_evidence": [],
+            "action": {"type": "wait", "reason": "no_new_message"},
+            "action_result": None,
+            "consumed_inbound": False,
+            "external_inbound": alex_item,
+            "external_action": external_action,
+            "external_action_result": external_result,
+            "external_ack": external_ack,
+            "external_generation_error": " || ".join(external_generation_errors),
+        }
+
+    latest = peer_inbox[-1]
+    memory = observation_text(agent, peer_observation)
     if not _memory_already_present(agent, memory):
         agent.brain.remember(memory, time_step=time_step)
     _coerce_memory_importance(agent)
 
-    generation_errors: list[str] = []
-    action = None
-    for _speech_attempt in range(_MAX_RECOVERABLE_SPEECH_ATTEMPTS):
-        try:
-            action = choose_action(agent, observation, partner, dialogue_history=dialogue_history)
-            break
-        except RuntimeError as exc:
-            if not _recoverable_speech_failure(exc):
-                raise
-            generation_errors.append(str(exc))
+    action, generation_errors = await _choose_with_recovery(
+        agent,
+        peer_observation,
+        other,
+        dialogue_history,
+    )
 
     if action is None:
         agent.brain.save(str(agent.workspace))
         return {
             "agent": agent.name,
             "time_step": time_step,
-            "observation": observation,
+            "observation": peer_observation,
             "retrieved_memories": [],
             "retrieved_memory_evidence": [],
             "action": {"type": "wait", "reason": "speech_generation_deferred"},
             "action_result": None,
             "consumed_inbound": False,
             "external_inbound": alex_item,
-            "interrupted_inbound": interrupted_inbound,
+            "external_action": external_action,
+            "external_action_result": external_result,
+            "external_ack": external_ack,
+            "external_generation_error": " || ".join(external_generation_errors),
             "generation_deferred": True,
             "generation_attempts": _MAX_RECOVERABLE_SPEECH_ATTEMPTS,
             "generation_error": " || ".join(generation_errors),
@@ -305,61 +357,35 @@ async def process_one_reply(
 
     result = None
     consumed = False
-    relay_result = None
-    alex_ack = None
     if action["type"] == "message":
-        if alex_item is not None:
-            result = {
-                "success": True,
-                "message": {
-                    "id": f"alex-reply-{uuid.uuid4().hex}",
-                    "from_id": agent.agent_id,
-                    "from_name": agent.name,
-                    "to_id": ALEX_ID,
-                    "to_name": ALEX_NAME,
-                    "content": str(action["content"]),
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                },
-            }
-            relay_result = await social.send_message(
-                agent.agent_id,
-                other.agent_id,
-                str(action["content"]),
-            )
-            if not isinstance(relay_result, dict) or relay_result.get("success") is not True:
-                raise RuntimeError(f"Failed to keep the room conversation moving after {agent.name} replied to Alex.")
-            alex_ack = await social.acknowledge_alex(str(alex_item["id"]))
-            if int(alex_ack.get("acknowledged", 0) or 0) < 1:
-                raise RuntimeError("Alex turn was answered but could not be acknowledged.")
-            consumed = True
-        else:
-            result = await social.send_message(
-                agent.agent_id,
-                int(action["recipient_id"]),
-                str(action["content"]),
-            )
-            if not isinstance(result, dict) or result.get("success") is not True:
-                raise RuntimeError(f"Message delivery failed for {agent.name}.")
-            consume_result = await social.consume_message(agent.agent_id, int(latest["id"]))
-            if consume_result.get("success") is not True:
-                raise RuntimeError(f"Message consume failed for {agent.name}.")
-            consumed = True
+        result = await social.send_message(
+            agent.agent_id,
+            int(action["recipient_id"]),
+            str(action["content"]),
+        )
+        if not isinstance(result, dict) or result.get("success") is not True:
+            raise RuntimeError(f"Message delivery failed for {agent.name}.")
+        consume_result = await social.consume_message(agent.agent_id, int(latest["id"]))
+        if consume_result.get("success") is not True:
+            raise RuntimeError(f"Message consume failed for {agent.name}.")
+        consumed = True
 
     agent.brain.save(str(agent.workspace))
 
     return {
         "agent": agent.name,
         "time_step": time_step,
-        "observation": observation,
+        "observation": peer_observation,
         "retrieved_memories": relevant,
         "retrieved_memory_evidence": retrieval_metadata,
         "action": action,
         "action_result": result,
         "consumed_inbound": consumed,
         "external_inbound": alex_item,
-        "interrupted_inbound": interrupted_inbound,
-        "continuation_relay": relay_result,
-        "external_ack": alex_ack,
+        "external_action": external_action,
+        "external_action_result": external_result,
+        "external_ack": external_ack,
+        "external_generation_error": " || ".join(external_generation_errors),
     }
 
 
