@@ -118,7 +118,14 @@ def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound
             rejected_identity.append(str(text)[:180])
             continue
 
-        if _is_social_reset(text, dialogue_history) or _is_short_semantic_echo(text, dialogue_history):
+        # A new session may restore historical dialogue for semantic continuity,
+        # but its autonomous opener has no inbound turn. Do not misclassify that
+        # legitimate first act as a mid-conversation greeting reset and spend up
+        # to eight expensive BitNet generations trying to escape it. Refractory
+        # resampling only applies when there is an actual live inbound message.
+        if str(inbound or "").strip() and (
+            _is_social_reset(text, dialogue_history) or _is_short_semantic_echo(text, dialogue_history)
+        ):
             if soft_fallback is None:
                 soft_fallback = text
             continue
