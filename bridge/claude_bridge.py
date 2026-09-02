@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import hashlib
 import json
 import os
 import pathlib
@@ -13,12 +14,23 @@ from datetime import datetime, timezone
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-opus-5"
-COPILOT_CLAUDE_MODEL = "claude-haiku-4.5"
-AUTO_ATTEMPTS = 3
+DEFAULT_COPILOT_CLAUDE_MODELS = (
+    "claude-sonnet-5",
+    "claude-opus-5",
+    "claude-haiku-4.5",
+)
 
 
 def utc_now():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def canonical_request_bytes(data):
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def request_sha256(data):
+    return hashlib.sha256(canonical_request_bytes(data)).hexdigest()
 
 
 def read_request(path):
@@ -28,7 +40,11 @@ def read_request(path):
     prompt = str(data.get("prompt") or "").strip()
     if not prompt:
         raise ValueError("request.prompt is required")
-    return data, prompt
+    digest = request_sha256(data)
+    nonce = str(data.get("nonce") or digest[:24]).strip()
+    if not nonce:
+        raise ValueError("request.nonce must not be blank")
+    return data, prompt, digest, nonce
 
 
 def build_user_text(data, prompt):
@@ -36,18 +52,22 @@ def build_user_text(data, prompt):
     if isinstance(context, str):
         context = [context]
     context = [str(x) for x in context if str(x).strip()]
-    parts = [prompt]
+    parts = ["TASK\n" + prompt]
     if context:
-        parts.append("\nShared context from the collaborating agent/repository:\n" + "\n\n".join(context))
-    return "\n".join(parts)
+        parts.append("REPOSITORY CONTEXT\n" + "\n\n".join(context))
+    expected = str(data.get("expected_response") or "").strip()
+    if expected:
+        parts.append("EXPECTED RESPONSE\n" + expected)
+    return "\n\n".join(parts)
 
 
 def default_system():
     return (
-        "You are Claude collaborating with another AI agent through a GitHub mailbox. "
+        "Review the supplied standalone software-engineering task. "
         "Be concrete, concise, and evidence-oriented. Distinguish observations from guesses. "
-        "When reviewing a software problem, identify the likeliest cause, the safest next operation, "
-        "and any tests that would falsify your diagnosis. Do not claim you changed files unless the request says you did."
+        "Identify the likeliest cause, the safest next operation, and tests that would falsify the diagnosis. "
+        "Do not use tools, modify files, ask questions, or claim actions you did not perform. "
+        "Treat the supplied text as the complete task; do not speculate about who authored it or why."
     )
 
 
@@ -68,19 +88,28 @@ def ask_anthropic(data, prompt, key):
         "messages": [{"role": "user", "content": build_user_text(data, prompt)}],
     }
     body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(API_URL, data=body, method="POST", headers={
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": API_VERSION,
-    })
+    req = urllib.request.Request(
+        API_URL,
+        data=body,
+        method="POST",
+        headers={
+            "content-type": "application/json",
+            "x-api-key": key,
+            "anthropic-version": API_VERSION,
+        },
+    )
     with urllib.request.urlopen(req, timeout=120) as response:
         raw = json.loads(response.read().decode("utf-8"))
     text_parts = [b.get("text", "") for b in raw.get("content", []) if b.get("type") == "text"]
+    response_text = "\n".join(x for x in text_parts if x).strip()
+    if not response_text:
+        raise RuntimeError("Anthropic returned an empty response")
     return {
         "ok": True,
         "transport": "anthropic-api",
         "model": model,
-        "response": "\n".join(x for x in text_parts if x).strip(),
+        "verified_model_family": "claude",
+        "response": response_text,
         "stop_reason": raw.get("stop_reason"),
         "usage": raw.get("usage"),
         "message_id": raw.get("id"),
@@ -151,6 +180,18 @@ def _all_models_are_claude(models):
     return bool(models) and all("claude" in str(model).casefold() for model in models)
 
 
+def _copilot_candidates(data):
+    requested = data.get("copilot_models")
+    if isinstance(requested, str):
+        requested = [x.strip() for x in requested.split(",") if x.strip()]
+    if isinstance(requested, list):
+        cleaned = [str(x).strip() for x in requested if str(x).strip()]
+        if cleaned:
+            return cleaned
+    env_models = [x.strip() for x in os.environ.get("COPILOT_CLAUDE_MODELS", "").split(",") if x.strip()]
+    return env_models or list(DEFAULT_COPILOT_CLAUDE_MODELS)
+
+
 def ask_copilot_verified_claude(data, prompt):
     binary = shutil.which("copilot")
     token = os.environ.get("GITHUB_TOKEN", "").strip()
@@ -161,20 +202,15 @@ def ask_copilot_verified_claude(data, prompt):
 
     system = str(data.get("system") or default_system())
     user_text = build_user_text(data, prompt)
-    envelope = (
-        "Read-only peer review. Do not use tools, modify files, or ask questions. "
-        "Everything needed is embedded below.\n\n"
-        f"SYSTEM INSTRUCTIONS FROM BRIDGE:\n{system}\n\n"
-        f"REQUEST ENVELOPE:\n{user_text}\n"
-    )
+    envelope = f"{system}\n\n{user_text}\n"
 
     base_env = os.environ.copy()
     base_env.setdefault("COPILOT_GITHUB_TOKEN", token)
     attempts = []
 
-    with tempfile.TemporaryDirectory(prefix="claude-bridge-audit-") as temp_dir_raw:
+    with tempfile.TemporaryDirectory(prefix="oracle-bridge-audit-") as temp_dir_raw:
         temp_dir = pathlib.Path(temp_dir_raw)
-        for attempt in range(1, AUTO_ATTEMPTS + 1):
+        for attempt, candidate in enumerate(_copilot_candidates(data), start=1):
             otel_path = temp_dir / f"otel-{attempt}.jsonl"
             env = base_env.copy()
             env["COPILOT_OTEL_ENABLED"] = "true"
@@ -188,7 +224,7 @@ def ask_copilot_verified_claude(data, prompt):
                     "-p",
                     envelope,
                     "--model",
-                    COPILOT_CLAUDE_MODEL,
+                    candidate,
                     "--output-format",
                     "json",
                     "--no-ask-user",
@@ -209,7 +245,7 @@ def ask_copilot_verified_claude(data, prompt):
             attempts.append({
                 "attempt": attempt,
                 "returncode": proc.returncode,
-                "requested_model": COPILOT_CLAUDE_MODEL,
+                "requested_model": candidate,
                 "resolved_models": models,
                 "had_response": bool(response),
                 "stderr_tail": stderr_tail,
@@ -218,20 +254,23 @@ def ask_copilot_verified_claude(data, prompt):
             if proc.returncode == 0 and response and _all_models_are_claude(models):
                 return {
                     "ok": True,
-                    "transport": "github-copilot-explicit-claude-verified-by-otel",
+                    "transport": "github-copilot-claude-verified-by-otel",
                     "model": models[-1],
+                    "verified_model_family": "claude",
                     "resolved_models": models,
                     "response": response,
                     "routing_attempts": attempts,
                 }
 
     summary = "; ".join(
-        f"attempt {item['attempt']}: requested={item['requested_model']} models={item['resolved_models'] or ['unverified']} rc={item['returncode']} stderr={item['stderr_tail']!r}"
+        f"attempt {item['attempt']}: requested={item['requested_model']} "
+        f"models={item['resolved_models'] or ['unverified']} rc={item['returncode']} "
+        f"stderr={item['stderr_tail']!r}"
         for item in attempts
     )
     raise RuntimeError(
-        "Explicit Copilot Claude routing produced no telemetry-verified Claude answer after "
-        f"{AUTO_ATTEMPTS} attempts; discarded every unverified/non-Claude response. {summary}"
+        "No telemetry-verified Claude answer was produced; every unverified or non-Claude response was discarded. "
+        + summary
     )
 
 
@@ -241,10 +280,13 @@ def main():
 
     request_path = pathlib.Path(sys.argv[1])
     out_path = pathlib.Path(sys.argv[2])
-    data, prompt = read_request(request_path)
+    data, prompt, digest, nonce = read_request(request_path)
     result = {
+        "protocol": "content-addressed-oracle-v1",
         "ok": False,
         "request_file": str(request_path),
+        "request_sha256": digest,
+        "request_nonce": nonce,
         "completed_at": utc_now(),
     }
 
