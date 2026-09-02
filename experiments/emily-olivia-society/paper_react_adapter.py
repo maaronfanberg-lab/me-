@@ -117,8 +117,6 @@ def _clean_memory_nodes(nodes, *, include_ambient: bool):
         else:
             substantive.append(node)
 
-    # Keep Stanford's retrieved order within each bucket. Substantive memories
-    # and reflections lead; greetings are retained only as trailing context.
     return substantive + phatic
 
 
@@ -133,6 +131,21 @@ def _reaction(
 ) -> dict:
     retrieved = agent.brain.memory_stream.retrieve([focal], time_step=time_step, n_count=16)
     selected_nodes = _clean_memory_nodes(retrieved.get(focal, []), include_ambient=include_ambient)
+
+    # Alex is a direct side-channel, not a third member of Emily + Olivia's
+    # autonomous dialogue. A live replay showed Olivia answering Alex with
+    # "Hello, Emily" because peer memories were retrieved into the Alex turn.
+    # Keep the Stanford retrieval stage, but scope external-turn retrieval to
+    # memories that actually mention that external interlocutor. With no such
+    # memory yet, the current Alex message itself remains the grounding event.
+    external_turn = str(other_name or "").strip().casefold() not in {"emily", "olivia"}
+    if external_turn:
+        source_token = str(other_name or "").strip().casefold()
+        selected_nodes = [
+            node for node in selected_nodes
+            if source_token and source_token in str(getattr(node, "content", "") or "").casefold()
+        ]
+
     memories = [str(getattr(node, "content", "") or "").strip() for node in selected_nodes]
     reaction = {
         "event": event,
@@ -141,13 +154,18 @@ def _reaction(
         "retrieved": memories,
         "retrieved_evidence": serialize_retrieval_evidence(selected_nodes, time_step),
     }
-    agent.brain.update_scratch(
-        {
-            "current_social_reaction": reaction["mode"],
-            "current_social_event": event[:500],
-            "reaction_research_source": _ORIGINAL_RESEARCH_COMMIT,
-        }
-    )
+
+    # Do not persist an external speaker's verbatim event into the pair's scratch
+    # state. The direct reply still uses the full current event and Stanford act,
+    # but Emily/Olivia peer cognition resumes with its own social state intact.
+    if not external_turn:
+        agent.brain.update_scratch(
+            {
+                "current_social_reaction": reaction["mode"],
+                "current_social_event": event[:500],
+                "reaction_research_source": _ORIGINAL_RESEARCH_COMMIT,
+            }
+        )
     return reaction
 
 
