@@ -12,8 +12,8 @@ from datetime import datetime, timezone
 
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
-DEFAULT_MODEL = "claude-opus-4-6"
-COPILOT_CLAUDE_MODEL = "claude-sonnet-4.6"
+DEFAULT_MODEL = "claude-opus-5"
+COPILOT_CLAUDE_MODEL = "claude-sonnet-5"
 AUTO_ATTEMPTS = 3
 
 
