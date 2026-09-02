@@ -46,25 +46,13 @@ jobs:
   dispatch-community:
     runs-on: ubuntu-latest
     steps:
-      - name: Keep exactly one Community runtime alive
+      - name: Dispatch current Community runtime now
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          runs_api="repos/${GITHUB_REPOSITORY}/actions/workflows/emily-olivia-community-run.yml/runs?per_page=30"
-          active="$(
-            gh api --method GET "$runs_api" \
-              --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending") | "\(.id) \(.head_sha) \(.status)"'
-          )"
-
-          if [ -n "$active" ]; then
-            echo "Emily + Olivia already have a Community runtime; preserving it without cancellation:"
-            echo "$active"
-            exit 0
-          fi
-
-          echo "No active Emily + Olivia Community runtime exists; dispatching the next handoff now."
+          echo "Dispatching the current Emily + Olivia Community runtime now."
           gh workflow run emily-olivia-community-run.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
