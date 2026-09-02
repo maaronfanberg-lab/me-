@@ -256,8 +256,10 @@ async def process_one_reply(
 
     # Alex is a side-channel participant, not a substitute for the pending
     # Emily<->Olivia turn. Answer Alex through the same Stanford cognition, but
-    # leave the peer message untouched and do not inject Alex or the reply into
-    # the autonomous pair's dialogue history.
+    # do not inject Alex's verbatim wording into the autonomous pair's persistent
+    # memory stream. That wording remains available during the direct Alex turn,
+    # then disappears from peer retrieval so a distinctive short Alex phrase
+    # cannot later be spoken as if Emily or Olivia coined it.
     if alex_item is not None:
         if peer_inbox:
             peer_memory = observation_text(agent, peer_observation)
@@ -265,17 +267,7 @@ async def process_one_reply(
                 agent.brain.remember(peer_memory, time_step=time_step)
 
         alex_observation = _alex_observation(peer_observation, agent, alex_item)
-        alex_memory = observation_text(agent, alex_observation)
-        if not _memory_already_present(agent, alex_memory):
-            agent.brain.remember(alex_memory, time_step=time_step)
         _coerce_memory_importance(agent)
-
-        if str(alex_item.get("target")) == "both":
-            other_memory = f"{other.name} observes a message from Alex: {alex_item['text']}"
-            if not _memory_already_present(other, other_memory):
-                other.brain.remember(other_memory, time_step=time_step)
-                _coerce_memory_importance(other)
-                other.brain.save(str(other.workspace))
 
         external_action, external_generation_errors = await _choose_with_recovery(
             agent,
@@ -429,39 +421,21 @@ async def run_first_exchange(opener: str) -> dict:
             "reply_turns": 2,
             "autonomous_loop": False,
         },
-        "start_time_step": base_time_step,
         "seed": seed,
-        "turns": [olivia_turn, emily_turn],
+        "olivia_turn": olivia_turn,
+        "emily_turn": emily_turn,
     }
-
     REPLAY_DIR.mkdir(parents=True, exist_ok=True)
-    (REPLAY_DIR / "first_exchange.json").write_text(
-        json.dumps(transcript, indent=2),
-        encoding="utf-8",
-    )
+    (REPLAY_DIR / "first_exchange.json").write_text(json.dumps(transcript, indent=2), encoding="utf-8")
     return transcript
 
 
-async def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the first bounded Emily + Olivia exchange.")
-    parser.add_argument(
-        "--opener",
-        default="",
-        help="Explicit initial message from Emily to Olivia; no default dialogue is supplied.",
-    )
-    parser.add_argument(
-        "--run",
-        action="store_true",
-        help="Explicitly permit one seed message, Olivia's reply, and Emily's reply, then stop.",
-    )
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("opener")
     args = parser.parse_args()
-
-    if not args.run:
-        raise SystemExit("Refusing to start automatically. Use --run for exactly one bounded first exchange.")
-
-    result = await run_first_exchange(args.opener)
-    print(json.dumps(result, indent=2))
+    print(json.dumps(asyncio.run(run_first_exchange(args.opener)), indent=2))
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
