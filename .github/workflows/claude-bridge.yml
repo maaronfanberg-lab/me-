@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       GITHUB_TOKEN: ${{ github.token }}
       COPILOT_CLAUDE_MODELS: claude-sonnet-5,claude-opus-5,claude-haiku-4.5
     steps:
@@ -52,15 +52,28 @@ jobs:
           echo "file=$f" >> "$GITHUB_OUTPUT"
           echo "out=bridge/outbox/${base}.json" >> "$GITHUB_OUTPUT"
 
-      - name: Install GitHub Copilot CLI fallback
-        if: env.ANTHROPIC_API_KEY == ''
+      - name: Install Claude Code subscription transport
+        if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Install verified Copilot fallback
+        if: env.CLAUDE_CODE_OAUTH_TOKEN == ''
         run: npm install -g @github/copilot
 
       - name: Run verified oracle
         id: oracle
         continue-on-error: true
+        shell: bash
         run: |
-          python3 bridge/claude_bridge.py '${{ steps.request.outputs.file }}' '${{ steps.request.outputs.out }}'
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            python3 bridge/claude_code_oracle.py '${{ steps.request.outputs.file }}' '${{ steps.request.outputs.out }}'
+          else
+            # No subscription token: retain the old model-verified Copilot path.
+            # Deliberately do not expose ANTHROPIC_API_KEY here, so this workflow
+            # cannot silently create separately billed Anthropic API usage.
+            env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN \
+              python3 bridge/claude_bridge.py '${{ steps.request.outputs.file }}' '${{ steps.request.outputs.out }}'
+          fi
 
       - name: Commit verified oracle result
         if: always()
