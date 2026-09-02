@@ -118,8 +118,9 @@ def _grounding_words(text: str, limit: int = 6) -> list[str]:
 
 
 def _cognitive_context(reaction: dict, plan_context: str) -> str:
-    _ = plan_context
-    return reaction_context(reaction).strip()
+    """Expose retrieved substance plus the existing private Stanford plan."""
+    parts = [reaction_context(reaction).strip(), str(plan_context or "").strip()]
+    return "\n".join(part for part in parts if part)
 
 
 def _is_exact_same_speaker_repeat(text: str, dialogue_history, agent_name: str) -> bool:
