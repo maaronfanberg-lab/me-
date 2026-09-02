@@ -205,12 +205,14 @@ def ask_copilot_verified_claude(data, prompt):
             )
             response = _assistant_text_from_jsonl(proc.stdout)
             models = _response_models_from_otel(otel_path)
+            stderr_tail = str(proc.stderr or "").strip()[-1200:]
             attempts.append({
                 "attempt": attempt,
                 "returncode": proc.returncode,
                 "requested_model": COPILOT_CLAUDE_MODEL,
                 "resolved_models": models,
                 "had_response": bool(response),
+                "stderr_tail": stderr_tail,
             })
 
             if proc.returncode == 0 and response and _all_models_are_claude(models):
@@ -224,7 +226,7 @@ def ask_copilot_verified_claude(data, prompt):
                 }
 
     summary = "; ".join(
-        f"attempt {item['attempt']}: requested={item['requested_model']} models={item['resolved_models'] or ['unverified']} rc={item['returncode']}"
+        f"attempt {item['attempt']}: requested={item['requested_model']} models={item['resolved_models'] or ['unverified']} rc={item['returncode']} stderr={item['stderr_tail']!r}"
         for item in attempts
     )
     raise RuntimeError(
