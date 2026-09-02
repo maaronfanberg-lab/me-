@@ -1,7 +1,16 @@
 {
   "mode": "continuous_persistent_community_session",
-  "status": "running",
+  "status": "completed",
   "session_id": "1788315072-d71bff2e37",
+  "limits": {
+    "seed_messages": 1,
+    "requested_reply_turns": 8,
+    "maximum_reply_turns": 10,
+    "maximum_continuous_seconds": 19800,
+    "continuous_seconds": 17400,
+    "turn_delay_seconds": 0.0,
+    "autonomous_loop": true
+  },
   "resumed_social_state": false,
   "autonomous_opening": true,
   "discarded_pending_message_ids": [],
@@ -60,8 +69,67 @@
     "consumed_inbound": null
   },
   "completed_reply_turns": 9,
-  "continuous_seconds": 17400,
-  "turn_delay_seconds": 0.0,
+  "stop_reason": "speech_generation_deferred",
+  "seed": {
+    "success": true,
+    "message": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hey, I saw you on the news. What did you think about everything?",
+      "created_at": "2026-09-02T02:11:49.020043+00:00"
+    }
+  },
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 10,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 9,
+          "from_id": 1,
+          "from_name": "Emily",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "What was that about?",
+          "created_at": "2026-09-02T02:20:04.103986+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [],
+    "retrieved_memory_evidence": [],
+    "action": {
+      "type": "wait",
+      "reason": "speech_generation_deferred"
+    },
+    "action_result": null,
+    "consumed_inbound": false,
+    "external_inbound": null,
+    "interrupted_inbound": null,
+    "generation_deferred": true,
+    "generation_attempts": 3,
+    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'short_subset_echo: What did you think about everything?' || Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"recurring_pair_attractor: Oh, you're joking.\" || Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"recurring_pair_attractor: Oh, you're joking.\""
+  },
   "messages": [
     {
       "id": 1,
@@ -144,53 +212,5 @@
       "content": "What was that about?",
       "created_at": "2026-09-02T02:20:04.103986+00:00"
     }
-  ],
-  "latest_turn": {
-    "agent": "Olivia",
-    "time_step": 10,
-    "observation": {
-      "self": {
-        "id": 2,
-        "name": "Olivia"
-      },
-      "participants": [
-        {
-          "id": 1,
-          "name": "Emily"
-        },
-        {
-          "id": 2,
-          "name": "Olivia"
-        },
-        {
-          "id": 3,
-          "name": "Alex"
-        }
-      ],
-      "inbox": [
-        {
-          "id": 9,
-          "from_id": 1,
-          "from_name": "Emily",
-          "to_id": 2,
-          "to_name": "Olivia",
-          "content": "What was that about?",
-          "created_at": "2026-09-02T02:20:04.103986+00:00"
-        }
-      ]
-    },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
-    "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
-    },
-    "action_result": null,
-    "consumed_inbound": false,
-    "external_inbound": null,
-    "interrupted_inbound": null,
-    "generation_deferred": true,
-    "generation_attempts": 3,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'short_subset_echo: What did you think about everything?' || Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"recurring_pair_attractor: Oh, you're joking.\" || Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"recurring_pair_attractor: Oh, you're joking.\""
-  }
+  ]
 }
