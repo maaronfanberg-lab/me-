@@ -32,7 +32,7 @@ observation_text = _base.observation_text
 next_community_time_step = _base.next_community_time_step
 latest_community_time_step = _base.latest_community_time_step
 
-_MAX_ATTRACTOR_RESAMPLES = 8
+_MAX_ATTRACTOR_RESAMPLES = 1
 _INNER_EXHAUSTION_MARKER = "paper-derived Stanford act produced no usable spoken line after"
 _CONTROL_SCAFFOLD = re.compile(
     r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
