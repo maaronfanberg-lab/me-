@@ -1,4 +1,4 @@
-name: Claude bridge mailbox
+name: Verified oracle mailbox
 
 on:
   push:
@@ -17,7 +17,7 @@ permissions:
   copilot-requests: write
 
 concurrency:
-  group: claude-bridge
+  group: verified-oracle-bridge
   cancel-in-progress: false
 
 jobs:
@@ -27,13 +27,14 @@ jobs:
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GITHUB_TOKEN: ${{ github.token }}
+      COPILOT_CLAUDE_MODELS: claude-sonnet-5,claude-opus-5,claude-haiku-4.5
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
           fetch-depth: 2
 
-      - name: Resolve request file
+      - name: Resolve oracle task
         id: request
         shell: bash
         run: |
@@ -44,7 +45,7 @@ jobs:
           fi
           case "$f" in
             bridge/inbox/*.json) ;;
-            *) echo "No valid bridge inbox request found: $f" >&2; exit 1 ;;
+            *) echo "No valid oracle inbox request found: $f" >&2; exit 1 ;;
           esac
           test -f "$f"
           base=$(basename "$f" .json)
@@ -55,21 +56,21 @@ jobs:
         if: env.ANTHROPIC_API_KEY == ''
         run: npm install -g @github/copilot
 
-      - name: Ask Claude
-        id: claude
+      - name: Run verified oracle
+        id: oracle
         continue-on-error: true
         run: |
           python3 bridge/claude_bridge.py '${{ steps.request.outputs.file }}' '${{ steps.request.outputs.out }}'
 
-      - name: Commit Claude response
+      - name: Commit verified oracle result
         if: always()
         shell: bash
         run: |
-          test -f '${{ steps.request.outputs.out }}' || { echo 'No response file produced'; exit 1; }
-          git config user.name 'claude-bridge-bot'
+          test -f '${{ steps.request.outputs.out }}' || { echo 'No oracle result file produced'; exit 1; }
+          git config user.name 'verified-oracle-bot'
           git config user.email 'actions@users.noreply.github.com'
           git add '${{ steps.request.outputs.out }}'
-          git commit -m "Claude bridge response: $(basename '${{ steps.request.outputs.out }}' .json)" || exit 0
+          git commit -m "Oracle response: $(basename '${{ steps.request.outputs.out }}' .json)" || exit 0
           for n in 1 2 3 4 5; do
             if git push origin HEAD:main; then exit 0; fi
             git fetch origin main
@@ -78,8 +79,8 @@ jobs:
           done
           exit 1
 
-      - name: Surface bridge failure
-        if: steps.claude.outcome != 'success'
+      - name: Surface oracle failure
+        if: steps.oracle.outcome != 'success'
         run: |
           cat '${{ steps.request.outputs.out }}'
           exit 1
