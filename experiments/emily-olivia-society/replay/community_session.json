@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 1,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,109 @@
       "to_name": "Olivia",
       "content": "Hey, I was really looking forward to our chat tonight.",
       "created_at": "2026-09-02T18:43:58.960147+00:00"
+    },
+    {
+      "id": 2,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "That sounds great! What was the highlight of your day?",
+      "created_at": "2026-09-02T18:44:45.297721+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 2,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 1,
+          "from_id": 1,
+          "from_name": "Emily",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Hey, I was really looking forward to our chat tonight.",
+          "created_at": "2026-09-02T18:43:58.960147+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Hey, I was really looking forward to our chat tonight."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "84a67540d786dddde7d7",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 1,
+      "content": "That sounds great! What was the highlight of your day?",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Hey, I was really looking forward to our chat tonight."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "84a67540d786dddde7d7",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 2,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "That sounds great! What was the highlight of your day?",
+        "created_at": "2026-09-02T18:44:45.297721+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": null,
+    "external_action": null,
+    "external_action_result": null,
+    "external_ack": null,
+    "external_generation_error": ""
+  }
 }
