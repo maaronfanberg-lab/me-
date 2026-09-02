@@ -20,7 +20,7 @@ _RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
 _DEFAULT_THRESHOLD = 150.0
 _LEGACY_LOW_THRESHOLD_MAX = 20.0
 _EMPTY_EMBEDDING_ERROR = "Input text must be a non-empty string."
-_MAX_REFLECTION_ATTEMPTS = 8
+_MAX_REFLECTION_ATTEMPTS = 1
 
 
 def _latest_nodes(agent, count: int = 12):
@@ -56,10 +56,9 @@ def maybe_reflect(agent, time_step: int) -> bool:
 
     Natural declarative model output is parsed by the guarded local reflection
     adapter, while malformed, structured, prompt-shaped, or question-shaped
-    output is still removed by memory hygiene. When a stochastic pass yields no
-    clean insight, resample the same Stanford request at the same logical
-    timestep. The reflection watermark advances only after a clean reflection
-    survives, so one bad local-model draw cannot suppress future reflection.
+    output is still removed by memory hygiene. A stochastic pass gets one chance
+    on the current turn; if it yields no clean insight, dialogue continues and
+    the reflection watermark remains unchanged so a later turn can try again.
     """
     scratch = agent.brain.scratch
     last_step = int(scratch.get("reflection_last_step", 0) or 0)
