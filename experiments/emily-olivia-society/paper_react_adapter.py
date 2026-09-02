@@ -31,11 +31,39 @@ _AMBIENT_NO_MESSAGE = re.compile(
     r"\bno\s+addressed\s+message\s+(?:is\s+)?pending\b)",
     re.IGNORECASE,
 )
+_GREETING_ONLY = re.compile(
+    r"^\s*(?:(?:oh|well)[,! ]+)?(?:good\s+(?:morning|afternoon|evening)|hi|hello|hey)"
+    r"(?:\s+(?:there|again|emily|olivia))?[!,. ]*$",
+    re.IGNORECASE,
+)
+_ACK_ONLY = re.compile(
+    r"^\s*(?:yes|yeah|yep|okay|ok|sure|right|exactly|thanks|thank\s+you|same\s+here)"
+    r"[!,. ]*$",
+    re.IGNORECASE,
+)
+
+
+def _observation_payload(content: str) -> str:
+    return _MESSAGE_OBSERVATION_PREFIX.sub("", str(content or "").strip()).strip()
 
 
 def _semantic_tokens(content: str) -> set[str]:
-    text = _MESSAGE_OBSERVATION_PREFIX.sub("", str(content or "").strip())
-    return set(content_tokens(text))
+    return set(content_tokens(_observation_payload(content)))
+
+
+def _is_low_information_social_memory(node) -> bool:
+    """Identify social phatic observations without deleting them from memory.
+
+    These memories remain available as a fail-open fallback. They are simply
+    ranked behind substantive observations and reflections so a fresh greeting
+    cannot monopolize Stanford retrieval forever.
+    """
+    if getattr(node, "node_type", None) != "observation":
+        return False
+    text = _observation_payload(str(getattr(node, "content", "") or ""))
+    if not text:
+        return True
+    return bool(_GREETING_ONLY.match(text) or _ACK_ONLY.match(text))
 
 
 def _too_similar(candidate: set[str], selected: list[set[str]]) -> bool:
@@ -56,8 +84,14 @@ def _too_similar(candidate: set[str], selected: list[set[str]]) -> bool:
 
 
 def _clean_memory_nodes(nodes, *, include_ambient: bool):
-    """Return the exact selected Stanford nodes after hygiene/diversity filtering."""
-    out = []
+    """Return selected Stanford nodes with substantive material preferred.
+
+    Hygiene and semantic diversity remain hard selection criteria. Phatic social
+    memories are soft-ranked rather than rejected, preserving liveness when the
+    memory stream genuinely contains nothing richer yet.
+    """
+    substantive = []
+    phatic = []
     seen_content: set[str] = set()
     selected_tokens: list[set[str]] = []
     for node in nodes or []:
@@ -76,10 +110,16 @@ def _clean_memory_nodes(nodes, *, include_ambient: bool):
         tokens = _semantic_tokens(content)
         if _too_similar(tokens, selected_tokens):
             continue
-        out.append(node)
         seen_content.add(content)
         selected_tokens.append(tokens)
-    return out
+        if _is_low_information_social_memory(node):
+            phatic.append(node)
+        else:
+            substantive.append(node)
+
+    # Keep Stanford's retrieved order within each bucket. Substantive memories
+    # and reflections lead; greetings are retained only as trailing context.
+    return substantive + phatic
 
 
 def _reaction(
@@ -114,7 +154,8 @@ def _reaction(
 def react_to_observation(agent, other_name: str, inbound: str, time_step: int) -> dict:
     focal = (
         f"{other_name} said to {agent.name}: {inbound}\n"
-        f"What memories and thoughts are relevant to how {agent.name} should react?"
+        f"What memories, reflections, and unfinished conversational substance are relevant "
+        f"to how {agent.name} should react now, beyond merely repeating the latest social greeting?"
     )
     return _reaction(
         agent,
@@ -131,7 +172,7 @@ def react_to_presence(agent, other_name: str, time_step: int) -> dict:
     event = f"{other_name} is present in the private two-person community; no addressed message is pending."
     focal = (
         f"{agent.name} and {other_name} are present together with no addressed message pending. "
-        f"What memories and thoughts are relevant to {agent.name}'s current social reaction?"
+        f"What memories, reflections, and ongoing interests are relevant to {agent.name}'s current social reaction?"
     )
     return _reaction(
         agent,
