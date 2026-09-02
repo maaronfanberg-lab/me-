@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 1,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,108 @@
       "to_name": "Olivia",
       "content": "Hello, I'm Emily. Do you know me?",
       "created_at": "2026-09-02T02:24:30.989633+00:00"
+    },
+    {
+      "id": 2,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Hi, yes. I've just finished watching a movie about the history of life on this planet.",
+      "created_at": "2026-09-02T02:25:15.330115+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 2,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 1,
+          "from_id": 1,
+          "from_name": "Emily",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Hello, I'm Emily. Do you know me?",
+          "created_at": "2026-09-02T02:24:30.989633+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Hello, I'm Emily. Do you know me?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "198726d39c2e33b647f6",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 1,
+      "content": "Hi, yes. I've just finished watching a movie about the history of life on this planet.",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Hello, I'm Emily. Do you know me?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "198726d39c2e33b647f6",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 2,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Hi, yes. I've just finished watching a movie about the history of life on this planet.",
+        "created_at": "2026-09-02T02:25:15.330115+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": null,
+    "interrupted_inbound": null,
+    "continuation_relay": null,
+    "external_ack": null
+  }
 }
