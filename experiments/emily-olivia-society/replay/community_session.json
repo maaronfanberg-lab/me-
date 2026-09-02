@@ -1,7 +1,16 @@
 {
   "mode": "continuous_persistent_community_session",
-  "status": "running",
+  "status": "completed",
   "session_id": "1788316935-5ca76b4949",
+  "limits": {
+    "seed_messages": 1,
+    "requested_reply_turns": 8,
+    "maximum_reply_turns": 10,
+    "maximum_continuous_seconds": 19800,
+    "continuous_seconds": 17400,
+    "turn_delay_seconds": 0.0,
+    "autonomous_loop": true
+  },
   "resumed_social_state": false,
   "autonomous_opening": true,
   "discarded_pending_message_ids": [],
@@ -60,10 +69,10 @@
     "consumed_inbound": null
   },
   "completed_reply_turns": 4,
-  "continuous_seconds": 17400,
-  "turn_delay_seconds": 0.0,
-  "messages": [
-    {
+  "stop_reason": "speech_generation_deferred",
+  "seed": {
+    "success": true,
+    "message": {
       "id": 1,
       "from_id": 1,
       "from_name": "Emily",
@@ -71,35 +80,8 @@
       "to_name": "Olivia",
       "content": "Hey, I've never really liked chocolate. What is the deal with it?",
       "created_at": "2026-09-02T02:42:57.850015+00:00"
-    },
-    {
-      "id": "alex-reply-74f5f25ea3f04f1b96af8c931106b269",
-      "from_id": 2,
-      "from_name": "Olivia",
-      "to_id": 3,
-      "to_name": "Alex",
-      "content": "I'm just fine",
-      "created_at": "2026-09-02T02:44:08.416805+00:00"
-    },
-    {
-      "id": 3,
-      "from_id": 1,
-      "from_name": "Emily",
-      "to_id": 2,
-      "to_name": "Olivia",
-      "content": "Hi I'm Alex",
-      "created_at": "2026-09-02T02:44:26.813710+00:00"
-    },
-    {
-      "id": 4,
-      "from_id": 2,
-      "from_name": "Olivia",
-      "to_id": 1,
-      "to_name": "Emily",
-      "content": "Oh, you've got to be kidding.",
-      "created_at": "2026-09-02T02:44:57.275195+00:00"
     }
-  ],
+  },
   "latest_turn": {
     "agent": "Emily",
     "time_step": 5,
@@ -147,5 +129,43 @@
     "generation_deferred": true,
     "generation_attempts": 3,
     "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'bare_short_fragment: I\u2019ve got to be kidding' || Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"short_subset_echo: I've never really liked chocolate.\" || Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"short_subset_echo: I've never really liked chocolate\""
-  }
+  },
+  "messages": [
+    {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hey, I've never really liked chocolate. What is the deal with it?",
+      "created_at": "2026-09-02T02:42:57.850015+00:00"
+    },
+    {
+      "id": "alex-reply-74f5f25ea3f04f1b96af8c931106b269",
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 3,
+      "to_name": "Alex",
+      "content": "I'm just fine",
+      "created_at": "2026-09-02T02:44:08.416805+00:00"
+    },
+    {
+      "id": 3,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hi I'm Alex",
+      "created_at": "2026-09-02T02:44:26.813710+00:00"
+    },
+    {
+      "id": 4,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Oh, you've got to be kidding.",
+      "created_at": "2026-09-02T02:44:57.275195+00:00"
+    }
+  ]
 }
