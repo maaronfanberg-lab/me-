@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 1,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,141 @@
       "to_name": "Olivia",
       "content": "Oh, what's up with you?",
       "created_at": "2026-09-02T11:43:38.122281+00:00"
+    },
+    {
+      "id": 2,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Oh, just having a conversation with myself, you know how I am.",
+      "created_at": "2026-09-02T11:44:08.020578+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 2,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 1,
+          "from_id": 1,
+          "from_name": "Emily",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Oh, what's up with you?",
+          "created_at": "2026-09-02T11:43:38.122281+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Oh, what's up with you?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "b03d6b6952988fa54580",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 15.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 1,
+      "content": "Oh, just having a conversation with myself, you know how I am.",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Oh, what's up with you?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "b03d6b6952988fa54580",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 15.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 2,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Oh, just having a conversation with myself, you know how I am.",
+        "created_at": "2026-09-02T11:44:08.020578+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": {
+      "id": "DS1fFe6gAs7f",
+      "speaker": "Alex",
+      "text": "Go to the salon silly Olivia.",
+      "target": "both",
+      "at": "2026-09-02T11:38:43+00:00",
+      "source_url": "https://ntfy.sh/eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
+    },
+    "external_action": {
+      "type": "message",
+      "recipient_id": 3,
+      "content": "What? You're not going to buy me a ticket?",
+      "retrieved_memories": [],
+      "retrieved_memory_evidence": [],
+      "cognition": {
+        "reaction": "chat with Alex",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "external_action_result": {
+      "success": true,
+      "message": {
+        "id": "alex-reply-2a8d273b59814bec9e04d829015b46a0",
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 3,
+        "to_name": "Alex",
+        "content": "What? You're not going to buy me a ticket?",
+        "created_at": "2026-09-02T11:44:01.207770+00:00"
+      }
+    },
+    "external_ack": {
+      "acknowledged": 1
+    },
+    "external_generation_error": ""
+  }
 }
