@@ -28,6 +28,7 @@ DEFAULT_REPLY_TURNS = 8
 MAX_CONTINUOUS_SECONDS = 19800
 MAX_TURN_DELAY_SECONDS = 3600.0
 MAX_OPENER_CHARS = 12000
+DEFERRED_RETRY_DELAY_SECONDS = 1.0
 _LEGACY_CANNED_OPENER = "Let's continue naturally from where we left off."
 
 
@@ -417,10 +418,56 @@ async def run_community_session(
                 time_step=base_time_step + reply_time_offset + offset,
                 dialogue_history=dialogue_history,
             )
+            action = turn.get("action", {})
+
+            # A deferred sample is explicitly recoverable: the inbound message
+            # remains unconsumed, so continuous mode should keep the same speaker
+            # and try again rather than ending the whole conversation. Do not
+            # count or persist it as a completed reply turn.
+            if (
+                continuous_seconds > 0
+                and action.get("type") == "wait"
+                and action.get("reason") == "speech_generation_deferred"
+            ):
+                latest_turn = turn
+                append_jsonl(
+                    stream_path,
+                    {
+                        "type": "generation_deferred",
+                        "session_id": session_id,
+                        "agent": current.name,
+                        "time_step": base_time_step + reply_time_offset + offset,
+                        "generation_attempts": turn.get("generation_attempts"),
+                        "generation_error": turn.get("generation_error"),
+                    },
+                )
+                atomic_write_json(
+                    summary_path,
+                    {
+                        "mode": "continuous_persistent_community_session",
+                        "status": "running",
+                        "session_id": session_id,
+                        "resumed_social_state": resumed,
+                        "autonomous_opening": autonomous_opening,
+                        "discarded_pending_message_ids": discarded_pending_message_ids,
+                        "start_time_step": base_time_step,
+                        "opening_turn": opening_turn,
+                        "completed_reply_turns": completed,
+                        "continuous_seconds": continuous_seconds,
+                        "turn_delay_seconds": turn_delay_seconds,
+                        "messages": live_messages,
+                        "latest_turn": latest_turn,
+                    },
+                )
+                publish_live_replay()
+                remaining = continuous_seconds - (time.monotonic() - started)
+                if remaining > 0:
+                    await asyncio.sleep(min(DEFERRED_RETRY_DELAY_SECONDS, remaining))
+                continue
+
             completed += 1
             latest_turn = turn
 
-            action = turn.get("action", {})
             if action.get("type") == "message":
                 dialogue_history.append((current.name, str(action.get("content", ""))))
 
