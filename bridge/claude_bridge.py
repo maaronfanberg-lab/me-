@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-opus-5"
-COPILOT_CLAUDE_MODEL = "claude-sonnet-5"
+COPILOT_CLAUDE_MODEL = "claude-haiku-4.5"
 AUTO_ATTEMPTS = 3
 
 
