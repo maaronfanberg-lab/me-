@@ -140,11 +140,20 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 # Only a successfully completed workflow is eligible to become durable cognition.
 # Cancelled/failed artifacts remain diagnostic evidence, never continuity state.
-mapfile -t candidate_runs < <(
+candidate_runs_output=""
+if ! candidate_runs_output="$(
   gh api --method GET \
-    "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=30" \
-    --jq '.workflow_runs[] | select(.status == "completed" and .conclusion == "success") | [.id, .conclusion, .head_sha] | @tsv'
-)
+    "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+    --jq ".workflow_runs[] | select(.path == \".github/workflows/${WORKFLOW_FILE}\" and .status == \"completed\" and .conclusion == \"success\") | [.id, .conclusion, .head_sha] | @tsv"
+)"; then
+  echo "Checkpoint discovery unavailable; starting from clean cognition and social state."
+  reset_clean "checkpoint_discovery_unavailable"
+  exit 0
+fi
+candidate_runs=()
+if [[ -n "$candidate_runs_output" ]]; then
+  mapfile -t candidate_runs <<< "$candidate_runs_output"
+fi
 
 for candidate_info in "${candidate_runs[@]:-}"; do
   IFS=$'\t' read -r run_id run_conclusion run_head_sha <<< "$candidate_info"
