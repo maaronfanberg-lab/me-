@@ -3,9 +3,7 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import urllib.error
-import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
@@ -16,7 +14,7 @@ ISSUE_NUMBER = 277
 ALEX_GITHUB_LOGIN = "maaronfanberg-lab"
 MAX_ALEX_TURN_CHARS = 700
 _API_ROOT = f"https://api.github.com/repos/{REPOSITORY}"
-_ACK_PATTERN = re.compile(r"<!--\s*alex-ack:(\d+)\s*-->", re.IGNORECASE)
+_ACK_REACTION = "eyes"
 
 
 @dataclass(frozen=True)
@@ -37,10 +35,10 @@ def _parse_target(body: str) -> tuple[str, str]:
 class AlexBridgeClient:
     """Treat comments on one dedicated GitHub issue as human Alex turns.
 
-    Only comments authored by the repository owner are accepted as Alex. A
-    successful Stanford-generated reply is posted back into the issue with a
-    hidden acknowledgement marker, which makes queue consumption durable across
-    runner handoffs and crashes without another deployment service.
+    Only comments authored by the repository owner are accepted as Alex. After
+    a real Stanford-generated reply succeeds, the runner adds an eyes reaction
+    to the source comment. That reaction is the durable consume marker across
+    Community handoffs and requires no third-party queue deployment.
     """
 
     def __init__(self) -> None:
@@ -53,17 +51,19 @@ class AlexBridgeClient:
         *,
         method: str = "GET",
         body: dict | None = None,
+        reaction_api: bool = False,
     ) -> object:
         if not self.enabled:
             raise RuntimeError("Alex GitHub doorway is unavailable without GH_TOKEN/GITHUB_TOKEN.")
         data = None if body is None else json.dumps(body).encode("utf-8")
+        accept = "application/vnd.github+json"
         request = urllib.request.Request(
             _API_ROOT + path,
             data=data,
             method=method,
             headers={
                 "Authorization": f"Bearer {self.token}",
-                "Accept": "application/vnd.github+json",
+                "Accept": accept,
                 "Content-Type": "application/json",
                 "User-Agent": "emily-olivia-community-runner",
                 "X-GitHub-Api-Version": "2022-11-28",
@@ -90,17 +90,13 @@ class AlexBridgeClient:
         return [row for row in payload if isinstance(row, dict)]
 
     def pending(self) -> list[dict]:
-        comments = self._comments()
-        acknowledged: set[str] = set()
-        for row in comments:
-            for match in _ACK_PATTERN.finditer(str(row.get("body", ""))):
-                acknowledged.add(match.group(1))
-
         clean: list[dict] = []
-        for row in comments:
+        for row in self._comments():
             author = str((row.get("user") or {}).get("login", ""))
             row_id = str(row.get("id", "")).strip()
-            if author != ALEX_GITHUB_LOGIN or not row_id or row_id in acknowledged:
+            reactions = row.get("reactions") or {}
+            already_consumed = int(reactions.get(_ACK_REACTION, 0) or 0) > 0
+            if author != ALEX_GITHUB_LOGIN or not row_id or already_consumed:
                 continue
             target, text = _parse_target(str(row.get("body", "")))
             if not text or len(text) > MAX_ALEX_TURN_CHARS:
@@ -124,21 +120,18 @@ class AlexBridgeClient:
                 return row
         return None
 
-    def ack(self, queue_id: str, speaker: str, reply: str) -> dict:
-        row_id = str(queue_id or "").strip()
-        who = str(speaker or "").strip()
-        text = str(reply or "").strip()
-        if not row_id or not who or not text or not self.enabled:
+    def ack(self, ids: list[str]) -> dict:
+        clean = [str(value).strip() for value in ids if str(value).strip()]
+        if not clean or not self.enabled:
             return {"acknowledged": 0}
-        body = f"**{who}:** {text}\n\n<!-- alex-ack:{row_id} -->"
-        payload = self._request(
-            f"/issues/{ISSUE_NUMBER}/comments",
-            method="POST",
-            body={"body": body},
-        )
-        comment_id = payload.get("id") if isinstance(payload, dict) else None
-        return {
-            "acknowledged": 1 if comment_id else 0,
-            "comment_id": comment_id,
-            "url": payload.get("html_url") if isinstance(payload, dict) else None,
-        }
+        acknowledged = 0
+        for row_id in clean:
+            payload = self._request(
+                f"/issues/comments/{row_id}/reactions",
+                method="POST",
+                body={"content": _ACK_REACTION},
+                reaction_api=True,
+            )
+            if isinstance(payload, dict) and payload.get("id"):
+                acknowledged += 1
+        return {"acknowledged": acknowledged}
