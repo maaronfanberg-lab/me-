@@ -17,12 +17,10 @@ import dialogue_boundary_guard as _boundary
 import paper_act_adapter as _paper
 import stanford_native_cycle as _native
 
-# The pinned Stanford conversation path accepts the model's next conversational
-# line and only ends when the conversation logic says to end. Keep local style
-# heuristics from vetoing harmless references, greetings, or short echoes, while
-# retaining the paper adapter's private-plan and retrieved-memory leak guards.
-# Private cognition may influence a spoken act, but must never be read aloud as
-# serialized plan/memory text.
+# Keep the paper adapter's private-plan and retrieved-memory leak guards. The
+# live wrapper deliberately leaves purely stylistic hard-veto checks disabled;
+# conversational repetition is handled below as a fail-open refractory signal
+# so it can improve variety without ever becoming a dead-turn condition.
 _paper._is_ungrounded_short_reference = lambda text, inbound: False
 _paper._is_recent_echo = lambda text, dialogue_history: False
 _boundary._is_mid_conversation_greeting_reset = lambda text, dialogue_history: False
@@ -33,14 +31,18 @@ _boundary._is_short_recent_echo = lambda text, dialogue_history: False
 # stochastic generator when the live replay proves identity or grounding drift.
 _native.generate_spoken_action = _boundary.install_spoken_action_guard(_native.generate_spoken_action)
 
-# The generic boundary guard catches self-address and role drift, but a live
-# replay proved that the model can still emit a direct peer-identity self-claim
-# (for example Emily saying "my name's Olivia"). This is an integrity failure,
-# not a style preference. Resample the same Stanford generator; never substitute
-# authored dialogue. A generous retry budget keeps this hard identity boundary
-# from becoming an ordinary liveness bottleneck.
+# Live replay proved two distinct failure classes:
+#   1) hard identity drift (Emily claiming to be Olivia, or vice versa), and
+#   2) harmless but sticky social-reset attractors (Hi/Hey/Hello/How are you?).
+# Identity drift must never be published. Social resets should merely trigger
+# another stochastic sample. Critically, social-reset filtering is fail-open:
+# if every valid Stanford sample is still a greeting, speak the first valid one
+# rather than turning anti-repetition into a stall.
 _identity_base_generate = _native.generate_spoken_action
 _IDENTITY_ATTEMPTS = 8
+_SOCIAL_RESET_START = re.compile(r"^\s*(?:hi|hello|hey|oh\s*,?\s*(?:hi|hello|hey))\b", re.IGNORECASE)
+_SOCIAL_CHECKIN = re.compile(r"\bhow\s+are\s+you(?:\s+doing)?(?:\s+today)?\b", re.IGNORECASE)
+_WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 
 
 def _claims_peer_identity(text: object, agent_name: str, other_name: str) -> bool:
@@ -59,8 +61,50 @@ def _claims_peer_identity(text: object, agent_name: str, other_name: str) -> boo
     )
 
 
+def _word_list(text: object) -> list[str]:
+    return [match.group(0).casefold() for match in _WORD.finditer(str(text or ""))]
+
+
+def _is_social_reset(text: object, dialogue_history) -> bool:
+    history = list(dialogue_history or [])
+    if len(history) < 2:
+        return False
+    candidate = str(text or "").strip()
+    if not (_SOCIAL_RESET_START.search(candidate) or _SOCIAL_CHECKIN.search(candidate)):
+        return False
+
+    # Only call it an attractor after the recent conversation has already spent
+    # at least one turn in the same greeting/check-in basin. This preserves a
+    # natural opening while discouraging repeated re-openings.
+    for _speaker, prior in history[-4:]:
+        prior_text = str(prior or "").strip()
+        if _SOCIAL_RESET_START.search(prior_text) or _SOCIAL_CHECKIN.search(prior_text):
+            return True
+    return False
+
+
+def _is_short_semantic_echo(text: object, dialogue_history) -> bool:
+    output = _word_list(text)
+    if not output or len(output) > 7:
+        return False
+    for _speaker, prior in list(dialogue_history or [])[-4:]:
+        previous = _word_list(prior)
+        if not previous or len(previous) > 7:
+            continue
+        # Names differ across alternating greetings; compare the conversational
+        # skeleton after removing Emily/Olivia so "Hey, Emily" and "Hey, Olivia"
+        # are treated as the same move.
+        out_core = [word for word in output if word not in {"emily", "olivia"}]
+        prev_core = [word for word in previous if word not in {"emily", "olivia"}]
+        if out_core and out_core == prev_core:
+            return True
+    return False
+
+
 def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound: str = "", cognitive_context: str = ""):
-    rejected: list[str] = []
+    rejected_identity: list[str] = []
+    soft_fallback: str | None = None
+
     for _ in range(_IDENTITY_ATTEMPTS):
         text = _identity_base_generate(
             agent,
@@ -69,12 +113,24 @@ def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound
             inbound=inbound,
             cognitive_context=cognitive_context,
         )
-        if not _claims_peer_identity(text, getattr(agent, "name", ""), getattr(other, "name", "")):
-            return text
-        rejected.append(str(text)[:180])
+
+        if _claims_peer_identity(text, getattr(agent, "name", ""), getattr(other, "name", "")):
+            rejected_identity.append(str(text)[:180])
+            continue
+
+        if _is_social_reset(text, dialogue_history) or _is_short_semantic_echo(text, dialogue_history):
+            if soft_fallback is None:
+                soft_fallback = text
+            continue
+
+        return text
+
+    if soft_fallback is not None:
+        return soft_fallback
+
     raise RuntimeError(
         "paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: "
-        "peer-identity self-claim: " + " | ".join(rejected[-4:])
+        "peer-identity self-claim: " + " | ".join(rejected_identity[-4:])
     )
 
 
