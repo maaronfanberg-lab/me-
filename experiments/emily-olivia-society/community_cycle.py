@@ -36,12 +36,14 @@ _native.generate_spoken_action = _boundary.install_spoken_action_guard(_native.g
 #   2) harmless but sticky social-reset attractors (Hi/Hey/Hello/How are you?).
 # Identity drift must never be published. Social resets should merely trigger
 # another stochastic sample. Critically, social-reset filtering is fail-open:
-# if every valid Stanford sample is still a greeting, speak the first valid one
-# rather than turning anti-repetition into a stall. The underlying paper sampler
-# already performs bounded stochastic resampling, so this outer guard gets one
-# pass only; continuous mode retries a deferred turn without ending the session.
+# if both structurally valid Stanford samples are still soft attractors, speak
+# the first valid one rather than turning anti-repetition into a stall. The
+# underlying paper sampler owns its own bounded stochastic work; this outer
+# identity/social refractory layer gets exactly two samples total (initial plus
+# one retry). Boundary, attractor, and continuous-session retry layers remain
+# single-pass, so there is no restored multiplicative retry stack.
 _identity_base_generate = _native.generate_spoken_action
-_IDENTITY_ATTEMPTS = 1
+_IDENTITY_ATTEMPTS = 2
 _SOCIAL_RESET_START = re.compile(r"^\s*(?:hi|hello|hey|oh\s*,?\s*(?:hi|hello|hey))\b", re.IGNORECASE)
 _SOCIAL_CHECKIN = re.compile(r"\bhow\s+are\s+you(?:\s+doing)?(?:\s+today)?\b", re.IGNORECASE)
 _SERVICE_ASSISTANT = re.compile(
