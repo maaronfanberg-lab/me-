@@ -1,0 +1,79 @@
+name: Emily Olivia checkpoint hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/emily-olivia-checkpoint-hotfix.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  patch-and-restart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+
+      - name: Make checkpoint discovery fail open
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('experiments/emily-olivia-society/restore_latest_checkpoint.sh')
+          text = path.read_text()
+          old = '''mapfile -t candidate_runs < <(
+            gh api --method GET \\
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=30" \\
+              --jq '.workflow_runs[] | select(.status == "completed" and .conclusion == "success") | [.id, .conclusion, .head_sha] | @tsv'
+          )'''
+          new = '''candidate_runs_output=""
+          if ! candidate_runs_output="$(
+            gh api --method GET \\
+              "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \\
+              --jq ".workflow_runs[] | select(.path == \\\".github/workflows/${WORKFLOW_FILE}\\\" and .status == \\\"completed\\\" and .conclusion == \\\"success\\\") | [.id, .conclusion, .head_sha] | @tsv"
+          )"; then
+            echo "Checkpoint discovery unavailable; starting from clean cognition and social state."
+            reset_clean "checkpoint_discovery_unavailable"
+            exit 0
+          fi
+          candidate_runs=()
+          if [[ -n "$candidate_runs_output" ]]; then
+            mapfile -t candidate_runs <<< "$candidate_runs_output"
+          fi'''
+          if old not in text:
+              raise SystemExit('checkpoint candidate query block not found; refusing blind edit')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+          grep -q 'actions/runs?per_page=100' experiments/emily-olivia-society/restore_latest_checkpoint.sh
+          grep -q 'checkpoint_discovery_unavailable' experiments/emily-olivia-society/restore_latest_checkpoint.sh
+
+      - name: Commit checkpoint fix
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add experiments/emily-olivia-society/restore_latest_checkpoint.sh
+          git commit -m 'Make Community checkpoint discovery fail open'
+          for n in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then break; fi
+            git rebase --abort || true
+            sleep "$n"
+          done
+
+      - name: Start corrected Community runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          active="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" --jq '.workflow_runs[] | select(.path == ".github/workflows/emily-olivia-community-run.yml" and (.status == "in_progress" or .status == "queued" or .status == "pending")) | .id' | head -n1)"
+          if [ -n "$active" ]; then
+            echo "Community runtime already active as $active; preserving it."
+            exit 0
+          fi
+          gh workflow run emily-olivia-community-run.yml --repo "$GITHUB_REPOSITORY" --ref main -f opener=""
