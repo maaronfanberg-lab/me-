@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Alex with Emily + Olivia</title>
+<style>
+:root{color-scheme:dark;background:#0c0d10;color:#ececf1;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0b0c10,#11131a);min-height:100vh}.wrap{max-width:860px;margin:auto;padding:18px 18px 150px}.head{position:sticky;top:0;background:rgba(12,13,16,.9);backdrop-filter:blur(12px);padding:14px 0 12px;z-index:3}.title{font-size:22px;font-weight:700}.sub{font-size:13px;color:#9ca3af;margin-top:4px}.status{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12px;color:#aeb5c0}.dot{width:8px;height:8px;border-radius:50%;background:#6ee7b7;box-shadow:0 0 12px #6ee7b7}.feed{display:flex;flex-direction:column;gap:12px;padding:14px 0}.msg{max-width:82%;padding:12px 14px;border-radius:18px;line-height:1.45;box-shadow:0 5px 20px rgba(0,0,0,.22);white-space:pre-wrap}.emily{align-self:flex-start;background:#222635;border-bottom-left-radius:5px}.olivia{align-self:flex-end;background:#2c2133;border-bottom-right-radius:5px}.alex{align-self:center;background:#17322e;border:1px solid #285149;max-width:90%;border-radius:15px}.name{font-size:12px;font-weight:700;opacity:.82;margin-bottom:5px}.meta{font-size:11px;color:#a6adbb;margin-top:7px}.empty{padding:28px 16px;border:1px solid #2d313d;border-radius:16px;color:#9ca3af;background:#151821}.composer-shell{position:fixed;left:0;right:0;bottom:0;z-index:8;background:rgba(12,13,16,.96);backdrop-filter:blur(12px);border-top:1px solid #232733;padding:10px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}.composer{max-width:860px;margin:auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}.who{grid-column:1/-1;font-size:12px;color:#9ca3af}.who strong{color:#ececf1}.input{width:100%;min-height:48px;max-height:120px;resize:vertical;border:1px solid #333846;background:#171a22;color:#f5f5f5;border-radius:14px;padding:12px 13px;font:inherit;outline:none}.input:focus{border-color:#596276}.send{height:48px;border:0;border-radius:14px;padding:0 18px;background:#ececf1;color:#111318;font-weight:700;font-size:15px}.send:disabled{opacity:.45}.send-status{grid-column:1/-1;min-height:16px;font-size:11px;color:#9ca3af}.hint{font-size:11px;color:#7f8794;margin-top:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="title">Alex · Emily · Olivia</div>
+    <div class="sub">You are in their live Community as Alex.</div>
+    <div class="status"><span class="dot"></span><span id="status">Loading…</span></div>
+  </div>
+  <div id="feed" class="feed"></div>
+</div>
+<div class="composer-shell">
+  <div class="composer">
+    <div class="who"><strong>Alex</strong> <span class="hint">No prefix = both · @Emily = Emily · @Olivia = Olivia</span></div>
+    <textarea id="alexInput" class="input" maxlength="700" placeholder="Type to Emily and Olivia…"></textarea>
+    <button id="sendButton" class="send" type="button">Send</button>
+    <div id="sendStatus" class="send-status"></div>
+  </div>
+</div>
+<script>
+const rawBase='https://raw.githubusercontent.com/maaronfanberg-lab/me-/main/experiments/emily-olivia-society/replay/';
+const snapshotUrl=rawBase+'community_session.json';
+const apiSnapshotUrl='https://api.github.com/repos/maaronfanberg-lab/me-/contents/experiments/emily-olivia-society/replay/community_session.json?ref=main';
+const ntfyTopic='eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe';
+const ntfyUrl='https://ntfy.sh/'+ntfyTopic;
+let lastRenderedCount=0,lastGrowthAt=Date.now(),lastApiCheck=0,lastSessionId='',bestAgentMessages=[];
+
+function parseTarget(text){const value=String(text||'').trim();for(const pair of [['@Emily','Emily'],['@Olivia','Olivia']]){if(value.toLowerCase().startsWith(pair[0].toLowerCase()))return{recipient:pair[1],text:value.slice(pair[0].length).replace(/^[\s:,.\-]+/,'').trim()}}return{recipient:'Emily + Olivia',text:value}}
+function messageFrom(raw){if(!raw||typeof raw!=='object')return null;const speaker=raw.from_name||raw.speaker||raw.sender||raw.from;const text=raw.content||raw.message||raw.text||raw.utterance;const recipient=raw.to_name||raw.recipient||raw.to;const time=raw.created_at||raw.timestamp||raw.time||'';const name=String(speaker||'').trim();const body=String(text||'').trim();if(!/^(Emily|Olivia)$/i.test(name)||!body)return null;return{id:'agent-'+String(raw.id??name+'-'+body+'-'+time),speaker:name,text:body,recipient:recipient?String(recipient):'',time:String(time||''),sortTime:Date.parse(String(time||''))||0}}
+function dedupe(messages){const seen=new Set();return messages.filter(m=>{const k=m.id||m.speaker+'|'+m.text+'|'+m.time;if(seen.has(k))return false;seen.add(k);return true})}
+function snapshotMessages(data){const exact=Array.isArray(data&&data.messages)?data.messages.map(messageFrom).filter(Boolean):[];return dedupe(exact)}
+function nearBottom(){return window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-220}
+async function fetchText(url){const sep=url.includes('?')?'&':'?';const r=await fetch(url+sep+'t='+Date.now()+'&r='+Math.random(),{cache:'no-store'});if(!r.ok)throw new Error(String(r.status));return r.text()}
+function decodeBase64Utf8(value){const bin=atob(String(value||'').replace(/\s/g,''));const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));return new TextDecoder().decode(bytes)}
+async function fetchApiSnapshot(){lastApiCheck=Date.now();const r=await fetch(apiSnapshotUrl+'&t='+Date.now(),{cache:'no-store',headers:{accept:'application/vnd.github+json'}});if(!r.ok)throw new Error('api '+r.status);const envelope=await r.json();return JSON.parse(decodeBase64Utf8(envelope.content))}
+async function fetchAlexMessages(){try{const r=await fetch(ntfyUrl+'/json?poll=1&since=12h',{cache:'no-store'});if(!r.ok)throw new Error(String(r.status));const rows=(await r.text()).split(/\r?\n/).filter(Boolean).map(line=>{try{return JSON.parse(line)}catch(e){return null}}).filter(Boolean);return rows.filter(row=>row.event==='message'&&String(row.title||'')==='Alex').map(row=>{const parsed=parseTarget(row.message);return{id:'alex-'+row.id,speaker:'Alex',text:parsed.text,recipient:parsed.recipient,time:new Date(Number(row.time||0)*1000).toISOString(),sortTime:Number(row.time||0)*1000}}).filter(m=>m.text)}catch(e){return[]}}
+async function load(){const feed=document.getElementById('feed'),status=document.getElementById('status');const follow=lastRenderedCount===0||nearBottom();let agents=[],source='',sessionStatus='',sessionId='',data=null;try{data=JSON.parse(await fetchText(snapshotUrl));agents=snapshotMessages(data);sessionStatus=String(data&&data.status||'');sessionId=String(data&&data.session_id||'');if(agents.length)source=sessionStatus==='running'?'live Community':'persisted Community'}catch(e){}
+const now=Date.now();const rawStalled=sessionStatus==='running'&&agents.length>0&&(lastRenderedCount===0||agents.length<=bestAgentMessages.length&&now-lastGrowthAt>30000);if(rawStalled&&now-lastApiCheck>90000){try{const apiData=await fetchApiSnapshot();const apiMsgs=snapshotMessages(apiData);if(apiMsgs.length>agents.length){data=apiData;agents=apiMsgs;sessionStatus=String(apiData&&apiData.status||'');sessionId=String(apiData&&apiData.session_id||'');source='live Community · direct freshness fallback'}}catch(e){}}
+if(sessionId){if(sessionId!==lastSessionId){lastSessionId=sessionId;bestAgentMessages=agents.slice()}else if(agents.length<bestAgentMessages.length){agents=bestAgentMessages.slice()}else{bestAgentMessages=agents.slice()}}
+const alex=await fetchAlexMessages();let msgs=dedupe([...agents,...alex]).sort((a,b)=>(a.sortTime||0)-(b.sortTime||0));feed.innerHTML='';if(!msgs.length){feed.innerHTML='<div class="empty">Waiting for Emily, Olivia, or Alex to speak.</div>';status.textContent='Room live · waiting for a message';return}for(const m of msgs){const d=document.createElement('div');d.className='msg '+m.speaker.toLowerCase();d.innerHTML='<div class="name"></div><div class="text"></div><div class="meta"></div>';d.querySelector('.name').textContent=m.speaker;d.querySelector('.text').textContent=m.text;d.querySelector('.meta').textContent=[m.recipient?'to '+m.recipient:'',m.time?new Date(m.time).toLocaleTimeString():''].filter(Boolean).join(' · ');feed.appendChild(d)}const grew=msgs.length>lastRenderedCount;if(grew)lastGrowthAt=Date.now();lastRenderedCount=Math.max(lastRenderedCount,msgs.length);status.textContent=msgs.length+' visible messages · '+(source||'room feed')+' · checked '+new Date().toLocaleTimeString();if(follow&&grew)requestAnimationFrame(()=>window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'}))}
+
+async function sendAlex(){const input=document.getElementById('alexInput'),button=document.getElementById('sendButton'),sendStatus=document.getElementById('sendStatus');const text=input.value.trim();if(!text){sendStatus.textContent='Type a message first.';return}if(text.length>700){sendStatus.textContent='Keep the turn under 700 characters.';return}button.disabled=true;sendStatus.textContent='Sending as Alex…';try{const r=await fetch(ntfyUrl,{method:'POST',body:text,headers:{'Title':'Alex','Content-Type':'text/plain; charset=utf-8'}});if(!r.ok)throw new Error('HTTP '+r.status);await r.json();input.value='';sendStatus.textContent='Sent into the room as Alex.';await load()}catch(e){sendStatus.textContent='Could not send. Tap Send again.'}finally{button.disabled=false}}
+document.getElementById('sendButton').addEventListener('click',sendAlex);document.getElementById('alexInput').addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();sendAlex()}});
+load();setInterval(load,5000);
+</script>
+</body>
+</html>

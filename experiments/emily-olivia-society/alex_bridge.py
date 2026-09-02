@@ -3,18 +3,21 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 ALEX_ID = 3
 ALEX_NAME = "Alex"
-REPOSITORY = "maaronfanberg-lab/me-"
-ISSUE_NUMBER = 277
-ALEX_GITHUB_LOGIN = "maaronfanberg-lab"
 MAX_ALEX_TURN_CHARS = 700
-_API_ROOT = f"https://api.github.com/repos/{REPOSITORY}"
-_ACK_REACTION = "eyes"
+NTFY_ROOT = "https://ntfy.sh"
+DEFAULT_ALEX_TOPIC = "eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
+_ALEX_TITLE = "Alex"
+_ACK_TITLE = "AlexAck"
 
 
 @dataclass(frozen=True)
@@ -32,73 +35,133 @@ def _parse_target(body: str) -> tuple[str, str]:
     return "both", text
 
 
-class AlexBridgeClient:
-    """Treat comments on one dedicated GitHub issue as human Alex turns.
+def _iso_time(value: object) -> str:
+    try:
+        return datetime.fromtimestamp(float(value), tz=timezone.utc).isoformat()
+    except (TypeError, ValueError, OSError, OverflowError):
+        return datetime.now(timezone.utc).isoformat()
 
-    Only comments authored by the repository owner are accepted as Alex. After
-    a real Stanford-generated reply succeeds, the runner adds an eyes reaction
-    to the source comment. That reaction is the durable consume marker across
-    Community handoffs and requires no third-party queue deployment.
+
+class AlexBridgeClient:
+    """Use a tiny ntfy topic as Alex's browser-to-runner mailbox.
+
+    The topic is transport only. Emily and Olivia still process Alex through the
+    same Stanford observe -> remember -> retrieve -> reflect -> plan/react -> act
+    chain. Mailbox outages never terminate their autonomous Community run.
+
+    Consumed message ids are acknowledged back onto the same topic. A local ack
+    backlog prevents a transient ntfy write failure from replaying the same Alex
+    turn repeatedly during the current runner session; later polls retry the ack.
     """
 
     def __init__(self) -> None:
-        self.token = str(os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or "").strip()
-        self.enabled = bool(self.token)
+        self.topic = str(os.environ.get("COMMUNITY_ALEX_NTFY_TOPIC") or DEFAULT_ALEX_TOPIC).strip()
+        self.enabled = bool(self.topic)
+        self._locally_acked: set[str] = set()
+        self._ack_backlog: set[str] = set()
 
-    def _request(
-        self,
-        path: str,
-        *,
-        method: str = "GET",
-        body: dict | None = None,
-        reaction_api: bool = False,
-    ) -> object:
-        if not self.enabled:
-            raise RuntimeError("Alex GitHub doorway is unavailable without GH_TOKEN/GITHUB_TOKEN.")
-        data = None if body is None else json.dumps(body).encode("utf-8")
-        accept = "application/vnd.github+json"
-        request = urllib.request.Request(
-            _API_ROOT + path,
-            data=data,
-            method=method,
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Accept": accept,
-                "Content-Type": "application/json",
-                "User-Agent": "emily-olivia-community-runner",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=20) as response:
-                raw = response.read().decode("utf-8")
-                return json.loads(raw) if raw else {}
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:1200]
-            raise RuntimeError(f"Alex GitHub doorway HTTP {exc.code}: {detail}") from exc
-        except (urllib.error.URLError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"Alex GitHub doorway request failed: {exc}") from exc
+    @property
+    def topic_url(self) -> str:
+        quoted = urllib.parse.quote(self.topic, safe="")
+        return f"{NTFY_ROOT}/{quoted}"
 
-    def _comments(self) -> list[dict]:
+    def _request(self, request: urllib.request.Request) -> bytes:
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(request, timeout=12) as response:
+                    return response.read()
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")[:800]
+                last_error = RuntimeError(f"Alex mailbox HTTP {exc.code}: {detail}")
+                if exc.code < 500 and exc.code != 429:
+                    break
+            except urllib.error.URLError as exc:
+                last_error = RuntimeError(f"Alex mailbox request failed: {exc}")
+            if attempt < 2:
+                time.sleep(0.5 * (2**attempt))
+        if isinstance(last_error, RuntimeError):
+            raise last_error
+        raise RuntimeError("Alex mailbox request failed.")
+
+    def _poll_rows(self) -> list[dict]:
         if not self.enabled:
             return []
-        payload = self._request(
-            f"/issues/{ISSUE_NUMBER}/comments?per_page=100&sort=created&direction=asc"
+        url = f"{self.topic_url}/json?poll=1&since=all"
+        request = urllib.request.Request(
+            url,
+            method="GET",
+            headers={"Accept": "application/x-ndjson", "User-Agent": "emily-olivia-community-runner"},
         )
-        if not isinstance(payload, list):
-            raise RuntimeError("Alex GitHub doorway comments response is malformed.")
-        return [row for row in payload if isinstance(row, dict)]
+        raw = self._request(request).decode("utf-8", errors="replace")
+        rows: list[dict] = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict) and row.get("event") == "message":
+                rows.append(row)
+        return rows
+
+    def _publish(self, message: str, *, title: str) -> dict:
+        if not self.enabled:
+            raise RuntimeError("Alex direct room mailbox is not configured.")
+        request = urllib.request.Request(
+            self.topic_url,
+            data=str(message).encode("utf-8"),
+            method="POST",
+            headers={
+                "Title": title,
+                "Content-Type": "text/plain; charset=utf-8",
+                "User-Agent": "emily-olivia-community-runner",
+            },
+        )
+        raw = self._request(request).decode("utf-8", errors="replace")
+        payload = json.loads(raw) if raw.strip() else {}
+        if not isinstance(payload, dict):
+            raise RuntimeError("Alex mailbox publish returned malformed JSON.")
+        return payload
+
+    def _flush_ack_backlog(self) -> None:
+        for row_id in list(self._ack_backlog):
+            try:
+                payload = self._publish(row_id, title=_ACK_TITLE)
+            except Exception as exc:
+                print(f"WARNING: Alex mailbox ack retry deferred for {row_id}: {exc}", file=sys.stderr, flush=True)
+                continue
+            if str(payload.get("id", "")).strip():
+                self._ack_backlog.discard(row_id)
 
     def pending(self) -> list[dict]:
+        if not self.enabled:
+            return []
+        self._flush_ack_backlog()
+        try:
+            rows = self._poll_rows()
+        except Exception as exc:
+            print(f"WARNING: Alex mailbox poll unavailable; Emily and Olivia continue autonomously: {exc}", file=sys.stderr, flush=True)
+            return []
+
+        acknowledged = {
+            str(row.get("message", "")).strip()
+            for row in rows
+            if str(row.get("title", "")).strip() == _ACK_TITLE
+            and str(row.get("message", "")).strip()
+        }
+        acknowledged.update(self._locally_acked)
+
         clean: list[dict] = []
-        for row in self._comments():
-            author = str((row.get("user") or {}).get("login", ""))
-            row_id = str(row.get("id", "")).strip()
-            reactions = row.get("reactions") or {}
-            already_consumed = int(reactions.get(_ACK_REACTION, 0) or 0) > 0
-            if author != ALEX_GITHUB_LOGIN or not row_id or already_consumed:
+        for row in rows:
+            if str(row.get("title", "")).strip() != _ALEX_TITLE:
                 continue
-            target, text = _parse_target(str(row.get("body", "")))
+            row_id = str(row.get("id", "")).strip()
+            if not row_id or row_id in acknowledged:
+                continue
+            target, text = _parse_target(str(row.get("message", "")))
             if not text or len(text) > MAX_ALEX_TURN_CHARS:
                 continue
             clean.append(
@@ -107,8 +170,8 @@ class AlexBridgeClient:
                     "speaker": ALEX_NAME,
                     "text": text,
                     "target": target,
-                    "at": str(row.get("created_at", "")).strip(),
-                    "source_url": str(row.get("html_url", "")).strip(),
+                    "at": _iso_time(row.get("time")),
+                    "source_url": self.topic_url,
                 }
             )
         return clean
@@ -124,14 +187,20 @@ class AlexBridgeClient:
         clean = [str(value).strip() for value in ids if str(value).strip()]
         if not clean or not self.enabled:
             return {"acknowledged": 0}
+
         acknowledged = 0
         for row_id in clean:
-            payload = self._request(
-                f"/issues/comments/{row_id}/reactions",
-                method="POST",
-                body={"content": _ACK_REACTION},
-                reaction_api=True,
-            )
-            if isinstance(payload, dict) and payload.get("id"):
+            self._locally_acked.add(row_id)
+            try:
+                payload = self._publish(row_id, title=_ACK_TITLE)
+            except Exception as exc:
+                self._ack_backlog.add(row_id)
+                print(f"WARNING: Alex mailbox ack queued locally for {row_id}: {exc}", file=sys.stderr, flush=True)
+                acknowledged += 1
+                continue
+            if str(payload.get("id", "")).strip():
+                acknowledged += 1
+            else:
+                self._ack_backlog.add(row_id)
                 acknowledged += 1
         return {"acknowledged": acknowledged}
