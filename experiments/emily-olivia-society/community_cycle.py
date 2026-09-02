@@ -79,15 +79,15 @@ def _word_list(text: object) -> list[str]:
 
 def _is_social_reset(text: object, dialogue_history) -> bool:
     history = list(dialogue_history or [])
-    if len(history) < 2:
+    if not history:
         return False
     candidate = str(text or "").strip()
     if not (_SOCIAL_RESET_START.search(candidate) or _SOCIAL_CHECKIN.search(candidate)):
         return False
 
-    # Only call it an attractor after the recent conversation has already spent
-    # at least one turn in the same greeting/check-in basin. This preserves a
-    # natural opening while discouraging repeated re-openings.
+    # A live inbound means the conversation has already started. Treat a new
+    # greeting/check-in as a soft reset as soon as one prior turn occupied that
+    # same basin; the autonomous opener itself is exempt because it has no inbound.
     for _speaker, prior in history[-4:]:
         prior_text = str(prior or "").strip()
         if _SOCIAL_RESET_START.search(prior_text) or _SOCIAL_CHECKIN.search(prior_text):
