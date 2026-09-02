@@ -15,6 +15,7 @@ ALEX_ID = 3
 ALEX_NAME = "Alex"
 MAX_ALEX_TURN_CHARS = 700
 NTFY_ROOT = "https://ntfy.sh"
+DEFAULT_ALEX_TOPIC = "eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
 _ALEX_TITLE = "Alex"
 _ACK_TITLE = "AlexAck"
 
@@ -54,7 +55,7 @@ class AlexBridgeClient:
     """
 
     def __init__(self) -> None:
-        self.topic = str(os.environ.get("COMMUNITY_ALEX_NTFY_TOPIC") or "").strip()
+        self.topic = str(os.environ.get("COMMUNITY_ALEX_NTFY_TOPIC") or DEFAULT_ALEX_TOPIC).strip()
         self.enabled = bool(self.topic)
         self._locally_acked: set[str] = set()
         self._ack_backlog: set[str] = set()
