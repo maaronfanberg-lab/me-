@@ -46,6 +46,13 @@ _MEMORY_SCAFFOLD = re.compile(
     r"\[Fill\s+in\])",
     re.IGNORECASE,
 )
+_HARD_DIALOGUE_BLOCKERS = {
+    "empty_candidate",
+    "template_blank_residue",
+    "unfinished_cutoff",
+    "role_swapped_personal_fact",
+    "unsupported_concrete_biography",
+}
 
 
 def _has_pathological_repetition(text: str) -> bool:
@@ -145,7 +152,11 @@ def _generate_non_attractor_spoken_action(
             cognitive_context=cognitive_context,
             agent_name=agent.name,
         )
-        if blocker in {None, "mid_conversation_social_reset"}:
+        # Stanford's original iterative chat lets ordinary conversational
+        # repetition, fragments, greetings, and topic reuse pass through. Keep
+        # only boundary/integrity blockers here; stylistic refractory signals
+        # remain useful for diagnostics but must not stop the live toy.
+        if blocker not in _HARD_DIALOGUE_BLOCKERS:
             return text
         rejected.append(f"{blocker}: {text}")
     previews = " | ".join(repr(item[:240]) for item in rejected)
