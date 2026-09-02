@@ -203,8 +203,18 @@ def react_to_presence(agent, other_name: str, time_step: int) -> dict:
 
 
 def reaction_context(reaction: dict) -> str:
-    """Expose retrieved substance without leaking planner/control wording into speech."""
+    """Carry Stanford's current-event grounding plus retrieved substance into act.
+
+    ``agent_chat_v2`` supplies each utterance generator with the personas' actual
+    current actions before asking what to say next. In this map-free adapter the
+    selected social event is that current-action equivalent, so it must not be
+    dropped merely because retrieval returned no older memories.
+    """
+    parts: list[str] = []
+    event = str(reaction.get("event", "") or "").strip()
+    if event:
+        parts.append("Current observed social event: " + event)
     memories = [str(x).strip() for x in reaction.get("retrieved", []) if str(x).strip()]
-    if not memories:
-        return ""
-    return "Relevant retrieved memories: " + " | ".join(memories[:6])
+    if memories:
+        parts.append("Relevant retrieved memories: " + " | ".join(memories[:6]))
+    return "\n".join(parts)
