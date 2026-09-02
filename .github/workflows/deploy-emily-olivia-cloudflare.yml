@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: npx --yes wrangler@latest whoami
 
-      - name: Deploy read-only Community replay viewer
+      - name: Deploy Community viewer and Alex queue
         id: deploy
         working-directory: cloudflare/emily-olivia-community
         shell: bash
@@ -60,14 +60,17 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed URL: $url"
 
-      - name: Verify exact-replay surface and retired generator
+      - name: Verify replay, Alex entrance, and retired generator
         env:
           APP_URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
           curl -fsS --retry 8 --retry-delay 2 "$APP_URL/" | tee /tmp/viewer.html
-          grep -q 'Read-only live view of their persisted conversation' /tmp/viewer.html
+          grep -q 'Read-only live view' /tmp/viewer.html
+          curl -fsS --retry 8 --retry-delay 2 "$APP_URL/alex" | tee /tmp/alex.html
+          grep -q 'Emily + Olivia + Alex' /tmp/alex.html
+          grep -q 'Speak as Alex' /tmp/alex.html
           curl -fsS --retry 8 --retry-delay 2 "$APP_URL/state" | tee /tmp/state.json
           python3 -m json.tool /tmp/state.json >/dev/null
           code=$(curl -sS -o /tmp/start-retired.txt -w '%{http_code}' "$APP_URL/start")
@@ -78,9 +81,10 @@ jobs:
         env:
           APP_URL: ${{ steps.deploy.outputs.url }}
         run: |
-          echo "### Emily + Olivia Cloudflare viewer" >> "$GITHUB_STEP_SUMMARY"
-          echo "Read-only mirror of the persisted Stanford Community replay." >> "$GITHUB_STEP_SUMMARY"
+          echo "### Emily + Olivia Cloudflare Community" >> "$GITHUB_STEP_SUMMARY"
+          echo "Live mirror of the persisted Stanford Community replay plus the private Alex human-participant queue." >> "$GITHUB_STEP_SUMMARY"
           echo "No independent Cloudflare conversation generator is started." >> "$GITHUB_STEP_SUMMARY"
           echo "Viewer: $APP_URL/" >> "$GITHUB_STEP_SUMMARY"
+          echo "Alex entrance: $APP_URL/alex" >> "$GITHUB_STEP_SUMMARY"
           echo "Snapshot: $APP_URL/state" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact stream: $APP_URL/stream" >> "$GITHUB_STEP_SUMMARY"
