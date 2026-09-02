@@ -161,11 +161,15 @@ for candidate_info in "${candidate_runs[@]:-}"; do
     continue
   fi
 
-  artifact_count="$(
+  artifact_count=""
+  if ! artifact_count="$(
     gh api --method GET \
       "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
       --jq "[.artifacts[] | select(.name == \"$ARTIFACT_NAME\" and (.expired | not))] | length"
-  )"
+  )"; then
+    echo "Skipping checkpoint run $run_id: artifact lookup failed."
+    continue
+  fi
   if [[ "${artifact_count:-0}" -le 0 ]]; then
     continue
   fi
