@@ -59,12 +59,36 @@ jobs:
           )"
 
           if [ -n "$active" ]; then
-            echo "Emily + Olivia already have a Community runtime; preserving it without cancellation:"
-            echo "$active"
-            exit 0
+            if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+              outdated="$(printf '%s\n' "$active" | awk -v sha="$GITHUB_SHA" '$2 != sha {print $1}')"
+              if [ -n "$outdated" ]; then
+                echo "Community code changed; cancelling outdated Community runtime(s) so the repair is actually loaded:"
+                printf '%s\n' "$active"
+                while read -r run_id; do
+                  [ -n "$run_id" ] || continue
+                  gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" || true
+                done <<< "$outdated"
+                for _ in $(seq 1 30); do
+                  still_active="$(
+                    gh api --method GET "$runs_api" \
+                      --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending") | .id'
+                  )"
+                  [ -z "$still_active" ] && break
+                  sleep 2
+                done
+              else
+                echo "Emily + Olivia already have a Community runtime on this exact revision; preserving it."
+                printf '%s\n' "$active"
+                exit 0
+              fi
+            else
+              echo "Emily + Olivia already have a Community runtime; preserving it without cancellation:"
+              printf '%s\n' "$active"
+              exit 0
+            fi
           fi
 
-          echo "No active Emily + Olivia Community runtime exists; dispatching the next handoff now."
+          echo "Dispatching Emily + Olivia Community on current main."
           gh workflow run emily-olivia-community-run.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
