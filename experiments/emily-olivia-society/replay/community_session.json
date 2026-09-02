@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 1,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,158 @@
       "to_name": "Olivia",
       "content": "What's the weather like? Is it raining or sunny?",
       "created_at": "2026-09-02T02:06:57.388712+00:00"
+    },
+    {
+      "id": "alex-reply-43d0624cbfa94a7f8a18809c2204e2cb",
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 3,
+      "to_name": "Alex",
+      "content": "I don't know. It looks like it might be raining.",
+      "created_at": "2026-09-02T02:08:13.090832+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 2,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": "alex-l2PNH1njfeRy",
+          "from_id": 3,
+          "from_name": "Alex",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Hi",
+          "created_at": "2026-09-02T01:57:38+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Olivia observes a message from Alex: Hi",
+      "Olivia observes a message from Emily: What's the weather like? Is it raining or sunny?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "e012a6d5044b33a2d66c",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "e9cba82f9870fe85e0bd",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 3,
+      "content": "I don't know. It looks like it might be raining.",
+      "retrieved_memories": [
+        "Olivia observes a message from Alex: Hi",
+        "Olivia observes a message from Emily: What's the weather like? Is it raining or sunny?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "e012a6d5044b33a2d66c",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "e9cba82f9870fe85e0bd",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Alex",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": "alex-reply-43d0624cbfa94a7f8a18809c2204e2cb",
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 3,
+        "to_name": "Alex",
+        "content": "I don't know. It looks like it might be raining.",
+        "created_at": "2026-09-02T02:08:13.090832+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": {
+      "id": "l2PNH1njfeRy",
+      "speaker": "Alex",
+      "text": "Hi",
+      "target": "both",
+      "at": "2026-09-02T01:57:38+00:00",
+      "source_url": "https://ntfy.sh/eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
+    },
+    "interrupted_inbound": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "What's the weather like? Is it raining or sunny?",
+      "created_at": "2026-09-02T02:06:57.388712+00:00"
+    },
+    "continuation_relay": {
+      "success": true,
+      "message": {
+        "id": 2,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "I don't know. It looks like it might be raining.",
+        "created_at": "2026-09-02T02:08:13.090972+00:00"
+      }
+    },
+    "external_ack": {
+      "acknowledged": 1
+    }
+  }
 }
