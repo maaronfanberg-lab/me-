@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 1,
+  "completed_reply_turns": 2,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -80,6 +80,15 @@
       "to_name": "Emily",
       "content": "Oh, I'm so sorry for missing the message. How have you been? Is everything okay?",
       "created_at": "2026-09-02T16:08:52.491556+00:00"
+    },
+    {
+      "id": 3,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Thank you for reaching out. I was just looking at my phone to make sure everything is okay, and then I noticed we have a conversation here. Is everything all right?",
+      "created_at": "2026-09-02T16:09:29.887443+00:00"
     }
   ],
   "latest_turn": {
@@ -116,21 +125,64 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Oh, I'm so sorry for missing the message. How have you been? Is everything okay?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "de5f612151b52529f86e",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 70.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 4
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Thank you for reaching out. I was just looking at my phone to make sure everything is okay, and then I noticed we have a conversation here. Is everything all right?",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Oh, I'm so sorry for missing the message. How have you been? Is everything okay?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "de5f612151b52529f86e",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 70.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 4
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 3,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Thank you for reaching out. I was just looking at my phone to make sure everything is okay, and then I noticed we have a conversation here. Is everything all right?",
+        "created_at": "2026-09-02T16:09:29.887443+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"role_swapped_personal_fact: I'm so sorry that you missed the message. How have you been?\""
+    "external_generation_error": ""
   }
 }
