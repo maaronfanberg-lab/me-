@@ -1,7 +1,16 @@
 {
   "mode": "continuous_persistent_community_session",
-  "status": "running",
+  "status": "completed",
   "session_id": "1788310531-30a1447453",
+  "limits": {
+    "seed_messages": 1,
+    "requested_reply_turns": 8,
+    "maximum_reply_turns": 10,
+    "maximum_continuous_seconds": 19800,
+    "continuous_seconds": 17400,
+    "turn_delay_seconds": 0.0,
+    "autonomous_loop": true
+  },
   "resumed_social_state": false,
   "autonomous_opening": true,
   "discarded_pending_message_ids": [],
@@ -60,10 +69,10 @@
     "consumed_inbound": null
   },
   "completed_reply_turns": 4,
-  "continuous_seconds": 17400,
-  "turn_delay_seconds": 0.0,
-  "messages": [
-    {
+  "stop_reason": "speech_generation_deferred",
+  "seed": {
+    "success": true,
+    "message": {
       "id": 1,
       "from_id": 1,
       "from_name": "Emily",
@@ -71,35 +80,8 @@
       "to_name": "Olivia",
       "content": "Hi, how is it?",
       "created_at": "2026-09-02T00:56:08.981841+00:00"
-    },
-    {
-      "id": 2,
-      "from_id": 2,
-      "from_name": "Olivia",
-      "to_id": 1,
-      "to_name": "Emily",
-      "content": "Hi! How are you?",
-      "created_at": "2026-09-02T00:56:47.439436+00:00"
-    },
-    {
-      "id": 3,
-      "from_id": 1,
-      "from_name": "Emily",
-      "to_id": 2,
-      "to_name": "Olivia",
-      "content": "Hey, how's it going?",
-      "created_at": "2026-09-02T00:57:13.295696+00:00"
-    },
-    {
-      "id": 4,
-      "from_id": 2,
-      "from_name": "Olivia",
-      "to_id": 1,
-      "to_name": "Emily",
-      "content": "Hey Emily",
-      "created_at": "2026-09-02T00:58:06.946253+00:00"
     }
-  ],
+  },
   "latest_turn": {
     "agent": "Emily",
     "time_step": 5,
@@ -147,5 +129,43 @@
     "generation_deferred": true,
     "generation_attempts": 3,
     "generation_error": "Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'greeting-reset:Hey, how are you?' | 'greeting-reset:Hey Olivia!' | 'self-address:Hey Emily, how is it going?' || Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'greeting-reset:Hey, how\u2019re you?' | 'self-address:Hey Emily, how is it going?' | 'greeting-reset:Hey Olivia' || Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'greeting-reset:Hi, how is it going?' | 'greeting-reset:Hi Emily' | 'greeting-reset:Hi there! How are you doing?'"
-  }
+  },
+  "messages": [
+    {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hi, how is it?",
+      "created_at": "2026-09-02T00:56:08.981841+00:00"
+    },
+    {
+      "id": 2,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Hi! How are you?",
+      "created_at": "2026-09-02T00:56:47.439436+00:00"
+    },
+    {
+      "id": 3,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hey, how's it going?",
+      "created_at": "2026-09-02T00:57:13.295696+00:00"
+    },
+    {
+      "id": 4,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Hey Emily",
+      "created_at": "2026-09-02T00:58:06.946253+00:00"
+    }
+  ]
 }
