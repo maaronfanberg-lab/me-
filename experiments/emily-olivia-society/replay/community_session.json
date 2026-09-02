@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 2,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,117 @@
       "to_name": "Olivia",
       "content": "hi! my name is Emily, what is yours?",
       "created_at": "2026-09-02T06:23:43.207920+00:00"
+    },
+    {
+      "id": 2,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Hey Emily! It's cool to meet you too!",
+      "created_at": "2026-09-02T06:24:36.698931+00:00"
+    },
+    {
+      "id": 3,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hey, it's cool to meet you too!",
+      "created_at": "2026-09-02T06:25:34.941079+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Emily",
+    "time_step": 3,
+    "observation": {
+      "self": {
+        "id": 1,
+        "name": "Emily"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 2,
+          "from_id": 2,
+          "from_name": "Olivia",
+          "to_id": 1,
+          "to_name": "Emily",
+          "content": "Hey Emily! It's cool to meet you too!",
+          "created_at": "2026-09-02T06:24:36.698931+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Hey Emily! It's cool to meet you too!"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "0c62ca74fbb68510770c",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 4
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Hey, it's cool to meet you too!",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Hey Emily! It's cool to meet you too!"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "0c62ca74fbb68510770c",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 4
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 3,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Hey, it's cool to meet you too!",
+        "created_at": "2026-09-02T06:25:34.941079+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": null,
+    "interrupted_inbound": null,
+    "continuation_relay": null,
+    "external_ack": null
+  }
 }
