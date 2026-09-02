@@ -1,0 +1,15 @@
+{
+  "model": "claude-sonnet-5",
+  "max_tokens": 2600,
+  "system": "You are Claude collaborating on a live autonomous-agent toy. Be concrete and repository-aware. Prefer the smallest change that restores continuous natural conversation. Do not invent dialogue. Preserve memory/retrieval and malformed-output/control-scaffold guards, but do not let harmless conversational heuristics terminate the live toy.",
+  "prompt": "Diagnose the Emily/Olivia conversation-flow failure in maaronfanberg-lab/me-. Run #163 stopped after four replies because generated ordinary lines such as 'Hey, Olivia! How's your day going?' were rejected by conversational guards and process_one_reply eventually returned action type wait, reason speech_generation_deferred. community_session.py treats any non-message action as a reason to break the continuous loop. Stanford's original agent_chat_v2 does not ban greetings after N turns and alternates generated utterances until the model itself returns end=true. Recommend the exact minimal patch, with file/function names. Specifically answer: (1) which greeting/reset or attractor guard should be removed or weakened; (2) whether speech_generation_deferred should terminate continuous mode; (3) which guards are worth retaining; (4) whether recent-turn-driven retrieval from Stanford v2 should replace heuristic conversational grounding. No canned fallback dialogue and no strict lexical-overlap rule.",
+  "context": [
+    "Run #163 rejected ordinary candidates as greeting-reset in dialogue_boundary_guard.py. Its _is_mid_conversation_greeting_reset returns true for ANY candidate starting hi/hello/hey once history has at least 4 turns, regardless of whether the line then contains real substance.",
+    "dialogue_attractor.py has a second social-reset heuristic that is narrower, plus echo/recurrence/role-swap/unsupported-biography checks.",
+    "paper_act_adapter.py validates malformed/control/service drift, plan/memory echo, completeness, and other structural failures. Inner generation is 6 completion requests / 4 unique candidates.",
+    "stanford_native_cycle.py outer structural resamples are capped at 1. first_exchange.py retries recoverable speech failures 3 times, then returns action wait / speech_generation_deferred without consuming inbound.",
+    "community_session.py currently increments completed, persists the wait turn, then breaks the entire continuous loop whenever action.type != message.",
+    "Exact failure included greeting-reset on 'Hey, Olivia! How's your day going?' and 'Oh, hi! Just going on about my day. You? How's it going?', plus one legitimate self-address rejection 'Hey, Emily! What are you up to?'.",
+    "Pinned Stanford source: joonspk-research/generative_agents commit fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4 converse.py agent_chat_v2. Each speaker retrieves around partner name, summarizes relationship, forms last_chat from curr_chat[-4:], retrieves from relationship + partner act + last_chat, calls generate_one_utterance(..., curr_chat), appends the utterance, alternates, and breaks only on generated end flag."
+  ]
+}
