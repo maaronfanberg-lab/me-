@@ -1,0 +1,13 @@
+{
+  "model": "claude-haiku-4.5",
+  "max_tokens": 2200,
+  "system": "You are Claude collaborating on a live autonomous-agent toy. Be concrete and repository-aware. Prefer the smallest change that restores continuous natural conversation. Do not invent dialogue.",
+  "prompt": "Diagnose the Emily/Olivia live conversation failure. Ordinary replies are being rejected by greeting/reset heuristics, then first_exchange returns speech_generation_deferred, and community_session terminates the whole continuous loop on that non-message action. Stanford agent_chat_v2 instead uses recent chat as retrieval context and alternates utterances without heuristic greeting bans. Give an exact minimal patch: which greeting guard to remove/weaken, how deferred generation should behave in continuous mode, which safety/structural guards to keep, and whether Stanford recent-chat-driven retrieval should replace brittle conversational heuristics. No canned fallback dialogue.",
+  "context": [
+    "dialogue_boundary_guard.py: _is_mid_conversation_greeting_reset rejects any candidate starting hi/hello/hey after 4 history rows. Run #163 rejected 'Hey, Olivia! How's your day going?' as greeting-reset.",
+    "dialogue_attractor.py contains another narrower social-reset heuristic plus repetition and factual-grounding checks.",
+    "first_exchange.py returns wait/speech_generation_deferred after recoverable generation retries, with consumed_inbound=false.",
+    "community_session.py increments completed, persists that wait, and immediately breaks continuous mode for any action.type != message.",
+    "Stanford Generative Agents converse.py agent_chat_v2 uses curr_chat[-4:] as retrieval focal context and only stops when generated end flag is true."
+  ]
+}
