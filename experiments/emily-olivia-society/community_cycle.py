@@ -17,14 +17,13 @@ import paper_act_adapter as _paper
 import stanford_native_cycle as _native
 
 # The pinned Stanford conversation path accepts the model's next conversational
-# line and only ends when the conversation logic says to end. Keep hard boundary
-# checks for malformed/control output, identity drift, and unsupported external
-# claims, but do not let local conversational-style heuristics veto harmless
-# references, greetings, or short echoes until the same 10B sample is exhausted.
+# line and only ends when the conversation logic says to end. Keep local style
+# heuristics from vetoing harmless references, greetings, or short echoes, while
+# retaining the paper adapter's private-plan and retrieved-memory leak guards.
+# Private cognition may influence a spoken act, but must never be read aloud as
+# serialized plan/memory text.
 _paper._is_ungrounded_short_reference = lambda text, inbound: False
 _paper._is_recent_echo = lambda text, dialogue_history: False
-_paper._is_private_plan_echo = lambda text, cognitive_context: False
-_paper._is_retrieved_memory_echo = lambda text, cognitive_context: False
 _boundary._is_mid_conversation_greeting_reset = lambda text, dialogue_history: False
 _boundary._has_mid_turn_greeting_reset = lambda text, dialogue_history: False
 _boundary._is_short_recent_echo = lambda text, dialogue_history: False
