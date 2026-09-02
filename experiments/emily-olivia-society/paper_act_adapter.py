@@ -30,8 +30,8 @@ import community_cycle_base as _base
 
 _RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
 _MAX_HISTORY_TURNS = 12
-_MAX_UNIQUE_ACT_ATTEMPTS = 8
-_MAX_COMPLETION_REQUESTS = 20
+_MAX_UNIQUE_ACT_ATTEMPTS = 4
+_MAX_COMPLETION_REQUESTS = 6
 
 _PEER_META_DRIFT = re.compile(
     r"(?:generate\s+(?:the\s+)?dialogue|fictional\s+interaction|"
@@ -154,7 +154,7 @@ def _request_completion(
     previous_hit_limit: bool = False,
 ) -> tuple[str, bool]:
     port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
-    timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "900"))
+    timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "45"))
     base_tokens = min(128, max(24, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
     extra_tokens = 16 * min(4, max(0, request_index)) if previous_hit_limit else 0
     max_tokens = min(128, base_tokens + extra_tokens)
