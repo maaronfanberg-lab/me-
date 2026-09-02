@@ -37,9 +37,11 @@ _native.generate_spoken_action = _boundary.install_spoken_action_guard(_native.g
 # Identity drift must never be published. Social resets should merely trigger
 # another stochastic sample. Critically, social-reset filtering is fail-open:
 # if every valid Stanford sample is still a greeting, speak the first valid one
-# rather than turning anti-repetition into a stall.
+# rather than turning anti-repetition into a stall. The underlying paper sampler
+# already performs bounded stochastic resampling, so this outer guard gets one
+# pass only; continuous mode retries a deferred turn without ending the session.
 _identity_base_generate = _native.generate_spoken_action
-_IDENTITY_ATTEMPTS = 8
+_IDENTITY_ATTEMPTS = 1
 _SOCIAL_RESET_START = re.compile(r"^\s*(?:hi|hello|hey|oh\s*,?\s*(?:hi|hello|hey))\b", re.IGNORECASE)
 _SOCIAL_CHECKIN = re.compile(r"\bhow\s+are\s+you(?:\s+doing)?(?:\s+today)?\b", re.IGNORECASE)
 _SERVICE_ASSISTANT = re.compile(
@@ -151,7 +153,7 @@ def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound
 
         # If a live peer just addressed the agent, claiming to be talking to
         # oneself contradicts the observed social state. Treat this like identity
-        # drift: resample and never publish the contradictory line.
+        # drift: reject it and let continuous mode retry the same unconsumed turn.
         if _claims_impossible_self_conversation(text, inbound, other):
             rejected_identity.append("self-conversation:" + str(text)[:160])
             continue
@@ -166,8 +168,7 @@ def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound
 
         # A new session may restore historical dialogue for semantic continuity,
         # but its autonomous opener has no inbound turn. Do not misclassify that
-        # legitimate first act as a mid-conversation greeting reset and spend up
-        # to eight expensive BitNet generations trying to escape it. Refractory
+        # legitimate first act as a mid-conversation greeting reset. Refractory
         # resampling only applies when there is an actual live inbound message.
         if str(inbound or "").strip() and (
             _is_social_reset(text, dialogue_history)
