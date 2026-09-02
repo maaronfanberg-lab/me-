@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 1,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,158 @@
       "to_name": "Olivia",
       "content": "Hi, Olivia. It's a lovely day, isn't it?",
       "created_at": "2026-09-02T11:00:58.945721+00:00"
+    },
+    {
+      "id": "alex-reply-7f66867d8b1a4f989eb0f91e14c8d5ed",
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 3,
+      "to_name": "Alex",
+      "content": "I don't like that",
+      "created_at": "2026-09-02T11:01:54.182414+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 2,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": "alex-kezwOOjAhXNl",
+          "from_id": 3,
+          "from_name": "Alex",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Bye Olivia. Have a crappy day\n\ud83d\udca9",
+          "created_at": "2026-09-02T10:54:09+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Olivia observes a message from Alex: Bye Olivia. Have a crappy day\n\ud83d\udca9",
+      "Olivia observes a message from Emily: Hi, Olivia. It's a lovely day, isn't it?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "9d7158fa1321c5867afd",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "f6223443a1f0f5e72cb7",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 3,
+      "content": "I don't like that",
+      "retrieved_memories": [
+        "Olivia observes a message from Alex: Bye Olivia. Have a crappy day\n\ud83d\udca9",
+        "Olivia observes a message from Emily: Hi, Olivia. It's a lovely day, isn't it?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "9d7158fa1321c5867afd",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "f6223443a1f0f5e72cb7",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Alex",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": "alex-reply-7f66867d8b1a4f989eb0f91e14c8d5ed",
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 3,
+        "to_name": "Alex",
+        "content": "I don't like that",
+        "created_at": "2026-09-02T11:01:54.182414+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": {
+      "id": "kezwOOjAhXNl",
+      "speaker": "Alex",
+      "text": "Bye Olivia. Have a crappy day\n\ud83d\udca9",
+      "target": "both",
+      "at": "2026-09-02T10:54:09+00:00",
+      "source_url": "https://ntfy.sh/eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
+    },
+    "interrupted_inbound": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hi, Olivia. It's a lovely day, isn't it?",
+      "created_at": "2026-09-02T11:00:58.945721+00:00"
+    },
+    "continuation_relay": {
+      "success": true,
+      "message": {
+        "id": 2,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "I don't like that",
+        "created_at": "2026-09-02T11:01:54.182540+00:00"
+      }
+    },
+    "external_ack": {
+      "acknowledged": 1
+    }
+  }
 }
