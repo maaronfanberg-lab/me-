@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 5,
+  "completed_reply_turns": 6,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -116,6 +116,15 @@
       "to_name": "Emily",
       "content": "Wow, that's amazing! What movie are you watching now? \ud83d\ude0a",
       "created_at": "2026-09-02T19:59:52.868668+00:00"
+    },
+    {
+      "id": 7,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh wow, you're talking about what movie that is! That sounds interesting!",
+      "created_at": "2026-09-02T20:02:49.746298+00:00"
     }
   ],
   "latest_turn": {
@@ -152,21 +161,108 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Hello! How are you doing tonight? \ud83d\ude0a I was just watching some movie, and I'm really enjoying it. What about you?",
+      "Emily observes a message from Olivia: How was the movie you are watching?",
+      "Emily observes a message from Olivia: Wow, that's amazing! What movie are you watching now? \ud83d\ude0a"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "3730c0b30d70647a1713",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "bf50a4191fdb7cc124e7",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 30.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "3a9debb3acb386f4e766",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 7,
+        "stanford_last_retrieved": 7,
+        "observed_time_step": 8
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh wow, you're talking about what movie that is! That sounds interesting!",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Hello! How are you doing tonight? \ud83d\ude0a I was just watching some movie, and I'm really enjoying it. What about you?",
+        "Emily observes a message from Olivia: How was the movie you are watching?",
+        "Emily observes a message from Olivia: Wow, that's amazing! What movie are you watching now? \ud83d\ude0a"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "3730c0b30d70647a1713",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "bf50a4191fdb7cc124e7",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 30.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "3a9debb3acb386f4e766",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 7,
+          "stanford_last_retrieved": 7,
+          "observed_time_step": 8
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 7,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh wow, you're talking about what movie that is! That sounds interesting!",
+        "created_at": "2026-09-02T20:02:49.746298+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"role_swapped_personal_fact: Wow, that's amazing! I don't know if I could watch it again right now. Would you be interested in seeing it with me? \ud83d\ude0a\""
+    "external_generation_error": ""
   }
 }
