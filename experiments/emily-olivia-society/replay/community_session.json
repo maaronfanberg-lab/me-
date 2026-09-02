@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 1,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,141 @@
       "to_name": "Olivia",
       "content": "Hi. Are you Olivia?",
       "created_at": "2026-09-02T11:47:21.050846+00:00"
+    },
+    {
+      "id": 2,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Hi there! Yeah, that's me. How are you doing?",
+      "created_at": "2026-09-02T11:48:02.300600+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 2,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 1,
+          "from_id": 1,
+          "from_name": "Emily",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Hi. Are you Olivia?",
+          "created_at": "2026-09-02T11:47:21.050846+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Hi. Are you Olivia?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "d73aec30417704d2c6db",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 1,
+      "content": "Hi there! Yeah, that's me. How are you doing?",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Hi. Are you Olivia?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "d73aec30417704d2c6db",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 2,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Hi there! Yeah, that's me. How are you doing?",
+        "created_at": "2026-09-02T11:48:02.300600+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": {
+      "id": "kyPEHhK6c5LB",
+      "speaker": "Alex",
+      "text": "Haha! Very funny! I like you!",
+      "target": "both",
+      "at": "2026-09-02T11:46:53+00:00",
+      "source_url": "https://ntfy.sh/eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
+    },
+    "external_action": {
+      "type": "message",
+      "recipient_id": 3,
+      "content": "Alex, I'm so glad we could talk! I never thought you'd see me again.",
+      "retrieved_memories": [],
+      "retrieved_memory_evidence": [],
+      "cognition": {
+        "reaction": "chat with Alex",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "external_action_result": {
+      "success": true,
+      "message": {
+        "id": "alex-reply-7e1b457b46d34adeab2e6c77c323f36c",
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 3,
+        "to_name": "Alex",
+        "content": "Alex, I'm so glad we could talk! I never thought you'd see me again.",
+        "created_at": "2026-09-02T11:47:40.190118+00:00"
+      }
+    },
+    "external_ack": {
+      "acknowledged": 1
+    },
+    "external_generation_error": ""
+  }
 }
