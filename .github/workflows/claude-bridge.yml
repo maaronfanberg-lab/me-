@@ -59,11 +59,7 @@ jobs:
         id: claude
         continue-on-error: true
         run: |
-          # The bridge script verifies the resolved model via OTEL. Auto routing
-          # repeatedly selected MAI, so pin the documented Copilot Claude model
-          # in the runner copy before invoking the same audited bridge path.
           if [ -z "$ANTHROPIC_API_KEY" ]; then
-            sed -i 's/"--model",[[:space:]]*$/"--model",/' bridge/claude_bridge.py || true
             sed -i '0,/"auto",/s//"claude-sonnet-4.6",/' bridge/claude_bridge.py
           fi
           python3 bridge/claude_bridge.py '${{ steps.request.outputs.file }}' '${{ steps.request.outputs.out }}'
@@ -73,6 +69,9 @@ jobs:
         shell: bash
         run: |
           test -f '${{ steps.request.outputs.out }}' || { echo 'No response file produced'; exit 1; }
+          # Ask Claude patches the runner copy only. Restore that tracked helper
+          # before rebasing so live replay commits cannot strand the outbox.
+          git checkout -- bridge/claude_bridge.py || true
           git config user.name 'claude-bridge-bot'
           git config user.email 'actions@users.noreply.github.com'
           git add '${{ steps.request.outputs.out }}'
