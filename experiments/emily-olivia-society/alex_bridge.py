@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -33,6 +34,16 @@ def _parse_target(body: str) -> tuple[str, str]:
             cleaned = text[len(prefix):].lstrip(" :,.-\n\t")
             return target, cleaned
     return "both", text
+
+
+def _has_semantic_payload(text: str) -> bool:
+    """Ignore transport/test punctuation without rejecting emoji-only Alex turns."""
+    value = str(text or "").strip()
+    if not value:
+        return False
+    if re.search(r"\w", value, flags=re.UNICODE):
+        return True
+    return any(ord(char) > 127 and not char.isspace() for char in value)
 
 
 def _iso_time(value: object) -> str:
@@ -162,7 +173,7 @@ class AlexBridgeClient:
             if not row_id or row_id in acknowledged:
                 continue
             target, text = _parse_target(str(row.get("message", "")))
-            if not text or len(text) > MAX_ALEX_TURN_CHARS:
+            if not text or len(text) > MAX_ALEX_TURN_CHARS or not _has_semantic_payload(text):
                 continue
             clean.append(
                 {
