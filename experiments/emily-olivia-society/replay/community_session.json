@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 1,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,158 @@
       "to_name": "Olivia",
       "content": "Oh, hey. What are you doing here?",
       "created_at": "2026-09-02T01:28:39.054857+00:00"
+    },
+    {
+      "id": "alex-reply-1c305400faec4cd281c8473d99b394c5",
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 3,
+      "to_name": "Alex",
+      "content": "Hello, how are you?",
+      "created_at": "2026-09-02T01:30:10.287063+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 2,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": "alex-IDCrBEKyz2gD",
+          "from_id": 3,
+          "from_name": "Alex",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Hi, I\u2019m Alex.",
+          "created_at": "2026-09-02T01:24:18+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Olivia observes a message from Alex: Hi, I\u2019m Alex.",
+      "Olivia observes a message from Emily: Oh, hey. What are you doing here?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "349eed239b60b1364ddd",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "7df121fa9356edd728dd",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 3,
+      "content": "Hello, how are you?",
+      "retrieved_memories": [
+        "Olivia observes a message from Alex: Hi, I\u2019m Alex.",
+        "Olivia observes a message from Emily: Oh, hey. What are you doing here?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "349eed239b60b1364ddd",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "7df121fa9356edd728dd",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Alex",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": "alex-reply-1c305400faec4cd281c8473d99b394c5",
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 3,
+        "to_name": "Alex",
+        "content": "Hello, how are you?",
+        "created_at": "2026-09-02T01:30:10.287063+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": {
+      "id": "IDCrBEKyz2gD",
+      "speaker": "Alex",
+      "text": "Hi, I\u2019m Alex.",
+      "target": "both",
+      "at": "2026-09-02T01:24:18+00:00",
+      "source_url": "https://ntfy.sh/eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
+    },
+    "interrupted_inbound": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, hey. What are you doing here?",
+      "created_at": "2026-09-02T01:28:39.054857+00:00"
+    },
+    "continuation_relay": {
+      "success": true,
+      "message": {
+        "id": 2,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Hello, how are you?",
+        "created_at": "2026-09-02T01:30:10.287212+00:00"
+      }
+    },
+    "external_ack": {
+      "acknowledged": 1
+    }
+  }
 }
