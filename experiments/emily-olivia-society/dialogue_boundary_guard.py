@@ -194,7 +194,6 @@ def install_spoken_action_guard(generator):
                 (_has_unsupported_demographic_claim(text, agent), "unsupported-demographic"),
                 (_has_refusal_handoff(text), "refusal-handoff"),
                 (_has_mid_turn_greeting_reset(text, dialogue_history), "mid-turn-greeting-reset"),
-                (_is_mid_conversation_greeting_reset(text, dialogue_history), "greeting-reset"),
                 (_is_nominal_fragment(text), "nominal-fragment"),
                 (_contradicts_observed_presence(text, getattr(other, "name", ""), support), "presence-contradiction"),
                 (_has_unsupported_movement_premise(text, support), "unsupported-movement"),
