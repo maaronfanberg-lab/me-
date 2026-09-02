@@ -1,0 +1,15 @@
+{
+  "nonce": "emily-olivia-oracle-20260902-auto-v2",
+  "prompt": "Review the following autonomous two-agent dialogue control problem. We need to prevent repetitive greeting/check-in or single-topic conversational attractors without recreating multiplicative retry stalls. Recommend the smallest principled control change. Do not propose canned dialogue or phrase-specific replacements.",
+  "context": [
+    "The live path is observe -> remember -> retrieve -> reflect -> plan/react -> act, grounded in the pinned Stanford Generative Agents source.",
+    "Previous nested retry layers could multiply to hundreds of model completions for one turn. Those outer retry multipliers were reduced to one pass.",
+    "The current social refractory wrapper detects repeated greetings, short semantic echoes, and service-assistant stance, but with only one attempt it cannot resample a soft rejection and therefore fails open immediately.",
+    "A current replay also shows a different attractor: an unsupported party premise is introduced and then repeatedly reinforced because later memory retrieval treats prior dialogue as evidence.",
+    "Hard identity contradictions must never publish. Soft social-attractor filtering must never stall the continuous session. No hand-written/canned dialogue fallback is allowed.",
+    "Candidate repair under consideration: permit exactly one additional stochastic sample at exactly one layer, return the first structurally valid sample if both soft-fail, and leave every other retry layer at one pass."
+  ],
+  "expected_response": "State whether the two-sample single-layer refractory design is sound. Identify any hidden liveness or grounding failure it leaves. Recommend the safest exact location for the retry and give concrete falsification tests for throughput, identity, grounding, and conversational variety.",
+  "copilot_models": ["auto"],
+  "max_tokens": 1800
+}
