@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 1,
+  "completed_reply_turns": 2,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -80,6 +80,15 @@
       "to_name": "Emily",
       "content": "Oh, that's a great idea! I'd love to go swimming with you. What do you think?",
       "created_at": "2026-09-02T19:42:48.095690+00:00"
+    },
+    {
+      "id": 3,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Okay, it's a good idea! Where will we go swimming? I want to pick the best place. Maybe we can also get a massage or something like that.",
+      "created_at": "2026-09-02T19:43:41.701811+00:00"
     }
   ],
   "latest_turn": {
@@ -116,21 +125,64 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Oh, that's a great idea! I'd love to go swimming with you. What do you think?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "370b99052d39dc880c0a",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 4
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Okay, it's a good idea! Where will we go swimming? I want to pick the best place. Maybe we can also get a massage or something like that.",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Oh, that's a great idea! I'd love to go swimming with you. What do you think?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "370b99052d39dc880c0a",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 4
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 3,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Okay, it's a good idea! Where will we go swimming? I want to pick the best place. Maybe we can also get a massage or something like that.",
+        "created_at": "2026-09-02T19:43:41.701811+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'unsupported-setting:Oh, I actually have to work at the bar tonight. Do you want to come with me?'"
+    "external_generation_error": ""
   }
 }
