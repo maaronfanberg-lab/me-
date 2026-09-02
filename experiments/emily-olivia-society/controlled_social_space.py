@@ -12,7 +12,7 @@ STATE_VERSION = 1
 
 
 class ControlledSocialSpace(EnvBase):
-    """Two-agent social boundary built with AgentSociety 2 environment tools."""
+    """Small registered social boundary built with AgentSociety 2 tools."""
 
     def __init__(
         self,
@@ -20,13 +20,13 @@ class ControlledSocialSpace(EnvBase):
         state_path: str | Path | None = None,
     ):
         super().__init__()
-        if len(agent_id_name_pairs) != 2:
-            raise ValueError("ControlledSocialSpace requires exactly two agents.")
+        if len(agent_id_name_pairs) < 2:
+            raise ValueError("ControlledSocialSpace requires at least two participants.")
         self._names = {int(agent_id): str(name) for agent_id, name in agent_id_name_pairs}
-        if len(self._names) != 2:
-            raise ValueError("Agent IDs must be unique.")
+        if len(self._names) != len(agent_id_name_pairs):
+            raise ValueError("Participant IDs must be unique.")
         if any(not name.strip() for name in self._names.values()):
-            raise ValueError("Agent names must be non-empty.")
+            raise ValueError("Participant names must be non-empty.")
 
         self._state_path = Path(state_path) if state_path is not None else None
         self._inboxes: dict[int, list[dict]] = {agent_id: [] for agent_id in self._names}
@@ -36,25 +36,26 @@ class ControlledSocialSpace(EnvBase):
 
     @classmethod
     def description(cls) -> str:
-        return "A private-by-default two-agent social space with addressed messaging."
+        return "A private-by-default registered social space with addressed messaging."
 
     @classmethod
     def init_description(cls) -> str:
         return """ControlledSocialSpace
 
-A two-agent social environment built with AgentSociety 2 EnvBase and @tool.
+A registered social environment built with AgentSociety 2 EnvBase and @tool.
 
 Available tools:
-- observe_social_space(agent_id): read-only; returns participant names and that agent's addressed inbox.
-- send_message(agent_id, recipient_id, content): mutating; sends one explicit message to the other registered participant.
+- observe_social_space(agent_id): read-only; returns participant names and that participant's addressed inbox.
+- send_message(agent_id, recipient_id, content): mutating; sends one explicit message to another registered participant.
 - consume_message(agent_id, message_id): mutating; removes one addressed message after it has been processed.
 
+Only Emily and Olivia have autonomous cognition. Alex is a registered external human participant.
 Private cognition workspaces and memory files are not exposed by this environment.
 """
 
     def _require_agent(self, agent_id: int) -> None:
         if agent_id not in self._names:
-            raise ValueError(f"Unknown agent id: {agent_id}")
+            raise ValueError(f"Unknown participant id: {agent_id}")
 
     def _validate_message(self, message: object, expected_to: int) -> dict:
         if not isinstance(message, dict):
@@ -97,7 +98,7 @@ Private cognition workspaces and memory files are not exposed by this environmen
         for agent_id in self._names:
             raw_inbox = inboxes.get(str(agent_id), [])
             if not isinstance(raw_inbox, list):
-                raise ValueError(f"Inbox for agent {agent_id} must be a list.")
+                raise ValueError(f"Inbox for participant {agent_id} must be a list.")
             restored[agent_id] = []
             for raw_message in raw_inbox:
                 message = self._validate_message(raw_message, agent_id)
@@ -144,7 +145,7 @@ Private cognition workspaces and memory files are not exposed by this environmen
         self._require_agent(agent_id)
         self._require_agent(recipient_id)
         if agent_id == recipient_id:
-            raise ValueError("Agents may not send social messages to themselves.")
+            raise ValueError("Participants may not send social messages to themselves.")
 
         text = str(content).strip()
         if not text:

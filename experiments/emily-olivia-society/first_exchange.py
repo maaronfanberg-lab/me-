@@ -8,8 +8,11 @@ import os
 import re
 import selectors
 import subprocess
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
+from alex_bridge import ALEX_ID, ALEX_NAME, AlexBridgeClient, AlexParticipant
 from community_cycle import (
     load_agents,
     observation_text,
@@ -42,6 +45,7 @@ class SocialBridgeClient:
         if not 1 <= self.rpc_timeout <= 300:
             raise RuntimeError("COMMUNITY_SOCIAL_RPC_TIMEOUT must be between 1 and 300 seconds.")
 
+        self.alex = AlexBridgeClient()
         bridge_env = os.environ.copy()
         bridge_env.setdefault("AGENTSOCIETY_LLM_API_KEY", "local-no-api-key")
         self.proc = subprocess.Popen(
@@ -123,6 +127,12 @@ class SocialBridgeClient:
             {"op": "consume", "agent_id": agent_id, "message_id": message_id}
         )
 
+    async def first_alex_for(self, agent_name: str) -> dict | None:
+        return self.alex.first_for(agent_name)
+
+    async def acknowledge_alex(self, queue_id: str) -> dict:
+        return self.alex.ack([queue_id])
+
     def _force_stop(self) -> None:
         if self.proc.poll() is not None:
             return
@@ -186,6 +196,27 @@ def _recoverable_speech_failure(exc: RuntimeError) -> bool:
     return any(marker in message for marker in _RECOVERABLE_SPEECH_FAILURE_MARKERS)
 
 
+def _alex_observation(base: dict, agent, item: dict) -> dict:
+    participants = list(base.get("participants", []) or [])
+    if not any(int(row.get("id", -1)) == ALEX_ID for row in participants if isinstance(row, dict)):
+        participants.append({"id": ALEX_ID, "name": ALEX_NAME})
+    return {
+        "self": dict(base.get("self", {"id": agent.agent_id, "name": agent.name})),
+        "participants": participants,
+        "inbox": [
+            {
+                "id": f"alex-{item['id']}",
+                "from_id": ALEX_ID,
+                "from_name": ALEX_NAME,
+                "to_id": agent.agent_id,
+                "to_name": agent.name,
+                "content": item["text"],
+                "created_at": item.get("at") or datetime.now(timezone.utc).isoformat(),
+            }
+        ],
+    }
+
+
 async def process_one_reply(
     agent,
     other,
@@ -195,6 +226,37 @@ async def process_one_reply(
 ) -> dict:
     observation = await social.observe_social_space(agent.agent_id)
     inbox = observation.get("inbox", [])
+    alex_item = await social.first_alex_for(agent.name)
+    interrupted_inbound = None
+    partner = other
+
+    if alex_item is not None:
+        # Alex entering the room interrupts the currently pending peer reply. The
+        # agent still observes/remembers that peer line before it is consumed, so
+        # nothing already spoken disappears from cognition merely because a human
+        # joined the conversation.
+        if inbox:
+            interrupted_inbound = dict(inbox[-1])
+            interrupted_memory = observation_text(agent, observation)
+            if not _memory_already_present(agent, interrupted_memory):
+                agent.brain.remember(interrupted_memory, time_step=time_step)
+            interrupted_consume = await social.consume_message(agent.agent_id, int(interrupted_inbound["id"]))
+            if interrupted_consume.get("success") is not True:
+                raise RuntimeError(f"Failed to consume interrupted peer message for {agent.name}.")
+        observation = _alex_observation(observation, agent, alex_item)
+        inbox = observation["inbox"]
+        partner = AlexParticipant()
+        if dialogue_history is not None:
+            human_line = (ALEX_NAME, str(alex_item["text"]))
+            if not dialogue_history or dialogue_history[-1] != human_line:
+                dialogue_history.append(human_line)
+        if str(alex_item.get("target")) == "both":
+            other_memory = f"{other.name} observes a message from Alex: {alex_item['text']}"
+            if not _memory_already_present(other, other_memory):
+                other.brain.remember(other_memory, time_step=time_step)
+                _coerce_memory_importance(other)
+                other.brain.save(str(other.workspace))
+
     if not inbox:
         return {"agent": agent.name, "action": {"type": "wait", "reason": "no_new_message"}}
 
@@ -212,7 +274,7 @@ async def process_one_reply(
     action = None
     for _speech_attempt in range(_MAX_RECOVERABLE_SPEECH_ATTEMPTS):
         try:
-            action = choose_action(agent, observation, other, dialogue_history=dialogue_history)
+            action = choose_action(agent, observation, partner, dialogue_history=dialogue_history)
             break
         except RuntimeError as exc:
             if not _recoverable_speech_failure(exc):
@@ -230,6 +292,8 @@ async def process_one_reply(
             "action": {"type": "wait", "reason": "speech_generation_deferred"},
             "action_result": None,
             "consumed_inbound": False,
+            "external_inbound": alex_item,
+            "interrupted_inbound": interrupted_inbound,
             "generation_deferred": True,
             "generation_attempts": _MAX_RECOVERABLE_SPEECH_ATTEMPTS,
             "generation_error": " || ".join(generation_errors),
@@ -242,18 +306,49 @@ async def process_one_reply(
 
     result = None
     consumed = False
+    relay_result = None
+    alex_ack = None
     if action["type"] == "message":
-        result = await social.send_message(
-            agent.agent_id,
-            int(action["recipient_id"]),
-            str(action["content"]),
-        )
-        if not isinstance(result, dict) or result.get("success") is not True:
-            raise RuntimeError(f"Message delivery failed for {agent.name}.")
-        consume_result = await social.consume_message(agent.agent_id, int(latest["id"]))
-        if consume_result.get("success") is not True:
-            raise RuntimeError(f"Message consume failed for {agent.name}.")
-        consumed = True
+        if alex_item is not None:
+            # Alex is human, so there is no autonomous recipient process to send
+            # into. Persist the real Stanford act as the delivered reply to Alex,
+            # and relay the same spoken line to the other autonomous participant
+            # so the group conversation continues naturally on the next turn.
+            result = {
+                "success": True,
+                "message": {
+                    "id": f"alex-reply-{uuid.uuid4().hex}",
+                    "from_id": agent.agent_id,
+                    "from_name": agent.name,
+                    "to_id": ALEX_ID,
+                    "to_name": ALEX_NAME,
+                    "content": str(action["content"]),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            }
+            relay_result = await social.send_message(
+                agent.agent_id,
+                other.agent_id,
+                str(action["content"]),
+            )
+            if not isinstance(relay_result, dict) or relay_result.get("success") is not True:
+                raise RuntimeError(f"Failed to keep the room conversation moving after {agent.name} replied to Alex.")
+            alex_ack = await social.acknowledge_alex(str(alex_item["id"]))
+            if int(alex_ack.get("acknowledged", 0) or 0) < 1:
+                raise RuntimeError("Alex turn was answered but could not be acknowledged.")
+            consumed = True
+        else:
+            result = await social.send_message(
+                agent.agent_id,
+                int(action["recipient_id"]),
+                str(action["content"]),
+            )
+            if not isinstance(result, dict) or result.get("success") is not True:
+                raise RuntimeError(f"Message delivery failed for {agent.name}.")
+            consume_result = await social.consume_message(agent.agent_id, int(latest["id"]))
+            if consume_result.get("success") is not True:
+                raise RuntimeError(f"Message consume failed for {agent.name}.")
+            consumed = True
 
     agent.brain.save(str(agent.workspace))
 
@@ -266,6 +361,10 @@ async def process_one_reply(
         "action": action,
         "action_result": result,
         "consumed_inbound": consumed,
+        "external_inbound": alex_item,
+        "interrupted_inbound": interrupted_inbound,
+        "continuation_relay": relay_result,
+        "external_ack": alex_ack,
     }
 
 

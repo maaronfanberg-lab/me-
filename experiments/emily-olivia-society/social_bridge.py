@@ -20,7 +20,10 @@ MAX_REQUEST_CHARS = 32_768
 
 
 async def main() -> None:
-    pairs = [(1, "Emily"), (2, "Olivia")]
+    # Emily and Olivia remain the only autonomous agents. Alex is registered so
+    # a human turn can cross the same addressed social boundary and be observed
+    # by their Stanford cognition without inventing an Alex brain.
+    pairs = [(1, "Emily"), (2, "Olivia"), (3, "Alex")]
     social = ControlledSocialSpace(pairs, state_path=SOCIAL_STATE)
 
     for raw in sys.stdin:
