@@ -29,6 +29,15 @@ _RECOVERABLE_SPEECH_FAILURE_MARKERS = (
     "paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary",
     "repeatedly hit structural dialogue blockers after",
     "paper-derived Stanford act failed the dialogue boundary",
+    "paper-derived Stanford act produced no usable spoken line after",
+    "Remote end closed connection without response",
+    "BitNet paper-act completion request failed",
+    "BitNet paper-act completion HTTP 408",
+    "BitNet paper-act completion HTTP 429",
+    "BitNet paper-act completion HTTP 500",
+    "BitNet paper-act completion HTTP 502",
+    "BitNet paper-act completion HTTP 503",
+    "BitNet paper-act completion HTTP 504",
 )
 
 
@@ -231,10 +240,6 @@ async def process_one_reply(
     partner = other
 
     if alex_item is not None:
-        # Alex entering the room interrupts the currently pending peer reply. The
-        # agent still observes/remembers that peer line before it is consumed, so
-        # nothing already spoken disappears from cognition merely because a human
-        # joined the conversation.
         if inbox:
             interrupted_inbound = dict(inbox[-1])
             interrupted_memory = observation_text(agent, observation)
@@ -266,10 +271,6 @@ async def process_one_reply(
         agent.brain.remember(memory, time_step=time_step)
     _coerce_memory_importance(agent)
 
-    # No authored fallback is used. A recoverable speech-boundary exhaustion
-    # keeps the exact inbound unread and retries the full Stanford-derived act
-    # on that same turn. Only after a bounded number of fresh stochastic passes
-    # do we defer the message for a later pulse/run.
     generation_errors: list[str] = []
     action = None
     for _speech_attempt in range(_MAX_RECOVERABLE_SPEECH_ATTEMPTS):
@@ -299,8 +300,6 @@ async def process_one_reply(
             "generation_error": " || ".join(generation_errors),
         }
 
-    # The act itself carries the exact filtered Stanford reaction retrieval that
-    # reached the speech prompt. Do not run a second retrieval just for reporting.
     relevant = list(action.get("retrieved_memories", []) or [])
     retrieval_metadata = list(action.get("retrieved_memory_evidence", []) or [])
 
@@ -310,10 +309,6 @@ async def process_one_reply(
     alex_ack = None
     if action["type"] == "message":
         if alex_item is not None:
-            # Alex is human, so there is no autonomous recipient process to send
-            # into. Persist the real Stanford act as the delivered reply to Alex,
-            # and relay the same spoken line to the other autonomous participant
-            # so the group conversation continues naturally on the next turn.
             result = {
                 "success": True,
                 "message": {
