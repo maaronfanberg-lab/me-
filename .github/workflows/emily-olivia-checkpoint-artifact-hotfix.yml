@@ -1,0 +1,79 @@
+name: Emily Olivia checkpoint artifact hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/emily-olivia-checkpoint-artifact-hotfix.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  patch-and-restart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+
+      - name: Make per-run artifact lookup fail open
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('experiments/emily-olivia-society/restore_latest_checkpoint.sh')
+          text = path.read_text()
+          old = '''  artifact_count="$(
+    gh api --method GET \\
+      "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \\
+      --jq "[.artifacts[] | select(.name == \\\"$ARTIFACT_NAME\\\" and (.expired | not))] | length"
+  )"
+  if [[ "${artifact_count:-0}" -le 0 ]]; then
+    continue
+  fi'''
+          new = '''  artifact_count=""
+  if ! artifact_count="$(
+    gh api --method GET \\
+      "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \\
+      --jq "[.artifacts[] | select(.name == \\\"$ARTIFACT_NAME\\\" and (.expired | not))] | length"
+  )"; then
+    echo "Skipping checkpoint run $run_id: artifact lookup failed."
+    continue
+  fi
+  if [[ "${artifact_count:-0}" -le 0 ]]; then
+    continue
+  fi'''
+          if old not in text:
+              raise SystemExit('artifact lookup block not found; refusing blind edit')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+          grep -q 'artifact lookup failed' experiments/emily-olivia-society/restore_latest_checkpoint.sh
+
+      - name: Commit checkpoint artifact fix
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add experiments/emily-olivia-society/restore_latest_checkpoint.sh
+          git commit -m 'Skip unavailable checkpoint artifacts'
+          for n in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then break; fi
+            git rebase --abort || true
+            sleep "$n"
+          done
+
+      - name: Start corrected Community runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          active="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" --jq '.workflow_runs[] | select(.path == ".github/workflows/emily-olivia-community-run.yml" and (.status == "in_progress" or .status == "queued" or .status == "pending")) | .id' | head -n1)"
+          if [ -n "$active" ]; then
+            echo "Community runtime already active as $active; preserving it."
+            exit 0
+          fi
+          gh workflow run emily-olivia-community-run.yml --repo "$GITHUB_REPOSITORY" --ref main -f opener=""
