@@ -32,7 +32,7 @@ observation_text = _base.observation_text
 next_community_time_step = _base.next_community_time_step
 latest_community_time_step = _base.latest_community_time_step
 
-_MAX_ATTRACTOR_RESAMPLES = 1
+_MAX_ATTRACTOR_RESAMPLES = 2
 _INNER_EXHAUSTION_MARKER = "paper-derived Stanford act produced no usable spoken line after"
 _CONTROL_SCAFFOLD = re.compile(
     r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
@@ -149,7 +149,15 @@ def _generate_non_attractor_spoken_action(
     inbound: str,
     cognitive_context: str,
 ) -> str:
+    """Prefer a novel Stanford sample, but never let novelty filtering stall a turn.
+
+    Structural/integrity failures still fail closed. Repetition, greeting resets,
+    and recurring-topic attractors are soft refractory signals: they earn one
+    extra stochastic sample, then the first otherwise-valid Stanford line is
+    allowed through if no better sample appears.
+    """
     rejected: list[str] = []
+    soft_fallback: str | None = None
     for _attempt in range(_MAX_ATTRACTOR_RESAMPLES):
         try:
             text = generate_spoken_action(
@@ -166,6 +174,8 @@ def _generate_non_attractor_spoken_action(
             continue
 
         if _is_exact_same_speaker_repeat(text, dialogue_history, agent.name):
+            if soft_fallback is None:
+                soft_fallback = text
             rejected.append(f"exact_same_speaker_repeat: {text}")
             continue
 
@@ -176,13 +186,22 @@ def _generate_non_attractor_spoken_action(
             cognitive_context=cognitive_context,
             agent_name=agent.name,
         )
-        # Stanford's original iterative chat lets ordinary conversational
-        # repetition, fragments, greetings, and topic reuse pass through. Keep
-        # only boundary/integrity blockers here; stylistic refractory signals
-        # remain useful for diagnostics but must not stop the live toy.
-        if blocker not in _HARD_DIALOGUE_BLOCKERS:
+        if blocker is None:
             return text
-        rejected.append(f"{blocker}: {text}")
+        if blocker in _HARD_DIALOGUE_BLOCKERS:
+            rejected.append(f"{blocker}: {text}")
+            continue
+
+        if soft_fallback is None:
+            soft_fallback = text
+        rejected.append(f"soft_{blocker}: {text}")
+
+    # Critical liveness guarantee: semantic/style refractory checks may improve
+    # variety, but they are never allowed to turn a valid Stanford utterance into
+    # a dead turn. If both samples fall into the same harmless attractor, speak.
+    if soft_fallback is not None:
+        return soft_fallback
+
     previews = " | ".join(repr(item[:240]) for item in rejected)
     raise RuntimeError(
         f"{agent.name} repeatedly hit structural dialogue blockers after "
