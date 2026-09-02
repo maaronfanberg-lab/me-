@@ -6,10 +6,12 @@ Upstream research source:
   commit fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4
   Apache-2.0
 
-The original paper's conversation path generates the next line by ending the
-prompt at ``<persona name>: "`` and completing that line. This adapter keeps
-that research-derived boundary while using the current Community's Stanford HCI
-memory/retrieval/reflection state.
+Stanford's ``agent_chat_v2`` path generates one utterance at a time with the
+``iterative_convo_v1`` task frame: persona state, retrieved memory, current
+context, the conversation so far, and an explicit question asking what the
+current persona should say to the target persona next. This map-free adapter
+keeps that speaker/target grounding while preserving the Community's raw
+completion boundary and Stanford HCI memory/retrieval/reflection state.
 
 There are no authored example replies or canned fallbacks. Rejected outputs are
 resampled from the same research-derived prompt. Sampling state changes across
@@ -122,19 +124,26 @@ def _history_text(dialogue_history, other_name: str, inbound: str) -> str:
 
 
 def _paper_prompt(agent, other, dialogue_history, inbound: str, cognitive_context: str) -> str:
-    """Adapt the paper's generate_next_convo_line_v1 template."""
+    """Adapt Stanford ``agent_chat_v2`` iterative-conversation task framing."""
     history = _history_text(dialogue_history, other.name, inbound)
     context = str(cognitive_context or "").strip()
     if not context:
         context = "No additional retrieved information is available."
-    transcript = history + ("\n" if history else "")
+    transcript = history if history else "(The conversation has not started yet.)"
     return (
-        f"Here is some basic information about {agent.name}.\n"
+        "Context for the task:\n\n"
+        "PART 1.\n"
         f"{_identity(agent)}\n\n"
-        "===\n"
-        f"Following is a conversation between {agent.name} and {other.name}.\n\n"
-        f"{transcript}\n"
-        f"(Note -- This is the only information that {agent.name} has: {context})\n\n"
+        f"Here is the memory that is in {agent.name}'s head:\n"
+        f"{context}\n\n"
+        "PART 2.\n"
+        "Current Location: private two-person community\n\n"
+        "Current Context:\n"
+        f"{agent.name} and {other.name} are chatting.\n\n"
+        f"{agent.name} and {other.name} are chatting. Here is their conversation so far:\n"
+        f"{transcript}\n\n"
+        "---\n"
+        f"Task: Given the above, what should {agent.name} say to {other.name} next in the conversation?\n\n"
         f'{agent.name}: "'
     )
 
