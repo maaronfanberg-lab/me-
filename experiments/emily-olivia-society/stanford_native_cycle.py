@@ -32,7 +32,7 @@ observation_text = _base.observation_text
 next_community_time_step = _base.next_community_time_step
 latest_community_time_step = _base.latest_community_time_step
 
-_MAX_ATTRACTOR_RESAMPLES = 2
+_MAX_ATTRACTOR_RESAMPLES = 1
 _INNER_EXHAUSTION_MARKER = "paper-derived Stanford act produced no usable spoken line after"
 _CONTROL_SCAFFOLD = re.compile(
     r"(?:<\|(?:assistant|user|system|endoftext|im_start|im_end)[^>]*\|?>|"
@@ -152,9 +152,9 @@ def _generate_non_attractor_spoken_action(
     """Prefer a novel Stanford sample, but never let novelty filtering stall a turn.
 
     Structural/integrity failures still fail closed. Repetition, greeting resets,
-    and recurring-topic attractors are soft refractory signals: they earn one
-    extra stochastic sample, then the first otherwise-valid Stanford line is
-    allowed through if no better sample appears.
+    and recurring-topic attractors are soft refractory signals. The inner paper
+    sampler already performs bounded stochastic sampling; this outer layer gets
+    one pass so it cannot recreate a multiplicative retry stall.
     """
     rejected: list[str] = []
     soft_fallback: str | None = None
@@ -198,7 +198,7 @@ def _generate_non_attractor_spoken_action(
 
     # Critical liveness guarantee: semantic/style refractory checks may improve
     # variety, but they are never allowed to turn a valid Stanford utterance into
-    # a dead turn. If both samples fall into the same harmless attractor, speak.
+    # a dead turn. If the one sample is a harmless attractor, speak it.
     if soft_fallback is not None:
         return soft_fallback
 
