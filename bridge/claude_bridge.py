@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-opus-4-6"
+COPILOT_CLAUDE_MODEL = "claude-sonnet-4.6"
 AUTO_ATTEMPTS = 3
 
 
@@ -187,7 +188,7 @@ def ask_copilot_verified_claude(data, prompt):
                     "-p",
                     envelope,
                     "--model",
-                    "auto",
+                    COPILOT_CLAUDE_MODEL,
                     "--output-format",
                     "json",
                     "--no-ask-user",
@@ -207,6 +208,7 @@ def ask_copilot_verified_claude(data, prompt):
             attempts.append({
                 "attempt": attempt,
                 "returncode": proc.returncode,
+                "requested_model": COPILOT_CLAUDE_MODEL,
                 "resolved_models": models,
                 "had_response": bool(response),
             })
@@ -214,7 +216,7 @@ def ask_copilot_verified_claude(data, prompt):
             if proc.returncode == 0 and response and _all_models_are_claude(models):
                 return {
                     "ok": True,
-                    "transport": "github-copilot-auto-verified-by-otel",
+                    "transport": "github-copilot-explicit-claude-verified-by-otel",
                     "model": models[-1],
                     "resolved_models": models,
                     "response": response,
@@ -222,11 +224,11 @@ def ask_copilot_verified_claude(data, prompt):
                 }
 
     summary = "; ".join(
-        f"attempt {item['attempt']}: models={item['resolved_models'] or ['unverified']} rc={item['returncode']}"
+        f"attempt {item['attempt']}: requested={item['requested_model']} models={item['resolved_models'] or ['unverified']} rc={item['returncode']}"
         for item in attempts
     )
     raise RuntimeError(
-        "Copilot auto-routing produced no telemetry-verified Claude answer after "
+        "Explicit Copilot Claude routing produced no telemetry-verified Claude answer after "
         f"{AUTO_ATTEMPTS} attempts; discarded every unverified/non-Claude response. {summary}"
     )
 
