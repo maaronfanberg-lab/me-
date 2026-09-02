@@ -145,7 +145,7 @@ def _generate_non_attractor_spoken_action(
             cognitive_context=cognitive_context,
             agent_name=agent.name,
         )
-        if blocker is None:
+        if blocker in {None, "mid_conversation_social_reset"}:
             return text
         rejected.append(f"{blocker}: {text}")
     previews = " | ".join(repr(item[:240]) for item in rejected)
