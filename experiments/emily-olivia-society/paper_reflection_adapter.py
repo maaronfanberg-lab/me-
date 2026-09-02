@@ -17,8 +17,8 @@ from reflection_generation import install_natural_reflection_parser
 from reflection_hygiene import sanitize_memory_stream
 
 _RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
-_DEFAULT_THRESHOLD = 150.0
-_LEGACY_LOW_THRESHOLD_MAX = 20.0
+_TWO_PERSON_THRESHOLD = 24.0
+_THRESHOLD_PROFILE = "two-person-v1"
 _EMPTY_EMBEDDING_ERROR = "Input text must be a non-empty string."
 _MAX_REFLECTION_ATTEMPTS = 1
 
@@ -52,34 +52,47 @@ def _reflection_count(agent) -> int:
 
 
 def maybe_reflect(agent, time_step: int) -> bool:
-    """Run Stanford reflection after paper-scale accumulated importance.
+    """Run Stanford reflection at a cadence scaled for a two-agent world.
 
-    Natural declarative model output is parsed by the guarded local reflection
-    adapter, while malformed, structured, prompt-shaped, or question-shaped
-    output is still removed by memory hygiene. A stochastic pass gets one chance
-    on the current turn; if it yields no clean insight, dialogue continues and
-    the reflection watermark remains unchanged so a later turn can try again.
+    The original paper's large-environment accumulation threshold is too sparse
+    here because each persona receives only a narrow stream of social events.
+    We preserve the same importance-accumulation mechanism but scale its trigger
+    to this environment. Reflection remains strictly non-blocking: failure to
+    produce a clean insight never prevents the current dialogue turn.
     """
     scratch = agent.brain.scratch
     last_step = int(scratch.get("reflection_last_step", 0) or 0)
-    try:
-        threshold = float(
-            scratch.get("reflection_importance_threshold", _DEFAULT_THRESHOLD)
-        )
-    except (TypeError, ValueError):
-        threshold = _DEFAULT_THRESHOLD
-    if threshold <= _LEGACY_LOW_THRESHOLD_MAX:
-        threshold = _DEFAULT_THRESHOLD
+
+    # Migrate existing large-world threshold state once, instead of letting a
+    # persisted 150-point value suppress reflection indefinitely in this toy.
+    if scratch.get("reflection_threshold_profile") != _THRESHOLD_PROFILE:
+        threshold = _TWO_PERSON_THRESHOLD
+    else:
+        try:
+            threshold = float(
+                scratch.get("reflection_importance_threshold", _TWO_PERSON_THRESHOLD)
+            )
+        except (TypeError, ValueError):
+            threshold = _TWO_PERSON_THRESHOLD
+        if threshold <= 0:
+            threshold = _TWO_PERSON_THRESHOLD
 
     fresh = [
-        node for node in _latest_nodes(agent, 24)
+        node for node in _latest_nodes(agent, 32)
         if int(getattr(node, "created", 0) or 0) > last_step
     ]
     accumulated = sum(_importance(node) for node in fresh)
     if not fresh or accumulated < threshold:
+        agent.brain.update_scratch(
+            {
+                "reflection_importance_threshold": threshold,
+                "reflection_threshold_profile": _THRESHOLD_PROFILE,
+                "reflection_research_source": _RESEARCH_COMMIT,
+            }
+        )
         return False
 
-    anchor_parts = [str(getattr(node, "content", "")).strip() for node in fresh[-8:]]
+    anchor_parts = [str(getattr(node, "content", "")).strip() for node in fresh[-10:]]
     anchor_parts = [part for part in anchor_parts if part]
     if not anchor_parts:
         return False
@@ -101,9 +114,10 @@ def maybe_reflect(agent, time_step: int) -> bool:
                 retrieval_count=min(12, max(1, total_memories)),
                 time_step=time_step,
             )
-        except ValueError as exc:
-            if str(exc) != _EMPTY_EMBEDDING_ERROR:
-                raise
+        except (ValueError, RuntimeError):
+            # Reflection is enrichment, never a liveness gate. Hygiene below
+            # still removes malformed partial output before the turn continues.
+            succeeded = False
         finally:
             sanitize_memory_stream(agent.brain.memory_stream)
 
@@ -113,6 +127,7 @@ def maybe_reflect(agent, time_step: int) -> bool:
 
     scratch_update = {
         "reflection_importance_threshold": threshold,
+        "reflection_threshold_profile": _THRESHOLD_PROFILE,
         "reflection_research_source": _RESEARCH_COMMIT,
     }
     if succeeded:
