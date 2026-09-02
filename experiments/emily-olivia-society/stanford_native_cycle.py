@@ -122,6 +122,25 @@ def _cognitive_context(reaction: dict, plan_context: str) -> str:
     return reaction_context(reaction).strip()
 
 
+def _is_exact_same_speaker_repeat(text: str, dialogue_history, agent_name: str) -> bool:
+    """Reject only literal same-speaker loops, not ordinary topical repetition.
+
+    Stanford's iterative chat permits natural reuse of greetings, fragments, and
+    topics. What it does not require us to preserve is a local sampler emitting
+    the exact same line for the same persona over and over. Keep this check
+    deliberately narrow so it cannot become another stylistic dialogue filter.
+    """
+    candidate = tuple(_base._normalize_words(str(text or "")))
+    if not candidate:
+        return False
+    for speaker, prior in reversed(list(dialogue_history or [])[-12:]):
+        if str(speaker).strip() != agent_name:
+            continue
+        if tuple(_base._normalize_words(str(prior))) == candidate:
+            return True
+    return False
+
+
 def _generate_non_attractor_spoken_action(
     agent: CommunityAgent,
     other: CommunityAgent,
@@ -143,6 +162,10 @@ def _generate_non_attractor_spoken_action(
             if _INNER_EXHAUSTION_MARKER not in str(exc):
                 raise
             rejected.append(f"inner_sampler_exhaustion: {str(exc)[:220]}")
+            continue
+
+        if _is_exact_same_speaker_repeat(text, dialogue_history, agent.name):
+            rejected.append(f"exact_same_speaker_repeat: {text}")
             continue
 
         blocker = candidate_dialogue_blocker(
