@@ -1,0 +1,66 @@
+name: Switch Emily Olivia to Alex Room
+
+on:
+  push:
+    paths:
+      - '.github/workflows/emily-olivia-switch-to-alex.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: emily-olivia-alex-switch
+  cancel-in-progress: true
+
+jobs:
+  switch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel old Community runtime and start one Alex-enabled successor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow='emily-olivia-community-run.yml'
+          runs_api="repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?per_page=30"
+
+          mapfile -t active < <(
+            gh api --method GET "$runs_api" \
+              --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending") | .id'
+          )
+
+          if [ "${#active[@]}" -gt 1 ]; then
+            echo "Refusing switch: found ${#active[@]} active Community runs: ${active[*]}" >&2
+            exit 1
+          fi
+
+          if [ "${#active[@]}" -eq 1 ]; then
+            old="${active[0]}"
+            echo "Cancelling old Community run $old"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${old}/cancel"
+
+            for _ in $(seq 1 60); do
+              status="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs/${old}" --jq '.status')"
+              if [ "$status" = "completed" ]; then
+                break
+              fi
+              sleep 5
+            done
+
+            status="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs/${old}" --jq '.status')"
+            if [ "$status" != "completed" ]; then
+              echo "Old Community run $old did not stop in time" >&2
+              exit 1
+            fi
+          fi
+
+          remaining="$(gh api --method GET "$runs_api" --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending")] | length')"
+          if [ "$remaining" != "0" ]; then
+            echo "Refusing duplicate dispatch: $remaining Community run(s) still active" >&2
+            exit 1
+          fi
+
+          echo "Dispatching one Alex-enabled Community run from current main"
+          gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref main -f opener=""
