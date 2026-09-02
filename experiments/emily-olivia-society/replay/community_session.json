@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 0,
+  "completed_reply_turns": 1,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -71,7 +71,158 @@
       "to_name": "Olivia",
       "content": "Hey, I've never really liked chocolate. What is the deal with it?",
       "created_at": "2026-09-02T02:42:57.850015+00:00"
+    },
+    {
+      "id": "alex-reply-74f5f25ea3f04f1b96af8c931106b269",
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 3,
+      "to_name": "Alex",
+      "content": "I'm just fine",
+      "created_at": "2026-09-02T02:44:08.416805+00:00"
     }
   ],
-  "latest_turn": null
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 2,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": "alex-Xak4EyrTAVtp",
+          "from_id": 3,
+          "from_name": "Alex",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Hi I\u2019m Alex.",
+          "created_at": "2026-09-02T02:38:12+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [
+      "Olivia observes a message from Alex: Hi I\u2019m Alex.",
+      "Olivia observes a message from Emily: Hey, I've never really liked chocolate. What is the deal with it?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "cb95c5f068ef4c54ee26",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "6747e317fb57866f9a80",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 20.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 3
+      }
+    ],
+    "action": {
+      "type": "message",
+      "recipient_id": 3,
+      "content": "I'm just fine",
+      "retrieved_memories": [
+        "Olivia observes a message from Alex: Hi I\u2019m Alex.",
+        "Olivia observes a message from Emily: Hey, I've never really liked chocolate. What is the deal with it?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "cb95c5f068ef4c54ee26",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "6747e317fb57866f9a80",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 20.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 3
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Alex",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
+    },
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": "alex-reply-74f5f25ea3f04f1b96af8c931106b269",
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 3,
+        "to_name": "Alex",
+        "content": "I'm just fine",
+        "created_at": "2026-09-02T02:44:08.416805+00:00"
+      }
+    },
+    "consumed_inbound": true,
+    "external_inbound": {
+      "id": "Xak4EyrTAVtp",
+      "speaker": "Alex",
+      "text": "Hi I\u2019m Alex.",
+      "target": "both",
+      "at": "2026-09-02T02:38:12+00:00",
+      "source_url": "https://ntfy.sh/eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
+    },
+    "interrupted_inbound": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hey, I've never really liked chocolate. What is the deal with it?",
+      "created_at": "2026-09-02T02:42:57.850015+00:00"
+    },
+    "continuation_relay": {
+      "success": true,
+      "message": {
+        "id": 2,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "I'm just fine",
+        "created_at": "2026-09-02T02:44:08.416956+00:00"
+      }
+    },
+    "external_ack": {
+      "acknowledged": 1
+    }
+  }
 }
