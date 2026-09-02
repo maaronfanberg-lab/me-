@@ -24,7 +24,10 @@ HERE = Path(__file__).resolve().parent
 REPLAY_DIR = HERE / "replay"
 AGENTSOCIETY_PYTHON = HERE / ".venv-agentsociety" / "bin" / "python"
 BRIDGE = HERE / "social_bridge.py"
-_MAX_RECOVERABLE_SPEECH_ATTEMPTS = 3
+# The paper sampler already owns bounded stochastic retries. One choose_action
+# pass keeps a turn responsive; continuous_session retries a deferred, unconsumed
+# inbound on the next loop instead of multiplying hidden model calls here.
+_MAX_RECOVERABLE_SPEECH_ATTEMPTS = 1
 _RECOVERABLE_SPEECH_FAILURE_MARKERS = (
     "paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary",
     "repeatedly hit structural dialogue blockers after",
@@ -110,7 +113,7 @@ class SocialBridgeClient:
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"Social bridge returned invalid JSON during {op}.") from exc
         if not isinstance(response, dict):
-            raise RuntimeError(f"Social bridge returned a non-object response during {op}.")
+            raise RuntimeError("Social bridge returned a non-object response during {op}.")
         if response.get("ok") is not True:
             raise RuntimeError(str(response.get("error", "Unknown social bridge error")))
         result = response.get("result")
