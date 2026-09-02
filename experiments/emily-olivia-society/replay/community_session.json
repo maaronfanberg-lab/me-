@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 3,
+  "completed_reply_turns": 4,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -98,6 +98,15 @@
       "to_name": "Emily",
       "content": "I wish my flight had been as enjoyable. Maybe we could discuss the best flights and destinations for us to explore together in the future.",
       "created_at": "2026-09-02T17:25:47.355452+00:00"
+    },
+    {
+      "id": 5,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, I had so much fun on my flight! I would love to hear your recommendations for future flights or destinations.",
+      "created_at": "2026-09-02T17:26:35.561084+00:00"
     }
   ],
   "latest_turn": {
@@ -134,21 +143,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: I'm glad to hear that! I wish my flight had been as enjoyable. Have you got any recommendations for future flights or destinations?",
+      "Emily observes a message from Olivia: I wish my flight had been as enjoyable. Maybe we could discuss the best flights and destinations for us to explore together in the future."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "04eb0f499426907a5899",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 6
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "afb3fbebaf1b36ca59f1",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 70.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 6
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh, I had so much fun on my flight! I would love to hear your recommendations for future flights or destinations.",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: I'm glad to hear that! I wish my flight had been as enjoyable. Have you got any recommendations for future flights or destinations?",
+        "Emily observes a message from Olivia: I wish my flight had been as enjoyable. Maybe we could discuss the best flights and destinations for us to explore together in the future."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "04eb0f499426907a5899",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 6
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "afb3fbebaf1b36ca59f1",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 70.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 6
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 5,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, I had so much fun on my flight! I would love to hear your recommendations for future flights or destinations.",
+        "created_at": "2026-09-02T17:26:35.561084+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'unsupported-movement:I had so much fun on my flight! What is your most memorable flight? Where did you go and why?'"
+    "external_generation_error": ""
   }
 }
