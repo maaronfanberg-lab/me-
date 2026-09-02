@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 1,
+  "completed_reply_turns": 2,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -80,6 +80,15 @@
       "to_name": "Emily",
       "content": "It's a mix of pop and electronic. A little bit of R&B, too.",
       "created_at": "2026-09-02T05:15:38.585124+00:00"
+    },
+    {
+      "id": 3,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Pop and electronic music. That's new to me. I guess they're good together, huh?",
+      "created_at": "2026-09-02T05:19:06.215706+00:00"
     }
   ],
   "latest_turn": {
@@ -116,18 +125,63 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: It's a mix of pop and electronic. A little bit of R&B, too."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "1e2f1f2c03fc99c17046",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 40.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 4
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Pop and electronic music. That's new to me. I guess they're good together, huh?",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: It's a mix of pop and electronic. A little bit of R&B, too."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "1e2f1f2c03fc99c17046",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 40.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 4
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 3,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Pop and electronic music. That's new to me. I guess they're good together, huh?",
+        "created_at": "2026-09-02T05:19:06.215706+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "interrupted_inbound": null,
-    "generation_deferred": true,
-    "generation_attempts": 3,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'short_subset_echo: A little bit of R&B, too.' || Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'bare_short_fragment: Mix of pop and electronic' || Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'short_subset_echo: A mix of pop and electronic?'"
+    "continuation_relay": null,
+    "external_ack": null
   }
 }
