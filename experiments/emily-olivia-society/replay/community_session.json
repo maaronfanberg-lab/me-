@@ -101,12 +101,12 @@
     }
   ],
   "latest_turn": {
-    "agent": "Olivia",
-    "time_step": 4,
+    "agent": "Emily",
+    "time_step": 5,
     "observation": {
       "self": {
-        "id": 2,
-        "name": "Olivia"
+        "id": 1,
+        "name": "Emily"
       },
       "participants": [
         {
@@ -124,117 +124,28 @@
       ],
       "inbox": [
         {
-          "id": 3,
-          "from_id": 1,
-          "from_name": "Emily",
-          "to_id": 2,
-          "to_name": "Olivia",
-          "content": "What is the meaning of life?",
-          "created_at": "2026-09-02T04:15:56.687121+00:00"
+          "id": 4,
+          "from_id": 2,
+          "from_name": "Olivia",
+          "to_id": 1,
+          "to_name": "Emily",
+          "content": "Life is what happens when you're busy making other plans.",
+          "created_at": "2026-09-02T04:16:23.780075+00:00"
         }
       ]
     },
-    "retrieved_memories": [
-      "Olivia observes a message from Emily: Hi Olivia, are you ready?",
-      "Olivia observes a message from Alex: Me?",
-      "Olivia observes a message from Emily: What is the meaning of life?"
-    ],
-    "retrieved_memory_evidence": [
-      {
-        "retrieval_rank": 1,
-        "content_hash": "d71559c0b3f8f85eecb2",
-        "stanford_node_id": 0,
-        "stanford_node_type": "observation",
-        "stanford_importance_raw": 75.0,
-        "stanford_created": 2,
-        "stanford_last_retrieved": 2,
-        "observed_time_step": 5
-      },
-      {
-        "retrieval_rank": 2,
-        "content_hash": "c57638210c685d3068d5",
-        "stanford_node_id": 1,
-        "stanford_node_type": "observation",
-        "stanford_importance_raw": 50.0,
-        "stanford_created": 2,
-        "stanford_last_retrieved": 2,
-        "observed_time_step": 5
-      },
-      {
-        "retrieval_rank": 3,
-        "content_hash": "3e1369248aa254076982",
-        "stanford_node_id": 3,
-        "stanford_node_type": "observation",
-        "stanford_importance_raw": 75.0,
-        "stanford_created": 4,
-        "stanford_last_retrieved": 4,
-        "observed_time_step": 5
-      }
-    ],
+    "retrieved_memories": [],
+    "retrieved_memory_evidence": [],
     "action": {
-      "type": "message",
-      "recipient_id": 1,
-      "content": "Life is what happens when you're busy making other plans.",
-      "retrieved_memories": [
-        "Olivia observes a message from Emily: Hi Olivia, are you ready?",
-        "Olivia observes a message from Alex: Me?",
-        "Olivia observes a message from Emily: What is the meaning of life?"
-      ],
-      "retrieved_memory_evidence": [
-        {
-          "retrieval_rank": 1,
-          "content_hash": "d71559c0b3f8f85eecb2",
-          "stanford_node_id": 0,
-          "stanford_node_type": "observation",
-          "stanford_importance_raw": 75.0,
-          "stanford_created": 2,
-          "stanford_last_retrieved": 2,
-          "observed_time_step": 5
-        },
-        {
-          "retrieval_rank": 2,
-          "content_hash": "c57638210c685d3068d5",
-          "stanford_node_id": 1,
-          "stanford_node_type": "observation",
-          "stanford_importance_raw": 50.0,
-          "stanford_created": 2,
-          "stanford_last_retrieved": 2,
-          "observed_time_step": 5
-        },
-        {
-          "retrieval_rank": 3,
-          "content_hash": "3e1369248aa254076982",
-          "stanford_node_id": 3,
-          "stanford_node_type": "observation",
-          "stanford_importance_raw": 75.0,
-          "stanford_created": 4,
-          "stanford_last_retrieved": 4,
-          "observed_time_step": 5
-        }
-      ],
-      "cognition": {
-        "reaction": "chat with Emily",
-        "reflected": false,
-        "plan_present": true,
-        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
-      }
+      "type": "wait",
+      "reason": "speech_generation_deferred"
     },
-    "action_result": {
-      "success": true,
-      "message": {
-        "id": 4,
-        "from_id": 2,
-        "from_name": "Olivia",
-        "to_id": 1,
-        "to_name": "Emily",
-        "content": "Life is what happens when you're busy making other plans.",
-        "created_at": "2026-09-02T04:16:23.780075+00:00"
-      }
-    },
-    "consumed_inbound": true,
+    "action_result": null,
+    "consumed_inbound": false,
     "external_inbound": null,
     "interrupted_inbound": null,
-    "continuation_relay": null,
-    "external_ack": null
+    "generation_deferred": true,
+    "generation_attempts": 3,
+    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"inner_sampler_exhaustion: Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'speech-exhaustion:Emily paper-derived Stanford act produced no usable spoken line after 1 unique samples / 6 completion req\" || Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"inner_sampler_exhaustion: Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'speech-exhaustion:Emily paper-derived Stanford act produced no usable spoken line after 1 unique samples / 6 completion req\" || Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"inner_sampler_exhaustion: Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'speech-exhaustion:Emily paper-derived Stanford act produced no usable spoken line after 2 unique samples / 6 completion req\""
   }
 }
