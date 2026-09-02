@@ -42,6 +42,10 @@ _identity_base_generate = _native.generate_spoken_action
 _IDENTITY_ATTEMPTS = 8
 _SOCIAL_RESET_START = re.compile(r"^\s*(?:hi|hello|hey|oh\s*,?\s*(?:hi|hello|hey))\b", re.IGNORECASE)
 _SOCIAL_CHECKIN = re.compile(r"\bhow\s+are\s+you(?:\s+doing)?(?:\s+today)?\b", re.IGNORECASE)
+_SERVICE_ASSISTANT = re.compile(
+    r"\b(?:can\s+i\s+help\s+you|how\s+can\s+i\s+help|what\s+can\s+i\s+do\s+for\s+you|what\s+do\s+you\s+need\s+to\s+know)\b",
+    re.IGNORECASE,
+)
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 
 
@@ -101,6 +105,25 @@ def _is_short_semantic_echo(text: object, dialogue_history) -> bool:
     return False
 
 
+def _is_inbound_fragment_echo(text: object, inbound: object) -> bool:
+    output = _word_list(text)
+    source = _word_list(inbound)
+    if len(output) < 3 or len(output) > 7 or len(source) < len(output):
+        return False
+    # Catch terse phrase extraction from the live inbound, such as replying
+    # "How to get a new haircut" to "I'd like to know how to get a new haircut."
+    # This is a soft refractory signal only; it never authors a replacement.
+    for start in range(0, len(source) - len(output) + 1):
+        if source[start : start + len(output)] == output:
+            return True
+    overlap = sum(1 for word in output if word in source)
+    return overlap >= max(3, len(output) - 1)
+
+
+def _is_service_assistant_stance(text: object) -> bool:
+    return bool(_SERVICE_ASSISTANT.search(str(text or "")))
+
+
 def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound: str = "", cognitive_context: str = ""):
     rejected_identity: list[str] = []
     soft_fallback: str | None = None
@@ -118,13 +141,23 @@ def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound
             rejected_identity.append(str(text)[:180])
             continue
 
+        # A customer-service stance is a common chat-model prior, not evidence
+        # about Emily/Olivia's relationship. Prefer another Stanford sample, but
+        # fail open if every structurally valid sample falls into that basin.
+        if _is_service_assistant_stance(text):
+            if soft_fallback is None:
+                soft_fallback = text
+            continue
+
         # A new session may restore historical dialogue for semantic continuity,
         # but its autonomous opener has no inbound turn. Do not misclassify that
         # legitimate first act as a mid-conversation greeting reset and spend up
         # to eight expensive BitNet generations trying to escape it. Refractory
         # resampling only applies when there is an actual live inbound message.
         if str(inbound or "").strip() and (
-            _is_social_reset(text, dialogue_history) or _is_short_semantic_echo(text, dialogue_history)
+            _is_social_reset(text, dialogue_history)
+            or _is_short_semantic_echo(text, dialogue_history)
+            or _is_inbound_fragment_echo(text, inbound)
         ):
             if soft_fallback is None:
                 soft_fallback = text
