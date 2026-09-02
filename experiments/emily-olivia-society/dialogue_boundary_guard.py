@@ -2,8 +2,9 @@
 """Fail-closed grounding guards for paper-derived Emily + Olivia speech.
 
 These checks never write replacement dialogue. They reject concrete role or
-world-state claims that are unsupported by the current social evidence and ask
-the same Stanford-derived generator for another stochastic sample.
+world-state claims that are unsupported by the current social evidence. The
+underlying Stanford-derived sampler owns stochastic resampling; this boundary
+is deliberately single-pass so guard layers cannot multiply model calls.
 """
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ import re
 
 from external_reality_guard import candidate_external_grounding_blocker
 
-_MAX_BOUNDARY_ATTEMPTS = 3
+_MAX_BOUNDARY_ATTEMPTS = 1
 _SPEECH_EXHAUSTION_MARKER = "paper-derived Stanford act produced no usable spoken line"
 
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
