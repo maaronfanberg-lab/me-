@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 1,
+  "completed_reply_turns": 2,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -80,15 +80,24 @@
       "to_name": "Alex",
       "content": "Hi Emily, I'm from Oregon.",
       "created_at": "2026-09-02T01:36:40.564663+00:00"
+    },
+    {
+      "id": "alex-reply-232980c7e9f7425685ac072ac92c5485",
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 3,
+      "to_name": "Alex",
+      "content": "Oh, you're from Oregon?",
+      "created_at": "2026-09-02T01:37:17.526335+00:00"
     }
   ],
   "latest_turn": {
-    "agent": "Olivia",
-    "time_step": 2,
+    "agent": "Emily",
+    "time_step": 3,
     "observation": {
       "self": {
-        "id": 2,
-        "name": "Olivia"
+        "id": 1,
+        "name": "Emily"
       },
       "participants": [
         {
@@ -106,70 +115,92 @@
       ],
       "inbox": [
         {
-          "id": "alex-dQVvAoe0r1v3",
+          "id": "alex-7zqbbFmj6Wx3",
           "from_id": 3,
           "from_name": "Alex",
-          "to_id": 2,
-          "to_name": "Olivia",
-          "content": "Hi, I\u2019m Alex @Emily @Olivia",
-          "created_at": "2026-09-02T01:25:37+00:00"
+          "to_id": 1,
+          "to_name": "Emily",
+          "content": "Wait, you can see I\u2019m here?",
+          "created_at": "2026-09-02T01:31:48+00:00"
         }
       ]
     },
     "retrieved_memories": [
-      "Olivia observes a message from Alex: Hi, I\u2019m Alex @Emily @Olivia",
-      "Olivia observes a message from Emily: Hi Olivia. Where are you from?"
+      "Emily observes a message from Alex: Hi, I\u2019m Alex @Emily @Olivia",
+      "Emily observes a message from Alex: Wait, you can see I\u2019m here?",
+      "Emily observes a message from Olivia: Hi Emily, I'm from Oregon."
     ],
     "retrieved_memory_evidence": [
       {
         "retrieval_rank": 1,
-        "content_hash": "e36bd23bb464fc9761de",
+        "content_hash": "1b2786db1bd74bdb552a",
         "stanford_node_id": 1,
         "stanford_node_type": "observation",
-        "stanford_importance_raw": 90.0,
+        "stanford_importance_raw": 20.0,
         "stanford_created": 2,
         "stanford_last_retrieved": 2,
-        "observed_time_step": 3
+        "observed_time_step": 4
       },
       {
         "retrieval_rank": 2,
-        "content_hash": "e1810ba4961e944455b0",
-        "stanford_node_id": 0,
+        "content_hash": "689d6b9cc4b35c1aeb08",
+        "stanford_node_id": 3,
         "stanford_node_type": "observation",
-        "stanford_importance_raw": 10.0,
-        "stanford_created": 2,
-        "stanford_last_retrieved": 2,
-        "observed_time_step": 3
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 4
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "08dee7dbb1e68e01e720",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 4
       }
     ],
     "action": {
       "type": "message",
       "recipient_id": 3,
-      "content": "Hi Emily, I'm from Oregon.",
+      "content": "Oh, you're from Oregon?",
       "retrieved_memories": [
-        "Olivia observes a message from Alex: Hi, I\u2019m Alex @Emily @Olivia",
-        "Olivia observes a message from Emily: Hi Olivia. Where are you from?"
+        "Emily observes a message from Alex: Hi, I\u2019m Alex @Emily @Olivia",
+        "Emily observes a message from Alex: Wait, you can see I\u2019m here?",
+        "Emily observes a message from Olivia: Hi Emily, I'm from Oregon."
       ],
       "retrieved_memory_evidence": [
         {
           "retrieval_rank": 1,
-          "content_hash": "e36bd23bb464fc9761de",
+          "content_hash": "1b2786db1bd74bdb552a",
           "stanford_node_id": 1,
           "stanford_node_type": "observation",
-          "stanford_importance_raw": 90.0,
+          "stanford_importance_raw": 20.0,
           "stanford_created": 2,
           "stanford_last_retrieved": 2,
-          "observed_time_step": 3
+          "observed_time_step": 4
         },
         {
           "retrieval_rank": 2,
-          "content_hash": "e1810ba4961e944455b0",
-          "stanford_node_id": 0,
+          "content_hash": "689d6b9cc4b35c1aeb08",
+          "stanford_node_id": 3,
           "stanford_node_type": "observation",
-          "stanford_importance_raw": 10.0,
-          "stanford_created": 2,
-          "stanford_last_retrieved": 2,
-          "observed_time_step": 3
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 4
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "08dee7dbb1e68e01e720",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 4
         }
       ],
       "cognition": {
@@ -182,43 +213,43 @@
     "action_result": {
       "success": true,
       "message": {
-        "id": "alex-reply-c75ffd583aba4fd992c7a339c9281a6a",
-        "from_id": 2,
-        "from_name": "Olivia",
+        "id": "alex-reply-232980c7e9f7425685ac072ac92c5485",
+        "from_id": 1,
+        "from_name": "Emily",
         "to_id": 3,
         "to_name": "Alex",
-        "content": "Hi Emily, I'm from Oregon.",
-        "created_at": "2026-09-02T01:36:40.564663+00:00"
+        "content": "Oh, you're from Oregon?",
+        "created_at": "2026-09-02T01:37:17.526335+00:00"
       }
     },
     "consumed_inbound": true,
     "external_inbound": {
-      "id": "dQVvAoe0r1v3",
+      "id": "7zqbbFmj6Wx3",
       "speaker": "Alex",
-      "text": "Hi, I\u2019m Alex @Emily @Olivia",
+      "text": "Wait, you can see I\u2019m here?",
       "target": "both",
-      "at": "2026-09-02T01:25:37+00:00",
+      "at": "2026-09-02T01:31:48+00:00",
       "source_url": "https://ntfy.sh/eo-alex-4f542bcc00c9cacc4517cc7c99c99ffe"
     },
     "interrupted_inbound": {
-      "id": 1,
-      "from_id": 1,
-      "from_name": "Emily",
-      "to_id": 2,
-      "to_name": "Olivia",
-      "content": "Hi Olivia. Where are you from?",
-      "created_at": "2026-09-02T01:35:39.187190+00:00"
+      "id": 2,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Hi Emily, I'm from Oregon.",
+      "created_at": "2026-09-02T01:36:40.564797+00:00"
     },
     "continuation_relay": {
       "success": true,
       "message": {
-        "id": 2,
-        "from_id": 2,
-        "from_name": "Olivia",
-        "to_id": 1,
-        "to_name": "Emily",
-        "content": "Hi Emily, I'm from Oregon.",
-        "created_at": "2026-09-02T01:36:40.564797+00:00"
+        "id": 3,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, you're from Oregon?",
+        "created_at": "2026-09-02T01:37:17.526467+00:00"
       }
     },
     "external_ack": {
