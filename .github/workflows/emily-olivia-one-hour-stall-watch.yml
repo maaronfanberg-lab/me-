@@ -1,0 +1,92 @@
+name: Emily Olivia one-hour stall watch
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: emily-olivia-one-hour-stall-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Community progress and recover a true stall
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCH_UNTIL_UTC: '2026-09-02T12:26:25Z'
+          STALL_SECONDS: '300'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          now_epoch="$(date -u +%s)"
+          until_epoch="$(date -u -d "$WATCH_UNTIL_UTC" +%s)"
+          if (( now_epoch > until_epoch )); then
+            echo "One-hour watch window is complete; no action."
+            exit 0
+          fi
+
+          runs_api="repos/${GITHUB_REPOSITORY}/actions/workflows/emily-olivia-community-run.yml/runs?per_page=30"
+          run_id="$(
+            gh api --method GET "$runs_api" \
+              --jq '.workflow_runs[] | select(.status == "in_progress") | .id' \
+              | head -n 1
+          )"
+          if [ -z "$run_id" ]; then
+            echo "No in-progress Community run; nothing to watchdog."
+            exit 0
+          fi
+
+          snapshot_api="repos/${GITHUB_REPOSITORY}/contents/experiments/emily-olivia-society/replay/community_session.json?ref=main"
+          snapshot="$(gh api --method GET "$snapshot_api" --jq '.content' | tr -d '\n' | base64 -d)"
+
+          status="$(jq -r '.status // ""' <<<"$snapshot")"
+          session_id="$(jq -r '.session_id // ""' <<<"$snapshot")"
+          message_count="$(jq -r '(.messages // []) | length' <<<"$snapshot")"
+          last_time="$(jq -r '(.messages // [])[-1].created_at // ""' <<<"$snapshot")"
+
+          echo "run=$run_id session=$session_id status=$status messages=$message_count last=$last_time"
+
+          if [ "$status" != "running" ] || [ -z "$last_time" ]; then
+            echo "Replay is not a running session with a published message; not declaring a stall."
+            exit 0
+          fi
+
+          last_epoch="$(date -u -d "$last_time" +%s)"
+          age=$(( now_epoch - last_epoch ))
+          if (( age < STALL_SECONDS )); then
+            echo "Progress age is ${age}s, below ${STALL_SECONDS}s stall threshold."
+            exit 0
+          fi
+
+          echo "Confirmed Community stall: no published message growth for ${age}s. Cancelling run $run_id so its successor can start cleanly."
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" >/dev/null || true
+
+          for _ in $(seq 1 12); do
+            state="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+            [ "$state" = "completed" ] && break
+            sleep 5
+          done
+
+          successor="$(
+            gh api --method GET "$runs_api" \
+              --jq '.workflow_runs[] | select((.status == "in_progress" or .status == "queued" or .status == "pending") and .id != ('"$run_id"')) | .id' \
+              | head -n 1
+          )"
+          if [ -n "$successor" ]; then
+            echo "Successor already exists as run $successor; not dispatching a duplicate."
+            exit 0
+          fi
+
+          echo "Dispatching one clean Community successor after confirmed stall."
+          gh workflow run emily-olivia-community-run.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f opener=""
