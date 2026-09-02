@@ -46,6 +46,10 @@ _SERVICE_ASSISTANT = re.compile(
     r"\b(?:can\s+i\s+help\s+you|how\s+can\s+i\s+help|what\s+can\s+i\s+do\s+for\s+you|what\s+do\s+you\s+need\s+to\s+know)\b",
     re.IGNORECASE,
 )
+_SELF_CONVERSATION = re.compile(
+    r"\b(?:talk(?:ing)?|speak(?:ing)?|chat(?:ting)?|(?:having\s+)?a\s+conversation)\s+(?:to|with)\s+myself\b",
+    re.IGNORECASE,
+)
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 
 
@@ -124,6 +128,10 @@ def _is_service_assistant_stance(text: object) -> bool:
     return bool(_SERVICE_ASSISTANT.search(str(text or "")))
 
 
+def _claims_impossible_self_conversation(text: object, inbound: object, other) -> bool:
+    return bool(str(inbound or "").strip() and getattr(other, "name", "") and _SELF_CONVERSATION.search(str(text or "")))
+
+
 def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound: str = "", cognitive_context: str = ""):
     rejected_identity: list[str] = []
     soft_fallback: str | None = None
@@ -139,6 +147,13 @@ def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound
 
         if _claims_peer_identity(text, getattr(agent, "name", ""), getattr(other, "name", "")):
             rejected_identity.append(str(text)[:180])
+            continue
+
+        # If a live peer just addressed the agent, claiming to be talking to
+        # oneself contradicts the observed social state. Treat this like identity
+        # drift: resample and never publish the contradictory line.
+        if _claims_impossible_self_conversation(text, inbound, other):
+            rejected_identity.append("self-conversation:" + str(text)[:160])
             continue
 
         # A customer-service stance is a common chat-model prior, not evidence
@@ -170,7 +185,7 @@ def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound
 
     raise RuntimeError(
         "paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: "
-        "peer-identity self-claim: " + " | ".join(rejected_identity[-4:])
+        "peer-identity/social-state contradiction: " + " | ".join(rejected_identity[-4:])
     )
 
 
