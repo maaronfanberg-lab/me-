@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 5,
+  "completed_reply_turns": 6,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -116,6 +116,15 @@
       "to_name": "Emily",
       "content": "Hey Emily, what are you thinking for dinner? Something new?",
       "created_at": "2026-09-03T11:27:55.040334+00:00"
+    },
+    {
+      "id": 7,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, I thought Chinese would be good. I've heard of some really good restaurants that offer great food and are nice to the host.",
+      "created_at": "2026-09-03T11:29:59.664076+00:00"
     }
   ],
   "latest_turn": {
@@ -152,21 +161,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: I've been thinking, how about Italian? It sounds fun!",
+      "Emily observes a message from Olivia: Hey Emily, what are you thinking for dinner? Something new?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "7724b4ae25923afa4067",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "16dbf60b390d2077c915",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 7,
+        "stanford_last_retrieved": 7,
+        "observed_time_step": 8
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh, I thought Chinese would be good. I've heard of some really good restaurants that offer great food and are nice to the host.",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: I've been thinking, how about Italian? It sounds fun!",
+        "Emily observes a message from Olivia: Hey Emily, what are you thinking for dinner? Something new?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "7724b4ae25923afa4067",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "16dbf60b390d2077c915",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 7,
+          "stanford_last_retrieved": 7,
+          "observed_time_step": 8
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 7,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, I thought Chinese would be good. I've heard of some really good restaurants that offer great food and are nice to the host.",
+        "created_at": "2026-09-03T11:29:59.664076+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'unsupported-setting:Thank you! I think that sounds like a plan! What should we get? Let me go to the store and check out the menu. See you at your table!'"
+    "external_generation_error": ""
   }
 }
