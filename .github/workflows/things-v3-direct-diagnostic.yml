@@ -1,0 +1,72 @@
+name: Things v3 direct Falcon diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/things-v3-direct-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
+      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_PORT: '8080'
+      COMMUNITY_BITNET_START_TIMEOUT: '1200'
+      COMMUNITY_GENERATION_TIMEOUT: '120'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Show runner compute
+        run: |
+          echo '--- CPU ---'
+          nproc
+          lscpu | grep -E 'Model name|Socket|Core|Thread|CPU\(s\)|MHz' || true
+          echo '--- MEMORY ---'
+          free -h
+      - name: Restore Falcon BitNet runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v12
+          key: community-runtime-bitnet-v12-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+          restore-keys: |
+            community-runtime-bitnet-v12-${{ runner.os }}-py311-
+      - name: Validate and start Falcon
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 -m py_compile things_falcon_bridge_base.py things_falcon_bridge_v3.py
+          bash bootstrap_upstreams.sh
+          python3 bitnet_server.py start
+          python3 bitnet_server.py probe
+      - name: Direct Fanberg v3 enrichment
+        working-directory: experiments/emily-olivia-society
+        run: |
+          .venv-stanford/bin/python - <<'PY'
+          import json, time
+          from things_falcon_bridge_v3 import enrich
+          started=time.monotonic()
+          result=enrich('Fanberg',['surname','name relatedness'])
+          wall=round(time.monotonic()-started,3)
+          print(json.dumps({'wall_seconds':wall, **result}, indent=2, ensure_ascii=False))
+          if result.get('term') != 'Fanberg': raise SystemExit('wrong term')
+          if 'Falcon3-10B-Instruct-1.58bit' not in str(result.get('engine')): raise SystemExit('wrong engine')
+          if len(result.get('evidence_sources') or []) < 2: raise SystemExit(f"not multi-source: {result.get('evidence_sources')}")
+          if not result.get('relations'): raise SystemExit(f"no relations: {result}")
+          PY
+      - name: Stop Falcon
+        if: always()
+        working-directory: experiments/emily-olivia-society
+        run: python3 bitnet_server.py stop || true
