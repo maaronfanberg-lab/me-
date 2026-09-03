@@ -5,16 +5,17 @@
 let v24ResultFilter='all';
 
 const V24_FAMILY_RE=/\b(father|mother|parent|child|son|daughter|sibling|brother|sister|spouse|husband|wife|aunt|uncle|niece|nephew|cousin|grandfather|grandmother|grandparent|ancestor|descendant|in-law|by marriage|married)\b/i;
-const V24_SURNAME_RE=/\b(surname|family name|last name|patronym|matronym|name variant|variant spelling)\b/i;
+const V24_SURNAME_RE=/\b(surname|family name|last name|patronym|matronym|name variant|variant spelling|related through surname)\b/i;
 const V24_PLACE_RE=/\b(location|place|country|city|town|village|county|region|geograph|born|birthplace|died|death place|originated in|from)\b/i;
-const V24_PERSON_SRC_RE=/\b(WikiTree|FamilySearch|OpenAlex|Crossref|Open Library)\b/i;
+const V24_PERSON_SRC_RE=/\b(WikiTree|FamilySearch|Geneanet|Geni|OpenAlex|Crossref|Open Library)\b/i;
+const V24_HUMAN_REL_RE=/\b(person|human|author|researcher|genealog|born|died|father|mother|parent|child|son|daughter|sibling|brother|sister|spouse|husband|wife|aunt|uncle|niece|nephew|cousin|ancestor|descendant|surname|family name)\b/i;
 
 function v24RelationClass(rel='',src='',kind=''){
   let k=String(kind||'').toLowerCase(),r=String(rel||''),s=String(src||'');
   if(k==='family'||V24_FAMILY_RE.test(r))return'family';
   if(k==='surname'||V24_SURNAME_RE.test(r))return'surname';
   if(k==='place'||V24_PLACE_RE.test(r))return'places';
-  if(k==='people'||V24_PERSON_SRC_RE.test(s))return'people';
+  if(k==='people'||(V24_PERSON_SRC_RE.test(s)&&V24_HUMAN_REL_RE.test(r)))return'people';
   return'other'
 }
 function v24RelationStrength(rel='',src='',kind=''){
@@ -33,21 +34,7 @@ function v24RelationStrength(rel='',src='',kind=''){
 function v24FindEdge(a,b){
   return L.find(e=>{let x=e.source?.id||e.source,y=e.target?.id||e.target;return(x===a.id&&y===b.id)||(x===b.id&&y===a.id)})
 }
-
-const v24EdgeBase=edge;
-edge=function(a,b,r,seedId='',src='',kind=''){
-  if(!a||!b||a===b)return;
-  let before=v24FindEdge(a,b),oldStrength=before?v24RelationStrength(before.rel,before.src,before.kind):-1;
-  v24EdgeBase(a,b,r,seedId,src);
-  let e=v24FindEdge(a,b);if(!e)return;
-  let newKind=kind||v24RelationClass(r,src,''),newStrength=v24RelationStrength(r,src,newKind);
-  if(!Array.isArray(e.altRelations))e.altRelations=[];
-  let alt={rel:String(r||''),src:String(src||''),kind:newKind};
-  if(alt.rel&&!e.altRelations.some(x=>x.rel===alt.rel&&x.src===alt.src))e.altRelations.push(alt);
-  if(!before||newStrength>oldStrength){e.rel=r;e.src=src;e.seedId=seedId||e.seedId;e.kind=newKind}
-  else if(kind&&!e.kind)e.kind=kind
-};
-
+function v24IsSeedRoot(n){return !!n&&seeds.some(s=>s.root===n.id)}
 function v24LooksLikePersonLabel(label=''){
   let s=String(label||'').trim(),parts=s.split(/\s+/).filter(Boolean);
   if(parts.length<2||parts.length>7)return false;
@@ -58,6 +45,50 @@ function v24SurnameKey(label=''){
   if(!v24LooksLikePersonLabel(label))return'';
   let parts=String(label).trim().split(/\s+/);return key(parts[parts.length-1])
 }
+function v24MarkHuman(n,surname=''){
+  if(!n)return n;n.v24Human=true;
+  let sk=key(surname||'');if(sk)n.v24Surname=sk;
+  else if(!n.v24Surname&&v24LooksLikePersonLabel(n.l))n.v24Surname=v24SurnameKey(n.l);
+  return n
+}
+function v24MarkSurnameHub(n){if(n)n.v24SurnameHub=true;return n}
+function v24IsSurnameHub(n){return !!n&&(n.v24SurnameHub||L.some(e=>v24RelationClass(e.rel,e.src,e.kind)==='surname'&&((e.source?.id||e.source)===n.id||(e.target?.id||e.target)===n.id)&&!v24LooksLikePersonLabel(n.l)))}
+function v24IsHumanNode(n){
+  if(!n)return false;if(n.v24Human)return true;
+  for(const e of L){let cls=v24RelationClass(e.rel,e.src,e.kind),a=e.source?.id||e.source,b=e.target?.id||e.target;if(a!==n.id&&b!==n.id)continue;
+    if(cls==='family')return true;
+    if(cls==='surname'&&!v24IsSurnameHub(n)&&v24LooksLikePersonLabel(n.l))return true
+  }
+  return false
+}
+function v24TrustedPerson(n,hub=null,cohort=[]){
+  if(!n||!v24LooksLikePersonLabel(n.l))return false;
+  if(n.v24Human)return true;
+  if(hub&&(hub.v24SurnameHub||v24IsSeedRoot(hub)))return true;
+  return v24IsSeedRoot(n)&&cohort.some(x=>x!==n&&v24IsSeedRoot(x)&&v24LooksLikePersonLabel(x.l))
+}
+
+const v24EdgeBase=edge;
+edge=function(a,b,r,seedId='',src='',kind=''){
+  if(!a||!b||a===b)return;
+  let before=v24FindEdge(a,b),oldStrength=before?v24RelationStrength(before.rel,before.src,before.kind):-1;
+  v24EdgeBase(a,b,r,seedId,src);
+  let e=v24FindEdge(a,b);if(!e)return;
+  let newKind=kind||v24RelationClass(r,src,''),newStrength=v24RelationStrength(r,src,newKind);
+  if(newKind==='family'){v24MarkHuman(a);v24MarkHuman(b)}
+  if(newKind==='surname'){
+    let ap=v24LooksLikePersonLabel(a.l),bp=v24LooksLikePersonLabel(b.l);
+    if(ap&&!bp){v24MarkHuman(a,b.k);v24MarkSurnameHub(b)}
+    else if(bp&&!ap){v24MarkHuman(b,a.k);v24MarkSurnameHub(a)}
+    else if(ap&&bp){v24MarkHuman(a);v24MarkHuman(b)}
+  }
+  if(!Array.isArray(e.altRelations))e.altRelations=[];
+  let alt={rel:String(r||''),src:String(src||''),kind:newKind};
+  if(alt.rel&&!e.altRelations.some(x=>x.rel===alt.rel&&x.src===alt.src))e.altRelations.push(alt);
+  if(!before||newStrength>oldStrength){e.rel=r;e.src=src;e.seedId=seedId||e.seedId;e.kind=newKind}
+  else if(kind&&!e.kind)e.kind=kind
+};
+
 function v24SeedsForNodes(nodes=[],fallback=null){
   let out=[],seen=new Set();
   if(fallback?.id){seen.add(fallback.id);out.push(fallback)}
@@ -66,32 +97,35 @@ function v24SeedsForNodes(nodes=[],fallback=null){
 }
 function v24EnsureSurnameHubForNode(n,seed=null){
   if(!n)return;
-  let sk=v24SurnameKey(n.l);if(!sk||sk===n.k)return;
-  let hub=byK(sk),cohort=N.filter(x=>x!==n&&v24SurnameKey(x.l)===sk);
+  let sk=n.v24Surname||v24SurnameKey(n.l);if(!sk||sk===n.k)return;
+  let hub=byK(sk),rawCohort=N.filter(x=>x!==n&&(x.v24Surname||v24SurnameKey(x.l))===sk);
+  if(!v24TrustedPerson(n,hub,rawCohort))return;
+  v24MarkHuman(n,sk);
+  let cohort=rawCohort.filter(x=>v24TrustedPerson(x,hub,rawCohort));
 
-  // Exact surname sharing is already meaningful relatedness in Things Universe.
-  // If the surname itself is not on screen yet, create its hub as soon as a second
-  // person with that exact surname appears. Specific genealogy can refine this later.
+  // A surname hub is created only from actual human/surname context. Ordinary
+  // two-word concepts no longer get mistaken for people merely because they have
+  // a last token that looks like a surname.
   if(!hub&&cohort.length){
     let anchorNode=cohort[0]||n,seedsForHub=v24SeedsForNodes([n,...cohort],seed),primary=seedsForHub[0]||seed||null;
-    hub=v24NodeBase(cap(sk),primary,anchorNode);
+    hub=v24NodeBase(cap(sk),primary,anchorNode);v24MarkSurnameHub(hub);
     if(hub&&!hub.parentId&&typeof placeChild==='function')placeChild(hub,anchorNode);
     for(const s of seedsForHub)own(hub,s)
     try{if(typeof v24ProgressiveFalcon==='function')v24ProgressiveFalcon(hub.k)}catch{}
   }
   if(!hub||hub===n)return;
-
+  v24MarkSurnameHub(hub);
   for(const s of v24SeedsForNodes([n],seed))own(hub,s);
   edge(n,hub,'related through surname',seed?.id||[...n.owners||[]][0]||'','exact surname match','surname');
-  if(cohort.length){
-    for(const person of cohort){
-      edge(person,hub,'related through surname',[...person.owners||[]][0]||'','exact surname match','surname')
-    }
-  }
+  for(const person of cohort){v24MarkHuman(person,sk);edge(person,hub,'related through surname',[...person.owners||[]][0]||'','exact surname match','surname')}
 }
 function v24AttachExistingPeopleToSurname(hub,seed=null){
   if(!hub||String(hub.k||'').includes(' '))return;
-  for(const n of N){if(n===hub||v24SurnameKey(n.l)!==hub.k)continue;if(seed)own(n,seed);edge(n,hub,'related through surname',seed?.id||'','exact surname match','surname')}
+  let candidates=N.filter(n=>n!==hub&&(n.v24Surname||v24SurnameKey(n.l))===hub.k);
+  let trusted=candidates.filter(n=>n.v24Human||v24IsSeedRoot(n));
+  if(!trusted.length&&!hub.v24SurnameHub)return;
+  v24MarkSurnameHub(hub);
+  for(const n of trusted){v24MarkHuman(n,hub.k);if(seed)own(n,seed);edge(n,hub,'related through surname',seed?.id||'','exact surname match','surname')}
 }
 const v24NodeBase=node;
 node=function(term,seed=null,p=null){
@@ -103,15 +137,30 @@ node=function(term,seed=null,p=null){
 
 function v24EdgeMatches(e,filter=v24ResultFilter){
   if(filter==='all')return true;
-  let cls=v24RelationClass(e?.rel,e?.src,e?.kind);
-  if(filter==='people')return cls==='people'||cls==='family'||cls==='surname'||V24_PERSON_SRC_RE.test(String(e?.src||''));
+  let cls=v24RelationClass(e?.rel,e?.src,e?.kind),a=nById(e.source?.id||e.source),b=nById(e.target?.id||e.target);
+  if(filter==='surname')return cls==='surname';
+  if(filter==='family')return cls==='family';
+  if(filter==='people'){
+    let ah=v24IsHumanNode(a),bh=v24IsHumanNode(b),ash=v24IsSurnameHub(a),bsh=v24IsSurnameHub(b);
+    return (ah&&bh)||(cls==='family')||(cls==='surname'&&((ah&&bsh)||(bh&&ash)))
+  }
   if(filter==='other')return !['family','surname','places','people'].includes(cls);
   return cls===filter
 }
 
 function v24VisibleIds(){
   if(v24ResultFilter==='all')return null;
-  let ids=new Set(seeds.map(s=>s.root).filter(Boolean));
+  let ids=new Set();
+  if(v24ResultFilter==='people'){
+    for(const n of N)if(v24IsHumanNode(n))ids.add(n.id);
+    for(const e of L)if(v24EdgeMatches(e,'people')){let a=e.source?.id||e.source,b=e.target?.id||e.target;ids.add(a);ids.add(b)}
+    return ids
+  }
+  if(v24ResultFilter==='surname'||v24ResultFilter==='family'){
+    for(const e of L)if(v24EdgeMatches(e)){let a=e.source?.id||e.source,b=e.target?.id||e.target;if(a)ids.add(a);if(b)ids.add(b)}
+    return ids
+  }
+  for(const s of seeds)if(s.root)ids.add(s.root);
   for(const e of L)if(v24EdgeMatches(e)){let a=e.source?.id||e.source,b=e.target?.id||e.target;if(a)ids.add(a);if(b)ids.add(b)}
   return ids
 }
@@ -128,7 +177,7 @@ const v24FitBase=fit;
 fit=function(){
   if(v24ResultFilter==='all')return v24FitBase();
   let ids=v24VisibleIds(),allN=N,allL=L;
-  N=allN.filter(n=>ids.has(n.id));L=allL.filter(e=>v24EdgeMatches(e));
+  N=allN.filter(n=>ids.has(n.id));L=allL.filter(e=>v24EdgeMatches(e)&&ids.has(e.source?.id||e.source)&&ids.has(e.target?.id||e.target));
   try{return v24FitBase()}finally{N=allN;L=allL}
 };
 
@@ -152,7 +201,7 @@ if(typeof renderSelectionMarks==='function'){
 function v24InstallFilter(){
   let tools=document.querySelector('.tools');if(!tools||document.querySelector('#resultFilter'))return;
   let select=document.createElement('select');select.id='resultFilter';select.className='btn';select.setAttribute('aria-label','Filter visible results');
-  select.innerHTML='<option value="all">Filter: All</option><option value="family">Family</option><option value="surname">Surname</option><option value="people">People</option><option value="places">Places</option><option value="other">Sources / other</option>';
+  select.innerHTML='<option value="all">Filter: All</option><option value="family">Family only</option><option value="surname">Surname only</option><option value="people">Humans only</option><option value="places">Places</option><option value="other">Sources / other</option>';
   select.addEventListener('change',()=>{v24ResultFilter=select.value||'all';selected=null;draw();toast(v24ResultFilter==='all'?'Showing all results':`Showing ${select.options[select.selectedIndex].text.toLowerCase()}`)});
   tools.appendChild(select)
 }
@@ -178,8 +227,6 @@ v24ProgressRows=function(data,term){
 
 const v24MergeProgressBase=v24MergeProgressCache;
 v24MergeProgressCache=function(term,rows){
-  // Pairwise family facts belong between their two people, not between the
-  // original surname/search term and whichever endpoint happened to be returned.
   let direct=(rows||[]).filter(x=>!x.from||key(x.from)===key(term));
   return v24MergeProgressBase(term,direct)
 };
@@ -198,6 +245,15 @@ v24ScheduleProgress=function(parent,seed,rows){
     let q=byK(c.k),targetWas=!!q;
     if(!q){q=node(c.l,liveSeed,sourceNode);placeChild(q,sourceNode)}else own(q,liveSeed);
     if(sourceNode===q)return;
+
+    if(c.kind==='family'){v24MarkHuman(sourceNode);v24MarkHuman(q)}
+    else if(c.kind==='surname'){
+      if(sourceKey&&!sourceKey.includes(' ')&&v24LooksLikePersonLabel(q.l)){v24MarkSurnameHub(sourceNode);v24MarkHuman(q,sourceKey)}
+      else if(q.k&&!q.k.includes(' ')&&v24LooksLikePersonLabel(sourceNode.l)){v24MarkSurnameHub(q);v24MarkHuman(sourceNode,q.k)}
+      else {if(v24LooksLikePersonLabel(sourceNode.l))v24MarkHuman(sourceNode);if(v24LooksLikePersonLabel(q.l))v24MarkHuman(q)}
+    }else if(c.kind==='people'&&V24_HUMAN_REL_RE.test(c.r)){if(v24LooksLikePersonLabel(q.l))v24MarkHuman(q);if(V24_FAMILY_RE.test(c.r)&&v24LooksLikePersonLabel(sourceNode.l))v24MarkHuman(sourceNode)}
+
+    v24EnsureSurnameHubForNode(sourceNode,liveSeed);v24EnsureSurnameHubForNode(q,liveSeed);
     let before=v24FindEdge(sourceNode,q),oldRel=before?.rel||'',oldKind=before?.kind||'';
     edge(sourceNode,q,c.r,liveSeed.id,c.src,c.kind);
     let after=v24FindEdge(sourceNode,q),upgraded=after&&(after.rel!==oldRel||after.kind!==oldKind);
@@ -208,10 +264,10 @@ v24ScheduleProgress=function(parent,seed,rows){
 if(typeof conceptualPathBetween==='function'){
   const v24ConceptualPathBase=conceptualPathBetween;
   conceptualPathBetween=async function(a,b,...args){
-    let sa=v24SurnameKey(a?.l),sb=v24SurnameKey(b?.l);
-    if(sa&&sa===sb&&a!==b){
-      v24EnsureSurnameHubForNode(a,null);
-      v24EnsureSurnameHubForNode(b,null);
+    let sa=(a?.v24Surname||v24SurnameKey(a?.l)),sb=(b?.v24Surname||v24SurnameKey(b?.l));
+    let trustedA=v24IsHumanNode(a)||v24IsSeedRoot(a),trustedB=v24IsHumanNode(b)||v24IsSeedRoot(b);
+    if(sa&&sa===sb&&a!==b&&trustedA&&trustedB){
+      v24MarkHuman(a,sa);v24MarkHuman(b,sb);v24EnsureSurnameHubForNode(a,null);v24EnsureSurnameHubForNode(b,null);
       let ids=pathIds(a.id,b.id);
       if(ids){render();return{kind:'visible',ids}}
       return{kind:'surname-direct',surname:sa}
@@ -223,7 +279,7 @@ if(typeof describeSearchedPath==='function'){
   const v24DescribeSearchedBase=describeSearchedPath;
   describeSearchedPath=function(a,b,res){
     if(res?.kind==='surname-direct'){
-      let surname=cap(res.surname||v24SurnameKey(a?.l)||'');
+      let surname=cap(res.surname||a?.v24Surname||v24SurnameKey(a?.l)||'');
       return{html:`<div class="box"><strong>${a.l} ↔ ${b.l}</strong><ul><li><b>${a.l}</b> — related through surname → <b>${surname}</b></li><li><b>${b.l}</b> — related through surname → <b>${surname}</b></li></ul><p>Why they connect: they share the exact surname <b>${surname}</b>, which Things Universe treats as relatedness.</p></div>`,intermediates:[surname]}
     }
     return v24DescribeSearchedBase(a,b,res)
