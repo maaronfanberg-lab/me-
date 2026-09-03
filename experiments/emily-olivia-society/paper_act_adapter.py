@@ -164,6 +164,12 @@ def _request_completion(
 ) -> tuple[str, bool]:
     port = int(os.environ.get("COMMUNITY_BITNET_PORT", "8080"))
     timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "45"))
+    # Falcon3 10B measured ~62s just to evaluate the current Alex prompt on
+    # the hosted CPU runner (1136 prompt tokens at ~18.2 tok/s). Keep peer
+    # turns on the normal budget, but give direct Alex replies enough time
+    # for prompt evaluation plus a bounded 64-token answer.
+    if str(other_name or "").strip().lower() == "alex":
+        timeout = max(timeout, 90)
     base_tokens = min(128, max(24, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))
     extra_tokens = 16 * min(4, max(0, request_index)) if previous_hit_limit else 0
     max_tokens = min(128, base_tokens + extra_tokens)
