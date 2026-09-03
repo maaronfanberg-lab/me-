@@ -178,6 +178,23 @@ export class ThingsState extends DurableObject {
     return { jobs: selected, queued: queue.length };
   }
 
+  async progress(id, result) {
+    const queue = (await this.ctx.storage.get("thingsQueue")) || [];
+    const job = queue.find((item) => item.id === id);
+    if (!job) return { accepted: false, id, status: "missing" };
+    const now = Date.now();
+    const record = {
+      id,
+      term: job.term || result?.term || "",
+      status: "working",
+      result: result || null,
+      progressAt: now,
+      expiresAt: now + RESULT_TTL_MS,
+    };
+    await this.ctx.storage.put(`thingsResult:${id}`, record, { expirationTtl: Math.ceil(RESULT_TTL_MS / 1000) + 60 });
+    return { accepted: true, id, status: "working" };
+  }
+
   async complete(id, result, error = "") {
     const queue = (await this.ctx.storage.get("thingsQueue")) || [];
     const job = queue.find((item) => item.id === id);
@@ -252,6 +269,18 @@ export default {
       try {
         await requireGitHub(request);
         return json(await stub.pending(4));
+      } catch (error) {
+        return json({ error: "unauthorized", detail: String(error?.message || error) }, 401);
+      }
+    }
+
+    if (url.pathname === "/api/things/progress" && request.method === "POST") {
+      try {
+        await requireGitHub(request);
+        const body = await request.json();
+        const id = String(body?.id || "").trim();
+        if (!/^[0-9a-f-]{20,50}$/i.test(id)) return json({ error: "invalid-id" }, 400);
+        return json(await stub.progress(id, body?.result || null));
       } catch (error) {
         return json({ error: "unauthorized", detail: String(error?.message || error) }, 401);
       }
