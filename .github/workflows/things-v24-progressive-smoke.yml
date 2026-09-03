@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - 'apps/things-universe-v24-progressive.js'
+      - 'apps/things-universe-v24-family.js'
       - 'apps/things-universe-v24.html'
       - 'cloudflare/room-worker/src/open-allen-things.js'
+      - 'experiments/emily-olivia-society/things_falcon_bridge.py'
       - 'experiments/emily-olivia-society/things_falcon_bridge_v3.py'
       - '.github/workflows/things-v24-progressive-smoke.yml'
   workflow_dispatch:
@@ -27,24 +29,59 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Check progressive browser syntax
+      - name: Check browser and bridge syntax
         run: |
           node --check apps/things-universe-v24-progressive.js
+          node --check apps/things-universe-v24-family.js
           node --check cloudflare/room-worker/src/open-allen-things.js
           grep -q 'things-universe-v24-progressive.js' apps/things-universe-v24.html
+          grep -q 'things-universe-v24-family.js' apps/things-universe-v24.html
+          python3 -m py_compile experiments/emily-olivia-society/things_falcon_bridge.py
 
-      - name: Verify Fanberg produces direct multi-source relations
+      - name: Verify explicit kinship rules
         working-directory: experiments/emily-olivia-society
         run: |
           python3 - <<'PY'
-          import json
-          from things_falcon_bridge_v3 import gather_parallel, direct_relations
-          evidence=gather_parallel('Fanberg')
+          import things_falcon_bridge as bridge
+
+          daniel={
+            'Id':1,'FirstName':'Daniel','LastNameCurrent':'Fanberg','Father':2,
+            'Parents':{'2':{'Id':2,'FirstName':'Oscar','LastNameCurrent':'Fanberg','Gender':'Male'}}
+          }
+          relations=bridge._direct_family(daniel)
+          assert any(
+            r.get('subject')=='Oscar Fanberg' and r.get('label')=='Daniel Fanberg' and r.get('relation')=='father of'
+            for r in relations
+          ), relations
+          assert bridge._ancestor_relation({'Gender':'Female'},5)=='great-great-great-grandmother of'
+          print('kinship rule smoke passed')
+          PY
+
+      - name: Verify Fanberg multi-source and WikiTree lookup
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json, time
+          import things_falcon_bridge as bridge
+
+          evidence=bridge.v3.gather_parallel('Fanberg')
           sources=[x.get('source') for x in evidence if x.get('items')]
-          relations=direct_relations('Fanberg', evidence)
+          relations=bridge.v3.direct_relations('Fanberg', evidence)
           print(json.dumps({'sources':sources,'relations':relations},indent=2,ensure_ascii=False))
-          if len(sources) < 2: raise SystemExit(f'expected multi-source evidence, got {sources}')
-          if not relations: raise SystemExit('expected at least one explicit Fanberg relation before Falcon synthesis')
+          if len(sources) < 2:
+              raise SystemExit(f'expected multi-source evidence, got {sources}')
+          if not relations:
+              raise SystemExit('expected at least one explicit Fanberg relation before Falcon synthesis')
+
+          wt=None
+          for attempt in range(3):
+              wt=bridge.wikitree_v4('Fanberg')
+              if wt.get('items'):
+                  break
+              time.sleep(2)
+          print(json.dumps({'wikitree':wt},indent=2,ensure_ascii=False))
+          if not (wt or {}).get('items'):
+              raise SystemExit('WikiTree returned no Fanberg surname matches')
           PY
 
       - name: Verify live relay exposes working progress
@@ -53,12 +90,23 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, time, urllib.error
           import things_falcon_bridge_base as base
+
           term=f"v24 progress smoke {os.environ['RUN_ID']}"
-          queued=base.post_json(base.WORKER+'/api/things/enrich',{'term':term,'context':['progressive smoke']})
-          job=str(queued.get('id') or '')
-          if not job: raise SystemExit(f'no job id: {queued}')
+          queued=None
+          for attempt in range(5):
+              try:
+                  queued=base.post_json(base.WORKER+'/api/things/enrich',{'term':term,'context':['progressive smoke']})
+                  break
+              except urllib.error.HTTPError as exc:
+                  if exc.code != 503 or attempt == 4:
+                      raise
+                  time.sleep(2 + attempt)
+          job=str((queued or {}).get('id') or '')
+          if not job:
+              raise SystemExit(f'no job id: {queued}')
+
           token=base.oidc_token()
           partial={
             'term':term,
@@ -70,7 +118,9 @@ jobs:
           base.post_json(base.WORKER+'/api/things/progress',{'id':job,'result':partial},headers={'Authorization':f'Bearer {token}'})
           live=base.get_json(base.WORKER+f'/api/things/result?id={job}',quiet=False)
           print(json.dumps(live,indent=2))
-          if live.get('status') != 'working': raise SystemExit(f'progress not visible: {live}')
-          if (live.get('result') or {}).get('phase') != 'evidence': raise SystemExit(f'wrong progress payload: {live}')
+          if live.get('status') != 'working':
+              raise SystemExit(f'progress not visible: {live}')
+          if (live.get('result') or {}).get('phase') != 'evidence':
+              raise SystemExit(f'wrong progress payload: {live}')
           base.complete(token,job,result=partial|{'phase':'done'})
           PY
