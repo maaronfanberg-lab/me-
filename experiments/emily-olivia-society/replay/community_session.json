@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 2,
+  "completed_reply_turns": 3,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -89,6 +89,15 @@
       "to_name": "Olivia",
       "content": "How about you? Was your day good too?",
       "created_at": "2026-09-03T12:06:58.807576+00:00"
+    },
+    {
+      "id": 4,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Oh, I had a good day too! Thanks for asking.",
+      "created_at": "2026-09-03T12:07:47.449730+00:00"
     }
   ],
   "latest_turn": {
@@ -125,21 +134,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Hey, how was your day?",
+      "Olivia observes a message from Emily: How about you? Was your day good too?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "6c779bd19634dbb67d2d",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 40.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 5
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "39d06f1894439f7609d4",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 5
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "Oh, I had a good day too! Thanks for asking.",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Hey, how was your day?",
+        "Olivia observes a message from Emily: How about you? Was your day good too?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "6c779bd19634dbb67d2d",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 40.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 5
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "39d06f1894439f7609d4",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 5
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 4,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Oh, I had a good day too! Thanks for asking.",
+        "created_at": "2026-09-03T12:07:47.449730+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'role_swapped_personal_fact: I had a good day too, thank you! How about yours?'"
+    "external_generation_error": ""
   }
 }
