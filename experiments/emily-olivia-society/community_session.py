@@ -420,6 +420,19 @@ async def run_community_session(
             )
             action = turn.get("action", {})
 
+            # Alex is an external participant. Persist a successful direct reply
+            # immediately, even if the peer turn is deferred afterward. The Alex
+            # item is acknowledged when this result is created, so dropping it
+            # here would make a real reply disappear from the live Community.
+            external_action_result = turn.get("external_action_result")
+            external_delivered_message = (
+                external_action_result.get("message")
+                if isinstance(external_action_result, dict)
+                else None
+            )
+            if continuous_seconds > 0 and isinstance(external_delivered_message, dict):
+                live_messages.append(external_delivered_message)
+
             # A deferred sample is explicitly recoverable: the inbound message
             # remains unconsumed, so continuous mode should keep the same speaker
             # and try again rather than ending the whole conversation. Do not

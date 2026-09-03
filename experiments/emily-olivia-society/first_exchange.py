@@ -35,6 +35,7 @@ _RECOVERABLE_SPEECH_FAILURE_MARKERS = (
     "paper-derived Stanford act produced no usable spoken line after",
     "Remote end closed connection without response",
     "BitNet paper-act completion request failed",
+    "BitNet paper-act completion request timed out",
     "BitNet paper-act completion HTTP 408",
     "BitNet paper-act completion HTTP 429",
     "BitNet paper-act completion HTTP 500",

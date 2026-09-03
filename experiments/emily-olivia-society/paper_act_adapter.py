@@ -207,6 +207,8 @@ def _request_completion(
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:4000]
         raise RuntimeError(f"BitNet paper-act completion HTTP {exc.code}: {body}") from exc
+    except TimeoutError as exc:
+        raise RuntimeError(f"BitNet paper-act completion request timed out after {timeout}s") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"BitNet paper-act completion request failed: {exc.reason}") from exc
 
