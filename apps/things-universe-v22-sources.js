@@ -2,6 +2,8 @@
 
 // v22: common-meaning first. Explicit conceptual sources only.
 // Wikipedia is used only for cleaned conceptual fields; category members are never injected as nodes.
+// v24 Falcon extension: sparse/ambiguous concepts can be enriched through the Community's
+// Falcon3 10B engine, which synthesizes evidence from multiple independent public sources.
 
 const ENTITY_DESC=/\b(song|single|album|ep\b|film|movie|television|tv series|episode|novel|book|comic|video game|game|band|musician|singer|actor|actress|artist|record label|company|organization|person|surname|given name|village|town|city|county|district|station|airport|ship|album by|song by|film by)\b/i;
 const ENTITY_CAT=/\b(songs?|singles?|albums?|eps?|films?|movies?|television|episodes?|novels?|books?|comics?|video games?|musicians?|singers?|actors?|actresses?|artists?|record labels?|people|births|deaths|companies|organizations|cities|towns|villages|ships?)\b/i;
@@ -9,6 +11,7 @@ const FIELD_DROP=/\b(works by|discographies|filmographies|albums by|songs by|sin
 const EXPLICIT_ENTITY=/\b(song|single|album|film|movie|novel|book|episode|band|artist|actor|actress|company|city|country|\d{4})\b/i;
 const COMMON_ABSTRACT=/\b(idea|ideas|thought|belief|emotion|feeling|love|fear|anger|joy|happy|happiness|sad|sadness|peace|truth|beauty|good|bad|ethics|morality|meaning|knowledge|reason|reasoning|judgment|decision|choice|risk|mistake|problem|solution|creativity|curiosity|trust|hope|justice|freedom|power|culture|society|language|science|mathematics|math|number|numbers|sound|music|fungus|fungi|universe|nature|life|death)\b/i;
 const MEDIA_LABEL=/\b(album[- ]?equivalent|album|single release|music track|audio track|recording industry|greatest hits|extended play|record label|soundtrack|discography|musical work\/composition)\b/i;
+const THINGS_RELAY='https://room-live-mirror.dfp6k69dw5.workers.dev';
 
 const LOCAL_COMMON=new Map([
   ['idea',[
@@ -54,6 +57,8 @@ function candidateAllowed(label,term,src=''){
   return true
 }
 async function json(url,ms=4500){let c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{let r=await fetch(url,{signal:c.signal});return r.ok?await r.json():null}catch{return null}finally{clearTimeout(t)}}
+async function postjson(url,body,ms=5000){let c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{let r=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:c.signal});return r.ok?await r.json():null}catch{return null}finally{clearTimeout(t)}}
+const nap=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function add(m,c){if(!c?.k||!c?.l||!c?.r||!candidateAllowed(c.l,c.from||'',c.src))return;let o=m.get(c.k);if(!o||c.score>o.score)m.set(c.k,c)}
 
 async function cn(term){
@@ -114,6 +119,33 @@ async function wiki(term){
   return out
 }
 
+function falconRows(data,term){
+  let out=[];
+  for(const row of data?.relations||[]){
+    let lab=String(row?.label||'').trim(),rel=String(row?.relation||'').trim(),sources=Array.isArray(row?.sources)?row.sources.map(String).filter(Boolean).slice(0,4):[];
+    let confidence=Number(row?.confidence);if(!Number.isFinite(confidence))confidence=.5;
+    if(confidence<.5||!lab||!rel||!sources.length||!candidateAllowed(lab,term,'Falcon synthesis'))continue;
+    let q=key(lab);if(!q||q===key(term))continue;
+    out.push({k:q,l:cap(lab),r:rel,score:170+Math.round(Math.max(0,Math.min(1,confidence))*140),src:`Falcon synthesis · ${sources.join(' + ')}`,from:term});
+  }
+  return out.slice(0,14)
+}
+
+async function falcon(term){
+  let context=[];
+  try{if(typeof N!=='undefined'&&Array.isArray(N))context=N.slice(-12).map(n=>n?.l).filter(Boolean).slice(0,12)}catch{}
+  let start=await postjson(`${THINGS_RELAY}/api/things/enrich`,{term:String(term).slice(0,80),context},5000);
+  if(start?.result)return falconRows(start.result,term);
+  let id=start?.id;if(!id)return[];
+  for(let i=0;i<26;i++){
+    await nap(i?1100:350);
+    let result=await json(`${THINGS_RELAY}/api/things/result?id=${encodeURIComponent(id)}`,3500);
+    if(result?.status==='done')return falconRows(result.result,term);
+    if(result?.status==='error'||result?.status==='missing')return[];
+  }
+  return[]
+}
+
 async function concepts(term){
   let k=key(term);if(cache.has(k))return cache.get(k);
   let m=new Map();
@@ -128,6 +160,11 @@ async function concepts(term){
 
   // Wikipedia contributes only cleaned conceptual-field category names, never sibling pages/items.
   if(m.size<34){let w=await wiki(k);for(const x of w)add(m,x)}
+
+  // Sparse concepts get the expensive pass. Falcon does not replace the explicit sources above;
+  // it reconciles WikiTree, Wiktionary, Wikidata, ConceptNet, Wikipedia, DBpedia, OpenAlex,
+  // Crossref, Open Library, and FamilySearch when an authenticated FamilySearch token is available.
+  if(m.size<34){let f=await falcon(term);for(const x of f)add(m,x)}
 
   let out=[...m.values()].filter(x=>x.k!==k).sort((a,b)=>b.score-a.score);
   cache.set(k,out);return out

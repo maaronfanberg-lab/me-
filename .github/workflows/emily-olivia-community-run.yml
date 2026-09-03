@@ -17,6 +17,7 @@ permissions:
   actions: write
   contents: write
   issues: write
+  id-token: write
 
 jobs:
   community-run:
@@ -31,6 +32,8 @@ jobs:
       COMMUNITY_GENERATION_TIMEOUT: '45'
       COMMUNITY_SOCIAL_RPC_TIMEOUT: '60'
       COMMUNITY_MAX_TOKENS: '64'
+      THINGS_RELAY_BASE: 'https://room-live-mirror.dfp6k69dw5.workers.dev'
+      THINGS_OIDC_AUDIENCE: 'room-live-mirror'
       GH_TOKEN: ${{ github.token }}
       TZ: America/Chicago
     steps:
@@ -52,7 +55,7 @@ jobs:
           stanford_native_cycle.py paper_act_adapter.py paper_plan_adapter.py paper_react_adapter.py
           paper_reflection_adapter.py community_session.py controlled_social_space.py first_exchange.py
           social_bridge.py alex_bridge.py persistence_reflection.py observer.py dialogue_boundary_guard.py
-          external_reality_guard.py
+          external_reality_guard.py things_falcon_bridge.py
 
       - name: Restore Community runtime and BitNet
         id: bitnet-cache
@@ -130,7 +133,16 @@ jobs:
         id: session
         working-directory: experiments/emily-olivia-society
         run: |
+          set -euo pipefail
           OPENER="${{ github.event.inputs.opener }}"
+          mkdir -p replay
+          .venv-stanford/bin/python things_falcon_bridge.py > replay/things-falcon-bridge.log 2>&1 &
+          THINGS_BRIDGE_PID=$!
+          cleanup_things_bridge() {
+            kill "$THINGS_BRIDGE_PID" 2>/dev/null || true
+            wait "$THINGS_BRIDGE_PID" 2>/dev/null || true
+          }
+          trap cleanup_things_bridge EXIT
           .venv-stanford/bin/python community_session.py \
             --run \
             --continuous-seconds 17400 \
