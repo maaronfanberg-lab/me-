@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'apps/things-universe-v22-sources.js'
+      - 'apps/things-universe-v24-progressive.js'
+      - 'apps/things-universe-v24.html'
       - 'cloudflare/room-worker/src/open-allen-things.js'
       - 'cloudflare/room-worker/wrangler.toml'
       - 'experiments/emily-olivia-society/things_falcon_bridge*.py'
@@ -28,7 +30,10 @@ jobs:
           experiments/emily-olivia-society/things_falcon_bridge_v3.py
 
       - name: Check Things Universe source syntax
-        run: node --check apps/things-universe-v22-sources.js
+        run: |
+          node --check apps/things-universe-v22-sources.js
+          node --check apps/things-universe-v24-progressive.js
+          grep -q 'things-universe-v24-progressive.js' apps/things-universe-v24.html
 
       - name: Check Worker wrapper syntax
         run: node --check cloudflare/room-worker/src/open-allen-things.js
