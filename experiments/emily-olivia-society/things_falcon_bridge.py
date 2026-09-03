@@ -9,10 +9,11 @@ from typing import Any, Callable
 
 import things_falcon_bridge_base as base
 import things_falcon_bridge_v3 as v3
+import things_surname_deep as deep
 
 WT_APP_ID = "ThingsUniverseV24"
 WT_ANCESTOR_DEPTH = 8
-MAX_RELATIONS = 44
+MAX_RELATIONS = 240
 
 
 def _wt_params(**kwargs: Any) -> str:
@@ -399,6 +400,17 @@ def enrich_v4(
 
     send("evidence", basic, "multi-source evidence; family walk + Falcon pending")
 
+    deep_rows: list[dict[str, Any]] = []
+    if deep.is_surname_term(term):
+        try:
+            sweep = deep.deep_surname_sweep(term)
+            deep_rows = list(sweep.get("relations") or [])[:MAX_RELATIONS]
+            allowed_sources.update(str(x) for x in (sweep.get("sources") or []) if x)
+            if deep_rows:
+                send("surname", merge_relations(basic, deep_rows), "deep surname sweep; family refinement + Falcon pending")
+        except Exception as exc:
+            print(f"Deep surname sweep failed for {term}: {type(exc).__name__}: {exc}", flush=True)
+
     family: list[dict[str, Any]] = []
     if "WikiTree" in allowed_sources:
         family = family_relations(
@@ -406,15 +418,15 @@ def enrich_v4(
             compact,
             emit=lambda rows: send(
                 "family",
-                merge_relations(basic, rows),
-                "multi-source evidence + explicit WikiTree kinship; Falcon pending",
+                merge_relations(basic, deep_rows, rows),
+                "deep surname sweep + family refinement; Falcon pending",
             ),
         )
 
     if not compact:
         return {
             "term": term,
-            "relations": merge_relations(basic, family),
+            "relations": merge_relations(basic, deep_rows, family),
             "evidence_sources": sorted(allowed_sources),
             "engine": "multi-source evidence",
             "phase": "done",
@@ -448,12 +460,12 @@ def enrich_v4(
         print(f"Things Falcon synthesis deferred for {term}: {type(exc).__name__}: {exc}", flush=True)
         inferred = []
 
-    relations = merge_relations(basic, family, inferred)
+    relations = merge_relations(basic, deep_rows, family, inferred)
     return {
         "term": term,
         "relations": relations,
         "evidence_sources": sorted(allowed_sources),
-        "engine": "Falcon3-10B-Instruct-1.58bit via BitNet + multi-source evidence + explicit kinship rules",
+        "engine": "Falcon3-10B-Instruct-1.58bit via BitNet + deep surname sweep + kinship refinement",
         "phase": "done",
         "elapsed_seconds": round(time.monotonic() - started, 3),
     }

@@ -25,7 +25,7 @@ function v24RelationStrength(rel='',src='',kind=''){
     if(/\b(grand|great-|ancestor|descendant|aunt|uncle|niece|nephew|cousin|in-law|by marriage)\b/.test(r))return 90;
     return 86
   }
-  if(cls==='surname')return /has surname|family name/.test(r)?62:58;
+  if(cls==='surname')return /related through surname/.test(r)?76:/has surname|family name/.test(r)?72:68;
   if(cls==='people')return 40;
   if(cls==='places')return 35;
   return 20
@@ -77,20 +77,21 @@ function v24EnsureSurnameHubForNode(n,seed=null){
     hub=v24NodeBase(cap(sk),primary,anchorNode);
     if(hub&&!hub.parentId&&typeof placeChild==='function')placeChild(hub,anchorNode);
     for(const s of seedsForHub)own(hub,s)
+    try{if(typeof v24ProgressiveFalcon==='function')v24ProgressiveFalcon(hub.k)}catch{}
   }
   if(!hub||hub===n)return;
 
   for(const s of v24SeedsForNodes([n],seed))own(hub,s);
-  edge(n,hub,'has surname',seed?.id||[...n.owners||[]][0]||'','exact surname match','surname');
+  edge(n,hub,'related through surname',seed?.id||[...n.owners||[]][0]||'','exact surname match','surname');
   if(cohort.length){
     for(const person of cohort){
-      edge(person,hub,'has surname',[...person.owners||[]][0]||'','exact surname match','surname')
+      edge(person,hub,'related through surname',[...person.owners||[]][0]||'','exact surname match','surname')
     }
   }
 }
 function v24AttachExistingPeopleToSurname(hub,seed=null){
   if(!hub||String(hub.k||'').includes(' '))return;
-  for(const n of N){if(n===hub||v24SurnameKey(n.l)!==hub.k)continue;if(seed)own(n,seed);edge(n,hub,'has surname',seed?.id||'','exact surname match','surname')}
+  for(const n of N){if(n===hub||v24SurnameKey(n.l)!==hub.k)continue;if(seed)own(n,seed);edge(n,hub,'related through surname',seed?.id||'','exact surname match','surname')}
 }
 const v24NodeBase=node;
 node=function(term,seed=null,p=null){
@@ -172,7 +173,7 @@ v24ProgressRows=function(data,term){
     let kind=String(row?.kind||v24RelationClass(rel,sources.join(' + '),'')).toLowerCase();
     out.push({k:q,l:cap(lab),r:rel,score:170+Math.round(Math.max(0,Math.min(1,confidence))*140),src:`${phase} · ${sources.join(' + ')}`,from,origin:term,kind});
   }
-  return out.slice(0,44)
+  return out.slice(0,240)
 };
 
 const v24MergeProgressBase=v24MergeProgressCache;
@@ -187,7 +188,7 @@ v24ScheduleProgress=function(parent,seed,rows){
   let watchKey=`${seed.id}|${parent.id}`,seen=v24ProgressWatches.get(watchKey);if(!seen)return;
   let fresh=[];
   for(const c of rows||[]){let rk=`${key(c.from||parent.k)}|${c.k}|${c.r}`;if(seen.has(rk))continue;seen.add(rk);fresh.push(c)}
-  fresh.slice(0,44).forEach((c,i)=>setTimeout(()=>{
+  fresh.slice(0,240).forEach((c,i)=>setTimeout(()=>{
     let liveParent=nById(parent.id),liveSeed=seedById(seed.id);if(!liveParent||!liveSeed||!liveParent.owners?.has(liveSeed.id))return;
     let sourceNode=liveParent,sourceKey=key(c.from||liveParent.k),sourceWas=false;
     if(sourceKey&&sourceKey!==key(liveParent.k)){
@@ -204,6 +205,30 @@ v24ScheduleProgress=function(parent,seed,rows){
   },i*420))
 };
 
+if(typeof conceptualPathBetween==='function'){
+  const v24ConceptualPathBase=conceptualPathBetween;
+  conceptualPathBetween=async function(a,b,...args){
+    let sa=v24SurnameKey(a?.l),sb=v24SurnameKey(b?.l);
+    if(sa&&sa===sb&&a!==b){
+      v24EnsureSurnameHubForNode(a,null);
+      v24EnsureSurnameHubForNode(b,null);
+      let ids=pathIds(a.id,b.id);
+      if(ids){render();return{kind:'visible',ids}}
+      return{kind:'surname-direct',surname:sa}
+    }
+    return v24ConceptualPathBase(a,b,...args)
+  }
+}
+if(typeof describeSearchedPath==='function'){
+  const v24DescribeSearchedBase=describeSearchedPath;
+  describeSearchedPath=function(a,b,res){
+    if(res?.kind==='surname-direct'){
+      let surname=cap(res.surname||v24SurnameKey(a?.l)||'');
+      return{html:`<div class="box"><strong>${a.l} ↔ ${b.l}</strong><ul><li><b>${a.l}</b> — related through surname → <b>${surname}</b></li><li><b>${b.l}</b> — related through surname → <b>${surname}</b></li></ul><p>Why they connect: they share the exact surname <b>${surname}</b>, which Things Universe treats as relatedness.</p></div>`,intermediates:[surname]}
+    }
+    return v24DescribeSearchedBase(a,b,res)
+  }
+}
 if(typeof relationKind==='function'){
   const v24RelationKindBase=relationKind;
   relationKind=function(rel){let c=v24RelationClass(rel,'','');if(c==='family'||c==='surname')return c;return v24RelationKindBase(rel)}
@@ -212,8 +237,8 @@ if(typeof whySentence==='function'){
   const v24WhyBase=whySentence;
   whySentence=function(steps){
     let kinds=[...new Set((steps||[]).map(s=>relationKind(s.rel||s.r)))];
-    if(kinds.includes('family'))return'Why they connect: this chain includes documented family relationships. Exact surname relatedness remains part of the graph, but the specific family edge is stronger.';
-    if(kinds.includes('surname'))return'Why they connect: Things Universe treats an exact shared surname as general surname-relatedness. A specific biological or marriage path is shown only when records support one.';
+    if(kinds.includes('family'))return'Why they connect: this chain includes a more specific family relationship. Shared-surname relatedness remains underneath it.';
+    if(kinds.includes('surname'))return'Why they connect: they share the same surname, which Things Universe treats as relatedness. More specific family connections can replace this general link when they are found.';
     return v24WhyBase(steps)
   }
 }
