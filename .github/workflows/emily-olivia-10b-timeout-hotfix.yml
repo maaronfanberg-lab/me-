@@ -1,4 +1,4 @@
-# One-shot measured repair: 45s cannot cover the observed 10B Alex prompt.
+# One-shot measured repair for direct Alex replies on Falcon3 10B.
 name: Emily Olivia 10B Timeout Hotfix
 
 on:
@@ -26,38 +26,40 @@ jobs:
           ref: main
           fetch-depth: 2
 
-      - name: Apply measured Falcon3 10B generation budget
+      - name: Give direct Alex replies the measured 10B budget
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('.github/workflows/emily-olivia-community-run.yml')
+          path = Path('experiments/emily-olivia-society/paper_act_adapter.py')
           text = path.read_text(encoding='utf-8')
-          old = "      COMMUNITY_GENERATION_TIMEOUT: '45'\n"
-          new = "      COMMUNITY_GENERATION_TIMEOUT: '90'\n"
-          if new in text:
-              print('90-second 10B generation budget already present')
+          old = '''    timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "45"))\n    base_tokens = min(128, max(24, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))\n'''
+          new = '''    timeout = int(os.environ.get("COMMUNITY_GENERATION_TIMEOUT", "45"))\n    # Falcon3 10B measured ~62s just to evaluate the current Alex prompt on\n    # the hosted CPU runner (1136 prompt tokens at ~18.2 tok/s). Keep peer\n    # turns on the normal budget, but give direct Alex replies enough time\n    # for prompt evaluation plus a bounded 64-token answer.\n    if str(other_name or "").strip().lower() == "alex":\n        timeout = max(timeout, 90)\n    base_tokens = min(128, max(24, int(os.environ.get("COMMUNITY_MAX_TOKENS", "64"))))\n'''
+          marker = 'timeout = max(timeout, 90)'
+          if marker in text:
+              print('Measured Alex reply budget already present')
           elif old in text:
               path.write_text(text.replace(old, new, 1), encoding='utf-8')
-              print('Raised measured 10B generation budget from 45s to 90s')
+              print('Added measured 90s minimum only for direct Alex replies')
           else:
-              raise SystemExit('Expected Community generation-timeout setting not found')
+              raise SystemExit('Expected paper-act timeout target not found')
           PY
-          grep -q "COMMUNITY_GENERATION_TIMEOUT: '90'" .github/workflows/emily-olivia-community-run.yml
+          python3 -m py_compile experiments/emily-olivia-society/paper_act_adapter.py
+          grep -q 'timeout = max(timeout, 90)' experiments/emily-olivia-society/paper_act_adapter.py
 
-      - name: Commit verified timeout repair and let Community trigger reload it
+      - name: Commit verified runtime repair and reload Community
         shell: bash
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .github/workflows/emily-olivia-community-run.yml
+          git add experiments/emily-olivia-society/paper_act_adapter.py
           if git diff --cached --quiet; then
-            echo 'Measured timeout repair is already present.'
+            echo 'Measured Alex reply repair is already present.'
             exit 0
           fi
-          git commit -m 'Give Falcon3 10B measured 90s generation budget'
+          git commit -m 'Give Alex Falcon3 10B measured reply budget'
           for attempt in 1 2 3; do
             if git pull --rebase --autostash origin main && git push origin HEAD:main; then
               exit 0
@@ -65,5 +67,5 @@ jobs:
             git rebase --abort || true
             sleep $((attempt * 5))
           done
-          echo 'Failed to publish measured timeout repair after retries.' >&2
+          echo 'Failed to publish measured Alex reply repair after retries.' >&2
           exit 1
