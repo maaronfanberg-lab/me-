@@ -51,3 +51,14 @@ conceptualPathBetween=async function(a,b,...args){
   }
   return v24ConceptualPathBeforeSurnameCompat(a,b,...args)
 };
+
+// In Things Universe, exact surname sharing is baseline family relatedness.
+// Therefore the Family filter must retain surname edges rather than hiding them.
+const v24EdgeMatchesBeforeSurnameCompat=v24EdgeMatches;
+v24EdgeMatches=function(e,filter=v24ResultFilter){
+  if(filter==='family'){
+    let cls=v24RelationClass(e?.rel,e?.src,e?.kind);
+    if(cls==='surname')return true
+  }
+  return v24EdgeMatchesBeforeSurnameCompat(e,filter)
+};
