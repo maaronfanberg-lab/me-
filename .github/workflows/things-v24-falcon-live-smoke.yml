@@ -1,0 +1,75 @@
+name: Live smoke Things Universe Falcon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/things-v24-falcon-live-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      RELAY: https://room-live-mirror.dfp6k69dw5.workers.dev
+    steps:
+      - name: Enqueue Fanberg enrichment
+        id: enqueue
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --connect-timeout 5 --max-time 15 -o /tmp/enqueue.json -w '%{http_code}' \
+            -H 'content-type: application/json' \
+            --data '{"term":"Fanberg","context":["surname","name relatedness"]}' \
+            "$RELAY/api/things/enrich")
+          cat /tmp/enqueue.json
+          test "$code" = 202
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          d=json.load(open('/tmp/enqueue.json'))
+          job=d.get('id')
+          if not job: raise SystemExit('No Things job id returned')
+          print(f'job={job}')
+          PY
+
+      - name: Await Falcon result
+        shell: bash
+        env:
+          JOB: ${{ steps.enqueue.outputs.job }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            code=$(curl -sS --connect-timeout 5 --max-time 15 -o /tmp/result.json -w '%{http_code}' \
+              "$RELAY/api/things/result?id=$JOB")
+            cat /tmp/result.json
+            if [ "$code" = 200 ]; then
+              status=$(python3 - <<'PY'
+          import json
+          print(json.load(open('/tmp/result.json')).get('status',''))
+          PY
+              )
+              if [ "$status" = done ]; then break; fi
+              if [ "$status" = error ]; then exit 1; fi
+            fi
+            sleep 5
+          done
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/result.json'))
+          if d.get('status') != 'done': raise SystemExit(f"Falcon result did not complete: {d}")
+          r=d.get('result') or {}
+          if r.get('term') != 'Fanberg': raise SystemExit(f"Wrong term: {r}")
+          if 'Falcon3-10B-Instruct-1.58bit' not in str(r.get('engine')): raise SystemExit(f"Wrong engine: {r}")
+          sources=r.get('evidence_sources') or []
+          if len(sources) < 2: raise SystemExit(f"Expected multi-source evidence, got {sources}")
+          relations=r.get('relations') or []
+          if not relations: raise SystemExit(f"No graph relations returned: {r}")
+          for x in relations:
+              if not x.get('label') or not x.get('relation') or not x.get('sources'):
+                  raise SystemExit(f"Malformed relation: {x}")
+          print(json.dumps({'sources':sources,'relations':relations}, indent=2))
+          PY
