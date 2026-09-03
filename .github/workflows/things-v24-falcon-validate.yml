@@ -1,0 +1,40 @@
+name: Validate Things Universe Falcon integration
+
+on:
+  pull_request:
+    paths:
+      - 'apps/things-universe-v22-sources.js'
+      - 'cloudflare/room-worker/src/open-allen-things.js'
+      - 'cloudflare/room-worker/wrangler.toml'
+      - 'experiments/emily-olivia-society/things_falcon_bridge.py'
+      - '.github/workflows/emily-olivia-community-run.yml'
+      - '.github/workflows/things-v24-falcon-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compile Falcon enrichment bridge
+        run: python3 -m py_compile experiments/emily-olivia-society/things_falcon_bridge.py
+
+      - name: Check Things Universe source syntax
+        run: node --check apps/things-universe-v22-sources.js
+
+      - name: Check Worker wrapper syntax
+        run: node --check cloudflare/room-worker/src/open-allen-things.js
+
+      - name: Bundle Worker configuration without deploying
+        working-directory: cloudflare/room-worker
+        run: npx --yes wrangler@latest deploy --dry-run --outdir /tmp/things-worker-build
+
+      - name: Confirm Community workflow contains Falcon bridge service
+        run: |
+          grep -q 'id-token: write' .github/workflows/emily-olivia-community-run.yml
+          grep -q 'things_falcon_bridge.py' .github/workflows/emily-olivia-community-run.yml
+          grep -q 'Falcon3-10B-Instruct-1.58bit' .github/workflows/emily-olivia-community-run.yml

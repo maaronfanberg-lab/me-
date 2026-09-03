@@ -1,14 +1,23 @@
 name = "room-live-mirror"
-main = "src/open-allen.js"
+main = "src/open-allen-things.js"
 compatibility_date = "2026-08-17"
 workers_dev = true
 # keyless Allen participant wrapper 2026-08-24
+# Things Universe Falcon relay 2026-09-03
 
 [[durable_objects.bindings]]
 name = "ROOM"
 class_name = "RoomState"
 
+[[durable_objects.bindings]]
+name = "THINGS"
+class_name = "ThingsState"
+
 [exports.RoomState]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.ThingsState]
 type = "durable-object"
 storage = "sqlite"
 
