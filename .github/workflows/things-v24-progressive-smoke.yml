@@ -1,0 +1,76 @@
+name: Smoke progressive Things Universe enrichment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/things-universe-v24-progressive.js'
+      - 'apps/things-universe-v24.html'
+      - 'cloudflare/room-worker/src/open-allen-things.js'
+      - 'experiments/emily-olivia-society/things_falcon_bridge_v3.py'
+      - '.github/workflows/things-v24-progressive-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      THINGS_RELAY_BASE: 'https://room-live-mirror.dfp6k69dw5.workers.dev'
+      THINGS_OIDC_AUDIENCE: 'room-live-mirror'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check progressive browser syntax
+        run: |
+          node --check apps/things-universe-v24-progressive.js
+          node --check cloudflare/room-worker/src/open-allen-things.js
+          grep -q 'things-universe-v24-progressive.js' apps/things-universe-v24.html
+
+      - name: Verify Fanberg produces direct multi-source relations
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from things_falcon_bridge_v3 import gather_parallel, direct_relations
+          evidence=gather_parallel('Fanberg')
+          sources=[x.get('source') for x in evidence if x.get('items')]
+          relations=direct_relations('Fanberg', evidence)
+          print(json.dumps({'sources':sources,'relations':relations},indent=2,ensure_ascii=False))
+          if len(sources) < 2: raise SystemExit(f'expected multi-source evidence, got {sources}')
+          if not relations: raise SystemExit('expected at least one explicit Fanberg relation before Falcon synthesis')
+          PY
+
+      - name: Verify live relay exposes working progress
+        working-directory: experiments/emily-olivia-society
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          import things_falcon_bridge_base as base
+          term=f"v24 progress smoke {os.environ['RUN_ID']}"
+          queued=base.post_json(base.WORKER+'/api/things/enrich',{'term':term,'context':['progressive smoke']})
+          job=str(queued.get('id') or '')
+          if not job: raise SystemExit(f'no job id: {queued}')
+          token=base.oidc_token()
+          partial={
+            'term':term,
+            'phase':'evidence',
+            'engine':'smoke evidence',
+            'evidence_sources':['SmokeSource'],
+            'relations':[{'label':'progress node','relation':'arrived progressively','confidence':1,'sources':['SmokeSource'],'note':''}],
+          }
+          base.post_json(base.WORKER+'/api/things/progress',{'id':job,'result':partial},headers={'Authorization':f'Bearer {token}'})
+          live=base.get_json(base.WORKER+f'/api/things/result?id={job}',quiet=False)
+          print(json.dumps(live,indent=2))
+          if live.get('status') != 'working': raise SystemExit(f'progress not visible: {live}')
+          if (live.get('result') or {}).get('phase') != 'evidence': raise SystemExit(f'wrong progress payload: {live}')
+          base.complete(token,job,result=partial|{'phase':'done'})
+          PY
