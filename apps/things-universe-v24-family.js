@@ -17,13 +17,64 @@ function v24RelationClass(rel='',src='',kind=''){
   if(k==='people'||V24_PERSON_SRC_RE.test(s))return'people';
   return'other'
 }
+function v24RelationStrength(rel='',src='',kind=''){
+  let cls=v24RelationClass(rel,src,kind),r=String(rel||'').toLowerCase();
+  if(cls==='family'){
+    if(/\b(father|mother|son|daughter)\b/.test(r))return 100;
+    if(/\b(parent|child|sibling|brother|sister|spouse|husband|wife)\b/.test(r))return 94;
+    if(/\b(grand|great-|ancestor|descendant|aunt|uncle|niece|nephew|cousin|in-law|by marriage)\b/.test(r))return 90;
+    return 86
+  }
+  if(cls==='surname')return /has surname|family name/.test(r)?62:58;
+  if(cls==='people')return 40;
+  if(cls==='places')return 35;
+  return 20
+}
+function v24FindEdge(a,b){
+  return L.find(e=>{let x=e.source?.id||e.source,y=e.target?.id||e.target;return(x===a.id&&y===b.id)||(x===b.id&&y===a.id)})
+}
 
 const v24EdgeBase=edge;
 edge=function(a,b,r,seedId='',src='',kind=''){
+  if(!a||!b||a===b)return;
+  let before=v24FindEdge(a,b),oldStrength=before?v24RelationStrength(before.rel,before.src,before.kind):-1;
   v24EdgeBase(a,b,r,seedId,src);
-  if(!a||!b)return;
-  let e=L.find(e=>{let x=e.source?.id||e.source,y=e.target?.id||e.target;return(x===a.id&&y===b.id)||(x===b.id&&y===a.id)});
-  if(e&&kind)e.kind=kind
+  let e=v24FindEdge(a,b);if(!e)return;
+  let newKind=kind||v24RelationClass(r,src,''),newStrength=v24RelationStrength(r,src,newKind);
+  if(!Array.isArray(e.altRelations))e.altRelations=[];
+  let alt={rel:String(r||''),src:String(src||''),kind:newKind};
+  if(alt.rel&&!e.altRelations.some(x=>x.rel===alt.rel&&x.src===alt.src))e.altRelations.push(alt);
+  if(!before||newStrength>oldStrength){e.rel=r;e.src=src;e.seedId=seedId||e.seedId;e.kind=newKind}
+  else if(kind&&!e.kind)e.kind=kind
+};
+
+function v24LooksLikePersonLabel(label=''){
+  let s=String(label||'').trim(),parts=s.split(/\s+/).filter(Boolean);
+  if(parts.length<2||parts.length>7)return false;
+  if(parts.some(x=>/\d|https?:|[@/]/i.test(x)))return false;
+  return parts.every(x=>/^[A-Za-zÀ-ÖØ-öø-ÿ'’.-]+$/.test(x))
+}
+function v24SurnameKey(label=''){
+  if(!v24LooksLikePersonLabel(label))return'';
+  let parts=String(label).trim().split(/\s+/);return key(parts[parts.length-1])
+}
+function v24EnsureSurnameHubForNode(n,seed=null){
+  if(!n)return;
+  let sk=v24SurnameKey(n.l);if(!sk||sk===n.k)return;
+  let hub=byK(sk);if(!hub||hub===n)return;
+  if(seed)own(hub,seed);
+  edge(n,hub,'has surname',seed?.id||'','name structure','surname')
+}
+function v24AttachExistingPeopleToSurname(hub,seed=null){
+  if(!hub||String(hub.k||'').includes(' '))return;
+  for(const n of N){if(n===hub||v24SurnameKey(n.l)!==hub.k)continue;if(seed)own(n,seed);edge(n,hub,'has surname',seed?.id||'','name structure','surname')}
+}
+const v24NodeBase=node;
+node=function(term,seed=null,p=null){
+  let n=v24NodeBase(term,seed,p);
+  v24EnsureSurnameHubForNode(n,seed);
+  if(n&&String(n.k||'').indexOf(' ')<0)v24AttachExistingPeopleToSurname(n,seed);
+  return n
 };
 
 function v24EdgeMatches(e,filter=v24ResultFilter){
@@ -123,8 +174,10 @@ v24ScheduleProgress=function(parent,seed,rows){
     let q=byK(c.k),targetWas=!!q;
     if(!q){q=node(c.l,liveSeed,sourceNode);placeChild(q,sourceNode)}else own(q,liveSeed);
     if(sourceNode===q)return;
-    let wasLinked=hasEdge(sourceNode,q);edge(sourceNode,q,c.r,liveSeed.id,c.src,c.kind);
-    if(!sourceWas||!targetWas||!wasLinked)render()
+    let before=v24FindEdge(sourceNode,q),oldRel=before?.rel||'',oldKind=before?.kind||'';
+    edge(sourceNode,q,c.r,liveSeed.id,c.src,c.kind);
+    let after=v24FindEdge(sourceNode,q),upgraded=after&&(after.rel!==oldRel||after.kind!==oldKind);
+    if(!sourceWas||!targetWas||!before||upgraded)render()
   },i*420))
 };
 
