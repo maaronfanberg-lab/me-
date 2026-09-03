@@ -59,6 +59,23 @@ main = main.replace(`    loaderStatus.textContent = 'Loading Google 3D Tiles...'
 if (main.includes("throw new Error('GOOGLE_MAPS_API_KEY not found")) throw new Error('Google hard-stop patch failed');
 writeFileSync(mainPath, main);
 
+// The upstream scope mask is deliberately cinematic. Earth Signal boots as an
+// ordinary full-frame globe instead, while leaving the upstream feature intact
+// behind the wrapper for compatibility with the rest of the application.
+const scopePath = join(work, 'src', 'scopeMask.js');
+let scope = readFileSync(scopePath, 'utf8');
+const scopeDefault = 'let _enabled = true;';
+if (!scope.includes(scopeDefault)) throw new Error('Could not locate scope-mask default');
+scope = scope.replace(scopeDefault, 'let _enabled = false;');
+writeFileSync(scopePath, scope);
+
+const sharePath = join(work, 'src', 'sharelink.js');
+let share = readFileSync(sharePath, 'utf8');
+const shareScopeDefault = 'this._scopeEnabled = true;';
+if (!share.includes(shareScopeDefault)) throw new Error('Could not locate share-link scope default');
+share = share.replace(shareScopeDefault, 'this._scopeEnabled = false;');
+writeFileSync(sharePath, share);
+
 const flightsPath = join(work, 'src', 'data', 'flights.js');
 let flights = readFileSync(flightsPath, 'utf8');
 const oldApi = "const API_URL = '/api/opensky';";
@@ -88,10 +105,30 @@ cpSync(upstreamDist, out, { recursive: true });
 cpSync(join(root, 'mobile.css'), join(out, 'mobile.css'));
 cpSync(join(root, 'manifest.webmanifest'), join(out, 'manifest.webmanifest'));
 cpSync(join(root, 'sw.js'), join(out, 'sw.js'));
+
 const indexPath = join(out, 'index.html');
 let html = readFileSync(indexPath, 'utf8');
-html = html.replace('</head>', `  <meta name="apple-mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n  <meta name="theme-color" content="#05070a">\n  <link rel="manifest" href="/manifest.webmanifest">\n  <link rel="stylesheet" href="/mobile.css">\n</head>`);
+const oldTitle = `<title>God's Eye View</title>`;
+const oldBrand = `GOD'S EYE <span class="title-accent">VIEW</span>`;
+const oldSubtitle = `<p class="subtitle">NO PLACE LEFT BEHIND</p>`;
+if (!html.includes(oldTitle) || !html.includes(oldBrand) || !html.includes(oldSubtitle)) {
+  throw new Error('Could not locate upstream branding seams');
+}
+html = html.replace(oldTitle, '<title>Earth Signal</title>');
+html = html.replace(oldBrand, 'EARTH <span class="title-accent">SIGNAL</span>');
+html = html.replace(oldSubtitle, '<p class="subtitle">LIVE PUBLIC DATA · CURRENT CONDITIONS</p>');
+html = html.replace('</head>', `  <meta name="apple-mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n  <meta name="theme-color" content="#080b0e">\n  <link rel="manifest" href="/manifest.webmanifest">\n  <link rel="stylesheet" href="/mobile.css">\n</head>`);
 html = html.replace('</body>', `  <script>if ('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));</script>\n</body>`);
 writeFileSync(indexPath, html);
+
+const manifestPath = join(out, 'manifest.webmanifest');
+const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+manifest.name = 'Earth Signal';
+manifest.short_name = 'Earth Signal';
+manifest.description = 'Live public Earth data and current conditions on one globe.';
+manifest.theme_color = '#080b0e';
+manifest.background_color = '#080b0e';
+writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+
 writeFileSync(join(out, '_headers'), `/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: geolocation=(self), microphone=(self)\n\n/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n`);
-console.log('Keyless mobile bundle ready in dist/ with ADSB.lol Live Flights');
+console.log('Earth Signal bundle ready in dist/ with ADSB.lol Live Flights');
