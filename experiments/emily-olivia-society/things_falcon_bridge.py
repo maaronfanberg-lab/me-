@@ -474,4 +474,5 @@ def enrich_v4(
 v3.enrich = enrich_v4
 
 if __name__ == "__main__":
+    import things_falcon_bridge_web  # installs web-wide mention overlay on v3.enrich
     raise SystemExit(v3.main())
