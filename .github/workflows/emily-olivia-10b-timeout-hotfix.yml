@@ -1,0 +1,68 @@
+name: Emily Olivia 10B Timeout Hotfix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/emily-olivia-10b-timeout-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: emily-olivia-10b-timeout-hotfix
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+
+      - name: Apply measured Falcon3 10B generation budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/emily-olivia-community-run.yml')
+          text = path.read_text(encoding='utf-8')
+          old = "      COMMUNITY_GENERATION_TIMEOUT: '45'\n"
+          new = "      COMMUNITY_GENERATION_TIMEOUT: '90'\n"
+          if new in text:
+              print('90-second 10B generation budget already present')
+          elif old in text:
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print('Raised measured 10B generation budget from 45s to 90s')
+          else:
+              raise SystemExit('Expected Community generation-timeout setting not found')
+          PY
+          grep -q "COMMUNITY_GENERATION_TIMEOUT: '90'" .github/workflows/emily-olivia-community-run.yml
+
+      - name: Commit verified timeout repair and let Community trigger reload it
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/emily-olivia-community-run.yml
+          if git diff --cached --quiet; then
+            echo 'Measured timeout repair is already present.'
+            exit 0
+          fi
+          git commit -m 'Give Falcon3 10B measured 90s generation budget'
+          for attempt in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              exit 0
+            fi
+            git rebase --abort || true
+            sleep $((attempt * 5))
+          done
+          echo 'Failed to publish measured timeout repair after retries.' >&2
+          exit 1
