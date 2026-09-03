@@ -8,6 +8,8 @@ on:
       - 'apps/things-universe-v24-family.js'
       - 'apps/things-universe-v24.html'
       - 'cloudflare/room-worker/src/open-allen-things.js'
+      - 'cloudflare/room-worker/src/open-allen-things-v2.js'
+      - 'cloudflare/room-worker/wrangler.toml'
       - 'experiments/emily-olivia-society/things_falcon_bridge.py'
       - 'experiments/emily-olivia-society/things_falcon_bridge_v3.py'
       - '.github/workflows/things-v24-progressive-smoke.yml'
@@ -34,6 +36,8 @@ jobs:
           node --check apps/things-universe-v24-progressive.js
           node --check apps/things-universe-v24-family.js
           node --check cloudflare/room-worker/src/open-allen-things.js
+          node --check cloudflare/room-worker/src/open-allen-things-v2.js
+          grep -q 'main = "src/open-allen-things-v2.js"' cloudflare/room-worker/wrangler.toml
           grep -q 'things-universe-v24-progressive.js' apps/things-universe-v24.html
           grep -q 'things-universe-v24-family.js' apps/things-universe-v24.html
           python3 -m py_compile experiments/emily-olivia-society/things_falcon_bridge.py
@@ -95,12 +99,12 @@ jobs:
 
           term=f"v24 progress smoke {os.environ['RUN_ID']}"
           queued=None
-          for attempt in range(5):
+          for attempt in range(6):
               try:
                   queued=base.post_json(base.WORKER+'/api/things/enrich',{'term':term,'context':['progressive smoke']})
                   break
               except urllib.error.HTTPError as exc:
-                  if exc.code != 503 or attempt == 4:
+                  if exc.code != 503 or attempt == 5:
                       raise
                   time.sleep(2 + attempt)
           job=str((queued or {}).get('id') or '')
