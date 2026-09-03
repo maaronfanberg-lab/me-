@@ -1,0 +1,103 @@
+name: Emily Olivia Alex Reply Hotfix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/emily-olivia-alex-reply-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: emily-olivia-alex-reply-hotfix
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+
+      - name: Make Alex replies recoverable and persistent
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str, marker: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if marker in text:
+                  print(f'{path}: already patched')
+                  return
+              if old not in text:
+                  raise SystemExit(f'{path}: expected patch target not found')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print(f'{path}: patched')
+
+          replace_once(
+              'experiments/emily-olivia-society/paper_act_adapter.py',
+              '''    except urllib.error.HTTPError as exc:\n        body = exc.read().decode("utf-8", errors="replace")[:4000]\n        raise RuntimeError(f"BitNet paper-act completion HTTP {exc.code}: {body}") from exc\n    except urllib.error.URLError as exc:\n        raise RuntimeError(f"BitNet paper-act completion request failed: {exc.reason}") from exc\n''',
+              '''    except urllib.error.HTTPError as exc:\n        body = exc.read().decode("utf-8", errors="replace")[:4000]\n        raise RuntimeError(f"BitNet paper-act completion HTTP {exc.code}: {body}") from exc\n    except TimeoutError as exc:\n        raise RuntimeError(f"BitNet paper-act completion request timed out after {timeout}s") from exc\n    except urllib.error.URLError as exc:\n        raise RuntimeError(f"BitNet paper-act completion request failed: {exc.reason}") from exc\n''',
+              'BitNet paper-act completion request timed out after {timeout}s',
+          )
+
+          replace_once(
+              'experiments/emily-olivia-society/first_exchange.py',
+              '''    "Remote end closed connection without response",\n    "BitNet paper-act completion request failed",\n    "BitNet paper-act completion HTTP 408",\n''',
+              '''    "Remote end closed connection without response",\n    "BitNet paper-act completion request failed",\n    "BitNet paper-act completion request timed out",\n    "BitNet paper-act completion HTTP 408",\n''',
+              '"BitNet paper-act completion request timed out",',
+          )
+
+          replace_once(
+              'experiments/emily-olivia-society/community_session.py',
+              '''            turn = await process_one_reply(\n                current,\n                other,\n                social,\n                time_step=base_time_step + reply_time_offset + offset,\n                dialogue_history=dialogue_history,\n            )\n            action = turn.get("action", {})\n\n            # A deferred sample is explicitly recoverable: the inbound message\n''',
+              '''            turn = await process_one_reply(\n                current,\n                other,\n                social,\n                time_step=base_time_step + reply_time_offset + offset,\n                dialogue_history=dialogue_history,\n            )\n            action = turn.get("action", {})\n\n            # Alex is an external participant. Persist a successful direct reply\n            # immediately, even if the peer turn is deferred afterward. The Alex\n            # item is acknowledged when this result is created, so dropping it\n            # here would make a real reply disappear from the live Community.\n            external_action_result = turn.get("external_action_result")\n            external_delivered_message = (\n                external_action_result.get("message")\n                if isinstance(external_action_result, dict)\n                else None\n            )\n            if continuous_seconds > 0 and isinstance(external_delivered_message, dict):\n                live_messages.append(external_delivered_message)\n\n            # A deferred sample is explicitly recoverable: the inbound message\n''',
+              'external_delivered_message = (',
+          )
+          PY
+
+      - name: Verify patched Python before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            experiments/emily-olivia-society/paper_act_adapter.py \
+            experiments/emily-olivia-society/first_exchange.py \
+            experiments/emily-olivia-society/community_session.py
+          grep -q 'BitNet paper-act completion request timed out after' experiments/emily-olivia-society/paper_act_adapter.py
+          grep -q '"BitNet paper-act completion request timed out"' experiments/emily-olivia-society/first_exchange.py
+          grep -q 'external_delivered_message' experiments/emily-olivia-society/community_session.py
+
+      - name: Commit verified Alex reply fix without disturbing live Community
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            experiments/emily-olivia-society/paper_act_adapter.py \
+            experiments/emily-olivia-society/first_exchange.py \
+            experiments/emily-olivia-society/community_session.py
+          if git diff --cached --quiet; then
+            echo 'Alex reply fix is already present.'
+            exit 0
+          fi
+          git commit -m 'Keep Alex replies recoverable and visible [skip ci]'
+          for attempt in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              exit 0
+            fi
+            git rebase --abort || true
+            sleep $((attempt * 5))
+          done
+          echo 'Failed to publish verified Alex reply fix after retries.' >&2
+          exit 1
