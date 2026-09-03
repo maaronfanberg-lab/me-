@@ -15,86 +15,87 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
-      - name: Apply deep surname patch to current main
+          fetch-depth: 1
+          sparse-checkout: |
+            apps
+            experiments/emily-olivia-society
+            .github/workflows
+          sparse-checkout-cone-mode: true
+      - name: Move to newest main
         run: |
-          git pull --rebase origin main
+          git fetch origin main --depth=1
+          git reset --hard origin/main
+      - name: Apply deep surname patch
+        run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # Bridge: preserve the existing explicit kinship engine, then add a deep
-          # surname roster before the slower family/Falcon refinement.
           p=Path('experiments/emily-olivia-society/things_falcon_bridge.py')
           s=p.read_text()
           if 'import things_surname_deep as deep' not in s:
               s=s.replace('import things_falcon_bridge_v3 as v3\n','import things_falcon_bridge_v3 as v3\nimport things_surname_deep as deep\n',1)
           s=s.replace('MAX_RELATIONS = 44','MAX_RELATIONS = 240',1)
           needle='    send("evidence", basic, "multi-source evidence; family walk + Falcon pending")\n\n    family: list[dict[str, Any]] = []\n'
-          replacement='''    send("evidence", basic, "multi-source evidence; family walk + Falcon pending")\n\n    deep_rows: list[dict[str, Any]] = []\n    if deep.is_surname_term(term):\n        try:\n            sweep = deep.deep_surname_sweep(term)\n            deep_rows = list(sweep.get("relations") or [])[:MAX_RELATIONS]\n            allowed_sources.update(str(x) for x in (sweep.get("sources") or []) if x)\n            if deep_rows:\n                send(\n                    "surname",\n                    merge_relations(basic, deep_rows),\n                    "deep surname sweep across genealogy, research, library, archive, authority, and UN sources; family walk + Falcon pending",\n                )\n        except Exception as exc:\n            print(f"Deep surname sweep failed for {term}: {type(exc).__name__}: {exc}", flush=True)\n\n    family: list[dict[str, Any]] = []\n'''
+          replacement='''    send("evidence", basic, "multi-source evidence; family walk + Falcon pending")\n\n    deep_rows: list[dict[str, Any]] = []\n    if deep.is_surname_term(term):\n        try:\n            sweep = deep.deep_surname_sweep(term)\n            deep_rows = list(sweep.get("relations") or [])[:MAX_RELATIONS]\n            allowed_sources.update(str(x) for x in (sweep.get("sources") or []) if x)\n            if deep_rows:\n                send(\n                    "surname",\n                    merge_relations(basic, deep_rows),\n                    "deep surname sweep; family refinement + Falcon pending",\n                )\n        except Exception as exc:\n            print(f"Deep surname sweep failed for {term}: {type(exc).__name__}: {exc}", flush=True)\n\n    family: list[dict[str, Any]] = []\n'''
           if needle in s and 'deep_rows: list[dict[str, Any]]' not in s:
               s=s.replace(needle,replacement,1)
-          s=s.replace('merge_relations(basic, rows),\n                "multi-source evidence + explicit WikiTree kinship; Falcon pending",','merge_relations(basic, deep_rows, rows),\n                "deep surname sweep + explicit WikiTree kinship; Falcon pending",',1)
+          s=s.replace('merge_relations(basic, rows),\n                "multi-source evidence + explicit WikiTree kinship; Falcon pending",','merge_relations(basic, deep_rows, rows),\n                "deep surname sweep + family refinement; Falcon pending",',1)
           s=s.replace('"relations": merge_relations(basic, family),','"relations": merge_relations(basic, deep_rows, family),',1)
           s=s.replace('relations = merge_relations(basic, family, inferred)','relations = merge_relations(basic, deep_rows, family, inferred)',1)
-          s=s.replace('"engine": "Falcon3-10B-Instruct-1.58bit via BitNet + multi-source evidence + explicit kinship rules",','"engine": "Falcon3-10B-Instruct-1.58bit via BitNet + deep multi-source surname sweep + explicit kinship rules",',1)
+          s=s.replace('"engine": "Falcon3-10B-Instruct-1.58bit via BitNet + multi-source evidence + explicit kinship rules",','"engine": "Falcon3-10B-Instruct-1.58bit via BitNet + deep surname sweep + kinship refinement",',1)
           p.write_text(s)
 
-          # Browser family layer: accept a deep progressive roster, and make the
-          # connection examiner recognize exact shared surnames directly from labels.
           p=Path('apps/things-universe-v24-family.js')
           s=p.read_text()
           s=s.replace('return out.slice(0,44)','return out.slice(0,240)',1)
           s=s.replace('fresh.slice(0,44).forEach','fresh.slice(0,240).forEach',1)
-          marker="if(typeof whySentence==='function'){\n"
-          wrapper="""if(typeof conceptualPathBetween==='function'){\n  const v24ConceptualPathBase=conceptualPathBetween;\n  conceptualPathBetween=async function(a,b,...args){\n    let sa=v24SurnameKey(a?.l),sb=v24SurnameKey(b?.l);\n    if(sa&&sa===sb&&a!==b){\n      v24EnsureSurnameHubForNode(a,null);\n      v24EnsureSurnameHubForNode(b,null);\n      let ids=pathIds(a.id,b.id);\n      if(ids){render();return{kind:'visible',ids}}\n    }\n    return v24ConceptualPathBase(a,b,...args)\n  }\n}\n"""
-          if wrapper not in s:
+          s=s.replace("if(cls==='surname')return /has surname|family name/.test(r)?62:58;","if(cls==='surname')return /related through surname/.test(r)?76:/has surname|family name/.test(r)?72:68;",1)
+          s=s.replace("edge(n,hub,'has surname',seed?.id||[...n.owners||[]][0]||'','exact surname match','surname');","edge(n,hub,'related through surname',seed?.id||[...n.owners||[]][0]||'','exact surname match','surname');",1)
+          s=s.replace("edge(person,hub,'has surname',[...person.owners||[]][0]||'','exact surname match','surname')","edge(person,hub,'related through surname',[...person.owners||[]][0]||'','exact surname match','surname')",1)
+          s=s.replace("edge(n,hub,'has surname',seed?.id||'','exact surname match','surname')","edge(n,hub,'related through surname',seed?.id||'','exact surname match','surname')",1)
+
+          marker="if(typeof relationKind==='function'){\n"
+          wrapper="""if(typeof conceptualPathBetween==='function'){\n  const v24ConceptualPathBase=conceptualPathBetween;\n  conceptualPathBetween=async function(a,b,...args){\n    let sa=v24SurnameKey(a?.l),sb=v24SurnameKey(b?.l);\n    if(sa&&sa===sb&&a!==b){\n      v24EnsureSurnameHubForNode(a,null);\n      v24EnsureSurnameHubForNode(b,null);\n      let ids=pathIds(a.id,b.id);\n      if(ids){render();return{kind:'visible',ids}}\n      return{kind:'surname-direct',surname:sa}\n    }\n    return v24ConceptualPathBase(a,b,...args)\n  }\n}\nif(typeof describeSearchedPath==='function'){\n  const v24DescribeSearchedBase=describeSearchedPath;\n  describeSearchedPath=function(a,b,res){\n    if(res?.kind==='surname-direct'){\n      let surname=cap(res.surname||v24SurnameKey(a?.l)||'');\n      return{html:`<div class=\"box\"><strong>${a.l} ↔ ${b.l}</strong><ul><li><b>${a.l}</b> — related through surname → <b>${surname}</b></li><li><b>${b.l}</b> — related through surname → <b>${surname}</b></li></ul><p>Why they connect: they share the exact surname <b>${surname}</b>, which Things Universe treats as relatedness.</p></div>`,intermediates:[surname]}\n    }\n    return v24DescribeSearchedBase(a,b,res)\n  }\n}\n"""
+          if 'surname-direct' not in s:
               s=s.replace(marker,wrapper+marker,1)
-          # When a real same-surname cohort creates a hub, make sure that surname
-          # gets a background enrichment job even if the word itself is common.
+          s=s.replace("if(kinds.includes('surname'))return'Why they connect: Things Universe treats an exact shared surname as general surname-relatedness. A specific biological or marriage path is shown only when records support one.';","if(kinds.includes('surname'))return'Why they connect: they share the same surname, which Things Universe treats as relatedness. More specific family connections can replace this general link when they are found.';",1)
+          s=s.replace("if(kinds.includes('family'))return'Why they connect: this chain includes documented family relationships. Exact surname relatedness remains part of the graph, but the specific family edge is stronger.';","if(kinds.includes('family'))return'Why they connect: this chain includes a more specific family relationship. Shared-surname relatedness remains underneath it.';",1)
+          # Start background surname enrichment as soon as a cohort forces a hub.
           old="    for(const s of seedsForHub)own(hub,s)\n  }\n  if(!hub||hub===n)return;"
           new="    for(const s of seedsForHub)own(hub,s)\n    try{if(typeof v24ProgressiveFalcon==='function')v24ProgressiveFalcon(hub.k)}catch{}\n  }\n  if(!hub||hub===n)return;"
           s=s.replace(old,new,1)
           p.write_text(s)
 
-          # Cache-bust the family layer so mobile browsers receive the actual fix.
           p=Path('apps/things-universe-v24.html')
-          s=p.read_text().replace('things-universe-v24-family.js?v=20260903d','things-universe-v24-family.js?v=20260903e')
+          s=p.read_text()
+          import re
+          s=re.sub(r'things-universe-v24-family\.js\?v=[^\"]+','things-universe-v24-family.js?v=20260903f',s)
           p.write_text(s)
 
-          # Extend smoke coverage to the deep-surname module and live surname sweep.
           p=Path('.github/workflows/things-v24-progressive-smoke.yml')
           s=p.read_text()
           if "things_surname_deep.py" not in s:
               s=s.replace("      - 'experiments/emily-olivia-society/things_falcon_bridge_v3.py'\n","      - 'experiments/emily-olivia-society/things_falcon_bridge_v3.py'\n      - 'experiments/emily-olivia-society/things_surname_deep.py'\n",1)
           if 'python3 -m py_compile experiments/emily-olivia-society/things_surname_deep.py' not in s:
               s=s.replace('          python3 -m py_compile experiments/emily-olivia-society/things_falcon_bridge.py\n','          python3 -m py_compile experiments/emily-olivia-society/things_falcon_bridge.py\n          python3 -m py_compile experiments/emily-olivia-society/things_surname_deep.py\n',1)
-          test_needle="          import things_falcon_bridge as bridge\n\n          evidence=bridge.v3.gather_parallel('Fanberg')\n"
-          test_replace="""          import things_falcon_bridge as bridge\n          import things_surname_deep as deep\n\n          evidence=bridge.v3.gather_parallel('Fanberg')\n"""
-          s=s.replace(test_needle,test_replace,1)
-          deep_test="""\n          sweep=deep.deep_surname_sweep('Fanberg')\n          print(json.dumps({'deep_sources':sweep.get('sources'),'deep_counts':sweep.get('counts'),'deep_relations':sweep.get('relations',[])[:20]},indent=2,ensure_ascii=False))\n          if len(sweep.get('relations') or []) < 5:\n              raise SystemExit(f\"expected deep Fanberg roster, got {len(sweep.get('relations') or [])}\")\n          if len(sweep.get('sources') or []) < 2:\n              raise SystemExit(f\"expected multiple deep sources, got {sweep.get('sources')}\")\n"""
-          anchor="          if not relations:\n              raise SystemExit('expected at least one explicit Fanberg relation before Falcon synthesis')\n"
-          if 'deep_surname_sweep' not in s:
-              s=s.replace(anchor,anchor+deep_test,1)
           p.write_text(s)
           PY
-
       - name: Validate patched files
         run: |
           node --check apps/things-universe-v24-family.js
-          python3 -m py_compile experiments/emily-olivia-society/things_falcon_bridge.py
-          python3 -m py_compile experiments/emily-olivia-society/things_surname_deep.py
-          grep -q 'things-universe-v24-family.js?v=20260903e' apps/things-universe-v24.html
-          grep -q 'deep_surname_sweep' experiments/emily-olivia-society/things_falcon_bridge.py
+          python3 -m py_compile experiments/emily-olivia-society/things_falcon_bridge.py experiments/emily-olivia-society/things_surname_deep.py
+          grep -q 'surname-direct' apps/things-universe-v24-family.js
           grep -q 'slice(0,240)' apps/things-universe-v24-family.js
-
+          grep -q 'things-universe-v24-family.js?v=20260903f' apps/things-universe-v24.html
+          grep -q 'deep_surname_sweep' experiments/emily-olivia-society/things_falcon_bridge.py
       - name: Commit integration
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add experiments/emily-olivia-society/things_falcon_bridge.py apps/things-universe-v24-family.js apps/things-universe-v24.html .github/workflows/things-v24-progressive-smoke.yml
+          git add apps/things-universe-v24-family.js apps/things-universe-v24.html experiments/emily-olivia-society/things_falcon_bridge.py .github/workflows/things-v24-progressive-smoke.yml
           if git diff --cached --quiet; then
             echo 'Deep surname integration already applied.'
             exit 0
           fi
-          git commit -m 'Wire deep surname sweep into V24'
+          git commit -m 'Make surname relatedness immediate and deepen V24 sweep'
           git push origin HEAD:main
