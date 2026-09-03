@@ -2,16 +2,17 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.error
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from typing import Any
+from typing import Any, Callable
 
 import things_falcon_bridge_base as base
 from bitnet_server import request_chat
 
 EVIDENCE_WINDOW_SECONDS = 12.0
-MAX_RELATIONS = 6
+MAX_RELATIONS = 10
 
 
 def gather_parallel(term: str) -> list[dict[str, Any]]:
@@ -46,6 +47,95 @@ def gather_parallel(term: str) -> list[dict[str, Any]]:
     return [item for _, item in collected]
 
 
+def _name_has_surname(name: Any, term: str) -> bool:
+    clean = re.sub(r"[^0-9A-Za-zÀ-ÖØ-öø-ÿ'’-]+", " ", str(name or "")).strip()
+    parts = [x for x in clean.split() if x]
+    return bool(parts) and parts[-1].casefold() == term.strip().casefold()
+
+
+def _relation(label: Any, relation: str, confidence: float, source: str) -> dict[str, Any] | None:
+    text = base.text_clean(label, 70)
+    if not text:
+        return None
+    return {
+        "label": text,
+        "relation": relation,
+        "confidence": confidence,
+        "sources": [source],
+        "note": "",
+    }
+
+
+def direct_relations(term: str, evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Turn explicit source records into safe graph edges without waiting for the LLM."""
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(row: dict[str, Any] | None) -> None:
+        if not row:
+            return
+        label = str(row.get("label") or "").strip()
+        relation = str(row.get("relation") or "").strip()
+        if not label or not relation or label.casefold() == term.casefold():
+            return
+        key = (label.casefold(), relation.casefold())
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(row)
+
+    for block in evidence:
+        source = str(block.get("source") or "")
+        items = block.get("items") or []
+
+        if source == "WikiTree":
+            for item in items:
+                last = item.get("LastNameCurrent") or item.get("LastNameAtBirth")
+                if str(last or "").casefold() != term.casefold():
+                    continue
+                first = base.text_clean(item.get("FirstName"), 50)
+                label = " ".join(x for x in (first, base.text_clean(last, 60)) if x)
+                if label:
+                    add(_relation(label, "shares surname", 0.93, source))
+
+        elif source == "FamilySearch":
+            for item in items:
+                name = item.get("name")
+                if _name_has_surname(name, term):
+                    add(_relation(name, "shares surname in family-history record", 0.92, source))
+
+        elif source == "Wikidata":
+            for item in items:
+                label = item.get("label")
+                if _name_has_surname(label, term):
+                    add(_relation(label, "has surname", 0.84, source))
+
+        elif source == "OpenAlex":
+            for item in items:
+                if item.get("type") != "author":
+                    continue
+                name = item.get("name")
+                if _name_has_surname(name, term):
+                    add(_relation(name, "surname used by scholarly author", 0.88, source))
+
+        elif source == "Crossref":
+            for item in items:
+                for name in item.get("authors") or []:
+                    if _name_has_surname(name, term):
+                        add(_relation(name, "surname used by published author", 0.88, source))
+
+        elif source == "Open Library":
+            for item in items:
+                for name in item.get("authors") or []:
+                    if _name_has_surname(name, term):
+                        add(_relation(name, "surname used by book author", 0.86, source))
+
+        if len(out) >= MAX_RELATIONS:
+            break
+
+    return out[:MAX_RELATIONS]
+
+
 def parse_tsv(text: str, term: str, allowed_sources: set[str]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -54,6 +144,8 @@ def parse_tsv(text: str, term: str, allowed_sources: set[str]) -> list[dict[str,
         if not line:
             continue
         parts = [part.strip() for part in line.split("\t")]
+        if len(parts) != 4 and "|" in line:
+            parts = [part.strip() for part in line.split("|")]
         if len(parts) != 4:
             continue
         label, relation, raw_confidence, raw_sources = parts
@@ -88,19 +180,45 @@ def parse_tsv(text: str, term: str, allowed_sources: set[str]) -> list[dict[str,
     return out
 
 
-def enrich(term: str, context: list[str] | None = None) -> dict[str, Any]:
+def merge_relations(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for group in groups:
+        for row in group:
+            key = (str(row.get("label") or "").casefold(), str(row.get("relation") or "").casefold())
+            if not all(key) or key in seen:
+                continue
+            seen.add(key)
+            out.append(row)
+            if len(out) >= MAX_RELATIONS:
+                return out
+    return out
+
+
+def enrich(
+    term: str,
+    context: list[str] | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
     started = time.monotonic()
     evidence = gather_parallel(term)
     compact = base.compact_evidence(evidence, budget=3600)
     allowed_sources = {str(item.get("source")) for item in compact if item.get("source")}
+    explicit = direct_relations(term, compact)
+
+    evidence_result = {
+        "term": term,
+        "relations": explicit,
+        "evidence_sources": sorted(allowed_sources),
+        "engine": "multi-source evidence; Falcon3-10B-Instruct-1.58bit pending",
+        "phase": "evidence",
+        "elapsed_seconds": round(time.monotonic() - started, 3),
+    }
+    if progress_callback:
+        progress_callback(evidence_result)
+
     if not compact:
-        return {
-            "term": term,
-            "relations": [],
-            "evidence_sources": [],
-            "engine": "Falcon3-10B-Instruct-1.58bit via BitNet",
-            "elapsed_seconds": round(time.monotonic() - started, 3),
-        }
+        return evidence_result | {"engine": "multi-source evidence", "phase": "done"}
 
     prompt = {
         "term": term,
@@ -114,21 +232,36 @@ def enrich(term: str, context: list[str] | None = None) -> dict[str, Any]:
         "Shared surname is valid name-relatedness, never proof of blood relationship. "
         "Do not invent people, genealogy, dates, etymology, or citations. Prefer useful specific edges."
     )
-    answer = request_chat(
-        system,
-        json.dumps(prompt, ensure_ascii=False, separators=(",", ":")),
-        96,
-        0.0,
-        timeout=120,
-    )
-    relations = parse_tsv(answer, term, allowed_sources)
+    try:
+        answer = request_chat(
+            system,
+            json.dumps(prompt, ensure_ascii=False, separators=(",", ":")),
+            96,
+            0.0,
+            timeout=180,
+        )
+        inferred = parse_tsv(answer, term, allowed_sources)
+    except Exception as exc:
+        print(f"Things Falcon synthesis deferred for {term}: {type(exc).__name__}: {exc}", flush=True)
+        inferred = []
+
+    relations = merge_relations(explicit, inferred)
     return {
         "term": term,
         "relations": relations,
         "evidence_sources": sorted(allowed_sources),
-        "engine": "Falcon3-10B-Instruct-1.58bit via BitNet",
+        "engine": "Falcon3-10B-Instruct-1.58bit via BitNet + multi-source evidence",
+        "phase": "done",
         "elapsed_seconds": round(time.monotonic() - started, 3),
     }
+
+
+def send_progress(token: str, job_id: str, result: dict[str, Any]) -> None:
+    base.post_json(
+        base.WORKER + "/api/things/progress",
+        {"id": job_id, "result": result},
+        headers={"Authorization": f"Bearer {token}"},
+    )
 
 
 def main() -> int:
@@ -151,7 +284,11 @@ def main() -> int:
                 if not job_id or not term:
                     continue
                 try:
-                    result = enrich(term, [str(x)[:80] for x in context])
+                    result = enrich(
+                        term,
+                        [str(x)[:80] for x in context],
+                        progress_callback=lambda partial, t=token, j=job_id: send_progress(t, j, partial),
+                    )
                     base.complete(token, job_id, result=result)
                     print(
                         f"Things v3 enriched: {term} -> {len(result['relations'])} relations "
