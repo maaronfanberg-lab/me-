@@ -58,16 +58,39 @@ function v24SurnameKey(label=''){
   if(!v24LooksLikePersonLabel(label))return'';
   let parts=String(label).trim().split(/\s+/);return key(parts[parts.length-1])
 }
+function v24SeedsForNodes(nodes=[],fallback=null){
+  let out=[],seen=new Set();
+  if(fallback?.id){seen.add(fallback.id);out.push(fallback)}
+  for(const n of nodes)for(const id of n?.owners||[]){if(seen.has(id))continue;let s=seedById(id);if(s){seen.add(id);out.push(s)}}
+  return out
+}
 function v24EnsureSurnameHubForNode(n,seed=null){
   if(!n)return;
   let sk=v24SurnameKey(n.l);if(!sk||sk===n.k)return;
-  let hub=byK(sk);if(!hub||hub===n)return;
-  if(seed)own(hub,seed);
-  edge(n,hub,'has surname',seed?.id||'','name structure','surname')
+  let hub=byK(sk),cohort=N.filter(x=>x!==n&&v24SurnameKey(x.l)===sk);
+
+  // Exact surname sharing is already meaningful relatedness in Things Universe.
+  // If the surname itself is not on screen yet, create its hub as soon as a second
+  // person with that exact surname appears. Specific genealogy can refine this later.
+  if(!hub&&cohort.length){
+    let anchorNode=cohort[0]||n,seedsForHub=v24SeedsForNodes([n,...cohort],seed),primary=seedsForHub[0]||seed||null;
+    hub=v24NodeBase(cap(sk),primary,anchorNode);
+    if(hub&&!hub.parentId&&typeof placeChild==='function')placeChild(hub,anchorNode);
+    for(const s of seedsForHub)own(hub,s)
+  }
+  if(!hub||hub===n)return;
+
+  for(const s of v24SeedsForNodes([n],seed))own(hub,s);
+  edge(n,hub,'has surname',seed?.id||[...n.owners||[]][0]||'','exact surname match','surname');
+  if(cohort.length){
+    for(const person of cohort){
+      edge(person,hub,'has surname',[...person.owners||[]][0]||'','exact surname match','surname')
+    }
+  }
 }
 function v24AttachExistingPeopleToSurname(hub,seed=null){
   if(!hub||String(hub.k||'').includes(' '))return;
-  for(const n of N){if(n===hub||v24SurnameKey(n.l)!==hub.k)continue;if(seed)own(n,seed);edge(n,hub,'has surname',seed?.id||'','name structure','surname')}
+  for(const n of N){if(n===hub||v24SurnameKey(n.l)!==hub.k)continue;if(seed)own(n,seed);edge(n,hub,'has surname',seed?.id||'','exact surname match','surname')}
 }
 const v24NodeBase=node;
 node=function(term,seed=null,p=null){
@@ -189,8 +212,8 @@ if(typeof whySentence==='function'){
   const v24WhyBase=whySentence;
   whySentence=function(steps){
     let kinds=[...new Set((steps||[]).map(s=>relationKind(s.rel||s.r)))];
-    if(kinds.includes('family'))return'Why they connect: this chain includes documented family relationships. Surname similarity is not being used as proof of biological relationship.';
-    if(kinds.includes('surname'))return'Why they connect: this is surname or name-relatedness. Sharing a surname is meaningful here, but by itself it does not prove a common ancestor.';
+    if(kinds.includes('family'))return'Why they connect: this chain includes documented family relationships. Exact surname relatedness remains part of the graph, but the specific family edge is stronger.';
+    if(kinds.includes('surname'))return'Why they connect: Things Universe treats an exact shared surname as general surname-relatedness. A specific biological or marriage path is shown only when records support one.';
     return v24WhyBase(steps)
   }
 }
