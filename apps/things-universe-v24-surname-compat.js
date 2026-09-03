@@ -62,3 +62,17 @@ v24EdgeMatches=function(e,filter=v24ResultFilter){
   }
   return v24EdgeMatchesBeforeSurnameCompat(e,filter)
 };
+
+// A source being about research, books, or records does not make every entity in
+// that source a human. People filtering must rely on the relationship itself.
+const V24_PERSON_REL_EVIDENCE_RE=/\b(person|human|author|researcher|scholar|scientist|writer|poet|artist|actor|actress|director|composer|musician|politician|engineer|physician|doctor|professor|teacher|employee|founder|member|student|alumn(?:us|a|i)?|occupation|works at|affiliated with|married|husband|wife|spouse|father|mother|parent|child|son|daughter|sibling|brother|sister|aunt|uncle|niece|nephew|cousin|grandparent|ancestor|descendant|surname|family name)\b/i;
+const v24EdgeMatchesBeforePeopleCompat=v24EdgeMatches;
+v24EdgeMatches=function(e,filter=v24ResultFilter){
+  if(filter==='people'){
+    let rel=String(e?.rel||''),cls=v24RelationClass(rel,e?.src,e?.kind);
+    if(cls==='family'||cls==='surname')return true;
+    if(V24_PLACE_RE.test(rel))return false;
+    return V24_PERSON_REL_EVIDENCE_RE.test(rel)
+  }
+  return v24EdgeMatchesBeforePeopleCompat(e,filter)
+};
