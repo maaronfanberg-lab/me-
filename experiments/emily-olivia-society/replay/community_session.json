@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 2,
+  "completed_reply_turns": 3,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -89,6 +89,15 @@
       "to_name": "Olivia",
       "content": "Oh, I'm doing great. Just the usual, you know? Just trying to stay ahead of the curve.",
       "created_at": "2026-09-03T06:08:08.500622+00:00"
+    },
+    {
+      "id": 4,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "I'm really happy to hear that!",
+      "created_at": "2026-09-03T06:08:49.662738+00:00"
     }
   ],
   "latest_turn": {
@@ -125,21 +134,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Hey, how are you doing?",
+      "Olivia observes a message from Emily: Oh, I'm doing great. Just the usual, you know? Just trying to stay ahead of the curve."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "a1bbb06157a0e551be98",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 70.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 5
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "c363355e517faf095353",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 5
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "I'm really happy to hear that!",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Hey, how are you doing?",
+        "Olivia observes a message from Emily: Oh, I'm doing great. Just the usual, you know? Just trying to stay ahead of the curve."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "a1bbb06157a0e551be98",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 70.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 5
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "c363355e517faf095353",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 5
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 4,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "I'm really happy to hear that!",
+        "created_at": "2026-09-03T06:08:49.662738+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: \"unsupported-setting:I've been thinking about going to the beach this weekend. How about you?\""
+    "external_generation_error": ""
   }
 }
