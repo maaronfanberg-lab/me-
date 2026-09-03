@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 4,
+  "completed_reply_turns": 5,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -107,6 +107,15 @@
       "to_name": "Olivia",
       "content": "Oh, really? What's different?",
       "created_at": "2026-09-03T06:59:57.972605+00:00"
+    },
+    {
+      "id": 6,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "You should try the latte I ordered! It's really great.",
+      "created_at": "2026-09-03T07:02:17.297955+00:00"
     }
   ],
   "latest_turn": {
@@ -143,21 +152,108 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Hey, have you been to that new coffee shop downtown? It has the best latte.",
+      "Olivia observes a message from Emily: Yeah, it's really good. I went there a couple times before and always order the same drink! It's my favorite latte, and I love the whole experience of sitting down and sipping on it while enjoying conversation with friends.",
+      "Olivia observes a message from Emily: Oh, really? What's different?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "b5a6cb00b3dc09f10e20",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 7
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "bcbfce73d9c81f80a5c7",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 7
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "a3107c0b0f8524c78a93",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 6,
+        "stanford_last_retrieved": 6,
+        "observed_time_step": 7
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "You should try the latte I ordered! It's really great.",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Hey, have you been to that new coffee shop downtown? It has the best latte.",
+        "Olivia observes a message from Emily: Yeah, it's really good. I went there a couple times before and always order the same drink! It's my favorite latte, and I love the whole experience of sitting down and sipping on it while enjoying conversation with friends.",
+        "Olivia observes a message from Emily: Oh, really? What's different?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "b5a6cb00b3dc09f10e20",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 7
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "bcbfce73d9c81f80a5c7",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 7
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "a3107c0b0f8524c78a93",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 6,
+          "stanford_last_retrieved": 6,
+          "observed_time_step": 7
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 6,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "You should try the latte I ordered! It's really great.",
+        "created_at": "2026-09-03T07:02:17.297955+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"role_swapped_personal_fact: I am really excited about your latte! What's different?\""
+    "external_generation_error": ""
   }
 }
