@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 5,
+  "completed_reply_turns": 6,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -116,6 +116,15 @@
       "to_name": "Emily",
       "content": "Emily, I love the way you talk. Can't wait to get to know you better.",
       "created_at": "2026-09-04T23:36:14.854423+00:00"
+    },
+    {
+      "id": 7,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, it's great that we could talk! What about you?",
+      "created_at": "2026-09-04T23:39:20.526921+00:00"
     }
   ],
   "latest_turn": {
@@ -152,21 +161,108 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: How is it going? Do you have any new hobbies or interests to try out?",
+      "Emily observes a message from Olivia: That's really cool! What kind of music do you like to listen to?",
+      "Emily observes a message from Olivia: Emily, I love the way you talk. Can't wait to get to know you better."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "709c6cebd2b4073451b0",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 70.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "6f7172eb1bd3b8e0777d",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "a7aef0f09f115f6f40fb",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 90.0,
+        "stanford_created": 7,
+        "stanford_last_retrieved": 7,
+        "observed_time_step": 8
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh, it's great that we could talk! What about you?",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: How is it going? Do you have any new hobbies or interests to try out?",
+        "Emily observes a message from Olivia: That's really cool! What kind of music do you like to listen to?",
+        "Emily observes a message from Olivia: Emily, I love the way you talk. Can't wait to get to know you better."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "709c6cebd2b4073451b0",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 70.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "6f7172eb1bd3b8e0777d",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "a7aef0f09f115f6f40fb",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 90.0,
+          "stanford_created": 7,
+          "stanford_last_retrieved": 7,
+          "observed_time_step": 8
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 7,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, it's great that we could talk! What about you?",
+        "created_at": "2026-09-04T23:39:20.526921+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"long_refractory_echo: Wow, that's really cool! I just started playing violin this year. It's really enjoyable and relaxing.\""
+    "external_generation_error": ""
   }
 }
