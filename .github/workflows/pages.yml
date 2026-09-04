@@ -45,6 +45,33 @@ jobs:
         working-directory: cloudflare/gods-eye-view-mobile
         run: npm run build
 
+      - name: Use stable keyless Earth basemap endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('cloudflare/gods-eye-view-mobile/dist/assets')
+          old = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+          new = 'https://wi.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer'
+          changed = 0
+
+          for p in root.glob('*.js'):
+              s = p.read_text(encoding='utf-8')
+              if old not in s:
+                  continue
+              p.write_text(s.replace(old, new), encoding='utf-8')
+              changed += 1
+
+          if changed == 0:
+              raise SystemExit('Earth Signal basemap patch seam not found')
+          for p in root.glob('*.js'):
+              if old in p.read_text(encoding='utf-8'):
+                  raise SystemExit(f'Old Esri basemap endpoint still present in {p}')
+          print(f'Patched Earth Signal basemap endpoint in {changed} bundle(s).')
+          PY
+
       - name: Stage God's Eye View under Pages
         shell: bash
         run: |
@@ -85,7 +112,8 @@ jobs:
         run: |
           set -euo pipefail
           grep -R -q 'api.adsb.lol/v2' apps/gods-eye-view-mobile/assets
-          echo 'ADSB.lol Live Flights bridge present in production bundle.'
+          grep -R -q 'wi.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer' apps/gods-eye-view-mobile/assets
+          echo 'ADSB.lol Live Flights and stable Earth basemap are present in the production bundle.'
 
       - name: Configure Pages
         if: github.ref == 'refs/heads/main'
