@@ -46,13 +46,6 @@ _MEMORY_SCAFFOLD = re.compile(
     r"\[Fill\s+in\])",
     re.IGNORECASE,
 )
-_HARD_DIALOGUE_BLOCKERS = {
-    "empty_candidate",
-    "template_blank_residue",
-    "unfinished_cutoff",
-    "role_swapped_personal_fact",
-    "unsupported_concrete_biography",
-}
 
 
 def _has_pathological_repetition(text: str) -> bool:
@@ -149,15 +142,15 @@ def _generate_non_attractor_spoken_action(
     inbound: str,
     cognitive_context: str,
 ) -> str:
-    """Prefer a novel Stanford sample, but never let novelty filtering stall a turn.
+    """Publish only a Stanford sample that clears the generic dialogue guards.
 
-    Structural/integrity failures still fail closed. Repetition, greeting resets,
-    and recurring-topic attractors are soft refractory signals. The inner paper
-    sampler already performs bounded stochastic sampling; this outer layer gets
-    one pass so it cannot recreate a multiplicative retry stall.
+    The inner paper sampler already performs bounded stochastic resampling, so
+    this outer layer deliberately gets one pass rather than multiplying costly
+    10B requests. If that candidate is an echo, recurring attractor, reset, or
+    structural failure, fail recoverably. Continuous Community mode keeps the
+    inbound unconsumed and retries later instead of publishing a known-bad line.
     """
     rejected: list[str] = []
-    soft_fallback: str | None = None
     for _attempt in range(_MAX_ATTRACTOR_RESAMPLES):
         try:
             text = generate_spoken_action(
@@ -174,8 +167,6 @@ def _generate_non_attractor_spoken_action(
             continue
 
         if _is_exact_same_speaker_repeat(text, dialogue_history, agent.name):
-            if soft_fallback is None:
-                soft_fallback = text
             rejected.append(f"exact_same_speaker_repeat: {text}")
             continue
 
@@ -188,19 +179,7 @@ def _generate_non_attractor_spoken_action(
         )
         if blocker is None:
             return text
-        if blocker in _HARD_DIALOGUE_BLOCKERS:
-            rejected.append(f"{blocker}: {text}")
-            continue
-
-        if soft_fallback is None:
-            soft_fallback = text
-        rejected.append(f"soft_{blocker}: {text}")
-
-    # Critical liveness guarantee: semantic/style refractory checks may improve
-    # variety, but they are never allowed to turn a valid Stanford utterance into
-    # a dead turn. If the one sample is a harmless attractor, speak it.
-    if soft_fallback is not None:
-        return soft_fallback
+        rejected.append(f"{blocker}: {text}")
 
     previews = " | ".join(repr(item[:240]) for item in rejected)
     raise RuntimeError(
