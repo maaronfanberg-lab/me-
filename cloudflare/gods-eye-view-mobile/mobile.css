@@ -16,6 +16,7 @@ body {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   color: #d7dee4;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
 
 button,
@@ -29,31 +30,91 @@ canvas {
   touch-action: none;
 }
 
-/* Earth Signal: keep the data, lose the spy-movie costume. */
+/* Earth Signal: retain the data engine and remove the spy-simulator chrome. */
+#title-bar,
+#style-indicator,
+#safe-frame-overlay,
 #scope-mask,
 #scope-toggle,
 #scope-slider-row,
 #cockpit-entry,
+#cockpit-hud,
+#style-buttons,
+#param-slider-panel,
 .title-glow,
 .title-logo,
 .cockpit-reticle,
-.cockpit-visor-shell {
+.cockpit-visor-shell,
+.dock-label-icon-presets {
   display: none !important;
 }
 
-.title-accent {
-  color: inherit !important;
-  text-shadow: none !important;
+/* A deliberately plain identity strip. The information is the interesting part. */
+#earth-signal-header {
+  position: fixed;
+  z-index: 190;
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid rgba(205, 216, 225, 0.22);
+  border-radius: 10px;
+  background: rgba(8, 11, 14, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: none;
+  color: #eef2f4;
 }
 
-.subtitle {
-  opacity: 0.68 !important;
-  letter-spacing: 0.12em !important;
-  text-shadow: none !important;
+#earth-signal-header .earth-signal-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-button,
-[role="button"],
+#earth-signal-header strong {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+#earth-signal-header small {
+  color: rgba(220, 228, 234, 0.66);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+#earth-signal-header .earth-signal-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(205, 216, 225, 0.16);
+  color: rgba(231, 237, 241, 0.82);
+  font-size: 11px;
+}
+
+#earth-signal-header .earth-signal-live::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.75;
+}
+
+/* Neutralize the remaining command surfaces without touching their behavior. */
+#command-dock,
+.dock-popover-content,
+.global-context-panel,
+.hud-panel,
 .panel,
 .drawer,
 .sidebar,
@@ -61,6 +122,35 @@ button,
 [class*="panel"],
 [class*="sidebar"],
 [class*="popover"] {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border-color: rgba(190, 205, 216, 0.20) !important;
+}
+
+#command-dock,
+.dock-popover-content,
+.global-context-panel {
+  background-color: rgba(8, 11, 14, 0.88) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.title-accent {
+  color: inherit !important;
+  text-shadow: none !important;
+}
+
+.subtitle,
+.panel-title,
+.indicator-label,
+.btn-label,
+.pp-slider-mini-label {
+  letter-spacing: 0.02em !important;
+  text-shadow: none !important;
+}
+
+button,
+[role="button"] {
   box-shadow: none !important;
   text-shadow: none !important;
 }
@@ -73,9 +163,24 @@ button,
   border-color: rgba(190, 205, 216, 0.22) !important;
 }
 
+/* Kill the theatrical visual modes in this wrapper. The upstream code remains untouched. */
+button[data-style="retro"],
+button[data-style="surveillance"],
+button[data-style="thermal"],
+button[data-style="anime"] {
+  display: none !important;
+}
+
 @media (max-width: 820px) {
   body {
     font-size: 14px;
+  }
+
+  #earth-signal-header {
+    top: calc(8px + env(safe-area-inset-top));
+    left: calc(8px + env(safe-area-inset-left));
+    min-height: 44px;
+    padding: 7px 10px;
   }
 
   .hud,
@@ -118,6 +223,10 @@ button,
 }
 
 @media (max-width: 480px) {
+  #earth-signal-header small {
+    display: none;
+  }
+
   .hud,
   .panel,
   .drawer,
