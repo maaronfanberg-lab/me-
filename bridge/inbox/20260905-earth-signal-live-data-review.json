@@ -1,0 +1,16 @@
+{
+  "nonce": "earth-signal-live-data-20260905",
+  "prompt": "Review the current Earth Signal / God's Eye View Mobile implementation in this repository as a read-only second-model engineering review. The immediate problem is that the deployed app presents live-data layers as unavailable. Inspect the repository files relevant to cloudflare/gods-eye-view-mobile, its build patching strategy, and the deployment workflows. Identify the actual architectural and code causes, then propose the smallest robust plan to make the app genuinely usable as a live public-world-data viewer.",
+  "context": [
+    "The public app is deployed from GitHub Pages, so browser calls to local /api/* routes have no server behind them.",
+    "The wrapper already patches Live Flights away from /api/opensky to ADSB.lol, but the user still reported Live Flights and several other layers unavailable.",
+    "Known upstream-style routes/layers include satellites/Celestrak, launches, NASA FIRMS fires, AIS, radio/stations and other /api/* endpoints. Earthquakes already use USGS directly in-browser.",
+    "The desired product is a calm, serious Earth Signal interface, not a cinematic scope/HUD app. The current priority is working data plumbing, not cosmetic redesign.",
+    "Do not modify Things Universe V24 or any V24 files. Keep this review strictly scoped to Earth Signal / God's Eye View Mobile and its supporting deployment/backend architecture.",
+    "Prefer keyless/public feeds where practical. For feeds requiring server-side CORS handling, authenticated APIs, or private credentials, prefer a narrowly scoped Cloudflare Worker proxy. Paid/private-credential-only features should be clearly disabled or removed rather than shown as mysteriously unavailable.",
+    "Do not make edits or commits. This bridge is read-only."
+  ],
+  "expected_response": "Give: (1) a ranked root-cause diagnosis, (2) exact repository files/functions/routes to change, (3) a minimal staged implementation plan starting with the highest-value working layers, (4) concrete tests that prove each live layer is actually functioning on the public deployment, and (5) any build/deployment traps that could regress the existing globe or V24. Be concise but specific.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 4
+}
