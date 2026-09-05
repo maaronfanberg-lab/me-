@@ -24,6 +24,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Test Little World Falcon adapter
+        working-directory: experiments/little-world-lab
+        run: |
+          python -m unittest discover -s tests -p 'test_*.py' -v
+
       - name: Record runner resources
         run: |
           echo '=== memory ==='
@@ -36,25 +41,13 @@ jobs:
       - name: Start isolated Falcon llama.cpp server
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          path = Path('experiments/little-world-lab/runtime/action-schema.json')
-          schema = json.loads(path.read_text(encoding='utf-8'))
-          assert schema['type'] == 'object'
-          assert set(schema['properties']['type']['enum']) == {'move', 'talk', 'help', 'work', 'rest', 'observe'}
-          assert schema['additionalProperties'] is False
-          print('Little World action schema validated.')
-          PY
           docker pull ghcr.io/ggml-org/llama.cpp:server
           docker run -d --name little-world-falcon \
             -p 8080:8080 \
-            -v "$GITHUB_WORKSPACE/experiments/little-world-lab/runtime/action-schema.json:/schemas/little-world-action.json:ro" \
             ghcr.io/ggml-org/llama.cpp:server \
             -hf bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M \
             --host 0.0.0.0 \
             --port 8080 \
-            --json-schema-file /schemas/little-world-action.json \
             -c 2048 \
             -np 1
 
@@ -104,13 +97,12 @@ jobs:
           set -euo pipefail
           rm -rf runs/falcon-live-smoke
           MODEL_ID="$(cat /tmp/little-world-model-id.txt)"
-          python living_world.py \
-            --backend bitnet \
+          python falcon_live.py \
             --ticks 4 \
             --actors-per-tick 1 \
             --seed 7 \
-            --temperature 0.2 \
-            --max-tokens 160 \
+            --temperature 0.1 \
+            --max-tokens 256 \
             --timeout 300 \
             --model "$MODEL_ID" \
             --output runs/falcon-live-smoke
