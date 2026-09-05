@@ -1,0 +1,49 @@
+name: Little World Lab smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/little-world-lab/**'
+      - '.github/workflows/little-world-lab-smoke.yml'
+  pull_request:
+    paths:
+      - 'experiments/little-world-lab/**'
+      - '.github/workflows/little-world-lab-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: experiments/little-world-lab
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Deterministic smoke run
+        run: |
+          rm -rf runs/ci-smoke
+          python living_world.py --backend stub --ticks 12 --actors-per-tick 2 --seed 7 --output runs/ci-smoke
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out = Path('runs/ci-smoke')
+          metrics = json.loads((out / 'metrics.json').read_text())
+          assert metrics['ticks'] == 12
+          assert metrics['agents'] == 8
+          assert metrics['total_actions'] == 24
+          assert metrics['backend_errors'] == 0
+          assert (out / 'events.jsonl').exists()
+          assert (out / 'metrics.jsonl').exists()
+          assert (out / 'checkpoint.json').exists()
+          print(json.dumps(metrics, indent=2, sort_keys=True))
+          PY
