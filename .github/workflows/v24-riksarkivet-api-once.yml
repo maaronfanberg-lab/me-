@@ -1,0 +1,198 @@
+name: Install V24 Riksarkivet API once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'Install V24 Riksarkivet API patcher'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Add direct Riksarkivet Search API source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('experiments/emily-olivia-society/things_sweden_genealogy.py')
+          s = p.read_text()
+
+          if 'import json\n' not in s:
+              marker = 'from __future__ import annotations\n\n'
+              if marker not in s:
+                  raise SystemExit('import seam changed; refusing broad rewrite')
+              s = s.replace(marker, marker + 'import json\n', 1)
+
+          function_marker = '\n\ndef _group_adapter(index: int) -> Callable[[str], list[dict[str, str]]]:\n'
+          function_block = r'''
+
+def riksarkivet_transcribed(term: str) -> list[dict[str, str]]:
+    """Search Riksarkivet's official Search API for digitised transcribed records.
+
+    This mirrors the public search surface's "Digitised material only" plus
+    "Transcribed material only" mode. Results stay archival-record mentions;
+    no nearby words are promoted into inferred people or family relationships.
+    """
+    params = urllib.parse.urlencode(
+        {
+            "transcribed_text": term,
+            "only_digitised_materials": "true",
+            "limit": 100,
+            "offset": 0,
+            "sort": "relevance",
+        }
+    )
+    payload = _read("https://data.riksarkivet.se/api/records?" + params, timeout=8)
+    try:
+        data = json.loads(payload.decode("utf-8", errors="replace"))
+    except Exception:
+        return []
+
+    rows: list[dict[str, str]] = []
+    items = data.get("items", []) if isinstance(data, dict) else []
+    for item in items[:100]:
+        if not isinstance(item, dict):
+            continue
+        metadata = item.get("metadata") or {}
+        links = item.get("_links") or {}
+        transcribed = item.get("transcribedText") or {}
+        snippets = transcribed.get("snippets") or []
+
+        snippet_parts = []
+        for sn in snippets[:4]:
+            if isinstance(sn, dict):
+                text = _clean(sn.get("text"), 260)
+                if text:
+                    snippet_parts.append(text)
+
+        hierarchy = metadata.get("hierarchy") or []
+        hierarchy_caption = ""
+        for node in hierarchy:
+            if isinstance(node, dict) and node.get("caption"):
+                hierarchy_caption = _clean(node.get("caption"), 160)
+                break
+
+        record_id = _clean(item.get("id"), 90)
+        reference = _clean(metadata.get("referenceCode"), 120)
+        title = (
+            _clean(item.get("caption"), 180)
+            or hierarchy_caption
+            or reference
+            or (f"Riksarkivet record {record_id}" if record_id else "Riksarkivet record")
+        )
+        url = _canonical_url(links.get("html"))
+        if not url and record_id:
+            url = f"https://sok.riksarkivet.se/arkiv/{urllib.parse.quote(record_id)}"
+        context = " | ".join(
+            x for x in (
+                reference,
+                _clean(metadata.get("date"), 60),
+                _clean(metadata.get("note"), 180),
+                " ".join(snippet_parts),
+            )
+            if x
+        )
+        row = {
+            "index": "Sweden genealogy · Riksarkivet transcribed archives",
+            "title": title,
+            "url": url,
+            "snippet": _clean(context, 420),
+            "date": _clean(metadata.get("date"), 60),
+        }
+        if row["title"] and _contains_term(row, term):
+            rows.append(row)
+    return rows
+'''
+
+          if 'def riksarkivet_transcribed(term: str)' not in s:
+              if function_marker not in s:
+                  raise SystemExit('adapter insertion seam changed; refusing broad rewrite')
+              s = s.replace(function_marker, function_block + function_marker, 1)
+
+          old_adapters = '''ADAPTERS: tuple[Callable[[str], list[dict[str, str]]], ...] = tuple(\n    _group_adapter(i) for i in range(len(SOURCE_GROUPS))\n)'''
+          new_adapters = '''ADAPTERS: tuple[Callable[[str], list[dict[str, str]]], ...] = (\n    riksarkivet_transcribed,\n) + tuple(_group_adapter(i) for i in range(len(SOURCE_GROUPS)))'''
+          if new_adapters not in s:
+              if old_adapters not in s:
+                  raise SystemExit('adapter tuple seam changed; refusing broad rewrite')
+              s = s.replace(old_adapters, new_adapters, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Validate Riksarkivet adapter without network
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 -m py_compile things_sweden_genealogy.py things_falcon_bridge_web.py things_falcon_bridge.py
+          python3 - <<'PY'
+          import json
+          import things_sweden_genealogy as se
+
+          sample = {
+              "items": [
+                  {
+                      "id": "abc123",
+                      "caption": "Court book 1761",
+                      "metadata": {
+                          "referenceCode": "SE/RA/TEST/1",
+                          "date": "1761",
+                          "note": "Digitised court record",
+                          "hierarchy": [{"caption": "Sundsvall court records"}],
+                      },
+                      "transcribedText": {
+                          "snippets": [{"text": "satängvävaren Jonas <em>Fanberg</em> inställde sig"}],
+                          "numTotal": 1,
+                      },
+                      "_links": {"html": "https://sok.riksarkivet.se/arkiv/abc123"},
+                  },
+                  {
+                      "id": "other",
+                      "caption": "Unrelated record",
+                      "metadata": {"referenceCode": "SE/RA/TEST/2", "date": "1762"},
+                      "transcribedText": {"snippets": [{"text": "nothing relevant here"}], "numTotal": 0},
+                      "_links": {"html": "https://sok.riksarkivet.se/arkiv/other"},
+                  },
+              ]
+          }
+          real_read = se._read
+          try:
+              se._read = lambda *args, **kwargs: json.dumps(sample).encode('utf-8')
+              rows = se.riksarkivet_transcribed('Fanberg')
+          finally:
+              se._read = real_read
+
+          assert len(rows) == 1, rows
+          row = rows[0]
+          assert row['index'] == 'Sweden genealogy · Riksarkivet transcribed archives'
+          assert row['url'] == 'https://sok.riksarkivet.se/arkiv/abc123'
+          assert 'Fanberg' in row['snippet']
+          assert 'SE/RA/TEST/1' in row['snippet']
+          assert se.ADAPTERS[0] is se.riksarkivet_transcribed
+          print('Riksarkivet direct adapter deterministic test passed')
+          PY
+
+      - name: Commit direct Riksarkivet source
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add experiments/emily-olivia-society/things_sweden_genealogy.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Connect V24 directly to Riksarkivet Search API [skip ci]'
+          for attempt in 1 2 3 4; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then exit 0; fi
+            git rebase --abort || true
+            sleep $((attempt*4))
+          done
+          exit 1
