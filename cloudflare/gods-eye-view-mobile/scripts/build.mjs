@@ -118,6 +118,8 @@ html = html.replace(oldTitle, '<title>Earth Signal</title>');
 html = html.replace(oldBrand, 'EARTH <span class="title-accent">SIGNAL</span>');
 html = html.replace(oldSubtitle, '<p class="subtitle">LIVE PUBLIC DATA · CURRENT CONDITIONS</p>');
 html = html.replace('</head>', `  <meta name="apple-mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n  <meta name="theme-color" content="#080b0e">\n  <link rel="manifest" href="/manifest.webmanifest">\n  <link rel="stylesheet" href="/mobile.css">\n</head>`);
+const earthSignalHeader = `  <header id="earth-signal-header" aria-label="Earth Signal">\n    <div class="earth-signal-copy">\n      <strong>Earth Signal</strong>\n      <small>public world data · current conditions</small>\n    </div>\n    <span class="earth-signal-live">public feeds</span>\n  </header>\n`;
+html = html.replace('<body>', `<body>\n${earthSignalHeader}`);
 html = html.replace('</body>', `  <script>if ('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));</script>\n</body>`);
 writeFileSync(indexPath, html);
 
@@ -128,6 +130,8 @@ manifest.short_name = 'Earth Signal';
 manifest.description = 'Live public Earth data and current conditions on one globe.';
 manifest.theme_color = '#080b0e';
 manifest.background_color = '#080b0e';
+manifest.start_url = './';
+manifest.scope = './';
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 
 writeFileSync(join(out, '_headers'), `/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: geolocation=(self), microphone=(self)\n\n/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n`);
