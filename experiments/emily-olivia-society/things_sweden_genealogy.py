@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import html
 import re
 import urllib.parse
@@ -197,6 +198,83 @@ def _query_group(term: str, group: str, domains: tuple[str, ...]) -> list[dict[s
     )
     return _parse_rss(_read("https://www.bing.com/search?" + params), group, term)
 
+def riksarkivet_transcribed(term: str) -> list[dict[str, str]]:
+    """Search Riksarkivet's official Search API for digitised transcribed records.
+
+    This mirrors the public search surface's "Digitised material only" plus
+    "Transcribed material only" mode. Results stay archival-record mentions;
+    no nearby words are promoted into inferred people or family relationships.
+    """
+    params = urllib.parse.urlencode(
+        {
+            "transcribed_text": term,
+            "only_digitised_materials": "true",
+            "limit": 100,
+            "offset": 0,
+            "sort": "relevance",
+        }
+    )
+    payload = _read("https://data.riksarkivet.se/api/records?" + params, timeout=8)
+    try:
+        data = json.loads(payload.decode("utf-8", errors="replace"))
+    except Exception:
+        return []
+
+    rows: list[dict[str, str]] = []
+    items = data.get("items", []) if isinstance(data, dict) else []
+    for item in items[:100]:
+        if not isinstance(item, dict):
+            continue
+        metadata = item.get("metadata") or {}
+        links = item.get("_links") or {}
+        transcribed = item.get("transcribedText") or {}
+        snippets = transcribed.get("snippets") or []
+
+        snippet_parts = []
+        for sn in snippets[:4]:
+            if isinstance(sn, dict):
+                text = _clean(sn.get("text"), 260)
+                if text:
+                    snippet_parts.append(text)
+
+        hierarchy = metadata.get("hierarchy") or []
+        hierarchy_caption = ""
+        for node in hierarchy:
+            if isinstance(node, dict) and node.get("caption"):
+                hierarchy_caption = _clean(node.get("caption"), 160)
+                break
+
+        record_id = _clean(item.get("id"), 90)
+        reference = _clean(metadata.get("referenceCode"), 120)
+        title = (
+            _clean(item.get("caption"), 180)
+            or hierarchy_caption
+            or reference
+            or (f"Riksarkivet record {record_id}" if record_id else "Riksarkivet record")
+        )
+        url = _canonical_url(links.get("html"))
+        if not url and record_id:
+            url = f"https://sok.riksarkivet.se/arkiv/{urllib.parse.quote(record_id)}"
+        context = " | ".join(
+            x for x in (
+                reference,
+                _clean(metadata.get("date"), 60),
+                _clean(metadata.get("note"), 180),
+                " ".join(snippet_parts),
+            )
+            if x
+        )
+        row = {
+            "index": "Sweden genealogy · Riksarkivet transcribed archives",
+            "title": title,
+            "url": url,
+            "snippet": _clean(context, 420),
+            "date": _clean(metadata.get("date"), 60),
+        }
+        if row["title"] and _contains_term(row, term):
+            rows.append(row)
+    return rows
+
 
 def _group_adapter(index: int) -> Callable[[str], list[dict[str, str]]]:
     def run(term: str) -> list[dict[str, str]]:
@@ -206,9 +284,9 @@ def _group_adapter(index: int) -> Callable[[str], list[dict[str, str]]]:
     return run
 
 
-ADAPTERS: tuple[Callable[[str], list[dict[str, str]]], ...] = tuple(
-    _group_adapter(i) for i in range(len(SOURCE_GROUPS))
-)
+ADAPTERS: tuple[Callable[[str], list[dict[str, str]]], ...] = (
+    riksarkivet_transcribed,
+) + tuple(_group_adapter(i) for i in range(len(SOURCE_GROUPS)))
 
 
 def sweden_genealogy_mentions(term: str) -> dict[str, Any]:
