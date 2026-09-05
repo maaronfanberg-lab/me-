@@ -1,12 +1,22 @@
 {
   "requested_at": "2026-09-05",
   "model": "bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M",
-  "purpose": "end-to-end isolated Falcon live smoke for Little World Lab",
-  "ticks": 4,
-  "actors_per_tick": 1,
-  "seed": 7,
-  "attempt": 6,
+  "purpose": "close remaining Little World Falcon verification blockers with full live action-contract coverage and a multi-seed natural baseline",
+  "natural_baseline": {
+    "ticks_per_seed": 12,
+    "actors_per_tick": 2,
+    "seeds": [7, 19, 31],
+    "expected_total_actions": 72
+  },
+  "directed_live_contract_probes": ["move", "talk", "help", "work", "rest", "observe"],
+  "quality_gate": {
+    "backend_errors": 0,
+    "minimum_accepted_model_proposals": 36,
+    "maximum_aggregate_proposal_rejection_rate": 0.5
+  },
+  "attempt": 7,
   "structured_output": "prompt-plus-bounded-balanced-json-extractor",
+  "feasibility_grounding": true,
   "temperature": 0.1,
   "max_tokens": 256
 }

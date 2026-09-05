@@ -76,13 +76,43 @@ class FalconBackend(BitNetBackend):
     _extract_json = staticmethod(extract_first_complete_json_object)
 
     @staticmethod
+    def _feasibility_constraints(observation: dict[str, Any]) -> dict[str, list[str]]:
+        """Expose only action arguments the engine currently considers local/visible.
+
+        This does not validate or resolve anything. It simply prevents the prompt
+        from making a small model rediscover constraints already present in its
+        observation, while WorldEngine remains the authority on acceptance.
+        """
+        move_locations = sorted(
+            {str(value).strip() for value in observation.get("neighbor_locations", []) if str(value).strip()}
+        )
+        interaction_targets = sorted(
+            {str(value).strip() for value in observation.get("co_located_agents", []) if str(value).strip()}
+        )
+        resources = observation.get("resources") or {}
+        work_resources = sorted({str(value).strip() for value in resources if str(value).strip()})
+        return {
+            "move_locations": move_locations,
+            "interaction_targets": interaction_targets,
+            "work_resources": work_resources,
+            "always_allowed": ["rest", "observe"],
+        }
+
+    @staticmethod
     def _prompt(agent: Agent, observation: dict[str, Any], tick: int) -> tuple[str, str]:
         system = (
             "Output one JSON object immediately. Your first non-whitespace character must be { and "
             "your last non-whitespace character must be }. Do not think aloud. Do not use markdown, "
             "analysis, explanations, labels, or preambles. You control one fictional simulation agent. "
             "Choose exactly one feasible action using only the observation and private memories shown. "
-            "Never assume unseen places, events, memories, or other agents' thoughts. Valid action forms are: "
+            "Never assume unseen places, events, memories, or other agents' thoughts. Use only values "
+            "listed in the feasibility constraints. If move_locations is empty, do not move; otherwise "
+            "a move location must be one of those values and must not be the current location unless it "
+            "is explicitly listed. Talk/help targets must be in interaction_targets. Work resources must "
+            "be in work_resources. If one of those lists is empty, do not choose its dependent action. "
+            "For talk, generate a fresh short natural utterance yourself rather than copying a placeholder. "
+            "Prefer a concrete feasible action that advances the agent's stated goals when one is available; "
+            "use rest or observe when they genuinely fit. Valid action forms are: "
             '{"type":"move","location":"NAME"}; '
             '{"type":"talk","target":"NAME","utterance":"WORDS"}; '
             '{"type":"help","target":"NAME"}; '
@@ -101,7 +131,8 @@ class FalconBackend(BitNetBackend):
                 "relationships": {k: asdict(v) for k, v in sorted(agent.relationships.items())},
             },
             "observation": observation,
-            "instruction": "Choose one feasible action now. JSON object only.",
+            "feasibility": FalconBackend._feasibility_constraints(observation),
+            "instruction": "Choose one feasible action that obeys the feasibility lists. JSON object only.",
         }
         return system, json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
