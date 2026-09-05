@@ -1,37 +1,53 @@
-# God's Eye View Mobile on Cloudflare
+# Earth Signal on Cloudflare
 
-This folder is a Cloudflare Pages deployment wrapper for the MIT-licensed upstream project `bilawalsidhu/gods-eye-view`.
+Earth Signal is the calm, public-data wrapper around the MIT-licensed upstream project `bilawalsidhu/gods-eye-view`.
 
-It intentionally does **not** vendor a stale copy of the upstream repository. The Cloudflare build clones the current upstream `main`, installs its locked dependencies, runs the upstream Vite build, then injects iPhone/mobile overrides and PWA/Home Screen support.
+The wrapper intentionally does **not** vendor a stale upstream copy. Its build clones the current upstream `main`, applies Earth Signal's live-data and presentation policy, installs the locked dependencies, runs the upstream Vite build, then adds mobile/PWA assets.
+
+## Live-data policy
+
+Earth Signal does not present generated or simulated observations as live conditions.
+
+The static Cloudflare Pages build currently verifies and supports these direct public feeds:
+
+- **USGS earthquakes** — official 24-hour GeoJSON feed, refreshed by the upstream layer every 60 seconds.
+- **ADSB.lol aircraft** — public ADS-B API, converted into the upstream flight-layer state-vector shape by the wrapper.
+
+The upstream street-traffic layer normally falls back to animated simulated vehicles when TomTom's server-side proxy is unavailable. This static wrapper does not ship that private proxy, so Earth Signal replaces the traffic layer with an inert `UNAVAILABLE` implementation and hides its control instead of drawing synthetic cars.
+
+Other upstream features that require private/server-side credentials remain unavailable until their proxy routes are explicitly ported to a Cloudflare Worker. A failed or missing feed should surface as unavailable/degraded rather than being replaced by fabricated data.
 
 ## Cloudflare Pages settings
 
-Use this repository and set:
-
-- Production branch: `main` after this PR is merged
+- Production branch: `main`
 - Root directory: `cloudflare/gods-eye-view-mobile`
 - Build command: `npm run build`
 - Build output directory: `dist`
 - Node version: `24.14.0`
 
-## Required environment variable
+## Map configuration
 
-`GOOGLE_MAPS_API_KEY`
+`GOOGLE_MAPS_API_KEY` is optional in Earth Signal. If present, the wrapper uses Google Photorealistic 3D Tiles. If absent or unavailable, it keeps the keyless globe visible instead of aborting startup.
 
-The upstream project requires a Google Maps API key with Map Tiles API enabled. The key is deliberately client-exposed by the upstream app, so restrict it by HTTP referrer and API in Google Cloud.
+If you configure a Google Maps key, restrict it by HTTP referrer and API in Google Cloud because the browser must receive it.
 
-## Useful optional environment variables
+`CESIUM_ION_TOKEN` remains optional for upstream features that use Cesium ion.
 
-- `CESIUM_ION_TOKEN`
-- `OPENSKY_AUTH_MODE=anon` for aircraft without OpenSky credentials
-
-The upstream project also supports server-side credentials such as OpenAI, AISStream, NASA FIRMS, TomTom and authenticated OpenSky. Those routes are implemented as Vite development-server middleware upstream and are not automatically converted into Cloudflare Worker routes by this static Pages wrapper.
-
-That means the first Cloudflare deployment gives you the core browser app and any client-capable/keyless layers that do not depend on `/api/*`. Features backed by private server credentials should remain disabled until their proxy routes are explicitly ported to a Worker. Do not put private server keys into client-prefixed variables.
+Do not put private server keys into client-prefixed environment variables.
 
 ## iPhone use
 
-Open the deployed Cloudflare URL in Safari. The wrapper adds safe-area handling, touch-friendly control sizing, reduced small-screen panel sizes, a web-app manifest and standalone Home Screen mode. In Safari choose Share → Add to Home Screen.
+Open the deployed Cloudflare URL in Safari. The wrapper adds safe-area handling, touch-friendly sizing, a web-app manifest and standalone Home Screen mode. In Safari choose Share → Add to Home Screen.
+
+## Build invariants
+
+The build fails rather than silently weakening the data contract if:
+
+- the upstream earthquake layer no longer contains the official USGS feed or its 60-second refresh seam;
+- the ADSB.lol aircraft bridge can no longer be applied; or
+- the Earth Signal traffic replacement no longer reports itself unavailable and detection-empty.
+
+The upstream cinematic scope mask and surveillance-style presentation are disabled/hidden by this wrapper; the underlying data-layer architecture remains upstream-compatible.
 
 ## Licensing
 
