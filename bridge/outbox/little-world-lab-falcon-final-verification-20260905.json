@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/little-world-lab-falcon-final-verification-20260905.json",
+  "request_sha256": "d479756308c41fa095abc2e7743df212597649e975b6e3b34e177b77d8b793f0",
+  "request_nonce": "d479756308c41fa095abc2e7",
+  "completed_at": "2026-09-05T22:25:07.074759Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Verdict: PASS (as an infrastructure/end‑to‑end integration smoke — not as a behavior‑quality result)\n\n### What actually passed\n- **Code inspection confirms the claimed architecture is real, not just claimed.** `falcon_live.py`'s `FalconBackend` only builds a prompt and calls `extract_first_complete_json_object` to parse the model's text into a candidate action dict. It never touches simulation state. All mutation and validation happens exclusively in `WorldEngine._validate` / `_resolve` in `living_world.py`. This matches the design the run is supposed to prove.\n- **The 16 unit tests are real and relevant.** `tests/test_falcon_live.py` (8 tests) exercises the JSON extractor exactly as claimed (array-only, malformed, truncated, brace-in-string, escaped quote/backslash, leading/trailing text, first-object-wins). `tests/test_living_world.py` (8 tests) covers engine safety: invalid move can't mutate location, talk requires co-location, private memories aren't leaked, incidents are location-scoped, checkpoint round-trip, repeated-utterance rejection, deterministic stub run. 8+8 = 16, matching the reported count.\n- **The workflow (`little-world-falcon-live.yml`) steps line up with the supplied run evidence**: unit tests → docker pull/run of `ghcr.io/ggml-org/llama.cpp:server` with `-hf bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M` → `/health` + `/v1/models` polling and model-id resolution → `falcon_live.py --ticks 4 --actors-per-tick 1 --seed 7 --temperature 0.1 --max-tokens 256 --timeout 300 --model \"$MODEL_ID\"` → a validation script that asserts exactly `ticks==4`, `agents==8`, `total_actions==4`, `backend_errors==0`, and file existence → log capture → artifact upload. This is exactly what the run/artifact evidence reports.\n- **`world.json` independently confirms `agents=8`** and that `workshop`'s neighbor list includes `square`, so Theo's accepted `workshop → square` move is a legitimate, schema-consistent transition, not an artifact of a bug.\n- **`compute_metrics()` in `living_world.py` produces exactly the field names/semantics in the supplied `metrics.json`** (`ticks`, `agents`, `total_actions`, `action_counts`, `proposal_rejections`, `backend_errors`, `talk_turns`, `exact_repeated_utterance_rate`), so the reported numbers are traceable to real code, not hand-authored.\n- **`backend_errors=0`** means every model call completed, returned parseable text, and was successfully JSON-extracted by the adapter — i.e., the adapter/server/network path itself never failed. That is the specific claim \"integration\" should be judged on, and it holds.\n\n### Do the 3 rejected proposals undermine the smoke-test claim?\nNo. They actually **demonstrate the safety property under test**, not a failure of it:\n- Lena and Arden each proposed `move` to their *own current location* (kitchen→kitchen, water_tower→water_tower), which is not in the neighbor list, so `_validate` correctly returned `move_not_neighbor` and safely substituted `observe`.\n- Mira produced a non-conforming object with no valid `type`, correctly triggering `unknown_action_type` and falling back to `observe`.\n- Theo's `workshop→square` proposal was valid and was executed exactly as the engine intends.\n\nThis is precisely the \"adapter proposes, engine alone decides\" contract working end-to-end against real, noisy 1B-model output — zero state corruption, zero backend errors, one correct action executed, three unsafe/invalid ones neutralized. It is not evidence against the integration; it's the integration test's most informative signal.\n\n### Important caveats (do not conflate with the PASS)\n- This is a **very narrow behavioral sample**: 1 actor/tick × 4 ticks = 4 total proposals from a 1B Q4_K_M quantized model, 3 of which were semantically invalid. `action_counts` shows only `move` and `observe` — `talk`, `help`, `work`, and `rest` (and their associated validation paths: `target_not_co_located`, `empty_utterance`, `repeated_utterance`, `unknown_local_resource`) were never exercised against the *live* model in this run, only against the stub/unit-test backends.\n- The workflow's own validation step deliberately checks only structural/transport invariants (`ticks`, `agents`, `total_actions`, `backend_errors==0`, file existence) and does **not** assert anything about proposal quality, rejection rate, or action diversity — so nothing is being overclaimed by the pipeline itself, but a reader must not infer \"Falcon behaves well\" from this PASS. It only supports \"Falcon is correctly wired into the safety-checked engine and the engine holds under real model noise.\"\n- 3/4 invalid proposals in this micro-sample is a real quality signal about this specific small model at this temperature/token budget; it should not be extrapolated to larger ticks/actors-per-tick counts or other action types without a further, broader live run.\n\n### Is further code change required before calling this verified?\nNo code change is required to certify the narrow claim: **the Falcon adapter/server/engine path is correctly integrated end-to-end and engine safety holds against real model output.** The evidence (code + workflow + artifact contents) is internally consistent and traceable, and the specific question posed (adapter/server/engine integration with safety holding) is answered affirmatively by this run. Any expansion to claim broader behavioral coverage (talk/help/work/rest paths, longer runs, lower rejection rates) would need a new/extended live run, not a code fix — that is out of scope for this integration verification.",
+  "session_id": "56060875-ed17-4c29-9a1b-93d500f2037a",
+  "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 22205,
+    "cache_read_input_tokens": 55591,
+    "output_tokens": 4562,
+    "output_tokens_details": {
+      "thinking_tokens": 1879
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 22205,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3696,
+        "cache_read_input_tokens": 23270,
+        "cache_creation_input_tokens": 1947,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1947
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.1473502,
+  "num_turns": 10
+}
