@@ -16,7 +16,10 @@ permissions:
 
 concurrency:
   group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  # This repository receives frequent independent commits. Do not kill a valid
+  # Pages build merely because a newer commit arrived while it was running.
+  # GitHub still retains only the newest pending run for this concurrency group.
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -36,12 +39,12 @@ jobs:
             echo 'Current Room launcher uses the live viewer; skipping legacy snapshot bake.'
           fi
 
-      - name: Set up Node for God's Eye View
+      - name: Set up Node for Earth Signal
         uses: actions/setup-node@v4
         with:
           node-version: '24.14.0'
 
-      - name: Build keyless God's Eye View mobile
+      - name: Build live-only Earth Signal
         working-directory: cloudflare/gods-eye-view-mobile
         run: npm run build
 
@@ -72,7 +75,7 @@ jobs:
           print(f'Patched Earth Signal basemap endpoint in {changed} bundle(s).')
           PY
 
-      - name: Stage God's Eye View under Pages
+      - name: Stage Earth Signal under Pages
         shell: bash
         run: |
           set -euo pipefail
@@ -81,7 +84,7 @@ jobs:
           cp -a cloudflare/gods-eye-view-mobile/dist/. apps/gods-eye-view-mobile/
           test -s apps/gods-eye-view-mobile/index.html
 
-      - name: Rebase God's Eye View static paths for GitHub Pages
+      - name: Rebase Earth Signal static paths for GitHub Pages
         shell: bash
         run: |
           set -euo pipefail
@@ -107,13 +110,20 @@ jobs:
           if missing: raise SystemExit(f'GitHub Pages path rebase incomplete: {missing}')
           PY
 
-      - name: Verify ADSB live-flight bridge is bundled
+      - name: Verify Earth Signal source contract is bundled
         shell: bash
         run: |
           set -euo pipefail
           grep -R -q 'api.adsb.lol/v2' apps/gods-eye-view-mobile/assets
+          grep -R -q 'earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson' apps/gods-eye-view-mobile/assets
           grep -R -q 'wi.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer' apps/gods-eye-view-mobile/assets
-          echo 'ADSB.lol Live Flights and stable Earth basemap are present in the production bundle.'
+          grep -Fq '[data-layer-id="traffic"]' apps/gods-eye-view-mobile/mobile.css
+          grep -q 'USGS · ADSB.lol' apps/gods-eye-view-mobile/index.html
+          if grep -R -q 'Street Traffic · Live/Simulated' apps/gods-eye-view-mobile; then
+            echo 'Synthetic street-traffic presentation leaked into production bundle.'
+            exit 1
+          fi
+          echo 'Verified Earth Signal: USGS earthquakes + ADSB.lol aircraft; synthetic street traffic disabled.'
 
       - name: Configure Pages
         if: github.ref == 'refs/heads/main'
