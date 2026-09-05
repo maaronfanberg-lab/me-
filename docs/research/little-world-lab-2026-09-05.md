@@ -46,7 +46,7 @@ What is the smallest auditable architecture that lets language-model-driven agen
 7. **Replication / limitations:** PASS WITH UNCERTAINTY. Recent reviews identify unresolved reproducibility and validation problems; deterministic stub runs provide only software replication, not behavioral replication.
 8. **Context transfer:** PASS WITH LIMITATION. We borrow architecture patterns, not conclusions about humans. Findings from this fictional sandbox do not transfer automatically to The Room or real people.
 9. **Implementation mapping:** PASS. New isolated `experiments/little-world-lab/`; model backend abstraction; engine-owned structured action validation; private memory retrieval; local observations; JSONL event log/checkpoints; metrics; deterministic stub backend.
-10. **Post-change validation:** DEFINED BELOW; behavioral result pending a real Falcon run.
+10. **Post-change validation:** PASS FOR SOFTWARE ENGINE; behavioral result pending a real Falcon run.
 
 ## Implementation mapping
 
@@ -84,4 +84,6 @@ Behavioral baseline criteria for later real Falcon runs:
 
 ## Post-change result
 
-Pending implementation and CI. A real Falcon behavioral run is a separate validation step because GitHub CI should not download or execute the large local model merely to prove engine correctness.
+Implementation is complete for the v1 software engine. Eight local unit tests passed after the Claude-reviewed architecture changes. GitHub Actions workflow **Little World Lab smoke**, run #1 (`33988370970`), completed successfully on 2026-09-05: the unit-test step passed and the deterministic 12-tick smoke run passed with the expected 8 agents, 24 resolved actions, zero backend errors, and the expected log/checkpoint outputs.
+
+The software gate is therefore satisfied. This validates the engine's deterministic test path and core invariants, not Falcon behavior. A real Falcon/BitNet behavioral run remains the next evidence step and must use a compatible model server; multiple seeded runs should be compared before describing any observed pattern as emergent.
