@@ -158,8 +158,10 @@ def ask_claude_code(data, prompt):
 
     payload = parse_cli_json(proc.stdout)
     if proc.returncode != 0:
+        detail = payload.get("result") or payload.get("errors") or payload
+        stderr = str(proc.stderr or "").strip()
         raise RuntimeError(
-            f"Claude Code exited {proc.returncode}: {str(proc.stderr or '').strip()[-1600:]}"
+            f"Claude Code exited {proc.returncode}: payload={json.dumps(detail, ensure_ascii=False)[:2400]} stderr={stderr[-1200:]}"
         )
     if payload.get("is_error"):
         raise RuntimeError(f"Claude Code reported an error: {payload.get('result') or payload.get('errors')}")
