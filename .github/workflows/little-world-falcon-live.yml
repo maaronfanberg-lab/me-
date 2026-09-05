@@ -1,0 +1,138 @@
+name: Little World Falcon live smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/little-world-lab/runtime/live-smoke-request.json'
+
+permissions:
+  contents: read
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Record runner resources
+        run: |
+          echo '=== memory ==='
+          free -h
+          echo '=== disk ==='
+          df -h /
+          echo '=== cpu ==='
+          nproc
+
+      - name: Start isolated Falcon llama.cpp server
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/ggml-org/llama.cpp:server
+          docker run -d --name little-world-falcon \
+            -p 8080:8080 \
+            ghcr.io/ggml-org/llama.cpp:server \
+            -hf tiiuae/Falcon3-1B-Instruct-1.58bit-GGUF \
+            --host 0.0.0.0 \
+            --port 8080 \
+            -c 2048 \
+            -np 1
+
+      - name: Wait for Falcon readiness
+        run: |
+          set -euo pipefail
+          ready=0
+          for i in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:8080/health >/tmp/little-world-health.json 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! docker ps -a --format '{{.Names}} {{.Status}}' | grep -q '^little-world-falcon '; then
+              echo 'Falcon container disappeared.'
+              docker ps -a
+              docker logs little-world-falcon || true
+              exit 1
+            fi
+            if [ $((i % 12)) -eq 0 ]; then
+              echo "Still loading Falcon after $((i * 5)) seconds..."
+              docker ps --format '{{.Names}} {{.Status}}'
+              free -h
+            fi
+            sleep 5
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'Falcon server did not become healthy in time.'
+            docker logs little-world-falcon || true
+            exit 1
+          fi
+          cat /tmp/little-world-health.json
+          curl -fsS http://127.0.0.1:8080/v1/models > /tmp/little-world-models.json
+          cat /tmp/little-world-models.json
+          python - <<'PY' > /tmp/little-world-model-id.txt
+          import json
+          data = json.load(open('/tmp/little-world-models.json', encoding='utf-8'))
+          rows = data.get('data') or []
+          if not rows or not rows[0].get('id'):
+              raise SystemExit('llama.cpp returned no model id')
+          print(rows[0]['id'])
+          PY
+          echo "Resolved model id: $(cat /tmp/little-world-model-id.txt)"
+
+      - name: Run real Falcon little-world smoke
+        working-directory: experiments/little-world-lab
+        run: |
+          set -euo pipefail
+          rm -rf runs/falcon-live-smoke
+          MODEL_ID="$(cat /tmp/little-world-model-id.txt)"
+          python living_world.py \
+            --backend bitnet \
+            --ticks 4 \
+            --actors-per-tick 1 \
+            --seed 7 \
+            --max-tokens 120 \
+            --timeout 300 \
+            --model "$MODEL_ID" \
+            --output runs/falcon-live-smoke
+
+      - name: Validate real Falcon result
+        working-directory: experiments/little-world-lab
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out = Path('runs/falcon-live-smoke')
+          metrics = json.loads((out / 'metrics.json').read_text(encoding='utf-8'))
+          assert metrics['ticks'] == 4, metrics
+          assert metrics['agents'] == 8, metrics
+          assert metrics['total_actions'] == 4, metrics
+          assert metrics['backend_errors'] == 0, metrics
+          assert (out / 'events.jsonl').exists()
+          assert (out / 'checkpoint.json').exists()
+          print(json.dumps(metrics, indent=2, sort_keys=True))
+          PY
+
+      - name: Capture Falcon server logs
+        if: always()
+        run: |
+          mkdir -p experiments/little-world-lab/runs/falcon-live-smoke
+          docker logs little-world-falcon > experiments/little-world-lab/runs/falcon-live-smoke/server.log 2>&1 || true
+          free -h > experiments/little-world-lab/runs/falcon-live-smoke/runner-memory.txt || true
+          df -h / > experiments/little-world-lab/runs/falcon-live-smoke/runner-disk.txt || true
+
+      - name: Upload live-smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: little-world-falcon-live-smoke
+          path: experiments/little-world-lab/runs/falcon-live-smoke
+          if-no-files-found: warn
+          retention-days: 14
