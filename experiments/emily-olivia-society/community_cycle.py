@@ -18,14 +18,47 @@ import paper_act_adapter as _paper
 import stanford_native_cycle as _native
 
 # Keep the paper adapter's private-plan and retrieved-memory leak guards. The
-# live wrapper deliberately leaves purely stylistic hard-veto checks disabled;
-# conversational repetition is handled below as a fail-open refractory signal
-# so it can improve variety without ever becoming a dead-turn condition.
+# live wrapper deliberately leaves purely stylistic hard-veto checks disabled.
+# Repetition itself is allowed when it functions as ordinary conversational
+# acknowledgement or uptake; only structural resets remain a soft refractory
+# signal below.
 _paper._is_ungrounded_short_reference = lambda text, inbound: False
 _paper._is_recent_echo = lambda text, dialogue_history: False
 _boundary._is_mid_conversation_greeting_reset = lambda text, dialogue_history: False
 _boundary._has_mid_turn_greeting_reset = lambda text, dialogue_history: False
 _boundary._is_short_recent_echo = lambda text, dialogue_history: False
+
+# Stanford's iterative conversation prompt already includes the transcript, but
+# live replay showed that the small model can still treat the latest message as
+# background and pivot elsewhere. Make the live inbound turn explicit at the act
+# boundary without prescribing any reply content. This applies equally to
+# Emily↔Olivia and Alex↔agent turns because they share the same paper-act path.
+_paper_prompt_base = _paper._paper_prompt
+
+
+def _uptake_focused_paper_prompt(agent, other, dialogue_history, inbound: str, cognitive_context: str) -> str:
+    prompt = _paper_prompt_base(agent, other, dialogue_history, inbound, cognitive_context)
+    live = str(inbound or "").strip()
+    if not live:
+        return prompt
+
+    requirement = (
+        "CONVERSATIONAL UPTAKE REQUIREMENT:\n"
+        f"The most recent live message from {other.name} is: {live}\n"
+        f"{agent.name}'s next utterance must respond to that specific message. "
+        "If it contains a question, answer or address that question in this turn before changing the subject. "
+        "Acknowledgement, agreement, repetition, paraphrase, disagreement, humor, and invented details are all allowed "
+        "when they function as part of a response. Do not ignore the live message and pivot to an unrelated topic. "
+        "After responding, the conversation may continue naturally.\n"
+    )
+    speaker_cue = f'{agent.name}: "'
+    cue_index = prompt.rfind(speaker_cue)
+    if cue_index < 0:
+        return prompt + "\n\n" + requirement
+    return prompt[:cue_index] + requirement + "\n" + prompt[cue_index:]
+
+
+_paper._paper_prompt = _uptake_focused_paper_prompt
 
 # Keep the Stanford/paper act path intact, but fail closed and resample the same
 # stochastic generator when the live replay proves identity or grounding drift.
@@ -103,9 +136,6 @@ def _is_short_semantic_echo(text: object, dialogue_history) -> bool:
         previous = _word_list(prior)
         if not previous or len(previous) > 7:
             continue
-        # Names differ across alternating greetings; compare the conversational
-        # skeleton after removing Emily/Olivia so "Hey, Emily" and "Hey, Olivia"
-        # are treated as the same move.
         out_core = [word for word in output if word not in {"emily", "olivia"}]
         prev_core = [word for word in previous if word not in {"emily", "olivia"}]
         if out_core and out_core == prev_core:
@@ -118,9 +148,6 @@ def _is_inbound_fragment_echo(text: object, inbound: object) -> bool:
     source = _word_list(inbound)
     if len(output) < 3 or len(output) > 7 or len(source) < len(output):
         return False
-    # Catch terse phrase extraction from the live inbound, such as replying
-    # "How to get a new haircut" to "I'd like to know how to get a new haircut."
-    # This is a soft refractory signal only; it never authors a replacement.
     for start in range(0, len(source) - len(output) + 1):
         if source[start : start + len(output)] == output:
             return True
@@ -153,30 +180,19 @@ def _identity_guarded_spoken_action(agent, other, dialogue_history=None, inbound
             rejected_identity.append(str(text)[:180])
             continue
 
-        # If a live peer just addressed the agent, claiming to be talking to
-        # oneself contradicts the observed social state. Treat this like identity
-        # drift: reject it and let continuous mode retry the same unconsumed turn.
         if _claims_impossible_self_conversation(text, inbound, other):
             rejected_identity.append("self-conversation:" + str(text)[:160])
             continue
 
-        # A customer-service stance is a common chat-model prior, not evidence
-        # about Emily/Olivia's relationship. Prefer another Stanford sample, but
-        # fail open if every structurally valid sample falls into that basin.
         if _is_service_assistant_stance(text):
             if soft_fallback is None:
                 soft_fallback = text
             continue
 
-        # A new session may restore historical dialogue for semantic continuity,
-        # but its autonomous opener has no inbound turn. Do not misclassify that
-        # legitimate first act as a mid-conversation greeting reset. Refractory
-        # resampling only applies when there is an actual live inbound message.
-        if str(inbound or "").strip() and (
-            _is_social_reset(text, dialogue_history)
-            or _is_short_semantic_echo(text, dialogue_history)
-            or _is_inbound_fragment_echo(text, inbound)
-        ):
+        # Do not reject ordinary acknowledgement/paraphrase merely because it
+        # resembles the inbound turn. The live requirement is uptake, not lexical
+        # novelty. Only a repeated greeting/check-in remains a soft reset signal.
+        if str(inbound or "").strip() and _is_social_reset(text, dialogue_history):
             if soft_fallback is None:
                 soft_fallback = text
             continue
