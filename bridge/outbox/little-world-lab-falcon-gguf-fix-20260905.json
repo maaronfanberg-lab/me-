@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/little-world-lab-falcon-gguf-fix-20260905.json",
+  "request_sha256": "091f93ed52119e02edc5238c2eede1f851ece6cd3d3d668c4b676fe9cb3bf3ba",
+  "request_nonce": "091f93ed52119e02edc5238c",
+  "completed_at": "2026-09-05T21:55:58.760341Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Findings\n\n**Root cause is the model file, not the server binary.** `ggml-org/llama.cpp:server`'s current mainline dropped on-disk support for the legacy ARM-repacked `IQ4_NL_4_4` tensor storage type (tensor type 36) in favor of runtime repacking of plain `IQ4_NL`. The `tiiuae/Falcon3-1B-Instruct-1.58bit-GGUF` repo's `ggml-model-i2_s.gguf` is a **BitNet ternary conversion** that still embeds that removed on-disk format for some tensors. This is unrelated to whether Falcon-architecture inference works — dense Falcon3 GGUFs have been supported by mainline llama.cpp long before the BitNet fork existed.\n\n**`living_world.py`'s `BitNetBackend` is fully model-agnostic** (plain stdlib `urllib`, only requires `GET /health` and `POST /v1/chat/completions`, model id is read back dynamically from `/v1/models`). Nothing in Little World Lab depends on the ternary/BitNet format — any real Falcon chat GGUF served by `llama.cpp:server` on `:8080` satisfies it unchanged.\n\n**In-repo evidence that a standard (non-BitNet) GGUF + this llama.cpp lineage works cleanly:** `.github/workflows/bootstrap-society-brain.yml` / `society/MODEL.md` already prove, with pinned SHA256 and a fixed llama.cpp release (`b10441`), that a normal quantized GGUF (`Qwen2.5-0.5B-Instruct-GGUF`, `q4_0`) downloads and loads fine — i.e., the failure mode is specific to the BitNet ternary repack tensor type, not to this server/runtime family in general.\n\n**Why not pin an older llama.cpp image:** the exact last-compatible tag can't be verified from anything in this repo, it reintroduces a code path upstream deliberately removed, and it still leaves the deeper risk that full BitNet-ternary correctness realistically wants the dedicated `bitnet.cpp` fork (per the prior oracle note in `bridge/outbox/little-world-lab-falcon-runtime-20260905.json`), not mainline `llama.cpp`. Swapping the *model family variant* (BitNet→dense) is the smaller, more robust change.\n\n**Caveat on the exact repo name:** I could not browse Hugging Face from this sandbox to confirm the file list of `tiiuae/Falcon3-1B-Instruct-GGUF`. It's inferred from TII's own consistent Falcon3 naming convention already visible three times in this repo (`Falcon3-1B-Instruct-1.58bit-GGUF`, `Falcon3-7B-Instruct-1.58bit-GGUF`, `Falcon3-10B-Instruct-1.58bit-GGUF` are the BitNet siblings of the same size tiers). Treat the exact filename as \"verify at merge, don't assume.\"\n\n## Recommended change\n\nKeep the image (already proven to pull/run in this job), swap only the model source, and let `-hf` auto-resolve a default quant (or pin one explicitly for determinism):\n\n```bash\ndocker pull ghcr.io/ggml-org/llama.cpp:server\ndocker run -d --name little-world-falcon \\\n  -p 8080:8080 \\\n  ghcr.io/ggml-org/llama.cpp:server \\\n  -hf tiiuae/Falcon3-1B-Instruct-GGUF:Q4_K_M \\\n  --host 0.0.0.0 \\\n  --port 8080 \\\n  -c 2048 \\\n  -np 1 \\\n  -t 4\n```\n\n- `tiiuae/Falcon3-1B-Instruct-GGUF` = standard (non-1.58bit) Falcon3-1B-Instruct GGUF quant, not the BitNet/ternary repo.\n- `:Q4_K_M` pins a normal, mainline-supported quant tensor layout (avoids ambiguity if the repo hosts multiple files); `Q8_0` is an equally safe alternative if `Q4_K_M` isn't present.\n- `-t 4` matches the runner's 4 vCPUs (perf only, not required for correctness).\n- 1B-parameter Q4_K_M/Q8_0 is on the order of 700 MB–1.3 GB — well inside 87 GiB disk / 15 GiB RAM, and should download+load in well under the existing 35-minute job timeout / 15-minute target.\n- If this exact HF repo path 404s at merge-time verification, do **not** fall back to any `-1.58bit`/BitNet repo or an older `llama.cpp` tag — instead mirror the already-proven `bootstrap-society-brain.yml` pattern (direct `curl` + `sha256sum -c` against whichever officially published non-1.58bit Falcon3-1B-Instruct GGUF asset TII lists) so the fix stays verifiable rather than guessed.\n\n## Tiny patch plan (isolated to Little World only)\n\n1. `.github/workflows/little-world-falcon-live.yml` — in the \"Start isolated Falcon llama.cpp server\" step, change the `-hf` argument from `tiiuae/Falcon3-1B-Instruct-1.58bit-GGUF` to `tiiuae/Falcon3-1B-Instruct-GGUF:Q4_K_M` (optionally add `-t 4`). No other step needs edits — health-wait, `/v1/models` resolution, `living_world.py --backend bitnet` invocation, and result validation are already model-agnostic.\n2. `experiments/little-world-lab/runtime/live-smoke-request.json` — optional, cosmetic only: update the documentation `\"model\"` field to match, since it's not parsed by any code (only used as a path-filter trigger).\n3. No changes to `living_world.py`, `README.md`, `world.json`, tests, or anything under `experiments/emily-olivia-society/`, `society/`, or The Room's workflows — none of those are touched or depended on by this fix.",
+  "session_id": "026777ac-3b9c-477f-b127-646a54402a46",
+  "usage": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 35088,
+    "cache_read_input_tokens": 154204,
+    "output_tokens": 12069,
+    "output_tokens_details": {
+      "thinking_tokens": 8857
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 35088,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 5383,
+        "cache_read_input_tokens": 33876,
+        "cache_creation_input_tokens": 1212,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1212
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.2933388,
+  "num_turns": 15
+}
