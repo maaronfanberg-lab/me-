@@ -76,6 +76,37 @@ if (!share.includes(shareScopeDefault)) throw new Error('Could not locate share-
 share = share.replace(shareScopeDefault, 'this._scopeEnabled = false;');
 writeFileSync(sharePath, share);
 
+// Earth Signal's public aircraft feed is ADSB.lol itself, not a degraded
+// substitute for OpenSky. Keep upstream's generic fallback logic, but remove
+// the source-name special case that would falsely label this real feed FALLBACK.
+const managerPath = join(work, 'src', 'data', 'manager.js');
+let manager = readFileSync(managerPath, 'utf8');
+const adsbFallbackClause = "\n    || (!hasExplicitFallback && /\\badsb\\.lol\\b/i.test(source))";
+if (!manager.includes(adsbFallbackClause)) throw new Error('Could not locate ADSB.lol fallback classification');
+manager = manager.replace(adsbFallbackClause, '');
+writeFileSync(managerPath, manager);
+
+// Require the upstream earthquake layer to remain wired to the official USGS
+// public GeoJSON feed. If upstream changes this seam, fail the build rather
+// than silently shipping an unverified replacement.
+const earthquakesPath = join(work, 'src', 'data', 'earthquakes.js');
+const earthquakes = readFileSync(earthquakesPath, 'utf8');
+const usgsEarthquakeFeed = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
+if (!earthquakes.includes(usgsEarthquakeFeed) || !earthquakes.includes('updateInterval: 60000')) {
+  throw new Error('Earth Signal requires the official USGS 24h earthquake feed at a 60s refresh interval');
+}
+
+// Upstream street traffic deliberately simulates moving vehicles whenever its
+// TomTom server proxy is absent. This wrapper is static Pages and does not ship
+// that private proxy, so replace the module with an inert UNAVAILABLE layer.
+// No synthetic vehicles are rendered or exposed to detection/voice surfaces.
+const trafficPath = join(work, 'src', 'data', 'traffic.js');
+const trafficDisabled = readFileSync(join(root, 'scripts', 'traffic-disabled.txt'), 'utf8');
+if (!trafficDisabled.includes("status: 'unavailable'") || !trafficDisabled.includes('getDetectableObjects() { return []; }')) {
+  throw new Error('Earth Signal traffic stub failed live-only invariant');
+}
+writeFileSync(trafficPath, trafficDisabled);
+
 const flightsPath = join(work, 'src', 'data', 'flights.js');
 let flights = readFileSync(flightsPath, 'utf8');
 const oldApi = "const API_URL = '/api/opensky';";
@@ -93,7 +124,9 @@ if (!flights.includes(jsonMarker)) throw new Error('Could not locate flight JSON
 flights = flights.replace(jsonMarker, '      let data = await response.json();\n      updateSignal.throwIfAborted();\n      data = _adsbLolToStateVectorSnapshot(data);\n      if (!data || !Array.isArray(data.states)) {');
 flights = flights.replaceAll("'OpenSky Network'", "'ADSB.lol'");
 flights = flights.replaceAll('OpenSky Network', 'ADSB.lol');
-if (!flights.includes('_adsbLolToStateVectorSnapshot')) throw new Error('ADSB bridge patch failed');
+if (!flights.includes('_adsbLolToStateVectorSnapshot') || !flights.includes("const API_URL = 'https://api.adsb.lol/v2';")) {
+  throw new Error('ADSB.lol live-flight bridge patch failed');
+}
 writeFileSync(flightsPath, flights);
 
 execFileSync('npm', ['ci'], { cwd: work, stdio: 'inherit', env: process.env });
@@ -116,9 +149,9 @@ if (!html.includes(oldTitle) || !html.includes(oldBrand) || !html.includes(oldSu
 }
 html = html.replace(oldTitle, '<title>Earth Signal</title>');
 html = html.replace(oldBrand, 'EARTH <span class="title-accent">SIGNAL</span>');
-html = html.replace(oldSubtitle, '<p class="subtitle">LIVE PUBLIC DATA · CURRENT CONDITIONS</p>');
+html = html.replace(oldSubtitle, '<p class="subtitle">PUBLIC DATA · SOURCE-VERIFIED</p>');
 html = html.replace('</head>', `  <meta name="apple-mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n  <meta name="theme-color" content="#080b0e">\n  <link rel="manifest" href="/manifest.webmanifest">\n  <link rel="stylesheet" href="/mobile.css">\n</head>`);
-const earthSignalHeader = `  <header id="earth-signal-header" aria-label="Earth Signal">\n    <div class="earth-signal-copy">\n      <strong>Earth Signal</strong>\n      <small>public world data · current conditions</small>\n    </div>\n    <span class="earth-signal-live">public feeds</span>\n  </header>\n`;
+const earthSignalHeader = `  <header id="earth-signal-header" aria-label="Earth Signal">\n    <div class="earth-signal-copy">\n      <strong>Earth Signal</strong>\n      <small>public world data · current conditions</small>\n    </div>\n    <span class="earth-signal-live">USGS · ADSB.lol</span>\n  </header>\n`;
 html = html.replace('<body>', `<body>\n${earthSignalHeader}`);
 html = html.replace('</body>', `  <script>if ('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));</script>\n</body>`);
 writeFileSync(indexPath, html);
@@ -127,7 +160,7 @@ const manifestPath = join(out, 'manifest.webmanifest');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 manifest.name = 'Earth Signal';
 manifest.short_name = 'Earth Signal';
-manifest.description = 'Live public Earth data and current conditions on one globe.';
+manifest.description = 'Source-verified public Earth data and current conditions on one globe.';
 manifest.theme_color = '#080b0e';
 manifest.background_color = '#080b0e';
 manifest.start_url = './';
@@ -135,4 +168,4 @@ manifest.scope = './';
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 
 writeFileSync(join(out, '_headers'), `/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: geolocation=(self), microphone=(self)\n\n/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n`);
-console.log('Earth Signal bundle ready in dist/ with ADSB.lol Live Flights');
+console.log('Earth Signal bundle ready: official USGS earthquakes + public ADSB.lol aircraft; synthetic street traffic disabled');
