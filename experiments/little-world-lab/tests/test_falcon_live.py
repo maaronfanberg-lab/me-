@@ -62,8 +62,39 @@ class FalconLiveTests(unittest.TestCase):
         self.assertEqual(payload["feasibility"]["work_resources"], ["water"])
         self.assertEqual(payload["feasibility"]["always_allowed"], ["rest", "observe"])
         self.assertNotIn("square", payload["feasibility"]["move_locations"])
-        self.assertEqual(payload["field_contract"]["work"]["required_keys"], ["type", "resource"])
-        self.assertIn("location", payload["field_contract"]["work"]["forbidden_keys"])
+
+    def test_response_schema_contains_only_feasible_action_branches(self):
+        observation = {
+            "location": "square",
+            "neighbor_locations": ["kitchen", "workshop"],
+            "resources": {"water": 4},
+            "co_located_agents": ["Ivo"],
+        }
+        schema = FalconBackend._response_schema(observation)
+        branches = {
+            branch["properties"]["type"]["enum"][0]: branch
+            for branch in schema["oneOf"]
+        }
+        self.assertEqual(set(branches), {"move", "talk", "help", "work", "rest", "observe"})
+        self.assertEqual(branches["move"]["properties"]["location"]["enum"], ["kitchen", "workshop"])
+        self.assertEqual(branches["talk"]["properties"]["target"]["enum"], ["Ivo"])
+        self.assertEqual(branches["help"]["properties"]["target"]["enum"], ["Ivo"])
+        self.assertEqual(branches["work"]["properties"]["resource"]["enum"], ["water"])
+        self.assertTrue(all(branch["additionalProperties"] is False for branch in branches.values()))
+
+    def test_response_schema_omits_infeasible_dependent_actions(self):
+        observation = {
+            "location": "room",
+            "neighbor_locations": [],
+            "resources": {},
+            "co_located_agents": [],
+        }
+        schema = FalconBackend._response_schema(observation)
+        action_types = {
+            branch["properties"]["type"]["enum"][0]
+            for branch in schema["oneOf"]
+        }
+        self.assertEqual(action_types, {"rest", "observe"})
 
     def test_empty_visibility_lists_disable_dependent_action_arguments(self):
         observation = {
