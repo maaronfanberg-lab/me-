@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 7,
+  "completed_reply_turns": 8,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -134,6 +134,15 @@
       "to_name": "Emily",
       "content": "I understand your concern. The event was really crowded and I did go through some noise, but it was worth it! It was great to see so many people enjoy the music we played.",
       "created_at": "2026-09-05T15:19:07.871353+00:00"
+    },
+    {
+      "id": 9,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh my! That's really unfortunate. It must have been very frustrating to have to go through all that noise.",
+      "created_at": "2026-09-05T15:22:31.987758+00:00"
     }
   ],
   "latest_turn": {
@@ -170,21 +179,130 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Oh, I remember it! It was an exciting day indeed.",
+      "Emily observes a message from Olivia: Yeah, it was quite a crowd, but I enjoyed the music and company.",
+      "Emily observes a message from Olivia: Oh, that's great! I was just talking about the different music bands we saw. The sound from all those speakers must have been overwhelming!",
+      "Emily observes a message from Olivia: I understand your concern. The event was really crowded and I did go through some noise, but it was worth it! It was great to see so many people enjoy the music we played."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "ac296c3a10c9bf5c47c4",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 70.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "edd1aa112cf7e198401c",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "91e00893f8a38e39f01e",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 7,
+        "stanford_last_retrieved": 7,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 4,
+        "content_hash": "c195f0352566e054f79c",
+        "stanford_node_id": 4,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 9,
+        "stanford_last_retrieved": 9,
+        "observed_time_step": 10
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh my! That's really unfortunate. It must have been very frustrating to have to go through all that noise.",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Oh, I remember it! It was an exciting day indeed.",
+        "Emily observes a message from Olivia: Yeah, it was quite a crowd, but I enjoyed the music and company.",
+        "Emily observes a message from Olivia: Oh, that's great! I was just talking about the different music bands we saw. The sound from all those speakers must have been overwhelming!",
+        "Emily observes a message from Olivia: I understand your concern. The event was really crowded and I did go through some noise, but it was worth it! It was great to see so many people enjoy the music we played."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "ac296c3a10c9bf5c47c4",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 70.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "edd1aa112cf7e198401c",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "91e00893f8a38e39f01e",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 7,
+          "stanford_last_retrieved": 7,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 4,
+          "content_hash": "c195f0352566e054f79c",
+          "stanford_node_id": 4,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 9,
+          "stanford_last_retrieved": 9,
+          "observed_time_step": 10
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 9,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh my! That's really unfortunate. It must have been very frustrating to have to go through all that noise.",
+        "created_at": "2026-09-05T15:22:31.987758+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"exact_same_speaker_repeat: Oh my! I'm so sorry that you had to go through all that noise. I wish you could just have a quiet party.\""
+    "external_generation_error": ""
   }
 }
