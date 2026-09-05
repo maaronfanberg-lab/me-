@@ -15,6 +15,110 @@ SOURCE_NAME = "Web-wide mentions"
 MAX_ITEMS = 220
 SEARCH_WINDOW_SECONDS = 10.0
 
+# UNPAN is a network, not one authoritative upstream database. Its public
+# resources are contributed by UN DESA/DPIDG and current UNPAN member
+# institutions. Search those original public domains directly so V24 can cite
+# the originating institution rather than treating the UNPAN portal itself as
+# the evidence source.
+UNPAN_SITE_LABELS: dict[str, str] = {
+    "publicadministration.desa.un.org": "UN DESA/DPIDG",
+    "un.org": "United Nations",
+    "digitallibrary.un.org": "UN Digital Library",
+    "documents.un.org": "UN Official Documents",
+    "uneca.org": "UN ECA",
+    "unidep.org": "IDEP",
+    "ofpa.net": "OFPA",
+    "uclga.org": "UCLG Africa",
+    "aapam.org": "AAPAM",
+    "cafrad.org": "CAFRAD",
+    "aapa.asia": "AAPA",
+    "cgg.gov.in": "Centre for Good Governance",
+    "eropa.co": "EROPA",
+    "unescap.org": "UN ESCAP",
+    "sass.org.cn": "RCOCI / SASS",
+    "kipa.re.kr": "KIPA",
+    "snu.ac.kr": "Seoul National University",
+    "southasianetwork.org": "SANPA",
+    "weforum.org": "World Economic Forum",
+    "iis.ru": "Institute of Information Society",
+    "nispa.sk": "NISPAcee",
+    "respaweb.eu": "ReSPA",
+    "arado.org": "ARADO",
+    "mbrsg.ae": "Mohammed Bin Rashid School of Government",
+    "escwa.un.org": "UN ESCWA",
+    "aspanet.org": "ASPA",
+    "caricad.net": "CARICAD",
+    "clad.org": "CLAD",
+    "eclac.org": "UN ECLAC",
+    "icap.ac.cr": "ICAP",
+    "inap.mx": "INAP Mexico",
+    "ipac.ca": "IPAC/IAPC",
+    "ipma-hr.org": "IPMA-HR",
+    "ciiiap.org.br": "CIIIAP",
+    "iias-iisa.org": "IIAS",
+    "we-gov.org": "WeGO",
+    "povertyactionlab.org": "J-PAL",
+}
+
+UNPAN_SOURCE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "UN official",
+        (
+            "publicadministration.desa.un.org",
+            "un.org",
+            "digitallibrary.un.org",
+            "documents.un.org",
+        ),
+    ),
+    (
+        "Africa",
+        ("uneca.org", "unidep.org", "ofpa.net", "uclga.org", "aapam.org", "cafrad.org"),
+    ),
+    (
+        "Asia-Pacific",
+        (
+            "aapa.asia",
+            "cgg.gov.in",
+            "eropa.co",
+            "unescap.org",
+            "sass.org.cn",
+            "kipa.re.kr",
+            "snu.ac.kr",
+            "southasianetwork.org",
+        ),
+    ),
+    (
+        "Europe-Middle East",
+        (
+            "weforum.org",
+            "iis.ru",
+            "nispa.sk",
+            "respaweb.eu",
+            "arado.org",
+            "mbrsg.ae",
+            "escwa.un.org",
+        ),
+    ),
+    (
+        "Americas-Global",
+        (
+            "aspanet.org",
+            "caricad.net",
+            "clad.org",
+            "eclac.org",
+            "icap.ac.cr",
+            "inap.mx",
+            "ipac.ca",
+            "ipma-hr.org",
+            "ciiiap.org.br",
+            "iias-iisa.org",
+            "we-gov.org",
+            "povertyactionlab.org",
+            "southasianetwork.org",
+        ),
+    ),
+)
+
 
 def _clean(value: Any, limit: int = 320) -> str:
     text = html.unescape(re.sub(r"<[^>]+>", " ", str(value or "")))
@@ -48,6 +152,22 @@ def _canonical_url(value: Any) -> str:
     except Exception:
         pass
     return raw[:700]
+
+
+def _unpan_source_index(url: str, fallback: str) -> str:
+    try:
+        host = (urllib.parse.urlsplit(url).hostname or "").casefold().lstrip("www.")
+    except Exception:
+        return fallback
+    best_domain = ""
+    best_label = ""
+    for domain, label in UNPAN_SITE_LABELS.items():
+        d = domain.casefold().lstrip("www.")
+        if host == d or host.endswith("." + d):
+            if len(d) > len(best_domain):
+                best_domain = d
+                best_label = label
+    return f"UNPAN source · {best_label}" if best_label else fallback
 
 
 def _row(index: str, title: Any, url: Any, snippet: Any = "", date: Any = "") -> dict[str, str] | None:
@@ -87,12 +207,14 @@ def _parse_rss(payload: bytes, index: str, term: str) -> list[dict[str, str]]:
             item.findtext("description"),
             item.findtext("pubDate"),
         )
+        if row and index.startswith("UNPAN source network"):
+            row["index"] = _unpan_source_index(row.get("url") or "", index)
         if row and _contains_term(row, term):
             rows.append(row)
     return rows
 
 
-def _bing_query(term: str, query: str, first: int = 1) -> list[dict[str, str]]:
+def _bing_query(term: str, query: str, first: int = 1, index: str = "Bing web") -> list[dict[str, str]]:
     params = urllib.parse.urlencode(
         {
             "q": query,
@@ -103,7 +225,7 @@ def _bing_query(term: str, query: str, first: int = 1) -> list[dict[str, str]]:
         }
     )
     payload = _read("https://www.bing.com/search?" + params, accept="application/rss+xml,application/xml,text/xml,*/*")
-    return _parse_rss(payload, "Bing web", term)
+    return _parse_rss(payload, index, term)
 
 
 def bing_exact_page1(term: str) -> list[dict[str, str]]:
@@ -120,6 +242,36 @@ def bing_exact_page3(term: str) -> list[dict[str, str]]:
 
 def bing_un(term: str) -> list[dict[str, str]]:
     return _bing_query(term, f'"{term}" (site:un.org OR site:digitallibrary.un.org)', 1)
+
+
+def _bing_unpan_group(term: str, group: str, domains: tuple[str, ...]) -> list[dict[str, str]]:
+    sites = " OR ".join(f"site:{domain}" for domain in domains)
+    return _bing_query(term, f'"{term}" ({sites})', 1, f"UNPAN source network · {group}")
+
+
+def bing_unpan_official(term: str) -> list[dict[str, str]]:
+    group, domains = UNPAN_SOURCE_GROUPS[0]
+    return _bing_unpan_group(term, group, domains)
+
+
+def bing_unpan_africa(term: str) -> list[dict[str, str]]:
+    group, domains = UNPAN_SOURCE_GROUPS[1]
+    return _bing_unpan_group(term, group, domains)
+
+
+def bing_unpan_asia_pacific(term: str) -> list[dict[str, str]]:
+    group, domains = UNPAN_SOURCE_GROUPS[2]
+    return _bing_unpan_group(term, group, domains)
+
+
+def bing_unpan_europe_middle_east(term: str) -> list[dict[str, str]]:
+    group, domains = UNPAN_SOURCE_GROUPS[3]
+    return _bing_unpan_group(term, group, domains)
+
+
+def bing_unpan_americas_global(term: str) -> list[dict[str, str]]:
+    group, domains = UNPAN_SOURCE_GROUPS[4]
+    return _bing_unpan_group(term, group, domains)
 
 
 def bing_genealogy(term: str) -> list[dict[str, str]]:
@@ -225,6 +377,11 @@ ADAPTERS: tuple[Callable[[str], list[dict[str, str]]], ...] = (
     bing_exact_page2,
     bing_exact_page3,
     bing_un,
+    bing_unpan_official,
+    bing_unpan_africa,
+    bing_unpan_asia_pacific,
+    bing_unpan_europe_middle_east,
+    bing_unpan_americas_global,
     bing_genealogy,
     google_news,
     gdelt,
@@ -238,7 +395,8 @@ def webwide_mentions(term: str) -> dict[str, Any]:
     This is deliberately best-effort. No finite set of public indexes can guarantee
     every page on the Internet, but results from each live index are merged and
     deduplicated so a rare surname can be swept much more deeply than a normal
-    concept lookup.
+    concept lookup. UNPAN-derived searches target the original UNPAN member and
+    UN institutional domains, preserving the originating institution in the result.
     """
     term = str(term or "").strip()[:80]
     if not term:
