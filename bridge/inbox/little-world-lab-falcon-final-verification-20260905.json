@@ -1,0 +1,17 @@
+{
+  "model": "claude-sonnet-5",
+  "claude_code_max_turns": 12,
+  "max_tokens": 2200,
+  "system": "You are an independent read-only engineering verifier. Inspect only the Little World Lab repository files relevant to this request and evaluate the supplied GitHub Actions evidence. Do not modify files. Be strict: distinguish an infrastructure/end-to-end smoke PASS from model-behavior quality. Do not discuss or inspect Room or Emily/Olivia.",
+  "prompt": "Verify whether the final Little World Falcon live smoke is sufficient to declare the end-to-end Falcon integration passed. Inspect .github/workflows/little-world-falcon-live.yml, experiments/little-world-lab/falcon_live.py, living_world.py, and their tests. Cross-check the supplied run and artifact evidence. Return PASS or FAIL first. Then state exactly what passed, any important caveat, whether the 3 rejected proposals undermine the smoke-test claim, and whether any further code change is required before calling this integration verified. Do not propose unrelated work.",
+  "context": [
+    "GitHub Actions workflow Little World Falcon live smoke run #6, run_id=33995566729, head_sha=2ccfc31b70ab6db0997e9ae9920295f165409db3, status=completed, conclusion=success.",
+    "Every substantive job step completed successfully: Falcon adapter unit tests, start llama.cpp server, readiness/model resolution, run real Falcon little-world smoke, validate real Falcon result, capture logs, upload evidence artifact.",
+    "The readiness endpoint reported status ok and /v1/models resolved exactly bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M, GGUF Q4_K Medium, n_params=1669408768. The live command used falcon_live.py with ticks=4, actors-per-tick=1, seed=7, temperature=0.1, max-tokens=256, timeout=300.",
+    "Artifact little-world-falcon-live-smoke id=9977964478, size=5158 bytes, digest=sha256:797b09438c7b037b4047d4059307387a66b20e0f3d82a54d45bdb568ba7d70b4. It contains checkpoint.json, events.jsonl, metrics.json, metrics.jsonl, server.log, runner-memory.txt, runner-disk.txt.",
+    "metrics.json exact key results: ticks=4; agents=8; total_actions=4; backend_errors=0; proposal_rejections=3; action_counts={move:1, observe:3}; talk_turns=0; exact_repeated_utterance_rate=0.0.",
+    "events.jsonl summary: tick1 Lena proposed move to kitchen and engine rejected move_not_neighbor then safely executed observe; tick2 Mira proposed an object resembling the input payload with no valid action type and engine rejected unknown_action_type then safely executed observe; tick3 Arden proposed move to water_tower and engine rejected move_not_neighbor then safely executed observe; tick4 Theo proposed move to square and engine accepted it, moving workshop->square. An incident at tick3 also applied normally.",
+    "The validation step explicitly asserted ticks==4, agents==8, total_actions==4, backend_errors==0, and existence of events.jsonl and checkpoint.json, and it passed. All 16 unit tests passed before the live run, including parser tests for array-only, malformed, truncated, brace-in-string, escaped quote/backslash, leading/trailing text, and core engine safety tests.",
+    "Question to judge narrowly: has the real Falcon model been successfully integrated end-to-end through the adapter/server/engine with engine safety holding, even though this 1B model produced 3 semantically invalid proposals in a four-action smoke? Do not confuse integration success with strong autonomous behavior quality."
+  ]
+}
