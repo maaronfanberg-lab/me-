@@ -34,59 +34,34 @@ class RequiredActionFalconBackend(FalconBackend):
         self.attempt = int(attempt)
         self.previous_error = previous_error
 
-    def _prompt(self, agent, observation, tick):
-        """Use a deliberately tiny action-specific prompt for the 1B probe.
+    def _response_schema(self, observation: dict[str, Any]) -> dict[str, Any]:
+        """Constrain this live probe to one exact action contract."""
+        return self._action_schema(self.required_action_type, observation)
 
-        The natural-behavior run uses FalconBackend's richer prompt. These
-        directed probes only prove that each closed action contract can travel
-        through the live model, parser, validator, and resolver. Keeping the
-        prompt small avoids spending a 2K context window on irrelevant agent
-        biography and then truncating a tiny JSON reply.
-        """
+    def _prompt(self, agent, observation, tick):
+        """Keep directed-probe context tiny while constrained decoding enforces shape."""
         action_type = self.required_action_type
         feasible = FalconBackend._feasibility_constraints(observation)
         allowed: dict[str, Any] = {}
-        contract: dict[str, Any]
-
         if action_type == "move":
             allowed["location"] = feasible["move_locations"]
-            contract = {"required_keys": ["type", "location"]}
-        elif action_type == "talk":
+        elif action_type in {"talk", "help"}:
             allowed["target"] = feasible["interaction_targets"]
-            contract = {
-                "required_keys": ["type", "target", "utterance"],
-                "utterance_rule": "generate 1-8 natural words; no canned line is supplied",
-            }
-        elif action_type == "help":
-            allowed["target"] = feasible["interaction_targets"]
-            contract = {"required_keys": ["type", "target"]}
         elif action_type == "work":
             allowed["resource"] = feasible["work_resources"]
-            contract = {"required_keys": ["type", "resource"], "forbidden_keys": ["location", "target"]}
-        elif action_type in {"rest", "observe"}:
-            contract = {"required_keys": ["type"]}
-        else:
-            raise ValueError(f"unsupported probe action: {action_type}")
 
         system = (
-            "Return exactly one MINIFIED JSON object and nothing else. "
-            "No prose, markdown, code fence, labels, reasoning, or second object. "
-            "Start with { and end with }. Keep the entire reply under 100 characters. "
-            f"This integration probe requires action type {action_type!r}; do not choose another type. "
-            "Use exactly the required keys. Use only listed allowed values. "
-            "For talk, invent the short utterance yourself."
+            f"This is an integration probe. Produce one {action_type} action using the allowed values. "
+            "The server enforces the exact JSON schema. For talk, invent a short natural utterance. "
+            "Return the JSON object only."
         )
         payload: dict[str, Any] = {
             "required_action_type": action_type,
             "allowed": allowed,
-            "contract": contract,
             "attempt": self.attempt,
         }
         if self.previous_error:
             payload["previous_error"] = self.previous_error
-            payload["instruction"] = "Correct the previous error. Output the one JSON object now."
-        else:
-            payload["instruction"] = "Output the one JSON object now."
         return system, json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
@@ -256,7 +231,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--max-tokens", type=int, default=96)
-    parser.add_argument("--max-attempts", type=int, default=4)
+    parser.add_argument("--max-attempts", type=int, default=2)
     args = parser.parse_args()
 
     args.output.mkdir(parents=True, exist_ok=True)
@@ -270,7 +245,7 @@ def main() -> int:
             timeout=args.timeout,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
-            max_attempts=max(1, min(args.max_attempts, 5)),
+            max_attempts=max(1, min(args.max_attempts, 3)),
         )
         results.append(result)
 
