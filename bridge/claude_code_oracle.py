@@ -138,7 +138,7 @@ def ask_claude_code(data, prompt):
             "--tools",
             "Read,Glob,Grep",
             "--permission-mode",
-            "dontAsk",
+            "bypassPermissions",
             "--no-session-persistence",
             "--disable-slash-commands",
             "--safe-mode",
