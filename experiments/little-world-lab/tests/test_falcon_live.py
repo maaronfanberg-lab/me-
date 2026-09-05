@@ -62,6 +62,8 @@ class FalconLiveTests(unittest.TestCase):
         self.assertEqual(payload["feasibility"]["work_resources"], ["water"])
         self.assertEqual(payload["feasibility"]["always_allowed"], ["rest", "observe"])
         self.assertNotIn("square", payload["feasibility"]["move_locations"])
+        self.assertEqual(payload["field_contract"]["work"]["required_keys"], ["type", "resource"])
+        self.assertIn("location", payload["field_contract"]["work"]["forbidden_keys"])
 
     def test_empty_visibility_lists_disable_dependent_action_arguments(self):
         observation = {
@@ -74,6 +76,26 @@ class FalconLiveTests(unittest.TestCase):
         self.assertEqual(constraints["move_locations"], [])
         self.assertEqual(constraints["interaction_targets"], [])
         self.assertEqual(constraints["work_resources"], [])
+
+    def test_visible_work_resource_location_alias_is_canonicalized(self):
+        observation = {
+            "location": "shop",
+            "neighbor_locations": [],
+            "resources": {"parts": 1},
+            "co_located_agents": [],
+        }
+        value = FalconBackend._canonicalize_proposal({"type": "work", "location": "parts"}, observation)
+        self.assertEqual(value, {"type": "work", "resource": "parts"})
+
+    def test_unknown_work_alias_is_not_repaired(self):
+        observation = {
+            "location": "shop",
+            "neighbor_locations": [],
+            "resources": {"parts": 1},
+            "co_located_agents": [],
+        }
+        value = FalconBackend._canonicalize_proposal({"type": "work", "location": "imaginary"}, observation)
+        self.assertEqual(value, {"type": "work", "location": "imaginary"})
 
 
 if __name__ == "__main__":
