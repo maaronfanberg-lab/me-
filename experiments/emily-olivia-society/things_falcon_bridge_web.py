@@ -9,6 +9,7 @@ import things_falcon_bridge as family_bridge
 import things_falcon_bridge_base as base
 import things_falcon_bridge_v3 as v3
 import things_surname_deep as deep
+import things_sweden_genealogy as sweden_genealogy
 import things_web_mentions as web_mentions
 
 MAX_RELATIONS = 240
@@ -52,10 +53,16 @@ def _surname_supported(term: str, evidence: list[dict[str, Any]], context: list[
     return False
 
 
-def _web_rows(term: str, block: dict[str, Any]) -> list[dict[str, Any]]:
+def _web_rows(
+    term: str,
+    block: dict[str, Any],
+    source_name: str | None = None,
+    confidence: float = 0.78,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     needle = term.casefold()
+    source = base.text_clean(source_name or block.get("source"), 70) or web_mentions.SOURCE_NAME
     for item in block.get("items") or []:
         title = base.text_clean(item.get("title") or item.get("url"), 70)
         url = base.text_clean(item.get("url"), 500)
@@ -67,12 +74,12 @@ def _web_rows(term: str, block: dict[str, Any]) -> list[dict[str, Any]]:
         if key in seen:
             continue
         seen.add(key)
-        index = base.text_clean(item.get("index"), 50) or web_mentions.SOURCE_NAME
+        index = base.text_clean(item.get("index"), 90) or source
         rows.append({
             "label": title,
             "relation": "web mention",
-            "confidence": 0.78,
-            "sources": [web_mentions.SOURCE_NAME],
+            "confidence": confidence,
+            "sources": [source],
             "kind": "other",
             "note": " | ".join(x for x in (index, url) if x)[:500],
         })
@@ -109,11 +116,16 @@ def enrich_web(
             "elapsed_seconds": round(time.monotonic() - started, 3),
         })
 
-    send("evidence", basic, "multi-source evidence; deep surname + web sweep + family walk + Falcon pending")
+    send(
+        "evidence",
+        basic,
+        "multi-source evidence; deep surname + UNPAN/source web + Swedish genealogy + family walk + Falcon pending",
+    )
 
     surname_mode = _surname_supported(term, evidence, context)
     deep_rows: list[dict[str, Any]] = []
     web_rows: list[dict[str, Any]] = []
+    sweden_rows: list[dict[str, Any]] = []
 
     if surname_mode:
         try:
@@ -124,23 +136,41 @@ def enrich_web(
                 send(
                     "surname",
                     family_bridge.merge_relations(basic, deep_rows),
-                    "deep surname sweep; web-wide mentions + family refinement + Falcon pending",
+                    "deep surname sweep; UNPAN/source web + Swedish genealogy + family refinement + Falcon pending",
                 )
         except Exception as exc:
             print(f"Deep surname sweep failed for {term}: {type(exc).__name__}: {exc}", flush=True)
 
         try:
             web_block = web_mentions.webwide_mentions(term)
-            web_rows = _web_rows(term, web_block)
+            web_rows = _web_rows(term, web_block, web_mentions.SOURCE_NAME)
             if web_rows:
                 display_sources.add(web_mentions.SOURCE_NAME)
                 send(
                     "web",
                     family_bridge.merge_relations(basic, deep_rows, web_rows),
-                    "deep surname sweep + web-wide mentions; family refinement + Falcon pending",
+                    "deep surname sweep + UNPAN/source web; Swedish genealogy + family refinement + Falcon pending",
                 )
         except Exception as exc:
             print(f"Web-wide mention sweep failed for {term}: {type(exc).__name__}: {exc}", flush=True)
+
+        try:
+            sweden_block = sweden_genealogy.sweden_genealogy_mentions(term)
+            sweden_rows = _web_rows(
+                term,
+                sweden_block,
+                sweden_genealogy.SOURCE_NAME,
+                confidence=0.80,
+            )
+            if sweden_rows:
+                display_sources.add(sweden_genealogy.SOURCE_NAME)
+                send(
+                    "sweden",
+                    family_bridge.merge_relations(basic, deep_rows, web_rows, sweden_rows),
+                    "deep surname sweep + UNPAN/source web + Swedish genealogy; family refinement + Falcon pending",
+                )
+        except Exception as exc:
+            print(f"Swedish genealogy sweep failed for {term}: {type(exc).__name__}: {exc}", flush=True)
 
     family: list[dict[str, Any]] = []
     if "WikiTree" in falcon_sources:
@@ -149,17 +179,17 @@ def enrich_web(
             compact,
             emit=lambda rows: send(
                 "family",
-                family_bridge.merge_relations(basic, deep_rows, rows, web_rows),
-                "deep surname sweep + web mentions + family refinement; Falcon pending",
+                family_bridge.merge_relations(basic, deep_rows, rows, web_rows, sweden_rows),
+                "deep surname + UNPAN/source web + Swedish genealogy + family refinement; Falcon pending",
             ),
         )
 
     if not compact:
         return {
             "term": term,
-            "relations": family_bridge.merge_relations(basic, deep_rows, family, web_rows),
+            "relations": family_bridge.merge_relations(basic, deep_rows, family, web_rows, sweden_rows),
             "evidence_sources": sorted(display_sources),
-            "engine": "multi-source evidence + web-wide mentions",
+            "engine": "multi-source evidence + UNPAN/source web + Swedish genealogy",
             "phase": "done",
             "elapsed_seconds": round(time.monotonic() - started, 3),
         }
@@ -191,12 +221,12 @@ def enrich_web(
         print(f"Things Falcon synthesis deferred for {term}: {type(exc).__name__}: {exc}", flush=True)
         inferred = []
 
-    relations = family_bridge.merge_relations(basic, deep_rows, family, web_rows, inferred)
+    relations = family_bridge.merge_relations(basic, deep_rows, family, web_rows, sweden_rows, inferred)
     return {
         "term": term,
         "relations": relations,
         "evidence_sources": sorted(display_sources),
-        "engine": "Falcon3-10B-Instruct-1.58bit via BitNet + deep surname + web-wide mentions + kinship refinement",
+        "engine": "Falcon3-10B-Instruct-1.58bit via BitNet + deep surname + UNPAN/source web + Swedish genealogy + kinship refinement",
         "phase": "done",
         "elapsed_seconds": round(time.monotonic() - started, 3),
     }
