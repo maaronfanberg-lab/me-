@@ -35,29 +35,59 @@ class RequiredActionFalconBackend(FalconBackend):
         self.previous_error = previous_error
 
     def _prompt(self, agent, observation, tick):
-        system, user = FalconBackend._prompt(agent, observation, tick)
-        system += (
-            f" This is an integration contract probe, not a natural-behavior sample. "
-            f"For this probe you must choose the feasible action type '{self.required_action_type}'. "
-            "Do not choose another action type. Use only the supplied feasibility values. "
-            "For talk, create a short new natural utterance from the visible context; no canned line is supplied."
+        """Use a deliberately tiny action-specific prompt for the 1B probe.
+
+        The natural-behavior run uses FalconBackend's richer prompt. These
+        directed probes only prove that each closed action contract can travel
+        through the live model, parser, validator, and resolver. Keeping the
+        prompt small avoids spending a 2K context window on irrelevant agent
+        biography and then truncating a tiny JSON reply.
+        """
+        action_type = self.required_action_type
+        feasible = FalconBackend._feasibility_constraints(observation)
+        allowed: dict[str, Any] = {}
+        contract: dict[str, Any]
+
+        if action_type == "move":
+            allowed["location"] = feasible["move_locations"]
+            contract = {"required_keys": ["type", "location"]}
+        elif action_type == "talk":
+            allowed["target"] = feasible["interaction_targets"]
+            contract = {
+                "required_keys": ["type", "target", "utterance"],
+                "utterance_rule": "generate 1-8 natural words; no canned line is supplied",
+            }
+        elif action_type == "help":
+            allowed["target"] = feasible["interaction_targets"]
+            contract = {"required_keys": ["type", "target"]}
+        elif action_type == "work":
+            allowed["resource"] = feasible["work_resources"]
+            contract = {"required_keys": ["type", "resource"], "forbidden_keys": ["location", "target"]}
+        elif action_type in {"rest", "observe"}:
+            contract = {"required_keys": ["type"]}
+        else:
+            raise ValueError(f"unsupported probe action: {action_type}")
+
+        system = (
+            "Return exactly one MINIFIED JSON object and nothing else. "
+            "No prose, markdown, code fence, labels, reasoning, or second object. "
+            "Start with { and end with }. Keep the entire reply under 100 characters. "
+            f"This integration probe requires action type {action_type!r}; do not choose another type. "
+            "Use exactly the required keys. Use only listed allowed values. "
+            "For talk, invent the short utterance yourself."
         )
-        payload = json.loads(user)
-        payload["verification_probe"] = {
-            "required_action_type": self.required_action_type,
+        payload: dict[str, Any] = {
+            "required_action_type": action_type,
+            "allowed": allowed,
+            "contract": contract,
             "attempt": self.attempt,
         }
         if self.previous_error:
-            payload["verification_probe"]["previous_validation_error"] = self.previous_error
-            payload["instruction"] = (
-                f"Previous attempt failed with {self.previous_error}. Correct that constraint and return "
-                f"one feasible {self.required_action_type} JSON action only."
-            )
+            payload["previous_error"] = self.previous_error
+            payload["instruction"] = "Correct the previous error. Output the one JSON object now."
         else:
-            payload["instruction"] = (
-                f"Return one feasible {self.required_action_type} JSON action only for this verification probe."
-            )
-        return system, json.dumps(payload, ensure_ascii=False, sort_keys=True)
+            payload["instruction"] = "Output the one JSON object now."
+        return system, json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
 def _agent(name: str, location: str, *, energy: float = 70.0) -> dict[str, Any]:
@@ -225,8 +255,8 @@ def main() -> int:
     parser.add_argument("--model")
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--temperature", type=float, default=0.1)
-    parser.add_argument("--max-tokens", type=int, default=160)
-    parser.add_argument("--max-attempts", type=int, default=3)
+    parser.add_argument("--max-tokens", type=int, default=96)
+    parser.add_argument("--max-attempts", type=int, default=4)
     args = parser.parse_args()
 
     args.output.mkdir(parents=True, exist_ok=True)
