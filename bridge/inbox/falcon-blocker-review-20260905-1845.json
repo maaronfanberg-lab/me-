@@ -1,14 +1,17 @@
 {
   "model": "claude-sonnet-5",
-  "claude_code_max_turns": 8,
+  "claude_code_max_turns": 12,
   "max_tokens": 2200,
   "system": "You are Claude acting as Sarah's read-only engineering partner. Inspect the repository directly with Read/Glob/Grep. Be concise, evidence-based, and practical. Do not modify files or workflows. Do not inspect, alter, or advise changes to The Room or Emily/Olivia workflows or source. Focus only on experiments/little-world-lab and the Falcon live verification path.",
-  "prompt": "Review the remaining Little World Falcon verification blockers and independently check Sarah's latest fix. Run #9 failed because Falcon 1B echoed parts of the probe payload as JSON, producing unknown_action_type and truncated/malformed objects for every directed action contract. Sarah then changed the Falcon adapter to use llama.cpp schema-constrained response_format generation and tightened the directed probe schemas. Inspect experiments/little-world-lab/falcon_live.py, falcon_live_contract.py, tests/test_falcon_live.py, and .github/workflows/little-world-falcon-live.yml. Determine whether the current implementation should actually constrain Falcon correctly on llama.cpp, identify any concrete bug or compatibility risk in the response_format/JSON schema shape or probe path, and give the smallest exact patch if one is still needed. Also assess whether the final quality gate is meaningful: all six action types must pass directed live probes, the 3 natural seeds must produce 72 total actions, zero backend errors, at least 36 accepted proposals, and aggregate rejection <= 0.50. Do not propose canned dialogue or weakening WorldEngine validation.",
+  "prompt": "Perform the independent final review of the Little World Falcon blocker closure. Inspect experiments/little-world-lab/falcon_live.py, falcon_live_contract.py, tests/test_falcon_live.py, and .github/workflows/little-world-falcon-live.yml. The final run #10 has now completed successfully after schema-constrained decoding was added. Verify whether the implementation and quality gate are technically sound enough to call the integration blockers closed, or identify the smallest concrete remaining blocker. Do not propose canned dialogue, weaken WorldEngine validation, or touch unrelated systems.",
   "context": [
-    "Run #9 reached a healthy bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M llama.cpp server and all 20 unit tests passed, but the directed contract step failed. Typical returned objects echoed keys such as required_action_type, contract, allowed, attempt, and instruction, so WorldEngine reported unknown_action_type. Several replies were truncated or malformed.",
-    "The latest FalconBackend now builds a per-observation oneOf JSON schema, sends response_format with type=json_object plus that schema, and still sends every proposal through WorldEngine validation and resolution.",
-    "The directed RequiredActionFalconBackend now overrides _response_schema so each probe constrains decoding to exactly the required action type rather than the natural multi-action schema.",
+    "Final live run #10 completed successfully on commit eea2c13ea788e9ed0dab2758534455af60fea101.",
+    "All 22 unit tests passed.",
+    "Directed live probes passed all six action types: move, talk, help, work, rest, observe.",
+    "Three natural seeds produced 72 total actions, 67 accepted model proposals, 5 proposal rejections, 0 backend errors, aggregate rejection rate 0.0694.",
+    "Natural action mix was strongly dominated by move actions, with observe as the only other resolved action type in that sample; treat that as a behavior-quality issue unless it invalidates integration verification.",
+    "The Falcon backend uses llama.cpp schema-constrained response_format generation and still sends every proposal through WorldEngine validation and resolution.",
     "No Room or Emily/Olivia files are in scope."
   ],
-  "expected_response": "Start with VERDICT: ready / patch-needed. Then give: (1) evidence from exact files/functions, (2) any exact minimal patch, (3) what run #10 must prove before blockers can be called closed."
+  "expected_response": "Start with VERDICT: ready / patch-needed. Then give: (1) evidence from exact files/functions, (2) whether the run #10 gate is sufficient to close integration blockers, (3) any exact minimal patch only if still required, and (4) clearly separate optional behavior-quality improvements from blockers."
 }
