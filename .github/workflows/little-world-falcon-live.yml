@@ -36,13 +36,25 @@ jobs:
       - name: Start isolated Falcon llama.cpp server
         run: |
           set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('experiments/little-world-lab/runtime/action-schema.json')
+          schema = json.loads(path.read_text(encoding='utf-8'))
+          assert schema['type'] == 'object'
+          assert set(schema['properties']['type']['enum']) == {'move', 'talk', 'help', 'work', 'rest', 'observe'}
+          assert schema['additionalProperties'] is False
+          print('Little World action schema validated.')
+          PY
           docker pull ghcr.io/ggml-org/llama.cpp:server
           docker run -d --name little-world-falcon \
             -p 8080:8080 \
+            -v "$GITHUB_WORKSPACE/experiments/little-world-lab/runtime/action-schema.json:/schemas/little-world-action.json:ro" \
             ghcr.io/ggml-org/llama.cpp:server \
             -hf bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M \
             --host 0.0.0.0 \
             --port 8080 \
+            --json-schema-file /schemas/little-world-action.json \
             -c 2048 \
             -np 1
 
@@ -97,7 +109,8 @@ jobs:
             --ticks 4 \
             --actors-per-tick 1 \
             --seed 7 \
-            --max-tokens 120 \
+            --temperature 0.2 \
+            --max-tokens 160 \
             --timeout 300 \
             --model "$MODEL_ID" \
             --output runs/falcon-live-smoke
