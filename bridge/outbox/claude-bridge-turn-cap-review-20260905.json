@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-bridge-turn-cap-review-20260905.json",
+  "request_sha256": "6eb4246aa3acb5959f225a8450ba3909f2922a0c3797dad9075058b82c979b0a",
+  "request_nonce": "6eb4246aa3acb5959f225a84",
+  "completed_at": "2026-09-05T23:54:15.255602Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "**VERDICT: change** (partial trust — the turn‑cap edit alone is safe, but in isolation it likely won't fix the failure and may just swap one error for a worse one)\n\n**Why not full trust as specified:** Raising only the clamp (`min(max_turns, 8)` → `min(max_turns, 20)`) while leaving `subprocess timeout=240` untouched doesn't actually buy the extra turns any wall-clock room. If a \"larger read-only review\" needs >8 turns of Read/Glob/Grep, it's very likely each turn is already consuming a meaningful slice of that 240s budget — so allowing up to 20 turns just means the run is now far more likely to be hard-killed by the existing `subprocess.run(..., timeout=240)` (a `TimeoutExpired`/nonzero-exit failure) instead of cleanly hitting \"Reached maximum number of turns (8)\". That's not obviously a smaller/safer failure mode — it's a *different, possibly less legible* failure for the same underlying budget problem, and the 8‑minute job `timeout-minutes` gives no real extra margin once you add `npm install`, checkout, and commit/push overhead.\n\n**Smallest safe exact patch (bridge-only, matched change):**\n\n```diff\n-    max_turns = max(1, min(max_turns, 8))\n+    max_turns = max(1, min(max_turns, 12))\n@@\n-        timeout=240,\n+        timeout=330,\n```\n\n(both in `bridge/claude_code_oracle.py`, `DEFAULT_MAX_TURNS` stays `4`, tools/permissions untouched)\n\n**One-sentence timeout risk:** Bumping only the turn clamp without proportionally raising the 240s subprocess timeout (and confirming the 8‑minute job `timeout-minutes` has slack for checkout/npm-install overhead) means the extra allowed turns are likely to just run into the existing hard kill, so any clamp increase should be paired with a modest, proportional subprocess-timeout increase rather than jumping straight to 20.",
+  "session_id": "e1d9d17b-dfef-4c59-b1df-9b0cad04e237",
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 6254,
+    "cache_read_input_tokens": 14595,
+    "output_tokens": 3500,
+    "output_tokens_details": {
+      "thinking_tokens": 2424
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 6254,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3112,
+        "cache_read_input_tokens": 4114,
+        "cache_creation_input_tokens": 5152,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 5152
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.064087,
+  "num_turns": 7
+}
