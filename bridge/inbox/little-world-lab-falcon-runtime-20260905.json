@@ -1,0 +1,7 @@
+{
+  "claude_code_max_turns": 8,
+  "max_tokens": 2200,
+  "system": "Act as a concise read-only repository infrastructure reviewer. Inspect only what is needed. Do not edit anything. Do not propose modifications to, imports from, or runtime coupling with The Room or Emily/Olivia workflows/state.",
+  "prompt": "We built experiments/little-world-lab with BitNetBackend expecting GET /health and POST /v1/chat/completions on localhost:8080. Find the safest existing reusable mechanism in this repo to launch or access a generic Falcon/BitNet model for a real Little World Lab run. You may inspect generic infrastructure and existing Falcon/BitNet scripts for invocation details, but must not run, import, modify, or depend on The Room or Emily/Olivia workflows/state. Identify exact executable/script/workflow/server path, model path/model ID or secret assumptions, whether GitHub-hosted runners are realistic, and the minimal isolated way to run 10-30 ticks. Prefer a dedicated generic/local runtime or existing generic endpoint. Do not expose secret values or copy personal data. If no safe generic runtime exists, state that clearly and propose the smallest isolated runtime setup. Finish within 8 turns.",
+  "expected_response": "A concise runtime recommendation with exact repository paths/commands, resource constraints, and the smallest isolated next step."
+}
