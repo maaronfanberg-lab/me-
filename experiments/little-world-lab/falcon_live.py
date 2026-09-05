@@ -29,6 +29,8 @@ def extract_first_complete_json_object(text: str, max_chars: int = MAX_RESPONSE_
     source = str(text or "")
     if len(source) > max_chars:
         source = source[:max_chars]
+    if source.lstrip().startswith("["):
+        raise ValueError("model JSON response must be an object, not an array")
     start = source.find("{")
     if start < 0:
         raise ValueError("model response contained no JSON object")
