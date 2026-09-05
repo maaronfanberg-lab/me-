@@ -112,7 +112,7 @@ def ask_claude_code(data, prompt):
 
     model = str(data.get("claude_code_model") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     max_turns = int(data.get("claude_code_max_turns") or DEFAULT_MAX_TURNS)
-    max_turns = max(1, min(max_turns, 8))
+    max_turns = max(1, min(max_turns, 12))
     system = str(data.get("system") or default_system())
     user_text = build_user_text(data, prompt)
 
@@ -152,7 +152,7 @@ def ask_claude_code(data, prompt):
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        timeout=240,
+        timeout=330,
         check=False,
     )
 
