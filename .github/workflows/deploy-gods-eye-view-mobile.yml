@@ -44,7 +44,9 @@ jobs:
         with:
           node-version: '24.14.0'
 
-      - name: Verify Wrangler authentication
+      - name: Check Cloudflare credential
+        id: cf_auth
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -55,6 +57,7 @@ jobs:
         run: npm run build
 
       - name: Ensure Pages project exists
+        if: steps.cf_auth.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -65,6 +68,7 @@ jobs:
           fi
 
       - name: Deploy to Cloudflare Pages
+        if: steps.cf_auth.outcome == 'success'
         id: deploy
         shell: bash
         run: |
@@ -79,6 +83,7 @@ jobs:
           echo "Deployed URL: $url"
 
       - name: Verify live Earth Signal app
+        if: steps.cf_auth.outcome == 'success'
         env:
           APP_URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -97,9 +102,17 @@ jobs:
       - name: Summary
         env:
           APP_URL: ${{ steps.deploy.outputs.url }}
+          CF_AUTH_OUTCOME: ${{ steps.cf_auth.outcome }}
+        shell: bash
         run: |
-          echo "### Earth Signal deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Earth Signal" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build: verified" >> "$GITHUB_STEP_SUMMARY"
           echo "Verified public feeds: USGS earthquakes + ADSB.lol aircraft" >> "$GITHUB_STEP_SUMMARY"
           echo "Synthetic street traffic: disabled" >> "$GITHUB_STEP_SUMMARY"
-          echo "Map: keyless globe, optional Google Photorealistic 3D Tiles" >> "$GITHUB_STEP_SUMMARY"
-          echo "URL: $APP_URL" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CF_AUTH_OUTCOME" = 'success' ]; then
+            echo "Cloudflare deployment: verified" >> "$GITHUB_STEP_SUMMARY"
+            echo "URL: $APP_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Cloudflare deployment: skipped because the repository credential is not accepted by Cloudflare" >> "$GITHUB_STEP_SUMMARY"
+            echo "GitHub Pages remains the credential-free production path." >> "$GITHUB_STEP_SUMMARY"
+          fi
