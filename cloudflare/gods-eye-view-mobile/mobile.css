@@ -49,6 +49,13 @@ canvas {
   display: none !important;
 }
 
+/* The static wrapper cannot provide TomTom's private server proxy. The build
+   also replaces this module with an inert UNAVAILABLE layer, so the UI never
+   offers synthetic vehicle dots as if they were observations. */
+[data-layer-id="traffic"] {
+  display: none !important;
+}
+
 /* A deliberately plain identity strip. The information is the interesting part. */
 #earth-signal-header {
   position: fixed;
@@ -94,20 +101,15 @@ canvas {
 #earth-signal-header .earth-signal-live {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   padding-left: 12px;
   border-left: 1px solid rgba(205, 216, 225, 0.16);
   color: rgba(231, 237, 241, 0.82);
   font-size: 11px;
 }
 
+/* Source names, not an ornamental blinking/pulsing "LIVE" light. */
 #earth-signal-header .earth-signal-live::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.75;
+  display: none;
 }
 
 /* Neutralize the remaining command surfaces without touching their behavior. */
