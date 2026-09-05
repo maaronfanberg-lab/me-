@@ -40,7 +40,7 @@ jobs:
           docker run -d --name little-world-falcon \
             -p 8080:8080 \
             ghcr.io/ggml-org/llama.cpp:server \
-            -hf tiiuae/Falcon3-1B-Instruct-1.58bit-GGUF \
+            -hf bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M \
             --host 0.0.0.0 \
             --port 8080 \
             -c 2048 \
@@ -55,8 +55,8 @@ jobs:
               ready=1
               break
             fi
-            if ! docker ps -a --format '{{.Names}} {{.Status}}' | grep -q '^little-world-falcon '; then
-              echo 'Falcon container disappeared.'
+            if ! docker ps --format '{{.Names}}' | grep -qx 'little-world-falcon'; then
+              echo 'Falcon container exited before becoming healthy.'
               docker ps -a
               docker logs little-world-falcon || true
               exit 1
