@@ -1,4 +1,3 @@
-# Re-trigger after GitHub registered this workflow on main.
 name: Install V24 Riksarkivet API once
 
 on:
@@ -25,11 +24,11 @@ jobs:
       - name: Add direct Riksarkivet Search API source
         run: |
           python3 - <<'PY'
+          import base64
           from pathlib import Path
 
           p = Path('experiments/emily-olivia-society/things_sweden_genealogy.py')
           s = p.read_text()
-
           if 'import json\n' not in s:
               marker = 'from __future__ import annotations\n\n'
               if marker not in s:
@@ -37,98 +36,18 @@ jobs:
               s = s.replace(marker, marker + 'import json\n', 1)
 
           function_marker = '\n\ndef _group_adapter(index: int) -> Callable[[str], list[dict[str, str]]]:\n'
-          function_block = r'''
-
-def riksarkivet_transcribed(term: str) -> list[dict[str, str]]:
-    """Search Riksarkivet's official Search API for digitised transcribed records.
-
-    This mirrors the public search surface's "Digitised material only" plus
-    "Transcribed material only" mode. Results stay archival-record mentions;
-    no nearby words are promoted into inferred people or family relationships.
-    """
-    params = urllib.parse.urlencode(
-        {
-            "transcribed_text": term,
-            "only_digitised_materials": "true",
-            "limit": 100,
-            "offset": 0,
-            "sort": "relevance",
-        }
-    )
-    payload = _read("https://data.riksarkivet.se/api/records?" + params, timeout=8)
-    try:
-        data = json.loads(payload.decode("utf-8", errors="replace"))
-    except Exception:
-        return []
-
-    rows: list[dict[str, str]] = []
-    items = data.get("items", []) if isinstance(data, dict) else []
-    for item in items[:100]:
-        if not isinstance(item, dict):
-            continue
-        metadata = item.get("metadata") or {}
-        links = item.get("_links") or {}
-        transcribed = item.get("transcribedText") or {}
-        snippets = transcribed.get("snippets") or []
-
-        snippet_parts = []
-        for sn in snippets[:4]:
-            if isinstance(sn, dict):
-                text = _clean(sn.get("text"), 260)
-                if text:
-                    snippet_parts.append(text)
-
-        hierarchy = metadata.get("hierarchy") or []
-        hierarchy_caption = ""
-        for node in hierarchy:
-            if isinstance(node, dict) and node.get("caption"):
-                hierarchy_caption = _clean(node.get("caption"), 160)
-                break
-
-        record_id = _clean(item.get("id"), 90)
-        reference = _clean(metadata.get("referenceCode"), 120)
-        title = (
-            _clean(item.get("caption"), 180)
-            or hierarchy_caption
-            or reference
-            or (f"Riksarkivet record {record_id}" if record_id else "Riksarkivet record")
-        )
-        url = _canonical_url(links.get("html"))
-        if not url and record_id:
-            url = f"https://sok.riksarkivet.se/arkiv/{urllib.parse.quote(record_id)}"
-        context = " | ".join(
-            x for x in (
-                reference,
-                _clean(metadata.get("date"), 60),
-                _clean(metadata.get("note"), 180),
-                " ".join(snippet_parts),
-            )
-            if x
-        )
-        row = {
-            "index": "Sweden genealogy · Riksarkivet transcribed archives",
-            "title": title,
-            "url": url,
-            "snippet": _clean(context, 420),
-            "date": _clean(metadata.get("date"), 60),
-        }
-        if row["title"] and _contains_term(row, term):
-            rows.append(row)
-    return rows
-'''
-
+          function_block = base64.b64decode('CmRlZiByaWtzYXJraXZldF90cmFuc2NyaWJlZCh0ZXJtOiBzdHIpIC0+IGxpc3RbZGljdFtzdHIsIHN0cl1dOgogICAgIiIiU2VhcmNoIFJpa3NhcmtpdmV0J3Mgb2ZmaWNpYWwgU2VhcmNoIEFQSSBmb3IgZGlnaXRpc2VkIHRyYW5zY3JpYmVkIHJlY29yZHMuCgogICAgVGhpcyBtaXJyb3JzIHRoZSBwdWJsaWMgc2VhcmNoIHN1cmZhY2UncyAiRGlnaXRpc2VkIG1hdGVyaWFsIG9ubHkiIHBsdXMKICAgICJUcmFuc2NyaWJlZCBtYXRlcmlhbCBvbmx5IiBtb2RlLiBSZXN1bHRzIHN0YXkgYXJjaGl2YWwtcmVjb3JkIG1lbnRpb25zOwogICAgbm8gbmVhcmJ5IHdvcmRzIGFyZSBwcm9tb3RlZCBpbnRvIGluZmVycmVkIHBlb3BsZSBvciBmYW1pbHkgcmVsYXRpb25zaGlwcy4KICAgICIiIgogICAgcGFyYW1zID0gdXJsbGliLnBhcnNlLnVybGVuY29kZSgKICAgICAgICB7CiAgICAgICAgICAgICJ0cmFuc2NyaWJlZF90ZXh0IjogdGVybSwKICAgICAgICAgICAgIm9ubHlfZGlnaXRpc2VkX21hdGVyaWFscyI6ICJ0cnVlIiwKICAgICAgICAgICAgImxpbWl0IjogMTAwLAogICAgICAgICAgICAib2Zmc2V0IjogMCwKICAgICAgICAgICAgInNvcnQiOiAicmVsZXZhbmNlIiwKICAgICAgICB9CiAgICApCiAgICBwYXlsb2FkID0gX3JlYWQoImh0dHBzOi8vZGF0YS5yaWtzYXJraXZldC5zZS9hcGkvcmVjb3Jkcz8iICsgcGFyYW1zLCB0aW1lb3V0PTgpCiAgICB0cnk6CiAgICAgICAgZGF0YSA9IGpzb24ubG9hZHMocGF5bG9hZC5kZWNvZGUoInV0Zi04IiwgZXJyb3JzPSJyZXBsYWNlIikpCiAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgIHJldHVybiBbXQoKICAgIHJvd3M6IGxpc3RbZGljdFtzdHIsIHN0cl1dID0gW10KICAgIGl0ZW1zID0gZGF0YS5nZXQoIml0ZW1zIiwgW10pIGlmIGlzaW5zdGFuY2UoZGF0YSwgZGljdCkgZWxzZSBbXQogICAgZm9yIGl0ZW0gaW4gaXRlbXNbOjEwMF06CiAgICAgICAgaWYgbm90IGlzaW5zdGFuY2UoaXRlbSwgZGljdCk6CiAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgbWV0YWRhdGEgPSBpdGVtLmdldCgibWV0YWRhdGEiKSBvciB7fQogICAgICAgIGxpbmtzID0gaXRlbS5nZXQoIl9saW5rcyIpIG9yIHt9CiAgICAgICAgdHJhbnNjcmliZWQgPSBpdGVtLmdldCgidHJhbnNjcmliZWRUZXh0Iikgb3Ige30KICAgICAgICBzbmlwcGV0cyA9IHRyYW5zY3JpYmVkLmdldCgic25pcHBldHMiKSBvciBbXQoKICAgICAgICBzbmlwcGV0X3BhcnRzID0gW10KICAgICAgICBmb3Igc24gaW4gc25pcHBldHNbOjRdOgogICAgICAgICAgICBpZiBpc2luc3RhbmNlKHNuLCBkaWN0KToKICAgICAgICAgICAgICAgIHRleHQgPSBfY2xlYW4oc24uZ2V0KCJ0ZXh0IiksIDI2MCkKICAgICAgICAgICAgICAgIGlmIHRleHQ6CiAgICAgICAgICAgICAgICAgICAgc25pcHBldF9wYXJ0cy5hcHBlbmQodGV4dCkKCiAgICAgICAgaGllcmFyY2h5ID0gbWV0YWRhdGEuZ2V0KCJoaWVyYXJjaHkiKSBvciBbXQogICAgICAgIGhpZXJhcmNoeV9jYXB0aW9uID0gIiIKICAgICAgICBmb3Igbm9kZSBpbiBoaWVyYXJjaHk6CiAgICAgICAgICAgIGlmIGlzaW5zdGFuY2Uobm9kZSwgZGljdCkgYW5kIG5vZGUuZ2V0KCJjYXB0aW9uIik6CiAgICAgICAgICAgICAgICBoaWVyYXJjaHlfY2FwdGlvbiA9IF9jbGVhbihub2RlLmdldCgiY2FwdGlvbiIpLCAxNjApCiAgICAgICAgICAgICAgICBicmVhawoKICAgICAgICByZWNvcmRfaWQgPSBfY2xlYW4oaXRlbS5nZXQoImlkIiksIDkwKQogICAgICAgIHJlZmVyZW5jZSA9IF9jbGVhbihtZXRhZGF0YS5nZXQoInJlZmVyZW5jZUNvZGUiKSwgMTIwKQogICAgICAgIHRpdGxlID0gKAogICAgICAgICAgICBfY2xlYW4oaXRlbS5nZXQoImNhcHRpb24iKSwgMTgwKQogICAgICAgICAgICBvciBoaWVyYXJjaHlfY2FwdGlvbgogICAgICAgICAgICBvciByZWZlcmVuY2UKICAgICAgICAgICAgb3IgKGYiUmlrc2Fya2l2ZXQgcmVjb3JkIHtyZWNvcmRfaWR9IiBpZiByZWNvcmRfaWQgZWxzZSAiUmlrc2Fya2l2ZXQgcmVjb3JkIikKICAgICAgICApCiAgICAgICAgdXJsID0gX2Nhbm9uaWNhbF91cmwobGlua3MuZ2V0KCJodG1sIikpCiAgICAgICAgaWYgbm90IHVybCBhbmQgcmVjb3JkX2lkOgogICAgICAgICAgICB1cmwgPSBmImh0dHBzOi8vc29rLnJpa3NhcmtpdmV0LnNlL2Fya2l2L3t1cmxsaWIucGFyc2UucXVvdGUocmVjb3JkX2lkKX0iCiAgICAgICAgY29udGV4dCA9ICIgfCAiLmpvaW4oCiAgICAgICAgICAgIHggZm9yIHggaW4gKAogICAgICAgICAgICAgICAgcmVmZXJlbmNlLAogICAgICAgICAgICAgICAgX2NsZWFuKG1ldGFkYXRhLmdldCgiZGF0ZSIpLCA2MCksCiAgICAgICAgICAgICAgICBfY2xlYW4obWV0YWRhdGEuZ2V0KCJub3RlIiksIDE4MCksCiAgICAgICAgICAgICAgICAiICIuam9pbihzbmlwcGV0X3BhcnRzKSwKICAgICAgICAgICAgKQogICAgICAgICAgICBpZiB4CiAgICAgICAgKQogICAgICAgIHJvdyA9IHsKICAgICAgICAgICAgImluZGV4IjogIlN3ZWRlbiBnZW5lYWxvZ3kgwrcgUmlrc2Fya2l2ZXQgdHJhbnNjcmliZWQgYXJjaGl2ZXMiLAogICAgICAgICAgICAidGl0bGUiOiB0aXRsZSwKICAgICAgICAgICAgInVybCI6IHVybCwKICAgICAgICAgICAgInNuaXBwZXQiOiBfY2xlYW4oY29udGV4dCwgNDIwKSwKICAgICAgICAgICAgImRhdGUiOiBfY2xlYW4obWV0YWRhdGEuZ2V0KCJkYXRlIiksIDYwKSwKICAgICAgICB9CiAgICAgICAgaWYgcm93WyJ0aXRsZSJdIGFuZCBfY29udGFpbnNfdGVybShyb3csIHRlcm0pOgogICAgICAgICAgICByb3dzLmFwcGVuZChyb3cpCiAgICByZXR1cm4gcm93cwo=').decode('utf-8')
           if 'def riksarkivet_transcribed(term: str)' not in s:
               if function_marker not in s:
                   raise SystemExit('adapter insertion seam changed; refusing broad rewrite')
               s = s.replace(function_marker, function_block + function_marker, 1)
 
-          old_adapters = '''ADAPTERS: tuple[Callable[[str], list[dict[str, str]]], ...] = tuple(\n    _group_adapter(i) for i in range(len(SOURCE_GROUPS))\n)'''
-          new_adapters = '''ADAPTERS: tuple[Callable[[str], list[dict[str, str]]], ...] = (\n    riksarkivet_transcribed,\n) + tuple(_group_adapter(i) for i in range(len(SOURCE_GROUPS)))'''
+          old_adapters = 'ADAPTERS: tuple[Callable[[str], list[dict[str, str]]], ...] = tuple(\n    _group_adapter(i) for i in range(len(SOURCE_GROUPS))\n)'
+          new_adapters = 'ADAPTERS: tuple[Callable[[str], list[dict[str, str]]], ...] = (\n    riksarkivet_transcribed,\n) + tuple(_group_adapter(i) for i in range(len(SOURCE_GROUPS)))'
           if new_adapters not in s:
               if old_adapters not in s:
                   raise SystemExit('adapter tuple seam changed; refusing broad rewrite')
               s = s.replace(old_adapters, new_adapters, 1)
-
           p.write_text(s)
           PY
 
@@ -139,46 +58,18 @@ def riksarkivet_transcribed(term: str) -> list[dict[str, str]]:
           python3 - <<'PY'
           import json
           import things_sweden_genealogy as se
-
-          sample = {
-              "items": [
-                  {
-                      "id": "abc123",
-                      "caption": "Court book 1761",
-                      "metadata": {
-                          "referenceCode": "SE/RA/TEST/1",
-                          "date": "1761",
-                          "note": "Digitised court record",
-                          "hierarchy": [{"caption": "Sundsvall court records"}],
-                      },
-                      "transcribedText": {
-                          "snippets": [{"text": "satängvävaren Jonas <em>Fanberg</em> inställde sig"}],
-                          "numTotal": 1,
-                      },
-                      "_links": {"html": "https://sok.riksarkivet.se/arkiv/abc123"},
-                  },
-                  {
-                      "id": "other",
-                      "caption": "Unrelated record",
-                      "metadata": {"referenceCode": "SE/RA/TEST/2", "date": "1762"},
-                      "transcribedText": {"snippets": [{"text": "nothing relevant here"}], "numTotal": 0},
-                      "_links": {"html": "https://sok.riksarkivet.se/arkiv/other"},
-                  },
-              ]
-          }
+          sample = {"items":[{"id":"abc123","caption":"Court book 1761","metadata":{"referenceCode":"SE/RA/TEST/1","date":"1761","note":"Digitised court record","hierarchy":[{"caption":"Sundsvall court records"}]},"transcribedText":{"snippets":[{"text":"satängvävaren Jonas <em>Fanberg</em> inställde sig"}],"numTotal":1},"_links":{"html":"https://sok.riksarkivet.se/arkiv/abc123"}},{"id":"other","caption":"Unrelated record","metadata":{"referenceCode":"SE/RA/TEST/2","date":"1762"},"transcribedText":{"snippets":[{"text":"nothing relevant here"}],"numTotal":0},"_links":{"html":"https://sok.riksarkivet.se/arkiv/other"}}]}
           real_read = se._read
           try:
               se._read = lambda *args, **kwargs: json.dumps(sample).encode('utf-8')
               rows = se.riksarkivet_transcribed('Fanberg')
           finally:
               se._read = real_read
-
           assert len(rows) == 1, rows
-          row = rows[0]
-          assert row['index'] == 'Sweden genealogy · Riksarkivet transcribed archives'
-          assert row['url'] == 'https://sok.riksarkivet.se/arkiv/abc123'
-          assert 'Fanberg' in row['snippet']
-          assert 'SE/RA/TEST/1' in row['snippet']
+          assert rows[0]['index'] == 'Sweden genealogy · Riksarkivet transcribed archives'
+          assert rows[0]['url'] == 'https://sok.riksarkivet.se/arkiv/abc123'
+          assert 'Fanberg' in rows[0]['snippet']
+          assert 'SE/RA/TEST/1' in rows[0]['snippet']
           assert se.ADAPTERS[0] is se.riksarkivet_transcribed
           print('Riksarkivet direct adapter deterministic test passed')
           PY
