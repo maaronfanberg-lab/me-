@@ -1,9 +1,52 @@
 {
   "protocol": "content-addressed-oracle-v1",
-  "ok": false,
+  "ok": true,
   "request_file": "bridge/inbox/falcon-blocker-review-20260905-1845.json",
-  "request_sha256": "378e761ca3fe3ac888228631ae5dc6f5d9220955399889f9b427e718fb7f8325",
-  "request_nonce": "378e761ca3fe3ac888228631",
-  "completed_at": "2026-09-05T23:46:03.984629Z",
-  "error": "RuntimeError: Claude Code exited 1: payload=[\"Reached maximum number of turns (8)\"] stderr="
+  "request_sha256": "2ae5fb9c4b3407e2649fdb819faca17e7f901be4855564f05b4f93d859c1f72f",
+  "request_nonce": "2ae5fb9c4b3407e2649fdb81",
+  "completed_at": "2026-09-05T23:56:24.892683Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "**VERDICT: ready** (integration blockers are closed on the evidence in these four files; remaining item is a behavior-quality follow-up, not a technical blocker)\n\n**1) Evidence from exact files/functions**\n\n- `falcon_live.py :: FalconBackend.choose_action` — builds `response_format` from `_response_schema(observation)` (schema-constrained), still round-trips through `_extract_json` (strict, non-repairing JSON extraction) and `_canonicalize_proposal` (narrow legacy `work.location→resource` alias, only applied when the value is already in the visible-resource allowlist — no new laxity).\n- `living_world.py :: WorldEngine.step` — any backend exception is caught, logged as a `backend_error` event, and downgraded to `{\"type\": \"observe\"}`; **every** proposal (constrained-decoded or not) is then passed through `WorldEngine._validate`, which enforces move-neighbor, co-location, non-empty/non-repeated utterance, known-local-resource, and repeat-action-loop rules, defaulting to `observe` with a recorded rejection reason on any violation. Nothing in `falcon_live.py` or `falcon_live_contract.py` bypasses this — the model is still only a proposer.\n- `falcon_live_contract.py :: run_probe` — drives each of the six closed v1 action types (`move, talk, help, work, rest, observe`, matching README.md) through a real `FalconBackend` subclass → `engine._validate` → `engine._resolve`, i.e. live model + adapter + WorldEngine, individually, and records `ok: True` per type.\n- `.github/workflows/little-world-falcon-live.yml` \"Validate blocker-closure evidence\" step — asserts `backend_errors == 0` on all 3 natural seeds, `probe['ok'] is True` with exactly the 6 required types, `total_actions == 72`, `total_accepted >= 36`, `aggregate_rejection_rate <= 0.50`. These thresholds match `runtime/live-smoke-request.json`'s pre-declared `quality_gate`, so the gate wasn't loosened after the fact.\n- `tests/test_falcon_live.py` (14 tests) + `tests/test_living_world.py` (8 tests) = 22, matching the reported \"22 unit tests passed.\" Notably `test_response_schema_contains_only_feasible_action_branches` and `test_response_schema_omits_infeasible_dependent_actions` deterministically verify the exact schema fed to llama.cpp's constrained decoder, independent of live model behavior.\n\n**2) Is the run #10 gate sufficient to close the blockers?**\n\nYes, for the specific integration claim (\"Falcon can drive all six actions live, through schema-constrained decoding, without WorldEngine authority being weakened\"):\n\n- WorldEngine's `_validate`/`_resolve` is the only path that mutates state, and no branch in the inspected files skips it.\n- Directed probes prove each of the 6 action types is reachable through the real model + real adapter + real engine, not just structurally reachable in a unit test.\n- Zero backend errors across all 72 natural actions + 6 directed probes means the schema-constrained JSON always parsed and matched a defined `oneOf` branch. A broken constrained-decoding grammar would far more plausibly surface as parse/HTTP errors than as a clean but skewed action-type distribution — so the observed 0-error rate is evidence *against* a grammar defect, not just neutral.\n- The pre-declared acceptance floor (≥36) and rejection ceiling (≤0.50) are both comfortably met (67 accepted, 0.0694 rejection rate).\n\nNo patch is required to call this blocker closed.\n\n**3) Minimal patch required**\n\nNone. I did not find a code path where an unvalidated model string can mutate state, and the gate's assertions are consistent with what the code actually measures.\n\n**4) Optional behavior-quality items — explicitly not blockers**\n\n- The natural seeds (72 actions, 3 seeds) never produced `talk`, `help`, or `work`, despite co-located agents (square: Jun/Ivo; kitchen: Sol/Lena) and non-empty resources at every location from tick 1. This is a real observation worth investigating (e.g., temperature sweep, or logging feasible-vs-chosen action types per tick) before making any claim about coordinated/social behavior — but the project's own docs (README \"Deliberate v1 limits,\" research gate §\"Behavioral baseline criteria\") already scope that claim as unresolved and requiring multiple compared seeded runs, so it does not gate today's integration-blocker closure.\n- `FalconBackend._canonicalize_proposal`'s legacy `work.location→resource` alias is effectively dead code under schema-constrained decoding (`additionalProperties: false` forbids the extra key), harmless but worth a comment/removal in a later cleanup — not urgent.\n- Future hardening idea: have the natural-run harness also log, per tick, which action types were *feasible* vs. *chosen*, so a future silent regression in the combined `oneOf` grammar (branch becomes unreachable rather than merely unchosen) would be caught mechanically instead of inferred from a 0-backend-error argument as I did here.",
+  "session_id": "75d1cd8d-0e7e-4acc-8087-850d678fe433",
+  "usage": {
+    "input_tokens": 24,
+    "cache_creation_input_tokens": 40942,
+    "cache_read_input_tokens": 285085,
+    "output_tokens": 13959,
+    "output_tokens_details": {
+      "thinking_tokens": 10809
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 40942,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 8844,
+        "cache_read_input_tokens": 39382,
+        "cache_creation_input_tokens": 4701,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 4701
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.361802,
+  "num_turns": 17
 }
