@@ -1,0 +1,49 @@
+// Earth Signal intentionally does not simulate street traffic.
+//
+// The upstream layer uses animated synthetic vehicles when its TomTom server-side
+// proxy is unavailable. This Cloudflare Pages wrapper is static and does not ship
+// that private proxy, so presenting those dots would violate Earth Signal's
+// live-data-only contract. Keep the layer interface present for upstream state/
+// serialization compatibility, but make it inert and explicitly unavailable.
+
+const MESSAGE = 'Live street traffic is unavailable in this static Earth Signal deployment';
+
+const trafficLayer = {
+  id: 'traffic',
+  name: 'Street Traffic',
+  icon: '🚗',
+  source: 'TomTom live traffic (server proxy required)',
+  updateInterval: 0,
+
+  init() {},
+  enable() { return true; },
+  disable() {},
+  async update() { return true; },
+  setParams() {},
+  getParams() {
+    return {
+      densityScale: 1,
+      speedScale: 1,
+      uncoveredRoads: 'hide',
+      jamViz: 'none',
+      presetDots: 'off',
+    };
+  },
+  getDetectableObjects() { return []; },
+  destroy() {},
+  getStats() {
+    return {
+      count: 0,
+      lastUpdate: null,
+      loading: false,
+      status: 'unavailable',
+      available: false,
+      error: MESSAGE,
+      mode: 'live',
+      source: 'TomTom live traffic (server proxy required)',
+      loadingLabel: 'UNAVAILABLE · live traffic proxy not deployed',
+    };
+  },
+};
+
+export default trafficLayer;
