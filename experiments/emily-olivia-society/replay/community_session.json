@@ -1,7 +1,16 @@
 {
   "mode": "continuous_persistent_community_session",
-  "status": "running",
+  "status": "completed",
   "session_id": "1788564587-eaa4c09cb1",
+  "limits": {
+    "seed_messages": 1,
+    "requested_reply_turns": 8,
+    "maximum_reply_turns": 10,
+    "maximum_continuous_seconds": 19800,
+    "continuous_seconds": 17400,
+    "turn_delay_seconds": 0.0,
+    "autonomous_loop": true
+  },
   "resumed_social_state": false,
   "autonomous_opening": true,
   "discarded_pending_message_ids": [],
@@ -60,8 +69,70 @@
     "consumed_inbound": null
   },
   "completed_reply_turns": 49,
-  "continuous_seconds": 17400,
-  "turn_delay_seconds": 0.0,
+  "stop_reason": "continuous_window_complete",
+  "seed": {
+    "success": true,
+    "message": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, I'm so happy to see you! How are you doing this evening?",
+      "created_at": "2026-09-04T23:30:05.665186+00:00"
+    }
+  },
+  "latest_turn": {
+    "agent": "Emily",
+    "time_step": 51,
+    "observation": {
+      "self": {
+        "id": 1,
+        "name": "Emily"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 50,
+          "from_id": 2,
+          "from_name": "Olivia",
+          "to_id": 1,
+          "to_name": "Emily",
+          "content": "I like to listen to a wide variety of genres, but my favorite has always been classical music. What do you think? Also, what resources can you recommend for someone who is interested in learning painting?",
+          "created_at": "2026-09-05T04:07:15.400086+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [],
+    "retrieved_memory_evidence": [],
+    "action": {
+      "type": "wait",
+      "reason": "speech_generation_deferred"
+    },
+    "action_result": null,
+    "consumed_inbound": false,
+    "external_inbound": null,
+    "external_action": null,
+    "external_action_result": null,
+    "external_ack": null,
+    "external_generation_error": "",
+    "generation_deferred": true,
+    "generation_attempts": 1,
+    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"long_refractory_echo: Thank you for the input, Olivia. I always enjoy hearing different perspectives on music and other interests. Let's keep chatting and see where the conversation goes.\""
+  },
   "messages": [
     {
       "id": 1,
@@ -513,56 +584,5 @@
       "content": "I like to listen to a wide variety of genres, but my favorite has always been classical music. What do you think? Also, what resources can you recommend for someone who is interested in learning painting?",
       "created_at": "2026-09-05T04:07:15.400086+00:00"
     }
-  ],
-  "latest_turn": {
-    "agent": "Emily",
-    "time_step": 51,
-    "observation": {
-      "self": {
-        "id": 1,
-        "name": "Emily"
-      },
-      "participants": [
-        {
-          "id": 1,
-          "name": "Emily"
-        },
-        {
-          "id": 2,
-          "name": "Olivia"
-        },
-        {
-          "id": 3,
-          "name": "Alex"
-        }
-      ],
-      "inbox": [
-        {
-          "id": 50,
-          "from_id": 2,
-          "from_name": "Olivia",
-          "to_id": 1,
-          "to_name": "Emily",
-          "content": "I like to listen to a wide variety of genres, but my favorite has always been classical music. What do you think? Also, what resources can you recommend for someone who is interested in learning painting?",
-          "created_at": "2026-09-05T04:07:15.400086+00:00"
-        }
-      ]
-    },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
-    "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
-    },
-    "action_result": null,
-    "consumed_inbound": false,
-    "external_inbound": null,
-    "external_action": null,
-    "external_action_result": null,
-    "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"long_refractory_echo: Thank you for the input, Olivia. I always enjoy hearing different perspectives on music and other interests. Let's keep chatting and see where the conversation goes.\""
-  }
+  ]
 }
