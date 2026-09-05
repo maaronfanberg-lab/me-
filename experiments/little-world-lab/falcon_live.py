@@ -99,6 +99,30 @@ class FalconBackend(BitNetBackend):
         }
 
     @staticmethod
+    def _canonicalize_proposal(proposed: dict[str, Any], observation: dict[str, Any]) -> dict[str, Any]:
+        """Normalize one narrow Falcon schema alias without weakening engine safety.
+
+        Falcon 1B sometimes emits a valid visible work resource under the generic
+        key ``location``. Convert that one closed-schema alias only when the value
+        is already in the observation's visible work-resource allowlist. Unknown
+        values and all other malformed proposals remain untouched for WorldEngine
+        to reject normally.
+        """
+        if not isinstance(proposed, dict):
+            return proposed
+        normalized = dict(proposed)
+        if str(normalized.get("type") or "").strip().lower() != "work":
+            return normalized
+        if str(normalized.get("resource") or "").strip():
+            return normalized
+        allowed = set(FalconBackend._feasibility_constraints(observation)["work_resources"])
+        alias_value = str(normalized.get("location") or "").strip()
+        if alias_value and alias_value in allowed:
+            normalized.pop("location", None)
+            normalized["resource"] = alias_value
+        return normalized
+
+    @staticmethod
     def _prompt(agent: Agent, observation: dict[str, Any], tick: int) -> tuple[str, str]:
         system = (
             "Output one JSON object immediately. Your first non-whitespace character must be { and "
@@ -109,10 +133,11 @@ class FalconBackend(BitNetBackend):
             "listed in the feasibility constraints. If move_locations is empty, do not move; otherwise "
             "a move location must be one of those values and must not be the current location unless it "
             "is explicitly listed. Talk/help targets must be in interaction_targets. Work resources must "
-            "be in work_resources. If one of those lists is empty, do not choose its dependent action. "
-            "For talk, generate a fresh short natural utterance yourself rather than copying a placeholder. "
-            "Prefer a concrete feasible action that advances the agent's stated goals when one is available; "
-            "use rest or observe when they genuinely fit. Valid action forms are: "
+            "be in work_resources and a work action MUST use the JSON key resource, never location. "
+            "If one of those lists is empty, do not choose its dependent action. For talk, generate a fresh "
+            "short natural utterance yourself rather than copying a placeholder. Prefer a concrete feasible "
+            "action that advances the agent's stated goals when one is available; use rest or observe when "
+            "they genuinely fit. Valid action forms are: "
             '{"type":"move","location":"NAME"}; '
             '{"type":"talk","target":"NAME","utterance":"WORDS"}; '
             '{"type":"help","target":"NAME"}; '
@@ -132,9 +157,21 @@ class FalconBackend(BitNetBackend):
             },
             "observation": observation,
             "feasibility": FalconBackend._feasibility_constraints(observation),
-            "instruction": "Choose one feasible action that obeys the feasibility lists. JSON object only.",
+            "field_contract": {
+                "move": {"required_keys": ["type", "location"]},
+                "talk": {"required_keys": ["type", "target", "utterance"]},
+                "help": {"required_keys": ["type", "target"]},
+                "work": {"required_keys": ["type", "resource"], "forbidden_keys": ["location", "target"]},
+                "rest": {"required_keys": ["type"]},
+                "observe": {"required_keys": ["type"]},
+            },
+            "instruction": "Choose one feasible action that obeys the feasibility lists and field contract. JSON object only.",
         }
         return system, json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+    def choose_action(self, *, agent: Agent, observation: dict[str, Any], tick: int) -> dict[str, Any]:
+        proposed = super().choose_action(agent=agent, observation=observation, tick=tick)
+        return self._canonicalize_proposal(proposed, observation)
 
 
 def main() -> int:
