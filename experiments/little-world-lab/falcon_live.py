@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse
 import json
 import time
+import urllib.error
+import urllib.request
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -71,7 +73,7 @@ def extract_first_complete_json_object(text: str, max_chars: int = MAX_RESPONSE_
 
 
 class FalconBackend(BitNetBackend):
-    """OpenAI-compatible Falcon adapter with bounded JSON extraction."""
+    """OpenAI-compatible Falcon adapter with schema-constrained JSON output."""
 
     _extract_json = staticmethod(extract_first_complete_json_object)
 
@@ -80,8 +82,9 @@ class FalconBackend(BitNetBackend):
         """Expose only action arguments the engine currently considers local/visible.
 
         This does not validate or resolve anything. It simply prevents the prompt
-        from making a small model rediscover constraints already present in its
-        observation, while WorldEngine remains the authority on acceptance.
+        and decoder from making a small model rediscover constraints already
+        present in its observation, while WorldEngine remains the authority on
+        acceptance and state mutation.
         """
         move_locations = sorted(
             {str(value).strip() for value in observation.get("neighbor_locations", []) if str(value).strip()}
@@ -99,14 +102,71 @@ class FalconBackend(BitNetBackend):
         }
 
     @staticmethod
-    def _canonicalize_proposal(proposed: dict[str, Any], observation: dict[str, Any]) -> dict[str, Any]:
-        """Normalize one narrow Falcon schema alias without weakening engine safety.
+    def _action_schema(action_type: str, observation: dict[str, Any]) -> dict[str, Any]:
+        feasible = FalconBackend._feasibility_constraints(observation)
+        properties: dict[str, Any] = {"type": {"type": "string", "enum": [action_type]}}
+        required = ["type"]
+        if action_type == "move":
+            values = feasible["move_locations"]
+            if not values:
+                raise ValueError("move has no feasible locations")
+            properties["location"] = {"type": "string", "enum": values}
+            required.append("location")
+        elif action_type == "talk":
+            values = feasible["interaction_targets"]
+            if not values:
+                raise ValueError("talk has no feasible targets")
+            properties["target"] = {"type": "string", "enum": values}
+            properties["utterance"] = {"type": "string", "minLength": 1, "maxLength": 160}
+            required.extend(["target", "utterance"])
+        elif action_type == "help":
+            values = feasible["interaction_targets"]
+            if not values:
+                raise ValueError("help has no feasible targets")
+            properties["target"] = {"type": "string", "enum": values}
+            required.append("target")
+        elif action_type == "work":
+            values = feasible["work_resources"]
+            if not values:
+                raise ValueError("work has no feasible resources")
+            properties["resource"] = {"type": "string", "enum": values}
+            required.append("resource")
+        elif action_type not in {"rest", "observe"}:
+            raise ValueError(f"unsupported action type: {action_type}")
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": False,
+        }
 
-        Falcon 1B sometimes emits a valid visible work resource under the generic
-        key ``location``. Convert that one closed-schema alias only when the value
-        is already in the observation's visible work-resource allowlist. Unknown
-        values and all other malformed proposals remain untouched for WorldEngine
-        to reject normally.
+    @classmethod
+    def _response_schema(cls, observation: dict[str, Any]) -> dict[str, Any]:
+        """Constrain generation to syntactically and locally feasible actions.
+
+        llama.cpp converts this JSON schema to a generation grammar. The engine
+        still revalidates every proposal, so constrained decoding reduces model
+        format noise without moving authority out of WorldEngine.
+        """
+        feasible = cls._feasibility_constraints(observation)
+        branches = [cls._action_schema("rest", observation), cls._action_schema("observe", observation)]
+        if feasible["move_locations"]:
+            branches.append(cls._action_schema("move", observation))
+        if feasible["interaction_targets"]:
+            branches.append(cls._action_schema("talk", observation))
+            branches.append(cls._action_schema("help", observation))
+        if feasible["work_resources"]:
+            branches.append(cls._action_schema("work", observation))
+        return {"oneOf": branches}
+
+    @staticmethod
+    def _canonicalize_proposal(proposed: dict[str, Any], observation: dict[str, Any]) -> dict[str, Any]:
+        """Normalize one narrow legacy Falcon schema alias without weakening safety.
+
+        Older unconstrained Falcon runs sometimes emitted a visible work resource
+        under the generic key ``location``. Keep the compatibility normalization
+        for old callers, but only when the value is already in the visible local
+        resource allowlist. New schema-constrained requests should not need it.
         """
         if not isinstance(proposed, dict):
             return proposed
@@ -125,26 +185,11 @@ class FalconBackend(BitNetBackend):
     @staticmethod
     def _prompt(agent: Agent, observation: dict[str, Any], tick: int) -> tuple[str, str]:
         system = (
-            "Output one JSON object immediately. Your first non-whitespace character must be { and "
-            "your last non-whitespace character must be }. Do not think aloud. Do not use markdown, "
-            "analysis, explanations, labels, or preambles. You control one fictional simulation agent. "
-            "Choose exactly one feasible action using only the observation and private memories shown. "
-            "Never assume unseen places, events, memories, or other agents' thoughts. Use only values "
-            "listed in the feasibility constraints. If move_locations is empty, do not move; otherwise "
-            "a move location must be one of those values and must not be the current location unless it "
-            "is explicitly listed. Talk/help targets must be in interaction_targets. Work resources must "
-            "be in work_resources and a work action MUST use the JSON key resource, never location. "
-            "If one of those lists is empty, do not choose its dependent action. For talk, generate a fresh "
-            "short natural utterance yourself rather than copying a placeholder. Prefer a concrete feasible "
-            "action that advances the agent's stated goals when one is available; use rest or observe when "
-            "they genuinely fit. Valid action forms are: "
-            '{"type":"move","location":"NAME"}; '
-            '{"type":"talk","target":"NAME","utterance":"WORDS"}; '
-            '{"type":"help","target":"NAME"}; '
-            '{"type":"work","resource":"NAME"}; '
-            '{"type":"rest"}; '
-            '{"type":"observe"}. '
-            "Choose now and output only the object."
+            "You control one fictional simulation agent. Choose one action that advances the agent's goals "
+            "using only the supplied observation and private memories. Never assume unseen places, events, "
+            "memories, or other agents' thoughts. The server constrains your response to a feasible JSON "
+            "action schema, so focus on choosing the best available action. For talk, write a fresh short "
+            "natural utterance. Do not copy a placeholder or explain your reasoning."
         )
         payload = {
             "tick": tick,
@@ -157,20 +202,52 @@ class FalconBackend(BitNetBackend):
             },
             "observation": observation,
             "feasibility": FalconBackend._feasibility_constraints(observation),
-            "field_contract": {
-                "move": {"required_keys": ["type", "location"]},
-                "talk": {"required_keys": ["type", "target", "utterance"]},
-                "help": {"required_keys": ["type", "target"]},
-                "work": {"required_keys": ["type", "resource"], "forbidden_keys": ["location", "target"]},
-                "rest": {"required_keys": ["type"]},
-                "observe": {"required_keys": ["type"]},
-            },
-            "instruction": "Choose one feasible action that obeys the feasibility lists and field contract. JSON object only.",
+            "instruction": "Choose one feasible action. Return only the schema-constrained JSON object.",
         }
         return system, json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
     def choose_action(self, *, agent: Agent, observation: dict[str, Any], tick: int) -> dict[str, Any]:
-        proposed = super().choose_action(agent=agent, observation=observation, tick=tick)
+        system, user = self._prompt(agent, observation, tick)
+        schema = self._response_schema(observation)
+        request_data = {
+            "model": self.model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "temperature": max(0.0, min(self.temperature, 2.0)),
+            "max_tokens": max(32, min(self.max_tokens, 256)),
+            "stream": False,
+            "response_format": {"type": "json_object", "schema": schema},
+        }
+        health_url = self.endpoint.split("/v1/chat/completions", 1)[0].rstrip("/") + "/health"
+        try:
+            with urllib.request.urlopen(health_url, timeout=min(self.timeout, 5)) as response:
+                if not (200 <= response.status < 300):
+                    raise RuntimeError(f"Falcon health check returned HTTP {response.status}")
+        except Exception as exc:
+            raise RuntimeError(f"Falcon server is not healthy at {health_url}: {exc}") from exc
+
+        req = urllib.request.Request(
+            self.endpoint,
+            data=json.dumps(request_data).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")[:2000]
+            raise RuntimeError(f"Falcon HTTP {exc.code}: {body}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Falcon request failed: {exc.reason}") from exc
+
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise RuntimeError("Falcon response contained no choices")
+        message = choices[0].get("message") if isinstance(choices[0], dict) else None
+        text = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(text, str):
+            raise RuntimeError("Falcon response contained no message content")
+        proposed = self._extract_json(text)
         return self._canonicalize_proposal(proposed, observation)
 
 
