@@ -1,4 +1,4 @@
-name: Deploy God's Eye View Mobile
+name: Deploy Earth Signal
 
 on:
   push:
@@ -22,7 +22,6 @@ jobs:
     timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN_RAW: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
-      OPENSKY_AUTH_MODE: anon
     steps:
       - uses: actions/checkout@v6
 
@@ -51,7 +50,7 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@latest whoami
 
-      - name: Build keyless mobile app
+      - name: Build live-only Earth Signal
         working-directory: cloudflare/gods-eye-view-mobile
         run: npm run build
 
@@ -79,7 +78,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed URL: $url"
 
-      - name: Verify live phone app
+      - name: Verify live Earth Signal app
         env:
           APP_URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -88,14 +87,19 @@ jobs:
           curl -fsS --retry 8 --retry-delay 2 "$APP_URL/" -o /tmp/index.html
           grep -q 'apple-mobile-web-app-capable' /tmp/index.html
           grep -q 'manifest.webmanifest' /tmp/index.html
+          grep -q 'Earth Signal' /tmp/index.html
+          grep -q 'USGS · ADSB.lol' /tmp/index.html
           curl -fsS --retry 5 --retry-delay 2 "$APP_URL/mobile.css" -o /tmp/mobile.css
           test -s /tmp/mobile.css
-          echo "Verified live keyless mobile app at $APP_URL"
+          grep -Fq '[data-layer-id="traffic"]' /tmp/mobile.css
+          echo "Verified live Earth Signal shell and live-only traffic policy at $APP_URL"
 
       - name: Summary
         env:
           APP_URL: ${{ steps.deploy.outputs.url }}
         run: |
-          echo "### God's Eye View Mobile deployed" >> "$GITHUB_STEP_SUMMARY"
-          echo "Map: keyless OpenStreetMap + Re:Earth terrain" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Earth Signal deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verified public feeds: USGS earthquakes + ADSB.lol aircraft" >> "$GITHUB_STEP_SUMMARY"
+          echo "Synthetic street traffic: disabled" >> "$GITHUB_STEP_SUMMARY"
+          echo "Map: keyless globe, optional Google Photorealistic 3D Tiles" >> "$GITHUB_STEP_SUMMARY"
           echo "URL: $APP_URL" >> "$GITHUB_STEP_SUMMARY"
