@@ -374,17 +374,20 @@ function createUI(){
   var status=el('div','status','No account or API key required. This test uses free-license music from Wikimedia Commons.');
   status.id='commonsStatus';
   card.appendChild(status);
+  var ui={card:card,status:status,load:null,tracks:null};
   var load=button('LOAD FREE MUSIC TEST CATALOG',function(){loadCatalog(ui);});
   load.id='commonsLoad';
+  ui.load=load;
   card.appendChild(load);
   var tracks=el('div','');
   tracks.id='commonsTracks';
+  ui.tracks=tracks;
   card.appendChild(tracks);
   var note=el('div','legal','');
   note.appendChild(document.createTextNode('Live-processing test only. Pocket Spatial does not record, save, export, or persist the streamed media. License and attribution details remain linked to each Commons file page.'));
   card.appendChild(note);
   hero.parentNode.insertBefore(card,hero);
-  return {card:card,status:status,load:load,tracks:tracks};
+  return ui;
 }
 
 function boot(){
