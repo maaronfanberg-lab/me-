@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-06-pocket-spatial-commons-buffered-player-001.json",
+  "request_sha256": "5c3649e940c543912f6b6a5ee58270fca43253ecf60feee925dc120459700623",
+  "request_nonce": "pocket-spatial-commons-buffered-player-20260906-001",
+  "completed_at": "2026-09-06T20:32:34.209491Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Grounding (read from repo)\n\n`apps/pocket-spatial.html` builds one `AudioContext` lazily on first user tap (`buildGraph()`), wires `source = ctx.createMediaElementSource(audio)` → `splitter` → direct gains + cross-ear `Delay→Biquad(lowpass)→Gain` + four early-reflection `Delay→Biquad→Gain` paths → `merger` → `master` → `destination`. `apps/pocket-spatial-core.js` computes all targets from two pure functions (`calculate`, `calculateDepth`); coefficients are hardcoded: `directGain=1-0.18·wet`, `farGain=0.22·wet`, `cutoff=7000-3800·wet`, reflections at fixed 11/13/21/24 ms with gains `0.14·depth`/`0.07·depth`, `reflCutoff=2600Hz`, headroom-clamped master. `pocket-spatial-buffer-probe.js` already proves the XHR→decodeAudioData→AudioBufferSourceNode→Analyser path works on-device (127 max deviation, 5.7s), created inside a tap, `MAX_BYTES=1MB` for that probe only.\n\n## Playback architecture (smallest robust addition)\n\n- **Don't touch the local-file path.** Insert one shared `inputBus = ctx.createGain()` between \"any source\" and `splitter`. Local file keeps `createMediaElementSource(audio).connect(inputBus)`, created once, permanent. Commons playback instead builds a fresh `AudioBufferSourceNode` per play/restart and connects it to the *same* `inputBus`; the entire splitter→merger→master graph is built once and never rebuilt.\n- **Reuse the existing single `AudioContext`.** Do not open a second context for Commons audio — iOS has tight limits on concurrent contexts/voices; extend `buildGraph()`'s existing `if(ctx)return true` guard to cover both source types.\n- **One-shot lifecycle:** track `var trackBuffer, activeSource=null, playStartCtxTime=0, pausedOffset=0, generation=0`. Play: `gen=++generation; s=ctx.createBufferSource(); s.buffer=trackBuffer; s.connect(inputBus); s.start(0,pausedOffset); playStartCtxTime=ctx.currentTime-pausedOffset; activeSource=s; s.onended=function(){if(gen===generation)/*natural end cleanup*/;};`. Pause: `pausedOffset=ctx.currentTime-playStartCtxTime; try{activeSource.onended=null;activeSource.stop(0);}catch(e){}; activeSource=null;`. Resume: same as Play with stored `pausedOffset`. Restart: `pausedOffset=0` then Play. The `generation` counter guards against a stale `onended` firing after a newer source already started (classic race).\n- **Duplicate-source prevention:** disable the transport button during the stop/create transition; always null-check and `stop()` `activeSource` before creating a new one; never call `.start()` twice on one node (throws).\n- **Seeking:** skip in v1. The offset variables above make it a cheap follow-up (just set `pausedOffset` before Play), not worth the added UI/testing surface now.\n- **User-gesture unlock:** identical to the proven probe — `ctx=new AC(); ctx.resume();` executed synchronously inside the tap handler; `decodeAudioData`/XHR run async after; `source.start()` fires only once decode resolves, same pattern already validated at 127 deviation.\n- **Memory (iPhone 6, 1GB RAM):** cap Commons downloads well above the 1MB probe ceiling but conservatively — e.g. ≤8MB compressed (~5–6 min @128kbps). Decoded stereo Float32 PCM ≈ 44100×2×4 bytes/s ≈ 353KB/s, so a 5-minute track ≈ 106MB resident; keep only one `AudioBuffer` alive at a time, `null` the previous one before decoding the next, and prefer capping to ~3 minutes (~64MB) for margin against iOS12 WebContent-process crashes historically seen well under 300MB total.\n\n## Diagnostics proving buffered source feeds real DSP\n\n1. Reuse the proven decode probe (bytes>0, `buffer.duration>0`) as a precondition.\n2. Add three temporary `AnalyserNode` taps (fftSize 256, smoothing 0): pre-DSP (on the `AudioBufferSourceNode` output), post-splitter, post-master. With spatial OFF (`wet=0`), pre-DSP and post-master time-domain snapshots should be near-identical (bypass parity). With spatial ON, post-master must differ from pre-DSP (checksum/byte-diff on `getByteTimeDomainData`) while both show `maxDeviation>2` — proves signal is both present and *transformed*, not silently passed through or silently absent.\n3. Toggle `depth` 0→100 with `space` fixed at 0 and confirm post-master deviation/energy changes — isolates the reflection branch specifically.\n4. Lifecycle test: play 2s, pause, assert `pausedOffset≈2.0s±0.1s`; resume 1s, pause, assert `≈3.0s` — validates offset tracking independent of DSP.\n5. Log all results to the existing on-page status/diagnostic div (matching current UI convention), not console-only.\n\n## Perceptual tuning for \"touchable / close / embodied\" (no convolution, no worklet)\n\n- **Direct dominance:** raise `directGain` ceiling — change coefficient from `1-0.18·wet` to `1-0.08·wet` (range ~0.92–0.98). Closeness reads as direct-signal dominance, not width.\n- **Cross-ear gain:** lower `farGain` ceiling from `0.22·wet` to `0.12–0.14·wet` — less cross-bleed avoids the \"wide/diffuse\" character that fights intimacy.\n- **Angle:** bias low, 28–36° (vs current default 57°) — smaller ITD reads as centered/close; large angle reads as external/wide.\n- **Low-pass cutoff:** don't darken as much — change `7000-3800·wet` to `7000-2400·wet` (floor ~4600Hz instead of 3200Hz). Real close sources aren't muffled; preserved treble/transients read as proximity.\n- **Early reflections:** move earlier and quieter — 6–9ms / 14–18ms instead of 11–24ms; reduce gain coefficients to `0.08·depth` and `0.04·depth` (from 0.14/0.07). Earlier+darker+quieter reflections simulate a near wall/body rather than a room, reinforcing \"touchable\" over \"spacious.\"\n- **Reflection LPF:** keep ~2000–2400Hz, unchanged Q≈0.5 — sufficient for body warmth without extra CPU.\n- **Output trim:** loosen `baseMasterGain` from `1-0.06·wet` to `1-0.03·wet` since the reduced nominal sum frees headroom; keep the existing clamp logic (it's a good safety net, don't remove it).\n- **Optional low-mid presence:** one extra peaking `BiquadFilter` (200Hz, +1.5–3dB, Q 0.8–1.0) inserted merger→presence→master is cheap (one node) and can add chest/body warmth; keep gain ≤+3dB, don't combine with heavy reflection darkening or it reads as \"distant/dull\" — opposite of target.\n- **Transient preservation:** keep `setTargetAtTime` tau at ~0.03–0.05s (current 0.035 is fine) — enough to avoid zipper noise, not enough to smear attacks.\n\n**Proposed \"Touchable\" preset:** Space 58%, Angle 30°, Depth 30% — but note the current UI-preset mechanism only varies slider inputs against *fixed formula coefficients*; achieving this profile requires the coefficient changes above in `PocketSpatialCore`, not just a new slider button, since Near/Wide/Outside all share the same curve shape today.\n\n## Risks / stop conditions\n\n- Don't push cutoff/reflection darkening and low-mid boost simultaneously — stacking both reads as \"muffled and far,\" inverting the goal.\n- Don't raise angle/farGain to chase \"wide\" in the same preset meant to be \"close\" — they're perceptually opposed.\n- Track length/memory cap is a hard iOS12 stability constraint, not a suggestion — test actual crash threshold on-device before shipping a higher cap.",
+  "session_id": "1811c7c7-c00a-451f-8e86-aa304f88bb8a",
+  "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 31204,
+    "cache_read_input_tokens": 44989,
+    "output_tokens": 10211,
+    "output_tokens_details": {
+      "thinking_tokens": 6414
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 31204,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 9116,
+        "cache_read_input_tokens": 23139,
+        "cache_creation_input_tokens": 11248,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 11248
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.23766780000000004,
+  "num_turns": 12
+}
