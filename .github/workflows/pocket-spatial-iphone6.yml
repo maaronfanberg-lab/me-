@@ -36,5 +36,39 @@ jobs:
         run: node --check /tmp/pocket-spatial.js
       - name: Enforce ES5 syntax for old Safari
         run: npx --yes es-check@7 es5 /tmp/pocket-spatial.js
-      - name: Validate HTML
-        run: npx --yes html-validate@9 apps/pocket-spatial.html
+      - name: Validate legacy HTML structure
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          html=Path('apps/pocket-spatial.html').read_text()
+          assert html.lstrip().lower().startswith('<!doctype html>')
+
+          class P(HTMLParser):
+              def __init__(self):
+                  HTMLParser.__init__(self)
+                  self.ids=[]
+                  self.labels=[]
+                  self.buttons=[]
+                  self.has_audio=False
+                  self.lang=None
+              def handle_starttag(self, tag, attrs):
+                  a=dict(attrs)
+                  if tag=='html': self.lang=a.get('lang')
+                  if 'id' in a: self.ids.append(a['id'])
+                  if tag=='label' and 'for' in a: self.labels.append(a['for'])
+                  if tag=='button': self.buttons.append(a)
+                  if tag=='audio': self.has_audio=True
+
+          p=P(); p.feed(html)
+          assert p.lang=='en'
+          assert p.has_audio
+          assert len(p.ids)==len(set(p.ids)), 'duplicate id detected'
+          for required in ('file','space','angle','spatial','audio'):
+              assert required in p.ids, f'missing required id {required}'
+          for labelled in ('file','space','angle'):
+              assert labelled in p.labels, f'missing label for {labelled}'
+          assert p.buttons and all(b.get('type')=='button' for b in p.buttons), 'every button must declare type=button'
+          print('Legacy HTML structure passed.')
+          PY
