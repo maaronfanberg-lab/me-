@@ -44,8 +44,12 @@ jobs:
           grep -q "https://api.audius.co/v1" apps/pocket-spatial-audius-catalog.js
           grep -q "/tracks/.*stream" apps/pocket-spatial-audius-catalog.js
           grep -q 'is_stream_gated' apps/pocket-spatial-audius-catalog.js
+          grep -q 'stream_conditions' apps/pocket-spatial-audius-catalog.js
           grep -q 'access.stream' apps/pocket-spatial-audius-catalog.js
+          grep -q 'all rights reserved' apps/pocket-spatial-audius-catalog.js
+          grep -q 'noncommercial' apps/pocket-spatial-audius-catalog.js
           grep -q 'by-nd' apps/pocket-spatial-audius-catalog.js
+          grep -q 'creative commons attribution' apps/pocket-spatial-audius-catalog.js
           if grep -E -q 'access_token|client_secret|bearerToken|Authorization:[[:space:]]*Bearer' apps/pocket-spatial-audius-catalog.js; then
             echo 'Browser Audius source must not embed credentials.'
             exit 1
@@ -56,44 +60,72 @@ jobs:
           fi
           echo 'Audius browser-source contract passed.'
 
-      - name: Smoke-test live Audius API, MP3 and CORS
+      - name: Smoke-test live Audius explicit-license MP3 and CORS
         shell: bash
         run: |
           set -euo pipefail
-          API_URL='https://api.audius.co/v1/tracks/trending?time=week&limit=50&app_name=PocketSpatial'
           ORIGIN='https://maaronfanberg-lab.github.io'
           UA='PocketSpatial/0.3 (https://maaronfanberg-lab.github.io/me-/apps/pocket-spatial.html)'
-          curl -fsS --max-time 25 -A "$UA" -H "Origin: $ORIGIN" -D /tmp/audius-api.headers "$API_URL" -o /tmp/audius.json
-          test -s /tmp/audius.json
-          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/audius-api.headers
+
           python3 - <<'PY'
-          import json
+          import json, subprocess
           from pathlib import Path
           from urllib.parse import quote
-          data=json.loads(Path('/tmp/audius.json').read_text())
-          tracks=data.get('data') or []
-          assert tracks, 'Audius trending returned no tracks'
-          def allowed(t):
+
+          queries=['creative commons','CC BY','Creative Commons Attribution','CC0']
+          seen=[]
+          chosen=None
+
+          def license_ok(value):
+              text=str(value or '').strip().lower().replace('_','-')
+              if not text: return False
+              if 'all rights reserved' in text: return False
+              if 'noncommercial' in text or 'non-commercial' in text: return False
+              if 'by-nc' in text or '-nc-' in text: return False
+              if 'no derivatives' in text or 'noderivatives' in text or 'no-derivatives' in text: return False
+              if 'by-nd' in text or '-nd-' in text: return False
+              if text in ('nd','cc nd'): return False
+              return ('cc0' in text or 'public domain' in text or
+                      'creative commons attribution' in text or
+                      'cc by' in text or 'cc-by' in text or 'by-sa' in text)
+
+          def playable(t):
               if not t.get('id'): return False
               if t.get('is_streamable') is False: return False
               if t.get('is_stream_gated') is True: return False
+              if t.get('stream_conditions'): return False
               access=t.get('access') or {}
               if access.get('stream') is False: return False
-              license_text=str(t.get('license') or '').lower().replace('_','-')
-              if 'no derivatives' in license_text or 'noderivatives' in license_text or 'by-nd' in license_text or 'nc-nd' in license_text:
-                  return False
               duration=float(t.get('duration') or 0)
               if duration and duration > 180: return False
-              return True
-          candidates=[t for t in tracks if allowed(t)]
-          assert candidates, 'Audius returned no compatible <=180s non-gated candidate in this batch'
-          t=candidates[0]
-          tid=str(t['id'])
-          url='https://api.audius.co/v1/tracks/'+quote(tid,safe='')+'/stream?app_name=PocketSpatial'
-          Path('/tmp/audius-stream-url').write_text(url)
-          print('Testing Audius:',t.get('title'),'by',((t.get('user') or {}).get('name') or 'unknown'))
-          print('Track id:',tid,'license:',t.get('license') or 'Audius OML/API access','duration:',t.get('duration'))
+              return license_ok(t.get('license'))
+
+          for q in queries:
+              url='https://api.audius.co/v1/tracks/search?query='+quote(q)+'&limit=100&app_name=PocketSpatial'
+              proc=subprocess.run([
+                  'curl','-fsS','--max-time','25','-A',
+                  'PocketSpatial/0.3 (https://maaronfanberg-lab.github.io/me-/apps/pocket-spatial.html)',
+                  '-H','Origin: https://maaronfanberg-lab.github.io',
+                  url
+              ],capture_output=True,text=True,check=True)
+              data=json.loads(proc.stdout)
+              tracks=data.get('data') or []
+              for t in tracks:
+                  lic=str(t.get('license') or '').strip()
+                  if lic and lic not in seen: seen.append(lic)
+                  if chosen is None and playable(t): chosen=t
+              if chosen is not None: break
+
+          print('Audius license values observed:', seen[:20])
+          assert chosen is not None, 'Audius searches returned no explicit derivative-permitting <=180s non-gated candidate'
+          tid=str(chosen['id'])
+          stream='https://api.audius.co/v1/tracks/'+quote(tid,safe='')+'/stream?app_name=PocketSpatial'
+          Path('/tmp/audius-stream-url').write_text(stream)
+          Path('/tmp/audius-track.json').write_text(json.dumps(chosen))
+          print('Testing Audius:',chosen.get('title'),'by',((chosen.get('user') or {}).get('name') or 'unknown'))
+          print('Track id:',tid,'license:',chosen.get('license'),'duration:',chosen.get('duration'))
           PY
+
           AUDIO_URL="$(cat /tmp/audius-stream-url)"
           curl -fsSL --max-time 30 -A "$UA" \
             -H "Origin: $ORIGIN" \
@@ -105,4 +137,4 @@ jobs:
           test "$(wc -c < /tmp/audius.sample)" -gt 1024
           grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/audius-stream.headers
           grep -i -E '^content-type:[[:space:]]*(audio/mpeg|audio/mp3|application/octet-stream)' /tmp/audius-stream.headers
-          echo 'Live Audius catalog, MP3 bytes and CORS check passed.'
+          echo 'Live Audius explicit-license MP3 bytes and CORS check passed.'
