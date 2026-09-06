@@ -103,7 +103,7 @@
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
-  var build='20260906-commons-buffered-2';
+  var build='20260906-audius-1';
   function versioned(src){return src+'?v='+build;}
   function load(src,next){
     var script=document.createElement('script');
@@ -113,8 +113,10 @@
     document.head.appendChild(script);
   }
   load('pocket-spatial-commons-buffered.js',function(){
-    load('pocket-spatial-buffered-catalog.js',function(){
-      load('pocket-spatial-buffer-probe.js');
+    load('pocket-spatial-audius-catalog.js',function(){
+      load('pocket-spatial-buffered-catalog.js',function(){
+        load('pocket-spatial-buffer-probe.js');
+      });
     });
   });
 }());
