@@ -74,13 +74,25 @@
       ]
     },
     "Mira": {
-      "energy": 75.0,
+      "energy": 73.0,
       "goals": [
         "keep the greenhouse productive",
         "learn what neighbors need"
       ],
-      "location": "greenhouse",
-      "memories": [],
+      "location": "square",
+      "memories": [
+        {
+          "id": "448fa2877788e7db",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "move",
+            "Mira"
+          ],
+          "text": "I moved from greenhouse to square.",
+          "tick": 2
+        }
+      ],
       "name": "Mira",
       "relationships": {},
       "traits": [
@@ -89,13 +101,25 @@
       ]
     },
     "Nia": {
-      "energy": 75.0,
+      "energy": 73.0,
       "goals": [
         "keep basic supplies available",
         "notice when someone needs assistance"
       ],
-      "location": "clinic",
-      "memories": [],
+      "location": "kitchen",
+      "memories": [
+        {
+          "id": "b8fafa8abb2446b7",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "move",
+            "Nia"
+          ],
+          "text": "I moved from clinic to kitchen.",
+          "tick": 2
+        }
+      ],
       "name": "Nia",
       "relationships": {},
       "traits": [
@@ -206,7 +230,7 @@
   },
   "metrics": {
     "action_counts": {
-      "move": 2
+      "move": 4
     },
     "action_entropy_bits": 0.0,
     "action_feasibility_breakdown": {
@@ -218,13 +242,13 @@
         "feasible_unchosen_ticks": 1,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
-        "unavailable_ticks": 1
+        "unavailable_ticks": 3
       },
       "move": {
-        "chosen_and_accepted_ticks": 2,
+        "chosen_and_accepted_ticks": 4,
         "chosen_and_rejected_ticks": 0,
-        "chosen_ticks": 2,
-        "feasible_ticks": 2,
+        "chosen_ticks": 4,
+        "feasible_ticks": 4,
         "feasible_unchosen_ticks": 0,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
@@ -234,8 +258,8 @@
         "chosen_and_accepted_ticks": 0,
         "chosen_and_rejected_ticks": 0,
         "chosen_ticks": 0,
-        "feasible_ticks": 2,
-        "feasible_unchosen_ticks": 2,
+        "feasible_ticks": 4,
+        "feasible_unchosen_ticks": 4,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
         "unavailable_ticks": 0
@@ -244,8 +268,8 @@
         "chosen_and_accepted_ticks": 0,
         "chosen_and_rejected_ticks": 0,
         "chosen_ticks": 0,
-        "feasible_ticks": 2,
-        "feasible_unchosen_ticks": 2,
+        "feasible_ticks": 4,
+        "feasible_unchosen_ticks": 4,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
         "unavailable_ticks": 0
@@ -258,14 +282,14 @@
         "feasible_unchosen_ticks": 1,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
-        "unavailable_ticks": 1
+        "unavailable_ticks": 3
       },
       "work": {
         "chosen_and_accepted_ticks": 0,
         "chosen_and_rejected_ticks": 0,
         "chosen_ticks": 0,
-        "feasible_ticks": 2,
-        "feasible_unchosen_ticks": 2,
+        "feasible_ticks": 4,
+        "feasible_unchosen_ticks": 4,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
         "unavailable_ticks": 0
@@ -273,14 +297,14 @@
     },
     "agents": 8,
     "backend_errors": 0,
-    "decision_count": 2,
+    "decision_count": 4,
     "exact_repeated_utterance_rate": 0.0,
-    "location_entropy_bits": 1.0,
+    "location_entropy_bits": 2.0,
     "note": "These are engineering diagnostics, not measures of human realism or consciousness.",
     "proposal_rejections": 0,
     "talk_turns": 0,
-    "ticks": 1,
-    "total_actions": 2,
+    "ticks": 2,
+    "total_actions": 4,
     "unique_interaction_pairs": 0
   },
   "model": "bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M",
@@ -375,6 +399,92 @@
       },
       "seq": 4,
       "tick": 1
+    },
+    {
+      "accepted": true,
+      "actor": "Mira",
+      "chosen_type": "move",
+      "co_located_agents": [],
+      "energy": 75.0,
+      "feasible_action_types": [
+        "move",
+        "observe",
+        "rest",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "greenhouse",
+      "proposed_action": {
+        "location": "square",
+        "type": "move"
+      },
+      "proposed_type": "move",
+      "recent_local_incidents": [],
+      "rejection_reason": null,
+      "resources_visible": {
+        "food": 6
+      },
+      "seq": 5,
+      "tick": 2
+    },
+    {
+      "action": {
+        "location": "square",
+        "type": "move"
+      },
+      "actor": "Mira",
+      "kind": "action",
+      "location": "greenhouse",
+      "outcome": {
+        "from": "greenhouse",
+        "ok": true,
+        "to": "square"
+      },
+      "seq": 6,
+      "tick": 2
+    },
+    {
+      "accepted": true,
+      "actor": "Nia",
+      "chosen_type": "move",
+      "co_located_agents": [],
+      "energy": 75.0,
+      "feasible_action_types": [
+        "move",
+        "observe",
+        "rest",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "clinic",
+      "proposed_action": {
+        "location": "kitchen",
+        "type": "move"
+      },
+      "proposed_type": "move",
+      "recent_local_incidents": [],
+      "rejection_reason": null,
+      "resources_visible": {
+        "medicine": 3
+      },
+      "seq": 7,
+      "tick": 2
+    },
+    {
+      "action": {
+        "location": "kitchen",
+        "type": "move"
+      },
+      "actor": "Nia",
+      "kind": "action",
+      "location": "clinic",
+      "outcome": {
+        "from": "clinic",
+        "ok": true,
+        "to": "kitchen"
+      },
+      "seq": 8,
+      "tick": 2
     }
   ],
   "seed": 7,
@@ -382,8 +492,8 @@
   "started_at": "2026-09-06T02:13:51.522554Z",
   "status": "live",
   "temperature": 0.1,
-  "tick": 1,
-  "updated_at": "2026-09-06T02:13:51.522711Z",
+  "tick": 2,
+  "updated_at": "2026-09-06T02:14:03.571782Z",
   "version": 1,
   "world_name": "Cedar Hollow"
 }
