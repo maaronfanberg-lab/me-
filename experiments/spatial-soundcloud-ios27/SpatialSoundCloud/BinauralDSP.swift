@@ -2,16 +2,19 @@ import AudioToolbox
 import Foundation
 import Synchronization
 
-/// A deliberately small binaural mechanism for the first streaming PoC.
+/// A deliberately small ITD-based spatial crossfeed for the first streaming PoC.
 ///
-/// This is not a measured or individualized HRTF. It creates real binaural cues
-/// by combining interaural delay with frequency-dependent contralateral filtering.
-/// The UI-facing parameters are atomics so the realtime process callback never locks.
-final class BinauralDSP {
+/// This is not a measured or individualized HRTF renderer. It creates physically
+/// meaningful headphone cues by combining interaural delay with frequency-dependent
+/// contralateral filtering. The UI-facing parameters are atomics so the realtime
+/// process callback never locks.
+final class BinauralDSP: @unchecked Sendable {
     private let enabled = Atomic<UInt8>(0)
     private let amountBits = Atomic<UInt32>(Float(0.75).bitPattern)
 
-    // Prepared before realtime processing starts.
+    // Prepared before realtime processing starts. Apple serializes a tap's
+    // prepare/process/unprepare callback sequence; that contract is why these are
+    // non-atomic. Re-verify against the shipping iOS 27 SDK before merge.
     private var sampleRate: Float = 48_000
     private var channelCount = 0
     private var isFloat32 = false
@@ -34,7 +37,9 @@ final class BinauralDSP {
     }
 
     /// Called from the tap's prepare callback, not the realtime process callback.
-    func prepare(format: AudioStreamBasicDescription) {
+    /// Returns whether this DSP can actually process the negotiated format.
+    @discardableResult
+    func prepare(format: AudioStreamBasicDescription) -> Bool {
         sampleRate = max(Float(format.mSampleRate), 8_000)
         channelCount = Int(format.mChannelsPerFrame)
         isFloat32 = format.mFormatID == kAudioFormatLinearPCM
@@ -42,13 +47,22 @@ final class BinauralDSP {
             && format.mBitsPerChannel == 32
         isNonInterleaved = (format.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
 
+        let isSupported = channelCount == 2 && isFloat32
+        writeIndex = 0
+        leftFarLP = 0
+        rightFarLP = 0
+
+        guard isSupported else {
+            // Keep any previous capacity available, but process() will transparently
+            // bypass because the negotiated format is not eligible.
+            return false
+        }
+
         // Up to 2 ms is plenty for human-head ITD and leaves margin for experiments.
         let historyFrames = max(128, Int(sampleRate * 0.002) + 8)
         leftHistory = Array(repeating: 0, count: historyFrames)
         rightHistory = Array(repeating: 0, count: historyFrames)
-        writeIndex = 0
-        leftFarLP = 0
-        rightFarLP = 0
+        return true
     }
 
     func unprepare() {
@@ -169,11 +183,11 @@ final class BinauralDSP {
         leftFarLP += lpAlpha * (delayedLeft - leftFarLP)
         rightFarLP += lpAlpha * (delayedRight - rightFarLP)
 
-        let binauralL = directGain * inputL + farGain * rightFarLP
-        let binauralR = directGain * inputR + farGain * leftFarLP
+        let spatialL = directGain * inputL + farGain * rightFarLP
+        let spatialR = directGain * inputR + farGain * leftFarLP
 
-        left = dryGain * inputL + wetAmount * binauralL
-        right = dryGain * inputR + wetAmount * binauralR
+        left = dryGain * inputL + wetAmount * spatialL
+        right = dryGain * inputR + wetAmount * spatialR
 
         writeIndex += 1
         if writeIndex == leftHistory.count { writeIndex = 0 }
