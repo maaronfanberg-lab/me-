@@ -1,7 +1,16 @@
 {
   "mode": "continuous_persistent_community_session",
-  "status": "running",
+  "status": "completed",
   "session_id": "1788656958-f07dc96226",
+  "limits": {
+    "seed_messages": 1,
+    "requested_reply_turns": 8,
+    "maximum_reply_turns": 10,
+    "maximum_continuous_seconds": 19800,
+    "continuous_seconds": 17400,
+    "turn_delay_seconds": 0.0,
+    "autonomous_loop": true
+  },
   "resumed_social_state": false,
   "autonomous_opening": true,
   "discarded_pending_message_ids": [],
@@ -60,8 +69,70 @@
     "consumed_inbound": null
   },
   "completed_reply_turns": 23,
-  "continuous_seconds": 17400,
-  "turn_delay_seconds": 0.0,
+  "stop_reason": "continuous_window_complete",
+  "seed": {
+    "success": true,
+    "message": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hey, I'm going to a party tonight!",
+      "created_at": "2026-09-06T01:09:37.849023+00:00"
+    }
+  },
+  "latest_turn": {
+    "agent": "Emily",
+    "time_step": 25,
+    "observation": {
+      "self": {
+        "id": 1,
+        "name": "Emily"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 24,
+          "from_id": 2,
+          "from_name": "Olivia",
+          "to_id": 1,
+          "to_name": "Emily",
+          "content": "Great that we have different music tastes! How do you like country and jazz?",
+          "created_at": "2026-09-06T05:31:48.662362+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [],
+    "retrieved_memory_evidence": [],
+    "action": {
+      "type": "wait",
+      "reason": "speech_generation_deferred"
+    },
+    "action_result": null,
+    "consumed_inbound": false,
+    "external_inbound": null,
+    "external_action": null,
+    "external_action_result": null,
+    "external_ack": null,
+    "external_generation_error": "",
+    "generation_deferred": true,
+    "generation_attempts": 1,
+    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'long_refractory_echo: Thank you for sharing that information!'"
+  },
   "messages": [
     {
       "id": 1,
@@ -297,56 +368,5 @@
       "content": "Great that we have different music tastes! How do you like country and jazz?",
       "created_at": "2026-09-06T05:31:48.662362+00:00"
     }
-  ],
-  "latest_turn": {
-    "agent": "Emily",
-    "time_step": 25,
-    "observation": {
-      "self": {
-        "id": 1,
-        "name": "Emily"
-      },
-      "participants": [
-        {
-          "id": 1,
-          "name": "Emily"
-        },
-        {
-          "id": 2,
-          "name": "Olivia"
-        },
-        {
-          "id": 3,
-          "name": "Alex"
-        }
-      ],
-      "inbox": [
-        {
-          "id": 24,
-          "from_id": 2,
-          "from_name": "Olivia",
-          "to_id": 1,
-          "to_name": "Emily",
-          "content": "Great that we have different music tastes! How do you like country and jazz?",
-          "created_at": "2026-09-06T05:31:48.662362+00:00"
-        }
-      ]
-    },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
-    "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
-    },
-    "action_result": null,
-    "consumed_inbound": false,
-    "external_inbound": null,
-    "external_action": null,
-    "external_action_result": null,
-    "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'long_refractory_echo: Thank you for sharing that information!'"
-  }
+  ]
 }
