@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/cedar-action-selection-review-20260906.json",
+  "request_sha256": "9582a6f5281298f0686df9e17a7f69f53b6bf186b5eeceea6d4ee77d4b914299",
+  "request_nonce": "9582a6f5281298f0686df9e1",
+  "completed_at": "2026-09-06T01:13:23.399243Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## VERDICT: schema-order-test\n\nThe oneOf branch-order permutation test is the correct next experiment, and it should be run *before* touching a larger model. Here's the reasoning and the minimal design.\n\n### 1. Why, grounded in exact code\n\n`FalconBackend._response_schema` (falcon_live.py:143‑160) always assembles branches in one fixed literal order:\n\n```python\nbranches = [cls._action_schema(\"rest\", observation), cls._action_schema(\"observe\", observation)]\nif feasible[\"move_locations\"]:\n    branches.append(cls._action_schema(\"move\", observation))\nif feasible[\"interaction_targets\"]:\n    branches.append(cls._action_schema(\"talk\", observation))\n    branches.append(cls._action_schema(\"help\", observation))\nif feasible[\"work_resources\"]:\n    branches.append(cls._action_schema(\"work\", observation))\n```\n\nThis list is fed as `{\"oneOf\": branches}` into `response_format.schema`, which llama.cpp compiles into a GBNF grammar. GBNF alternation preserves authoring order, and at low/mid temperature (near-greedy sampling) ties or near-ties among grammar-valid continuations can resolve toward whichever alternative the compiled grammar reaches first/most simply — a structural artifact independent of the model's actual per-context judgment.\n\nThe observed data is the signature of exactly that artifact, not of content-sensitive choice:\n\n- Temp 0.1: **72/72 move**, across 3 different seeds with different agents, locations, resources, and co-located agents.\n- Temp 0.5: **72/72 move** again, identical to 0.1, despite temperature nominally changing the sampling distribution.\n- Temp 1.0: 69 move / 3 observe — still overwhelming, with talk/help/work at 0 despite being feasible on most decisions.\n\nIf this were genuine content-driven preference, varying world content across three distinct seeds/worlds at three different temperatures should produce *some* variation in which actions get chosen relative to what's feasible. Total invariance to world content, tied to a branch that sits at a fixed schema position, is a stronger fit for a schema/grammar-order confound than for \"Falcon-1B genuinely always wants to move.\" Confirming or ruling this out is a prerequisite to trusting any behavioral read of this pipeline — including a future, larger model, which would inherit the identical fixed-order schema and could show the same artifact for the same structural reason.\n\n### 2. Smallest diagnostic experiment\n\nDo **not** run the full 3-temperature sweep again. Temperature 0.1 already produced total collapse (72/72) and is the cheapest, cleanest condition to falsify/confirm order-dependence. Rerun only the same 3 seeds (7, 19, 31) at temperature 0.1, holding every other input identical, under alternate `oneOf` branch orderings, and compare `chosen_action_counts`.\n\nNothing about feasibility computation, prompt content, validation, or WorldEngine authority changes. Only the textual order of already-feasible branches in the schema changes.\n\n### 3. Exact minimal patch shape\n\nAdd an optional, default-inert ordering parameter to `_response_schema`, threaded through an explicit opt-in (env var), so default behavior for all existing tests/production runs is byte-identical unless the diagnostic explicitly requests otherwise:\n\n```python\n_DEFAULT_BRANCH_ORDER = (\"rest\", \"observe\", \"move\", \"talk\", \"help\", \"work\")\n\n@classmethod\ndef _response_schema(cls, observation: dict[str, Any], branch_order: tuple[str, ...] | None = None) -> dict[str, Any]:\n    feasible = cls._feasibility_constraints(observation)\n    order = branch_order or cls._DEFAULT_BRANCH_ORDER\n    available = {\n        \"rest\": True,\n        \"observe\": True,\n        \"move\": bool(feasible[\"move_locations\"]),\n        \"talk\": bool(feasible[\"interaction_targets\"]),\n        \"help\": bool(feasible[\"interaction_targets\"]),\n        \"work\": bool(feasible[\"work_resources\"]),\n    }\n    branches = [cls._action_schema(a, observation) for a in order if available[a]]\n    return {\"oneOf\": branches}\n```\n\n`FalconBackend.__init__`/`choose_action` reads an optional `LITTLE_WORLD_FALCON_BRANCH_ORDER` env var (comma-separated action names) purely to pass into `branch_order`; if unset, behavior is identical to today.\n\nWorkflow change: add one additional, non-gating step in `little-world-falcon-live.yml` after the existing Cedar sweep — same 3 seeds, temperature 0.1 only, run twice more with `LITTLE_WORLD_FALCON_BRANCH_ORDER` set to two alternate orders, then diff `chosen_action_counts` against baseline. Keep this step additive (its own artifact, no new `assert` that fails the job), so it doesn't turn into a de facto action quota or gate.\n\n**Minimum permutations needed: 2 beyond baseline (3 total conditions).**\n- Baseline: `rest, observe, move, talk, help, work` (current, move in slot 3).\n- Permutation A: `move, rest, observe, talk, help, work` (move moved to slot 1 — tests first-position bias).\n- Permutation B: `rest, observe, talk, help, work, move` (move moved to last slot — tests last-position bias).\n\nThis is the smallest set that can distinguish \"dominance follows the label (move)\" from \"dominance follows the slot (whatever branch is now first/last).\" A single reversal alone is insufficient because it only mildly displaces move; testing both extremes isolates position effects unambiguously.\n\n### 4. What result supports which conclusion\n\n- **Move stays dominant (~69–72/72) in all three orderings, across all 3 seeds** → position-independent → rules out schema-order confound as the primary driver → supports genuine Falcon‑1B capability/content collapse (a real small-model behavioral finding). At that point, testing a larger model is well-justified and the sweep's conclusion stands.\n- **Dominance shifts to track the slot** — e.g., in Permutation A whatever branch is now first (move) still wins but by an even larger margin, or in Permutation B the *newly first* branch (rest) starts winning instead of move — → confirms a schema/grammar-order decoding confound. In that case the entire completed sweep's interpretation is invalid, testing a larger model next would just reproduce the same artifact, and the priority becomes eliminating the order confound (e.g., seeding a stable per-decision-but-content-independent shuffle of branch order, still with WorldEngine as sole validator) before any further model-behavior claims are made.",
+  "session_id": "84fe80e3-f6a4-41a7-8e3c-12d03a16476e",
+  "usage": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 31463,
+    "cache_read_input_tokens": 8651,
+    "output_tokens": 9609,
+    "output_tokens_details": {
+      "thinking_tokens": 6924
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 31463,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 9163,
+        "cache_read_input_tokens": 4545,
+        "cache_creation_input_tokens": 26918,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 26918
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.22519219999999998,
+  "num_turns": 7
+}
