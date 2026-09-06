@@ -1,0 +1,15 @@
+{
+  "nonce": "spatial-soundcloud-20260905-001",
+  "prompt": "Review the architecture for a native iPhone app that signs into SoundCloud, browses the user's SoundCloud playlists/likes, streams a selected track, and applies real-time headphone spatialization. The intended stack is SwiftUI for UI plus AVFoundation/AVAudioEngine (or the most appropriate Apple audio APIs) for DSP. The goal is genuine binaural/spatial processing, not simple left-right '8D' panning. Identify the most technically sound architecture, especially the correct way to get a SoundCloud network stream into a real-time custom DSP graph on iOS. Flag any API, HLS/AAC decoding, DRM, background-audio, latency, or App Store constraints that could invalidate a naive design. Recommend the smallest viable prototype and a progression toward HRTF/binaural rendering, early reflections, room convolution, distance/depth cues, and optional head tracking.",
+  "context": [
+    "SoundCloud's developer API provides authenticated access to user playlists/likes and streaming URLs for tracks, including HLS/AAC streams.",
+    "A current third-party SoundCloud client called Soundy demonstrates SoundCloud account/library integration on Apple platforms and real-time EQ using AVAudioEngine.",
+    "The desired product is a SoundCloud-first spatial player, initially for ordinary headphones on iPhone.",
+    "We want to avoid fake spatialization based only on automated stereo panning.",
+    "The implementation should minimize unnecessary backend infrastructure for the first prototype and keep SoundCloud credentials/tokens handled safely.",
+    "This review is advisory only. Do not modify repository files."
+  ],
+  "expected_response": "Return: (1) architecture, (2) biggest technical trap, (3) smallest proof-of-concept, (4) recommended Apple APIs and DSP path, (5) SoundCloud integration cautions, (6) staged implementation plan, and (7) specific tests that prove the audio is actually being processed spatially rather than merely widened/panned.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 4
+}
