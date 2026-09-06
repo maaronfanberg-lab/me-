@@ -128,4 +128,40 @@ sandbox.PocketSpatialBufferedCommons.stop();
 assert.strictEqual(ids.spatial.disabled,false);
 assert.strictEqual(control.textContent,'BUFFER + PLAY IMMERSIVE');
 
+var fakeActive=null;
+var fakePlayer={
+  toggle:function(track,button,status){
+    if(fakeActive===track.pageid){
+      fakeActive=null;
+      button.textContent='BUFFER + PLAY IMMERSIVE';
+      status.textContent='Buffered immersive playback stopped.';
+      status.className='status';
+      return;
+    }
+    fakeActive=track.pageid;
+    button.textContent='STOP IMMERSIVE PLAYBACK';
+    status.textContent='Buffered immersive playback is live.';
+    status.className='status good';
+  }
+};
+var guardSandbox={PocketSpatialBufferedCommons:fakePlayer};
+var guardSource=fs.readFileSync('apps/pocket-spatial-single-playback.js','utf8');
+vm.runInNewContext(guardSource,guardSandbox,{filename:'pocket-spatial-single-playback.js'});
+var firstButton=new Element('firstButton');
+var firstStatus=new Element('firstStatus');
+var secondButton=new Element('secondButton');
+var secondStatus=new Element('secondStatus');
+fakePlayer.toggle({pageid:'a'},firstButton,firstStatus);
+assert.strictEqual(firstButton.textContent,'STOP IMMERSIVE PLAYBACK');
+fakePlayer.toggle({pageid:'b'},secondButton,secondStatus);
+assert.strictEqual(firstButton.textContent,'BUFFER + PLAY IMMERSIVE','old card resets when another track starts');
+assert.strictEqual(firstStatus.textContent,'Stopped because another track started.');
+assert.strictEqual(firstStatus.className,'status');
+assert.strictEqual(secondButton.textContent,'STOP IMMERSIVE PLAYBACK');
+assert.strictEqual(secondStatus.className,'status good');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(fakePlayer.singlePlaybackState())),{pageid:'b',hasControl:true,hasDiagnostic:true});
+fakePlayer.toggle({pageid:'b'},secondButton,secondStatus);
+assert.strictEqual(secondButton.textContent,'BUFFER + PLAY IMMERSIVE');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(fakePlayer.singlePlaybackState())),{pageid:null,hasControl:false,hasDiagnostic:false});
+
 console.log('Pocket Spatial buffered Commons immersive playback tests passed.');
