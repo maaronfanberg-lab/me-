@@ -176,7 +176,7 @@ jobs:
 
       - name: Verify page consumes the tested core
         run: |
-          grep -q '<script src="pocket-spatial-core.js"></script>' apps/pocket-spatial.html
+          grep -Eq '<script src="pocket-spatial-core\.js\?v=[^"]+"></script>' apps/pocket-spatial.html
           grep -q 'var core=window.PocketSpatialCore' apps/pocket-spatial.html
           grep -q 'core.appliedTargets' apps/pocket-spatial.html
           grep -q 'core.readouts' apps/pocket-spatial.html
