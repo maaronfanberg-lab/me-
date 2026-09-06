@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-06-pocket-spatial-audius-buffered-source-001.json",
+  "request_sha256": "84dcc9d2ed72bab1887e1687b612e5fe6691a64988376603d30d0ffacfccb5f7",
+  "request_nonce": "pocket-spatial-audius-buffered-source-20260906-001",
+  "completed_at": "2026-09-06T21:22:30.459416Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Audius Second-Source Integration — Read-Only Consult\n\n### Endpoint choice\nUse the load-balanced alias `https://api.audius.co` for both **search** (`GET /v1/tracks/search?query=...&app_name=PocketSpatial`) and **track lookup** (`GET /v1/tracks/{id}?app_name=PocketSpatial`). Do not hand-roll discovery-node failover for a \"smallest robust\" v1 — the `.co` alias already proxies to a healthy node, matching the \"prove it works\" scope. Only add manual multi-host retry later if the alias proves flaky on-device; if you do, treat it as a plain array of fallback hosts tried in sequence with the same request, not a second engine.\n\n### Auth pattern\nHistorically Audius' public v1 read endpoints (search, track metadata, `/stream`) required only an `app_name` query parameter — no OAuth, no secret, safe to embed client-side. **This must be verified live for 2026**: Audius may have since required a registered API key or signed JWT for stream/metadata calls. Check current developer docs and a live curl/browser request before merge. If a key is required, it must be a *public* identifier (not a bearer secret) since this is a static, unauthenticated Safari client with no backend proxy — do not embed anything that functions as a private credential.\n\n### Stream URL construction and following it\nConstruct `GET {host}/v1/tracks/{track_id}/stream?app_name=PocketSpatial`. This endpoint typically issues a 302 to the actual content/creator-node CDN URL serving the MP3 bytes. Feed this URL directly into the **existing** XHR `responseType=arraybuffer` flow (`pocket-spatial-commons-buffered.js`'s `fetchDecodePlay`) — old WebKit XHR follows redirects transparently, so no manual redirect-handling code is needed. **CORS risk**: the *final* CDN response, not just the redirect, must carry `Access-Control-Allow-Origin` for the arraybuffer read to succeed; Commons works because its media host is CORS-open, but Audius content nodes are third-party operator infrastructure and CORS posture can vary node-to-node. This is the single highest-risk unknown and must be verified on the physical iPhone 6 before merge (a CORS failure here won't throw a catchable JS error distinct from a generic network error, so add a diagnostic string specifically calling out \"possible CORS block\" when `xhr.onerror` fires with no HTTP status).\n\n### Stream-gated / non-streamable handling\nBefore ever issuing the stream XHR, gate on track metadata: reject if `is_streamable === false`, if `access && access.stream === false`, or if `stream_conditions` is non-null (indicates follow/tip/USDC-gated). None of these require special-case UI — treat exactly like Commons pages that fail `licenseAllowsSpatial`: silently excluded from the candidate list, same conservative deny-by-default posture already used for Commons. **Verify field names live** — v1 API field naming for gating has shifted across Audius API versions.\n\n### License filtering (conservative, deny-by-default)\nMirror `licenseAllowsSpatial()` in `pocket-spatial-buffered-catalog.js` exactly in spirit: normalize the `license` string to lowercase and **block** if it contains `no derivatives`, `noderivatives`, `-nd`, or `nd)`; also block empty/missing license and literal `all rights reserved` (Audius default when no CC license is chosen). Only **allow** if the string affirmatively matches a known CC-BY family without ND (e.g., contains `attribution` and not `no derivatives`). Do not attempt to special-case NC (non-commercial) — Commons' filter already blocks NC too, so keep consistent: NC does not clearly forbid derivatives but the existing app treats it as blocked, so match that precedent for symmetry rather than introducing a looser rule for Audius. **Verify the exact license strings Audius' API returns live** (e.g., \"Creative Commons Attribution\", \"Creative Commons Attribution ShareAlike\") since token matching depends on exact casing/wording.\n\n### Source-neutral track object — reuse, don't fork the engine\nReuse the existing buffered engine unchanged. The only structural addition needed: allow `track.audio` to be either a plain URL string (Commons case, already resolved) or a resolver — because Audius' stream URL is itself already directly followable by XHR (redirects are transparent), you likely don't even need a resolver step; the same static-string shape works. So the minimal-risk path is: **write an Audius normalizer that outputs the identical `{pageid, title, artist, license, file_page, audio}` shape** already consumed by `fetchDecodePlay`/`startDecodedBuffer`, and feed it through the same UI list-rendering and playback functions. Do not build a parallel DSP or playback engine — the DSP graph, safety ceilings (6 MB / 180 s), and progress-abort logic are already source-agnostic.\n\n### Focused on-device diagnostics (iPhone 6 / iOS 12.5 Safari)\n1. One real `GET .../stream?app_name=...` via XHR arraybuffer on-device — confirm `xhr.status`, byte count via `onprogress`, and successful `decodeAudioData`.\n2. Confirm no silent CORS failure (compare `xhr.status===0` cases against Commons baseline behavior).\n3. Confirm `is_streamable`/`access`/`stream_conditions` are present and correctly typed in a live search response batch.\n4. Confirm actual license string values against the filter tokens above.\n5. Confirm duration/filesize pre-filtering is possible before the byte fetch (Audius track metadata typically includes `duration` in seconds — use it to reject >180 s candidates before spending bandwidth, same spirit as Commons' pre-fetch limits though Commons currently only enforces size/duration post-fetch).\n\n**Must verify live before merge**: current auth requirement (app_name vs API key), CORS headers on actual stream/CDN responses on this physical device, exact gating field names, and exact license string vocabulary.",
+  "session_id": "518aceea-a1a5-432d-aebb-0363e7ef5931",
+  "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 18701,
+    "cache_read_input_tokens": 43022,
+    "output_tokens": 5750,
+    "output_tokens_details": {
+      "thinking_tokens": 2857
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 18701,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 4693,
+        "cache_read_input_tokens": 21373,
+        "cache_creation_input_tokens": 511,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 511
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.14247939999999998,
+  "num_turns": 11
+}
