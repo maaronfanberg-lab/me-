@@ -3,12 +3,24 @@ import Combine
 
 @MainActor
 final class SpatialPlayer: ObservableObject {
+    enum PlayerError: LocalizedError {
+        case protectedContent
+
+        var errorDescription: String? {
+            switch self {
+            case .protectedContent:
+                return "This stream uses protected/FairPlay content. Apple's whole-mix processing tap can't spatialize it."
+            }
+        }
+    }
+
     @Published private(set) var isPlaying = false
+    @Published private(set) var spatialAvailable = false
     @Published private(set) var status = "Ready for a non-FairPlay HLS URL."
     @Published private(set) var tapFormat = "Tap not prepared yet."
 
     @Published var spatialEnabled = false {
-        didSet { mixTap?.setSpatialEnabled(spatialEnabled) }
+        didSet { mixTap?.setSpatialEnabled(spatialEnabled && spatialAvailable) }
     }
 
     @Published var spatialAmount: Double = 0.75 {
@@ -27,35 +39,16 @@ final class SpatialPlayer: ObservableObject {
             return
         }
 
-        do {
-            try configureAudioSession()
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        mixTap = nil
+        isPlaying = false
+        spatialAvailable = false
+        spatialEnabled = false
+        tapFormat = "Inspecting stream…"
+        status = "Checking stream protection and preparing playback…"
 
-            let tap = try HLSMixTap { [weak self] format in
-                let sampleRate = Int(format.mSampleRate.rounded())
-                let channels = format.mChannelsPerFrame
-                let bits = format.mBitsPerChannel
-                Task { @MainActor in
-                    self?.tapFormat = "Prepared: \(sampleRate) Hz, \(channels) ch, \(bits)-bit PCM"
-                    self?.status = "Streaming tap is receiving decoded audio."
-                }
-            }
-
-            tap.setSpatialEnabled(spatialEnabled)
-            tap.setSpatialAmount(Float(spatialAmount))
-
-            let item = AVPlayerItem(url: url)
-            try tap.install(on: item)
-
-            mixTap = tap
-            player.replaceCurrentItem(with: item)
-            player.play()
-            isPlaying = true
-            tapFormat = "Waiting for tap prepare callback…"
-            status = "Loading stream…"
-        } catch {
-            isPlaying = false
-            status = "Load failed: \(error.localizedDescription)"
-        }
+        Task { await loadValidated(url: url) }
     }
 
     func togglePlayback() {
@@ -71,7 +64,9 @@ final class SpatialPlayer: ObservableObject {
         } else {
             player.play()
             isPlaying = true
-            status = "Playing."
+            status = spatialAvailable
+                ? "Playing. Spatial processing is available."
+                : "Playing in transparent bypass."
         }
     }
 
@@ -80,8 +75,67 @@ final class SpatialPlayer: ObservableObject {
         player.replaceCurrentItem(with: nil)
         mixTap = nil
         isPlaying = false
+        spatialAvailable = false
+        spatialEnabled = false
         tapFormat = "Tap not prepared yet."
         status = "Stopped."
+    }
+
+    private func loadValidated(url: URL) async {
+        do {
+            try configureAudioSession()
+
+            let asset = AVURLAsset(url: url)
+            let hasProtectedContent = try await asset.load(.hasProtectedContent)
+            guard !hasProtectedContent else {
+                throw PlayerError.protectedContent
+            }
+
+            let tap = try HLSMixTap { [weak self] format, dspEligible in
+                let sampleRate = Int(format.mSampleRate.rounded())
+                let channels = format.mChannelsPerFrame
+                let bits = format.mBitsPerChannel
+                let layout = (format.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
+                    ? "planar"
+                    : "interleaved"
+
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.spatialAvailable = dspEligible
+                    self.tapFormat = "Prepared: \(sampleRate) Hz, \(channels) ch, \(bits)-bit PCM, \(layout)"
+
+                    if dspEligible {
+                        self.status = "Streaming tap is receiving compatible decoded audio."
+                        self.mixTap?.setSpatialEnabled(self.spatialEnabled)
+                    } else {
+                        self.spatialEnabled = false
+                        self.status = "Streaming tap is active, but this PCM format isn't eligible for the spatial DSP. Playback is bypassed."
+                    }
+                }
+            }
+
+            tap.setSpatialEnabled(false)
+            tap.setSpatialAmount(Float(spatialAmount))
+
+            let item = AVPlayerItem(asset: asset)
+            try tap.install(on: item)
+
+            mixTap = tap
+            player.replaceCurrentItem(with: item)
+            player.play()
+            isPlaying = true
+            tapFormat = "Waiting for tap prepare callback…"
+            status = "Loading stream…"
+        } catch {
+            player.pause()
+            player.replaceCurrentItem(with: nil)
+            mixTap = nil
+            isPlaying = false
+            spatialAvailable = false
+            spatialEnabled = false
+            tapFormat = "Tap unavailable."
+            status = "Load failed: \(error.localizedDescription)"
+        }
     }
 
     private func configureAudioSession() throws {
