@@ -3,13 +3,17 @@ name: Pocket Spatial iPhone 6 CI
 on:
   push:
     branches:
-      - feature/spatial-iphone6-web
+      - 'feature/pocket-spatial-*'
     paths:
       - 'apps/pocket-spatial.html'
+      - 'apps/pocket-spatial-core.js'
+      - 'tests/pocket-spatial-core.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
   pull_request:
     paths:
       - 'apps/pocket-spatial.html'
+      - 'apps/pocket-spatial-core.js'
+      - 'tests/pocket-spatial-core.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
   workflow_dispatch:
 
@@ -22,6 +26,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Verify slider-to-DSP calibration math
+        run: node tests/pocket-spatial-core.test.js
       - name: Extract inline JavaScript
         run: |
           python3 - <<'PY'
@@ -33,9 +39,18 @@ jobs:
           Path('/tmp/pocket-spatial.js').write_text(scripts[0])
           PY
       - name: Check JavaScript syntax
-        run: node --check /tmp/pocket-spatial.js
+        run: |
+          node --check apps/pocket-spatial-core.js
+          node --check /tmp/pocket-spatial.js
       - name: Enforce ES5 syntax for old Safari
-        run: npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+        run: |
+          npx --yes es-check@7 es5 apps/pocket-spatial-core.js
+          npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+      - name: Verify page consumes the tested core
+        run: |
+          grep -q '<script src="pocket-spatial-core.js"></script>' apps/pocket-spatial.html
+          grep -q 'PocketSpatialCore.appliedTargets' apps/pocket-spatial.html
+          grep -q 'PocketSpatialCore.readouts' apps/pocket-spatial.html
       - name: Validate legacy HTML structure
         run: |
           python3 - <<'PY'
@@ -65,7 +80,7 @@ jobs:
           assert p.lang=='en'
           assert p.has_audio
           assert len(p.ids)==len(set(p.ids)), 'duplicate id detected'
-          for required in ('file','space','angle','spatial','audio'):
+          for required in ('file','space','angle','spatial','audio','delay','cutoff','far','direct'):
               assert required in p.ids, f'missing required id {required}'
           for labelled in ('file','space','angle'):
               assert labelled in p.labels, f'missing label for {labelled}'
