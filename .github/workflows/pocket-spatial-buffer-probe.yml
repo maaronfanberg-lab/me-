@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '<!doctype html>' apps/pocket-spatial-buffer-test.html
-          grep -q 'pocket-spatial-buffer-probe.js?v=20260906-buffer-probe-1' apps/pocket-spatial-buffer-test.html
+          grep -q 'pocket-spatial-buffer-probe.js?v=20260906-buffer-probe-2' apps/pocket-spatial-buffer-test.html
           grep -q 'remote bytes.*decodeAudioData.*AudioBufferSourceNode.*analyser' apps/pocket-spatial-buffer-test.html
 
       - name: Verify buffered-probe safety contract
@@ -62,11 +62,13 @@ jobs:
           grep -q 'buffer_pcm_flatline' apps/pocket-spatial-buffer-probe.js
           grep -q 'Music loop 168bpm (Still frivolous).ogg' apps/pocket-spatial-buffer-probe.js
           grep -q "load('pocket-spatial-buffer-probe.js'" apps/pocket-spatial-core.js
+          grep -q 'probeBufferedPCM(resolvedClip.url' apps/pocket-spatial-buffer-probe.js
+          grep -q 'if(ui)prepare(ui);' apps/pocket-spatial-buffer-probe.js
           if grep -E -q 'MediaRecorder|captureStream|indexedDB|localStorage|caches\.open' apps/pocket-spatial-buffer-probe.js; then
             echo 'Buffered probe must not record or persist remote media.'
             exit 1
           fi
-          echo 'Buffered PCM safety contract passed.'
+          echo 'Buffered PCM safety and gesture contract passed.'
 
       - name: Smoke-test exact Commons control clip and MP3 CORS
         shell: bash
