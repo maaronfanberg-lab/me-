@@ -1,0 +1,98 @@
+name: Pocket Spatial Netlabels Diagnostic
+
+on:
+  push:
+    branches:
+      - feature/pocket-spatial-internet-archive-probe
+    paths:
+      - '.github/workflows/pocket-spatial-netlabels-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Find exact CC BY Netlabels candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          ORIGIN='https://maaronfanberg-lab.github.io'
+          QUERY='collection:(netlabels) AND mediatype:(audio) AND licenseurl:http*by*'
+          curl -fsSG --max-time 30 \
+            -H "Origin: $ORIGIN" \
+            --data-urlencode "q=$QUERY" \
+            --data-urlencode 'fl[]=identifier' \
+            --data-urlencode 'fl[]=title' \
+            --data-urlencode 'fl[]=creator' \
+            --data-urlencode 'fl[]=licenseurl' \
+            --data-urlencode 'fl[]=collection' \
+            --data-urlencode 'sort[]=downloads desc' \
+            --data-urlencode 'rows=500' \
+            --data-urlencode 'page=1' \
+            --data-urlencode 'output=json' \
+            'https://archive.org/advancedsearch.php' \
+            -o /tmp/netlabels.json
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+          data=json.loads(Path('/tmp/netlabels.json').read_text())
+          docs=(data.get('response') or {}).get('docs') or []
+          def first(v):
+              if isinstance(v,list): return str(v[0]) if v else ''
+              return str(v or '')
+          def exact(v):
+              u=first(v).lower().split('?',1)[0].split('#',1)[0].rstrip('/')
+              return bool(re.match(r'^https?://creativecommons\.org/licenses/by/[0-9.]+$',u))
+          exact_docs=[d for d in docs if exact(d.get('licenseurl'))]
+          print('TOTAL_DISCOVERY',len(docs))
+          print('EXACT_CC_BY_SEARCH_DOCS',len(exact_docs))
+          for d in exact_docs[:40]:
+              print('EXACT',d.get('identifier'),first(d.get('licenseurl')),repr(d.get('title')))
+          Path('/tmp/exact-ids').write_text('\n'.join(str(d.get('identifier')) for d in exact_docs[:40] if d.get('identifier')))
+          assert exact_docs, 'No exact CC BY search docs found in first 500 Netlabels results'
+          PY
+
+          verified=0
+          while IFS= read -r ID; do
+            [ -n "$ID" ] || continue
+            curl -fsS --max-time 20 "https://archive.org/metadata/$ID" -o /tmp/md.json || continue
+            ID="$ID" python3 - <<'PY'
+          import json,os,re,urllib.parse
+          from pathlib import Path
+          data=json.loads(Path('/tmp/md.json').read_text())
+          md=data.get('metadata') or {}
+          col=md.get('collection') or []
+          if isinstance(col,str): col=[col]
+          if 'netlabels' not in [str(x).lower() for x in col]: raise SystemExit(2)
+          lic=md.get('licenseurl') or ''
+          if isinstance(lic,list): lic=lic[0] if lic else ''
+          lic=str(lic).lower().split('?',1)[0].split('#',1)[0].rstrip('/')
+          if not re.match(r'^https?://creativecommons\.org/licenses/by/[0-9.]+$',lic): raise SystemExit(3)
+          files=[]
+          for f in data.get('files') or []:
+              n=str((f or {}).get('name') or '')
+              if n.lower().endswith('.mp3') and str((f or {}).get('private') or '').lower()!='true': files.append(f)
+          if not files: raise SystemExit(4)
+          files.sort(key=lambda f: 0 if str(f.get('source') or '').lower()=='original' else 1)
+          name=str(files[0].get('name'))
+          path='/'.join(urllib.parse.quote(p,safe='') for p in name.split('/'))
+          url='https://archive.org/download/'+urllib.parse.quote(os.environ['ID'],safe='')+'/'+path
+          Path('/tmp/audio-url').write_text(url)
+          print('VERIFIED_METADATA',os.environ['ID'],lic,name)
+          PY
+            rc=$?
+            if [ "$rc" -ne 0 ]; then continue; fi
+            AUDIO_URL="$(cat /tmp/audio-url)"
+            if curl -fsSL --max-time 20 -H "Origin: $ORIGIN" -H 'Range: bytes=0-4095' -D /tmp/audio.headers -o /tmp/sample "$AUDIO_URL"; then
+              if [ -s /tmp/sample ] && grep -i -E -q '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/audio.headers; then
+                echo "VERIFIED_CORS_AUDIO $ID $AUDIO_URL"
+                verified=1
+                break
+              fi
+            fi
+          done < /tmp/exact-ids
+          test "$verified" -eq 1
