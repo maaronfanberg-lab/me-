@@ -38,17 +38,17 @@ audio{width:100%;margin-top:10px}.ctrl{margin:15px 0}.ctrl label{display:flex;ju
 
 <div class="card">
   <div class="ctrl">
-    <label><span>SPACE</span><b id="spaceRead">72%</b></label>
+    <label for="space"><span>SPACE</span><b id="spaceRead">72%</b></label>
     <input id="space" type="range" min="0" max="100" step="1" value="72">
   </div>
   <div class="ctrl">
-    <label><span>VIRTUAL SPEAKER ANGLE</span><b id="angleRead">57°</b></label>
+    <label for="angle"><span>VIRTUAL SPEAKER ANGLE</span><b id="angleRead">57°</b></label>
     <input id="angle" type="range" min="20" max="70" step="1" value="57">
   </div>
   <div class="row">
-    <button class="preset" data-space="48" data-angle="38">NEAR</button>
-    <button class="preset" data-space="72" data-angle="57">WIDE</button>
-    <button class="preset" data-space="92" data-angle="68">OUTSIDE</button>
+    <button class="preset" type="button" data-space="48" data-angle="38">NEAR</button>
+    <button class="preset" type="button" data-space="72" data-angle="57">WIDE</button>
+    <button class="preset" type="button" data-space="92" data-angle="68">OUTSIDE</button>
   </div>
 </div>
 
@@ -59,7 +59,7 @@ audio{width:100%;margin-top:10px}.ctrl{margin:15px 0}.ctrl label{display:flex;ju
     <div class="metric"><span>Head-shadow LPF</span><b id="cutoff">—</b></div>
     <div class="metric"><span>Far-ear path</span><b id="far">0%</b></div>
   </div>
-  <div id="status" class="status">Nothing is processed until you choose a file and tap Spatial.</div>
+  <div id="status" class="status" aria-live="polite">Nothing is processed until you choose a file and tap Spatial.</div>
 </div>
 
 <div class="card legal">
@@ -86,7 +86,6 @@ var directL=null,directR=null,crossL=null,crossR=null,delayL=null,delayR=null,fi
 var enabled=false,objectURL=null;
 
 function text(id,value){document.getElementById(id).textContent=value;}
-function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 function calc(){
   var wet=+space.value/100;
   var deg=+angle.value;
