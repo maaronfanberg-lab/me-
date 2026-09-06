@@ -1,0 +1,14 @@
+{
+  "nonce": "spatial-soundcloud-20260905-002",
+  "prompt": "Give a concise engineering review of this proposed native iPhone SoundCloud spatial-audio player. Do not modify files. You do not need to inspect the repository unless essential. Architecture goal: SoundCloud OAuth/library/stream URL -> decode network audio -> custom real-time DSP -> headphones, with SwiftUI UI. We need genuine binaural/spatial rendering, not simple stereo panning. The main uncertainty is the correct iOS path for getting SoundCloud AAC HLS/network streams into a DSP graph that we control. Identify the safest architecture and the smallest proof that works.",
+  "context": [
+    "SoundCloud currently documents OAuth 2.1 with PKCE and custom-player streaming; its streams endpoint includes AAC HLS transcodings.",
+    "Apple AVAudioEngine is intended for advanced processing/positional audio, but AVAudioPlayerNode is buffer/file oriented and AVAudioEnvironmentNode spatializes mono sources rather than arbitrary stereo mixes.",
+    "Target: ordinary headphones on iPhone first, later optional head tracking.",
+    "Desired DSP roadmap: controlled stereo decomposition, binaural/HRTF rendering, early reflections, room convolution, distance/depth cues, and spatial motion only when intentionally chosen.",
+    "Security: keep SoundCloud OAuth tokens safe and avoid putting a client secret in a distributed iOS binary if the current SoundCloud flow requires one."
+  ],
+  "expected_response": "In under 1200 words, return seven labeled sections: Architecture; Biggest Trap; Smallest PoC; Apple APIs/DSP Path; SoundCloud Cautions; Staged Build; Proof Tests. Be concrete and decisive.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 10
+}
