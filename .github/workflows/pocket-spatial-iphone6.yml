@@ -78,10 +78,10 @@ jobs:
           set -euo pipefail
           grep -q "load('pocket-spatial-openverse.js'" apps/pocket-spatial-core.js
           grep -q "API='https://api.openverse.org/v1/audio/'" apps/pocket-spatial-openverse.js
+          grep -q "DEFAULT_QUERY='music'" apps/pocket-spatial-openverse.js
           grep -q "license=by" apps/pocket-spatial-openverse.js
           grep -q "extension=mp3" apps/pocket-spatial-openverse.js
-          grep -q "category=music" apps/pocket-spatial-openverse.js
-          grep -q "source=freesound" apps/pocket-spatial-openverse.js
+          grep -q "page_size=30" apps/pocket-spatial-openverse.js
           grep -q "new XMLHttpRequest()" apps/pocket-spatial-openverse.js
           grep -q "licenseAllowsSpatial" apps/pocket-spatial-openverse.js
           grep -q "createMediaElementSource(tappedMedia)" apps/pocket-spatial-openverse.js
@@ -89,13 +89,17 @@ jobs:
           grep -q "web_audio_pcm_flatline" apps/pocket-spatial-openverse.js
           grep -q "No login or API key required" apps/pocket-spatial-openverse.js
           grep -q "Open original source" apps/pocket-spatial-openverse.js
+          if grep -q 'audiodownload' apps/pocket-spatial-openverse.js; then
+            echo 'Openverse path must stream only; download behavior was added.'
+            exit 1
+          fi
           echo 'Openverse no-account stream contract passed.'
 
       - name: Smoke-test live Openverse API and CORS audio
         shell: bash
         run: |
           set -euo pipefail
-          API_URL='https://api.openverse.org/v1/audio/?q=electronic%20music&license=by&extension=mp3&category=music&source=freesound&page_size=10'
+          API_URL='https://api.openverse.org/v1/audio/?q=music&license=by&extension=mp3&page_size=30'
           curl -fsS --max-time 20 \
             -H 'Origin: https://maaronfanberg-lab.github.io' \
             -D /tmp/openverse-api.headers \
@@ -107,23 +111,27 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('/tmp/openverse.json').read_text())
           results=data.get('results') or []
-          assert results, 'Openverse returned no results'
+          assert results, 'Openverse returned no results for broad CC BY MP3 music query'
           urls=[]
+          providers={}
           for track in results:
-              assert (track.get('license') or '').lower() == 'by', track.get('license')
+              if (track.get('license') or '').lower() != 'by':
+                  continue
+              provider=track.get('provider') or track.get('source') or 'unknown'
+              providers[provider]=providers.get(provider,0)+1
               if (track.get('filetype') or '').lower() == 'mp3' and track.get('url'):
-                  urls.append(track['url'])
+                  urls.append((track['url'], provider))
                   continue
               for alt in track.get('alt_files') or []:
                   if (alt.get('filetype') or '').lower() == 'mp3' and alt.get('url'):
-                      urls.append(alt['url'])
+                      urls.append((alt['url'], provider))
                       break
-          assert urls, 'No MP3 URLs found in Openverse results'
-          Path('/tmp/openverse-audio-urls').write_text('\n'.join(urls[:10]))
-          print('Openverse returned', len(results), 'CC BY results and', len(urls), 'MP3 URLs')
+          assert urls, 'No MP3 URLs found in Openverse CC BY results'
+          Path('/tmp/openverse-audio-urls').write_text('\n'.join(u+'\t'+p for u,p in urls[:20]))
+          print('Openverse returned', len(results), 'results; providers:', providers, 'MP3 URLs:', len(urls))
           PY
           found=0
-          while IFS= read -r AUDIO_URL; do
+          while IFS=$'\t' read -r AUDIO_URL PROVIDER; do
             [ -n "$AUDIO_URL" ] || continue
             FINAL_URL="$(curl -fsSL --max-time 15 -r 0-0 -o /dev/null -w '%{url_effective}' "$AUDIO_URL" || true)"
             [ -n "$FINAL_URL" ] || continue
@@ -136,7 +144,7 @@ jobs:
               "$FINAL_URL"; then
               if [ -s /tmp/openverse.sample ] && grep -i -E -q '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/openverse-audio.headers; then
                 found=1
-                echo "Found a live CORS-enabled Openverse MP3 stream: $FINAL_URL"
+                echo "Found live CORS-enabled Openverse MP3 from provider $PROVIDER: $FINAL_URL"
                 break
               fi
             fi
@@ -158,7 +166,6 @@ jobs:
           grep -q "load('pocket-spatial-soundcloud-config.js'" apps/pocket-spatial-core.js
           grep -q "load('pocket-spatial-soundcloud.js'" apps/pocket-spatial-core.js
           grep -q "SESSION_KEY='pocketSpatial.soundcloud.session.v1'" apps/pocket-spatial-soundcloud.js
-          grep -q "Authorization='Bearer '" /dev/null 2>/dev/null || true
           grep -q "headers.Authorization='Bearer '+state.session" apps/pocket-spatial-soundcloud.js
           grep -q "'/me/tracks?limit=50&linked_partitioning=true'" cloudflare/pocket-spatial-soundcloud/src/index.js
           grep -q "spatial_eligibility_reason: 'own_upload'" cloudflare/pocket-spatial-soundcloud/src/index.js
@@ -204,18 +211,11 @@ jobs:
           python3 - <<'PY'
           from html.parser import HTMLParser
           from pathlib import Path
-
           html=Path('apps/pocket-spatial.html').read_text()
           assert html.lstrip().lower().startswith('<!doctype html>')
-
           class P(HTMLParser):
               def __init__(self):
-                  HTMLParser.__init__(self)
-                  self.ids=[]
-                  self.labels=[]
-                  self.buttons=[]
-                  self.has_audio=False
-                  self.lang=None
+                  HTMLParser.__init__(self);self.ids=[];self.labels=[];self.buttons=[];self.has_audio=False;self.lang=None
               def handle_starttag(self, tag, attrs):
                   a=dict(attrs)
                   if tag=='html': self.lang=a.get('lang')
@@ -223,11 +223,8 @@ jobs:
                   if tag=='label' and 'for' in a: self.labels.append(a['for'])
                   if tag=='button': self.buttons.append(a)
                   if tag=='audio': self.has_audio=True
-
-          p=P(); p.feed(html)
-          assert p.lang=='en'
-          assert p.has_audio
-          assert len(p.ids)==len(set(p.ids)), 'duplicate id detected'
+          p=P();p.feed(html)
+          assert p.lang=='en';assert p.has_audio;assert len(p.ids)==len(set(p.ids)), 'duplicate id detected'
           for required in ('file','space','angle','depth','spatial','audio','delay','cutoff','far','direct','reflTimes','reflGain','reflCutoff','master'):
               assert required in p.ids, f'missing required id {required}'
           for labelled in ('file','space','angle','depth'):
