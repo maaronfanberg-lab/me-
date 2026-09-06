@@ -103,7 +103,7 @@
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
-  var build='20260906-buffer-probe-2';
+  var build='20260906-commons-buffered-2';
   function versioned(src){return src+'?v='+build;}
   function load(src,next){
     var script=document.createElement('script');
@@ -112,11 +112,9 @@
     if(next)script.onload=next;
     document.head.appendChild(script);
   }
-  load('pocket-spatial-commons.js',function(){
-    load('pocket-spatial-buffer-probe.js',function(){
-      load('pocket-spatial-soundcloud-config.js',function(){
-        load('pocket-spatial-soundcloud.js');
-      });
+  load('pocket-spatial-commons-buffered.js',function(){
+    load('pocket-spatial-buffered-catalog.js',function(){
+      load('pocket-spatial-buffer-probe.js');
     });
   });
 }());
