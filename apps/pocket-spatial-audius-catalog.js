@@ -41,7 +41,7 @@ function licenseAllowsSpatial(track){
   var value=licenseValue(track).toLowerCase();
   if(!value)return true;
   if(value.indexOf('no derivatives')!==-1||value.indexOf('noderivatives')!==-1)return false;
-  if(value.indexOf('by-nd')!==-1||value.indexOf('by_nd')!==-1||value.indexOf('cc by nd')!==-1)return false;
+  if(value.indexOf('-nd')!==-1||value.indexOf('_nd')!==-1||/(^|[^a-z])nd([^a-z]|$)/.test(value))return false;
   if(value.indexOf('all rights reserved')!==-1)return false;
   return true;
 }
