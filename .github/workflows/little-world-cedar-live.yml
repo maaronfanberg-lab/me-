@@ -1,0 +1,235 @@
+name: Cedar Hollow live town
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/little-world-lab/runtime/live-town-request.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cedar-hollow-live
+  cancel-in-progress: true
+
+jobs:
+  live-town:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout Cedar source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Test Little World live snapshot code
+        working-directory: experiments/little-world-lab
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Read live-session request
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/cedar-live.env
+          import json
+          import re
+          from pathlib import Path
+
+          path = Path('experiments/little-world-lab/runtime/live-town-request.json')
+          request = json.loads(path.read_text(encoding='utf-8'))
+
+          def integer(name, default, low, high):
+              try:
+                  value = int(request.get(name, default))
+              except (TypeError, ValueError):
+                  value = default
+              return max(low, min(high, value))
+
+          def number(name, default, low, high):
+              try:
+                  value = float(request.get(name, default))
+              except (TypeError, ValueError):
+                  value = default
+              return max(low, min(high, value))
+
+          session = str(request.get('session_id') or 'cedar-live').strip()
+          session = re.sub(r'[^A-Za-z0-9._-]+', '-', session)[:80] or 'cedar-live'
+
+          print(f'CEDAR_SESSION_ID={session}')
+          print(f'CEDAR_TICKS={integer("ticks", 60, 1, 120)}')
+          print(f'CEDAR_SEED={integer("seed", 7, -2147483648, 2147483647)}')
+          print(f'CEDAR_ACTORS_PER_TICK={integer("actors_per_tick", 2, 1, 8)}')
+          print(f'CEDAR_STEP_DELAY={integer("step_delay_seconds", 4, 2, 30)}')
+          print(f'CEDAR_TEMPERATURE={number("temperature", 0.1, 0.0, 2.0)}')
+          print(f'CEDAR_MAX_TOKENS={integer("max_tokens", 256, 32, 256)}')
+          PY
+          cat /tmp/cedar-live.env
+          cat /tmp/cedar-live.env >> "$GITHUB_ENV"
+
+      - name: Prepare isolated live-state branch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin cedar-live-state
+          rm -rf /tmp/cedar-live-state
+          git worktree add -B cedar-live-state /tmp/cedar-live-state origin/cedar-live-state
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+          state = {
+              'version': 1,
+              'status': 'starting',
+              'updated_at': now,
+              'session_id': os.environ['CEDAR_SESSION_ID'],
+              'started_at': now,
+              'tick': 0,
+              'seed': int(os.environ['CEDAR_SEED']),
+              'actors_per_tick': int(os.environ['CEDAR_ACTORS_PER_TICK']),
+              'temperature': float(os.environ['CEDAR_TEMPERATURE']),
+              'model': 'Falcon3-1B-Instruct-GGUF:Q4_K_M',
+              'world_name': 'Cedar Hollow',
+              'note': 'GitHub runner is starting the isolated Falcon model.',
+          }
+          Path('/tmp/cedar-live-state/cedar-state.json').write_text(
+              json.dumps(state, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+          git -C /tmp/cedar-live-state add cedar-state.json
+          git -C /tmp/cedar-live-state commit -m "Cedar live session starting [skip ci]"
+          git -C /tmp/cedar-live-state push origin cedar-live-state
+
+      - name: Start isolated Falcon llama.cpp server
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/ggml-org/llama.cpp:server
+          docker run -d --name cedar-live-falcon \
+            -p 8080:8080 \
+            ghcr.io/ggml-org/llama.cpp:server \
+            -hf bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M \
+            --host 0.0.0.0 \
+            --port 8080 \
+            -c 2048 \
+            -np 1
+
+      - name: Wait for Falcon readiness
+        run: |
+          set -euo pipefail
+          ready=0
+          for i in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:8080/health >/tmp/cedar-live-health.json 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -qx 'cedar-live-falcon'; then
+              echo 'Falcon container exited before becoming healthy.'
+              docker logs cedar-live-falcon || true
+              exit 1
+            fi
+            sleep 5
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'Falcon server did not become healthy in time.'
+            docker logs cedar-live-falcon || true
+            exit 1
+          fi
+
+          curl -fsS http://127.0.0.1:8080/v1/models > /tmp/cedar-live-models.json
+          python - <<'PY' > /tmp/cedar-live-model-id.txt
+          import json
+          data = json.load(open('/tmp/cedar-live-models.json', encoding='utf-8'))
+          rows = data.get('data') or []
+          if not rows or not rows[0].get('id'):
+              raise SystemExit('llama.cpp returned no model id')
+          print(rows[0]['id'])
+          PY
+          echo "Cedar live model: $(cat /tmp/cedar-live-model-id.txt)"
+
+      - name: Run and publish Cedar ticks
+        working-directory: experiments/little-world-lab
+        run: |
+          set -euo pipefail
+          RUN_DIR="runs/cedar-live-${CEDAR_SESSION_ID}"
+          rm -rf "$RUN_DIR"
+          MODEL_ID="$(cat /tmp/cedar-live-model-id.txt)"
+
+          for INDEX in $(seq 1 "$CEDAR_TICKS"); do
+            python cedar_live_session.py \
+              --output "$RUN_DIR" \
+              --ticks 1 \
+              --seed "$CEDAR_SEED" \
+              --actors-per-tick "$CEDAR_ACTORS_PER_TICK" \
+              --checkpoint-every 1 \
+              --temperature "$CEDAR_TEMPERATURE" \
+              --max-tokens "$CEDAR_MAX_TOKENS" \
+              --timeout 300 \
+              --model "$MODEL_ID" \
+              --status live \
+              --session-id "$CEDAR_SESSION_ID"
+
+            cp "$RUN_DIR/live-state.json" /tmp/cedar-live-state/cedar-state.json
+            git -C /tmp/cedar-live-state add cedar-state.json
+            git -C /tmp/cedar-live-state commit -m "Cedar live tick ${INDEX} [skip ci]"
+            git -C /tmp/cedar-live-state push origin cedar-live-state
+
+            if [ "$INDEX" -lt "$CEDAR_TICKS" ]; then
+              sleep "$CEDAR_STEP_DELAY"
+            fi
+          done
+
+      - name: Mark live session finished
+        if: always()
+        env:
+          CEDAR_JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ ! -d /tmp/cedar-live-state ]; then
+            exit 0
+          fi
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          path = Path('/tmp/cedar-live-state/cedar-state.json')
+          try:
+              state = json.loads(path.read_text(encoding='utf-8'))
+          except Exception:
+              state = {'version': 1, 'session_id': os.environ.get('CEDAR_SESSION_ID')}
+          state['status'] = 'complete' if os.environ.get('CEDAR_JOB_STATUS') == 'success' else 'error'
+          state['updated_at'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+          if state['status'] == 'error':
+              state['note'] = 'The live runner stopped unexpectedly. The last published town state is preserved.'
+          else:
+              state['note'] = 'The requested live session finished. The last town state is preserved.'
+          path.write_text(json.dumps(state, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+          git -C /tmp/cedar-live-state add cedar-state.json
+          if ! git -C /tmp/cedar-live-state diff --cached --quiet; then
+            git -C /tmp/cedar-live-state commit -m "Cedar live session finished [skip ci]"
+            git -C /tmp/cedar-live-state push origin cedar-live-state
+          fi
+
+      - name: Capture Falcon logs
+        if: always()
+        run: docker logs cedar-live-falcon > /tmp/cedar-live-falcon.log 2>&1 || true
+
+      - name: Stop Falcon
+        if: always()
+        run: docker rm -f cedar-live-falcon >/dev/null 2>&1 || true

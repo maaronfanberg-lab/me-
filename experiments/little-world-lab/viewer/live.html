@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#122017" />
+  <title>Cedar Hollow Live</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#0d1510; --panel:#142019; --panel2:#19281f; --line:#34503d;
+      --text:#edf4eb; --muted:#a7baa9; --accent:#d7c98f; --good:#7dd79c;
+      --warn:#efc36d; --bad:#f08a82; --shadow:0 18px 50px rgba(0,0,0,.28);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 50% 0,#1b2b20 0,#0d1510 45%);color:var(--text);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    a{color:var(--accent)}
+    button{font:inherit}
+    .shell{width:min(1240px,100%);margin:auto;padding:18px}
+    .hero{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:18px 0 16px}
+    .eyebrow{margin:0 0 6px;color:var(--accent);text-transform:uppercase;letter-spacing:.16em;font-size:11px;font-weight:800}
+    h1,h2,h3,p{margin-top:0} h1{font-size:clamp(34px,7vw,62px);line-height:.95;margin-bottom:9px;letter-spacing:-.045em}
+    .lede{max-width:690px;color:var(--muted);margin-bottom:0}
+    .live-box{min-width:260px;padding:14px 16px;background:rgba(20,32,25,.88);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+    .status-row{display:flex;align-items:center;gap:9px;font-weight:800}.dot{width:10px;height:10px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 0 rgba(125,215,156,.5)}
+    .status-live .dot{background:var(--good);animation:pulse 1.8s infinite}.status-starting .dot{background:var(--warn)}.status-error .dot{background:var(--bad)}
+    @keyframes pulse{70%{box-shadow:0 0 0 9px rgba(125,215,156,0)}}
+    .meta{color:var(--muted);font-size:12px;margin-top:5px}
+    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+    .stat,.card{background:rgba(20,32,25,.92);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+    .stat{padding:12px 14px}.stat b{display:block;font-size:22px}.stat span{color:var(--muted);font-size:12px}
+    .workspace{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(320px,.8fr);gap:12px}
+    .card{padding:16px}.card h2{font-size:19px;margin-bottom:12px}
+    .town-map{position:relative;min-height:600px;border-radius:16px;overflow:hidden;background:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px),#101b14;background-size:28px 28px}
+    .edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.edges line{stroke:#3d5c45;stroke-width:3;stroke-linecap:round;opacity:.75}
+    .location-layer{position:absolute;inset:0}.location{position:absolute;transform:translate(-50%,-50%);width:min(180px,26vw);padding:10px;border:1px solid #3b5943;border-radius:14px;background:rgba(24,40,30,.95);text-align:center}
+    .location h3{font-size:14px;margin-bottom:3px}.resources{color:var(--muted);font-size:11px;min-height:17px}
+    .agents{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:8px}
+    .agent-dot{border:1px solid rgba(255,255,255,.25);border-radius:999px;color:white;padding:5px 8px;font-size:11px;cursor:pointer}
+    .side{display:grid;gap:12px;align-content:start}.decision,.event,.agent-detail{padding:10px 11px;border-radius:12px;background:var(--panel2);border:1px solid #294032}
+    .decision+.decision,.event+.event{margin-top:8px}.decision-top,.event-top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+    .chip{font-size:11px;padding:3px 7px;border-radius:999px;background:#293f30;color:#dbe9dc}.chip.bad{background:#4a2928;color:#ffd4d0}
+    .small{font-size:12px;color:var(--muted)}.feasible{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}.feasible span{font-size:10px;border:1px solid #385441;border-radius:999px;padding:2px 6px;color:#bcd0bd}
+    .agents-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}.agent-card{padding:9px;border-radius:12px;border:1px solid #324d3a;background:#16231a;color:var(--text);text-align:left;cursor:pointer}.agent-card.active{outline:2px solid var(--accent)}
+    .agent-card b,.agent-card span{display:block}.agent-card span{font-size:11px;color:var(--muted)}
+    .empty{color:var(--muted);padding:16px 4px}.incident{border-color:#755f31;background:#2e2818}.footer{padding:16px 2px 4px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    @media(max-width:850px){.hero{align-items:flex-start;flex-direction:column}.live-box{width:100%}.stats{grid-template-columns:repeat(2,1fr)}.workspace{grid-template-columns:1fr}.town-map{min-height:520px}.agents-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:500px){.shell{padding:12px}.town-map{min-height:500px}.location{width:132px;padding:8px}.location h3{font-size:12px}.agent-dot{font-size:10px;padding:4px 6px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Little World Lab · live read-only view</p>
+        <h1>Cedar Hollow Live</h1>
+        <p class="lede">This page follows the actual running Cedar state. It refreshes automatically and cannot steer Falcon or mutate WorldEngine.</p>
+      </div>
+      <div id="liveBox" class="live-box">
+        <div class="status-row"><span class="dot"></span><span id="statusText">Connecting…</span></div>
+        <div id="freshness" class="meta">Waiting for the live feed.</div>
+      </div>
+    </header>
+
+    <section class="stats">
+      <div class="stat"><b id="tickValue">–</b><span>current tick</span></div>
+      <div class="stat"><b id="agentValue">–</b><span>residents</span></div>
+      <div class="stat"><b id="modelValue">–</b><span>model</span></div>
+      <div class="stat"><b id="tempValue">–</b><span>temperature</span></div>
+    </section>
+
+    <section class="workspace">
+      <section class="card">
+        <h2>Town right now</h2>
+        <div id="townMap" class="town-map">
+          <svg id="edgeLayer" class="edges" viewBox="0 0 1000 680" preserveAspectRatio="none"></svg>
+          <div id="locationLayer" class="location-layer"></div>
+        </div>
+        <div id="agentGrid" class="agents-grid"></div>
+      </section>
+
+      <aside class="side">
+        <section class="card"><h2>Latest decisions</h2><div id="decisions" class="empty">Waiting for Cedar.</div></section>
+        <section class="card"><h2>Selected resident</h2><div id="agentDetail" class="empty">Tap a resident on the map.</div></section>
+        <section class="card"><h2>Recent town events</h2><div id="events" class="empty">No events yet.</div></section>
+      </aside>
+    </section>
+
+    <footer class="footer">
+      <span id="sessionLine">Live state source: cedar-live-state branch.</span>
+      <a href="./">Open recorded replays</a>
+    </footer>
+  </main>
+  <script src="live.js"></script>
+</body>
+</html>
