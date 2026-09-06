@@ -1,16 +1,20 @@
 import AVFoundation
+import CoreMedia
 import MediaToolbox
 
 @available(iOS 27.0, *)
 final class HLSMixTap {
     enum TapError: LocalizedError {
+        case preferredFormatFailed(OSStatus)
         case creationFailed(OSStatus)
         case noTap
 
         var errorDescription: String? {
             switch self {
+            case .preferredFormatFailed(let status):
+                return "Could not create the preferred PCM format (OSStatus \(status))."
             case .creationFailed(let status):
-                return "MTAudioProcessingTapCreate failed with OSStatus \(status)."
+                return "MTAudioProcessingTap creation failed with OSStatus \(status)."
             case .noTap:
                 return "The audio processing tap was not created."
             }
@@ -34,6 +38,35 @@ final class HLSMixTap {
         let context = TapContext(onPrepared: onPrepared)
         self.context = context
         self.tap = nil
+
+        // iOS 27's whole-mix tap should be created with a preferred format. Ask for
+        // planar stereo Float32 PCM so the realtime processor has a predictable target.
+        // Apple still requires prepare() to inspect the actual returned LPCM details.
+        var preferredASBD = AudioStreamBasicDescription(
+            mSampleRate: 48_000,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagsNativeFloatPacked | kAudioFormatFlagIsNonInterleaved,
+            mBytesPerPacket: 4,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 4,
+            mChannelsPerFrame: 2,
+            mBitsPerChannel: 32,
+            mReserved: 0
+        )
+        var preferredDescription: CMAudioFormatDescription?
+        let preferredStatus = CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &preferredASBD,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &preferredDescription
+        )
+        guard preferredStatus == noErr else {
+            throw TapError.preferredFormatFailed(preferredStatus)
+        }
 
         // The tap owns one retain on this context. finalize releases it.
         let contextPointer = Unmanaged.passRetained(context).toOpaque()
@@ -89,10 +122,11 @@ final class HLSMixTap {
         )
 
         var createdTap: MTAudioProcessingTap?
-        let status = MTAudioProcessingTapCreate(
+        let status = MTAudioProcessingTapCreateWithPreferredFormat(
             kCFAllocatorDefault,
             &callbacks,
             kMTAudioProcessingTapCreationFlag_PostEffects,
+            preferredDescription,
             &createdTap
         )
 
