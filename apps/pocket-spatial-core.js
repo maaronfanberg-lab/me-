@@ -31,14 +31,14 @@
     var depth=clamp(Number(depthPercent)||0,0,100)/100;
     return{
       depth:depth,
-      refl1DelayL:0.011,
-      refl1DelayR:0.013,
-      refl2DelayL:0.021,
-      refl2DelayR:0.024,
-      refl1Gain:0.14*depth,
-      refl2Gain:0.07*depth,
-      reflCutoff:2600,
-      reflQ:0.5
+      refl1DelayL:0.017,
+      refl1DelayR:0.019,
+      refl2DelayL:0.031,
+      refl2DelayR:0.034,
+      refl1Gain:0.18*depth,
+      refl2Gain:0.10*depth,
+      reflCutoff:3300,
+      reflQ:0.65
     };
   }
 
@@ -85,7 +85,7 @@
       cutoffText:Math.round(t.cutoffHz)+' Hz',
       farText:Math.round(t.farGain*100)+'%',
       directText:Math.round(t.directGain*100)+'%',
-      reflectionTimesText:'11/13 · 21/24 ms',
+      reflectionTimesText:'17/19 · 31/34 ms',
       reflectionGainText:(t.refl1Gain*100).toFixed(1)+'% / '+(t.refl2Gain*100).toFixed(1)+'%',
       reflectionCutoffText:Math.round(t.reflCutoff)+' Hz',
       masterText:Math.round(t.masterGain*100)+'%'
@@ -103,7 +103,7 @@
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
-  var build='20260906-audius-buffered-3';
+  var build='20260906-tactile-theater-1';
   function versioned(src){return src+'?v='+build;}
   function load(src,next){
     var script=document.createElement('script');
