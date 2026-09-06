@@ -8,6 +8,7 @@ on:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-jamendo.js'
       - 'apps/pocket-spatial-soundcloud.js'
       - 'apps/pocket-spatial-soundcloud-config.js'
       - 'cloudflare/pocket-spatial-soundcloud/**'
@@ -18,6 +19,7 @@ on:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-jamendo.js'
       - 'apps/pocket-spatial-soundcloud.js'
       - 'apps/pocket-spatial-soundcloud-config.js'
       - 'cloudflare/pocket-spatial-soundcloud/**'
@@ -56,6 +58,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check apps/pocket-spatial-core.js
+          node --check apps/pocket-spatial-jamendo.js
           node --check apps/pocket-spatial-soundcloud-config.js
           node --check apps/pocket-spatial-soundcloud.js
           node --check cloudflare/pocket-spatial-soundcloud/src/index.js
@@ -64,9 +67,34 @@ jobs:
       - name: Enforce ES5 syntax for old Safari page code
         run: |
           npx --yes es-check@7 es5 apps/pocket-spatial-core.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-jamendo.js
           npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud-config.js
           npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud.js
           npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+
+      - name: Verify Jamendo test-stream contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "load('pocket-spatial-jamendo.js'" apps/pocket-spatial-core.js
+          grep -q "TEST_CLIENT_ID='709fa152'" apps/pocket-spatial-jamendo.js
+          grep -q "audioformat=mp32" apps/pocket-spatial-jamendo.js
+          grep -q "include=licenses" apps/pocket-spatial-jamendo.js
+          grep -q "ccnd=false" apps/pocket-spatial-jamendo.js
+          grep -q "order=popularity_total" apps/pocket-spatial-jamendo.js
+          grep -q "groupby=artist_id" apps/pocket-spatial-jamendo.js
+          grep -q "callback=" apps/pocket-spatial-jamendo.js
+          grep -q "licenseAllowsSpatial" apps/pocket-spatial-jamendo.js
+          grep -q "url.indexOf('-nd/')" apps/pocket-spatial-jamendo.js
+          grep -q "createMediaElementSource(tappedMedia)" apps/pocket-spatial-jamendo.js
+          grep -q "getByteTimeDomainData" apps/pocket-spatial-jamendo.js
+          grep -q "web_audio_pcm_flatline" apps/pocket-spatial-jamendo.js
+          grep -q "Development test only" apps/pocket-spatial-jamendo.js
+          if grep -q 'audiodownload' apps/pocket-spatial-jamendo.js; then
+            echo 'Jamendo test path must stream only; download behavior was added.'
+            exit 1
+          fi
+          echo 'Jamendo test-stream contract passed.'
 
       - name: Verify SoundCloud Worker bundles
         run: |
@@ -118,7 +146,7 @@ jobs:
           grep -q 'reflGainR2.connect(merger,0,1)' apps/pocket-spatial.html
           grep -q 'setParam(reflGainL1.gain,t.refl1Gain)' apps/pocket-spatial.html
           grep -q 'setParam(reflGainL2.gain,t.refl2Gain)' apps/pocket-spatial.html
-          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js; then
+          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js apps/pocket-spatial-jamendo.js; then
             echo 'Heavy/custom DSP primitive leaked into the iPhone 6 layer.'
             exit 1
           fi
