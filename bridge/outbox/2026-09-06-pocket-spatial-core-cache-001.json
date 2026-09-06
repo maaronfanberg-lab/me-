@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-06-pocket-spatial-core-cache-001.json",
+  "request_sha256": "72c108223fbab45b55e9dfe85665975cc2d7b650f84671502ce05bb73c24d43f",
+  "request_nonce": "72c108223fbab45b55e9dfe8",
+  "completed_at": "2026-09-06T21:48:14.182262Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Diagnosis\n\nRoot cause confirmed by code: `pocket-spatial-core.js` dynamically appends `?v=20260906-audius-buffered-2` to the *child* scripts it loads (`commons-buffered.js`, `buffered-catalog.js`, `audius-catalog.js`, `buffer-probe.js`), but `pocket-spatial.html` loads **core.js itself** with a bare `<script src=\"pocket-spatial-core.js\"></script>` — no query string.\n\nThe `build` version string that gets appended to the children's URLs is *defined inside core.js*. So if iOS 12 Safari (or the WKWebView instance backing a home-screen icon) is holding a stale cached copy of `pocket-spatial-core.js` for that exact unversioned URL, the browser will keep executing the **old** `build` value forever — which means it keeps requesting the children at the **same old `?v=...` URL**, which is itself already cached. The child script (with the stale \"trending + CC fallback\" placeholder) never gets re-fetched, even though main is fixed and the deploy succeeded. Core.js is the single point of staleness for the whole chain.\n\n## Is versioning the core `<script>` tag sufficient?\n\n**Necessary, but not sufficient by itself.** It breaks the specific chain you found (stale core → stale build id → stale children), but two more failure modes remain on iOS 12 Safari:\n\n1. **The HTML document itself can be cached.** If `pocket-spatial.html` is served without `Cache-Control: no-cache`/`must-revalidate` (or short `max-age`), Safari may reuse a cached copy of the page — meaning the browser never even parses your new versioned `<script>` tag. Versioning the JS is moot if the HTML never updates. This is the single most likely \"still stale after deploy\" culprit on iOS 12/WKWebView, which is aggressive about serving cached HTML on relaunch without a real network revalidation.\n2. **iOS/WKWebView doesn't re-fetch on background→foreground.** A tab/home-screen app that was already loaded and is simply resumed from the app switcher won't hit the network at all; only a real reload (pull-to-refresh, cold relaunch, or explicit navigation) does. Testers can easily \"confirm the fix\" without ever exercising the fetch path.\n\n## Minimal safe fix\n\n- Add explicit cache-busting to the core tag too: `<script src=\"pocket-spatial-core.js?v=BUILD_ID\"></script>`, using the **same `BUILD_ID`** that core.js uses for its children (ideally generated once at build/deploy time and injected into both places, not hand-maintained in two spots — that duplication is exactly how this bug happened).\n- Set `Cache-Control: no-cache, must-revalidate` (or a short `max-age` with revalidation) on `pocket-spatial.html` and on all `.js` assets at the host/CDN level, not just via query-string busting. Query strings only help if the *document* fetch itself isn't stale.\n\n## Tests to add\n\n- **Static check:** assert every `<script src=...>` in `pocket-spatial.html` (including core) carries a `?v=` matching the current build id — fail CI if any tag is missing it (this exact bug should be unrepresentable).\n- **Consistency check:** assert the version literal in `pocket-spatial-core.js`'s `build` var matches the version query on the core `<script>` tag in the HTML, so they can't drift independently again.\n- **Header check:** a smoke test hitting the deployed HTML/JS URLs asserting `Cache-Control` disallows long-lived caching.\n- **Manual/E2E on iOS 12 Safari:** verify the fix only after a *hard reload / force-quit relaunch* (not app-switcher resume), since that's the realistic staleness path this bug exposed.",
+  "session_id": "e8620dc6-d635-401a-be4c-3f42d6a2acd3",
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 15524,
+    "cache_read_input_tokens": 15496,
+    "output_tokens": 4348,
+    "output_tokens_details": {
+      "thinking_tokens": 2606
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 15524,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3866,
+        "cache_read_input_tokens": 4535,
+        "cache_creation_input_tokens": 14172,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 14172
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.1098272,
+  "num_turns": 8
+}
