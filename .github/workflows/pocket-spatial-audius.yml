@@ -1,0 +1,108 @@
+name: Pocket Spatial Audius CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/pocket-spatial-*'
+    paths:
+      - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-audius-catalog.js'
+      - 'tests/pocket-spatial-audius-catalog.test.js'
+      - '.github/workflows/pocket-spatial-audius.yml'
+  pull_request:
+    paths:
+      - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-audius-catalog.js'
+      - 'tests/pocket-spatial-audius-catalog.test.js'
+      - '.github/workflows/pocket-spatial-audius.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audius-source-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Audius catalog and rights filtering
+        run: node tests/pocket-spatial-audius-catalog.test.js
+
+      - name: Check old-Safari syntax
+        run: |
+          node --check apps/pocket-spatial-audius-catalog.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-audius-catalog.js
+
+      - name: Verify Audius active-path contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "load('pocket-spatial-audius-catalog.js'" apps/pocket-spatial-core.js
+          grep -q "https://api.audius.co/v1" apps/pocket-spatial-audius-catalog.js
+          grep -q "/tracks/.*stream" apps/pocket-spatial-audius-catalog.js
+          grep -q 'is_stream_gated' apps/pocket-spatial-audius-catalog.js
+          grep -q 'access.stream' apps/pocket-spatial-audius-catalog.js
+          grep -q 'by-nd' apps/pocket-spatial-audius-catalog.js
+          if grep -E -q 'access_token|client_secret|bearerToken|Authorization:[[:space:]]*Bearer' apps/pocket-spatial-audius-catalog.js; then
+            echo 'Browser Audius source must not embed credentials.'
+            exit 1
+          fi
+          if grep -E -q 'MediaRecorder|captureStream|indexedDB|localStorage|caches\.open' apps/pocket-spatial-audius-catalog.js; then
+            echo 'Audius source must not record or persist media.'
+            exit 1
+          fi
+          echo 'Audius browser-source contract passed.'
+
+      - name: Smoke-test live Audius API, MP3 and CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          API_URL='https://api.audius.co/v1/tracks/trending?time=week&limit=50&app_name=PocketSpatial'
+          ORIGIN='https://maaronfanberg-lab.github.io'
+          UA='PocketSpatial/0.3 (https://maaronfanberg-lab.github.io/me-/apps/pocket-spatial.html)'
+          curl -fsS --max-time 25 -A "$UA" -H "Origin: $ORIGIN" -D /tmp/audius-api.headers "$API_URL" -o /tmp/audius.json
+          test -s /tmp/audius.json
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/audius-api.headers
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from urllib.parse import quote
+          data=json.loads(Path('/tmp/audius.json').read_text())
+          tracks=data.get('data') or []
+          assert tracks, 'Audius trending returned no tracks'
+          def allowed(t):
+              if not t.get('id'): return False
+              if t.get('is_streamable') is False: return False
+              if t.get('is_stream_gated') is True: return False
+              access=t.get('access') or {}
+              if access.get('stream') is False: return False
+              license_text=str(t.get('license') or '').lower().replace('_','-')
+              if 'no derivatives' in license_text or 'noderivatives' in license_text or 'by-nd' in license_text or 'nc-nd' in license_text:
+                  return False
+              duration=float(t.get('duration') or 0)
+              if duration and duration > 180: return False
+              return True
+          candidates=[t for t in tracks if allowed(t)]
+          assert candidates, 'Audius returned no compatible <=180s non-gated candidate in this batch'
+          t=candidates[0]
+          tid=str(t['id'])
+          url='https://api.audius.co/v1/tracks/'+quote(tid,safe='')+'/stream?app_name=PocketSpatial'
+          Path('/tmp/audius-stream-url').write_text(url)
+          print('Testing Audius:',t.get('title'),'by',((t.get('user') or {}).get('name') or 'unknown'))
+          print('Track id:',tid,'license:',t.get('license') or 'Audius OML/API access','duration:',t.get('duration'))
+          PY
+          AUDIO_URL="$(cat /tmp/audius-stream-url)"
+          curl -fsSL --max-time 30 -A "$UA" \
+            -H "Origin: $ORIGIN" \
+            -H 'Range: bytes=0-65535' \
+            -D /tmp/audius-stream.headers \
+            -o /tmp/audius.sample \
+            "$AUDIO_URL"
+          test -s /tmp/audius.sample
+          test "$(wc -c < /tmp/audius.sample)" -gt 1024
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/audius-stream.headers
+          grep -i -E '^content-type:[[:space:]]*(audio/mpeg|audio/mp3|application/octet-stream)' /tmp/audius-stream.headers
+          echo 'Live Audius catalog, MP3 bytes and CORS check passed.'
