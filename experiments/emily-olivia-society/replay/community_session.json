@@ -1,7 +1,16 @@
 {
   "mode": "continuous_persistent_community_session",
-  "status": "running",
+  "status": "completed",
   "session_id": "1788692769-7bbe351f24",
+  "limits": {
+    "seed_messages": 1,
+    "requested_reply_turns": 8,
+    "maximum_reply_turns": 10,
+    "maximum_continuous_seconds": 19800,
+    "continuous_seconds": 17400,
+    "turn_delay_seconds": 0.0,
+    "autonomous_loop": true
+  },
   "resumed_social_state": false,
   "autonomous_opening": true,
   "discarded_pending_message_ids": [],
@@ -60,8 +69,70 @@
     "consumed_inbound": null
   },
   "completed_reply_turns": 36,
-  "continuous_seconds": 17400,
-  "turn_delay_seconds": 0.0,
+  "stop_reason": "continuous_window_complete",
+  "seed": {
+    "success": true,
+    "message": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hi, how are you doing? \ud83d\ude0a",
+      "created_at": "2026-09-06T11:06:29.507353+00:00"
+    }
+  },
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 38,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 37,
+          "from_id": 1,
+          "from_name": "Emily",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Oh, I remember that time quite well. Our discovery of the secret cave system was a huge adventure for us. It felt like we were on an exciting quest to uncover hidden secrets and explore what lay beneath our feet.",
+          "created_at": "2026-09-06T15:55:56.115177+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [],
+    "retrieved_memory_evidence": [],
+    "action": {
+      "type": "wait",
+      "reason": "speech_generation_deferred"
+    },
+    "action_result": null,
+    "consumed_inbound": false,
+    "external_inbound": null,
+    "external_action": null,
+    "external_action_result": null,
+    "external_ack": null,
+    "external_generation_error": "",
+    "generation_deferred": true,
+    "generation_attempts": 1,
+    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'short_subset_echo: Oh, I remember that time quite well.'"
+  },
   "messages": [
     {
       "id": 1,
@@ -396,56 +467,5 @@
       "content": "Oh, I remember that time quite well. Our discovery of the secret cave system was a huge adventure for us. It felt like we were on an exciting quest to uncover hidden secrets and explore what lay beneath our feet.",
       "created_at": "2026-09-06T15:55:56.115177+00:00"
     }
-  ],
-  "latest_turn": {
-    "agent": "Olivia",
-    "time_step": 38,
-    "observation": {
-      "self": {
-        "id": 2,
-        "name": "Olivia"
-      },
-      "participants": [
-        {
-          "id": 1,
-          "name": "Emily"
-        },
-        {
-          "id": 2,
-          "name": "Olivia"
-        },
-        {
-          "id": 3,
-          "name": "Alex"
-        }
-      ],
-      "inbox": [
-        {
-          "id": 37,
-          "from_id": 1,
-          "from_name": "Emily",
-          "to_id": 2,
-          "to_name": "Olivia",
-          "content": "Oh, I remember that time quite well. Our discovery of the secret cave system was a huge adventure for us. It felt like we were on an exciting quest to uncover hidden secrets and explore what lay beneath our feet.",
-          "created_at": "2026-09-06T15:55:56.115177+00:00"
-        }
-      ]
-    },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
-    "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
-    },
-    "action_result": null,
-    "consumed_inbound": false,
-    "external_inbound": null,
-    "external_action": null,
-    "external_action_result": null,
-    "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'short_subset_echo: Oh, I remember that time quite well.'"
-  }
+  ]
 }
