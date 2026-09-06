@@ -110,7 +110,9 @@
     if(next)script.onload=next;
     document.head.appendChild(script);
   }
-  load('pocket-spatial-soundcloud-config.js',function(){
-    load('pocket-spatial-soundcloud.js');
+  load('pocket-spatial-openverse.js',function(){
+    load('pocket-spatial-soundcloud-config.js',function(){
+      load('pocket-spatial-soundcloud.js');
+    });
   });
 }());
