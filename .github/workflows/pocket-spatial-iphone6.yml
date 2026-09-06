@@ -8,6 +8,7 @@ on:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-openverse.js'
       - 'apps/pocket-spatial-soundcloud.js'
       - 'apps/pocket-spatial-soundcloud-config.js'
       - 'cloudflare/pocket-spatial-soundcloud/**'
@@ -18,6 +19,7 @@ on:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-openverse.js'
       - 'apps/pocket-spatial-soundcloud.js'
       - 'apps/pocket-spatial-soundcloud-config.js'
       - 'cloudflare/pocket-spatial-soundcloud/**'
@@ -56,6 +58,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check apps/pocket-spatial-core.js
+          node --check apps/pocket-spatial-openverse.js
           node --check apps/pocket-spatial-soundcloud-config.js
           node --check apps/pocket-spatial-soundcloud.js
           node --check cloudflare/pocket-spatial-soundcloud/src/index.js
@@ -64,9 +67,82 @@ jobs:
       - name: Enforce ES5 syntax for old Safari page code
         run: |
           npx --yes es-check@7 es5 apps/pocket-spatial-core.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-openverse.js
           npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud-config.js
           npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud.js
           npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+
+      - name: Verify Openverse no-account stream contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "load('pocket-spatial-openverse.js'" apps/pocket-spatial-core.js
+          grep -q "API='https://api.openverse.org/v1/audio/'" apps/pocket-spatial-openverse.js
+          grep -q "license=by" apps/pocket-spatial-openverse.js
+          grep -q "extension=mp3" apps/pocket-spatial-openverse.js
+          grep -q "category=music" apps/pocket-spatial-openverse.js
+          grep -q "source=freesound" apps/pocket-spatial-openverse.js
+          grep -q "new XMLHttpRequest()" apps/pocket-spatial-openverse.js
+          grep -q "licenseAllowsSpatial" apps/pocket-spatial-openverse.js
+          grep -q "createMediaElementSource(tappedMedia)" apps/pocket-spatial-openverse.js
+          grep -q "getByteTimeDomainData" apps/pocket-spatial-openverse.js
+          grep -q "web_audio_pcm_flatline" apps/pocket-spatial-openverse.js
+          grep -q "No login or API key required" apps/pocket-spatial-openverse.js
+          grep -q "Open original source" apps/pocket-spatial-openverse.js
+          echo 'Openverse no-account stream contract passed.'
+
+      - name: Smoke-test live Openverse API and CORS audio
+        shell: bash
+        run: |
+          set -euo pipefail
+          API_URL='https://api.openverse.org/v1/audio/?q=electronic%20music&license=by&extension=mp3&category=music&source=freesound&page_size=10'
+          curl -fsS --max-time 20 \
+            -H 'Origin: https://maaronfanberg-lab.github.io' \
+            -D /tmp/openverse-api.headers \
+            "$API_URL" \
+            -o /tmp/openverse.json
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/openverse-api.headers
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('/tmp/openverse.json').read_text())
+          results=data.get('results') or []
+          assert results, 'Openverse returned no results'
+          urls=[]
+          for track in results:
+              assert (track.get('license') or '').lower() == 'by', track.get('license')
+              if (track.get('filetype') or '').lower() == 'mp3' and track.get('url'):
+                  urls.append(track['url'])
+                  continue
+              for alt in track.get('alt_files') or []:
+                  if (alt.get('filetype') or '').lower() == 'mp3' and alt.get('url'):
+                      urls.append(alt['url'])
+                      break
+          assert urls, 'No MP3 URLs found in Openverse results'
+          Path('/tmp/openverse-audio-urls').write_text('\n'.join(urls[:10]))
+          print('Openverse returned', len(results), 'CC BY results and', len(urls), 'MP3 URLs')
+          PY
+          found=0
+          while IFS= read -r AUDIO_URL; do
+            [ -n "$AUDIO_URL" ] || continue
+            FINAL_URL="$(curl -fsSL --max-time 15 -r 0-0 -o /dev/null -w '%{url_effective}' "$AUDIO_URL" || true)"
+            [ -n "$FINAL_URL" ] || continue
+            rm -f /tmp/openverse-audio.headers /tmp/openverse.sample
+            if curl -fsSL --max-time 15 \
+              -H 'Origin: https://maaronfanberg-lab.github.io' \
+              -H 'Range: bytes=0-4095' \
+              -D /tmp/openverse-audio.headers \
+              -o /tmp/openverse.sample \
+              "$FINAL_URL"; then
+              if [ -s /tmp/openverse.sample ] && grep -i -E -q '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/openverse-audio.headers; then
+                found=1
+                echo "Found a live CORS-enabled Openverse MP3 stream: $FINAL_URL"
+                break
+              fi
+            fi
+          done < /tmp/openverse-audio-urls
+          test "$found" -eq 1
+          echo 'Live Openverse API and CORS audio smoke test passed.'
 
       - name: Verify SoundCloud Worker bundles
         run: |
@@ -118,7 +194,7 @@ jobs:
           grep -q 'reflGainR2.connect(merger,0,1)' apps/pocket-spatial.html
           grep -q 'setParam(reflGainL1.gain,t.refl1Gain)' apps/pocket-spatial.html
           grep -q 'setParam(reflGainL2.gain,t.refl2Gain)' apps/pocket-spatial.html
-          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js; then
+          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js apps/pocket-spatial-openverse.js; then
             echo 'Heavy/custom DSP primitive leaked into the iPhone 6 layer.'
             exit 1
           fi
