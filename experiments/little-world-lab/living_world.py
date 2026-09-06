@@ -356,6 +356,18 @@ class WorldEngine:
             "relevant_private_memories": self._relevant_memories(agent, query),
         }
 
+    @staticmethod
+    def _feasible_action_types(observation: dict[str, Any]) -> list[str]:
+        """Return engine-side action-type availability for diagnostics only."""
+        feasible = {"rest", "observe"}
+        if observation.get("neighbor_locations"):
+            feasible.add("move")
+        if observation.get("co_located_agents"):
+            feasible.update({"talk", "help"})
+        if observation.get("resources"):
+            feasible.add("work")
+        return sorted(feasible)
+
     def _event(self, kind: str, **payload: Any) -> dict[str, Any]:
         self.sequence += 1
         event = {"tick": self.tick, "seq": self.sequence, "kind": kind, **payload}
@@ -540,8 +552,10 @@ class WorldEngine:
         for name in self._actors_for_tick():
             agent = self.agents[name]
             observation = self.observation_for(name)
+            raw_proposed: Any = None
             try:
-                proposed = self.backend.choose_action(agent=agent, observation=observation, tick=self.tick)
+                raw_proposed = self.backend.choose_action(agent=agent, observation=observation, tick=self.tick)
+                proposed = raw_proposed
             except Exception as exc:
                 proposed = {"type": "observe"}
                 note = f"backend_error:{type(exc).__name__}"
@@ -557,6 +571,29 @@ class WorldEngine:
                     proposed=proposed if isinstance(proposed, dict) else repr(proposed)[:300],
                     reason=validation_note,
                 )
+            if isinstance(raw_proposed, (dict, list, str, int, float, bool)) or raw_proposed is None:
+                logged_proposal = raw_proposed
+            else:
+                logged_proposal = repr(raw_proposed)[:300]
+            proposed_type = None
+            if isinstance(raw_proposed, dict):
+                candidate = str(raw_proposed.get("type") or "").strip().lower()
+                proposed_type = candidate or None
+            self._event(
+                "decision",
+                actor=name,
+                location=agent.location,
+                feasible_action_types=self._feasible_action_types(observation),
+                resources_visible=dict(observation.get("resources") or {}),
+                recent_local_incidents=list(observation.get("recent_local_incidents") or []),
+                co_located_agents=list(observation.get("co_located_agents") or []),
+                energy=round(agent.energy, 1),
+                proposed_type=proposed_type,
+                proposed_action=logged_proposal,
+                chosen_type=action["type"],
+                accepted=note is None,
+                rejection_reason=note,
+            )
             events.append(self._resolve(agent, action, note))
         snapshot = self.compute_metrics()
         with self.metrics_stream_path.open("a", encoding="utf-8") as handle:
@@ -601,6 +638,21 @@ class WorldEngine:
         rejected = 0
         backend_errors = 0
         location_counts = collections.Counter()
+        action_types = sorted(ALLOWED_ACTIONS)
+        decision_total = 0
+        feasibility: dict[str, dict[str, Any]] = {
+            action_type: {
+                "feasible_ticks": 0,
+                "unavailable_ticks": 0,
+                "chosen_ticks": 0,
+                "feasible_unchosen_ticks": 0,
+                "chosen_and_accepted_ticks": 0,
+                "chosen_and_rejected_ticks": 0,
+                "schema_violation_ticks": 0,
+                "rejection_reasons": collections.Counter(),
+            }
+            for action_type in action_types
+        }
         if self.event_path.exists():
             for line in self.event_path.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
@@ -621,6 +673,32 @@ class WorldEngine:
                     rejected += 1
                 elif event.get("kind") == "backend_error":
                     backend_errors += 1
+                elif event.get("kind") == "decision":
+                    decision_total += 1
+                    available = set(event.get("feasible_action_types") or [])
+                    proposed_type = str(event.get("proposed_type") or "").strip().lower()
+                    accepted = bool(event.get("accepted"))
+                    reason = str(event.get("rejection_reason") or "").strip()
+                    for action_type in action_types:
+                        if action_type in available:
+                            feasibility[action_type]["feasible_ticks"] += 1
+                    if proposed_type in feasibility:
+                        if proposed_type in available:
+                            row = feasibility[proposed_type]
+                            row["chosen_ticks"] += 1
+                            if accepted:
+                                row["chosen_and_accepted_ticks"] += 1
+                            else:
+                                row["chosen_and_rejected_ticks"] += 1
+                                if reason:
+                                    row["rejection_reasons"][reason] += 1
+                        else:
+                            feasibility[proposed_type]["schema_violation_ticks"] += 1
+        for action_type in action_types:
+            row = feasibility[action_type]
+            row["unavailable_ticks"] = decision_total - row["feasible_ticks"]
+            row["feasible_unchosen_ticks"] = row["feasible_ticks"] - row["chosen_ticks"]
+            row["rejection_reasons"] = dict(sorted(row["rejection_reasons"].items()))
         total_actions = sum(actions.values())
         action_entropy = 0.0
         if total_actions:
@@ -646,6 +724,8 @@ class WorldEngine:
             "backend_errors": backend_errors,
             "talk_turns": len(utterances),
             "exact_repeated_utterance_rate": round(repeats / len(utterances), 4) if utterances else 0.0,
+            "decision_count": decision_total,
+            "action_feasibility_breakdown": feasibility,
             "note": "These are engineering diagnostics, not measures of human realism or consciousness.",
         }
 

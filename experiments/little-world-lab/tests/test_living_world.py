@@ -26,6 +26,19 @@ class TalkBackend:
         return {"type": "observe"}
 
 
+class RepeatTalkBackend:
+    def choose_action(self, *, agent, observation, tick):
+        others = observation["co_located_agents"]
+        if others:
+            return {"type": "talk", "target": others[0], "utterance": "same"}
+        return {"type": "observe"}
+
+
+class ExplodingBackend:
+    def choose_action(self, **kwargs):
+        raise RuntimeError("boom")
+
+
 class LittleWorldTests(unittest.TestCase):
     def engine(self, output, backend=None, **kwargs):
         return WorldEngine(
@@ -121,6 +134,97 @@ class LittleWorldTests(unittest.TestCase):
             e.step()
             rows = [json.loads(x) for x in (Path(d) / "events.jsonl").read_text().splitlines()]
             self.assertTrue(any(x.get("kind") == "proposal_rejected" and x.get("reason") == "repeated_utterance" for x in rows))
+
+    def test_decision_event_emitted_for_every_actor_turn(self):
+        with tempfile.TemporaryDirectory() as d:
+            e = self.engine(d, FixedBackend({"type": "observe"}), actors_per_tick=3)
+            e.step()
+            rows = [json.loads(x) for x in (Path(d) / "events.jsonl").read_text().splitlines()]
+            decisions = [x for x in rows if x.get("kind") == "decision"]
+            actions = [x for x in rows if x.get("kind") == "action"]
+            self.assertEqual(len(decisions), 3)
+            self.assertEqual(len(decisions), len(actions))
+
+    def test_decision_feasibility_excludes_unavailable_branches(self):
+        config = {
+            "locations": {"solo": {"neighbors": [], "resources": {}}},
+            "agents": [{"name": "Solo", "location": "solo"}],
+        }
+        with tempfile.TemporaryDirectory() as d:
+            e = WorldEngine(config, FixedBackend({"type": "observe"}), Path(d), actors_per_tick=1)
+            e.step()
+            rows = [json.loads(x) for x in (Path(d) / "events.jsonl").read_text().splitlines()]
+            decision = next(x for x in rows if x.get("kind") == "decision")
+            self.assertEqual(decision["feasible_action_types"], ["observe", "rest"])
+            self.assertEqual(decision["resources_visible"], {})
+            self.assertEqual(decision["co_located_agents"], [])
+
+    def test_decision_preserves_proposed_intent_on_rejection(self):
+        config = {
+            "locations": {
+                "a": {"neighbors": ["b"], "resources": {}},
+                "b": {"neighbors": ["a"], "resources": {}},
+            },
+            "agents": [
+                {"name": "A", "location": "a"},
+                {"name": "B", "location": "b"},
+            ],
+        }
+        proposal = {"type": "talk", "target": "B", "utterance": "hello"}
+        with tempfile.TemporaryDirectory() as d:
+            e = WorldEngine(config, FixedBackend(proposal), Path(d), actors_per_tick=1)
+            e.step()
+            rows = [json.loads(x) for x in (Path(d) / "events.jsonl").read_text().splitlines()]
+            decision = next(x for x in rows if x.get("kind") == "decision")
+            self.assertEqual(decision["proposed_type"], "talk")
+            self.assertEqual(decision["proposed_action"], proposal)
+            self.assertEqual(decision["chosen_type"], "observe")
+            self.assertFalse(decision["accepted"])
+            self.assertEqual(decision["rejection_reason"], "target_not_co_located")
+
+    def test_backend_error_is_visible_in_decision_event(self):
+        with tempfile.TemporaryDirectory() as d:
+            e = self.engine(d, ExplodingBackend(), actors_per_tick=1)
+            e.step()
+            rows = [json.loads(x) for x in (Path(d) / "events.jsonl").read_text().splitlines()]
+            decision = next(x for x in rows if x.get("kind") == "decision")
+            self.assertIsNone(decision["proposed_type"])
+            self.assertIsNone(decision["proposed_action"])
+            self.assertEqual(decision["chosen_type"], "observe")
+            self.assertFalse(decision["accepted"])
+            self.assertEqual(decision["rejection_reason"], "backend_error:RuntimeError")
+
+    def test_action_feasibility_breakdown_is_consistent(self):
+        config = {
+            "locations": {"square": {"neighbors": [], "resources": {}}},
+            "agents": [
+                {"name": "A", "location": "square"},
+                {"name": "B", "location": "square"},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as d:
+            e = WorldEngine(config, RepeatTalkBackend(), Path(d), actors_per_tick=2)
+            e.step()
+            e.step()
+            metrics = e.compute_metrics()
+            talk = metrics["action_feasibility_breakdown"]["talk"]
+            self.assertEqual(metrics["decision_count"], 4)
+            self.assertEqual(talk["feasible_ticks"], 4)
+            self.assertEqual(talk["unavailable_ticks"], 0)
+            self.assertEqual(talk["chosen_ticks"], 4)
+            self.assertEqual(talk["feasible_unchosen_ticks"], 0)
+            self.assertEqual(talk["chosen_and_accepted_ticks"], 2)
+            self.assertEqual(talk["chosen_and_rejected_ticks"], 2)
+            self.assertEqual(talk["schema_violation_ticks"], 0)
+            self.assertEqual(talk["rejection_reasons"], {"repeated_utterance": 2})
+            for action_type, row in metrics["action_feasibility_breakdown"].items():
+                self.assertEqual(row["feasible_ticks"] + row["unavailable_ticks"], metrics["decision_count"])
+                self.assertEqual(
+                    row["chosen_ticks"],
+                    row["chosen_and_accepted_ticks"] + row["chosen_and_rejected_ticks"],
+                    action_type,
+                )
+                self.assertEqual(row["feasible_unchosen_ticks"], row["feasible_ticks"] - row["chosen_ticks"])
 
 
 if __name__ == "__main__":
