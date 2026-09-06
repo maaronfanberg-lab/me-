@@ -1,0 +1,101 @@
+name: Pocket Spatial Audius CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/pocket-spatial-*'
+    paths:
+      - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-audius-catalog.js'
+      - 'apps/pocket-spatial-commons-buffered.js'
+      - 'tests/pocket-spatial-audius-catalog.test.js'
+      - '.github/workflows/pocket-spatial-audius.yml'
+  pull_request:
+    paths:
+      - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-audius-catalog.js'
+      - 'apps/pocket-spatial-commons-buffered.js'
+      - 'tests/pocket-spatial-audius-catalog.test.js'
+      - '.github/workflows/pocket-spatial-audius.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audius-live-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Audius catalog normalization
+        run: node tests/pocket-spatial-audius-catalog.test.js
+
+      - name: Check old-Safari JavaScript
+        run: |
+          node --check apps/pocket-spatial-audius-catalog.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-audius-catalog.js
+
+      - name: Verify anonymous Audius contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "tracks/remixables" apps/pocket-spatial-audius-catalog.js
+          grep -q "tracks/'+encodeURIComponent(String(id||''))+'/stream" apps/pocket-spatial-audius-catalog.js
+          grep -q "PocketSpatialBufferedPlayer||root.PocketSpatialBufferedCommons" apps/pocket-spatial-audius-catalog.js
+          grep -q "load('pocket-spatial-audius-catalog.js'" apps/pocket-spatial-core.js
+          if grep -E -q 'Authorization|Bearer|api[_-]?key|access_token|client_secret' apps/pocket-spatial-audius-catalog.js; then
+            echo 'Audius first-pass source must stay anonymous and credential-free.'
+            exit 1
+          fi
+          if grep -E -q 'MediaRecorder|captureStream|indexedDB|localStorage|caches\.open' apps/pocket-spatial-audius-catalog.js; then
+            echo 'Audius path must not record or persist media.'
+            exit 1
+          fi
+
+      - name: Smoke-test live Audius remixables API, MP3 and CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          API='https://api.audius.co/v1/tracks/remixables?limit=50'
+          ORIGIN='https://maaronfanberg-lab.github.io'
+          UA='PocketSpatial/0.3 (https://maaronfanberg-lab.github.io/me-/apps/pocket-spatial.html)'
+          curl -fsSL --max-time 25 -A "$UA" -H "Origin: $ORIGIN" -D /tmp/audius-api.headers "$API" -o /tmp/audius.json
+          test -s /tmp/audius.json
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/audius-api.headers
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('/tmp/audius.json').read_text())
+          items=data.get('data',data.get('tracks',[])) if isinstance(data,dict) else []
+          if isinstance(items,dict): items=items.get('tracks',[])
+          assert isinstance(items,list) and items, 'Audius remixables returned no tracks'
+          candidates=[]
+          for t in items:
+              if not isinstance(t,dict) or not t.get('id'): continue
+              streamable=t.get('is_streamable',t.get('isStreamable',True))
+              if str(streamable).lower()=='false': continue
+              license_text=str(t.get('license') or t.get('license_type') or t.get('licenseType') or '').lower()
+              if 'all rights reserved' in license_text or 'no derivatives' in license_text or 'noderivatives' in license_text or 'by-nd' in license_text:
+                  continue
+              candidates.append(t)
+          assert candidates, 'Audius returned no usable remixable candidate'
+          candidates.sort(key=lambda t: (0 if 0 < float(t.get('duration') or 0) <= 180 else 1, float(t.get('duration') or 999999)))
+          t=candidates[0]
+          Path('/tmp/audius-track-id').write_text(str(t['id']))
+          print('Testing Audius track:',t.get('title'),t.get('id'),'duration=',t.get('duration'),'license=',t.get('license'))
+          PY
+          TRACK_ID="$(cat /tmp/audius-track-id)"
+          STREAM="https://api.audius.co/v1/tracks/${TRACK_ID}/stream"
+          curl -fsSL --max-time 30 -A "$UA" -H "Origin: $ORIGIN" -H 'Range: bytes=0-65535' -D /tmp/audius-stream.headers "$STREAM" -o /tmp/audius.sample
+          test -s /tmp/audius.sample
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/audius-stream.headers
+          python3 - <<'PY'
+          from pathlib import Path
+          sample=Path('/tmp/audius.sample').read_bytes()
+          assert len(sample)>1024, f'Audius stream sample too small: {len(sample)}'
+          print('Audius stream bytes:',len(sample))
+          PY
+          echo 'Live Audius remixable MP3 and CORS check passed.'
