@@ -1,0 +1,14 @@
+{
+  "nonce": "pocket-spatial-own-upload-hls-20260906-001",
+  "prompt": "Read-only architecture consult. Pocket Spatial is a working iPhone 6 / iOS 12.5 Safari Web Audio spatializer. We have now added a SoundCloud OAuth connector that intentionally exposes only the authenticated user's own uploads. The remaining problem is playback transport: for one own upload, SoundCloud's authenticated /tracks/{track_urn}/streams returns AAC-HLS URLs, but Safari 12 historically does not reliably expose HLS media-element PCM through MediaElementAudioSourceNode for Web Audio processing. We must not proxy or capture arbitrary third-party tracks. Because these are the authenticated user's own uploads, assess the fastest technically honest way to get such a track into the existing browser spatial DSP on iPhone 6. Compare: (A) try native Safari HLS <audio> -> MediaElementAudioSourceNode and feature-test whether PCM actually flows; (B) Worker resolves authenticated SoundCloud stream to a signed CDN URL and browser feeds that <audio> source to Web Audio; (C) browser fetches HLS playlist/segments and decodes AAC using only APIs available in iOS 12 Safari; (D) abandon web transport for SoundCloud playback and add a minimal iOS 12 UIKit/AVFoundation/AVAudioEngine native app while retaining the web player for local files. Do not propose server-side transcoding/relaying unless there is no compliant alternative, and state legal/API caveats clearly. Do not modify repo files.",
+  "context": [
+    "Existing Web Audio graph is ES5 and uses only MediaElementAudioSourceNode, ChannelSplitter, DelayNode, BiquadFilterNode, GainNode and ChannelMerger. It is tested on a mocked graph but not yet physically tested on Alex's iPhone 6.",
+    "Current SoundCloud connector keeps client secret and real OAuth tokens in a Cloudflare Worker. The page has only an opaque encrypted session token.",
+    "Current SoundCloud scope is /me and /me/tracks only; every listed track is marked own_upload and linked back to SoundCloud.",
+    "SoundCloud current stream endpoint is authenticated and modern stream family is AAC HLS, typically 160k then 96k fallback.",
+    "Target is something Alex can actually hear on an iPhone 6, not a theoretical browser demo. Stability and truthful capability detection matter more than elegance."
+  ],
+  "expected_response": "Under 1000 words: decisive recommendation; exact first experiment; how to feature-test success/failure on iOS 12; whether signed-CDN pre-resolution helps; what absolutely cannot work in Safari 12; native fallback architecture if browser fails; and the next implementation sequence. Be conservative about claims and distinguish facts from things requiring device verification.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 10
+}
