@@ -22,11 +22,13 @@ final class HLSMixTap {
     }
 
     /// Retained by the C tap independently of HLSMixTap, avoiding a self↔tap retain cycle.
-    private final class TapContext {
+    /// Apple serializes each tap's callback sequence; this manual contract is why it is
+    /// explicitly unchecked Sendable rather than forcing locks into the audio callback.
+    private final class TapContext: @unchecked Sendable {
         let dsp = BinauralDSP()
-        let onPrepared: (AudioStreamBasicDescription) -> Void
+        let onPrepared: (AudioStreamBasicDescription, Bool) -> Void
 
-        init(onPrepared: @escaping (AudioStreamBasicDescription) -> Void) {
+        init(onPrepared: @escaping (AudioStreamBasicDescription, Bool) -> Void) {
             self.onPrepared = onPrepared
         }
     }
@@ -34,7 +36,7 @@ final class HLSMixTap {
     private let context: TapContext
     private var tap: MTAudioProcessingTap?
 
-    init(onPrepared: @escaping (AudioStreamBasicDescription) -> Void = { _ in }) throws {
+    init(onPrepared: @escaping (AudioStreamBasicDescription, Bool) -> Void = { _, _ in }) throws {
         let context = TapContext(onPrepared: onPrepared)
         self.context = context
         self.tap = nil
@@ -86,8 +88,8 @@ final class HLSMixTap {
                     .fromOpaque(MTAudioProcessingTapGetStorage(tap))
                     .takeUnretainedValue()
                 let format = processingFormat.pointee
-                context.dsp.prepare(format: format)
-                context.onPrepared(format)
+                let dspEligible = context.dsp.prepare(format: format)
+                context.onPrepared(format, dspEligible)
             },
             unprepare: { tap in
                 let context = Unmanaged<TapContext>
