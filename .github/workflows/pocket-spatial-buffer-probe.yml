@@ -7,6 +7,7 @@ on:
       - 'feature/pocket-spatial-*'
     paths:
       - 'apps/pocket-spatial-buffer-probe.js'
+      - 'apps/pocket-spatial-buffer-test.html'
       - 'apps/pocket-spatial-core.js'
       - 'tests/pocket-spatial-buffer-probe.test.js'
       - 'tests/pocket-spatial-commons.test.js'
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - 'apps/pocket-spatial-buffer-probe.js'
+      - 'apps/pocket-spatial-buffer-test.html'
       - 'apps/pocket-spatial-core.js'
       - 'tests/pocket-spatial-buffer-probe.test.js'
       - 'tests/pocket-spatial-commons.test.js'
@@ -38,6 +40,14 @@ jobs:
 
       - name: Run buffered PCM regression tests
         run: node tests/pocket-spatial-buffer-probe.test.js
+
+      - name: Verify standalone diagnostic page
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '<!doctype html>' apps/pocket-spatial-buffer-test.html
+          grep -q 'pocket-spatial-buffer-probe.js?v=20260906-buffer-probe-1' apps/pocket-spatial-buffer-test.html
+          grep -q 'remote bytes.*decodeAudioData.*AudioBufferSourceNode.*analyser' apps/pocket-spatial-buffer-test.html
 
       - name: Verify buffered-probe safety contract
         shell: bash
