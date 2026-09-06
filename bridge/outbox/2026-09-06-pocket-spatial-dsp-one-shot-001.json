@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-06-pocket-spatial-dsp-one-shot-001.json",
+  "request_sha256": "fabfee01a19b132b5144734452fa9225cb554a9ca26386994b280a2f96284ad4",
+  "request_nonce": "fabfee01a19b132b51447344",
+  "completed_at": "2026-09-06T22:56:49.186197Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "- **Node-level idea:** Add a single per-ear \"floor/wall\" early reflection cluster via a short `DelayNode` + `BiquadFilterNode` (lowpass) + `GainNode` feeding back into the existing dry sum (parallel send, not inserted in series), rather than adding more discrete taps — effectively a tiny 2-tap reflection \"spread\" (one longer, one shorter delay per ear) with a gentle high-shelf cut to simulate distance/back-of-room damping; this reinforces front/back cues without new node types.\n\n- **Parameter ranges:** delay 15–35 ms (front reflection ~15–20 ms, \"behind\" reflection ~28–35 ms), gain -12 to -18 dB relative to direct path, lowpass cutoff 3–5 kHz (Q ~0.7), with the \"behind\" tap given an extra -3 dB and lower cutoff (~2.5–3 kHz) vs the \"front\" tap to differentiate front/back via spectral tilt rather than amplitude alone.\n\n- Keep total added reflections ≤2 per ear (reuse existing 11/13 & 21/24 ms taps if possible by re-tuning gain/cutoff rather than adding fresh DelayNodes) to avoid doubling node count and preserve low CPU on iPhone 6-class hardware.\n\n- Sum all reflection sends into the same stereo bus pre-ITD-panning so mono fold-down (L+R) still collapses coherently — avoid any per-ear-only phase inversion or all-pass tricks that would cancel in mono.\n\n- **Failure mode to test:** comb filtering / hollow timbre when mono-summed — check L+R at 0/70° source angles for audible notches (sweep sine or pink noise, look for >6 dB dips in mono spectrum) caused by the new delay taps interfering with the existing 11–24 ms reflections; if present, nudge delay times apart (avoid exact multiples) or reduce reflection gain further.\n\n- Secondary check: confirm `AudioBufferSourceNode` reconnection/rebuild (since only one track can be active) doesn't leak the added DelayNode/BiquadFilterNode graph across track switches — verify node teardown on stop to prevent gradual CPU/memory creep on iOS 12 Safari's WebKit AudioContext.",
+  "session_id": "04c82a80-4641-40db-b7da-703445e8c1ac",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 464,
+    "cache_read_input_tokens": 3183,
+    "output_tokens": 805,
+    "output_tokens_details": {
+      "thinking_tokens": 25
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 464,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 805,
+        "cache_read_input_tokens": 3183,
+        "cache_creation_input_tokens": 464,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 464
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.0116986,
+  "num_turns": 1
+}
