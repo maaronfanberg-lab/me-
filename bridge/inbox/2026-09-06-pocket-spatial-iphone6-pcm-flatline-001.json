@@ -1,0 +1,10 @@
+{
+  "id": "2026-09-06-pocket-spatial-iphone6-pcm-flatline-001",
+  "task": "Review a physical iPhone 6 / iOS 12.5.x Pocket Spatial result. Wikimedia Commons free-license MP3 catalog loads and audio plays. The live probe reports web_audio_pcm_flatline: native media currentTime advances, the CORS media element currentTime advances, but AnalyserNode fed by createMediaElementSource(tappedMedia) remains flat at 128. CI has verified the same Commons MP3 bytes and Access-Control-Allow-Origin for our GitHub Pages origin. Existing local-file spatializer uses an <audio> element -> MediaElementAudioSourceNode -> splitter/delay/filter/reflection graph. We need the smallest next experiment that can prove real remote audio can enter Web Audio on this device without pretending success. Assess likely iOS 12 MediaElementAudioSource limitations/bugs and whether a runtime XHR/fetch ArrayBuffer -> decodeAudioData -> AudioBufferSourceNode path is a good compatibility probe for a short Commons MP3. Consider memory constraints on iPhone 6, user-gesture requirements, CORS, and that the project must not record or persist the audio. If a different minimal probe is better, specify it. Preserve ES5/iOS 12 compatibility. Also say what physical-device observation would distinguish browser media-element limitation from a broader Web Audio failure.",
+  "context": {
+    "device": "iPhone 6 / iOS 12.5.x Safari",
+    "observed": "Commons catalog loads; selected MP3 audibly plays; probe result web_audio_pcm_flatline; loaded dry",
+    "network": "live CI verifies Commons API, MP3 bytes, and CORS",
+    "goal": "true runtime spatial processing of remote audio without storage/capture"
+  }
+}
