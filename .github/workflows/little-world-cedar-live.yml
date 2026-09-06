@@ -2,6 +2,8 @@ name: Cedar Hollow live town
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '*/10 * * * *'
   push:
     branches: [main]
     paths:
@@ -10,14 +12,70 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: cedar-hollow-live
-  cancel-in-progress: true
-
 jobs:
-  live-town:
+  gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+    steps:
+      - name: Decide whether Cedar needs a runner
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "schedule" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime, timezone
+
+          url = "https://api.github.com/repos/maaronfanberg-lab/me-/contents/cedar-state.json?ref=cedar-live-state"
+          req = urllib.request.Request(
+              url,
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          should_run = True
+          reason = "state unavailable"
+          try:
+              with urllib.request.urlopen(req, timeout=15) as response:
+                  payload = json.loads(response.read().decode("utf-8"))
+              raw = base64.b64decode(payload["content"]).decode("utf-8")
+              state = json.loads(raw)
+              status = str(state.get("status") or "")
+              updated = str(state.get("updated_at") or "")
+              timestamp = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+              age = max(0.0, (datetime.now(timezone.utc) - timestamp).total_seconds())
+              active = status in {"starting", "live"} and age < 600
+              should_run = not active
+              reason = f"status={status or 'unknown'} age={age:.0f}s"
+          except Exception as exc:
+              reason = f"state check failed: {type(exc).__name__}"
+
+          print(f"Cedar watchdog: {reason}; should_run={should_run}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"should_run={'true' if should_run else 'false'}\n")
+          PY
+
+  live-town:
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    concurrency:
+      group: cedar-hollow-live
+      cancel-in-progress: false
     defaults:
       run:
         shell: bash
@@ -37,7 +95,7 @@ jobs:
         working-directory: experiments/little-world-lab
         run: python -m unittest discover -s tests -p 'test_*.py' -v
 
-      - name: Read live-session request
+      - name: Read 24/7 town request
         run: |
           set -euo pipefail
           python - <<'PY' > /tmp/cedar-live.env
@@ -62,19 +120,22 @@ jobs:
                   value = default
               return max(low, min(high, value))
 
-          session = str(request.get('session_id') or 'cedar-live').strip()
-          session = re.sub(r'[^A-Za-z0-9._-]+', '-', session)[:80] or 'cedar-live'
+          session = str(request.get('session_id') or 'cedar-24x7').strip()
+          session = re.sub(r'[^A-Za-z0-9._-]+', '-', session)[:80] or 'cedar-24x7'
 
           print(f'CEDAR_SESSION_ID={session}')
-          print(f'CEDAR_TICKS={integer("ticks", 60, 1, 120)}')
           print(f'CEDAR_SEED={integer("seed", 7, -2147483648, 2147483647)}')
           print(f'CEDAR_ACTORS_PER_TICK={integer("actors_per_tick", 2, 1, 8)}')
-          print(f'CEDAR_STEP_DELAY={integer("step_delay_seconds", 4, 2, 30)}')
+          print(f'CEDAR_STEP_DELAY={integer("step_delay_seconds", 8, 2, 60)}')
+          print(f'CEDAR_PUBLISH_INTERVAL={integer("publish_interval_seconds", 30, 15, 180)}')
+          print(f'CEDAR_RUN_MINUTES={integer("run_minutes", 340, 10, 340)}')
           print(f'CEDAR_TEMPERATURE={number("temperature", 0.1, 0.0, 2.0)}')
           print(f'CEDAR_MAX_TOKENS={integer("max_tokens", 256, 32, 256)}')
+          print(f'CEDAR_EVENT_LIMIT={integer("event_log_limit", 2000, 240, 10000)}')
           PY
           cat /tmp/cedar-live.env
           cat /tmp/cedar-live.env >> "$GITHUB_ENV"
+          echo "CEDAR_RUN_DIR=$GITHUB_WORKSPACE/experiments/little-world-lab/runs/cedar-live-24x7" >> "$GITHUB_ENV"
 
       - name: Prepare isolated live-state branch
         run: |
@@ -84,35 +145,130 @@ jobs:
           git fetch origin cedar-live-state
           rm -rf /tmp/cedar-live-state
           git worktree add -B cedar-live-state /tmp/cedar-live-state origin/cedar-live-state
+
           python - <<'PY'
           import json
           import os
           from datetime import datetime, timezone
           from pathlib import Path
 
+          path = Path('/tmp/cedar-live-state/cedar-state.json')
+          try:
+              state = json.loads(path.read_text(encoding='utf-8'))
+          except Exception:
+              state = {'version': 1}
           now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-          state = {
+          state.update({
               'version': 1,
               'status': 'starting',
               'updated_at': now,
               'session_id': os.environ['CEDAR_SESSION_ID'],
-              'started_at': now,
-              'tick': 0,
               'seed': int(os.environ['CEDAR_SEED']),
               'actors_per_tick': int(os.environ['CEDAR_ACTORS_PER_TICK']),
               'temperature': float(os.environ['CEDAR_TEMPERATURE']),
               'model': 'Falcon3-1B-Instruct-GGUF:Q4_K_M',
               'world_name': 'Cedar Hollow',
-              'note': 'GitHub runner is starting the isolated Falcon model.',
-          }
-          Path('/tmp/cedar-live-state/cedar-state.json').write_text(
-              json.dumps(state, indent=2, sort_keys=True) + '\n',
-              encoding='utf-8',
-          )
+              'mode': '24/7',
+              'note': 'Cedar is handing off to a fresh GitHub runner; the last town state remains visible.',
+          })
+          state.setdefault('started_at', now)
+          state.setdefault('tick', 0)
+          path.write_text(json.dumps(state, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           PY
+
           git -C /tmp/cedar-live-state add cedar-state.json
-          git -C /tmp/cedar-live-state commit -m "Cedar live session starting [skip ci]"
-          git -C /tmp/cedar-live-state push origin cedar-live-state
+          if ! git -C /tmp/cedar-live-state diff --cached --quiet; then
+            git -C /tmp/cedar-live-state commit -m "Cedar 24x7 runner starting [skip ci]"
+            git -C /tmp/cedar-live-state push origin cedar-live-state
+          fi
+
+      - name: Restore persistent Cedar state
+        run: |
+          set -euo pipefail
+          rm -rf "$CEDAR_RUN_DIR"
+          mkdir -p "$CEDAR_RUN_DIR"
+
+          [ ! -f /tmp/cedar-live-state/cedar-checkpoint.json ] || cp /tmp/cedar-live-state/cedar-checkpoint.json "$CEDAR_RUN_DIR/checkpoint.json"
+          [ ! -f /tmp/cedar-live-state/cedar-events.jsonl ] || cp /tmp/cedar-live-state/cedar-events.jsonl "$CEDAR_RUN_DIR/events.jsonl"
+          [ ! -f /tmp/cedar-live-state/cedar-live-session.json ] || cp /tmp/cedar-live-state/cedar-live-session.json "$CEDAR_RUN_DIR/live-session.json"
+
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          run_dir = Path(os.environ['CEDAR_RUN_DIR'])
+          checkpoint = run_dir / 'checkpoint.json'
+          if checkpoint.exists():
+              print('Restored exact Cedar checkpoint.')
+              raise SystemExit(0)
+
+          state_path = Path('/tmp/cedar-live-state/cedar-state.json')
+          try:
+              state = json.loads(state_path.read_text(encoding='utf-8'))
+          except Exception:
+              state = {}
+
+          if not state.get('agents') or not state.get('locations'):
+              print('No prior world snapshot to migrate; Cedar will start from world.json.')
+              raise SystemExit(0)
+
+          config = json.loads(Path('experiments/little-world-lab/world.json').read_text(encoding='utf-8'))
+          tick = int(state.get('tick') or 0)
+          recent_events = [row for row in (state.get('recent_events') or []) if isinstance(row, dict)]
+          sequence = max((int(row.get('seq') or 0) for row in recent_events), default=0)
+          incident_ids = []
+          for incident in config.get('incidents') or []:
+              if int(incident.get('tick') or -1) <= tick:
+                  incident_ids.append(str(incident.get('id') or f"incident-{incident.get('tick')}"))
+
+          agents = {}
+          for original in config.get('agents') or []:
+              name = str(original['name'])
+              row = dict((state.get('agents') or {}).get(name) or {})
+              agents[name] = {
+                  'name': name,
+                  'traits': list(row.get('traits') or original.get('traits') or []),
+                  'goals': list(row.get('goals') or original.get('goals') or []),
+                  'location': str(row.get('location') or original.get('location')),
+                  'energy': float(row.get('energy', original.get('energy', 75))),
+                  'memories': list(row.get('memories') or []),
+                  'relationships': dict(row.get('relationships') or {}),
+                  'action_history': [],
+                  'recent_utterances': [],
+              }
+
+          migrated = {
+              'version': 1,
+              'config': config,
+              'seed': int(state.get('seed', os.environ['CEDAR_SEED'])),
+              'tick': tick,
+              'sequence': sequence,
+              'actors_per_tick': int(state.get('actors_per_tick', os.environ['CEDAR_ACTORS_PER_TICK'])),
+              'checkpoint_every': 1,
+              'locations': state['locations'],
+              'applied_incidents': sorted(incident_ids),
+              'agents': agents,
+          }
+          checkpoint.write_text(json.dumps(migrated, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+          events_path = run_dir / 'events.jsonl'
+          if not events_path.exists() and recent_events:
+              events_path.write_text(
+                  ''.join(json.dumps(row, ensure_ascii=False, sort_keys=True) + '\n' for row in recent_events),
+                  encoding='utf-8',
+              )
+
+          session_path = run_dir / 'live-session.json'
+          if not session_path.exists():
+              session_path.write_text(json.dumps({
+                  'session_id': os.environ['CEDAR_SESSION_ID'],
+                  'started_at': state.get('started_at') or datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+                  'migrated_from_live_snapshot': True,
+              }, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f'Migrated Cedar live snapshot at tick {tick} into the persistent checkpoint format.')
+          PY
 
       - name: Start isolated Falcon llama.cpp server
         run: |
@@ -160,17 +316,60 @@ jobs:
           PY
           echo "Cedar live model: $(cat /tmp/cedar-live-model-id.txt)"
 
-      - name: Run and publish Cedar ticks
+      - name: Run Cedar continuously and publish snapshots
         working-directory: experiments/little-world-lab
         run: |
           set -euo pipefail
-          RUN_DIR="runs/cedar-live-${CEDAR_SESSION_ID}"
-          rm -rf "$RUN_DIR"
           MODEL_ID="$(cat /tmp/cedar-live-model-id.txt)"
+          END_EPOCH=$(( $(date +%s) + CEDAR_RUN_MINUTES * 60 ))
+          LAST_PUBLISH=0
 
-          for INDEX in $(seq 1 "$CEDAR_TICKS"); do
+          publish_state() {
+            local now tick
+            now="$(date +%s)"
+
+            if [ -f "$CEDAR_RUN_DIR/events.jsonl" ]; then
+              tail -n "$CEDAR_EVENT_LIMIT" "$CEDAR_RUN_DIR/events.jsonl" > "$CEDAR_RUN_DIR/events.trimmed.jsonl"
+              mv "$CEDAR_RUN_DIR/events.trimmed.jsonl" "$CEDAR_RUN_DIR/events.jsonl"
+            fi
+            if [ -f "$CEDAR_RUN_DIR/metrics.jsonl" ]; then
+              tail -n 1000 "$CEDAR_RUN_DIR/metrics.jsonl" > "$CEDAR_RUN_DIR/metrics.trimmed.jsonl"
+              mv "$CEDAR_RUN_DIR/metrics.trimmed.jsonl" "$CEDAR_RUN_DIR/metrics.jsonl"
+            fi
+
+            cp "$CEDAR_RUN_DIR/live-state.json" /tmp/cedar-live-state/cedar-state.json
+            cp "$CEDAR_RUN_DIR/checkpoint.json" /tmp/cedar-live-state/cedar-checkpoint.json
+            [ ! -f "$CEDAR_RUN_DIR/events.jsonl" ] || cp "$CEDAR_RUN_DIR/events.jsonl" /tmp/cedar-live-state/cedar-events.jsonl
+            [ ! -f "$CEDAR_RUN_DIR/live-session.json" ] || cp "$CEDAR_RUN_DIR/live-session.json" /tmp/cedar-live-state/cedar-live-session.json
+
+            python - <<'PY'
+            import json
+            from pathlib import Path
+            path = Path('/tmp/cedar-live-state/cedar-state.json')
+            state = json.loads(path.read_text(encoding='utf-8'))
+            state['mode'] = '24/7'
+            state['note'] = 'Cedar Hollow is running autonomously. The viewer is read-only.'
+            path.write_text(json.dumps(state, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+            PY
+
+            tick="$(python - <<'PY'
+            import json
+            print(json.load(open('/tmp/cedar-live-state/cedar-state.json', encoding='utf-8')).get('tick', 0))
+            PY
+            )"
+
+            git -C /tmp/cedar-live-state add cedar-state.json cedar-checkpoint.json cedar-events.jsonl cedar-live-session.json 2>/dev/null || \
+              git -C /tmp/cedar-live-state add cedar-state.json cedar-checkpoint.json
+            if ! git -C /tmp/cedar-live-state diff --cached --quiet; then
+              git -C /tmp/cedar-live-state commit -m "Cedar 24x7 tick ${tick} [skip ci]"
+              git -C /tmp/cedar-live-state push origin cedar-live-state
+            fi
+            LAST_PUBLISH="$now"
+          }
+
+          while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
             python cedar_live_session.py \
-              --output "$RUN_DIR" \
+              --output "$CEDAR_RUN_DIR" \
               --ticks 1 \
               --seed "$CEDAR_SEED" \
               --actors-per-tick "$CEDAR_ACTORS_PER_TICK" \
@@ -182,23 +381,25 @@ jobs:
               --status live \
               --session-id "$CEDAR_SESSION_ID"
 
-            cp "$RUN_DIR/live-state.json" /tmp/cedar-live-state/cedar-state.json
-            git -C /tmp/cedar-live-state add cedar-state.json
-            git -C /tmp/cedar-live-state commit -m "Cedar live tick ${INDEX} [skip ci]"
-            git -C /tmp/cedar-live-state push origin cedar-live-state
+            NOW="$(date +%s)"
+            if [ "$LAST_PUBLISH" -eq 0 ] || [ $(( NOW - LAST_PUBLISH )) -ge "$CEDAR_PUBLISH_INTERVAL" ]; then
+              publish_state
+            fi
 
-            if [ "$INDEX" -lt "$CEDAR_TICKS" ]; then
+            if [ "$(date +%s)" -lt "$END_EPOCH" ]; then
               sleep "$CEDAR_STEP_DELAY"
             fi
           done
 
-      - name: Mark live session finished
+          publish_state
+
+      - name: Mark runner handoff
         if: always()
         env:
           CEDAR_JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ ! -d /tmp/cedar-live-state ]; then
+          if [ ! -d /tmp/cedar-live-state ] || [ ! -f /tmp/cedar-live-state/cedar-state.json ]; then
             exit 0
           fi
           python - <<'PY'
@@ -208,21 +409,21 @@ jobs:
           from pathlib import Path
 
           path = Path('/tmp/cedar-live-state/cedar-state.json')
-          try:
-              state = json.loads(path.read_text(encoding='utf-8'))
-          except Exception:
-              state = {'version': 1, 'session_id': os.environ.get('CEDAR_SESSION_ID')}
-          state['status'] = 'complete' if os.environ.get('CEDAR_JOB_STATUS') == 'success' else 'error'
+          state = json.loads(path.read_text(encoding='utf-8'))
+          ok = os.environ.get('CEDAR_JOB_STATUS') == 'success'
+          state['status'] = 'handoff' if ok else 'error'
           state['updated_at'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-          if state['status'] == 'error':
-              state['note'] = 'The live runner stopped unexpectedly. The last published town state is preserved.'
-          else:
-              state['note'] = 'The requested live session finished. The last town state is preserved.'
+          state['mode'] = '24/7'
+          state['note'] = (
+              'Runner handoff in progress. Cedar will resume from this exact checkpoint automatically.'
+              if ok else
+              'The Cedar runner stopped unexpectedly. The watchdog will retry from the last published checkpoint.'
+          )
           path.write_text(json.dumps(state, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           PY
           git -C /tmp/cedar-live-state add cedar-state.json
           if ! git -C /tmp/cedar-live-state diff --cached --quiet; then
-            git -C /tmp/cedar-live-state commit -m "Cedar live session finished [skip ci]"
+            git -C /tmp/cedar-live-state commit -m "Cedar 24x7 runner handoff [skip ci]"
             git -C /tmp/cedar-live-state push origin cedar-live-state
           fi
 
