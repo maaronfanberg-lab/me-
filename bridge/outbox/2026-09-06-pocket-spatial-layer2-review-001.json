@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-06-pocket-spatial-layer2-review-001.json",
+  "request_sha256": "d62cad0dc2b14ea4f7a5ac02c41b49a9203e838d34f62bfb60928d3a3c9a7b0b",
+  "request_nonce": "pocket-spatial-layer2-review-20260906-001",
+  "completed_at": "2026-09-06T13:42:26.452259Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Second Opinion: Pocket Spatial — Next Layer for iPhone 6/iOS 12\n\n**Observation before recommending:** I read `apps/pocket-spatial.html` and `.github/workflows/pocket-spatial-iphone6.yml` directly. The live graph matches your description (split → direct + crossed delay/LPF/gain → merge → master trim, all via `setParam`/`setTargetAtTime`). However, the CI workflow I found only checks JS syntax, ES5-compliance (`es-check`), and HTML structure (ids/labels/button types) — I did **not** find a separate \"shared ES5 core\" file or a test asserting displayed values equal the exact `AudioParam` targets. That numeric-equivalence gate may exist elsewhere/not-yet-merged; flag this as unverified before treating it as a settled baseline, since the \"control can never lie about the DSP\" guarantee you want for the *new* layer should build on a gate that demonstrably exists today.\n\n### Recommendation\n**(a) Sparse early reflections**, built entirely from `DelayNode` + `GainNode` + `BiquadFilterNode`. It beats (b) and (c) on your stated priorities.\n\n### Exact graph (additive, parallel to existing bus)\n```\nsplitter(0=L) → reflDelay_L1(delayTime) → reflLPF_L1(lowpass) → reflGain_L1 → merger input0\nsplitter(0=L) → reflDelay_L2(delayTime) → reflLPF_L2(lowpass) → reflGain_L2 → merger input0\nsplitter(1=R) → reflDelay_R1(delayTime) → reflLPF_R1(lowpass) → reflGain_R1 → merger input1\nsplitter(1=R) → reflDelay_R2(delayTime) → reflLPF_R2(lowpass) → reflGain_R2 → merger input1\n```\nKeep reflections **un-crossed** (L stays L, R stays R) so the existing ITD/ILD image isn't smeared — only the direct/cross paths carry interaural cues; reflections add depth without touching width.\n\n### Suggested parameter ranges (new \"Depth\" slider, 0–100)\n- Reflection 1 delay: fixed 11 ms (L) / 13 ms (R) — below precedence-effect threshold (~30–40 ms), read as *space*, not echo.\n- Reflection 2 delay: fixed 21 ms (L) / 24 ms (R).\n- Reflection gains: `refl1Gain = 0.14 * depth/100`, `refl2Gain = 0.07 * depth/100` — cap total added energy well under unity headroom (existing output trim already sits at 0.94–1.0).\n- Reflection LPF cutoff: fixed ~2600 Hz, Q 0.5 (simulates absorption; darker than head-shadow LPF, not modulated by Depth — fewer moving parts to test).\n- Keep delay *times* constant; only gains scale with Depth. This avoids delay-ramp \"zipper\"/pitch-smear artifacts from `setTargetAtTime` on `delayTime`.\n\n### Why this externalizes rather than just widens\nITD/ILD alone (your current layer) tells the brain *direction*; it doesn't tell it *distance* or *room*. A dry, single-arrival binaural signal still tends to localize inside the head on headphones. Adding a couple of decorrelated, delayed, spectrally-darker copies reproduces the early-reflection pattern the auditory system uses as a distance/room-size cue — independent of the angle cue already present. That's the standard, minimal mechanism for \"outside-the-head\" perception without full BRIR convolution.\n\n### CPU/memory risk on iPhone 6 (A8, iOS 12.5 Safari)\nLow. Adds 4 `DelayNode` (max buffer ~30 ms × 2ch ≈ trivial KB each), 4 simple biquads, 4 gains — comparable in cost to the nodes already running. No FFT, no buffer decode, no asset load. By contrast, (b) ConvolverNode requires loading/decoding an IR file (memory spike, decode time, occasional iOS12 Safari decode failures on older devices) and runs partitioned FFT convolution — categorically higher and less predictable CPU/memory cost for the same device you're told to prioritize stability on. (c) spectral shaping is cheap too but mostly re-colors timbre/front-back cues rather than adding a distance cue, so it doesn't clearly out-perform (a) on externalization for the cost.\n\n### Objective tests\n1. Extend the shared core with a pure `calcDepth(depth)` returning `{refl1DelayL, refl1DelayR, refl2DelayL, refl2DelayR, refl1Gain, refl2Gain, reflCutoff}`.\n2. CI test asserting each displayed \"Depth\"/reflection readout equals the exact value passed to the corresponding `AudioParam.value`/target (same pattern as existing angle/delay/cutoff tests).\n3. Boundary tests: `depth=0` → both gains exactly 0 (silent reflections, provably no CPU/audio change); `depth=100` → gains equal documented max.\n4. Monotonicity test: gain outputs strictly non-decreasing in depth, and `refl1Gain*2 + refl2Gain*2 + directGain + farGain*2 ≤` a fixed headroom bound.\n5. Static-scan test (extend the existing es-check step) asserting the script contains no `createConvolver`, `ScriptProcessor`, or `AudioWorklet` tokens.\n\n### One thing not to add yet\nDo not add a real/measured room impulse response via `ConvolverNode` (or any BRIR/HRTF convolution). Save it until this synthetic-reflection layer is shipped and verified stable on-device.",
+  "session_id": "159b1ba9-bde6-4dd1-840a-a84b0ed480d8",
+  "usage": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 11528,
+    "cache_read_input_tokens": 40030,
+    "output_tokens": 6645,
+    "output_tokens_details": {
+      "thinking_tokens": 3815
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 11528,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 5577,
+        "cache_read_input_tokens": 13682,
+        "cache_creation_input_tokens": 1029,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1029
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.122081,
+  "num_turns": 12
+}
