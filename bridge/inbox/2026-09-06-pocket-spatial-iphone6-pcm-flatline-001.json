@@ -1,10 +1,15 @@
 {
-  "id": "2026-09-06-pocket-spatial-iphone6-pcm-flatline-001",
-  "task": "Review a physical iPhone 6 / iOS 12.5.x Pocket Spatial result. Wikimedia Commons free-license MP3 catalog loads and audio plays. The live probe reports web_audio_pcm_flatline: native media currentTime advances, the CORS media element currentTime advances, but AnalyserNode fed by createMediaElementSource(tappedMedia) remains flat at 128. CI has verified the same Commons MP3 bytes and Access-Control-Allow-Origin for our GitHub Pages origin. Existing local-file spatializer uses an <audio> element -> MediaElementAudioSourceNode -> splitter/delay/filter/reflection graph. We need the smallest next experiment that can prove real remote audio can enter Web Audio on this device without pretending success. Assess likely iOS 12 MediaElementAudioSource limitations/bugs and whether a runtime XHR/fetch ArrayBuffer -> decodeAudioData -> AudioBufferSourceNode path is a good compatibility probe for a short Commons MP3. Consider memory constraints on iPhone 6, user-gesture requirements, CORS, and that the project must not record or persist the audio. If a different minimal probe is better, specify it. Preserve ES5/iOS 12 compatibility. Also say what physical-device observation would distinguish browser media-element limitation from a broader Web Audio failure.",
-  "context": {
-    "device": "iPhone 6 / iOS 12.5.x Safari",
-    "observed": "Commons catalog loads; selected MP3 audibly plays; probe result web_audio_pcm_flatline; loaded dry",
-    "network": "live CI verifies Commons API, MP3 bytes, and CORS",
-    "goal": "true runtime spatial processing of remote audio without storage/capture"
-  }
+  "nonce": "pocket-spatial-iphone6-pcm-flatline-20260906-001",
+  "prompt": "Read-only architecture consult. We now have a physical iPhone 6 / iOS 12.5.x Pocket Spatial result. Wikimedia Commons free-license MP3 catalog loads and the selected remote MP3 audibly plays. The live probe reports web_audio_pcm_flatline: the native media element currentTime advances, the crossOrigin=anonymous media element currentTime also advances, but an AnalyserNode fed by createMediaElementSource(tappedMedia) stays flat at 128. CI independently verifies the same Commons MP3 returns bytes and Access-Control-Allow-Origin for our GitHub Pages origin. Existing local-file Pocket Spatial uses an <audio> element -> MediaElementAudioSourceNode -> splitter/delay/filter/reflection DSP graph. We need the smallest next experiment that can prove real remote audio can enter Web Audio on this device without pretending success. Assess likely iOS 12 MediaElementAudioSource limitations or bugs and whether a runtime XMLHttpRequest/fetch ArrayBuffer -> decodeAudioData -> AudioBufferSourceNode path is the best compatibility probe for a short Commons MP3. Consider iPhone 6 memory limits, user-gesture requirements, CORS, and that Pocket Spatial must not record or persist the audio. If a different minimal probe is better, specify it. Also state what physical-device observation would distinguish a remote media-element limitation from a broader Web Audio failure. Preserve ES5/iOS 12 compatibility and do not modify repo files.",
+  "context": [
+    "Device: iPhone 6, iOS 12.5.x Safari.",
+    "Observed: Commons catalog loads; chosen MP3 audibly plays; probe result web_audio_pcm_flatline; app loads dry playback instead.",
+    "Probe uses two hidden audio elements, one native and one crossOrigin=anonymous, and taps the CORS element with MediaElementAudioSourceNode -> AnalyserNode.",
+    "Both media clocks advance, so the remote stream is playable and the CORS media element itself progresses.",
+    "Live CI verifies Commons API response, real MP3 bytes, and CORS for https://maaronfanberg-lab.github.io.",
+    "Goal is true runtime spatial processing of remote audio without saving, recording, exporting, or persistent caching by our app."
+  ],
+  "expected_response": "Under 900 words: diagnose the most likely layer that failed; recommend the smallest next physical-device experiment; evaluate XHR/ArrayBuffer + decodeAudioData + AudioBufferSourceNode for iOS 12; include memory/UX limits; give exact success/failure signals; and state when to stop browser work and pivot native.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 10
 }
