@@ -194,9 +194,108 @@ async function collectOwnTracks(accessToken, maxItems = 100) {
   return result;
 }
 
+function entityURN(entity, kind) {
+  if (!entity) return null;
+  if (entity.urn) return String(entity.urn);
+  if (entity.id != null) return `soundcloud:${kind}:${entity.id}`;
+  return null;
+}
+
+function requireTrackURN(value) {
+  const urn = String(value || '').trim();
+  if (!/^soundcloud:tracks:\d+$/.test(urn)) {
+    const error = new Error('invalid_track_urn');
+    error.status = 400;
+    throw error;
+  }
+  return urn;
+}
+
+function isAllowedSoundCloudMediaURL(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === 'https:' && (
+      host === 'playback.media-streaming.soundcloud.cloud' ||
+      host.endsWith('.soundcloud.cloud') ||
+      host === 'sndcdn.com' ||
+      host.endsWith('.sndcdn.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+function sameSoundCloudUser(track, me) {
+  const owner = track && track.user;
+  if (!owner || !me) return false;
+  const ownerURN = entityURN(owner, 'users');
+  const meURN = entityURN(me, 'users');
+  if (ownerURN && meURN) return ownerURN === meURN;
+  if (owner.id != null && me.id != null) return String(owner.id) === String(me.id);
+  return false;
+}
+
+async function resolveOwnAACStream(accessToken, rawURN) {
+  const urn = requireTrackURN(rawURN);
+  const encodedURN = encodeURIComponent(urn);
+  const [me, track] = await Promise.all([
+    soundCloudGET('/me', accessToken),
+    soundCloudGET(`/tracks/${encodedURN}`, accessToken),
+  ]);
+
+  if (!sameSoundCloudUser(track, me)) {
+    const error = new Error('track_not_owned_by_authenticated_user');
+    error.status = 403;
+    throw error;
+  }
+  if (track.access === 'blocked' || track.streamable === false) {
+    const error = new Error('track_not_streamable');
+    error.status = 403;
+    throw error;
+  }
+
+  const streams = await soundCloudGET(`/tracks/${encodedURN}/streams`, accessToken);
+  let field = null;
+  let bitrateKbps = null;
+  if (streams.hls_aac_160_url) {
+    field = 'hls_aac_160_url';
+    bitrateKbps = 160;
+  } else if (streams.hls_aac_96_url) {
+    field = 'hls_aac_96_url';
+    bitrateKbps = 96;
+  }
+
+  if (!field) {
+    const error = new Error('no_supported_aac_hls_stream');
+    error.status = 422;
+    throw error;
+  }
+
+  const streamURL = String(streams[field]);
+  if (!isAllowedSoundCloudMediaURL(streamURL)) {
+    const error = new Error('untrusted_soundcloud_media_url');
+    error.status = 502;
+    throw error;
+  }
+
+  return {
+    track: cleanTrack(track),
+    stream: {
+      url: streamURL,
+      protocol: 'hls',
+      codec_family: 'aac',
+      bitrate_kbps: bitrateKbps,
+      source_field: field,
+      ephemeral: true,
+      proxying: false,
+    },
+  };
+}
+
 function cleanTrack(track) {
   return {
-    urn: track.urn || (track.id ? `soundcloud:tracks:${track.id}` : null),
+    urn: entityURN(track, 'tracks'),
     title: track.title || 'Untitled',
     permalink_url: track.permalink_url || null,
     artwork_url: track.artwork_url || null,
@@ -206,6 +305,7 @@ function cleanTrack(track) {
     downloadable: Boolean(track.downloadable),
     streamable: track.streamable !== false,
     user: track.user ? {
+      urn: entityURN(track.user, 'users'),
       username: track.user.username || null,
       permalink_url: track.user.permalink_url || null,
     } : null,
@@ -246,6 +346,7 @@ export default {
         configured: configured(env),
         app_url: env.APP_URL,
         callback_url: callbackURL(request),
+        stream_transport: 'aac-hls-url-resolution-only',
       }), env, request);
     }
 
@@ -304,7 +405,7 @@ export default {
         const me = await soundCloudGET('/me', session.access_token);
         return {
           user: {
-            urn: me.urn || (me.id ? `soundcloud:users:${me.id}` : null),
+            urn: entityURN(me, 'users'),
             username: me.username || null,
             permalink_url: me.permalink_url || null,
             avatar_url: me.avatar_url || null,
@@ -317,6 +418,13 @@ export default {
       return apiResponse(request, env, async (session) => {
         const tracks = await collectOwnTracks(session.access_token, 100);
         return { tracks: tracks.map(cleanTrack) };
+      });
+    }
+
+    if (url.pathname === '/api/stream' && request.method === 'GET') {
+      const urn = url.searchParams.get('urn');
+      return apiResponse(request, env, async (session) => {
+        return resolveOwnAACStream(session.access_token, urn);
       });
     }
 
