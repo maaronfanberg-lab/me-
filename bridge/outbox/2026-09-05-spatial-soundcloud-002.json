@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-05-spatial-soundcloud-002.json",
+  "request_sha256": "727eb6f8c689d6ccc2639c42eaebe7425d29a595d2257d93b72ecdd6e3c5bba9",
+  "request_nonce": "spatial-soundcloud-20260905-002",
+  "completed_at": "2026-09-06T02:30:52.779490Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "# Engineering Review: Native iPhone SoundCloud Spatial-Audio Player\n\n## Architecture\n\nThree decoupled stages, each independently testable:\n\n1. **Network/Auth layer**: OAuth 2.1 + PKCE (no client secret embedded) → resolve track → fetch HLS AAC transcoding URL (short-lived, signed) → refresh as needed.\n2. **Decode/ingest layer**: `AVURLAsset`/`AVPlayerItem` pointed at the HLS URL, tapped via `AVPlayerItemOutput` (specifically `AVPlayerItemVideoOutput`'s audio cousin doesn't exist — see trap below) or, more reliably, decode HLS segments yourself and hand PCM to the engine.\n3. **DSP/render layer**: `AVAudioEngine` graph with a **source node fed raw PCM buffers** (not `AVAudioPlayerNode` reading a file) → stereo-to-object decomposition → binaural convolution stage → `AVAudioSinkNode`/output to headphones.\n\nKeep these as separate modules with a PCM-ring-buffer boundary between (2) and (3). This isolates SoundCloud/HLS fragility from your DSP work — you can develop and demo the DSP chain entirely against local files while (2) is still being solved.\n\n## Biggest Trap\n\n**There is no supported, sanctioned way to pull raw AAC HLS audio into `AVAudioEngine` as a controllable PCM stream without either (a) using `AVPlayer` for playback and only get coarse taps, or (b) doing your own HLS demuxing/decoding.** Specifically:\n\n- `AVAudioPlayerNode` wants a file or in-memory PCM buffer — it does not consume streaming HLS.\n- `AVPlayer`/`AVPlayerItem` *can* play HLS, and you can attach an `MTAudioProcessingTap` to get PCM callbacks mid-pipeline — but this API is old (pre-Swift concurrency), poorly documented, has real-time thread constraints, and Apple has quietly under-invested in it. It is not officially deprecated but is easy to get subtly wrong (e.g., calling non-realtime-safe code in the tap callback causes glitches/crashes).\n- `AVAudioEnvironmentNode` spatializes **mono** point sources; it does not do arbitrary stereo-image-aware binaural rendering. To preserve the artist's stereo mix intent while adding spatialization, you must decompose stereo into components yourself (mid/side, or multiple virtual mono sources) before feeding the environment node — the \"genuine binaural, not panning\" requirement rests on this decomposition, which Apple provides no primitive for.\n- Assume the HLS URLs are short-lived/signed and may require the `AVURLAsset` to carry proper headers (User-Agent/Referer) or the CDN will 403 — a common silent-failure trap.\n\n**This is the single point of highest technical risk.** De-risk it first, before writing any DSP.\n\n## Smallest PoC\n\nTwo-part PoC, sequenced:\n\n**PoC-A (decode path, ~1-2 days):** `AVPlayer` playing a real SoundCloud HLS URL, with an `MTAudioProcessingTap` installed on the audio mix, logging buffer format/sample rate/frame count to console. Success = you receive continuous, correctly-timed PCM callbacks for a full track with no gaps. This single test answers the biggest uncertainty in the whole project.\n\n**PoC-B (DSP path, parallel, ~1-2 days):** `AVAudioEngine` with an `AVAudioSourceNode` fed by a local WAV file's PCM (bypass networking entirely), routed through `AVAudioEnvironmentNode` with a mono source moved in a slow circle, output to headphones. Success = audibly perceived motion around the head (not just L/R volume shift).\n\nOnly after both succeed independently do you wire PoC-A's tap output into PoC-B's source node ring buffer. That integration is PoC-C and is the real go/no-go milestone.\n\n## Apple APIs/DSP Path\n\n- **Ingest**: `AVPlayerItem` + `MTAudioProcessingTap` (or, if tap proves unreliable, fall back to `AVAssetReader` against a locally-cached/downloaded HLS rendition — more work, but fully synchronous and controllable, no real-time tap constraints).\n- **Bridge to engine**: write tapped/read PCM into a lock-free ring buffer; pull from it inside an `AVAudioSourceNode`'s render block (this block runs on the real-time audio thread — no allocations, no locks, no Swift ARC-heavy code).\n- **Stereo decomposition**: manual mid/side or PCA-based decomposition into N virtual mono emitters before the spatializer — this is your own DSP code, likely using `vDSP`/Accelerate for the math.\n- **Binaural rendering**: `AVAudioEnvironmentNode` per virtual mono source gets you basic HRTF-based binaural panning + distance attenuation \"for free.\" For genuine early reflections/room convolution beyond what the environment node offers, use `AVAudioUnitReverb` (limited) or write a custom `AVAudioUnit`/`AUv3` convolution stage using Accelerate's FFT-based convolution against measured or synthetic BRIRs (binaural room impulse responses) — this is where real engineering effort goes.\n- **Head tracking (later)**: `CMHeadphoneMotionManager` feeds device-relative head orientation into `AVAudioEnvironmentNode`'s listener orientation — straightforward once the rest works.\n\n## SoundCloud Cautions\n\n- Confirm current app registration terms: if PKCE truly eliminates the need for a client secret for your grant type, use it — do not embed a secret in the binary regardless. If SoundCloud's current custom-player flow still nominally issues a secret, route token exchange through a small backend proxy you control (even a serverless function) rather than shipping the secret client-side.\n- Store access/refresh tokens in Keychain, not UserDefaults; use `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` or stricter.\n- Treat stream URLs as ephemeral/signed — re-resolve on each playback session rather than caching long-term; do not persist raw stream URLs.\n- Respect ToS around caching/downloading audio — the architecture above should decode-and-discard PCM in the ring buffer, not persist decoded audio to disk, to stay within typical streaming-license constraints.\n- Rate-limit token refresh and stream-resolution calls; build in exponential backoff — SoundCloud API stability/quotas for third-party non-partner apps are historically inconsistent.\n\n## Staged Build\n\n1. **Stage 0** — OAuth/PKCE + track resolution to a playable HLS URL only; verify with stock `AVPlayer` (no DSP).\n2. **Stage 1** — PoC-A: tap PCM off that `AVPlayer` stream, verify integrity (checksums/duration match).\n3. **Stage 2** — PoC-B: local-file DSP chain with `AVAudioEnvironmentNode`, prove binaural motion perceptually and via spectral before/after ITD/ILD measurement.\n4. **Stage 3** — PoC-C: integrate live SoundCloud PCM into the DSP chain; handle buffer underrun/network stalls gracefully (this is where most remaining risk lives — network jitter vs. real-time audio thread).\n5. **Stage 4** — Add stereo decomposition (mid/side → multi-emitter) so the *original* stereo mix informs spatial placement rather than collapsing to mono.\n6. **Stage 5** — Custom convolution stage (early reflections/room IR) via Accelerate FFT.\n7. **Stage 6** — SwiftUI UI wrapping playback/library browsing; this is the least risky part and should come last.\n8. **Stage 7** — Head tracking via `CMHeadphoneMotionManager`.\n\n## Proof Tests\n\n- **Ingest integrity**: decode a known test tone/track via the tap path and via offline `AVAssetReader`; compare sample counts and spectral content — must match within decoder tolerance, no dropped/duplicated frames over a 5-minute stream.\n- **Real-time safety**: run PoC-C under Xcode's audio thread priority inversion / glitch detection (`AVAudioEngine`'s `isRunning` + manual buffer-underrun counters) during simulated network throttling (Network Link Conditioner) — zero dropouts under moderate jitter is the bar.\n- **Binaural authenticity**: measure interaural time/level differences (ITD/ILD) of engine output for a source panned front-left vs. simple stereo pan of the same source — spatialized output must show frequency-dependent ILD and non-trivial ITD, not just flat amplitude difference (this operationally distinguishes \"real binaural\" from \"panning\").\n- **Stereo-preservation test**: feed a hard-panned stereo test file through decomposition + spatializer; confirm the two channels remain perceptually separated in the rendered binaural output (not collapsed to a single point source).\n- **Token security**: static-scan the shipped binary for embedded secrets (strings search) before each release; confirm refresh-token flow survives app restart and token revocation gracefully.\n- **Long-session stability**: 60-minute continuous playback with track skips, backgrounding, and route changes (headphones unplugged/replugged) — engine must reconfigure without crash (`AVAudioEngineConfigurationChange` notification handling).",
+  "session_id": "88f817a5-2faf-4fcd-b0a0-9c20bbdf1cf9",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 822,
+    "cache_read_input_tokens": 3183,
+    "output_tokens": 3269,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 822,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3269,
+        "cache_read_input_tokens": 3183,
+        "cache_creation_input_tokens": 822,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 822
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.0379586,
+  "num_turns": 1
+}
