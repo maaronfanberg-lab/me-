@@ -49,8 +49,9 @@ jobs:
       - name: Verify page consumes the tested core
         run: |
           grep -q '<script src="pocket-spatial-core.js"></script>' apps/pocket-spatial.html
-          grep -q 'PocketSpatialCore.appliedTargets' apps/pocket-spatial.html
-          grep -q 'PocketSpatialCore.readouts' apps/pocket-spatial.html
+          grep -q 'var core=window.PocketSpatialCore' apps/pocket-spatial.html
+          grep -q 'core.appliedTargets' apps/pocket-spatial.html
+          grep -q 'core.readouts' apps/pocket-spatial.html
       - name: Validate legacy HTML structure
         run: |
           python3 - <<'PY'
@@ -80,7 +81,7 @@ jobs:
           assert p.lang=='en'
           assert p.has_audio
           assert len(p.ids)==len(set(p.ids)), 'duplicate id detected'
-          for required in ('file','space','angle','spatial','audio','delay','cutoff','far','direct'):
+          for required in ('file','space','angle','spatial','audio','delay','cutoff','far','direct','master'):
               assert required in p.ids, f'missing required id {required}'
           for labelled in ('file','space','angle'):
               assert labelled in p.labels, f'missing label for {labelled}'
