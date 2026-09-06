@@ -92,6 +92,7 @@ final class SoundCloudLibrary: ObservableObject {
         case unplayableTrack
         case missingTrackURN
         case noAACStream
+        case untrustedTokenDestination
         case unresolvedAuthenticatedStream
 
         var errorDescription: String? {
@@ -106,6 +107,8 @@ final class SoundCloudLibrary: ObservableObject {
                 return "This track does not contain a usable SoundCloud resource URN."
             case .noAACStream:
                 return "SoundCloud did not provide an AAC HLS stream for this track."
+            case .untrustedTokenDestination:
+                return "Refused to send the SoundCloud OAuth token to a URL outside https://api.soundcloud.com."
             case .unresolvedAuthenticatedStream:
                 return "The SoundCloud HLS endpoint still requires an authorization header after resolution, so AVPlayer cannot safely consume it yet."
             }
@@ -155,6 +158,10 @@ final class SoundCloudLibrary: ObservableObject {
             throw APIError.noAACStream
         }
 
+        // This request contains an OAuth bearer-equivalent credential. Never trust a
+        // server-returned absolute URL blindly, even when it is expected to be SoundCloud.
+        try requireTrustedSoundCloudAPIURL(authenticatedStreamURL)
+
         // The modern /streams response points back at an authenticated SoundCloud
         // streaming endpoint. Resolve that small HLS request with URLSession so its
         // OAuth header is applied, then hand the final signed CDN URL to AVPlayer.
@@ -169,10 +176,13 @@ final class SoundCloudLibrary: ObservableObject {
         guard (200..<300).contains(http.statusCode) else {
             throw APIError.http(http.statusCode, "stream resolution failed")
         }
-        guard let finalURL = response.url else { throw APIError.badResponse }
+        guard let finalURL = response.url,
+              finalURL.scheme?.lowercased() == "https" else {
+            throw APIError.badResponse
+        }
 
         let host = finalURL.host?.lowercased() ?? ""
-        if host == "api.soundcloud.com" || host.hasSuffix(".api.soundcloud.com") {
+        if host == "api.soundcloud.com" {
             // Do not pass an OAuth-dependent URL to AVPlayer: there is no supported
             // general Authorization-header initialization option for AVURLAsset.
             throw APIError.unresolvedAuthenticatedStream
@@ -225,11 +235,16 @@ final class SoundCloudLibrary: ObservableObject {
         if let absolute = URL(string: absoluteOrRelative), absolute.scheme != nil {
             url = absolute
         } else {
-            guard let relative = URL(string: absoluteOrRelative, relativeTo: URL(string: "https://api.soundcloud.com")!)?.absoluteURL else {
+            guard let relative = URL(
+                string: absoluteOrRelative,
+                relativeTo: URL(string: "https://api.soundcloud.com")!
+            )?.absoluteURL else {
                 throw APIError.badResponse
             }
             url = relative
         }
+
+        try requireTrustedSoundCloudAPIURL(url)
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -243,5 +258,12 @@ final class SoundCloudLibrary: ObservableObject {
             throw APIError.http(http.statusCode, message)
         }
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func requireTrustedSoundCloudAPIURL(_ url: URL) throws {
+        guard url.scheme?.lowercased() == "https",
+              url.host?.lowercased() == "api.soundcloud.com" else {
+            throw APIError.untrustedTokenDestination
+        }
     }
 }
