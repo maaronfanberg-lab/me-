@@ -73,12 +73,12 @@
       ]
     },
     "Ivo": {
-      "energy": 65.0,
+      "energy": 63.0,
       "goals": [
         "be useful during disruptions",
         "earn others' trust through visible work"
       ],
-      "location": "kitchen",
+      "location": "square",
       "memories": [
         {
           "id": "85bbecc38f842ab0",
@@ -145,6 +145,17 @@
           ],
           "text": "I moved from square to kitchen.",
           "tick": 14
+        },
+        {
+          "id": "aa9f3aabccb0fe38",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "move",
+            "Ivo"
+          ],
+          "text": "I moved from kitchen to square.",
+          "tick": 17
         }
       ],
       "name": "Ivo",
@@ -242,12 +253,12 @@
       ]
     },
     "Mira": {
-      "energy": 67.0,
+      "energy": 65.0,
       "goals": [
         "keep the greenhouse productive",
         "learn what neighbors need"
       ],
-      "location": "kitchen",
+      "location": "square",
       "memories": [
         {
           "id": "448fa2877788e7db",
@@ -303,6 +314,17 @@
           ],
           "text": "I paused to observe kitchen.",
           "tick": 13
+        },
+        {
+          "id": "90537f9c6d26c051",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "move",
+            "Mira"
+          ],
+          "text": "I moved from kitchen to square.",
+          "tick": 17
         }
       ],
       "name": "Mira",
@@ -542,26 +564,26 @@
   },
   "metrics": {
     "action_counts": {
-      "move": 29,
+      "move": 31,
       "observe": 3
     },
-    "action_entropy_bits": 0.4489,
+    "action_entropy_bits": 0.4306,
     "action_feasibility_breakdown": {
       "help": {
         "chosen_and_accepted_ticks": 0,
         "chosen_and_rejected_ticks": 0,
         "chosen_ticks": 0,
-        "feasible_ticks": 27,
-        "feasible_unchosen_ticks": 27,
+        "feasible_ticks": 29,
+        "feasible_unchosen_ticks": 29,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
         "unavailable_ticks": 5
       },
       "move": {
-        "chosen_and_accepted_ticks": 29,
+        "chosen_and_accepted_ticks": 31,
         "chosen_and_rejected_ticks": 3,
-        "chosen_ticks": 32,
-        "feasible_ticks": 32,
+        "chosen_ticks": 34,
+        "feasible_ticks": 34,
         "feasible_unchosen_ticks": 0,
         "rejection_reasons": {
           "repeated_action_loop": 3
@@ -573,8 +595,8 @@
         "chosen_and_accepted_ticks": 0,
         "chosen_and_rejected_ticks": 0,
         "chosen_ticks": 0,
-        "feasible_ticks": 32,
-        "feasible_unchosen_ticks": 32,
+        "feasible_ticks": 34,
+        "feasible_unchosen_ticks": 34,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
         "unavailable_ticks": 0
@@ -583,8 +605,8 @@
         "chosen_and_accepted_ticks": 0,
         "chosen_and_rejected_ticks": 0,
         "chosen_ticks": 0,
-        "feasible_ticks": 32,
-        "feasible_unchosen_ticks": 32,
+        "feasible_ticks": 34,
+        "feasible_unchosen_ticks": 34,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
         "unavailable_ticks": 0
@@ -593,8 +615,8 @@
         "chosen_and_accepted_ticks": 0,
         "chosen_and_rejected_ticks": 0,
         "chosen_ticks": 0,
-        "feasible_ticks": 27,
-        "feasible_unchosen_ticks": 27,
+        "feasible_ticks": 29,
+        "feasible_unchosen_ticks": 29,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
         "unavailable_ticks": 5
@@ -603,8 +625,8 @@
         "chosen_and_accepted_ticks": 0,
         "chosen_and_rejected_ticks": 0,
         "chosen_ticks": 0,
-        "feasible_ticks": 32,
-        "feasible_unchosen_ticks": 32,
+        "feasible_ticks": 34,
+        "feasible_unchosen_ticks": 34,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
         "unavailable_ticks": 0
@@ -612,14 +634,14 @@
     },
     "agents": 8,
     "backend_errors": 0,
-    "decision_count": 32,
+    "decision_count": 34,
     "exact_repeated_utterance_rate": 0.0,
-    "location_entropy_bits": 1.7685,
+    "location_entropy_bits": 1.7373,
     "note": "These are engineering diagnostics, not measures of human realism or consciousness.",
     "proposal_rejections": 3,
     "talk_turns": 0,
-    "ticks": 16,
-    "total_actions": 32,
+    "ticks": 17,
+    "total_actions": 34,
     "unique_interaction_pairs": 0
   },
   "model": "bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M",
@@ -2230,6 +2252,103 @@
       },
       "seq": 70,
       "tick": 16
+    },
+    {
+      "accepted": true,
+      "actor": "Ivo",
+      "chosen_type": "move",
+      "co_located_agents": [
+        "Jun",
+        "Lena",
+        "Mira"
+      ],
+      "energy": 65.0,
+      "feasible_action_types": [
+        "help",
+        "move",
+        "observe",
+        "rest",
+        "talk",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "kitchen",
+      "proposed_action": {
+        "location": "square",
+        "type": "move"
+      },
+      "proposed_type": "move",
+      "recent_local_incidents": [],
+      "rejection_reason": null,
+      "resources_visible": {
+        "food": 5
+      },
+      "seq": 71,
+      "tick": 17
+    },
+    {
+      "action": {
+        "location": "square",
+        "type": "move"
+      },
+      "actor": "Ivo",
+      "kind": "action",
+      "location": "kitchen",
+      "outcome": {
+        "from": "kitchen",
+        "ok": true,
+        "to": "square"
+      },
+      "seq": 72,
+      "tick": 17
+    },
+    {
+      "accepted": true,
+      "actor": "Mira",
+      "chosen_type": "move",
+      "co_located_agents": [
+        "Jun",
+        "Lena"
+      ],
+      "energy": 67.0,
+      "feasible_action_types": [
+        "help",
+        "move",
+        "observe",
+        "rest",
+        "talk",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "kitchen",
+      "proposed_action": {
+        "location": "square",
+        "type": "move"
+      },
+      "proposed_type": "move",
+      "recent_local_incidents": [],
+      "rejection_reason": null,
+      "resources_visible": {
+        "food": 5
+      },
+      "seq": 73,
+      "tick": 17
+    },
+    {
+      "action": {
+        "location": "square",
+        "type": "move"
+      },
+      "actor": "Mira",
+      "kind": "action",
+      "location": "kitchen",
+      "outcome": {
+        "from": "kitchen",
+        "ok": true,
+        "to": "square"
+      },
+      "seq": 74,
+      "tick": 17
     }
   ],
   "seed": 7,
@@ -2237,8 +2356,8 @@
   "started_at": "2026-09-06T02:13:51.522554Z",
   "status": "live",
   "temperature": 0.1,
-  "tick": 16,
-  "updated_at": "2026-09-06T02:17:41.162893Z",
+  "tick": 17,
+  "updated_at": "2026-09-06T02:18:00.893945Z",
   "version": 1,
   "world_name": "Cedar Hollow"
 }
