@@ -1,0 +1,14 @@
+{
+  "model": "claude-sonnet-5",
+  "claude_code_max_turns": 12,
+  "max_tokens": 2200,
+  "system": "You are Claude acting as Sarah's read-only engineering partner. Inspect the repository directly with Read/Glob/Grep. Be concise, evidence-based, and practical. Do not modify files or workflows. Do not inspect, alter, or advise changes to The Room or Emily/Olivia workflows or source. Focus only on experiments/little-world-lab and the Little World Falcon live path.",
+  "prompt": "Cedar Hollow integration blockers are closed. The next research question is why natural Falcon3-1B runs overwhelmingly choose move/observe even when talk/help/work are locally feasible and incidents make cooperation meaningful. Review experiments/little-world-lab/falcon_live.py, living_world.py, tests, and the Little World live workflow. Design the smallest instrumentation-first next step that tells us, for each natural decision, which action types were feasible, which action Falcon chose, what local incident/resource context was visible, and whether the chosen action was accepted or rejected. Preserve the principle model proposes / WorldEngine validates and do not add rules that force social behavior. Also assess whether a temperature sweep should happen immediately or only after instrumentation, and what exact metrics would distinguish 'branch unavailable', 'branch available but unchosen', and 'model chose it but engine rejected it'. Do not propose changes outside Little World.",
+  "context": [
+    "Latest blocker-closure run passed: all six directed action paths work live, 72 natural actions across seeds 7/19/31, 67 accepted, 5 rejected, 0 backend errors.",
+    "Natural action distribution was dominated by move, with a few observe actions and no spontaneous talk/help/work/rest.",
+    "Cedar incidents include greenhouse crop damage, water-pump trouble, and repair-part delivery; agents can be co-located and resources are present.",
+    "The goal is to understand behavior, not manufacture it."
+  ],
+  "expected_response": "Start with RECOMMENDATION. Then give (1) exact instrumentation fields and where to emit them, (2) smallest files/functions to change, (3) exact metrics/tests, (4) whether to run the temperature sweep now or after instrumentation, and (5) any risk of accidentally biasing behavior."
+}
