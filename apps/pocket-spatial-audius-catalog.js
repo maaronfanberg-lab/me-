@@ -3,7 +3,9 @@
 
 var API='https://api.audius.co/v1';
 var APP_NAME='PocketSpatial';
-var MAX_RESULTS=24;
+var API_LIMIT=100;
+var DISPLAY_RESULTS=24;
+var DISCOVERY_QUERIES=['CC BY','Creative Commons Attribution','creative commons','CC0'];
 var state={tracks:[]};
 
 function el(tag,className,text){
@@ -84,11 +86,8 @@ function normalizeTrack(track){
 }
 
 function buildCatalogURL(query){
-  var q=cleanText(query);
-  if(q){
-    return API+'/tracks/search?query='+encodeURIComponent(q)+'&limit='+MAX_RESULTS+'&app_name='+encodeURIComponent(APP_NAME);
-  }
-  return API+'/tracks/trending?time=week&limit='+MAX_RESULTS+'&app_name='+encodeURIComponent(APP_NAME);
+  var q=cleanText(query)||DISCOVERY_QUERIES[0];
+  return API+'/tracks/search?query='+encodeURIComponent(q)+'&limit='+API_LIMIT+'&app_name='+encodeURIComponent(APP_NAME);
 }
 
 function xhrJSON(url,callback){
@@ -111,7 +110,7 @@ function xhrJSON(url,callback){
 function collectTracks(data){
   var raw=data&&data.data&&data.data.length!=null?data.data:[];
   var tracks=[];
-  for(var i=0;i<raw.length;i+=1){
+  for(var i=0;i<raw.length&&tracks.length<DISPLAY_RESULTS;i+=1){
     var track=normalizeTrack(raw[i]);
     if(track)tracks.push(track);
   }
@@ -121,7 +120,7 @@ function collectTracks(data){
 function renderTracks(ui){
   while(ui.tracks.firstChild)ui.tracks.removeChild(ui.tracks.firstChild);
   if(!state.tracks.length){
-    ui.tracks.appendChild(el('div','status','No derivative-permitting Audius tracks were returned. Try a Creative Commons search.'));
+    ui.tracks.appendChild(el('div','status','No derivative-permitting Audius tracks were returned. Pocket Spatial will try several rights-safe searches when the box is blank.'));
     return;
   }
   var heading=el('div','status','AUDIUS · '+state.tracks.length+' BUFFERED IMMERSIVE CANDIDATES');
@@ -169,42 +168,62 @@ function renderTracks(ui){
   }
 }
 
-function finishCatalog(ui,error,data,query){
+function showTracks(ui,tracks,label){
+  state.tracks=tracks||[];
   ui.load.disabled=false;
   ui.load.textContent='SEARCH / RELOAD AUDIUS';
+  renderTracks(ui);
+  if(state.tracks.length){
+    setStatus(ui,'Audius connected through “'+cleanText(label)+'” with derivative-permitting tracks. Pick one and tap BUFFER + PLAY IMMERSIVE.','good');
+  }else{
+    setStatus(ui,'Audius responded, but no derivative-permitting <=180 s tracks were found in the rights-safe discovery searches.','warn');
+  }
+}
+
+function finishCatalog(ui,error,data,query){
   if(error){
     state.tracks=[];
+    ui.load.disabled=false;
+    ui.load.textContent='SEARCH / RELOAD AUDIUS';
     renderTracks(ui);
     setStatus(ui,'Audius catalog request failed: '+error.message,'warn');
     return;
   }
-  state.tracks=collectTracks(data);
-  renderTracks(ui);
-  if(state.tracks.length)setStatus(ui,'Audius connected with derivative-permitting tracks. Pick one and tap BUFFER + PLAY IMMERSIVE.','good');
-  else setStatus(ui,'Audius responded, but “'+cleanText(query)+'” returned no derivative-permitting <=180 s tracks. Try another Creative Commons search.','warn');
+  showTracks(ui,collectTracks(data),query);
+}
+
+function loadDiscovery(ui,index){
+  var query;
+  if(index>=DISCOVERY_QUERIES.length){
+    showTracks(ui,[],'rights-safe discovery');
+    return;
+  }
+  query=DISCOVERY_QUERIES[index];
+  setStatus(ui,'Audius connected. Checking rights-safe search '+(index+1)+'/'+DISCOVERY_QUERIES.length+': “'+query+'”…','');
+  xhrJSON(buildCatalogURL(query),function(error,data){
+    var tracks;
+    if(error){
+      if(index+1<DISCOVERY_QUERIES.length){loadDiscovery(ui,index+1);return;}
+      finishCatalog(ui,error,data,query);
+      return;
+    }
+    tracks=collectTracks(data);
+    if(tracks.length){showTracks(ui,tracks,query);return;}
+    loadDiscovery(ui,index+1);
+  });
 }
 
 function loadCatalog(ui){
-  var query=ui.query?ui.query.value:'';
+  var query=ui.query?cleanText(ui.query.value):'';
   ui.load.disabled=true;
-  ui.load.textContent=query?'SEARCHING AUDIUS…':'LOADING AUDIUS…';
-  setStatus(ui,query?'Searching Audius for “'+cleanText(query)+'”…':'Loading Audius trending tracks and checking creator licenses…','');
-  xhrJSON(buildCatalogURL(query),function(error,data){
-    var tracks;
-    if(error){finishCatalog(ui,error,data,query);return;}
-    tracks=collectTracks(data);
-    if(!query&&!tracks.length){
-      setStatus(ui,'Audius connected. Trending had no derivative-permitting candidates, so Pocket Spatial is checking Creative Commons tracks…','');
-      xhrJSON(buildCatalogURL('creative commons'),function(error2,data2){finishCatalog(ui,error2,data2,'creative commons');});
-      return;
-    }
-    state.tracks=tracks;
-    ui.load.disabled=false;
-    ui.load.textContent='SEARCH / RELOAD AUDIUS';
-    renderTracks(ui);
-    if(tracks.length)setStatus(ui,'Audius connected with derivative-permitting tracks. Pick one and tap BUFFER + PLAY IMMERSIVE.','good');
-    else setStatus(ui,'Audius responded, but this search had no derivative-permitting <=180 s tracks. Try “creative commons” or a known CC artist.','warn');
-  });
+  ui.load.textContent=query?'SEARCHING AUDIUS…':'DISCOVERING AUDIUS…';
+  if(query){
+    setStatus(ui,'Searching Audius for “'+query+'” and checking creator licenses…','');
+    xhrJSON(buildCatalogURL(query),function(error,data){finishCatalog(ui,error,data,query);});
+    return;
+  }
+  setStatus(ui,'Searching Audius more deeply for explicit derivative-permitting licenses…','');
+  loadDiscovery(ui,0);
 }
 
 function createUI(){
@@ -222,7 +241,7 @@ function createUI(){
   card.appendChild(status);
   var query=el('input','');
   query.type='text';
-  query.placeholder='Artist, track, genre… (blank = trending + CC fallback)';
+  query.placeholder='Artist, track, genre… (blank = rights-safe discovery)';
   query.id='audiusBufferedQuery';
   query.autocapitalize='off';
   query.autocomplete='off';
@@ -258,6 +277,7 @@ function boot(){
     isPlayable:isPlayable,
     normalizeTrack:normalizeTrack,
     streamURL:streamURL,
+    discoveryQueries:DISCOVERY_QUERIES.slice(0),
     ui:ui
   };
 }
