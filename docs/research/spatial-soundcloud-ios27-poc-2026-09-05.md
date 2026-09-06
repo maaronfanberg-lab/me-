@@ -1,7 +1,7 @@
 # Spatial SoundCloud iOS 27 PoC — research gate
 
 Date: 2026-09-05
-Status: pre-implementation research record
+Status: implementation scaffold complete; Xcode 27 / physical-device validation pending
 Branch: `feature/spatial-soundcloud-ios27-poc`
 
 ## Observed problem
@@ -33,7 +33,9 @@ What is the smallest native iPhone architecture that can:
 
 - SoundCloud developer documentation currently describes OAuth 2.1 / PKCE and AAC HLS stream transcodings for custom players.
 - SoundCloud's current authentication documentation also states that clients are treated as confidential and a `client_secret` is required for token acquisition/refresh. A secret therefore must not be shipped inside an iOS binary; a small server-side token broker is required for production-safe account login.
+- `/tracks/{track_urn}/streams` remains authenticated. The preferred modern streams are `hls_aac_160_url` and `hls_aac_96_url`.
 - Stream URLs should be treated as ephemeral and resolved for playback rather than persisted as durable media URLs.
+- Custom players must credit the uploader, credit SoundCloud, and link to the original SoundCloud work.
 
 ### Independent second-model review
 
@@ -44,37 +46,55 @@ The repository's verified Claude oracle bridge was used for a bounded architectu
 - verified model family: Claude
 - resolved primary response model: `claude-sonnet-5`
 
-Claude independently recommended separating network/auth, decode/ingest, and DSP; treating the decoded-PCM boundary as the main risk; using real binaural tests rather than subjective widening; and keeping the audio callback free of allocation/locking/network work. Claude's claim that HLS-to-tap processing required an unsupported workaround is superseded by Apple's new iOS 27 HLS tap support above.
+Claude independently recommended separating network/auth, decode/ingest, and DSP; treating the decoded-PCM boundary as the main risk; using real binaural tests rather than subjective widening; and keeping the audio callback free of allocation/locking/network work. Claude's initial assumption that HLS-to-tap processing required an unsupported workaround is superseded by Apple's new iOS 27 whole-mix HLS tap support above.
+
+A later branch-level Claude code review could not inspect this feature branch because the oracle runner checked out only the triggering `main` commit. The oracle explicitly declined to speculate without source visibility. A source-inline follow-up review was submitted separately rather than treating the failed branch review as evidence.
 
 ## Competing explanations / limitations
 
 1. A perceived "3D" effect can come from stereo widening, phase tricks, or automated pan motion without true binaural cues. Therefore listening impressions alone are not enough to validate the mechanism.
 2. Apple's new whole-mix HLS tap path is iOS 27-era beta API as of 2026-09-05. It should not be assumed to work on iOS 26, and behavior may change before final SDK release.
 3. `AVAudioEnvironmentNode` is useful for a mono-source reference experiment, but forcing an existing stereo master through mono point sources can alter the artist's mix. A custom stereo-aware binaural stage is preferable for the long-term design.
-4. A custom HRTF/BRIR engine increases DSP complexity and CPU cost. The first PoC should prove the streaming tap and use a deliberately small, measurable binaural model before convolution-heavy rooms are added.
-5. SoundCloud OAuth cannot be completed end-to-end without an app registration/client ID and a server-held client secret. This PoC therefore isolates the audio path first.
+4. A custom HRTF/BRIR engine increases DSP complexity and CPU cost. The first PoC proves a smaller measurable binaural mechanism before convolution-heavy rooms are added.
+5. SoundCloud OAuth code is scaffolded, but end-to-end authentication still requires a registered SoundCloud API application, a deployed Worker, and real credentials. No credential is committed to the repository.
+6. The SoundCloud stream resolver assumes that an authenticated API stream URL redirects to an HTTPS CDN URL that no longer requires the OAuth header. The app deliberately fails closed if the final URL is still `api.soundcloud.com`; this behavior must be tested against a real account/track.
+7. Apple's unsupported `AVURLAssetHTTPHeaderFieldsKey` is deliberately not used.
 
 ## 10-level gate
 
 1. **Observed problem:** PASS. The desired behavior and current gap are explicit.
-2. **Foundational evidence:** PASS for the audio mechanism. Binaural localization relies on interaural time difference (ITD), interaural level difference (ILD), and frequency-dependent filtering; the PoC will implement measurable ITD/ILD plus head-shadow filtering rather than a volume pan.
+2. **Foundational evidence:** PASS for the audio mechanism. Binaural localization relies on interaural time difference (ITD), interaural level difference (ILD), and frequency-dependent filtering; the PoC implements measurable ITD/ILD plus head-shadow filtering rather than a volume pan.
 3. **Current evidence:** PASS. Apple 2026 HLS documentation materially changes the ingest architecture and is the primary reason for targeting iOS 27.
 4. **Natural-behavior evidence:** N/A. This change is an audio-processing prototype, not human-behavior modeling.
 5. **Mechanism evidence:** PASS. The proposed output is generated by delayed/frequency-shaped cross-ear paths and virtual-source geometry, not an effect-name preset.
 6. **Competing explanations:** PASS. Stereo widening/panning is treated as a confound and gets separate proof tests.
 7. **Replication/correction/limitations:** PARTIAL. The new Apple API is beta and cannot yet have mature field evidence. This uncertainty is explicit.
 8. **Context transfer:** PASS WITH LIMIT. Apple's HLS tap applies to AVPlayer streaming generally, but SoundCloud-specific CDN/auth behavior still needs device testing.
-9. **Implementation mapping:** PASS. `AVPlayerItem` owns transport; `MTAudioProcessingTap` exposes decoded PCM; `BinauralDSP` transforms buffers in-place; SoundCloud auth remains a separate later module.
+9. **Implementation mapping:** PASS. `SoundCloudAccount` handles PKCE/token state; the Cloudflare Worker holds the client secret; `SoundCloudLibrary` resolves library resources and AAC HLS; `AVPlayerItem` owns transport; `MTAudioProcessingTap` exposes decoded PCM; `BinauralDSP` transforms buffers in place.
 10. **Post-change validation:** DEFINED below. No success claim is permitted until physical-device tests pass.
 
-## Proposed implementation mapping
+## Implemented mapping
+
+### SoundCloud identity and library
+
+`ASWebAuthenticationSession + PKCE`
+→ Cloudflare token broker
+→ SoundCloud token endpoint
+→ iPhone Keychain
+→ `/me/likes/tracks` + `/me/playlists`
+→ `/tracks/{track_urn}/streams`
+→ prefer AAC HLS 160k, fallback 96k
+→ authenticated stream preflight
+→ final HTTPS CDN URL if the redirect is self-sufficient
+
+All OAuth-bearing API requests are pinned to `https://api.soundcloud.com` before the token is attached. The Worker does not proxy media.
 
 ### PoC A — iOS 27 HLS tap
 
 `AVPlayerItem(HLS URL)`
 → `AVAudioMixInputParametersTrackID.mixID`
-→ `MTAudioProcessingTap`
-→ decoded PCM callback
+→ `MTAudioProcessingTapCreateWithPreferredFormat`
+→ decoded stereo Float32 target / actual format inspection in prepare
 → in-place DSP
 → AVPlayer's normal headphone output
 
@@ -90,20 +110,21 @@ Treat the incoming left and right program channels as two virtual sources. For e
 - expose a conservative spatial-amount control;
 - maintain headroom and provide an exact bypass.
 
-This is intentionally a small binaural renderer, not a claim of individualized HRTF accuracy. Measured HRTF/BRIR convolution is a later stage.
+This is intentionally a small binaural renderer, not a claim of individualized HRTF accuracy. Deterministic unit tests cover bypass transparency, delayed cross-ear energy, and frequency-dependent far-ear attenuation.
 
 ### Later stages
 
-1. SoundCloud OAuth/library module with a server-side secret broker, likely a small Cloudflare Worker.
-2. Resolve and prefer SoundCloud AAC HLS stream URLs.
+1. Xcode 27 and physical iPhone validation of the beta streaming tap.
+2. Real SoundCloud OAuth/playlist/HLS redirect validation with registered credentials.
 3. Measured/synthetic HRTF FIR convolution via Accelerate/vDSP.
 4. Early-reflection field and room/BRIR convolution.
 5. Distance/depth controls.
 6. Optional `CMHeadphoneMotionManager` head tracking.
+7. Final SoundCloud logo/branding implementation and App Store compliance pass.
 
 ## Pre-change baseline
 
-No native iOS project in this repository currently implements SoundCloud HLS whole-mix tapping or in-place binaural DSP.
+No native iOS project in this repository previously implemented SoundCloud HLS whole-mix tapping or in-place binaural DSP.
 
 ## Validation criteria
 
@@ -114,9 +135,22 @@ The PoC is successful only if all of these are observed on a physical iPhone run
 3. Bypass is sample-path transparent within floating-point tolerance for supported formats.
 4. Spatial mode produces measurable non-zero cross-ear delay and frequency-dependent cross-ear attenuation, proving it is not merely a balance/pan operation.
 5. No allocation, locks, network calls, logging, or Swift async work occur in the process callback.
-6. A 60-minute playback test produces no crash and no persistent audio dropout under ordinary network conditions.
-7. Background/foreground and headphone route changes either recover cleanly or fail in a documented, observable way.
+6. A real SoundCloud track resolves from authenticated `/streams` to a playable final AAC-HLS URL without relying on unsupported AVFoundation header injection.
+7. A 60-minute playback test produces no crash and no persistent audio dropout under ordinary network conditions.
+8. Background/foreground and headphone route changes either recover cleanly or fail in a documented, observable way.
 
 ## Post-change result
 
-Pending physical-device and Xcode 27 validation. Repository code alone is not evidence that the beta streaming path works on Alex's iPhone.
+Implemented on `feature/spatial-soundcloud-ios27-poc`:
+
+- iOS 27 whole-mix `MTAudioProcessingTap` scaffold with preferred stereo Float32 PCM request;
+- realtime-safe first-pass ITD/head-shadow DSP with atomic UI parameters;
+- deterministic DSP proof tests;
+- SwiftUI player, diagnostics, direct-HLS laboratory mode;
+- SoundCloud OAuth/PKCE controller and Keychain storage;
+- Cloudflare secret-bearing token broker;
+- Likes/playlists loading and AAC-HLS resolver;
+- fail-closed token-host validation and authenticated stream preflight;
+- creator/SoundCloud track links in the prototype UI.
+
+Still pending: Xcode 27 compilation, real SoundCloud credentials, Worker deployment, physical-device HLS/tap validation, and long-run playback testing. Repository code alone is not evidence that the beta streaming path works on Alex's iPhone.
