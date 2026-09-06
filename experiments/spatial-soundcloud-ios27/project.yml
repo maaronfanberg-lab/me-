@@ -25,4 +25,16 @@ targets:
         INFOPLIST_KEY_UIBackgroundModes: audio
         CODE_SIGN_STYLE: Automatic
     scheme:
-      testTargets: []
+      testTargets:
+        - SpatialSoundCloudTests
+
+  SpatialSoundCloudTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: SpatialSoundCloud
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
