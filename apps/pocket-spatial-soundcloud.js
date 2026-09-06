@@ -118,11 +118,11 @@ function createUI(){
   card.appendChild(tracks);
 
   var note=el('div','legal','');
-  note.appendChild(document.createTextNode('This connector currently loads '));
+  note.appendChild(document.createTextNode('This connector loads '));
   var bold=document.createElement('b');
   bold.textContent='your own SoundCloud uploads';
   note.appendChild(bold);
-  note.appendChild(document.createTextNode('. They are rights-safe candidates for our processor because you are the uploader. The HLS-to-iPhone-6 spatial transport is the next layer; other users’ tracks stay on SoundCloud unless their license explicitly permits modification.'));
+  note.appendChild(document.createTextNode('. For a selected upload it resolves SoundCloud’s current AAC-HLS stream without proxying the music, then runs a device capability test before claiming spatial playback. Other users’ tracks remain out of this path unless their rights and SoundCloud rules explicitly permit modification.'));
   card.appendChild(note);
 
   hero.parentNode.insertBefore(card,hero);
@@ -133,6 +133,197 @@ function createUI(){
 function setStatus(ui,text,kind){
   ui.status.textContent=text;
   ui.status.className='status'+(kind?' '+kind:'');
+}
+
+function removeNode(node){
+  if(node&&node.parentNode)node.parentNode.removeChild(node);
+}
+
+function hiddenAudio(url,crossOrigin){
+  var media=document.createElement('audio');
+  media.preload='auto';
+  media.muted=true;
+  media.setAttribute('playsinline','playsinline');
+  media.style.position='absolute';
+  media.style.left='-9999px';
+  media.style.width='1px';
+  media.style.height='1px';
+  if(crossOrigin)media.crossOrigin='anonymous';
+  media.src=url;
+  document.body.appendChild(media);
+  return media;
+}
+
+function safePlay(media){
+  try{
+    var result=media.play();
+    if(result&&typeof result['catch']==='function')result['catch'](function(){});
+  }catch(e){}
+}
+
+function mediaErrorCode(media){
+  return media&&media.error?media.error.code:null;
+}
+
+function probeHLSWebAudio(url,callback){
+  var AC=root.AudioContext||root.webkitAudioContext;
+  if(!AC){callback({supported:false,reason:'web_audio_unavailable'});return;}
+
+  var nativeMedia=hiddenAudio(url,false);
+  var tappedMedia=hiddenAudio(url,true);
+  var ctx=null;
+  var source=null;
+  var analyser=null;
+  var silent=null;
+  var timer=null;
+  var ticks=0;
+  var maxDeviation=0;
+
+  function cleanup(){
+    if(timer)clearInterval(timer);
+    try{nativeMedia.pause();}catch(e){}
+    try{tappedMedia.pause();}catch(e2){}
+    removeNode(nativeMedia);
+    removeNode(tappedMedia);
+    try{if(ctx&&ctx.close)ctx.close();}catch(e3){}
+  }
+
+  try{
+    ctx=new AC();
+    source=ctx.createMediaElementSource(tappedMedia);
+    analyser=ctx.createAnalyser();
+    analyser.fftSize=256;
+    analyser.smoothingTimeConstant=0;
+    silent=ctx.createGain();
+    silent.gain.value=0;
+    source.connect(analyser);
+    analyser.connect(silent);
+    silent.connect(ctx.destination);
+    if(ctx.state==='suspended'&&ctx.resume)ctx.resume();
+  }catch(error){
+    cleanup();
+    callback({supported:false,reason:'probe_graph_failed',detail:error.message||String(error)});
+    return;
+  }
+
+  var data=new Uint8Array(analyser.fftSize);
+  safePlay(nativeMedia);
+  safePlay(tappedMedia);
+
+  timer=setInterval(function(){
+    ticks+=1;
+    try{
+      analyser.getByteTimeDomainData(data);
+      for(var i=0;i<data.length;i+=1){
+        var deviation=Math.abs(data[i]-128);
+        if(deviation>maxDeviation)maxDeviation=deviation;
+      }
+    }catch(e){}
+
+    if(ticks>=18){
+      var nativeAdvanced=nativeMedia.currentTime>0.10;
+      var tappedAdvanced=tappedMedia.currentTime>0.10;
+      var pcmFlowing=maxDeviation>2;
+      var result={
+        supported:nativeAdvanced&&tappedAdvanced&&pcmFlowing,
+        native_hls_playing:nativeAdvanced,
+        cors_hls_playing:tappedAdvanced,
+        web_audio_pcm_flowing:pcmFlowing,
+        max_analyser_deviation:maxDeviation,
+        native_media_error:mediaErrorCode(nativeMedia),
+        tapped_media_error:mediaErrorCode(tappedMedia)
+      };
+      if(!nativeAdvanced)result.reason='native_hls_did_not_advance';
+      else if(!tappedAdvanced)result.reason='cors_media_did_not_advance';
+      else if(!pcmFlowing)result.reason='web_audio_pcm_flatline';
+      else result.reason='spatial_pcm_available';
+      cleanup();
+      callback(result);
+    }
+  },100);
+}
+
+function loadResolvedStreamIntoPlayer(track,stream,spatialSupported){
+  var player=document.getElementById('audio');
+  var trackLabel=document.getElementById('track');
+  var playerStatus=document.getElementById('status');
+  if(!player)return;
+
+  try{player.pause();}catch(e){}
+  player.removeAttribute('src');
+  if(spatialSupported)player.crossOrigin='anonymous';
+  else player.removeAttribute('crossorigin');
+  player.src=stream.url;
+  try{player.load();}catch(e2){}
+
+  if(trackLabel)trackLabel.textContent='SoundCloud · '+(track.title||'Untitled');
+  if(playerStatus){
+    if(spatialSupported){
+      playerStatus.textContent='SoundCloud AAC-HLS passed the Web Audio PCM probe. Tap Play, then turn Spatial on.';
+      playerStatus.className='status good';
+    }else{
+      playerStatus.textContent='SoundCloud HLS is loaded for dry playback, but this device did not prove PCM access for the spatial engine.';
+      playerStatus.className='status warn';
+    }
+  }
+}
+
+function prepareSpatialStream(ui,track,control,diagnostic){
+  if(!track.urn){
+    diagnostic.textContent='This upload has no usable SoundCloud track URN.';
+    diagnostic.className='status warn';
+    return;
+  }
+  control.disabled=true;
+  control.textContent='RESOLVING AAC-HLS…';
+  diagnostic.textContent='Requesting a fresh SoundCloud AAC-HLS URL for this own upload…';
+  diagnostic.className='status';
+
+  api('/api/stream?urn='+encodeURIComponent(track.urn)).then(function(result){
+    track._spatialStream=result.stream;
+    control.disabled=false;
+    control.textContent='TEST SPATIAL HLS';
+    diagnostic.textContent='Resolved '+result.stream.bitrate_kbps+' kbps AAC-HLS. Tap Test Spatial HLS to run the iPhone capability probe.';
+    diagnostic.className='status good';
+  })['catch'](function(error){
+    control.disabled=false;
+    control.textContent='PREPARE SPATIAL STREAM';
+    diagnostic.textContent='Could not resolve this upload: '+error.message;
+    diagnostic.className='status warn';
+  });
+}
+
+function testSpatialStream(ui,track,control,diagnostic){
+  var stream=track._spatialStream;
+  if(!stream||!stream.url){
+    prepareSpatialStream(ui,track,control,diagnostic);
+    return;
+  }
+
+  control.disabled=true;
+  control.textContent='TESTING IOS AUDIO…';
+  diagnostic.textContent='Running silent native-HLS and Web-Audio paths side by side for about two seconds…';
+  diagnostic.className='status';
+
+  probeHLSWebAudio(stream.url,function(result){
+    track._probeResult=result;
+    control.disabled=false;
+    loadResolvedStreamIntoPlayer(track,stream,result.supported);
+
+    if(result.supported){
+      control.textContent='SPATIAL PCM VERIFIED ✓';
+      diagnostic.textContent='Verified on this device: HLS advances and the Web Audio analyser receives non-flat PCM (max deviation '+result.max_analyser_deviation+').';
+      diagnostic.className='status good';
+    }else if(result.native_hls_playing){
+      control.textContent='HLS DRY ONLY';
+      diagnostic.textContent='Safari can advance the SoundCloud HLS stream, but the spatial path was not verified ('+result.reason+'). Dry playback is loaded instead.';
+      diagnostic.className='status warn';
+    }else{
+      control.textContent='RETRY HLS TEST';
+      diagnostic.textContent='The HLS test did not establish native playback ('+result.reason+'). Nothing is being claimed as spatial.';
+      diagnostic.className='status warn';
+    }
+  });
 }
 
 function renderTrackList(ui){
@@ -160,7 +351,7 @@ function renderTrackList(ui){
       meta.style.marginTop='4px';
       row.appendChild(meta);
 
-      var rights=el('div','status good','Spatial rights check: own upload ✓');
+      var rights=el('div','status good','Spatial eligibility candidate: authenticated own upload');
       rights.style.marginTop='4px';
       row.appendChild(rights);
 
@@ -175,8 +366,17 @@ function renderTrackList(ui){
         row.appendChild(link);
       }
 
-      var next=el('div','status','Spatial stream bridge: next layer');
-      row.appendChild(next);
+      var diagnostic=el('div','status','AAC-HLS stream not resolved yet.');
+      diagnostic.style.marginTop='6px';
+      row.appendChild(diagnostic);
+
+      var streamButton=button('PREPARE SPATIAL STREAM',function(){
+        if(track._spatialStream)testSpatialStream(ui,track,streamButton,diagnostic);
+        else prepareSpatialStream(ui,track,streamButton,diagnostic);
+      });
+      streamButton.style.marginTop='8px';
+      row.appendChild(streamButton);
+
       ui.tracks.appendChild(row);
     }(state.tracks[i]));
   }
@@ -206,7 +406,7 @@ function refreshLibrary(ui){
     state.tracks=values[1].tracks||[];
     setStatus(ui,'SoundCloud connected. Your own uploads are loaded.','good');
     render(ui);
-  }).catch(function(error){
+  })['catch'](function(error){
     state.me=null;
     state.tracks=[];
     if(error.status===401){
