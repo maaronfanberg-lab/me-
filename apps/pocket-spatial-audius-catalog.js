@@ -30,18 +30,28 @@ function cleanText(value){
 }
 
 function licenseAllowsSpatial(track){
-  var text=cleanText(track&&track.license).toLowerCase();
-  if(text.indexOf('no derivatives')!==-1||text.indexOf('noderivatives')!==-1)return false;
-  if(text.indexOf('by-nd')!==-1||text.indexOf('by_nd')!==-1||text.indexOf('by nd')!==-1)return false;
-  if(text.indexOf('-nc-nd')!==-1||text.indexOf('_nc_nd')!==-1||text.indexOf(' nc nd')!==-1)return false;
-  return true;
+  var text=cleanText(track&&track.license).toLowerCase().replace(/_/g,'-');
+  if(!text)return false;
+  if(text.indexOf('all rights reserved')!==-1)return false;
+  if(text.indexOf('noncommercial')!==-1||text.indexOf('non-commercial')!==-1)return false;
+  if(text.indexOf('no derivatives')!==-1||text.indexOf('noderivatives')!==-1||text.indexOf('no-derivatives')!==-1)return false;
+  if(text.indexOf('by-nc')!==-1||text.indexOf('-nc-')!==-1||text.indexOf(' nc ')!==-1)return false;
+  if(text.indexOf('by-nd')!==-1||text.indexOf('-nd-')!==-1||/\bnd\b/.test(text))return false;
+  if(text.indexOf('cc0')!==-1||text.indexOf('public domain')!==-1)return true;
+  if(text.indexOf('creative commons attribution')!==-1)return true;
+  if(text.indexOf('cc by')!==-1||text.indexOf('cc-by')!==-1||text.indexOf('by-sa')!==-1)return true;
+  return false;
 }
 
 function isPlayable(track){
+  var duration;
   if(!track||!track.id)return false;
   if(track.is_streamable===false)return false;
   if(track.is_stream_gated===true)return false;
+  if(track.stream_conditions)return false;
   if(track.access&&track.access.stream===false)return false;
+  duration=Number(track.duration)||0;
+  if(duration>180)return false;
   return licenseAllowsSpatial(track);
 }
 
@@ -65,7 +75,7 @@ function normalizeTrack(track){
     source:'Audius',
     title:cleanText(track.title)||'Untitled Audius track',
     artist:cleanText(user.name||user.handle)||'Audius artist',
-    license:cleanText(track.license)||'Audius OML/API access',
+    license:cleanText(track.license),
     duration:duration,
     file_page:pageURL(track),
     audio:streamURL(track.id),
@@ -86,7 +96,7 @@ function xhrJSON(url,callback){
   var xhr=new root.XMLHttpRequest();
   try{xhr.open('GET',url,true);}catch(e){callback(e);return;}
   xhr.timeout=12000;
-  xhr.onerror=function(){callback(new Error('audius_catalog_failed'));};
+  xhr.onerror=function(){callback(new Error('audius_catalog_failed_or_cors_blocked'));};
   xhr.ontimeout=function(){callback(new Error('audius_catalog_timeout'));};
   xhr.onload=function(){
     var status=Number(xhr.status)||0;
@@ -98,10 +108,20 @@ function xhrJSON(url,callback){
   try{xhr.send();}catch(e){callback(e);}
 }
 
+function collectTracks(data){
+  var raw=data&&data.data&&data.data.length!=null?data.data:[];
+  var tracks=[];
+  for(var i=0;i<raw.length;i+=1){
+    var track=normalizeTrack(raw[i]);
+    if(track)tracks.push(track);
+  }
+  return tracks;
+}
+
 function renderTracks(ui){
   while(ui.tracks.firstChild)ui.tracks.removeChild(ui.tracks.firstChild);
   if(!state.tracks.length){
-    ui.tracks.appendChild(el('div','status','No compatible Audius tracks were returned. Try another search or load trending again.'));
+    ui.tracks.appendChild(el('div','status','No derivative-permitting Audius tracks were returned. Try a Creative Commons search.'));
     return;
   }
   var heading=el('div','status','AUDIUS · '+state.tracks.length+' BUFFERED IMMERSIVE CANDIDATES');
@@ -119,7 +139,7 @@ function renderTracks(ui){
       meta.style.display='block';
       meta.style.marginTop='4px';
       row.appendChild(meta);
-      var rights=el('div','status good','Audius API playback candidate. Explicit NoDerivatives licenses and stream-gated tracks are excluded.');
+      var rights=el('div','status good','Derivative-permitting Audius license verified. NC, NoDerivatives, All Rights Reserved, and gated tracks are excluded.');
       rights.style.marginTop='4px';
       row.appendChild(rights);
       var link=el('a','','Open this track on Audius');
@@ -149,30 +169,41 @@ function renderTracks(ui){
   }
 }
 
+function finishCatalog(ui,error,data,query){
+  ui.load.disabled=false;
+  ui.load.textContent='SEARCH / RELOAD AUDIUS';
+  if(error){
+    state.tracks=[];
+    renderTracks(ui);
+    setStatus(ui,'Audius catalog request failed: '+error.message,'warn');
+    return;
+  }
+  state.tracks=collectTracks(data);
+  renderTracks(ui);
+  if(state.tracks.length)setStatus(ui,'Audius connected with derivative-permitting tracks. Pick one and tap BUFFER + PLAY IMMERSIVE.','good');
+  else setStatus(ui,'Audius responded, but “'+cleanText(query)+'” returned no derivative-permitting <=180 s tracks. Try another Creative Commons search.','warn');
+}
+
 function loadCatalog(ui){
   var query=ui.query?ui.query.value:'';
   ui.load.disabled=true;
   ui.load.textContent=query?'SEARCHING AUDIUS…':'LOADING AUDIUS…';
-  setStatus(ui,query?'Searching Audius for “'+cleanText(query)+'”…':'Loading current Audius trending tracks…','');
+  setStatus(ui,query?'Searching Audius for “'+cleanText(query)+'”…':'Loading Audius trending tracks and checking creator licenses…','');
   xhrJSON(buildCatalogURL(query),function(error,data){
-    ui.load.disabled=false;
-    ui.load.textContent='SEARCH / RELOAD AUDIUS';
-    if(error){
-      state.tracks=[];
-      renderTracks(ui);
-      setStatus(ui,'Audius catalog request failed: '+error.message,'warn');
+    var tracks;
+    if(error){finishCatalog(ui,error,data,query);return;}
+    tracks=collectTracks(data);
+    if(!query&&!tracks.length){
+      setStatus(ui,'Audius connected. Trending had no derivative-permitting candidates, so Pocket Spatial is checking Creative Commons tracks…','');
+      xhrJSON(buildCatalogURL('creative commons'),function(error2,data2){finishCatalog(ui,error2,data2,'creative commons');});
       return;
     }
-    var raw=data&&data.data&&data.data.length!=null?data.data:[];
-    var tracks=[];
-    for(var i=0;i<raw.length;i+=1){
-      var track=normalizeTrack(raw[i]);
-      if(track)tracks.push(track);
-    }
     state.tracks=tracks;
+    ui.load.disabled=false;
+    ui.load.textContent='SEARCH / RELOAD AUDIUS';
     renderTracks(ui);
-    if(tracks.length)setStatus(ui,'Audius connected. Pick a track and tap BUFFER + PLAY IMMERSIVE.','good');
-    else setStatus(ui,'Audius responded, but this batch had no non-gated, non-NoDerivatives candidates. Try another search.','warn');
+    if(tracks.length)setStatus(ui,'Audius connected with derivative-permitting tracks. Pick one and tap BUFFER + PLAY IMMERSIVE.','good');
+    else setStatus(ui,'Audius responded, but this search had no derivative-permitting <=180 s tracks. Try “creative commons” or a known CC artist.','warn');
   });
 }
 
@@ -186,12 +217,12 @@ function createUI(){
   title.style.letterSpacing='.06em';
   title.style.fontSize='12px';
   card.appendChild(title);
-  var status=el('div','status','Second live source. Audius public read API is queried directly; compatible tracks are buffered into Web Audio RAM and sent through Pocket Spatial.');
+  var status=el('div','status','Second live source. Pocket Spatial queries Audius directly and only offers tracks with an affirmative derivative-permitting license.');
   status.id='audiusBufferedStatus';
   card.appendChild(status);
   var query=el('input','');
   query.type='text';
-  query.placeholder='Artist, track, genre… (blank = trending)';
+  query.placeholder='Artist, track, genre… (blank = trending + CC fallback)';
   query.id='audiusBufferedQuery';
   query.autocapitalize='off';
   query.autocomplete='off';
