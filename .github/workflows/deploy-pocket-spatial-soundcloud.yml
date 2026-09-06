@@ -1,0 +1,154 @@
+name: Deploy Pocket Spatial SoundCloud Connector
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cloudflare/pocket-spatial-soundcloud/**'
+      - '.github/workflows/deploy-pocket-spatial-soundcloud.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-pocket-spatial-soundcloud
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+      SOUNDCLOUD_CLIENT_ID: ${{ secrets.SOUNDCLOUD_CLIENT_ID }}
+      SOUNDCLOUD_CLIENT_SECRET: ${{ secrets.SOUNDCLOUD_CLIENT_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check Cloudflare token
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          echo 'Cloudflare API token is available.'
+
+      - name: Select Fanberg Cloudflare account
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
+            > /tmp/cf-accounts.json
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          d=json.load(open('/tmp/cf-accounts.json'))
+          if not d.get('success'):
+              raise SystemExit('Cloudflare account lookup failed; refusing to guess an account.')
+          matches=[a for a in d.get('result',[]) if 'fanberg' in str(a.get('name','')).lower()]
+          if len(matches) != 1:
+              names=[str(a.get('name','')) for a in d.get('result',[])]
+              raise SystemExit(f'Expected exactly one Cloudflare account containing Fanberg; found {len(matches)}. Accessible account names: {names}')
+          a=matches[0]
+          print(f"CLOUDFLARE_ACCOUNT_ID={a['id']}")
+          print(f"CLOUDFLARE_ACCOUNT_NAME={a['name']}")
+          PY
+          echo 'Selected Fanberg Cloudflare account.'
+
+      - name: Validate Worker source
+        run: |
+          node --check cloudflare/pocket-spatial-soundcloud/src/index.js
+          npx --yes wrangler@latest deploy \
+            --config cloudflare/pocket-spatial-soundcloud/wrangler.jsonc \
+            --dry-run \
+            --outdir /tmp/pocket-spatial-worker-dry-run
+
+      - name: Deploy connector Worker
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest deploy \
+            --config cloudflare/pocket-spatial-soundcloud/wrangler.jsonc \
+            2>&1 | tee /tmp/pocket-spatial-soundcloud-deploy.txt
+          url=$(grep -Eo 'https://[^[:space:]]+\.workers\.dev' /tmp/pocket-spatial-soundcloud-deploy.txt | tail -1)
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "POCKET_SPATIAL_SOUNDCLOUD_URL=$url" >> "$GITHUB_ENV"
+          echo 'Worker URL captured.'
+
+      - name: Install SoundCloud credentials when available
+        id: credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          configured=false
+          if [ -n "${SOUNDCLOUD_CLIENT_ID:-}" ] && [ -n "${SOUNDCLOUD_CLIENT_SECRET:-}" ]; then
+            printf '%s' "$SOUNDCLOUD_CLIENT_ID" | npx --yes wrangler@latest secret put SOUNDCLOUD_CLIENT_ID \
+              --config cloudflare/pocket-spatial-soundcloud/wrangler.jsonc >/dev/null
+            printf '%s' "$SOUNDCLOUD_CLIENT_SECRET" | npx --yes wrangler@latest secret put SOUNDCLOUD_CLIENT_SECRET \
+              --config cloudflare/pocket-spatial-soundcloud/wrangler.jsonc >/dev/null
+            configured=true
+            echo 'SoundCloud API credentials are installed in the Worker.'
+          else
+            echo 'SoundCloud API credentials are not present in GitHub Secrets. Connector will deploy in setup-required mode.'
+          fi
+          echo "configured=$configured" >> "$GITHUB_OUTPUT"
+          echo "SOUNDCLOUD_CONFIGURED=$configured" >> "$GITHUB_ENV"
+
+      - name: Verify live connector
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 5 --retry-delay 2 "$POCKET_SPATIAL_SOUNDCLOUD_URL/health" > /tmp/pocket-spatial-health.json
+          python3 - <<'PY'
+          import json, os
+          d=json.load(open('/tmp/pocket-spatial-health.json'))
+          assert d.get('ok') is True
+          assert d.get('app') == 'pocket-spatial-soundcloud-auth'
+          expected=os.environ.get('SOUNDCLOUD_CONFIGURED','false').lower()=='true'
+          assert bool(d.get('configured')) == expected, (d, expected)
+          assert d.get('app_url') == 'https://maaronfanberg-lab.github.io/me-/apps/pocket-spatial.html'
+          assert str(d.get('callback_url','')).endswith('/oauth/callback')
+          print('Live Pocket Spatial SoundCloud connector verified.')
+          PY
+
+      - name: Publish connector URL to Pocket Spatial
+        shell: bash
+        run: |
+          cat > apps/pocket-spatial-soundcloud-config.js <<EOF
+          (function(root){
+            root.PocketSpatialSoundCloudConfig={
+              brokerURL:'$POCKET_SPATIAL_SOUNDCLOUD_URL',
+              configured:$SOUNDCLOUD_CONFIGURED
+            };
+          }(this));
+          EOF
+          git config user.name "pocket-spatial-soundcloud-deployer"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/pocket-spatial-soundcloud-config.js
+          if git diff --cached --quiet; then
+            echo 'Connector URL config already current.'
+            exit 0
+          fi
+          git commit -m "Publish Pocket Spatial SoundCloud connector URL"
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
+
+      - name: Summary
+        run: |
+          echo '### Pocket Spatial SoundCloud connector' >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloudflare account: $CLOUDFLARE_ACCOUNT_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "Worker: $POCKET_SPATIAL_SOUNDCLOUD_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "SoundCloud credentials configured: $SOUNDCLOUD_CONFIGURED" >> "$GITHUB_STEP_SUMMARY"
+          echo 'OAuth design: PKCE + encrypted stateless session; SoundCloud access/refresh tokens are not exposed to the page.' >> "$GITHUB_STEP_SUMMARY"

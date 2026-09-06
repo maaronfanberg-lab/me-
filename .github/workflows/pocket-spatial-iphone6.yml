@@ -8,6 +8,9 @@ on:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-soundcloud.js'
+      - 'apps/pocket-spatial-soundcloud-config.js'
+      - 'cloudflare/pocket-spatial-soundcloud/**'
       - 'tests/pocket-spatial-core.test.js'
       - 'tests/pocket-spatial-ui.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
@@ -15,6 +18,9 @@ on:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-soundcloud.js'
+      - 'apps/pocket-spatial-soundcloud-config.js'
+      - 'cloudflare/pocket-spatial-soundcloud/**'
       - 'tests/pocket-spatial-core.test.js'
       - 'tests/pocket-spatial-ui.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
@@ -26,7 +32,7 @@ permissions:
 jobs:
   legacy-web-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
 
@@ -50,12 +56,46 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check apps/pocket-spatial-core.js
+          node --check apps/pocket-spatial-soundcloud-config.js
+          node --check apps/pocket-spatial-soundcloud.js
+          node --check cloudflare/pocket-spatial-soundcloud/src/index.js
           node --check /tmp/pocket-spatial.js
 
-      - name: Enforce ES5 syntax for old Safari
+      - name: Enforce ES5 syntax for old Safari page code
         run: |
           npx --yes es-check@7 es5 apps/pocket-spatial-core.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud-config.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud.js
           npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+
+      - name: Verify SoundCloud Worker bundles
+        run: |
+          npx --yes wrangler@latest deploy \
+            --config cloudflare/pocket-spatial-soundcloud/wrangler.jsonc \
+            --dry-run \
+            --outdir /tmp/pocket-spatial-soundcloud-worker
+
+      - name: Verify SoundCloud security and scope contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "load('pocket-spatial-soundcloud-config.js'" apps/pocket-spatial-core.js
+          grep -q "load('pocket-spatial-soundcloud.js'" apps/pocket-spatial-core.js
+          grep -q "SESSION_KEY='pocketSpatial.soundcloud.session.v1'" apps/pocket-spatial-soundcloud.js
+          grep -q "Authorization='Bearer '" /dev/null 2>/dev/null || true
+          grep -q "headers.Authorization='Bearer '+state.session" apps/pocket-spatial-soundcloud.js
+          grep -q "'/me/tracks?limit=50&linked_partitioning=true'" cloudflare/pocket-spatial-soundcloud/src/index.js
+          grep -q "spatial_eligibility_reason: 'own_upload'" cloudflare/pocket-spatial-soundcloud/src/index.js
+          grep -q "Open original on SoundCloud" apps/pocket-spatial-soundcloud.js
+          if grep -R -E 'client_secret|SOUNDCLOUD_CLIENT_SECRET' apps/pocket-spatial*.js; then
+            echo 'A SoundCloud client secret reference leaked into public page JavaScript.'
+            exit 1
+          fi
+          if grep -E -q '/me/likes|/me/playlists' cloudflare/pocket-spatial-soundcloud/src/index.js; then
+            echo 'Connector scope widened beyond own uploads.'
+            exit 1
+          fi
+          echo 'SoundCloud connector security/scope contract passed.'
 
       - name: Verify page consumes the tested core
         run: |
