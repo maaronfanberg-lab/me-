@@ -17,40 +17,50 @@ final class HLSMixTap {
         }
     }
 
-    private let dsp = BinauralDSP()
-    private let onPrepared: (AudioStreamBasicDescription) -> Void
+    /// Retained by the C tap independently of HLSMixTap, avoiding a self↔tap retain cycle.
+    private final class TapContext {
+        let dsp = BinauralDSP()
+        let onPrepared: (AudioStreamBasicDescription) -> Void
+
+        init(onPrepared: @escaping (AudioStreamBasicDescription) -> Void) {
+            self.onPrepared = onPrepared
+        }
+    }
+
+    private let context: TapContext
     private var tap: MTAudioProcessingTap?
 
     init(onPrepared: @escaping (AudioStreamBasicDescription) -> Void = { _ in }) throws {
-        self.onPrepared = onPrepared
+        let context = TapContext(onPrepared: onPrepared)
+        self.context = context
         self.tap = nil
 
-        // Retain the owner through the C tap lifecycle. finalize releases this retain.
-        let context = Unmanaged.passRetained(self).toOpaque()
+        // The tap owns one retain on this context. finalize releases it.
+        let contextPointer = Unmanaged.passRetained(context).toOpaque()
 
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
-            clientInfo: context,
+            clientInfo: contextPointer,
             init: { _, clientInfo, tapStorageOut in
                 tapStorageOut.pointee = clientInfo
             },
             finalize: { tap in
                 let storage = MTAudioProcessingTapGetStorage(tap)
-                Unmanaged<HLSMixTap>.fromOpaque(storage).release()
+                Unmanaged<TapContext>.fromOpaque(storage).release()
             },
             prepare: { tap, _, processingFormat in
-                let owner = Unmanaged<HLSMixTap>
+                let context = Unmanaged<TapContext>
                     .fromOpaque(MTAudioProcessingTapGetStorage(tap))
                     .takeUnretainedValue()
                 let format = processingFormat.pointee
-                owner.dsp.prepare(format: format)
-                owner.onPrepared(format)
+                context.dsp.prepare(format: format)
+                context.onPrepared(format)
             },
             unprepare: { tap in
-                let owner = Unmanaged<HLSMixTap>
+                let context = Unmanaged<TapContext>
                     .fromOpaque(MTAudioProcessingTapGetStorage(tap))
                     .takeUnretainedValue()
-                owner.dsp.unprepare()
+                context.dsp.unprepare()
             },
             process: { tap, numberFrames, _, bufferListInOut, numberFramesOut, flagsOut in
                 let status = MTAudioProcessingTapGetSourceAudio(
@@ -67,11 +77,11 @@ final class HLSMixTap {
                     return
                 }
 
-                let owner = Unmanaged<HLSMixTap>
+                let context = Unmanaged<TapContext>
                     .fromOpaque(MTAudioProcessingTapGetStorage(tap))
                     .takeUnretainedValue()
 
-                owner.dsp.process(
+                context.dsp.process(
                     bufferListInOut,
                     frames: Int(numberFramesOut.pointee)
                 )
@@ -87,11 +97,11 @@ final class HLSMixTap {
         )
 
         guard status == noErr else {
-            Unmanaged<HLSMixTap>.fromOpaque(context).release()
+            Unmanaged<TapContext>.fromOpaque(contextPointer).release()
             throw TapError.creationFailed(status)
         }
         guard let createdTap else {
-            Unmanaged<HLSMixTap>.fromOpaque(context).release()
+            Unmanaged<TapContext>.fromOpaque(contextPointer).release()
             throw TapError.noTap
         }
 
@@ -101,8 +111,8 @@ final class HLSMixTap {
     func install(on item: AVPlayerItem) throws {
         guard let tap else { throw TapError.noTap }
 
-        // iOS 27: special track ID 0 means the mixed output of all audio tracks,
-        // including streaming HLS playback, rather than a file-backed AVAssetTrack.
+        // iOS 27: the special mix ID applies parameters to all audio output from
+        // the AVPlayerItem, including HLS, rather than requiring a file-backed track.
         let input = AVMutableAudioMixInputParameters(track: nil)
         input.trackID = AVAudioMixInputParametersTrackID.mixID.rawValue
         input.audioTapProcessor = tap
@@ -113,10 +123,10 @@ final class HLSMixTap {
     }
 
     func setSpatialEnabled(_ enabled: Bool) {
-        dsp.setEnabled(enabled)
+        context.dsp.setEnabled(enabled)
     }
 
     func setSpatialAmount(_ amount: Float) {
-        dsp.setAmount(amount)
+        context.dsp.setAmount(amount)
     }
 }
