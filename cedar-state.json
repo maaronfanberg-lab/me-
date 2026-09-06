@@ -1,14 +1,389 @@
 {
   "actors_per_tick": 2,
-  "model": "Falcon3-1B-Instruct-GGUF:Q4_K_M",
-  "note": "GitHub runner is starting the isolated Falcon model.",
+  "agents": {
+    "Arden": {
+      "energy": 75.0,
+      "goals": [
+        "keep water available",
+        "inspect problems before acting"
+      ],
+      "location": "water_tower",
+      "memories": [],
+      "name": "Arden",
+      "relationships": {},
+      "traits": [
+        "independent",
+        "methodical"
+      ]
+    },
+    "Ivo": {
+      "energy": 75.0,
+      "goals": [
+        "be useful during disruptions",
+        "earn others' trust through visible work"
+      ],
+      "location": "square",
+      "memories": [],
+      "name": "Ivo",
+      "relationships": {},
+      "traits": [
+        "energetic",
+        "competitive"
+      ]
+    },
+    "Jun": {
+      "energy": 75.0,
+      "goals": [
+        "understand what is changing around town",
+        "connect people who can help each other"
+      ],
+      "location": "square",
+      "memories": [],
+      "name": "Jun",
+      "relationships": {},
+      "traits": [
+        "observant",
+        "sociable"
+      ]
+    },
+    "Lena": {
+      "energy": 73.0,
+      "goals": [
+        "reduce waste",
+        "maintain reliable relationships across the town"
+      ],
+      "location": "square",
+      "memories": [
+        {
+          "id": "bd0a85039dd93208",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "move",
+            "Lena"
+          ],
+          "text": "I moved from kitchen to square.",
+          "tick": 1
+        }
+      ],
+      "name": "Lena",
+      "relationships": {},
+      "traits": [
+        "reflective",
+        "cooperative"
+      ]
+    },
+    "Mira": {
+      "energy": 75.0,
+      "goals": [
+        "keep the greenhouse productive",
+        "learn what neighbors need"
+      ],
+      "location": "greenhouse",
+      "memories": [],
+      "name": "Mira",
+      "relationships": {},
+      "traits": [
+        "patient",
+        "curious"
+      ]
+    },
+    "Nia": {
+      "energy": 75.0,
+      "goals": [
+        "keep basic supplies available",
+        "notice when someone needs assistance"
+      ],
+      "location": "clinic",
+      "memories": [],
+      "name": "Nia",
+      "relationships": {},
+      "traits": [
+        "steady",
+        "careful"
+      ]
+    },
+    "Sol": {
+      "energy": 75.0,
+      "goals": [
+        "keep meals possible with available food",
+        "trade information for useful help"
+      ],
+      "location": "kitchen",
+      "memories": [],
+      "name": "Sol",
+      "relationships": {},
+      "traits": [
+        "inventive",
+        "direct"
+      ]
+    },
+    "Theo": {
+      "energy": 73.0,
+      "goals": [
+        "keep shared equipment working",
+        "avoid wasting scarce parts"
+      ],
+      "location": "square",
+      "memories": [
+        {
+          "id": "b5ccaa4e2669b831",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "move",
+            "Theo"
+          ],
+          "text": "I moved from workshop to square.",
+          "tick": 1
+        }
+      ],
+      "name": "Theo",
+      "relationships": {},
+      "traits": [
+        "practical",
+        "reserved"
+      ]
+    }
+  },
+  "locations": {
+    "clinic": {
+      "neighbors": [
+        "kitchen",
+        "greenhouse",
+        "water_tower"
+      ],
+      "resources": {
+        "medicine": 3
+      }
+    },
+    "greenhouse": {
+      "neighbors": [
+        "square",
+        "clinic"
+      ],
+      "resources": {
+        "food": 6
+      }
+    },
+    "kitchen": {
+      "neighbors": [
+        "square",
+        "clinic"
+      ],
+      "resources": {
+        "food": 5
+      }
+    },
+    "square": {
+      "neighbors": [
+        "kitchen",
+        "workshop",
+        "greenhouse"
+      ],
+      "resources": {
+        "water": 4
+      }
+    },
+    "water_tower": {
+      "neighbors": [
+        "workshop",
+        "clinic"
+      ],
+      "resources": {
+        "water": 7
+      }
+    },
+    "workshop": {
+      "neighbors": [
+        "square",
+        "water_tower"
+      ],
+      "resources": {
+        "parts": 3
+      }
+    }
+  },
+  "metrics": {
+    "action_counts": {
+      "move": 2
+    },
+    "action_entropy_bits": 0.0,
+    "action_feasibility_breakdown": {
+      "help": {
+        "chosen_and_accepted_ticks": 0,
+        "chosen_and_rejected_ticks": 0,
+        "chosen_ticks": 0,
+        "feasible_ticks": 1,
+        "feasible_unchosen_ticks": 1,
+        "rejection_reasons": {},
+        "schema_violation_ticks": 0,
+        "unavailable_ticks": 1
+      },
+      "move": {
+        "chosen_and_accepted_ticks": 2,
+        "chosen_and_rejected_ticks": 0,
+        "chosen_ticks": 2,
+        "feasible_ticks": 2,
+        "feasible_unchosen_ticks": 0,
+        "rejection_reasons": {},
+        "schema_violation_ticks": 0,
+        "unavailable_ticks": 0
+      },
+      "observe": {
+        "chosen_and_accepted_ticks": 0,
+        "chosen_and_rejected_ticks": 0,
+        "chosen_ticks": 0,
+        "feasible_ticks": 2,
+        "feasible_unchosen_ticks": 2,
+        "rejection_reasons": {},
+        "schema_violation_ticks": 0,
+        "unavailable_ticks": 0
+      },
+      "rest": {
+        "chosen_and_accepted_ticks": 0,
+        "chosen_and_rejected_ticks": 0,
+        "chosen_ticks": 0,
+        "feasible_ticks": 2,
+        "feasible_unchosen_ticks": 2,
+        "rejection_reasons": {},
+        "schema_violation_ticks": 0,
+        "unavailable_ticks": 0
+      },
+      "talk": {
+        "chosen_and_accepted_ticks": 0,
+        "chosen_and_rejected_ticks": 0,
+        "chosen_ticks": 0,
+        "feasible_ticks": 1,
+        "feasible_unchosen_ticks": 1,
+        "rejection_reasons": {},
+        "schema_violation_ticks": 0,
+        "unavailable_ticks": 1
+      },
+      "work": {
+        "chosen_and_accepted_ticks": 0,
+        "chosen_and_rejected_ticks": 0,
+        "chosen_ticks": 0,
+        "feasible_ticks": 2,
+        "feasible_unchosen_ticks": 2,
+        "rejection_reasons": {},
+        "schema_violation_ticks": 0,
+        "unavailable_ticks": 0
+      }
+    },
+    "agents": 8,
+    "backend_errors": 0,
+    "decision_count": 2,
+    "exact_repeated_utterance_rate": 0.0,
+    "location_entropy_bits": 1.0,
+    "note": "These are engineering diagnostics, not measures of human realism or consciousness.",
+    "proposal_rejections": 0,
+    "talk_turns": 0,
+    "ticks": 1,
+    "total_actions": 2,
+    "unique_interaction_pairs": 0
+  },
+  "model": "bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M",
+  "read_only_note": "This snapshot is observational. The viewer cannot propose actions or mutate WorldEngine state.",
+  "recent_events": [
+    {
+      "accepted": true,
+      "actor": "Lena",
+      "chosen_type": "move",
+      "co_located_agents": [
+        "Sol"
+      ],
+      "energy": 75.0,
+      "feasible_action_types": [
+        "help",
+        "move",
+        "observe",
+        "rest",
+        "talk",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "kitchen",
+      "proposed_action": {
+        "location": "square",
+        "type": "move"
+      },
+      "proposed_type": "move",
+      "recent_local_incidents": [],
+      "rejection_reason": null,
+      "resources_visible": {
+        "food": 5
+      },
+      "seq": 1,
+      "tick": 1
+    },
+    {
+      "action": {
+        "location": "square",
+        "type": "move"
+      },
+      "actor": "Lena",
+      "kind": "action",
+      "location": "kitchen",
+      "outcome": {
+        "from": "kitchen",
+        "ok": true,
+        "to": "square"
+      },
+      "seq": 2,
+      "tick": 1
+    },
+    {
+      "accepted": true,
+      "actor": "Theo",
+      "chosen_type": "move",
+      "co_located_agents": [],
+      "energy": 75.0,
+      "feasible_action_types": [
+        "move",
+        "observe",
+        "rest",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "workshop",
+      "proposed_action": {
+        "location": "square",
+        "type": "move"
+      },
+      "proposed_type": "move",
+      "recent_local_incidents": [],
+      "rejection_reason": null,
+      "resources_visible": {
+        "parts": 3
+      },
+      "seq": 3,
+      "tick": 1
+    },
+    {
+      "action": {
+        "location": "square",
+        "type": "move"
+      },
+      "actor": "Theo",
+      "kind": "action",
+      "location": "workshop",
+      "outcome": {
+        "from": "workshop",
+        "ok": true,
+        "to": "square"
+      },
+      "seq": 4,
+      "tick": 1
+    }
+  ],
   "seed": 7,
   "session_id": "cedar-live-20260905-2109",
-  "started_at": "2026-09-06T02:12:42.133442Z",
-  "status": "starting",
+  "started_at": "2026-09-06T02:13:51.522554Z",
+  "status": "live",
   "temperature": 0.1,
-  "tick": 0,
-  "updated_at": "2026-09-06T02:12:42.133442Z",
+  "tick": 1,
+  "updated_at": "2026-09-06T02:13:51.522711Z",
   "version": 1,
   "world_name": "Cedar Hollow"
 }
