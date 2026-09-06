@@ -96,6 +96,44 @@ jobs:
           fi
           echo 'Jamendo test-stream contract passed.'
 
+      - name: Smoke-test live Jamendo API and stream CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          API_URL='https://api.jamendo.com/v3.0/tracks/?client_id=709fa152&format=json&limit=5&audioformat=mp32&include=licenses&ccnd=false&order=popularity_total&groupby=artist_id'
+          curl -fsS --max-time 20 "$API_URL" -o /tmp/jamendo.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('/tmp/jamendo.json').read_text())
+          assert data.get('headers',{}).get('status')=='success', data.get('headers')
+          results=data.get('results') or []
+          assert results, 'Jamendo test client returned no tracks'
+          eligible=[]
+          for track in results:
+              license_url=(track.get('license_ccurl') or '').lower()
+              if ('creativecommons.org/' in license_url and
+                  '-nd/' not in license_url and '/nd/' not in license_url and
+                  track.get('audio')):
+                  eligible.append(track)
+          assert eligible, 'No derivative-permitting streamed track returned'
+          first=eligible[0]
+          Path('/tmp/jamendo-audio-url').write_text(first['audio'])
+          print('Live Jamendo API returned', len(results), 'tracks; testing track', first.get('id'))
+          PY
+          AUDIO_URL="$(cat /tmp/jamendo-audio-url)"
+          FINAL_URL="$(curl -fsSL --max-time 20 -r 0-0 -o /dev/null -w '%{url_effective}' "$AUDIO_URL")"
+          test -n "$FINAL_URL"
+          curl -fsSL --max-time 20 \
+            -H 'Origin: https://maaronfanberg-lab.github.io' \
+            -H 'Range: bytes=0-4095' \
+            -D /tmp/jamendo.headers \
+            -o /tmp/jamendo.sample \
+            "$FINAL_URL"
+          test -s /tmp/jamendo.sample
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/jamendo.headers
+          echo 'Live Jamendo API, audio bytes, and CORS stream check passed.'
+
       - name: Verify SoundCloud Worker bundles
         run: |
           npx --yes wrangler@latest deploy \
