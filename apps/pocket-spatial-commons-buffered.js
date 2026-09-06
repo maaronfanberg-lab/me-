@@ -211,7 +211,7 @@ function stop(manual){
   state.monoMerger=null;
   state.playing=false;
   state.activePageId=null;
-  if(manual)resetActiveButton('Buffered immersive playback stopped.','');
+  resetActiveButton(manual?'Buffered immersive playback stopped.':'Buffered immersive playback stopped because another track started.','');
   restoreUI();
   state.activeControl=null;
   state.activeDiagnostic=null;
