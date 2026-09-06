@@ -58,14 +58,14 @@ var previous2=-1;
 depthCases.forEach(function(depth){
   var d=core.calculateDepth(depth);
   near(d.depth,depth/100,1e-12,'depth '+depth);
-  assert.strictEqual(d.refl1DelayL,0.011);
-  assert.strictEqual(d.refl1DelayR,0.013);
-  assert.strictEqual(d.refl2DelayL,0.021);
-  assert.strictEqual(d.refl2DelayR,0.024);
-  assert.strictEqual(d.reflCutoff,2600);
-  assert.strictEqual(d.reflQ,0.5);
-  near(d.refl1Gain,0.14*(depth/100),1e-12,'reflection 1 gain '+depth);
-  near(d.refl2Gain,0.07*(depth/100),1e-12,'reflection 2 gain '+depth);
+  assert.strictEqual(d.refl1DelayL,0.017);
+  assert.strictEqual(d.refl1DelayR,0.019);
+  assert.strictEqual(d.refl2DelayL,0.031);
+  assert.strictEqual(d.refl2DelayR,0.034);
+  assert.strictEqual(d.reflCutoff,3300);
+  assert.strictEqual(d.reflQ,0.65);
+  near(d.refl1Gain,0.18*(depth/100),1e-12,'reflection 1 gain '+depth);
+  near(d.refl2Gain,0.10*(depth/100),1e-12,'reflection 2 gain '+depth);
   assert(d.refl1Gain>=previous1,'reflection 1 gain must be monotonic');
   assert(d.refl2Gain>=previous2,'reflection 2 gain must be monotonic');
   previous1=d.refl1Gain;
@@ -83,21 +83,28 @@ depthCases.forEach(function(depth){
 
   var r=core.readouts(72,57,depth,true);
   assert.strictEqual(r.depthText,depth+'%');
-  assert.strictEqual(r.reflectionTimesText,'11/13 · 21/24 ms');
+  assert.strictEqual(r.reflectionTimesText,'17/19 · 31/34 ms');
   assert.strictEqual(r.reflectionGainText,(d.refl1Gain*100).toFixed(1)+'% / '+(d.refl2Gain*100).toFixed(1)+'%');
-  assert.strictEqual(r.reflectionCutoffText,'2600 Hz');
+  assert.strictEqual(r.reflectionCutoffText,'3300 Hz');
 });
 
 var d0=core.calculateDepth(0);
 var d100=core.calculateDepth(100);
 assert.strictEqual(d0.refl1Gain,0);
 assert.strictEqual(d0.refl2Gain,0);
-assert.strictEqual(d100.refl1Gain,0.14);
-assert.strictEqual(d100.refl2Gain,0.07);
+assert.strictEqual(d100.refl1Gain,0.18);
+assert.strictEqual(d100.refl2Gain,0.10);
 
 var full=core.appliedTargets(100,70,100,true);
 assert(full.masterGain<core.calculate(100,70).baseMasterGain,'depth headroom must reduce output trim when needed');
 assert(full.nominalSum*full.masterGain<=1.000000000001,'full settings must satisfy nominal headroom budget');
+
+var tactile=core.appliedTargets(86,64,58,true);
+assert.strictEqual(tactile.refl1DelayL,0.017);
+assert.strictEqual(tactile.refl2DelayR,0.034);
+near(tactile.refl1Gain,0.1044,1e-12,'tactile preset reflection 1');
+near(tactile.refl2Gain,0.058,1e-12,'tactile preset reflection 2');
+assert(tactile.nominalSum*tactile.masterGain<=1.000000000001,'tactile preset must preserve headroom');
 
 var clamped=core.calculate(150,5);
 assert.strictEqual(clamped.wet,1);
@@ -113,4 +120,4 @@ assert.strictEqual(core.readouts(72,57,0,true).delayText,(wide.itd*1000).toFixed
 assert.strictEqual(core.readouts(72,57,0,true).cutoffText,Math.round(wide.cutoff)+' Hz');
 assert.strictEqual(core.readouts(72,57,0,true).farText,Math.round(wide.farGain*100)+'%');
 
-console.log('Pocket Spatial slider + Depth mapping tests passed for '+cases.length+' spatial and '+depthCases.length+' depth calibration points.');
+console.log('Pocket Spatial slider + tactile Depth mapping tests passed for '+cases.length+' spatial and '+depthCases.length+' depth calibration points.');

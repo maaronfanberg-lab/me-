@@ -160,8 +160,8 @@ assertTargets(72,57,45,'default');
 ids.depth.value='100';
 ids.depth.dispatch('input');
 assertTargets(72,57,100,'depth 100');
-near(audio.gains[5].gain.value,0.14,1e-12,'Depth 100 reflection 1');
-near(audio.gains[7].gain.value,0.07,1e-12,'Depth 100 reflection 2');
+near(audio.gains[5].gain.value,0.18,1e-12,'Depth 100 reflection 1');
+near(audio.gains[7].gain.value,0.10,1e-12,'Depth 100 reflection 2');
 
 ids.depth.value='0';
 ids.depth.dispatch('input');
