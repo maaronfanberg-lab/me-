@@ -22,41 +22,19 @@ jobs:
     timeout-minutes: 10
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 21b1ec0b68cbf56fca273d58ce5b346e
       SOUNDCLOUD_CLIENT_ID: ${{ secrets.SOUNDCLOUD_CLIENT_ID }}
       SOUNDCLOUD_CLIENT_SECRET: ${{ secrets.SOUNDCLOUD_CLIENT_SECRET }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check Cloudflare token
+      - name: Check deployment credentials
         shell: bash
         run: |
           test -n "$CLOUDFLARE_API_TOKEN"
-          echo 'Cloudflare API token is available.'
-
-      - name: Select Fanberg Cloudflare account
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            -H 'Content-Type: application/json' \
-            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
-            > /tmp/cf-accounts.json
-          python3 - <<'PY' >> "$GITHUB_ENV"
-          import json
-          d=json.load(open('/tmp/cf-accounts.json'))
-          if not d.get('success'):
-              raise SystemExit('Cloudflare account lookup failed; refusing to guess an account.')
-          matches=[a for a in d.get('result',[]) if 'fanberg' in str(a.get('name','')).lower()]
-          if len(matches) != 1:
-              names=[str(a.get('name','')) for a in d.get('result',[])]
-              raise SystemExit(f'Expected exactly one Cloudflare account containing Fanberg; found {len(matches)}. Accessible account names: {names}')
-          a=matches[0]
-          print(f"CLOUDFLARE_ACCOUNT_ID={a['id']}")
-          print(f"CLOUDFLARE_ACCOUNT_NAME={a['name']}")
-          PY
-          echo 'Selected Fanberg Cloudflare account.'
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          echo 'Cloudflare deploy credentials are available.'
 
       - name: Validate Worker source
         run: |
@@ -146,7 +124,7 @@ jobs:
       - name: Summary
         run: |
           echo '### Pocket Spatial SoundCloud connector' >> "$GITHUB_STEP_SUMMARY"
-          echo "Cloudflare account: $CLOUDFLARE_ACCOUNT_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloudflare account ID: $CLOUDFLARE_ACCOUNT_ID" >> "$GITHUB_STEP_SUMMARY"
           echo "Worker: $POCKET_SPATIAL_SOUNDCLOUD_URL" >> "$GITHUB_STEP_SUMMARY"
           echo "SoundCloud credentials configured: $SOUNDCLOUD_CONFIGURED" >> "$GITHUB_STEP_SUMMARY"
           echo 'OAuth design: PKCE + encrypted stateless session; SoundCloud access/refresh tokens are not exposed to the page.' >> "$GITHUB_STEP_SUMMARY"
