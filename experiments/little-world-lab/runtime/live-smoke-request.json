@@ -1,25 +1,36 @@
 {
   "requested_at": "2026-09-05",
   "model": "bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M",
-  "purpose": "capture the first instrumented Cedar natural-behavior baseline without changing prompts, schemas, world rules, or decoding settings",
+  "purpose": "compare Cedar natural action selection at temperatures 0.1, 0.5, and 1.0 with identical seeds, prompts, schemas, and world rules",
   "natural_baseline": {
     "ticks_per_seed": 12,
     "actors_per_tick": 2,
     "seeds": [7, 19, 31],
-    "expected_total_actions": 72
+    "expected_total_actions_per_temperature": 72
   },
   "directed_live_contract_probes": ["move", "talk", "help", "work", "rest", "observe"],
   "quality_gate": {
     "backend_errors": 0,
-    "minimum_accepted_model_proposals": 36,
-    "maximum_aggregate_proposal_rejection_rate": 0.5
+    "minimum_accepted_model_proposals_at_baseline": 36,
+    "maximum_aggregate_proposal_rejection_rate_at_baseline": 0.5
   },
-  "attempt": 11,
+  "attempt": 12,
   "behavior_instrumentation": {
     "decision_events": true,
     "action_feasibility_breakdown": true,
-    "purpose": "measure unavailable vs feasible-unchosen vs chosen-rejected vs chosen-accepted action branches"
+    "purpose": "compare unavailable vs feasible-unchosen vs chosen-rejected vs chosen-accepted action branches across temperatures"
   },
+  "temperature_sweep": [0.1, 0.5, 1.0],
+  "controlled_variables": [
+    "model",
+    "seeds",
+    "ticks_per_seed",
+    "actors_per_tick",
+    "prompt",
+    "response_schema",
+    "world_rules",
+    "max_tokens"
+  ],
   "structured_output": "llama.cpp-response_format-json-schema-plus-engine-revalidation",
   "schema_constrained_decoding": true,
   "feasibility_grounding": true,
@@ -28,6 +39,5 @@
   "closed_schema_alias_normalization": {
     "work.location_to_resource": "legacy compatibility only, and only when the value is already a visible local resource"
   },
-  "temperature": 0.1,
   "max_tokens": 256
 }
