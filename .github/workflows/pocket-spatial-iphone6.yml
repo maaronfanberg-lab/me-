@@ -80,7 +80,7 @@ jobs:
           grep -q "SEARCH_API='https://archive.org/advancedsearch.php'" apps/pocket-spatial-internet-archive.js
           grep -q "METADATA_API='https://archive.org/metadata/'" apps/pocket-spatial-internet-archive.js
           grep -q "DOWNLOAD_BASE='https://archive.org/download/'" apps/pocket-spatial-internet-archive.js
-          grep -q "licenseurl:(http\*creativecommons.org/licenses/by/\*)" apps/pocket-spatial-internet-archive.js
+          grep -q "licenseurl:http\*by\*" apps/pocket-spatial-internet-archive.js
           grep -q "isExactCCBY" apps/pocket-spatial-internet-archive.js
           grep -q "selectMP3" apps/pocket-spatial-internet-archive.js
           grep -q "createMediaElementSource(tappedMedia)" apps/pocket-spatial-internet-archive.js
@@ -99,7 +99,7 @@ jobs:
         run: |
           set -euo pipefail
           ORIGIN='https://maaronfanberg-lab.github.io'
-          QUERY='mediatype:(audio) AND licenseurl:(http*creativecommons.org/licenses/by/*) AND (music)'
+          QUERY='mediatype:(audio) AND licenseurl:http*by*'
           curl -fsSG --max-time 25 \
             -H "Origin: $ORIGIN" \
             -D /tmp/archive-search.headers \
@@ -109,7 +109,7 @@ jobs:
             --data-urlencode 'fl[]=creator' \
             --data-urlencode 'fl[]=licenseurl' \
             --data-urlencode 'sort[]=downloads desc' \
-            --data-urlencode 'rows=12' \
+            --data-urlencode 'rows=30' \
             --data-urlencode 'page=1' \
             --data-urlencode 'output=json' \
             'https://archive.org/advancedsearch.php' \
@@ -120,11 +120,11 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('/tmp/archive-search.json').read_text())
           docs=(data.get('response') or {}).get('docs') or []
-          assert docs, 'Internet Archive search returned no candidate items'
+          assert docs, 'Internet Archive broad license search returned no candidate items'
           ids=[str(d.get('identifier') or '') for d in docs if d.get('identifier')]
           assert ids, 'Internet Archive candidates had no identifiers'
-          Path('/tmp/archive-ids').write_text('\n'.join(ids[:10]))
-          print('Archive search returned', len(docs), 'candidate items')
+          Path('/tmp/archive-ids').write_text('\n'.join(ids[:20]))
+          print('Archive broad search returned', len(docs), 'candidate items')
           PY
 
           found=0
