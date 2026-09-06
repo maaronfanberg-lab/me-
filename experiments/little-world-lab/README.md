@@ -20,6 +20,25 @@ This experiment does **not** import or modify The Room, Emily/Olivia runtime sta
 - A deterministic `StubBackend` for CI. Stub behavior is an engine test fixture, **not** behavioral evidence.
 - A standard-library `BitNetBackend` compatible with the existing localhost OpenAI-style server contract.
 
+## Replay Cedar Hollow
+
+The browser replay viewer is available at:
+
+`https://maaronfanberg-lab.github.io/me-/experiments/little-world-lab/viewer/`
+
+It is read-only. The bundled replay data comes from the successful Falcon live-verification run #12 and includes the natural baseline seed 7 at temperature 0.1. Moving the replay timeline does not call Falcon or mutate WorldEngine state.
+
+Viewer files live under `viewer/`:
+
+```text
+viewer/index.html
+viewer/styles.css
+viewer/app.js
+viewer/replay-data.json
+```
+
+The viewer reconstructs agent locations and visible resource changes from the append-only event record, and shows each recorded Falcon decision alongside the engine-side feasible action types and acceptance/rejection result.
+
 ## Run the deterministic smoke simulation
 
 From this directory:

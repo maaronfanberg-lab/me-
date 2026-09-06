@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#efe7d2" />
+  <title>Cedar Hollow Replay</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Little World Lab · read-only replay</p>
+        <h1>Cedar Hollow</h1>
+        <p class="lede">Watch a recorded Falcon run tick by tick. The viewer reads evidence already produced by the simulation; it cannot steer the agents or change WorldEngine state.</p>
+      </div>
+      <div class="source-card">
+        <span class="status-dot" aria-hidden="true"></span>
+        <div>
+          <strong>Recorded experiment</strong>
+          <span id="sourceLine">Loading run evidence…</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Replay controls">
+      <label>
+        <span>Temperature</span>
+        <select id="temperatureSelect" aria-label="Temperature"></select>
+      </label>
+      <label>
+        <span>Seed</span>
+        <select id="seedSelect" aria-label="Seed"></select>
+      </label>
+      <div class="transport" aria-label="Playback controls">
+        <button id="backButton" type="button" aria-label="Previous tick">←</button>
+        <button id="playButton" type="button" class="primary">Play</button>
+        <button id="nextButton" type="button" aria-label="Next tick">→</button>
+      </div>
+      <label class="speed-control">
+        <span>Speed</span>
+        <select id="speedSelect" aria-label="Playback speed">
+          <option value="1400">0.7×</option>
+          <option value="900" selected>1×</option>
+          <option value="450">2×</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="timeline-card">
+      <div class="tick-readout">
+        <div><span class="small-label">Tick</span><strong id="tickNumber">0</strong><span id="tickTotal">/ 12</span></div>
+        <div class="tick-summary" id="tickSummary">Initial state</div>
+      </div>
+      <input id="tickSlider" type="range" min="0" max="12" value="0" step="1" aria-label="Replay tick" />
+      <div class="milestones" aria-hidden="true">
+        <span style="left:25%">wind</span>
+        <span style="left:58.33%">pump</span>
+        <span style="left:91.66%">delivery</span>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <div class="map-panel card">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Town view</p>
+            <h2>Where everyone is</h2>
+          </div>
+          <div id="incidentBadge" class="incident-badge hidden"></div>
+        </div>
+        <div id="townMap" class="town-map" aria-label="Map of Cedar Hollow">
+          <svg id="edgeLayer" class="edges" viewBox="0 0 1000 680" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div id="locationLayer" class="location-layer"></div>
+        </div>
+        <p class="map-note">Lines show allowed neighboring moves. Agent markers show recorded positions after all events through the selected tick.</p>
+      </div>
+
+      <aside class="decision-panel card">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Falcon decisions</p>
+            <h2 id="decisionHeading">Tick 0</h2>
+          </div>
+          <span id="decisionCount" class="count-chip">0</span>
+        </div>
+        <div id="decisions" class="decisions empty-state">No decisions yet. Tick 0 is the starting world.</div>
+      </aside>
+    </section>
+
+    <section class="lower-grid">
+      <div class="card agents-card">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Residents</p>
+            <h2>Agent state</h2>
+          </div>
+          <span class="hint">Tap a resident</span>
+        </div>
+        <div id="agentGrid" class="agent-grid"></div>
+      </div>
+
+      <div class="card detail-card">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Resident detail</p>
+            <h2 id="agentDetailName">Select an agent</h2>
+          </div>
+        </div>
+        <div id="agentDetail" class="agent-detail empty-state">Traits, goals, current location, recent recorded decisions, and checkpoint memories appear here.</div>
+      </div>
+    </section>
+
+    <section class="card event-card">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">World record</p>
+          <h2>Events through this tick</h2>
+        </div>
+        <span id="eventCount" class="count-chip">0</span>
+      </div>
+      <div id="eventStream" class="event-stream"></div>
+    </section>
+
+    <footer>
+      <p id="footerSource"></p>
+      <p>This is a replay, not a live town. Falcon proposed actions; WorldEngine validated and mutated the world.</p>
+    </footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
