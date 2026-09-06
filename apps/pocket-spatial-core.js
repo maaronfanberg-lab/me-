@@ -103,7 +103,7 @@
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
-  var build='20260906-buffer-probe-1';
+  var build='20260906-buffer-probe-2';
   function versioned(src){return src+'?v='+build;}
   function load(src,next){
     var script=document.createElement('script');

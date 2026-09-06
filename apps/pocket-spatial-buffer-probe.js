@@ -7,6 +7,8 @@ var TEST_PAGE='https://commons.wikimedia.org/wiki/File:Music_loop_168bpm_(Still_
 var MAX_BYTES=1048576;
 var jsonpCounter=0;
 var lastResult=null;
+var resolvedClip=null;
+var resolveError=null;
 
 function el(tag,className,text){
   var node=document.createElement(tag);
@@ -247,28 +249,45 @@ function setStatus(ui,text,kind){
   ui.status.className='status'+(kind?' '+kind:'');
 }
 
-function run(ui){
+function prepare(ui){
+  resolvedClip=null;
+  resolveError=null;
   ui.button.disabled=true;
-  ui.button.textContent='TESTING BUFFERED PCM…';
-  setStatus(ui,'Bypassing the remote audio-element tap. Resolving a 5.7-second Commons music loop, then decoding it directly into Web Audio RAM…','');
+  ui.button.textContent='PREPARING BUFFER TEST…';
+  setStatus(ui,'Resolving the tiny Commons control clip before your tap so iOS 12 can keep the next button press as a real Web Audio user gesture…','');
   resolveTestClip(function(error,clip){
     if(error){
+      resolveError=error;
       ui.button.disabled=false;
-      ui.button.textContent='RETRY BUFFERED PCM CHECK';
-      setStatus(ui,'Could not prepare the tiny Commons control clip: '+error.message,'warn');
+      ui.button.textContent='RETRY PREPARE TEST';
+      setStatus(ui,'Could not prepare the tiny Commons control clip: '+error.message+'. Tap retry.','warn');
       return;
     }
-    probeBufferedPCM(clip.url,function(result){
-      lastResult=result;
-      ui.button.disabled=false;
-      if(result.supported){
-        ui.button.textContent='BUFFERED PCM VERIFIED ✓';
-        setStatus(ui,'Verified: remote audio bytes decoded into non-flat Web Audio PCM on this iPhone. The old media-element tap is the broken layer. Bytes '+result.received_bytes+', duration '+result.decoded_duration.toFixed(1)+' s, analyser deviation '+result.max_analyser_deviation+'.','good');
-      }else{
-        ui.button.textContent='BUFFERED PCM NOT VERIFIED';
-        setStatus(ui,'Buffered Web Audio test failed at '+result.reason+'. Bytes '+result.received_bytes+', decoded duration '+result.decoded_duration.toFixed(1)+' s, analyser deviation '+result.max_analyser_deviation+'.','warn');
-      }
-    });
+    resolvedClip=clip;
+    ui.button.disabled=false;
+    ui.button.textContent='RUN BUFFERED PCM CHECK';
+    setStatus(ui,'Ready. The control clip is resolved. Tap the button once to create Web Audio inside your iPhone gesture, then fetch and decode the clip in memory.','good');
+  });
+}
+
+function run(ui){
+  if(!resolvedClip){
+    prepare(ui);
+    return;
+  }
+  ui.button.disabled=true;
+  ui.button.textContent='TESTING BUFFERED PCM…';
+  setStatus(ui,'Bypassing the remote audio-element tap. Web Audio was created from this tap; now fetching and decoding the 5.7-second Commons clip in RAM…','');
+  probeBufferedPCM(resolvedClip.url,function(result){
+    lastResult=result;
+    ui.button.disabled=false;
+    if(result.supported){
+      ui.button.textContent='BUFFERED PCM VERIFIED ✓';
+      setStatus(ui,'Verified: remote audio bytes decoded into non-flat Web Audio PCM on this iPhone. The old media-element tap is the broken layer. Bytes '+result.received_bytes+', duration '+result.decoded_duration.toFixed(1)+' s, analyser deviation '+result.max_analyser_deviation+'.','good');
+    }else{
+      ui.button.textContent='BUFFERED PCM NOT VERIFIED';
+      setStatus(ui,'Buffered Web Audio test failed at '+result.reason+'. Bytes '+result.received_bytes+', decoded duration '+result.decoded_duration.toFixed(1)+' s, analyser deviation '+result.max_analyser_deviation+'.','warn');
+    }
   });
 }
 
@@ -282,12 +301,16 @@ function createUI(){
   title.style.letterSpacing='.06em';
   title.style.fontSize='12px';
   card.appendChild(title);
-  var status=el('div','status','Use this only if a Commons track says web_audio_pcm_flatline. It tests a tiny remote clip without using an HTML audio-element tap.');
+  var status=el('div','status','Preparing the tiny remote control clip. No audio is stored.');
   card.appendChild(status);
   var ui={card:card,status:status,button:null};
-  var button=el('button','','RUN BUFFERED PCM CHECK');
+  var button=el('button','','PREPARING BUFFER TEST…');
   button.type='button';
-  button.addEventListener('click',function(){run(ui);});
+  button.disabled=true;
+  button.addEventListener('click',function(){
+    if(!resolvedClip&&resolveError){prepare(ui);return;}
+    run(ui);
+  });
   ui.button=button;
   card.appendChild(button);
   var link=el('a','','Open the 5.7-second Commons test clip + license');
@@ -298,7 +321,7 @@ function createUI(){
   link.style.marginTop='6px';
   link.style.color='inherit';
   card.appendChild(link);
-  var note=el('div','legal','This diagnostic keeps the compressed bytes and decoded AudioBuffer in memory only for the short test, then releases them. It does not record, save, export, or persist the clip.');
+  var note=el('div','legal','This diagnostic keeps the compressed bytes and decoded AudioBuffer in memory only for the short test, then releases them. It does not record, save, export, or persist the clip. The diagnostic output is intentionally silent; the result text is what matters.');
   note.style.marginTop='8px';
   card.appendChild(note);
   hero.parentNode.insertBefore(card,hero);
@@ -312,9 +335,11 @@ function boot(){
     licenseAllowsProbe:licenseAllowsProbe,
     selectMP3:selectMP3,
     probeBufferedPCM:probeBufferedPCM,
+    prepare:prepare,
     getLastResult:function(){return lastResult;},
     ui:ui
   };
+  if(ui)prepare(ui);
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);
