@@ -12,7 +12,7 @@ function sliceFunction(name,nextName){
   return source.slice(start,end);
 }
 
-var snippet="var API='https://api.audius.co/v1';\nvar APP_NAME='PocketSpatial';\nvar MAX_RESULTS=24;\n"+
+var snippet="var API='https://api.audius.co/v1';\nvar APP_NAME='PocketSpatial';\nvar API_LIMIT=100;\nvar DISPLAY_RESULTS=24;\nvar DISCOVERY_QUERIES=['CC BY','Creative Commons Attribution','creative commons','CC0'];\n"+
   sliceFunction('cleanText','licenseAllowsSpatial')+'\n'+
   sliceFunction('licenseAllowsSpatial','isPlayable')+'\n'+
   sliceFunction('isPlayable','streamURL')+'\n'+
@@ -20,7 +20,7 @@ var snippet="var API='https://api.audius.co/v1';\nvar APP_NAME='PocketSpatial';\
   sliceFunction('pageURL','normalizeTrack')+'\n'+
   sliceFunction('normalizeTrack','buildCatalogURL')+'\n'+
   sliceFunction('buildCatalogURL','xhrJSON')+'\n'+
-  'this.api={licenseAllowsSpatial:licenseAllowsSpatial,isPlayable:isPlayable,streamURL:streamURL,pageURL:pageURL,normalizeTrack:normalizeTrack,buildCatalogURL:buildCatalogURL};';
+  'this.api={licenseAllowsSpatial:licenseAllowsSpatial,isPlayable:isPlayable,streamURL:streamURL,pageURL:pageURL,normalizeTrack:normalizeTrack,buildCatalogURL:buildCatalogURL,discoveryQueries:DISCOVERY_QUERIES};';
 
 var sandbox={encodeURIComponent:encodeURIComponent,String:String,Number:Number,RegExp:RegExp};
 vm.runInNewContext(snippet,sandbox,{filename:'audius-catalog-pure.js'});
@@ -46,6 +46,7 @@ function track(overrides){
 }
 
 assert.strictEqual(api.licenseAllowsSpatial(track({license:'CC BY 4.0'})),true);
+assert.strictEqual(api.licenseAllowsSpatial(track({license:'Attribution CC BY'})),true);
 assert.strictEqual(api.licenseAllowsSpatial(track({license:'CC BY-SA 4.0'})),true);
 assert.strictEqual(api.licenseAllowsSpatial(track({license:'Creative Commons Attribution'})),true);
 assert.strictEqual(api.licenseAllowsSpatial(track({license:'CC0 1.0'})),true);
@@ -76,13 +77,18 @@ assert.strictEqual(normalized.audio,'https://api.audius.co/v1/tracks/D7KyD/strea
 assert.strictEqual(api.normalizeTrack(track({license:'CC BY-ND 4.0'})),null);
 assert.strictEqual(api.normalizeTrack(track({license:''})),null);
 
-var trending=api.buildCatalogURL('');
-assert(trending.indexOf('https://api.audius.co/v1/tracks/trending?')===0);
-assert(trending.indexOf('limit=24')!==-1);
-assert(trending.indexOf('app_name=PocketSpatial')!==-1);
+assert.deepStrictEqual(Array.prototype.slice.call(api.discoveryQueries),['CC BY','Creative Commons Attribution','creative commons','CC0']);
+var blank=api.buildCatalogURL('');
+assert(blank.indexOf('https://api.audius.co/v1/tracks/search?query=CC%20BY')===0);
+assert(blank.indexOf('limit=100')!==-1);
+assert(blank.indexOf('app_name=PocketSpatial')!==-1);
 var search=api.buildCatalogURL('ambient piano');
 assert(search.indexOf('/tracks/search?query=ambient%20piano')!==-1);
+assert(search.indexOf('limit=100')!==-1);
 assert(search.indexOf('app_name=PocketSpatial')!==-1);
+assert(source.indexOf("loadDiscovery(ui,0)")!==-1);
+assert(source.indexOf('/tracks/trending?')===-1);
+assert(source.indexOf("tracks.length<DISPLAY_RESULTS")!==-1);
 
 assert(source.indexOf('access_token')===-1);
 assert(source.indexOf('client_secret')===-1);
