@@ -196,6 +196,107 @@ jobs:
           assert aggregate_rejection_rate <= 0.50, summary
           PY
 
+      - name: Run Cedar temperature sweep
+        working-directory: experiments/little-world-lab
+        run: |
+          set -euo pipefail
+          MODEL_ID="$(cat /tmp/little-world-model-id.txt)"
+          for TEMP in 0.5 1.0; do
+            LABEL="${TEMP/./p}"
+            for SEED in 7 19 31; do
+              OUT="runs/falcon-live-temp-${LABEL}-seed-${SEED}"
+              rm -rf "$OUT"
+              python falcon_live.py \
+                --ticks 12 \
+                --actors-per-tick 2 \
+                --seed "$SEED" \
+                --temperature "$TEMP" \
+                --max-tokens 256 \
+                --timeout 300 \
+                --model "$MODEL_ID" \
+                --output "$OUT"
+            done
+          done
+
+      - name: Summarize Cedar temperature sweep
+        working-directory: experiments/little-world-lab
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import collections
+          import json
+          from pathlib import Path
+
+          seeds = [7, 19, 31]
+          temperatures = [(0.1, None), (0.5, '0p5'), (1.0, '1p0')]
+          actions = ['move', 'talk', 'help', 'work', 'rest', 'observe']
+          comparison = []
+
+          for temperature, label in temperatures:
+              chosen = collections.Counter()
+              resolved = collections.Counter()
+              feasible = collections.Counter()
+              rejections = 0
+              backend_errors = 0
+              decisions = 0
+              per_seed = []
+              for seed in seeds:
+                  if label is None:
+                      out = Path(f'runs/falcon-live-seed-{seed}')
+                  else:
+                      out = Path(f'runs/falcon-live-temp-{label}-seed-{seed}')
+                  metrics = json.loads((out / 'metrics.json').read_text(encoding='utf-8'))
+                  decisions += metrics['decision_count']
+                  rejections += metrics['proposal_rejections']
+                  backend_errors += metrics['backend_errors']
+                  resolved.update(metrics['action_counts'])
+                  for action in actions:
+                      row = metrics['action_feasibility_breakdown'][action]
+                      chosen[action] += row['chosen_ticks']
+                      feasible[action] += row['feasible_ticks']
+                  per_seed.append({
+                      'seed': seed,
+                      'chosen_action_counts': {
+                          action: metrics['action_feasibility_breakdown'][action]['chosen_ticks']
+                          for action in actions
+                      },
+                      'resolved_action_counts': metrics['action_counts'],
+                      'proposal_rejections': metrics['proposal_rejections'],
+                      'backend_errors': metrics['backend_errors'],
+                  })
+
+              row = {
+                  'temperature': temperature,
+                  'decisions': decisions,
+                  'chosen_action_counts': dict(chosen),
+                  'resolved_action_counts': dict(resolved),
+                  'feasible_action_ticks': dict(feasible),
+                  'proposal_rejections': rejections,
+                  'backend_errors': backend_errors,
+                  'per_seed': per_seed,
+              }
+              comparison.append(row)
+
+          summary = {
+              'experiment': 'cedar-temperature-sweep',
+              'model': 'bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M',
+              'seeds': seeds,
+              'ticks_per_seed': 12,
+              'actors_per_tick': 2,
+              'temperatures': [0.1, 0.5, 1.0],
+              'comparison': comparison,
+              'interpretation_rule': 'No behavior is forced. Compare model-proposed chosen_action_counts under identical world seeds and schemas.',
+          }
+          Path('runs/falcon-live-temperature-summary.json').write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(summary, indent=2, sort_keys=True))
+
+          assert all(row['decisions'] == 72 for row in comparison), summary
+          assert all(row['backend_errors'] == 0 for row in comparison), summary
+          PY
+
       - name: Capture Falcon server logs
         if: always()
         run: |
@@ -212,7 +313,9 @@ jobs:
           path: |
             experiments/little-world-lab/runs/falcon-live-contract
             experiments/little-world-lab/runs/falcon-live-seed-*
+            experiments/little-world-lab/runs/falcon-live-temp-*
             experiments/little-world-lab/runs/falcon-live-summary.json
+            experiments/little-world-lab/runs/falcon-live-temperature-summary.json
             experiments/little-world-lab/runs/falcon-live-evidence
           if-no-files-found: warn
           retention-days: 14
