@@ -8,21 +8,25 @@ on:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-commons.js'
       - 'apps/pocket-spatial-soundcloud.js'
       - 'apps/pocket-spatial-soundcloud-config.js'
       - 'cloudflare/pocket-spatial-soundcloud/**'
       - 'tests/pocket-spatial-core.test.js'
       - 'tests/pocket-spatial-ui.test.js'
+      - 'tests/pocket-spatial-commons.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
   pull_request:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-commons.js'
       - 'apps/pocket-spatial-soundcloud.js'
       - 'apps/pocket-spatial-soundcloud-config.js'
       - 'cloudflare/pocket-spatial-soundcloud/**'
       - 'tests/pocket-spatial-core.test.js'
       - 'tests/pocket-spatial-ui.test.js'
+      - 'tests/pocket-spatial-commons.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
   workflow_dispatch:
 
@@ -42,6 +46,9 @@ jobs:
       - name: Verify real UI events drive exact Web Audio targets
         run: node tests/pocket-spatial-ui.test.js
 
+      - name: Verify Wikimedia Commons transport logic
+        run: node tests/pocket-spatial-commons.test.js
+
       - name: Extract inline JavaScript
         run: |
           python3 - <<'PY'
@@ -56,6 +63,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check apps/pocket-spatial-core.js
+          node --check apps/pocket-spatial-commons.js
           node --check apps/pocket-spatial-soundcloud-config.js
           node --check apps/pocket-spatial-soundcloud.js
           node --check cloudflare/pocket-spatial-soundcloud/src/index.js
@@ -64,9 +72,96 @@ jobs:
       - name: Enforce ES5 syntax for old Safari page code
         run: |
           npx --yes es-check@7 es5 apps/pocket-spatial-core.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-commons.js
           npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud-config.js
           npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud.js
           npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+
+      - name: Verify Wikimedia Commons test-stream contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "load('pocket-spatial-commons.js'" apps/pocket-spatial-core.js
+          grep -q "Category:Audio files of music" apps/pocket-spatial-commons.js
+          grep -q "generator=categorymembers" apps/pocket-spatial-commons.js
+          grep -q "prop=videoinfo" apps/pocket-spatial-commons.js
+          grep -q "derivatives|extmetadata" apps/pocket-spatial-commons.js
+          grep -q "LicenseShortName" apps/pocket-spatial-commons.js
+          grep -q "selectMP3" apps/pocket-spatial-commons.js
+          grep -q "createMediaElementSource(tappedMedia)" apps/pocket-spatial-commons.js
+          grep -q "getByteTimeDomainData" apps/pocket-spatial-commons.js
+          grep -q "web_audio_pcm_flatline" apps/pocket-spatial-commons.js
+          grep -q "No account or API key required" apps/pocket-spatial-commons.js
+          if grep -E -q 'client_id|access_token|api[_-]?key' apps/pocket-spatial-commons.js; then
+            echo 'Commons test path unexpectedly requires a credential.'
+            exit 1
+          fi
+          if grep -E -q 'download|MediaRecorder|captureStream' apps/pocket-spatial-commons.js; then
+            echo 'Commons test path must remain live-processing only.'
+            exit 1
+          fi
+          echo 'Wikimedia Commons stream contract passed.'
+
+      - name: Smoke-test live Wikimedia Commons API, MP3 and CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          API_URL='https://commons.wikimedia.org/w/api.php?action=query&generator=categorymembers&gcmtitle=Category%3AAudio%20files%20of%20music&gcmnamespace=6&gcmtype=file&gcmlimit=12&prop=videoinfo&viprop=url%7Cmime%7Cderivatives%7Cextmetadata&viextmetadatafilter=LicenseShortName%7CLicenseUrl%7CArtist%7CUsageTerms&format=json&origin=*'
+          UA='PocketSpatial/0.1 (https://maaronfanberg-lab.github.io/me-/apps/pocket-spatial.html)'
+          curl -fsS --max-time 25 -A "$UA" "$API_URL" -o /tmp/commons.json
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+
+          data=json.loads(Path('/tmp/commons.json').read_text())
+          assert 'error' not in data, data.get('error')
+          pages=(data.get('query') or {}).get('pages') or {}
+          assert pages, 'Commons category query returned no pages'
+
+          def meta(info,key):
+              raw=((info.get('extmetadata') or {}).get(key) or {}).get('value') or ''
+              return re.sub(r'<[^>]+>','',str(raw)).strip()
+
+          def license_ok(info):
+              text=' '.join([meta(info,'LicenseShortName'),meta(info,'LicenseUrl'),meta(info,'UsageTerms')]).lower()
+              if not text: return False
+              bad=('noncommercial','no derivatives','noderivatives','/by-nc','-nc-','/by-nd','-nd-')
+              return not any(x in text for x in bad)
+
+          def is_mp3(mime,url,key=''):
+              mime=(mime or '').lower(); url=(url or '').lower().split('?')[0]; key=(key or '').lower()
+              return 'audio/mpeg' in mime or 'audio/mp3' in mime or url.endswith('.mp3') or key=='mp3' or 'mp3' in key
+
+          candidates=[]
+          for page in pages.values():
+              info=((page.get('videoinfo') or [None])[0])
+              if not info or not license_ok(info): continue
+              original=info.get('url') or ''
+              if original.startswith('https://') and is_mp3(info.get('mime'),original):
+                  candidates.append((page,info,original,'original'))
+                  continue
+              for d in info.get('derivatives') or []:
+                  url=d.get('src') or d.get('url') or ''
+                  if url.startswith('https://') and is_mp3(d.get('type') or d.get('mime'),url,d.get('transcodekey') or d.get('key')):
+                      candidates.append((page,info,url,'derivative'))
+                      break
+
+          assert candidates, 'Commons returned no derivative-permitting MP3 source or derivative in this batch'
+          page,info,url,source=candidates[0]
+          Path('/tmp/commons-audio-url').write_text(url)
+          print('Commons returned',len(pages),'file pages; testing',page.get('title'),'via',source,'MP3')
+          print('License:',meta(info,'LicenseShortName') or meta(info,'UsageTerms'))
+          PY
+          AUDIO_URL="$(cat /tmp/commons-audio-url)"
+          curl -fsSL --max-time 25 -A "$UA" \
+            -H 'Origin: https://maaronfanberg-lab.github.io' \
+            -H 'Range: bytes=0-4095' \
+            -D /tmp/commons.headers \
+            -o /tmp/commons.sample \
+            "$AUDIO_URL"
+          test -s /tmp/commons.sample
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/commons.headers
+          echo 'Live Commons API, MP3 bytes, and CORS check passed.'
 
       - name: Verify SoundCloud Worker bundles
         run: |
@@ -118,7 +213,7 @@ jobs:
           grep -q 'reflGainR2.connect(merger,0,1)' apps/pocket-spatial.html
           grep -q 'setParam(reflGainL1.gain,t.refl1Gain)' apps/pocket-spatial.html
           grep -q 'setParam(reflGainL2.gain,t.refl2Gain)' apps/pocket-spatial.html
-          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js; then
+          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js apps/pocket-spatial-commons.js; then
             echo 'Heavy/custom DSP primitive leaked into the iPhone 6 layer.'
             exit 1
           fi
