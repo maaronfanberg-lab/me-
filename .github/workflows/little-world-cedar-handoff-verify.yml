@@ -1,0 +1,476 @@
+name: Cedar Hollow runner handoff verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/little-world-lab/runtime/handoff-verify-request.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cedar-handoff-verify-${{ github.run_id }}
+  cancel-in-progress: true
+
+env:
+  VERIFY_BRANCH: cedar-handoff-verify-${{ github.run_id }}
+  VERIFY_SESSION: cedar-handoff-verify-${{ github.run_id }}
+  FALCON_MODEL: bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M
+  TEMPERATURE: '0.1'
+  MAX_TOKENS: '256'
+
+jobs:
+  runner-a:
+    name: Runner A creates persisted Cedar state
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      state_commit_sha: ${{ steps.push_state.outputs.state_commit_sha }}
+    steps:
+      - name: Checkout Cedar source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Run Little World tests
+        working-directory: experiments/little-world-lab
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Assert verification isolation
+        run: |
+          set -euo pipefail
+          OUT_DIR="$RUNNER_TEMP/cedar-handoff-state"
+          test "$VERIFY_BRANCH" != "cedar-live-state"
+          test "$VERIFY_BRANCH" != "main"
+          test "$OUT_DIR" != "$GITHUB_WORKSPACE/experiments/little-world-lab/runs/cedar-live-24x7"
+          test -z "$(git status --porcelain -- experiments/little-world-lab/world.json experiments/little-world-lab/viewer)"
+          echo "OUT_DIR=$OUT_DIR" >> "$GITHUB_ENV"
+
+      - name: Start isolated Falcon on runner A
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/ggml-org/llama.cpp:server
+          docker run -d --name cedar-handoff-falcon-a \
+            -p 8080:8080 \
+            ghcr.io/ggml-org/llama.cpp:server \
+            -hf "$FALCON_MODEL" \
+            --host 0.0.0.0 \
+            --port 8080 \
+            -c 2048 \
+            -np 1
+
+      - name: Wait for runner A Falcon readiness
+        run: |
+          set -euo pipefail
+          ready=0
+          for i in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:8080/health >/tmp/cedar-handoff-a-health.json 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -qx 'cedar-handoff-falcon-a'; then
+              docker logs cedar-handoff-falcon-a || true
+              exit 1
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1
+          curl -fsS http://127.0.0.1:8080/v1/models > /tmp/cedar-handoff-a-models.json
+          MODEL_ID="$(python - <<'PY'
+          import json
+          rows = json.load(open('/tmp/cedar-handoff-a-models.json', encoding='utf-8')).get('data') or []
+          if not rows or not rows[0].get('id'):
+              raise SystemExit('llama.cpp returned no model id')
+          print(rows[0]['id'])
+          PY
+          )"
+          echo "MODEL_ID=$MODEL_ID" >> "$GITHUB_ENV"
+
+      - name: Capture runner A identity
+        env:
+          ACTIONS_RUNNER_NAME: ${{ runner.name }}
+        run: |
+          set -euo pipefail
+          export ID_HOSTNAME="$(hostname)"
+          export ID_MACHINE_ID="$(cat /etc/machine-id 2>/dev/null || true)"
+          export ID_CONTAINER_ID="$(docker inspect --format '{{.Id}}' cedar-handoff-falcon-a)"
+          mkdir -p "$OUT_DIR"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path(os.environ['OUT_DIR'], 'runner-a-identity.json').write_text(json.dumps({
+              'runner_name': os.environ['ACTIONS_RUNNER_NAME'],
+              'hostname': os.environ['ID_HOSTNAME'],
+              'machine_id': os.environ.get('ID_MACHINE_ID', ''),
+              'container_id': os.environ['ID_CONTAINER_ID'],
+          }, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Advance Cedar on runner A with live Falcon
+        run: |
+          set -euo pipefail
+          python experiments/little-world-lab/cedar_live_session.py \
+            --output "$OUT_DIR" \
+            --ticks 2 \
+            --seed 7 \
+            --actors-per-tick 2 \
+            --checkpoint-every 1 \
+            --temperature "$TEMPERATURE" \
+            --max-tokens "$MAX_TOKENS" \
+            --timeout 300 \
+            --model "$MODEL_ID" \
+            --status live \
+            --session-id "$VERIFY_SESSION"
+
+      - name: Prove runner A produced real validated state
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from collections import Counter
+          from pathlib import Path
+
+          out = Path(os.environ['OUT_DIR'])
+          checkpoint_bytes = (out / 'checkpoint.json').read_bytes()
+          checkpoint = json.loads(checkpoint_bytes)
+          state = json.loads((out / 'live-state.json').read_text(encoding='utf-8'))
+          events = [json.loads(line) for line in (out / 'events.jsonl').read_text(encoding='utf-8').splitlines() if line.strip()]
+          allowed = {'move', 'talk', 'help', 'work', 'rest', 'observe'}
+          decisions = [row for row in events if row.get('kind') == 'decision']
+          actions = [row for row in events if row.get('kind') == 'action']
+          backend_errors = [row for row in events if row.get('kind') == 'backend_error']
+
+          assert checkpoint['tick'] == 2, checkpoint['tick']
+          assert checkpoint['sequence'] == max(row['seq'] for row in events), checkpoint['sequence']
+          assert len(decisions) == 4, len(decisions)
+          assert len(actions) == 4, len(actions)
+          assert not backend_errors, backend_errors
+          assert Counter((row['tick'], row['actor']) for row in decisions) == Counter((row['tick'], row['actor']) for row in actions)
+          for row in decisions:
+              assert isinstance(row.get('proposed_action'), dict), row
+              assert row.get('proposed_type') in allowed, row
+          assert state['tick'] == checkpoint['tick']
+          assert state['session_id'] == os.environ['VERIFY_SESSION']
+          assert state['model'] == os.environ['MODEL_ID']
+
+          fingerprint_payload = {
+              'locations': checkpoint['locations'],
+              'agents': {
+                  name: {
+                      'location': agent['location'],
+                      'energy': agent['energy'],
+                      'memory_ids': [m['id'] for m in agent.get('memories', [])],
+                      'relationships': agent.get('relationships', {}),
+                  }
+                  for name, agent in sorted(checkpoint['agents'].items())
+              },
+          }
+          fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+          proof = {
+              'tick': checkpoint['tick'],
+              'sequence': checkpoint['sequence'],
+              'checkpoint_sha256': hashlib.sha256(checkpoint_bytes).hexdigest(),
+              'state_fingerprint_sha256': fingerprint,
+              'event_count': len(events),
+              'model_id': os.environ['MODEL_ID'],
+              'session_id': os.environ['VERIFY_SESSION'],
+              'decision_count': len(decisions),
+              'action_count': len(actions),
+              'backend_errors': 0,
+          }
+          (out / 'runner-a-proof.json').write_text(json.dumps(proof, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+          test -z "$(git status --porcelain -- experiments/little-world-lab/world.json experiments/little-world-lab/viewer)"
+
+      - name: Push exact state through GitHub remote
+        id: push_state
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$VERIFY_BRANCH"
+          rm -rf .cedar-handoff-proof
+          mkdir -p .cedar-handoff-proof
+          cp "$OUT_DIR/checkpoint.json" .cedar-handoff-proof/checkpoint.json
+          cp "$OUT_DIR/events.jsonl" .cedar-handoff-proof/events.jsonl
+          cp "$OUT_DIR/live-session.json" .cedar-handoff-proof/live-session.json
+          cp "$OUT_DIR/live-state.json" .cedar-handoff-proof/live-state.json
+          cp "$OUT_DIR/runner-a-identity.json" .cedar-handoff-proof/runner-a-identity.json
+          cp "$OUT_DIR/runner-a-proof.json" .cedar-handoff-proof/runner-a-proof.json
+          git add .cedar-handoff-proof
+          git commit -m "Cedar handoff verify runner A ${GITHUB_RUN_ID} [skip ci]"
+          git push origin "HEAD:refs/heads/$VERIFY_BRANCH"
+          STATE_COMMIT_SHA="$(git rev-parse HEAD)"
+          echo "state_commit_sha=$STATE_COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "Runner A state commit: $STATE_COMMIT_SHA"
+
+      - name: Stop runner A Falcon
+        if: always()
+        run: docker rm -f cedar-handoff-falcon-a >/dev/null 2>&1 || true
+
+  runner-b:
+    name: Runner B restores and advances persisted Cedar state
+    needs: runner-a
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Cedar source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Run Little World tests
+        working-directory: experiments/little-world-lab
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Assert verification isolation
+        run: |
+          set -euo pipefail
+          OUT_DIR="$RUNNER_TEMP/cedar-handoff-state"
+          test "$VERIFY_BRANCH" != "cedar-live-state"
+          test "$VERIFY_BRANCH" != "main"
+          test "$OUT_DIR" != "$GITHUB_WORKSPACE/experiments/little-world-lab/runs/cedar-live-24x7"
+          test -z "$(git status --porcelain -- experiments/little-world-lab/world.json experiments/little-world-lab/viewer)"
+          echo "OUT_DIR=$OUT_DIR" >> "$GITHUB_ENV"
+
+      - name: Start isolated Falcon on runner B
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/ggml-org/llama.cpp:server
+          docker run -d --name cedar-handoff-falcon-b \
+            -p 8080:8080 \
+            ghcr.io/ggml-org/llama.cpp:server \
+            -hf "$FALCON_MODEL" \
+            --host 0.0.0.0 \
+            --port 8080 \
+            -c 2048 \
+            -np 1
+
+      - name: Wait for runner B Falcon readiness
+        run: |
+          set -euo pipefail
+          ready=0
+          for i in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:8080/health >/tmp/cedar-handoff-b-health.json 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -qx 'cedar-handoff-falcon-b'; then
+              docker logs cedar-handoff-falcon-b || true
+              exit 1
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1
+          curl -fsS http://127.0.0.1:8080/v1/models > /tmp/cedar-handoff-b-models.json
+          MODEL_ID="$(python - <<'PY'
+          import json
+          rows = json.load(open('/tmp/cedar-handoff-b-models.json', encoding='utf-8')).get('data') or []
+          if not rows or not rows[0].get('id'):
+              raise SystemExit('llama.cpp returned no model id')
+          print(rows[0]['id'])
+          PY
+          )"
+          echo "MODEL_ID=$MODEL_ID" >> "$GITHUB_ENV"
+
+      - name: Capture runner B identity
+        env:
+          ACTIONS_RUNNER_NAME: ${{ runner.name }}
+        run: |
+          set -euo pipefail
+          export ID_HOSTNAME="$(hostname)"
+          export ID_MACHINE_ID="$(cat /etc/machine-id 2>/dev/null || true)"
+          export ID_CONTAINER_ID="$(docker inspect --format '{{.Id}}' cedar-handoff-falcon-b)"
+          mkdir -p "$OUT_DIR"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path(os.environ['OUT_DIR'], 'runner-b-identity.json').write_text(json.dumps({
+              'runner_name': os.environ['ACTIONS_RUNNER_NAME'],
+              'hostname': os.environ['ID_HOSTNAME'],
+              'machine_id': os.environ.get('ID_MACHINE_ID', ''),
+              'container_id': os.environ['ID_CONTAINER_ID'],
+          }, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Fetch persisted state from GitHub remote
+        env:
+          EXPECTED_COMMIT_SHA: ${{ needs.runner-a.outputs.state_commit_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/heads/$VERIFY_BRANCH:refs/remotes/origin/$VERIFY_BRANCH"
+          FETCHED_SHA="$(git rev-parse "refs/remotes/origin/$VERIFY_BRANCH")"
+          test "$FETCHED_SHA" = "$EXPECTED_COMMIT_SHA"
+          for file in checkpoint.json events.jsonl live-session.json live-state.json runner-a-identity.json runner-a-proof.json; do
+            git show "$FETCHED_SHA:.cedar-handoff-proof/$file" > "$OUT_DIR/$file"
+          done
+          echo "FETCHED_STATE_SHA=$FETCHED_SHA" >> "$GITHUB_ENV"
+
+      - name: Prove exact cross-runner restore before advancing
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          out = Path(os.environ['OUT_DIR'])
+          proof = json.loads((out / 'runner-a-proof.json').read_text(encoding='utf-8'))
+          a = json.loads((out / 'runner-a-identity.json').read_text(encoding='utf-8'))
+          b = json.loads((out / 'runner-b-identity.json').read_text(encoding='utf-8'))
+          checkpoint_bytes = (out / 'checkpoint.json').read_bytes()
+          checkpoint = json.loads(checkpoint_bytes)
+          events = [json.loads(line) for line in (out / 'events.jsonl').read_text(encoding='utf-8').splitlines() if line.strip()]
+
+          assert a['runner_name'] != b['runner_name'], (a, b)
+          assert a['hostname'] != b['hostname'], (a, b)
+          assert a['container_id'] != b['container_id'], (a, b)
+          assert hashlib.sha256(checkpoint_bytes).hexdigest() == proof['checkpoint_sha256']
+          assert checkpoint['tick'] == proof['tick'] > 0
+          assert checkpoint['sequence'] == proof['sequence']
+          assert len(events) == proof['event_count']
+          assert max(row['seq'] for row in events) == proof['sequence']
+
+          fingerprint_payload = {
+              'locations': checkpoint['locations'],
+              'agents': {
+                  name: {
+                      'location': agent['location'],
+                      'energy': agent['energy'],
+                      'memory_ids': [m['id'] for m in agent.get('memories', [])],
+                      'relationships': agent.get('relationships', {}),
+                  }
+                  for name, agent in sorted(checkpoint['agents'].items())
+              },
+          }
+          fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+          assert fingerprint == proof['state_fingerprint_sha256']
+
+          pre = {
+              'tick': checkpoint['tick'],
+              'sequence': checkpoint['sequence'],
+              'event_count': len(events),
+              'checkpoint_sha256': proof['checkpoint_sha256'],
+              'memory_ids': sorted({m['id'] for agent in checkpoint['agents'].values() for m in agent.get('memories', [])}),
+          }
+          Path('/tmp/cedar-handoff-pre.json').write_text(json.dumps(pre, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Advance restored Cedar state on runner B with live Falcon
+        run: |
+          set -euo pipefail
+          python experiments/little-world-lab/cedar_live_session.py \
+            --output "$OUT_DIR" \
+            --ticks 2 \
+            --seed 7 \
+            --actors-per-tick 2 \
+            --checkpoint-every 1 \
+            --temperature "$TEMPERATURE" \
+            --max-tokens "$MAX_TOKENS" \
+            --timeout 300 \
+            --model "$MODEL_ID" \
+            --status live \
+            --session-id "$VERIFY_SESSION"
+
+      - name: Assert runner-to-runner continuity and live advancement
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from collections import Counter
+          from pathlib import Path
+
+          out = Path(os.environ['OUT_DIR'])
+          pre = json.loads(Path('/tmp/cedar-handoff-pre.json').read_text(encoding='utf-8'))
+          a = json.loads((out / 'runner-a-identity.json').read_text(encoding='utf-8'))
+          b = json.loads((out / 'runner-b-identity.json').read_text(encoding='utf-8'))
+          checkpoint_bytes = (out / 'checkpoint.json').read_bytes()
+          checkpoint = json.loads(checkpoint_bytes)
+          state = json.loads((out / 'live-state.json').read_text(encoding='utf-8'))
+          events = [json.loads(line) for line in (out / 'events.jsonl').read_text(encoding='utf-8').splitlines() if line.strip()]
+          new_events = events[pre['event_count']:]
+          new_decisions = [row for row in new_events if row.get('kind') == 'decision']
+          new_actions = [row for row in new_events if row.get('kind') == 'action']
+          new_backend_errors = [row for row in new_events if row.get('kind') == 'backend_error']
+          allowed = {'move', 'talk', 'help', 'work', 'rest', 'observe'}
+
+          assert checkpoint['tick'] == pre['tick'] + 2, (pre['tick'], checkpoint['tick'])
+          assert checkpoint['sequence'] > pre['sequence']
+          seqs = [row['seq'] for row in new_events]
+          assert seqs and seqs[0] == pre['sequence'] + 1, seqs[:3]
+          assert seqs == list(range(pre['sequence'] + 1, checkpoint['sequence'] + 1)), seqs
+          assert len(new_decisions) == 4, len(new_decisions)
+          assert len(new_actions) == 4, len(new_actions)
+          assert not new_backend_errors, new_backend_errors
+          assert Counter((row['tick'], row['actor']) for row in new_decisions) == Counter((row['tick'], row['actor']) for row in new_actions)
+          for row in new_decisions:
+              assert isinstance(row.get('proposed_action'), dict), row
+              assert row.get('proposed_type') in allowed, row
+
+          pre_memory_ids = set(pre['memory_ids'])
+          post_memory_ids = {m['id'] for agent in checkpoint['agents'].values() for m in agent.get('memories', [])}
+          new_memory_ids = sorted(post_memory_ids - pre_memory_ids)
+          assert new_memory_ids, 'runner B added no new simulation memories'
+          assert hashlib.sha256(checkpoint_bytes).hexdigest() != pre['checkpoint_sha256']
+          assert state['tick'] == checkpoint['tick']
+          assert state['session_id'] == os.environ['VERIFY_SESSION']
+          assert state['model'] == os.environ['MODEL_ID']
+
+          evidence = {
+              'ok': True,
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'remote_state_commit_sha': os.environ['FETCHED_STATE_SHA'],
+              'session_id': os.environ['VERIFY_SESSION'],
+              'runner_a': a,
+              'runner_b': b,
+              'runner_a_tick': pre['tick'],
+              'runner_b_tick': checkpoint['tick'],
+              'runner_a_sequence': pre['sequence'],
+              'runner_b_sequence': checkpoint['sequence'],
+              'runner_b_new_decisions': len(new_decisions),
+              'runner_b_new_actions': len(new_actions),
+              'runner_b_backend_errors': 0,
+              'new_memory_ids': new_memory_ids,
+              'runner_b_checkpoint_sha256': hashlib.sha256(checkpoint_bytes).hexdigest(),
+              'model_id': os.environ['MODEL_ID'],
+              'proof': 'State was pushed by runner A to a run-scoped GitHub branch, fetched by a distinct runner B, byte-verified before resume, then advanced through cedar_live_session.py with a fresh live Falcon container and WorldEngine validation/resolution intact.',
+          }
+          (out / 'handoff-proof.json').write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          PY
+          test -z "$(git status --porcelain -- experiments/little-world-lab/world.json experiments/little-world-lab/viewer)"
+
+      - name: Upload handoff proof artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cedar-handoff-proof-${{ github.run_id }}
+          path: ${{ runner.temp }}/cedar-handoff-state
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Record proof summary
+        run: |
+          echo '## Cedar Hollow runner handoff: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo "Runner A remote commit: \`$FETCHED_STATE_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verification branch: \`$VERIFY_BRANCH\` (deleted after proof)" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Two distinct GitHub-hosted runners used separate Falcon containers; runner B byte-verified and resumed runner A state before advancing two more ticks.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete isolated verification branch
+        if: always()
+        run: git push origin --delete "$VERIFY_BRANCH" || true
+
+      - name: Stop runner B Falcon
+        if: always()
+        run: docker rm -f cedar-handoff-falcon-b >/dev/null 2>&1 || true
