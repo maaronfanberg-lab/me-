@@ -38,7 +38,7 @@ audio{width:100%;margin-top:10px}.ctrl{margin:15px 0}.ctrl label{display:flex;ju
 
 <div class="card">
   <div class="ctrl">
-    <label for="space"><span>SPACE</span><b id="spaceRead">72%</b></label>
+    <label for="space"><span>SPATIAL AMOUNT</span><b id="spaceRead">72%</b></label>
     <input id="space" type="range" min="0" max="100" step="1" value="72">
   </div>
   <div class="ctrl">
@@ -55,13 +55,18 @@ audio{width:100%;margin-top:10px}.ctrl{margin:15px 0}.ctrl label{display:flex;ju
 <div class="card">
   <div class="metricGrid">
     <div class="metric"><span>Audio engine</span><b id="engine">off</b></div>
-    <div class="metric"><span>Cross-ear delay</span><b id="delay">0.00 ms</b></div>
-    <div class="metric"><span>Head-shadow LPF</span><b id="cutoff">—</b></div>
-    <div class="metric"><span>Far-ear path</span><b id="far">0%</b></div>
+    <div class="metric"><span>Target cross-ear delay</span><b id="delay">0.00 ms</b></div>
+    <div class="metric"><span>Target head-shadow LPF</span><b id="cutoff">—</b></div>
+    <div class="metric"><span>Applied far-ear path</span><b id="far">0%</b></div>
+    <div class="metric"><span>Applied direct path</span><b id="direct">100%</b></div>
+    <div class="metric"><span>Applied output trim</span><b id="master">100%</b></div>
   </div>
   <div id="status" class="status" aria-live="polite">Nothing is processed until you choose a file and tap Spatial.</div>
 </div>
 
+<div class="card legal">
+  <b>What the sliders mean:</b> Spatial Amount controls the far-ear crossfeed level, high-frequency head-shadow cutoff, near-ear level, and output trim. Virtual Speaker Angle controls the physically modelled cross-ear delay. The diagnostics above are generated from the exact same parameter object that is sent to the Web Audio nodes.
+</div>
 <div class="card legal">
   <b>What this first version actually does:</b> it models two virtual speakers around your head. Each stereo channel reaches its near ear directly and the far ear a fraction of a millisecond later, with high frequencies reduced to approximate head shadow. That is real time-and-frequency processing, not automated left/right panning. It is deliberately lightweight enough for an iPhone 6.
 </div>
@@ -69,10 +74,12 @@ audio{width:100%;margin-top:10px}.ctrl{margin:15px 0}.ctrl label{display:flex;ju
   <b>Audio rights:</b> use audio you own, audio you obtained through an official download, or audio whose license allows this kind of processing. This page does not rip or capture streaming services.
 </div>
 
+<script src="pocket-spatial-core.js"></script>
 <script>
 (function(){
 'use strict';
 var AC=window.AudioContext||window.webkitAudioContext;
+var core=window.PocketSpatialCore;
 var audio=document.getElementById('audio');
 var file=document.getElementById('file');
 var spatial=document.getElementById('spatial');
@@ -86,48 +93,41 @@ var directL=null,directR=null,crossL=null,crossR=null,delayL=null,delayR=null,fi
 var enabled=false,objectURL=null;
 
 function text(id,value){document.getElementById(id).textContent=value;}
-function calc(){
-  var wet=+space.value/100;
-  var deg=+angle.value;
-  var theta=deg*Math.PI/180;
-  var itd=(0.0875/343)*(theta+Math.sin(theta));
-  var cutoff=7000-3800*wet;
-  var farGain=0.22*wet;
-  var directGain=1-(0.18*wet);
-  return{wet:wet,deg:deg,itd:itd,cutoff:cutoff,farGain:farGain,directGain:directGain};
-}
-function updateReadouts(){
-  var p=calc();
-  text('spaceRead',Math.round(p.wet*100)+'%');
-  text('angleRead',Math.round(p.deg)+'°');
-  text('delay',(p.itd*1000).toFixed(2)+' ms');
-  text('cutoff',Math.round(p.cutoff)+' Hz');
-  text('far',Math.round(p.farGain*100)+'%');
-}
 function setParam(param,value){
   if(!ctx)return;
   var t=ctx.currentTime;
   try{param.cancelScheduledValues(t);param.setTargetAtTime(value,t,0.035);}catch(e){param.value=value;}
 }
+function updateReadouts(){
+  var r=core.readouts(space.value,angle.value,enabled);
+  text('spaceRead',r.spaceText);
+  text('angleRead',r.angleText);
+  text('delay',r.delayText);
+  text('cutoff',r.cutoffText);
+  text('far',r.farText);
+  text('direct',r.directText);
+  text('master',r.masterText);
+}
 function apply(){
+  var t=core.appliedTargets(space.value,angle.value,enabled);
   updateReadouts();
   if(!ctx)return;
-  var p=calc();
-  setParam(delayL.delayTime,p.itd);
-  setParam(delayR.delayTime,p.itd);
-  setParam(filterL.frequency,p.cutoff);
-  setParam(filterR.frequency,p.cutoff);
-  setParam(directL.gain,enabled?p.directGain:1);
-  setParam(directR.gain,enabled?p.directGain:1);
-  setParam(crossL.gain,enabled?p.farGain:0);
-  setParam(crossR.gain,enabled?p.farGain:0);
-  setParam(master.gain,enabled?0.94:1);
+  setParam(delayL.delayTime,t.delaySeconds);
+  setParam(delayR.delayTime,t.delaySeconds);
+  setParam(filterL.frequency,t.cutoffHz);
+  setParam(filterR.frequency,t.cutoffHz);
+  setParam(directL.gain,t.directGain);
+  setParam(directR.gain,t.directGain);
+  setParam(crossL.gain,t.farGain);
+  setParam(crossR.gain,t.farGain);
+  setParam(master.gain,t.masterGain);
   badge.textContent=enabled?'Spatial on':'Spatial off';
   badge.className='badge'+(enabled?' on':'');
   spatial.textContent=enabled?'TURN SPATIAL OFF':'TURN SPATIAL ON';
 }
 function buildGraph(){
   if(ctx)return true;
+  if(!core){status.textContent='The tested spatial parameter core did not load.';status.className='status warn';return false;}
   if(!AC){status.textContent='This Safari build does not expose Web Audio.';status.className='status warn';return false;}
   try{
     ctx=new AC();
