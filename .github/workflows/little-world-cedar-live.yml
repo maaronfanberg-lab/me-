@@ -51,12 +51,11 @@ jobs:
           try:
               with urllib.request.urlopen(req, timeout=15) as response:
                   payload = json.loads(response.read().decode("utf-8"))
-              raw = base64.b64decode(payload["content"]).decode("utf-8")
-              state = json.loads(raw)
+              state = json.loads(base64.b64decode(payload["content"]).decode("utf-8"))
               status = str(state.get("status") or "")
               updated = str(state.get("updated_at") or "")
-              timestamp = datetime.fromisoformat(updated.replace("Z", "+00:00"))
-              age = max(0.0, (datetime.now(timezone.utc) - timestamp).total_seconds())
+              stamp = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+              age = max(0.0, (datetime.now(timezone.utc) - stamp).total_seconds())
               active = status in {"starting", "live"} and age < 600
               should_run = not active
               reason = f"status={status or 'unknown'} age={age:.0f}s"
@@ -103,8 +102,7 @@ jobs:
           import re
           from pathlib import Path
 
-          path = Path('experiments/little-world-lab/runtime/live-town-request.json')
-          request = json.loads(path.read_text(encoding='utf-8'))
+          request = json.loads(Path('experiments/little-world-lab/runtime/live-town-request.json').read_text(encoding='utf-8'))
 
           def integer(name, default, low, high):
               try:
@@ -342,24 +340,12 @@ jobs:
             [ ! -f "$CEDAR_RUN_DIR/events.jsonl" ] || cp "$CEDAR_RUN_DIR/events.jsonl" /tmp/cedar-live-state/cedar-events.jsonl
             [ ! -f "$CEDAR_RUN_DIR/live-session.json" ] || cp "$CEDAR_RUN_DIR/live-session.json" /tmp/cedar-live-state/cedar-live-session.json
 
-            python - <<'PY'
-            import json
-            from pathlib import Path
-            path = Path('/tmp/cedar-live-state/cedar-state.json')
-            state = json.loads(path.read_text(encoding='utf-8'))
-            state['mode'] = '24/7'
-            state['note'] = 'Cedar Hollow is running autonomously. The viewer is read-only.'
-            path.write_text(json.dumps(state, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-            PY
+            python -c 'import json; from pathlib import Path; p=Path("/tmp/cedar-live-state/cedar-state.json"); s=json.loads(p.read_text(encoding="utf-8")); s["mode"]="24/7"; s["note"]="Cedar Hollow is running autonomously. The viewer is read-only."; p.write_text(json.dumps(s, indent=2, sort_keys=True)+"\n", encoding="utf-8")'
+            tick="$(python -c 'import json; print(json.load(open("/tmp/cedar-live-state/cedar-state.json", encoding="utf-8")).get("tick", 0))')"
 
-            tick="$(python - <<'PY'
-            import json
-            print(json.load(open('/tmp/cedar-live-state/cedar-state.json', encoding='utf-8')).get('tick', 0))
-            PY
-            )"
-
-            git -C /tmp/cedar-live-state add cedar-state.json cedar-checkpoint.json cedar-events.jsonl cedar-live-session.json 2>/dev/null || \
-              git -C /tmp/cedar-live-state add cedar-state.json cedar-checkpoint.json
+            git -C /tmp/cedar-live-state add cedar-state.json cedar-checkpoint.json
+            [ ! -f /tmp/cedar-live-state/cedar-events.jsonl ] || git -C /tmp/cedar-live-state add cedar-events.jsonl
+            [ ! -f /tmp/cedar-live-state/cedar-live-session.json ] || git -C /tmp/cedar-live-state add cedar-live-session.json
             if ! git -C /tmp/cedar-live-state diff --cached --quiet; then
               git -C /tmp/cedar-live-state commit -m "Cedar 24x7 tick ${tick} [skip ci]"
               git -C /tmp/cedar-live-state push origin cedar-live-state
@@ -410,15 +396,14 @@ jobs:
 
           path = Path('/tmp/cedar-live-state/cedar-state.json')
           state = json.loads(path.read_text(encoding='utf-8'))
-          ok = os.environ.get('CEDAR_JOB_STATUS') == 'success'
-          state['status'] = 'handoff' if ok else 'error'
           state['updated_at'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
           state['mode'] = '24/7'
-          state['note'] = (
-              'Runner handoff in progress. Cedar will resume from this exact checkpoint automatically.'
-              if ok else
-              'The Cedar runner stopped unexpectedly. The watchdog will retry from the last published checkpoint.'
-          )
+          if os.environ.get('CEDAR_JOB_STATUS') == 'success':
+              state['status'] = 'handoff'
+              state['note'] = 'Cedar is between runners. The watchdog will resume from this exact checkpoint.'
+          else:
+              state['status'] = 'error'
+              state['note'] = 'The Cedar runner stopped unexpectedly. The watchdog will retry from the last published checkpoint.'
           path.write_text(json.dumps(state, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           PY
           git -C /tmp/cedar-live-state add cedar-state.json
