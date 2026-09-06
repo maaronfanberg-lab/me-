@@ -58,6 +58,13 @@ assert(metadataURL.indexOf('callback=cb')!==-1);
 assert(metadataURL.indexOf('client_id')===-1);
 assert(metadataURL.indexOf('token')===-1);
 
+const runSource=sliceFunction('run','createUI');
+const prepareSource=sliceFunction('prepare','run');
+assert(runSource.indexOf('resolveTestClip(')===-1,'run must not resolve metadata after the user gesture');
+assert(runSource.indexOf('probeBufferedPCM(resolvedClip.url')!==-1,'run must enter the buffered Web Audio probe directly from the tap');
+assert(prepareSource.indexOf('resolveTestClip(')!==-1,'metadata must be pre-resolved before the tap');
+assert(source.indexOf('if(ui)prepare(ui);')!==-1,'boot must prepare the control clip before enabling the test');
+
 let responseBytes=4096;
 let decodeShouldFail=false;
 let decodeCalls=0;
@@ -156,4 +163,4 @@ assert.strictEqual(result.supported,false);
 assert.strictEqual(result.reason,'decode_audio_data_failed');
 assert.strictEqual(decodeCalls,2);
 
-console.log('Pocket Spatial buffered PCM compatibility-probe tests passed.');
+console.log('Pocket Spatial buffered PCM compatibility-probe and gesture tests passed.');
