@@ -103,16 +103,20 @@
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
+  var build='20260906-buffer-probe-1';
+  function versioned(src){return src+'?v='+build;}
   function load(src,next){
     var script=document.createElement('script');
-    script.src=src;
+    script.src=versioned(src);
     script.async=false;
     if(next)script.onload=next;
     document.head.appendChild(script);
   }
   load('pocket-spatial-commons.js',function(){
-    load('pocket-spatial-soundcloud-config.js',function(){
-      load('pocket-spatial-soundcloud.js');
+    load('pocket-spatial-buffer-probe.js',function(){
+      load('pocket-spatial-soundcloud-config.js',function(){
+        load('pocket-spatial-soundcloud.js');
+      });
     });
   });
 }());

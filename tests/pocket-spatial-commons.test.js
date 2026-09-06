@@ -141,3 +141,4 @@ assert(ui.status.textContent.indexOf('Requesting a small batch')!==-1);
 assert(appendedScript&&appendedScript.src.indexOf('callback=PocketSpatialCommonsJSONP1')!==-1,'catalog click should append JSONP request script');
 
 console.log('Pocket Spatial Wikimedia Commons transport and catalog-button tests passed.');
+require('./pocket-spatial-buffer-probe.test.js');

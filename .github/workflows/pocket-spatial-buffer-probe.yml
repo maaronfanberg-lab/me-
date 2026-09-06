@@ -1,0 +1,112 @@
+name: Pocket Spatial Buffer Probe CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/pocket-spatial-*'
+    paths:
+      - 'apps/pocket-spatial-buffer-probe.js'
+      - 'apps/pocket-spatial-buffer-test.html'
+      - 'apps/pocket-spatial-core.js'
+      - 'tests/pocket-spatial-buffer-probe.test.js'
+      - 'tests/pocket-spatial-commons.test.js'
+      - '.github/workflows/pocket-spatial-buffer-probe.yml'
+  pull_request:
+    paths:
+      - 'apps/pocket-spatial-buffer-probe.js'
+      - 'apps/pocket-spatial-buffer-test.html'
+      - 'apps/pocket-spatial-core.js'
+      - 'tests/pocket-spatial-buffer-probe.test.js'
+      - 'tests/pocket-spatial-commons.test.js'
+      - '.github/workflows/pocket-spatial-buffer-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  buffered-pcm-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check buffered probe syntax
+        run: node --check apps/pocket-spatial-buffer-probe.js
+
+      - name: Enforce iOS 12-era ES5 syntax
+        run: npx --yes es-check@7 es5 apps/pocket-spatial-buffer-probe.js
+
+      - name: Run buffered PCM regression tests
+        run: node tests/pocket-spatial-buffer-probe.test.js
+
+      - name: Verify standalone diagnostic page
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '<!doctype html>' apps/pocket-spatial-buffer-test.html
+          grep -q 'pocket-spatial-buffer-probe.js?v=20260906-buffer-probe-1' apps/pocket-spatial-buffer-test.html
+          grep -q 'remote bytes.*decodeAudioData.*AudioBufferSourceNode.*analyser' apps/pocket-spatial-buffer-test.html
+
+      - name: Verify buffered-probe safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "responseType='arraybuffer'" apps/pocket-spatial-buffer-probe.js
+          grep -q 'decodeAudioData' apps/pocket-spatial-buffer-probe.js
+          grep -q 'createBufferSource' apps/pocket-spatial-buffer-probe.js
+          grep -q 'getByteTimeDomainData' apps/pocket-spatial-buffer-probe.js
+          grep -q 'MAX_BYTES=1048576' apps/pocket-spatial-buffer-probe.js
+          grep -q 'buffered_pcm_available' apps/pocket-spatial-buffer-probe.js
+          grep -q 'buffer_pcm_flatline' apps/pocket-spatial-buffer-probe.js
+          grep -q 'Music loop 168bpm (Still frivolous).ogg' apps/pocket-spatial-buffer-probe.js
+          grep -q "load('pocket-spatial-buffer-probe.js'" apps/pocket-spatial-core.js
+          if grep -E -q 'MediaRecorder|captureStream|indexedDB|localStorage|caches\.open' apps/pocket-spatial-buffer-probe.js; then
+            echo 'Buffered probe must not record or persist remote media.'
+            exit 1
+          fi
+          echo 'Buffered PCM safety contract passed.'
+
+      - name: Smoke-test exact Commons control clip and MP3 CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          API_URL='https://commons.wikimedia.org/w/api.php?action=query&titles=File%3AMusic%20loop%20168bpm%20%28Still%20frivolous%29.ogg&prop=videoinfo&viprop=url%7Cmime%7Cderivatives%7Cextmetadata&viextmetadatafilter=LicenseShortName%7CLicenseUrl%7CUsageTerms&format=json&origin=*'
+          UA='PocketSpatial/0.1 (https://maaronfanberg-lab.github.io/me-/apps/pocket-spatial.html)'
+          curl -fsS --max-time 20 -A "$UA" "$API_URL" -o /tmp/buffer-clip.json
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+          data=json.loads(Path('/tmp/buffer-clip.json').read_text())
+          assert 'error' not in data, data.get('error')
+          pages=(data.get('query') or {}).get('pages') or {}
+          assert pages, 'control clip query returned no page'
+          info=next(iter(pages.values())).get('videoinfo',[{}])[0]
+          meta=info.get('extmetadata') or {}
+          def value(k):
+              return re.sub(r'<[^>]+>','',str((meta.get(k) or {}).get('value') or '')).strip()
+          license_text=' '.join((value('LicenseShortName'),value('LicenseUrl'),value('UsageTerms'))).lower()
+          assert license_text and not any(x in license_text for x in ('noncommercial','no derivatives','noderivatives','/by-nc','-nc-','/by-nd','-nd-')), license_text
+          mp3=''
+          for d in info.get('derivatives') or []:
+              u=d.get('src') or d.get('url') or ''
+              kind=((d.get('type') or d.get('mime') or '')+' '+(d.get('transcodekey') or d.get('key') or '')).lower()
+              if u.startswith('https://') and ('audio/mpeg' in kind or 'mp3' in kind or u.lower().split('?')[0].endswith('.mp3')):
+                  mp3=u
+                  break
+          assert mp3, 'control clip has no MP3 derivative'
+          Path('/tmp/buffer-clip-url').write_text(mp3)
+          print('Control clip license:',value('LicenseShortName') or value('UsageTerms'))
+          print('MP3 derivative resolved')
+          PY
+          AUDIO_URL="$(cat /tmp/buffer-clip-url)"
+          curl -fsSL --max-time 20 -A "$UA" \
+            -H 'Origin: https://maaronfanberg-lab.github.io' \
+            -H 'Range: bytes=0-65535' \
+            -D /tmp/buffer-clip.headers \
+            -o /tmp/buffer-clip.sample \
+            "$AUDIO_URL"
+          test -s /tmp/buffer-clip.sample
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/buffer-clip.headers
+          echo 'Exact Commons buffered-PCM control clip and CORS check passed.'
