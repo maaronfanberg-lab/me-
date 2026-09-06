@@ -61,7 +61,7 @@ function jsonp(template,callback){
 
   root[name]=function(data){finish(null,data);};
   script.onerror=function(){finish(new Error('commons_jsonp_failed'));};
-  script.src=template.replace('{callback}',encodeURIComponent(name));
+  script.src=template.replace(/%7Bcallback%7D/i,encodeURIComponent(name)).replace('{callback}',encodeURIComponent(name));
   script.async=true;
   document.head.appendChild(script);
   timer=setTimeout(function(){finish(new Error('commons_jsonp_timeout'));},12000);
@@ -85,7 +85,7 @@ function metadataValue(info,key){
 }
 
 function licenseAllowsSpatial(info){
-  var text=(metadataValue(info,'LicenseShortName')+' '+metadataValue(info,'LicenseUrl')+' '+metadataValue(info,'UsageTerms')).toLowerCase();
+  var text=plain(metadataValue(info,'LicenseShortName')+' '+metadataValue(info,'LicenseUrl')+' '+metadataValue(info,'UsageTerms')).toLowerCase();
   if(!text)return false;
   if(text.indexOf('noncommercial')!==-1||text.indexOf('no derivatives')!==-1||text.indexOf('noderivatives')!==-1)return false;
   if(text.indexOf('/by-nc')!==-1||text.indexOf('-nc-')!==-1||text.indexOf('/by-nd')!==-1||text.indexOf('-nd-')!==-1)return false;
@@ -381,7 +381,7 @@ function createUI(){
   tracks.id='commonsTracks';
   card.appendChild(tracks);
   var note=el('div','legal','');
-  note.appendChild(document.createTextNode('Live-processing test only. Pocket Spatial does not record, download, export, or persist the streamed media. License and attribution details remain linked to each Commons file page.'));
+  note.appendChild(document.createTextNode('Live-processing test only. Pocket Spatial does not record, save, export, or persist the streamed media. License and attribution details remain linked to each Commons file page.'));
   card.appendChild(note);
   hero.parentNode.insertBefore(card,hero);
   return {card:card,status:status,load:load,tracks:tracks};
