@@ -1,0 +1,40 @@
+name: Pocket Spatial iPhone 6 CI
+
+on:
+  push:
+    branches:
+      - feature/spatial-iphone6-web
+    paths:
+      - 'apps/pocket-spatial.html'
+      - '.github/workflows/pocket-spatial-iphone6.yml'
+  pull_request:
+    paths:
+      - 'apps/pocket-spatial.html'
+      - '.github/workflows/pocket-spatial-iphone6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-web-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract inline JavaScript
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          html=Path('apps/pocket-spatial.html').read_text()
+          scripts=re.findall(r'<script>([\s\S]*?)</script>', html, flags=re.I)
+          assert len(scripts)==1, f'expected one inline script, got {len(scripts)}'
+          Path('/tmp/pocket-spatial.js').write_text(scripts[0])
+          PY
+      - name: Check JavaScript syntax
+        run: node --check /tmp/pocket-spatial.js
+      - name: Enforce ES5 syntax for old Safari
+        run: npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+      - name: Validate HTML
+        run: npx --yes html-validate@9 apps/pocket-spatial.html
