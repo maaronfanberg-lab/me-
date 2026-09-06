@@ -3,13 +3,17 @@ name: Pocket Spatial iPhone 6 CI
 on:
   push:
     branches:
-      - feature/spatial-iphone6-web
+      - 'feature/pocket-spatial-*'
     paths:
       - 'apps/pocket-spatial.html'
+      - 'apps/pocket-spatial-core.js'
+      - 'tests/pocket-spatial-core.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
   pull_request:
     paths:
       - 'apps/pocket-spatial.html'
+      - 'apps/pocket-spatial-core.js'
+      - 'tests/pocket-spatial-core.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
   workflow_dispatch:
 
@@ -22,6 +26,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify slider-to-DSP calibration math
+        run: node tests/pocket-spatial-core.test.js
+
       - name: Extract inline JavaScript
         run: |
           python3 - <<'PY'
@@ -32,10 +40,43 @@ jobs:
           assert len(scripts)==1, f'expected one inline script, got {len(scripts)}'
           Path('/tmp/pocket-spatial.js').write_text(scripts[0])
           PY
+
       - name: Check JavaScript syntax
-        run: node --check /tmp/pocket-spatial.js
+        run: |
+          node --check apps/pocket-spatial-core.js
+          node --check /tmp/pocket-spatial.js
+
       - name: Enforce ES5 syntax for old Safari
-        run: npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+        run: |
+          npx --yes es-check@7 es5 apps/pocket-spatial-core.js
+          npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+
+      - name: Verify page consumes the tested core
+        run: |
+          grep -q '<script src="pocket-spatial-core.js"></script>' apps/pocket-spatial.html
+          grep -q 'var core=window.PocketSpatialCore' apps/pocket-spatial.html
+          grep -q 'core.appliedTargets' apps/pocket-spatial.html
+          grep -q 'core.readouts' apps/pocket-spatial.html
+          grep -q 'core.appliedTargets(space.value,angle.value,depth.value,enabled)' apps/pocket-spatial.html
+          grep -q 'core.readouts(space.value,angle.value,depth.value,enabled)' apps/pocket-spatial.html
+
+      - name: Verify lightweight early-reflection graph contract
+        run: |
+          grep -q 'reflDelayL1=ctx.createDelay(0.05)' apps/pocket-spatial.html
+          grep -q 'reflDelayR1=ctx.createDelay(0.05)' apps/pocket-spatial.html
+          grep -q 'reflDelayL2=ctx.createDelay(0.05)' apps/pocket-spatial.html
+          grep -q 'reflDelayR2=ctx.createDelay(0.05)' apps/pocket-spatial.html
+          grep -q 'reflGainL1.connect(merger,0,0)' apps/pocket-spatial.html
+          grep -q 'reflGainL2.connect(merger,0,0)' apps/pocket-spatial.html
+          grep -q 'reflGainR1.connect(merger,0,1)' apps/pocket-spatial.html
+          grep -q 'reflGainR2.connect(merger,0,1)' apps/pocket-spatial.html
+          grep -q 'setParam(reflGainL1.gain,t.refl1Gain)' apps/pocket-spatial.html
+          grep -q 'setParam(reflGainL2.gain,t.refl2Gain)' apps/pocket-spatial.html
+          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js; then
+            echo 'Heavy/custom DSP primitive leaked into the iPhone 6 layer.'
+            exit 1
+          fi
+
       - name: Validate legacy HTML structure
         run: |
           python3 - <<'PY'
@@ -65,9 +106,9 @@ jobs:
           assert p.lang=='en'
           assert p.has_audio
           assert len(p.ids)==len(set(p.ids)), 'duplicate id detected'
-          for required in ('file','space','angle','spatial','audio'):
+          for required in ('file','space','angle','depth','spatial','audio','delay','cutoff','far','direct','reflTimes','reflGain','reflCutoff','master'):
               assert required in p.ids, f'missing required id {required}'
-          for labelled in ('file','space','angle'):
+          for labelled in ('file','space','angle','depth'):
               assert labelled in p.labels, f'missing label for {labelled}'
           assert p.buttons and all(b.get('type')=='button' for b in p.buttons), 'every button must declare type=button'
           print('Legacy HTML structure passed.')
