@@ -1,7 +1,7 @@
 {
   "requested_at": "2026-09-05",
   "model": "bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M",
-  "purpose": "close remaining Little World Falcon verification blockers with full live action-contract coverage and a multi-seed natural baseline",
+  "purpose": "capture the first instrumented Cedar natural-behavior baseline without changing prompts, schemas, world rules, or decoding settings",
   "natural_baseline": {
     "ticks_per_seed": 12,
     "actors_per_tick": 2,
@@ -14,7 +14,12 @@
     "minimum_accepted_model_proposals": 36,
     "maximum_aggregate_proposal_rejection_rate": 0.5
   },
-  "attempt": 10,
+  "attempt": 11,
+  "behavior_instrumentation": {
+    "decision_events": true,
+    "action_feasibility_breakdown": true,
+    "purpose": "measure unavailable vs feasible-unchosen vs chosen-rejected vs chosen-accepted action branches"
+  },
   "structured_output": "llama.cpp-response_format-json-schema-plus-engine-revalidation",
   "schema_constrained_decoding": true,
   "feasibility_grounding": true,
