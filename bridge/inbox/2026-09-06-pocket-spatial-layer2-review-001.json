@@ -1,0 +1,14 @@
+{
+  "nonce": "pocket-spatial-layer2-review-20260906-001",
+  "prompt": "Read-only second-opinion review for Pocket Spatial on iPhone 6 / iOS 12 Safari. The current verified layer uses only built-in Web Audio nodes: stereo split, direct near-ear path, delayed contralateral path, low-pass head-shadow filter, gains, merge, output trim. Slider math is now extracted into a shared ES5 core and deterministic CI tests prove that displayed angle/delay/cutoff/far/direct/output values are the exact parameter targets sent to the audio graph. No ScriptProcessorNode, AudioWorklet, FFT, convolution, or custom PCM callback is used. We need the NEXT spatial layer only after this verified baseline. Recommend the single best lightweight addition for stronger depth/externalization on an iPhone 6. Compare (a) sparse early reflections using a few DelayNode/GainNode/BiquadFilter paths, (b) ConvolverNode room impulse, (c) simple front/back spectral shaping, or another built-in-node-only option. Preserve stereo image, avoid chorus/echo, keep CPU/memory conservative, and make the new control measurable/testable so its UI can never lie about the DSP. Do not modify repo files.",
+  "context": [
+    "Current controls: Spatial Amount 0-100 and Virtual Speaker Angle 20-70 degrees.",
+    "Current ITD uses Woodworth-style spherical-head approximation with radius 0.0875 m and sound speed 343 m/s.",
+    "Spatial Amount maps to far-ear gain up to 0.22, LPF cutoff 7000 down to 3200 Hz, direct path 1.0 down to 0.82, and output trim 1.0 down to 0.94.",
+    "Target hardware is iPhone 6 on iOS 12.5.x Safari. The user wants strong 3D/spatial depth, but stability matters more than maximal sophistication.",
+    "Workflow constraint: consult, test, then implement. The baseline test gate has passed."
+  ],
+  "expected_response": "Under 700 words: Recommendation; exact Web Audio graph; suggested parameter ranges; why it should externalize rather than just widen; CPU risk on iPhone 6; objective tests that prove the control does what it says; one thing not to add yet.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 8
+}
