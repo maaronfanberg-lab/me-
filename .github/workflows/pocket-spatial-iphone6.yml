@@ -175,11 +175,19 @@ jobs:
           echo 'Live Commons MP3 bytes and CORS check passed.'
 
       - name: Verify page consumes the tested core
+        shell: bash
         run: |
+          set -euo pipefail
           grep -Eq '<script src="pocket-spatial-core\.js\?v=[^"]+"></script>' apps/pocket-spatial.html
+          CORE_BUILD="$(sed -n "s/.*var build='\([^']*\)'.*/\1/p" apps/pocket-spatial-core.js | head -n1)"
+          HTML_BUILD="$(sed -n 's/.*pocket-spatial-core\.js?v=\([^"<]*\).*/\1/p' apps/pocket-spatial.html | head -n1)"
+          test -n "$CORE_BUILD"
+          test -n "$HTML_BUILD"
+          test "$CORE_BUILD" = "$HTML_BUILD"
           grep -q 'var core=window.PocketSpatialCore' apps/pocket-spatial.html
           grep -q 'core.appliedTargets' apps/pocket-spatial.html
           grep -q 'core.readouts' apps/pocket-spatial.html
+          echo "Core cache id matches child-script build id: $CORE_BUILD"
 
       - name: Verify lightweight early-reflection graph contract
         run: |
