@@ -3,17 +3,20 @@ name: Pocket Spatial iPhone 6 CI
 on:
   push:
     branches:
+      - main
       - 'feature/pocket-spatial-*'
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
       - 'tests/pocket-spatial-core.test.js'
+      - 'tests/pocket-spatial-ui.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
   pull_request:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
       - 'tests/pocket-spatial-core.test.js'
+      - 'tests/pocket-spatial-ui.test.js'
       - '.github/workflows/pocket-spatial-iphone6.yml'
   workflow_dispatch:
 
@@ -29,6 +32,9 @@ jobs:
 
       - name: Verify slider-to-DSP calibration math
         run: node tests/pocket-spatial-core.test.js
+
+      - name: Verify real UI events drive exact Web Audio targets
+        run: node tests/pocket-spatial-ui.test.js
 
       - name: Extract inline JavaScript
         run: |
