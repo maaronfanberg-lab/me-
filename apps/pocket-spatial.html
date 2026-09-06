@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#080b12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pocket Spatial">
+<title>Pocket Spatial</title>
+<style>
+:root{--bg:#080b12;--panel:#111722;--line:#293347;--text:#edf2fb;--dim:#94a1b5;--accent:#8f83ff;--good:#5ddbc7;--warn:#e0bb65}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+body{padding:22px 14px 36px;max-width:720px;margin:auto}
+h1{font-size:28px;line-height:1;margin:3px 0 7px;letter-spacing:.02em}.sub{color:var(--dim);font-size:12px;line-height:1.45;margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:15px;margin:10px 0}.hero{text-align:center}
+.badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.badge.on{color:var(--good);border-color:var(--good)}
+button,.fileLabel{display:block;width:100%;min-height:52px;border-radius:14px;border:1px solid var(--line);background:#171f2d;color:var(--text);padding:13px;font-size:16px;font-weight:650;text-align:center;margin:8px 0}
+button.primary{background:#5147c8;border-color:#756cf2}.fileLabel{cursor:pointer}input[type=file]{position:absolute;left:-9999px}
+audio{width:100%;margin-top:10px}.ctrl{margin:15px 0}.ctrl label{display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}.ctrl b{color:var(--text);font-weight:650}input[type=range]{width:100%;height:35px}.row{display:flex;gap:8px}.row button{flex:1}
+.metricGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric{background:#0b1018;border:1px solid var(--line);border-radius:12px;padding:10px}.metric span{display:block;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.06em}.metric b{display:block;margin-top:4px;font-size:15px}
+.status{font-size:12px;color:var(--dim);line-height:1.5;margin-top:8px}.good{color:var(--good)}.warn{color:var(--warn)}.legal{font-size:10.5px;color:var(--dim);line-height:1.55}.legal b{color:var(--text)}
+@media(max-width:380px){h1{font-size:24px}.row{display:block}}
+</style>
+</head>
+<body>
+<h1>POCKET SPATIAL</h1>
+<div class="sub">Headphone spatializer for older iPhones · local / rights-cleared audio · iOS 12-friendly</div>
+
+<div class="card hero">
+  <div id="badge" class="badge">Spatial off</div>
+  <label class="fileLabel" for="file">CHOOSE AUDIO FROM FILES</label>
+  <input id="file" type="file" accept="audio/*">
+  <div id="track" class="status">Choose an MP3, AAC/M4A, WAV, or other audio file Safari can decode.</div>
+  <audio id="audio" controls preload="metadata"></audio>
+  <button id="spatial" class="primary" type="button">TURN SPATIAL ON</button>
+</div>
+
+<div class="card">
+  <div class="ctrl">
+    <label for="space"><span>SPACE</span><b id="spaceRead">72%</b></label>
+    <input id="space" type="range" min="0" max="100" step="1" value="72">
+  </div>
+  <div class="ctrl">
+    <label for="angle"><span>VIRTUAL SPEAKER ANGLE</span><b id="angleRead">57°</b></label>
+    <input id="angle" type="range" min="20" max="70" step="1" value="57">
+  </div>
+  <div class="row">
+    <button class="preset" type="button" data-space="48" data-angle="38">NEAR</button>
+    <button class="preset" type="button" data-space="72" data-angle="57">WIDE</button>
+    <button class="preset" type="button" data-space="92" data-angle="68">OUTSIDE</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="metricGrid">
+    <div class="metric"><span>Audio engine</span><b id="engine">off</b></div>
+    <div class="metric"><span>Cross-ear delay</span><b id="delay">0.00 ms</b></div>
+    <div class="metric"><span>Head-shadow LPF</span><b id="cutoff">—</b></div>
+    <div class="metric"><span>Far-ear path</span><b id="far">0%</b></div>
+  </div>
+  <div id="status" class="status" aria-live="polite">Nothing is processed until you choose a file and tap Spatial.</div>
+</div>
+
+<div class="card legal">
+  <b>What this first version actually does:</b> it models two virtual speakers around your head. Each stereo channel reaches its near ear directly and the far ear a fraction of a millisecond later, with high frequencies reduced to approximate head shadow. That is real time-and-frequency processing, not automated left/right panning. It is deliberately lightweight enough for an iPhone 6.
+</div>
+<div class="card legal">
+  <b>Audio rights:</b> use audio you own, audio you obtained through an official download, or audio whose license allows this kind of processing. This page does not rip or capture streaming services.
+</div>
+
+<script>
+(function(){
+'use strict';
+var AC=window.AudioContext||window.webkitAudioContext;
+var audio=document.getElementById('audio');
+var file=document.getElementById('file');
+var spatial=document.getElementById('spatial');
+var space=document.getElementById('space');
+var angle=document.getElementById('angle');
+var badge=document.getElementById('badge');
+var track=document.getElementById('track');
+var status=document.getElementById('status');
+var ctx=null,source=null,splitter=null,merger=null,master=null;
+var directL=null,directR=null,crossL=null,crossR=null,delayL=null,delayR=null,filterL=null,filterR=null;
+var enabled=false,objectURL=null;
+
+function text(id,value){document.getElementById(id).textContent=value;}
+function calc(){
+  var wet=+space.value/100;
+  var deg=+angle.value;
+  var theta=deg*Math.PI/180;
+  var itd=(0.0875/343)*(theta+Math.sin(theta));
+  var cutoff=7000-3800*wet;
+  var farGain=0.22*wet;
+  var directGain=1-(0.18*wet);
+  return{wet:wet,deg:deg,itd:itd,cutoff:cutoff,farGain:farGain,directGain:directGain};
+}
+function updateReadouts(){
+  var p=calc();
+  text('spaceRead',Math.round(p.wet*100)+'%');
+  text('angleRead',Math.round(p.deg)+'°');
+  text('delay',(p.itd*1000).toFixed(2)+' ms');
+  text('cutoff',Math.round(p.cutoff)+' Hz');
+  text('far',Math.round(p.farGain*100)+'%');
+}
+function setParam(param,value){
+  if(!ctx)return;
+  var t=ctx.currentTime;
+  try{param.cancelScheduledValues(t);param.setTargetAtTime(value,t,0.035);}catch(e){param.value=value;}
+}
+function apply(){
+  updateReadouts();
+  if(!ctx)return;
+  var p=calc();
+  setParam(delayL.delayTime,p.itd);
+  setParam(delayR.delayTime,p.itd);
+  setParam(filterL.frequency,p.cutoff);
+  setParam(filterR.frequency,p.cutoff);
+  setParam(directL.gain,enabled?p.directGain:1);
+  setParam(directR.gain,enabled?p.directGain:1);
+  setParam(crossL.gain,enabled?p.farGain:0);
+  setParam(crossR.gain,enabled?p.farGain:0);
+  setParam(master.gain,enabled?0.94:1);
+  badge.textContent=enabled?'Spatial on':'Spatial off';
+  badge.className='badge'+(enabled?' on':'');
+  spatial.textContent=enabled?'TURN SPATIAL OFF':'TURN SPATIAL ON';
+}
+function buildGraph(){
+  if(ctx)return true;
+  if(!AC){status.textContent='This Safari build does not expose Web Audio.';status.className='status warn';return false;}
+  try{
+    ctx=new AC();
+    source=ctx.createMediaElementSource(audio);
+    splitter=ctx.createChannelSplitter(2);
+    merger=ctx.createChannelMerger(2);
+    master=ctx.createGain();
+    directL=ctx.createGain();directR=ctx.createGain();crossL=ctx.createGain();crossR=ctx.createGain();
+    delayL=ctx.createDelay(0.01);delayR=ctx.createDelay(0.01);
+    filterL=ctx.createBiquadFilter();filterR=ctx.createBiquadFilter();
+    filterL.type='lowpass';filterR.type='lowpass';filterL.Q.value=.55;filterR.Q.value=.55;
+    source.connect(splitter);
+    splitter.connect(directL,0);directL.connect(merger,0,0);
+    splitter.connect(directR,1);directR.connect(merger,0,1);
+    splitter.connect(delayL,0);delayL.connect(filterL);filterL.connect(crossL);crossL.connect(merger,0,1);
+    splitter.connect(delayR,1);delayR.connect(filterR);filterR.connect(crossR);crossR.connect(merger,0,0);
+    merger.connect(master);master.connect(ctx.destination);
+    text('engine','ready');
+    apply();
+    return true;
+  }catch(e){
+    status.textContent='Could not start the audio graph: '+e.message;
+    status.className='status warn';
+    return false;
+  }
+}
+function resume(){
+  if(!buildGraph())return;
+  if(ctx.state==='suspended'&&ctx.resume){ctx.resume();}
+  text('engine',ctx.state||'ready');
+}
+
+file.addEventListener('change',function(){
+  if(!file.files||!file.files.length)return;
+  if(objectURL){try{URL.revokeObjectURL(objectURL);}catch(e){}}
+  objectURL=URL.createObjectURL(file.files[0]);
+  audio.src=objectURL;
+  track.textContent=file.files[0].name;
+  status.textContent='File loaded. Put on headphones, press play, then compare Spatial on/off.';
+  status.className='status good';
+});
+spatial.addEventListener('click',function(){resume();enabled=!enabled;apply();});
+audio.addEventListener('play',function(){resume();});
+space.addEventListener('input',apply);angle.addEventListener('input',apply);
+var presets=document.querySelectorAll('.preset');
+for(var i=0;i<presets.length;i++)presets[i].addEventListener('click',function(){space.value=this.getAttribute('data-space');angle.value=this.getAttribute('data-angle');apply();});
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&ctx&&ctx.state==='suspended'&&ctx.resume)ctx.resume();});
+updateReadouts();
+})();
+</script>
+</body>
+</html>
