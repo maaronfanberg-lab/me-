@@ -72,34 +72,34 @@ jobs:
           npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud.js
           npx --yes es-check@7 es5 /tmp/pocket-spatial.js
 
-      - name: Verify Internet Archive no-account stream contract
+      - name: Verify Internet Archive Netlabels stream contract
         shell: bash
         run: |
           set -euo pipefail
           grep -q "load('pocket-spatial-internet-archive.js'" apps/pocket-spatial-core.js
-          grep -q "SEARCH_API='https://archive.org/advancedsearch.php'" apps/pocket-spatial-internet-archive.js
-          grep -q "METADATA_API='https://archive.org/metadata/'" apps/pocket-spatial-internet-archive.js
-          grep -q "DOWNLOAD_BASE='https://archive.org/download/'" apps/pocket-spatial-internet-archive.js
+          grep -q "NETLABEL_COLLECTION='netlabels'" apps/pocket-spatial-internet-archive.js
+          grep -q "collection:(.*NETLABEL_COLLECTION" apps/pocket-spatial-internet-archive.js
           grep -q "licenseurl:http\*by\*" apps/pocket-spatial-internet-archive.js
           grep -q "isExactCCBY" apps/pocket-spatial-internet-archive.js
+          grep -q "isNetlabelsItem" apps/pocket-spatial-internet-archive.js
           grep -q "selectMP3" apps/pocket-spatial-internet-archive.js
           grep -q "createMediaElementSource(tappedMedia)" apps/pocket-spatial-internet-archive.js
           grep -q "getByteTimeDomainData" apps/pocket-spatial-internet-archive.js
           grep -q "web_audio_pcm_flatline" apps/pocket-spatial-internet-archive.js
           grep -q "No login or API key required" apps/pocket-spatial-internet-archive.js
-          grep -q "Open original on Internet Archive" apps/pocket-spatial-internet-archive.js
+          grep -q "View CC BY license" apps/pocket-spatial-internet-archive.js
           if grep -q 'audiodownload' apps/pocket-spatial-internet-archive.js; then
             echo 'Internet Archive path must stream only; download behavior was added.'
             exit 1
           fi
-          echo 'Internet Archive no-account stream contract passed.'
+          echo 'Internet Archive Netlabels stream contract passed.'
 
-      - name: Smoke-test Internet Archive search, metadata, and audio CORS
+      - name: Smoke-test Netlabels search, metadata, license, and audio CORS
         shell: bash
         run: |
           set -euo pipefail
           ORIGIN='https://maaronfanberg-lab.github.io'
-          QUERY='mediatype:(audio) AND licenseurl:http*by*'
+          QUERY='collection:(netlabels) AND mediatype:(audio) AND licenseurl:http*by*'
           curl -fsSG --max-time 25 \
             -H "Origin: $ORIGIN" \
             -D /tmp/archive-search.headers \
@@ -108,6 +108,7 @@ jobs:
             --data-urlencode 'fl[]=title' \
             --data-urlencode 'fl[]=creator' \
             --data-urlencode 'fl[]=licenseurl' \
+            --data-urlencode 'fl[]=collection' \
             --data-urlencode 'sort[]=downloads desc' \
             --data-urlencode 'rows=30' \
             --data-urlencode 'page=1' \
@@ -120,11 +121,11 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('/tmp/archive-search.json').read_text())
           docs=(data.get('response') or {}).get('docs') or []
-          assert docs, 'Internet Archive broad license search returned no candidate items'
+          assert docs, 'Internet Archive Netlabels search returned no candidate items'
           ids=[str(d.get('identifier') or '') for d in docs if d.get('identifier')]
-          assert ids, 'Internet Archive candidates had no identifiers'
+          assert ids, 'Netlabels candidates had no identifiers'
           Path('/tmp/archive-ids').write_text('\n'.join(ids[:20]))
-          print('Archive broad search returned', len(docs), 'candidate items')
+          print('Netlabels search returned', len(docs), 'candidate items')
           PY
 
           found=0
@@ -146,6 +147,10 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('/tmp/archive-metadata.json').read_text())
           md=data.get('metadata') or {}
+          collections=md.get('collection') or []
+          if isinstance(collections,str): collections=[collections]
+          if 'netlabels' not in [str(x).lower() for x in collections]:
+              raise SystemExit(0)
           lic=md.get('licenseurl') or ''
           if isinstance(lic,list): lic=lic[0] if lic else ''
           lic=str(lic).lower().split('?',1)[0].split('#',1)[0].rstrip('/')
@@ -165,7 +170,7 @@ jobs:
           path='/'.join(urllib.parse.quote(p,safe='') for p in name.split('/'))
           url='https://archive.org/download/'+urllib.parse.quote(identifier,safe='')+'/'+path
           Path('/tmp/archive-audio-url').write_text(url)
-          print('Exact CC BY MP3 candidate:', identifier, name)
+          print('Netlabels + exact CC BY MP3 candidate:', identifier, name, lic)
           PY
             [ -s /tmp/archive-audio-url ] || continue
             AUDIO_URL="$(cat /tmp/archive-audio-url)"
@@ -178,13 +183,13 @@ jobs:
               "$AUDIO_URL"; then
               if [ -s /tmp/archive.sample ] && grep -i -E -q '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/archive-audio.headers; then
                 found=1
-                echo "Live CORS-enabled exact-CC-BY Archive MP3 verified: $AUDIO_URL"
+                echo "Live CORS-enabled Netlabels CC BY MP3 verified: $AUDIO_URL"
                 break
               fi
             fi
           done < /tmp/archive-ids
           test "$found" -eq 1
-          echo 'Internet Archive live search + metadata + audio CORS smoke test passed.'
+          echo 'Internet Archive Netlabels live chain passed.'
 
       - name: Verify SoundCloud Worker bundles
         run: |
