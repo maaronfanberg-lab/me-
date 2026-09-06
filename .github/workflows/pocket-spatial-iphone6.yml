@@ -8,6 +8,7 @@ on:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-internet-archive.js'
       - 'apps/pocket-spatial-soundcloud.js'
       - 'apps/pocket-spatial-soundcloud-config.js'
       - 'cloudflare/pocket-spatial-soundcloud/**'
@@ -18,6 +19,7 @@ on:
     paths:
       - 'apps/pocket-spatial.html'
       - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-internet-archive.js'
       - 'apps/pocket-spatial-soundcloud.js'
       - 'apps/pocket-spatial-soundcloud-config.js'
       - 'cloudflare/pocket-spatial-soundcloud/**'
@@ -56,6 +58,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check apps/pocket-spatial-core.js
+          node --check apps/pocket-spatial-internet-archive.js
           node --check apps/pocket-spatial-soundcloud-config.js
           node --check apps/pocket-spatial-soundcloud.js
           node --check cloudflare/pocket-spatial-soundcloud/src/index.js
@@ -64,9 +67,124 @@ jobs:
       - name: Enforce ES5 syntax for old Safari page code
         run: |
           npx --yes es-check@7 es5 apps/pocket-spatial-core.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-internet-archive.js
           npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud-config.js
           npx --yes es-check@7 es5 apps/pocket-spatial-soundcloud.js
           npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+
+      - name: Verify Internet Archive no-account stream contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "load('pocket-spatial-internet-archive.js'" apps/pocket-spatial-core.js
+          grep -q "SEARCH_API='https://archive.org/advancedsearch.php'" apps/pocket-spatial-internet-archive.js
+          grep -q "METADATA_API='https://archive.org/metadata/'" apps/pocket-spatial-internet-archive.js
+          grep -q "DOWNLOAD_BASE='https://archive.org/download/'" apps/pocket-spatial-internet-archive.js
+          grep -q "licenseurl:(http\*creativecommons.org/licenses/by/\*)" apps/pocket-spatial-internet-archive.js
+          grep -q "isExactCCBY" apps/pocket-spatial-internet-archive.js
+          grep -q "selectMP3" apps/pocket-spatial-internet-archive.js
+          grep -q "createMediaElementSource(tappedMedia)" apps/pocket-spatial-internet-archive.js
+          grep -q "getByteTimeDomainData" apps/pocket-spatial-internet-archive.js
+          grep -q "web_audio_pcm_flatline" apps/pocket-spatial-internet-archive.js
+          grep -q "No login or API key required" apps/pocket-spatial-internet-archive.js
+          grep -q "Open original on Internet Archive" apps/pocket-spatial-internet-archive.js
+          if grep -q 'audiodownload' apps/pocket-spatial-internet-archive.js; then
+            echo 'Internet Archive path must stream only; download behavior was added.'
+            exit 1
+          fi
+          echo 'Internet Archive no-account stream contract passed.'
+
+      - name: Smoke-test Internet Archive search, metadata, and audio CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          ORIGIN='https://maaronfanberg-lab.github.io'
+          QUERY='mediatype:(audio) AND licenseurl:(http*creativecommons.org/licenses/by/*) AND (music)'
+          curl -fsSG --max-time 25 \
+            -H "Origin: $ORIGIN" \
+            -D /tmp/archive-search.headers \
+            --data-urlencode "q=$QUERY" \
+            --data-urlencode 'fl[]=identifier' \
+            --data-urlencode 'fl[]=title' \
+            --data-urlencode 'fl[]=creator' \
+            --data-urlencode 'fl[]=licenseurl' \
+            --data-urlencode 'sort[]=downloads desc' \
+            --data-urlencode 'rows=12' \
+            --data-urlencode 'page=1' \
+            --data-urlencode 'output=json' \
+            'https://archive.org/advancedsearch.php' \
+            -o /tmp/archive-search.json
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/archive-search.headers
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('/tmp/archive-search.json').read_text())
+          docs=(data.get('response') or {}).get('docs') or []
+          assert docs, 'Internet Archive search returned no candidate items'
+          ids=[str(d.get('identifier') or '') for d in docs if d.get('identifier')]
+          assert ids, 'Internet Archive candidates had no identifiers'
+          Path('/tmp/archive-ids').write_text('\n'.join(ids[:10]))
+          print('Archive search returned', len(docs), 'candidate items')
+          PY
+
+          found=0
+          while IFS= read -r ID; do
+            [ -n "$ID" ] || continue
+            rm -f /tmp/archive-metadata.json /tmp/archive-metadata.headers /tmp/archive-audio-url
+            if ! curl -fsS --max-time 20 \
+              -H "Origin: $ORIGIN" \
+              -D /tmp/archive-metadata.headers \
+              "https://archive.org/metadata/$ID" \
+              -o /tmp/archive-metadata.json; then
+              continue
+            fi
+            if ! grep -i -E -q '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/archive-metadata.headers; then
+              continue
+            fi
+            ID="$ID" python3 - <<'PY'
+          import json, os, re, urllib.parse
+          from pathlib import Path
+          data=json.loads(Path('/tmp/archive-metadata.json').read_text())
+          md=data.get('metadata') or {}
+          lic=md.get('licenseurl') or ''
+          if isinstance(lic,list): lic=lic[0] if lic else ''
+          lic=str(lic).lower().split('?',1)[0].split('#',1)[0].rstrip('/')
+          if not re.match(r'^https?://creativecommons\.org/licenses/by/[0-9.]+$',lic):
+              raise SystemExit(0)
+          files=data.get('files') or []
+          mp3=[]
+          for f in files:
+              name=str((f or {}).get('name') or '')
+              private=str((f or {}).get('private') or '').lower()
+              if name.lower().endswith('.mp3') and private!='true':
+                  mp3.append(f)
+          if not mp3: raise SystemExit(0)
+          mp3.sort(key=lambda f: 0 if str(f.get('source') or '').lower()=='original' else 1)
+          name=str(mp3[0].get('name'))
+          identifier=os.environ['ID']
+          path='/'.join(urllib.parse.quote(p,safe='') for p in name.split('/'))
+          url='https://archive.org/download/'+urllib.parse.quote(identifier,safe='')+'/'+path
+          Path('/tmp/archive-audio-url').write_text(url)
+          print('Exact CC BY MP3 candidate:', identifier, name)
+          PY
+            [ -s /tmp/archive-audio-url ] || continue
+            AUDIO_URL="$(cat /tmp/archive-audio-url)"
+            rm -f /tmp/archive-audio.headers /tmp/archive.sample
+            if curl -fsSL --max-time 20 \
+              -H "Origin: $ORIGIN" \
+              -H 'Range: bytes=0-4095' \
+              -D /tmp/archive-audio.headers \
+              -o /tmp/archive.sample \
+              "$AUDIO_URL"; then
+              if [ -s /tmp/archive.sample ] && grep -i -E -q '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/archive-audio.headers; then
+                found=1
+                echo "Live CORS-enabled exact-CC-BY Archive MP3 verified: $AUDIO_URL"
+                break
+              fi
+            fi
+          done < /tmp/archive-ids
+          test "$found" -eq 1
+          echo 'Internet Archive live search + metadata + audio CORS smoke test passed.'
 
       - name: Verify SoundCloud Worker bundles
         run: |
@@ -82,7 +200,6 @@ jobs:
           grep -q "load('pocket-spatial-soundcloud-config.js'" apps/pocket-spatial-core.js
           grep -q "load('pocket-spatial-soundcloud.js'" apps/pocket-spatial-core.js
           grep -q "SESSION_KEY='pocketSpatial.soundcloud.session.v1'" apps/pocket-spatial-soundcloud.js
-          grep -q "Authorization='Bearer '" /dev/null 2>/dev/null || true
           grep -q "headers.Authorization='Bearer '+state.session" apps/pocket-spatial-soundcloud.js
           grep -q "'/me/tracks?limit=50&linked_partitioning=true'" cloudflare/pocket-spatial-soundcloud/src/index.js
           grep -q "spatial_eligibility_reason: 'own_upload'" cloudflare/pocket-spatial-soundcloud/src/index.js
@@ -118,7 +235,7 @@ jobs:
           grep -q 'reflGainR2.connect(merger,0,1)' apps/pocket-spatial.html
           grep -q 'setParam(reflGainL1.gain,t.refl1Gain)' apps/pocket-spatial.html
           grep -q 'setParam(reflGainL2.gain,t.refl2Gain)' apps/pocket-spatial.html
-          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js; then
+          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js apps/pocket-spatial-internet-archive.js; then
             echo 'Heavy/custom DSP primitive leaked into the iPhone 6 layer.'
             exit 1
           fi
@@ -128,18 +245,11 @@ jobs:
           python3 - <<'PY'
           from html.parser import HTMLParser
           from pathlib import Path
-
           html=Path('apps/pocket-spatial.html').read_text()
           assert html.lstrip().lower().startswith('<!doctype html>')
-
           class P(HTMLParser):
               def __init__(self):
-                  HTMLParser.__init__(self)
-                  self.ids=[]
-                  self.labels=[]
-                  self.buttons=[]
-                  self.has_audio=False
-                  self.lang=None
+                  HTMLParser.__init__(self);self.ids=[];self.labels=[];self.buttons=[];self.has_audio=False;self.lang=None
               def handle_starttag(self, tag, attrs):
                   a=dict(attrs)
                   if tag=='html': self.lang=a.get('lang')
@@ -147,11 +257,8 @@ jobs:
                   if tag=='label' and 'for' in a: self.labels.append(a['for'])
                   if tag=='button': self.buttons.append(a)
                   if tag=='audio': self.has_audio=True
-
-          p=P(); p.feed(html)
-          assert p.lang=='en'
-          assert p.has_audio
-          assert len(p.ids)==len(set(p.ids)), 'duplicate id detected'
+          p=P();p.feed(html)
+          assert p.lang=='en';assert p.has_audio;assert len(p.ids)==len(set(p.ids)), 'duplicate id detected'
           for required in ('file','space','angle','depth','spatial','audio','delay','cutoff','far','direct','reflTimes','reflGain','reflCutoff','master'):
               assert required in p.ids, f'missing required id {required}'
           for labelled in ('file','space','angle','depth'):
