@@ -1,0 +1,12 @@
+{
+  "nonce": "pocket-spatial-dynamic-steering-v2-20260907-1802",
+  "prompt": "Give a focused read-only engineering review for Pocket Spatial dynamic matrix steering. Read only these repository files unless one referenced dependency is essential: apps/pocket-spatial.html, apps/pocket-spatial-core.js, apps/pocket-spatial-matrix-test.html. We already have fixed Lt/Rt-style matrix steering that the user's receiver decodes into convincing front/center/rear speaker positions over ordinary two-channel iPhone output. Propose the best practical next upgrade that remains free and browser-based: dynamic steering driven by short-window program analysis. Specifically answer: (1) which low-cost measurements should run in real time on iPhone Web Audio, (2) exact steering logic for center vs rear strength and left/right separation, including attack/release behavior, (3) how to preserve headroom and avoid pumping/phase collapse, (4) the three most valuable implementation changes in ranked order, and (5) a falsification test plan using our existing matrix speaker tests and real music. Do not discuss native iOS, paid services, Replit, licensed Dolby encoding, or hardware purchases. Do not edit files. Keep the answer under 1200 words and cite the repository filenames/functions you inspected.",
+  "context": [
+    "Current fixed steering in the app reinforces common L+R content toward center and phase-encodes L-R spatial material toward the rear pair using Hilbert-style phase processing.",
+    "The user's receiver already passed deliberately constructed matrix speaker-position tests, so the problem is not whether matrix decoding works. The goal is to make ordinary music decode more decisively and musically.",
+    "We want dynamic behavior based on program content, not merely larger fixed coefficients."
+  ],
+  "expected_response": "Concrete DSP design with equations or pseudocode, attack/release constants, headroom safeguards, ranked changes, and receiver test plan grounded in the three specified files.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 10
+}
