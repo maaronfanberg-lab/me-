@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 8,
+  "completed_reply_turns": 9,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -143,6 +143,15 @@
       "to_name": "Olivia",
       "content": "Wow, I'm so glad to hear that.",
       "created_at": "2026-09-07T22:07:27.817204+00:00"
+    },
+    {
+      "id": 10,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "That's great to hear! What are you doing this weekend?",
+      "created_at": "2026-09-07T22:10:21.884040+00:00"
     }
   ],
   "latest_turn": {
@@ -179,21 +188,152 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Hi, how's it going?",
+      "Olivia observes a message from Emily: What is the weather like in your area?",
+      "Olivia observes a message from Emily: Oh, I'm sorry to hear that the weather is terrible! That must be very tough. Are you taking care of yourself?",
+      "Olivia observes a message from Emily: Oh, that's terrible. Have you taken care of yourself?",
+      "Olivia observes a message from Emily: Wow, I'm so glad to hear that."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "1633cad817a4e2a3e0bf",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 30.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 11
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "f0175b26491127ccffc7",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 80.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 11
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "ef557a1d7f44cde87cdc",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 60.0,
+        "stanford_created": 6,
+        "stanford_last_retrieved": 6,
+        "observed_time_step": 11
+      },
+      {
+        "retrieval_rank": 4,
+        "content_hash": "cc2fd4ee604e3269d49b",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 8,
+        "stanford_last_retrieved": 8,
+        "observed_time_step": 11
+      },
+      {
+        "retrieval_rank": 5,
+        "content_hash": "64b7d945d78e865774a0",
+        "stanford_node_id": 4,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 10,
+        "stanford_last_retrieved": 10,
+        "observed_time_step": 11
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "That's great to hear! What are you doing this weekend?",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Hi, how's it going?",
+        "Olivia observes a message from Emily: What is the weather like in your area?",
+        "Olivia observes a message from Emily: Oh, I'm sorry to hear that the weather is terrible! That must be very tough. Are you taking care of yourself?",
+        "Olivia observes a message from Emily: Oh, that's terrible. Have you taken care of yourself?",
+        "Olivia observes a message from Emily: Wow, I'm so glad to hear that."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "1633cad817a4e2a3e0bf",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 30.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 11
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "f0175b26491127ccffc7",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 80.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 11
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "ef557a1d7f44cde87cdc",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 60.0,
+          "stanford_created": 6,
+          "stanford_last_retrieved": 6,
+          "observed_time_step": 11
+        },
+        {
+          "retrieval_rank": 4,
+          "content_hash": "cc2fd4ee604e3269d49b",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 8,
+          "stanford_last_retrieved": 8,
+          "observed_time_step": 11
+        },
+        {
+          "retrieval_rank": 5,
+          "content_hash": "64b7d945d78e865774a0",
+          "stanford_node_id": 4,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 10,
+          "stanford_last_retrieved": 10,
+          "observed_time_step": 11
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 10,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "That's great to hear! What are you doing this weekend?",
+        "created_at": "2026-09-07T22:10:21.884040+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"recurring_pair_attractor: Wow, that's great to hear. Have you been taking care of yourself?\""
+    "external_generation_error": ""
   }
 }
