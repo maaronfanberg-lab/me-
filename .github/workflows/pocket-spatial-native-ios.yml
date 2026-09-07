@@ -1,0 +1,34 @@
+name: Pocket Spatial Native iOS
+
+on:
+  push:
+    paths:
+      - 'ios/PocketSpatialNative/**'
+      - '.github/workflows/pocket-spatial-native-ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios/PocketSpatialNative
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator
+        working-directory: ios/PocketSpatialNative
+        run: |
+          xcodebuild \
+            -project PocketSpatialNative.xcodeproj \
+            -scheme PocketSpatialNative \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
