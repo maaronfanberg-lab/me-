@@ -93,30 +93,36 @@ jobs:
               if path.exists():
                   excerpts.append(f'\n===== {path.as_posix()} =====\n' + path.read_text(encoding='utf-8', errors='replace')[:16000])
 
-          prompt = '''We need a concrete next step for Pocket Spatial, a native iPhone audio app that already compiles in CI. It uses AVAudioSession and AVAudioEngine to detect 5.1/7.1 output and play a single discrete PCM channel at a time.
-
-Constraints:
-- User has an iPhone SE on iOS 26.6.1.
-- Goal is audio-only Lightning-to-HDMI into an AV receiver.
-- Do not use Safari/Web Audio.
-- Do not use Replit.
-- Prefer no laptop if a legitimate path exists.
-- GitHub Actions is available.
-- Do not assume paid Apple Developer Program membership unless required.
-- We need the fastest lawful way to get this exact app onto the physical iPhone and run it.
-- Do not invent signing bypasses or imply unsigned iOS apps can simply install.
-
-Review the repository excerpts below and answer as a senior iOS build/release engineer. Rank the realistic installation paths. Explicitly distinguish free Apple ID/Xcode personal-team deployment, paid Apple Developer/TestFlight, ad hoc/development signing, and any no-computer sideload approach. Say what GitHub Actions can automate versus what still needs Apple credentials/device registration. If project or CI changes are needed for a physical-device build, name them. End with one recommended next action for this specific user.
-''' + ''.join(excerpts)
+          prompt = (
+              'We need a concrete next step for Pocket Spatial, a native iPhone audio app that already compiles in CI. '
+              'It uses AVAudioSession and AVAudioEngine to detect 5.1/7.1 output and play a single discrete PCM channel at a time.\n\n'
+              'Constraints:\n'
+              '- User has an iPhone SE on iOS 26.6.1.\n'
+              '- Goal is audio-only Lightning-to-HDMI into an AV receiver.\n'
+              '- Do not use Safari/Web Audio.\n'
+              '- Do not use Replit.\n'
+              '- Prefer no laptop if a legitimate path exists.\n'
+              '- GitHub Actions is available.\n'
+              '- Do not assume paid Apple Developer Program membership unless required.\n'
+              '- We need the fastest lawful way to get this exact app onto the physical iPhone and run it.\n'
+              '- Do not invent signing bypasses or imply unsigned iOS apps can simply install.\n\n'
+              'Review the repository excerpts below and answer as a senior iOS build/release engineer. '
+              'Rank the realistic installation paths. Explicitly distinguish free Apple ID/Xcode personal-team deployment, '
+              'paid Apple Developer/TestFlight, ad hoc/development signing, and any no-computer sideload approach. '
+              'Say what GitHub Actions can automate versus what still needs Apple credentials/device registration. '
+              'If project or CI changes are needed for a physical-device build, name them. '
+              'End with one recommended next action for this specific user.\n'
+          ) + ''.join(excerpts)
 
           answer = request_chat(
-              'You are Falcon3-10B-Instruct, the same local BitNet model used by the Community. Be precise, practical, skeptical, and never fabricate Apple platform capabilities.',
+              'You are Falcon3-10B-Instruct, the same local BitNet model used by the Community. '
+              'Be precise, practical, skeptical, and never fabricate Apple platform capabilities.',
               prompt,
               max_tokens=256,
               temperature=0.1,
               timeout=180,
           )
-          Path(root / 'falcon-pocket-spatial-native-review.md').write_text(
+          (root / 'falcon-pocket-spatial-native-review.md').write_text(
               '# Falcon 10B Pocket Spatial native review\n\n' + answer + '\n',
               encoding='utf-8',
           )
