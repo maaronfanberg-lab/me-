@@ -4,76 +4,71 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#080b12">
-<title>Pocket Spatial Matrix Test</title>
+<title>Pocket Spatial Side Speaker Hunt</title>
 <style>
 :root{--bg:#080b12;--panel:#111722;--line:#293347;--text:#edf2fb;--dim:#94a1b5;--good:#5ddbc7;--warn:#e0bb65}
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}body{padding:24px 14px 40px;max-width:680px;margin:auto}h1{font-size:27px;margin:4px 0 8px}.sub,.status{color:var(--dim);font-size:13px;line-height:1.55}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0}button{width:100%;min-height:56px;border-radius:14px;border:1px solid #756cf2;background:#5147c8;color:var(--text);font-size:17px;font-weight:700;padding:12px;margin:8px 0}.secondary{background:#171f2d;border-color:var(--line)}.back{background:#313b65}.cue{font-size:28px;font-weight:800;text-align:center;min-height:50px;padding:8px}.good{color:var(--good)}.warn{color:var(--warn)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid .wide{grid-column:1/-1}ol{padding-left:22px;color:var(--dim);line-height:1.6}b{color:var(--text)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}body{padding:24px 14px 40px;max-width:680px;margin:auto}h1{font-size:27px;margin:4px 0 8px}.sub,.status{color:var(--dim);font-size:13px;line-height:1.55}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0}button{width:100%;min-height:56px;border-radius:14px;border:1px solid #756cf2;background:#5147c8;color:var(--text);font-size:16px;font-weight:700;padding:12px;margin:7px 0}.known{background:#1f4d47;border-color:#4bbca8}.candidate{background:#313b65}.cue{font-size:25px;font-weight:800;text-align:center;min-height:48px;padding:8px}.good{color:var(--good)}.warn{color:var(--warn)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.wide{grid-column:1/-1}b{color:var(--text)}
 @media(max-width:420px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<h1>POCKET SPATIAL · RECEIVER TEST</h1>
-<div class="sub">Tap one speaker at a time. SIDE LEFT / SIDE RIGHT are the calibrated surround pair. BACK LEFT / BACK RIGHT are the experimental rear pair.</div>
+<h1>POCKET SPATIAL · SIDE SPEAKER HUNT</h1>
+<div class="sub">We already have a cue that reaches the pair at the very back of your room. These new candidates deliberately change the stereo phase and balance to see whether your receiver chooses the other surround pair instead.</div>
 <div class="card">
   <div id="cue" class="cue">READY</div>
   <div class="grid">
-    <button class="speaker" data-pos="0" type="button">FRONT LEFT</button>
-    <button class="speaker" data-pos="2" type="button">FRONT RIGHT</button>
-    <button class="speaker wide" data-pos="1" type="button">CENTER</button>
-    <button class="speaker" data-pos="4" type="button">SIDE LEFT</button>
-    <button class="speaker" data-pos="3" type="button">SIDE RIGHT</button>
-    <button class="speaker back" data-pos="5" type="button">BACK LEFT · EXPERIMENT</button>
-    <button class="speaker back" data-pos="6" type="button">BACK RIGHT · EXPERIMENT</button>
+    <button class="speaker known" data-code="rearL" type="button">KNOWN FAR-BACK LEFT</button>
+    <button class="speaker known" data-code="rearR" type="button">KNOWN FAR-BACK RIGHT</button>
   </div>
-  <button id="sequence" class="secondary" type="button">PLAY ALL 7 POSITIONS</button>
-  <div id="status" class="status">Keep the receiver volume modest for the first run.</div>
+  <div class="status">Use the green buttons as your reference. They should hit the pair we already proved works.</div>
 </div>
 <div class="card">
-  <b>Side vs back</b>
-  <div class="status">The SIDE buttons use the calibrated matrix cues that already worked on your receiver. The BACK buttons use a more decorrelated pattern to test whether the receiver can steer farther behind you. This lets us compare the side and back pairs directly.</div>
+  <b>Try these for the other pair</b>
+  <div class="grid">
+    <button class="speaker candidate" data-code="sideAL" type="button">SIDE LEFT · A</button>
+    <button class="speaker candidate" data-code="sideAR" type="button">SIDE RIGHT · A</button>
+    <button class="speaker candidate" data-code="sideBL" type="button">SIDE LEFT · B</button>
+    <button class="speaker candidate" data-code="sideBR" type="button">SIDE RIGHT · B</button>
+    <button class="speaker candidate" data-code="sideCL" type="button">SIDE LEFT · C</button>
+    <button class="speaker candidate" data-code="sideCR" type="button">SIDE RIGHT · C</button>
+  </div>
+  <div id="status" class="status">Tap each candidate one at a time. Tell Sarah which letter, if any, moves away from the far-back pair and into the other surround speakers.</div>
+</div>
+<div class="card">
+  <div class="status"><b>What the candidates change:</b> A uses a shallower phase angle, B mixes a little in-phase content with the rear cue, and C uses a frequency-dependent phase blend. We are probing the receiver's steering behavior, not assuming a standard 7.1 matrix exists.</div>
 </div>
 <script>
 (function(){
 'use strict';
 var AC=window.AudioContext||window.webkitAudioContext;
-var cue=document.getElementById('cue'),status=document.getElementById('status'),sequence=document.getElementById('sequence');
-var labels=['FRONT LEFT','CENTER','FRONT RIGHT','SIDE RIGHT','SIDE LEFT','BACK LEFT · EXPERIMENT','BACK RIGHT · EXPERIMENT'];
-var ctx=null,timers=[];
-function clearTimers(){while(timers.length)clearTimeout(timers.pop());}
+var cue=document.getElementById('cue'),status=document.getElementById('status'),ctx=null;
 function envelope(t,d){var e=.035;if(t<e)return t/e;if(t>d-e)return Math.max(0,(d-t)/e);return 1;}
-function buildBuffer(c,positions){
-  var sr=c.sampleRate||48000,dur=1.10,gap=.30,total=Math.ceil(sr*positions.length*(dur+gap));
-  var b=c.createBuffer(2,total,sr),L=b.getChannelData(0),R=b.getChannelData(1),f=700,amp=.20;
-  for(var p=0;p<positions.length;p++){
-    var pos=positions[p],start=Math.floor(p*(dur+gap)*sr),frames=Math.floor(dur*sr);
-    for(var i=0;i<frames;i++){
-      var t=i/sr,e=envelope(t,dur),s=Math.sin(2*Math.PI*f*t)*amp*e,q=Math.sin(2*Math.PI*f*t+Math.PI/2)*amp*e;
-      var q2=Math.sin(2*Math.PI*(f*1.17)*t+Math.PI/2)*amp*.42*e;
-      var wobble=.82+.18*Math.sin(2*Math.PI*6.3*t);
-      var l=0,r=0;
-      if(pos===0){l=s;}
-      else if(pos===1){l=s*.707;r=s*.707;}
-      else if(pos===2){r=s;}
-      else if(pos===3){l=-q*.871;r=q*.49;}
-      else if(pos===4){l=-q*.49;r=q*.871;}
-      else if(pos===5){l=(-q*.64+q2*.28)*wobble;r=(q*.94-q2*.18)*wobble;}
-      else if(pos===6){l=(-q*.94+q2*.18)*wobble;r=(q*.64-q2*.28)*wobble;}
-      L[start+i]=l;R[start+i]=r;
-    }
-  }
-  return {buffer:b,dur:dur,gap:gap,total:total/sr};
+function gains(code,t,f,amp,e){
+  var s=Math.sin(2*Math.PI*f*t)*amp*e;
+  var q=Math.sin(2*Math.PI*f*t+Math.PI/2)*amp*e;
+  var q45=Math.sin(2*Math.PI*f*t+Math.PI/4)*amp*e;
+  var q2=Math.sin(2*Math.PI*(f*1.31)*t+Math.PI/2)*amp*.36*e;
+  var l=0,r=0;
+  if(code==='rearL'){l=-q*.49;r=q*.871;}
+  else if(code==='rearR'){l=-q*.871;r=q*.49;}
+  else if(code==='sideAL'){l=-q45*.34;r=q45*.92;}
+  else if(code==='sideAR'){l=-q45*.92;r=q45*.34;}
+  else if(code==='sideBL'){l=(-q*.26)+(s*.18);r=(q*.82)+(s*.42);}
+  else if(code==='sideBR'){l=(-q*.82)+(s*.42);r=(q*.26)+(s*.18);}
+  else if(code==='sideCL'){l=(-q*.22)+(q2*.26);r=(q*.76)+(q2*.46);}
+  else if(code==='sideCR'){l=(-q*.76)+(q2*.46);r=(q*.22)+(q2*.26);}
+  return [l,r];
 }
-function playPositions(positions){
+function play(code,label){
   if(!AC){status.textContent='This Safari build does not expose Web Audio.';status.className='status warn';return;}
-  clearTimers();try{if(ctx)ctx.close();}catch(e){}
-  ctx=new AC();var test=buildBuffer(ctx,positions),src=ctx.createBufferSource(),trim=ctx.createGain();trim.gain.value=.72;src.buffer=test.buffer;src.connect(trim);trim.connect(ctx.destination);
-  if(ctx.state==='suspended'&&ctx.resume)ctx.resume();src.start();status.textContent='Playing matrix cue through the iPhone audio output…';status.className='status good';
-  positions.forEach(function(pos,i){timers.push(setTimeout(function(){cue.textContent=labels[pos];},Math.round(i*(test.dur+test.gap)*1000)));});
-  timers.push(setTimeout(function(){cue.textContent='READY';status.textContent='Tap another speaker, or repeat the same one to confirm what you hear.';status.className='status';},Math.round(test.total*1000)+120));
-  src.onended=function(){try{ctx.close();}catch(e){}};
+  try{if(ctx)ctx.close();}catch(e){}
+  ctx=new AC();var sr=ctx.sampleRate||48000,dur=1.25,frames=Math.ceil(sr*dur),b=ctx.createBuffer(2,frames,sr),L=b.getChannelData(0),R=b.getChannelData(1),f=700,amp=.20;
+  for(var i=0;i<frames;i++){var t=i/sr,e=envelope(t,dur),g=gains(code,t,f,amp,e);L[i]=g[0];R[i]=g[1];}
+  var src=ctx.createBufferSource(),trim=ctx.createGain();trim.gain.value=.72;src.buffer=b;src.connect(trim);trim.connect(ctx.destination);
+  if(ctx.state==='suspended'&&ctx.resume)ctx.resume();cue.textContent=label;status.textContent='Playing '+label+'…';status.className='status good';src.start();
+  src.onended=function(){cue.textContent='READY';status.textContent='Repeat it if needed, then try the matching left/right candidate.';status.className='status';try{ctx.close();}catch(e){}};
 }
-document.querySelectorAll('.speaker').forEach(function(button){button.addEventListener('click',function(){playPositions([Number(this.getAttribute('data-pos'))]);});});
-sequence.addEventListener('click',function(){playPositions([0,1,2,3,4,5,6]);});
+document.querySelectorAll('.speaker').forEach(function(button){button.addEventListener('click',function(){play(this.getAttribute('data-code'),this.textContent);});});
 }());
 </script>
 </body>
