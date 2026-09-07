@@ -17,7 +17,7 @@ h1{font-size:28px;line-height:1;margin:3px 0 7px;letter-spacing:.02em}.sub{color
 .badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.badge.on{color:var(--good);border-color:var(--good)}
 button,.fileLabel{display:block;width:100%;min-height:52px;border-radius:14px;border:1px solid var(--line);background:#171f2d;color:var(--text);padding:13px;font-size:16px;font-weight:650;text-align:center;margin:8px 0}
 button.primary{background:#5147c8;border-color:#756cf2}.fileLabel{cursor:pointer}input[type=file]{position:absolute;left:-9999px}
-audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--dim)}.ctrl b{color:var(--text);font-weight:650;text-align:right}input[type=range]{width:100%;height:35px}.row{display:flex;gap:8px}.row button{flex:1}
+audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--dim)}.ctrl b{color:var(--text);font-weight:650;text-align:right;max-width:52%}input[type=range]{width:100%;height:35px}.row{display:flex;gap:8px}.row button{flex:1}
 .metricGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric{background:#0b1018;border:1px solid var(--line);border-radius:12px;padding:10px}.metric span{display:block;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.06em}.metric b{display:block;margin-top:4px;font-size:15px}
 .status{font-size:12px;color:var(--dim);line-height:1.5;margin-top:8px}.good{color:var(--good)}.warn{color:var(--warn)}.legal{font-size:10.5px;color:var(--dim);line-height:1.55}.legal b{color:var(--text)}
 .dangerZone{border-color:#5a3f57}.dangerZone .ctrl span:first-child:after{content:' ↯';color:var(--warn)}
@@ -26,7 +26,7 @@ audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;ju
 </head>
 <body>
 <h1>POCKET SPATIAL</h1>
-<div class="sub">Live spatial processor for Audius streams and local audio · extended experimental control range</div>
+<div class="sub">Live spatial processor · exponential geometry · room-wrap immersion field</div>
 
 <div class="card hero">
   <div id="badge" class="badge">Spatial off</div>
@@ -38,45 +38,22 @@ audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;ju
 </div>
 
 <div class="card dangerZone">
-  <div class="status warn">EXTREME LAB · These ranges deliberately extend beyond natural spatial cues. You can make the sound hollow, phasey, smeared, cavernous, or simply bad. A limiter remains active at the output.</div>
+  <div class="status warn">IMMERSION LAB · The controls now accelerate exponentially. Lower ranges stay tunable; upper ranges intentionally become extreme. ROOM WRAP adds later cross-fed arrivals around the listening position. Output limiting remains active.</div>
 
-  <div class="ctrl">
-    <label for="space"><span>SPATIAL AMOUNT</span><b id="spaceRead">72%</b></label>
-    <input id="space" type="range" min="0" max="250" step="1" value="72">
-  </div>
-  <div class="ctrl">
-    <label for="angle"><span>VIRTUAL SPEAKER ANGLE</span><b id="angleRead">57°</b></label>
-    <input id="angle" type="range" min="0" max="180" step="1" value="57">
-  </div>
-  <div class="ctrl">
-    <label for="delayStretch"><span>INTERAURAL DELAY STRETCH</span><b id="delayStretchRead">100%</b></label>
-    <input id="delayStretch" type="range" min="25" max="800" step="1" value="100">
-  </div>
-  <div class="ctrl">
-    <label for="headShadow"><span>HEAD-SHADOW CUTOFF</span><b id="headShadowRead">3300 Hz</b></label>
-    <input id="headShadow" type="range" min="400" max="12000" step="50" value="3300">
-  </div>
-  <div class="ctrl">
-    <label for="polarity"><span>CROSS-EAR POLARITY</span><b id="polarityRead">NORMAL 100%</b></label>
-    <input id="polarity" type="range" min="-100" max="100" step="1" value="100">
-  </div>
-  <div class="ctrl">
-    <label for="depth"><span>REFLECTION DEPTH</span><b id="depthRead">45%</b></label>
-    <input id="depth" type="range" min="0" max="300" step="1" value="45">
-  </div>
-  <div class="ctrl">
-    <label for="roomScale"><span>ROOM TIME SCALE</span><b id="roomScaleRead">100%</b></label>
-    <input id="roomScale" type="range" min="25" max="600" step="1" value="100">
-  </div>
-  <div class="ctrl">
-    <label for="reflectionTone"><span>REFLECTION TONE</span><b id="reflectionToneRead">3300 Hz</b></label>
-    <input id="reflectionTone" type="range" min="300" max="12000" step="50" value="3300">
-  </div>
+  <div class="ctrl"><label for="space"><span>SPATIAL AMOUNT</span><b id="spaceRead">72%</b></label><input id="space" type="range" min="0" max="250" step="1" value="72"></div>
+  <div class="ctrl"><label for="angle"><span>VIRTUAL SPEAKER ANGLE</span><b id="angleRead">57°</b></label><input id="angle" type="range" min="0" max="180" step="1" value="57"></div>
+  <div class="ctrl"><label for="delayStretch"><span>INTERAURAL DELAY STRETCH</span><b id="delayStretchRead">100%</b></label><input id="delayStretch" type="range" min="25" max="800" step="1" value="100"></div>
+  <div class="ctrl"><label for="headShadow"><span>HEAD-SHADOW CUTOFF</span><b id="headShadowRead">3300 Hz</b></label><input id="headShadow" type="range" min="400" max="12000" step="50" value="3300"></div>
+  <div class="ctrl"><label for="polarity"><span>CROSS-EAR POLARITY</span><b id="polarityRead">NORMAL 100%</b></label><input id="polarity" type="range" min="-100" max="100" step="1" value="100"></div>
+  <div class="ctrl"><label for="depth"><span>EARLY REFLECTION DEPTH</span><b id="depthRead">45%</b></label><input id="depth" type="range" min="0" max="300" step="1" value="45"></div>
+  <div class="ctrl"><label for="roomScale"><span>ROOM TIME SCALE</span><b id="roomScaleRead">100%</b></label><input id="roomScale" type="range" min="25" max="600" step="1" value="100"></div>
+  <div class="ctrl"><label for="roomWrap"><span>ROOM WRAP / IMMERSION</span><b id="roomWrapRead">65%</b></label><input id="roomWrap" type="range" min="0" max="300" step="1" value="65"></div>
+  <div class="ctrl"><label for="reflectionTone"><span>REFLECTION TONE</span><b id="reflectionToneRead">3300 Hz</b></label><input id="reflectionTone" type="range" min="300" max="12000" step="50" value="3300"></div>
 
   <div class="row">
-    <button class="preset" type="button" data-space="72" data-angle="57" data-delay="100" data-shadow="3300" data-polarity="100" data-depth="45" data-room="100" data-tone="3300">WIDE</button>
-    <button class="preset" type="button" data-space="145" data-angle="115" data-delay="260" data-shadow="1800" data-polarity="100" data-depth="150" data-room="230" data-tone="2200">WARPED</button>
-    <button class="preset" type="button" data-space="230" data-angle="175" data-delay="760" data-shadow="650" data-polarity="-100" data-depth="285" data-room="560" data-tone="700">ABYSS</button>
+    <button class="preset" type="button" data-space="82" data-angle="68" data-delay="105" data-shadow="3300" data-polarity="100" data-depth="60" data-room="115" data-wrap="85" data-tone="3300">ROOM</button>
+    <button class="preset" type="button" data-space="155" data-angle="128" data-delay="280" data-shadow="1900" data-polarity="100" data-depth="165" data-room="255" data-wrap="185" data-tone="2400">IMMERSED</button>
+    <button class="preset" type="button" data-space="235" data-angle="178" data-delay="720" data-shadow="700" data-polarity="-100" data-depth="290" data-room="560" data-wrap="290" data-tone="800">ABYSS</button>
   </div>
 </div>
 
@@ -87,8 +64,10 @@ audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;ju
     <div class="metric"><span>Head-shadow LPF</span><b id="cutoff">—</b></div>
     <div class="metric"><span>Far-ear path</span><b id="far">0%</b></div>
     <div class="metric"><span>Direct path</span><b id="direct">100%</b></div>
-    <div class="metric"><span>Reflection arrivals</span><b id="reflTimes">17/19 · 31/34 ms</b></div>
-    <div class="metric"><span>Reflection gains</span><b id="reflGain">0.0% / 0.0%</b></div>
+    <div class="metric"><span>Early arrivals</span><b id="reflTimes">—</b></div>
+    <div class="metric"><span>Early gains</span><b id="reflGain">0%</b></div>
+    <div class="metric"><span>Room-wrap arrivals</span><b id="wrapTimes">—</b></div>
+    <div class="metric"><span>Room-wrap gains</span><b id="wrapGain">0%</b></div>
     <div class="metric"><span>Reflection LPF</span><b id="reflCutoff">3300 Hz</b></div>
     <div class="metric"><span>Protective output trim</span><b id="master">100%</b></div>
     <div class="metric"><span>Output limiter</span><b>ACTIVE</b></div>
@@ -96,191 +75,72 @@ audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;ju
   <div id="status" class="status" aria-live="polite">Nothing is processed until playback starts and Spatial is on.</div>
 </div>
 
-<div class="card legal">
-  <b>Experimental controls:</b> Spatial Amount changes cross-ear energy. Speaker Angle and Delay Stretch can push localization timing beyond plausible human-head geometry. Cross-Ear Polarity can invert the delayed opposite-side path, creating strong cancellation and phase coloration. Room Time Scale stretches the early-reflection geometry, while Reflection Tone moves its damping from extremely dark to unnaturally bright.
-</div>
-<div class="card legal">
-  <b>Safety architecture:</b> extreme settings automatically reduce the internal master gain according to the combined path gains, then pass through a high-ratio dynamics limiter before the iPhone output. This is intended to keep experimentation about spatial character rather than raw level. Your receiver or theater volume still matters.
-</div>
-<div class="card legal">
-  <b>Streaming:</b> Audius playback uses API-accessible live streams. Pocket Spatial does not rip, export, or persist those tracks; Audius access and gating controls remain in force.
-</div>
+<div class="card legal"><b>What changed:</b> slider positions are no longer mapped linearly to acoustic strength. Spatial amount, angle timing, room scale, early reflections, delay stretch, and room wrap accelerate progressively toward the top of their ranges. The readouts show the effective result, not just the knob position.</div>
+<div class="card legal"><b>Room Wrap:</b> four later, darker arrivals are cross-fed across left and right. They are deliberately asynchronous, which reduces the sense of one flat frontal image and builds a larger surrounding field. This is still a stereo simulation, not true discrete multichannel rendering.</div>
+<div class="card legal"><b>Safety:</b> extreme settings reduce internal gain based on total path energy and then pass through a high-ratio limiter. Keep your theater receiver at a sensible level while experimenting.</div>
 
-<script src="pocket-spatial-core.js?v=20260907-extreme-lab-1"></script>
+<script src="pocket-spatial-core.js?v=20260907-immersive-log-2"></script>
 <script>
 (function(){
 'use strict';
 var AC=window.AudioContext||window.webkitAudioContext;
 var core=window.PocketSpatialCore;
-var audio=document.getElementById('audio');
-var file=document.getElementById('file');
-var spatial=document.getElementById('spatial');
-var space=document.getElementById('space');
-var angle=document.getElementById('angle');
-var depth=document.getElementById('depth');
-var delayStretch=document.getElementById('delayStretch');
-var headShadow=document.getElementById('headShadow');
-var roomScale=document.getElementById('roomScale');
-var reflectionTone=document.getElementById('reflectionTone');
-var polarity=document.getElementById('polarity');
-var badge=document.getElementById('badge');
-var track=document.getElementById('track');
-var status=document.getElementById('status');
+var audio=document.getElementById('audio'),file=document.getElementById('file'),spatial=document.getElementById('spatial');
+var space=document.getElementById('space'),angle=document.getElementById('angle'),depth=document.getElementById('depth');
+var delayStretch=document.getElementById('delayStretch'),headShadow=document.getElementById('headShadow'),roomScale=document.getElementById('roomScale');
+var roomWrap=document.getElementById('roomWrap'),reflectionTone=document.getElementById('reflectionTone'),polarity=document.getElementById('polarity');
+var badge=document.getElementById('badge'),track=document.getElementById('track'),status=document.getElementById('status');
 var ctx=null,source=null,splitter=null,merger=null,master=null,limiter=null;
 var directL=null,directR=null,crossL=null,crossR=null,delayL=null,delayR=null,filterL=null,filterR=null;
-var reflDelayL1=null,reflDelayR1=null,reflDelayL2=null,reflDelayR2=null;
-var reflFilterL1=null,reflFilterR1=null,reflFilterL2=null,reflFilterR2=null;
-var reflGainL1=null,reflGainR1=null,reflGainL2=null,reflGainR2=null;
+var reflDelayL1=null,reflDelayR1=null,reflDelayL2=null,reflDelayR2=null,reflFilterL1=null,reflFilterR1=null,reflFilterL2=null,reflFilterR2=null,reflGainL1=null,reflGainR1=null,reflGainL2=null,reflGainR2=null;
+var wrapDelayL1=null,wrapDelayR1=null,wrapDelayL2=null,wrapDelayR2=null,wrapFilterL1=null,wrapFilterR1=null,wrapFilterL2=null,wrapFilterR2=null,wrapGainL1=null,wrapGainR1=null,wrapGainL2=null,wrapGainR2=null;
 var enabled=false,objectURL=null;
 
-function text(id,value){document.getElementById(id).textContent=value;}
-function setParam(param,value){
-  if(!ctx)return;
-  var t=ctx.currentTime;
-  try{param.cancelScheduledValues(t);param.setTargetAtTime(value,t,0.035);}catch(e){param.value=value;}
-}
+function text(id,value){var n=document.getElementById(id);if(n)n.textContent=value;}
+function setParam(param,value){if(!ctx)return;var t=ctx.currentTime;try{param.cancelScheduledValues(t);param.setTargetAtTime(value,t,0.035);}catch(e){param.value=value;}}
 function setFixedParam(param,value){if(param.value!==value)param.value=value;}
-function targets(){
-  return core.appliedTargets(space.value,angle.value,depth.value,delayStretch.value,headShadow.value,roomScale.value,reflectionTone.value,polarity.value,enabled);
-}
+function targets(){return core.appliedTargets(space.value,angle.value,depth.value,delayStretch.value,headShadow.value,roomScale.value,reflectionTone.value,polarity.value,roomWrap.value,enabled);}
 function updateReadouts(){
-  var r=core.readouts(space.value,angle.value,depth.value,delayStretch.value,headShadow.value,roomScale.value,reflectionTone.value,polarity.value,enabled);
-  text('spaceRead',r.spaceText);
-  text('angleRead',r.angleText);
-  text('depthRead',r.depthText);
-  text('delayStretchRead',r.delayStretchText);
-  text('headShadowRead',r.headShadowText);
-  text('roomScaleRead',r.roomScaleText);
-  text('reflectionToneRead',r.reflectionToneText);
-  text('polarityRead',r.polarityText);
-  text('delay',r.delayText);
-  text('cutoff',r.cutoffText);
-  text('far',r.farText);
-  text('direct',r.directText);
-  text('reflTimes',r.reflectionTimesText);
-  text('reflGain',r.reflectionGainText);
-  text('reflCutoff',r.reflectionCutoffText);
-  text('master',r.masterText);
+  var r=core.readouts(space.value,angle.value,depth.value,delayStretch.value,headShadow.value,roomScale.value,reflectionTone.value,polarity.value,roomWrap.value,enabled);
+  text('spaceRead',r.spaceText);text('angleRead',r.angleText);text('depthRead',r.depthText);text('delayStretchRead',r.delayStretchText);text('headShadowRead',r.headShadowText);text('roomScaleRead',r.roomScaleText);text('roomWrapRead',r.roomWrapText);text('reflectionToneRead',r.reflectionToneText);text('polarityRead',r.polarityText);
+  text('delay',r.delayText);text('cutoff',r.cutoffText);text('far',r.farText);text('direct',r.directText);text('reflTimes',r.reflectionTimesText);text('reflGain',r.reflectionGainText);text('wrapTimes',r.wrapTimesText);text('wrapGain',r.wrapGainText);text('reflCutoff',r.reflectionCutoffText);text('master',r.masterText);
 }
 function apply(){
-  var t=targets();
-  updateReadouts();
-  if(!ctx)return;
-
-  setParam(delayL.delayTime,t.delaySeconds);
-  setParam(delayR.delayTime,t.delaySeconds);
-  setParam(filterL.frequency,t.cutoffHz);
-  setParam(filterR.frequency,t.cutoffHz);
-  setParam(directL.gain,t.directGain);
-  setParam(directR.gain,t.directGain);
-  setParam(crossL.gain,t.farGain);
-  setParam(crossR.gain,t.farGain);
-
-  setFixedParam(reflDelayL1.delayTime,t.refl1DelayL);
-  setFixedParam(reflDelayR1.delayTime,t.refl1DelayR);
-  setFixedParam(reflDelayL2.delayTime,t.refl2DelayL);
-  setFixedParam(reflDelayR2.delayTime,t.refl2DelayR);
-  setParam(reflFilterL1.frequency,t.reflCutoff);
-  setParam(reflFilterR1.frequency,t.reflCutoff);
-  setParam(reflFilterL2.frequency,t.reflCutoff);
-  setParam(reflFilterR2.frequency,t.reflCutoff);
-  setFixedParam(reflFilterL1.Q,t.reflQ);
-  setFixedParam(reflFilterR1.Q,t.reflQ);
-  setFixedParam(reflFilterL2.Q,t.reflQ);
-  setFixedParam(reflFilterR2.Q,t.reflQ);
-  setParam(reflGainL1.gain,t.refl1Gain);
-  setParam(reflGainR1.gain,t.refl1Gain);
-  setParam(reflGainL2.gain,t.refl2Gain);
-  setParam(reflGainR2.gain,t.refl2Gain);
-  setParam(master.gain,t.masterGain);
-
-  badge.textContent=enabled?'Spatial on':'Spatial off';
-  badge.className='badge'+(enabled?' on':'');
-  spatial.textContent=enabled?'TURN SPATIAL OFF':'TURN SPATIAL ON';
+  var t=targets();updateReadouts();if(!ctx)return;
+  setParam(delayL.delayTime,t.delaySeconds);setParam(delayR.delayTime,t.delaySeconds);setParam(filterL.frequency,t.cutoffHz);setParam(filterR.frequency,t.cutoffHz);setParam(directL.gain,t.directGain);setParam(directR.gain,t.directGain);setParam(crossL.gain,t.farGain);setParam(crossR.gain,t.farGain);
+  setParam(reflDelayL1.delayTime,t.refl1DelayL);setParam(reflDelayR1.delayTime,t.refl1DelayR);setParam(reflDelayL2.delayTime,t.refl2DelayL);setParam(reflDelayR2.delayTime,t.refl2DelayR);
+  setParam(reflFilterL1.frequency,t.reflCutoff);setParam(reflFilterR1.frequency,t.reflCutoff);setParam(reflFilterL2.frequency,t.reflCutoff);setParam(reflFilterR2.frequency,t.reflCutoff);
+  setParam(reflGainL1.gain,t.refl1Gain);setParam(reflGainR1.gain,t.refl1Gain);setParam(reflGainL2.gain,t.refl2Gain);setParam(reflGainR2.gain,t.refl2Gain);
+  setParam(wrapDelayL1.delayTime,t.wrapDelayL1);setParam(wrapDelayR1.delayTime,t.wrapDelayR1);setParam(wrapDelayL2.delayTime,t.wrapDelayL2);setParam(wrapDelayR2.delayTime,t.wrapDelayR2);
+  setParam(wrapFilterL1.frequency,t.wrapCutoff);setParam(wrapFilterR1.frequency,t.wrapCutoff);setParam(wrapFilterL2.frequency,t.wrapCutoff);setParam(wrapFilterR2.frequency,t.wrapCutoff);
+  setParam(wrapGainL1.gain,t.wrapGain1);setParam(wrapGainR1.gain,t.wrapGain1);setParam(wrapGainL2.gain,t.wrapGain2);setParam(wrapGainR2.gain,t.wrapGain2);setParam(master.gain,t.masterGain);
+  badge.textContent=enabled?'Spatial on':'Spatial off';badge.className='badge'+(enabled?' on':'');spatial.textContent=enabled?'TURN SPATIAL OFF':'TURN SPATIAL ON';
 }
 function buildGraph(){
-  if(ctx)return true;
-  if(!core){status.textContent='The spatial parameter core did not load.';status.className='status warn';return false;}
-  if(!AC){status.textContent='This Safari build does not expose Web Audio.';status.className='status warn';return false;}
+  if(ctx)return true;if(!core){status.textContent='The spatial parameter core did not load.';status.className='status warn';return false;}if(!AC){status.textContent='This Safari build does not expose Web Audio.';status.className='status warn';return false;}
   try{
-    ctx=new AC();
-    source=ctx.createMediaElementSource(audio);
-    splitter=ctx.createChannelSplitter(2);
-    merger=ctx.createChannelMerger(2);
-    master=ctx.createGain();
-    limiter=ctx.createDynamicsCompressor();
-    limiter.threshold.value=-3;
-    limiter.knee.value=0;
-    limiter.ratio.value=20;
-    limiter.attack.value=0.003;
-    limiter.release.value=0.12;
-
-    directL=ctx.createGain();directR=ctx.createGain();crossL=ctx.createGain();crossR=ctx.createGain();
-    delayL=ctx.createDelay(0.01);delayR=ctx.createDelay(0.01);
-    filterL=ctx.createBiquadFilter();filterR=ctx.createBiquadFilter();
-    filterL.type='lowpass';filterR.type='lowpass';filterL.Q.value=.55;filterR.Q.value=.55;
-
-    reflDelayL1=ctx.createDelay(0.25);reflDelayR1=ctx.createDelay(0.25);
-    reflDelayL2=ctx.createDelay(0.25);reflDelayR2=ctx.createDelay(0.25);
-    reflFilterL1=ctx.createBiquadFilter();reflFilterR1=ctx.createBiquadFilter();
-    reflFilterL2=ctx.createBiquadFilter();reflFilterR2=ctx.createBiquadFilter();
-    reflGainL1=ctx.createGain();reflGainR1=ctx.createGain();reflGainL2=ctx.createGain();reflGainR2=ctx.createGain();
-    reflFilterL1.type='lowpass';reflFilterR1.type='lowpass';reflFilterL2.type='lowpass';reflFilterR2.type='lowpass';
-
+    ctx=new AC();source=ctx.createMediaElementSource(audio);splitter=ctx.createChannelSplitter(2);merger=ctx.createChannelMerger(2);master=ctx.createGain();limiter=ctx.createDynamicsCompressor();
+    limiter.threshold.value=-4;limiter.knee.value=0;limiter.ratio.value=20;limiter.attack.value=0.003;limiter.release.value=0.14;
+    directL=ctx.createGain();directR=ctx.createGain();crossL=ctx.createGain();crossR=ctx.createGain();delayL=ctx.createDelay(0.12);delayR=ctx.createDelay(0.12);filterL=ctx.createBiquadFilter();filterR=ctx.createBiquadFilter();filterL.type='lowpass';filterR.type='lowpass';filterL.Q.value=.55;filterR.Q.value=.55;
+    reflDelayL1=ctx.createDelay(0.9);reflDelayR1=ctx.createDelay(0.9);reflDelayL2=ctx.createDelay(0.9);reflDelayR2=ctx.createDelay(0.9);reflFilterL1=ctx.createBiquadFilter();reflFilterR1=ctx.createBiquadFilter();reflFilterL2=ctx.createBiquadFilter();reflFilterR2=ctx.createBiquadFilter();reflGainL1=ctx.createGain();reflGainR1=ctx.createGain();reflGainL2=ctx.createGain();reflGainR2=ctx.createGain();
+    wrapDelayL1=ctx.createDelay(1.8);wrapDelayR1=ctx.createDelay(1.8);wrapDelayL2=ctx.createDelay(1.8);wrapDelayR2=ctx.createDelay(1.8);wrapFilterL1=ctx.createBiquadFilter();wrapFilterR1=ctx.createBiquadFilter();wrapFilterL2=ctx.createBiquadFilter();wrapFilterR2=ctx.createBiquadFilter();wrapGainL1=ctx.createGain();wrapGainR1=ctx.createGain();wrapGainL2=ctx.createGain();wrapGainR2=ctx.createGain();
+    var fs=[reflFilterL1,reflFilterR1,reflFilterL2,reflFilterR2,wrapFilterL1,wrapFilterR1,wrapFilterL2,wrapFilterR2];for(var q=0;q<fs.length;q++){fs[q].type='lowpass';fs[q].Q.value=.55;}
     source.connect(splitter);
-    splitter.connect(directL,0);directL.connect(merger,0,0);
-    splitter.connect(directR,1);directR.connect(merger,0,1);
-    splitter.connect(delayL,0);delayL.connect(filterL);filterL.connect(crossL);crossL.connect(merger,0,1);
-    splitter.connect(delayR,1);delayR.connect(filterR);filterR.connect(crossR);crossR.connect(merger,0,0);
-    splitter.connect(reflDelayL1,0);reflDelayL1.connect(reflFilterL1);reflFilterL1.connect(reflGainL1);reflGainL1.connect(merger,0,0);
-    splitter.connect(reflDelayL2,0);reflDelayL2.connect(reflFilterL2);reflFilterL2.connect(reflGainL2);reflGainL2.connect(merger,0,0);
-    splitter.connect(reflDelayR1,1);reflDelayR1.connect(reflFilterR1);reflFilterR1.connect(reflGainR1);reflGainR1.connect(merger,0,1);
-    splitter.connect(reflDelayR2,1);reflDelayR2.connect(reflFilterR2);reflFilterR2.connect(reflGainR2);reflGainR2.connect(merger,0,1);
-
-    merger.connect(master);master.connect(limiter);limiter.connect(ctx.destination);
-    text('engine','ready');
-    apply();
-    return true;
-  }catch(e){
-    status.textContent='Could not start the audio graph: '+e.message;
-    status.className='status warn';
-    return false;
-  }
+    splitter.connect(directL,0);directL.connect(merger,0,0);splitter.connect(directR,1);directR.connect(merger,0,1);
+    splitter.connect(delayL,0);delayL.connect(filterL);filterL.connect(crossL);crossL.connect(merger,0,1);splitter.connect(delayR,1);delayR.connect(filterR);filterR.connect(crossR);crossR.connect(merger,0,0);
+    splitter.connect(reflDelayL1,0);reflDelayL1.connect(reflFilterL1);reflFilterL1.connect(reflGainL1);reflGainL1.connect(merger,0,0);splitter.connect(reflDelayL2,0);reflDelayL2.connect(reflFilterL2);reflFilterL2.connect(reflGainL2);reflGainL2.connect(merger,0,0);
+    splitter.connect(reflDelayR1,1);reflDelayR1.connect(reflFilterR1);reflFilterR1.connect(reflGainR1);reflGainR1.connect(merger,0,1);splitter.connect(reflDelayR2,1);reflDelayR2.connect(reflFilterR2);reflFilterR2.connect(reflGainR2);reflGainR2.connect(merger,0,1);
+    splitter.connect(wrapDelayL1,0);wrapDelayL1.connect(wrapFilterL1);wrapFilterL1.connect(wrapGainL1);wrapGainL1.connect(merger,0,1);splitter.connect(wrapDelayL2,0);wrapDelayL2.connect(wrapFilterL2);wrapFilterL2.connect(wrapGainL2);wrapGainL2.connect(merger,0,1);
+    splitter.connect(wrapDelayR1,1);wrapDelayR1.connect(wrapFilterR1);wrapFilterR1.connect(wrapGainR1);wrapGainR1.connect(merger,0,0);splitter.connect(wrapDelayR2,1);wrapDelayR2.connect(wrapFilterR2);wrapFilterR2.connect(wrapGainR2);wrapGainR2.connect(merger,0,0);
+    merger.connect(master);master.connect(limiter);limiter.connect(ctx.destination);text('engine','ready');apply();return true;
+  }catch(e){status.textContent='Could not start the audio graph: '+e.message;status.className='status warn';return false;}
 }
-function resume(){
-  if(!buildGraph())return;
-  if(ctx.state==='suspended'&&ctx.resume)ctx.resume();
-  text('engine',ctx.state||'ready');
-}
-
-file.addEventListener('change',function(){
-  if(!file.files||!file.files.length)return;
-  if(objectURL){try{URL.revokeObjectURL(objectURL);}catch(e){}}
-  objectURL=URL.createObjectURL(file.files[0]);
-  audio.removeAttribute('crossorigin');
-  audio.src=objectURL;
-  track.textContent=file.files[0].name;
-  status.textContent='Local file loaded. Press play and explore the full control range.';
-  status.className='status good';
-});
-spatial.addEventListener('click',function(){resume();enabled=!enabled;apply();});
-audio.addEventListener('play',function(){resume();});
-var controls=[space,angle,depth,delayStretch,headShadow,roomScale,reflectionTone,polarity];
-for(var c=0;c<controls.length;c++)controls[c].addEventListener('input',apply);
-var presets=document.querySelectorAll('.preset');
-for(var i=0;i<presets.length;i++)presets[i].addEventListener('click',function(){
-  space.value=this.getAttribute('data-space');
-  angle.value=this.getAttribute('data-angle');
-  delayStretch.value=this.getAttribute('data-delay');
-  headShadow.value=this.getAttribute('data-shadow');
-  polarity.value=this.getAttribute('data-polarity');
-  depth.value=this.getAttribute('data-depth');
-  roomScale.value=this.getAttribute('data-room');
-  reflectionTone.value=this.getAttribute('data-tone');
-  apply();
-});
-document.addEventListener('visibilitychange',function(){if(!document.hidden&&ctx&&ctx.state==='suspended'&&ctx.resume)ctx.resume();});
-updateReadouts();
+function resume(){if(!buildGraph())return;if(ctx.state==='suspended'&&ctx.resume)ctx.resume();text('engine',ctx.state||'ready');}
+file.addEventListener('change',function(){if(!file.files||!file.files.length)return;if(objectURL){try{URL.revokeObjectURL(objectURL);}catch(e){}}objectURL=URL.createObjectURL(file.files[0]);audio.removeAttribute('crossorigin');audio.src=objectURL;track.textContent=file.files[0].name;status.textContent='Local file loaded. Press play and explore the exponential room field.';status.className='status good';});
+spatial.addEventListener('click',function(){resume();enabled=!enabled;apply();});audio.addEventListener('play',function(){resume();});
+var controls=[space,angle,depth,delayStretch,headShadow,roomScale,roomWrap,reflectionTone,polarity];for(var c=0;c<controls.length;c++)controls[c].addEventListener('input',apply);
+var presets=document.querySelectorAll('.preset');for(var i=0;i<presets.length;i++)presets[i].addEventListener('click',function(){space.value=this.getAttribute('data-space');angle.value=this.getAttribute('data-angle');delayStretch.value=this.getAttribute('data-delay');headShadow.value=this.getAttribute('data-shadow');polarity.value=this.getAttribute('data-polarity');depth.value=this.getAttribute('data-depth');roomScale.value=this.getAttribute('data-room');roomWrap.value=this.getAttribute('data-wrap');reflectionTone.value=this.getAttribute('data-tone');apply();});
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&ctx&&ctx.state==='suspended'&&ctx.resume)ctx.resume();});updateReadouts();
 })();
 </script>
 </body>
