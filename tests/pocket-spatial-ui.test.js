@@ -116,6 +116,10 @@ assert(audio,'AudioContext was not created by Spatial button');
 assert.strictEqual(audio.gains.length,9,'expected master + 4 localization gains + 4 reflection gains');
 assert.strictEqual(audio.delays.length,6,'expected 2 ITD + 4 reflection delays');
 assert.strictEqual(audio.filters.length,6,'expected 2 head-shadow + 4 reflection filters');
+assert.strictEqual(audio.gains[5].connections[0].input,0,'first left reflection stays on left output');
+assert.strictEqual(audio.gains[6].connections[0].input,1,'first right reflection stays on right output');
+assert.strictEqual(audio.gains[7].connections[0].input,1,'later left reflection crosses to right output');
+assert.strictEqual(audio.gains[8].connections[0].input,0,'later right reflection crosses to left output');
 
 function assertTargets(space,angle,depth,label){
   var t=core.appliedTargets(space,angle,depth,true);
@@ -187,4 +191,4 @@ assert.strictEqual(audio.gains[7].gain.value,0,'bypass reflection L2');
 assert.strictEqual(audio.gains[8].gain.value,0,'bypass reflection R2');
 assert.strictEqual(audio.gains[0].gain.value,1,'bypass master');
 
-console.log('Pocket Spatial UI/Web Audio integration test passed: slider events drive the exact displayed DSP targets.');
+console.log('Pocket Spatial UI/Web Audio integration test passed: slider events drive the exact displayed DSP targets and crossed late-reflection routing.');
