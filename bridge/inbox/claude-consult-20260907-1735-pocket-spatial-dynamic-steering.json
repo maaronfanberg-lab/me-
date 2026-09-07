@@ -1,0 +1,14 @@
+{
+  "nonce": "pocket-spatial-dynamic-steering-20260907-1735",
+  "prompt": "Review the current Pocket Spatial web app in this repository and propose a technically grounded dynamic matrix-steering upgrade that can improve quasi-surround decoding on a home-theater receiver from an ordinary two-channel iPhone output. Inspect the actual current files before answering, especially apps/pocket-spatial.html, apps/pocket-spatial-core.js, apps/pocket-spatial-audius-catalog.js, and the matrix/speaker-test files you find relevant. We already know the receiver can decode deliberately phase/polarity-encoded rear cues from our stereo test signal. We want the next frontier: dynamic rather than fixed steering. Focus on real-time measurements that are feasible in Web Audio on iPhone Safari, such as short-window L+R versus L-R energy, interchannel correlation, transient detection, spectral-band steering, ambience extraction, center anchoring, surround cue generation, attack/release smoothing, and clipping/headroom control. Recommend an architecture that preserves ordinary stereo compatibility while making the receiver more likely to decode stable front/center/rear positions. Identify the three highest-value changes, exact DSP logic or equations where useful, likely failure modes, and a falsification/test plan using our existing receiver speaker tests. Do not propose licensed Dolby encoding, fake discrete 5.1, paid services, native iOS installation, Replit, or hardware purchases. Keep everything compatible with the current free browser-based app and existing two-channel output. Claude is advisory only; do not edit files.",
+  "context": [
+    "The current app is Pocket Spatial in maaronfanberg-lab/me- and runs free in the browser on an iPhone connected to a home-theater receiver.",
+    "The receiver has already produced convincing center and rear-surround speaker localization from our intentionally constructed stereo matrix test cues.",
+    "Current matrix steering uses fixed center/rear/separation controls and Hilbert-style phase processing. We want dynamic steering that reacts to the program material in real time.",
+    "The user values aggressive experimentation and wants the closest practical theater-surround effect possible without claiming licensed Dolby or discrete 5.1.",
+    "Any recommendation must remain free and work through the existing two-channel iPhone output path."
+  ],
+  "expected_response": "A concrete read-only engineering review grounded in current repository files, with a ranked dynamic-steering design, equations/logic, implementation cautions, and an empirical receiver test plan.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 6
+}
