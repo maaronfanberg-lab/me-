@@ -2,6 +2,22 @@
 
 This repository uses a research-first change policy. It applies to behavioral, cognitive, conversational, architectural, reliability, performance, and interface changes.
 
+## Claude bridge operator rule
+
+A verified, read-only Claude consultation bridge is available in this repository. Do not assume a chat has prior memory of it.
+
+When the user asks to consult Claude, says `.` as a standalone collaboration command, or explicitly asks to use the Claude bridge:
+
+1. Read `bridge/README.md` and `.github/workflows/claude-bridge.yml` if the bridge procedure is not already known in the current chat.
+2. Create a uniquely named JSON request under `bridge/inbox/` on `main`. The request must contain at least a non-empty `prompt`; include concise repository context and an `expected_response` when useful.
+3. The push triggers the GitHub Actions workflow `Verified oracle mailbox`, which uses `bridge/claude_code_oracle.py` when the subscription OAuth token is configured.
+4. Wait for the workflow to finish and then read the matching `bridge/outbox/<same-name>.json`.
+5. Trust the consultation only when the outbox reports `ok: true`, `verified_model_family: "claude"`, a matching request identity/hash, and a non-empty `response`. If it fails, diagnose the bridge rather than pretending Claude replied.
+6. Claude is a read-only reviewer. Independently evaluate its advice before making changes.
+7. If the user sends `.+`, consult Claude and implement only the portions independently judged sound, safe, and within the user's stated boundaries.
+
+The bridge transport is discrete request/reply, not a continuous Claude conversation. Each Claude Code invocation uses no session persistence. Never put secrets, credentials, private prompts, or sensitive user material into bridge inbox or outbox files because this repository is public.
+
 ## Non-negotiable rule
 
 No substantive change should be made because it merely seems plausible, sounds more human, or fixes one visible symptom. Before implementation, the change must pass the 10-level research gate below. The research record may be concise, but the reasoning must be evidence-based and auditable.
