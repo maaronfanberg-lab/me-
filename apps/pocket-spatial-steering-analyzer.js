@@ -21,8 +21,8 @@ class PocketSpatialSteeringAnalyzer extends AudioWorkletProcessor {
     for(var i=0;i<left.length;i+=1){
       var xL=left[i]||0;
       var xR=right[i]||0;
-      if(outL)outL[i]=xL;
-      if(outR)outR[i]=xR;
+      if(outL)outL[i]=0;
+      if(outR)outR[i]=0;
       var yL=this.hpAlpha*(this.prevYL+xL-this.prevXL);
       var yR=this.hpAlpha*(this.prevYR+xR-this.prevXR);
       this.prevXL=xL;this.prevXR=xR;this.prevYL=yL;this.prevYR=yR;
