@@ -73,7 +73,7 @@ jobs:
           timeout 20m python3 bitnet_server.py start
           python3 bitnet_server.py status
 
-      - name: Ask Falcon for the physical-iPhone path
+      - name: Ask Falcon three constrained questions
         working-directory: experiments/emily-olivia-society
         run: |
           python3 - <<'PY'
@@ -81,54 +81,48 @@ jobs:
           from bitnet_server import request_chat
 
           root = Path('../..')
-          files = [
-              root / 'ios/PocketSpatialNative/PocketSpatialNative/AudioRouteProbe.swift',
-              root / 'ios/PocketSpatialNative/PocketSpatialNative/ContentView.swift',
-              root / 'ios/PocketSpatialNative/PocketSpatialNative/PocketSpatialNativeApp.swift',
-              root / 'ios/PocketSpatialNative/project.yml',
-              root / '.github/workflows/pocket-spatial-native-ios.yml',
-          ]
-          excerpts = []
-          for path in files:
-              if path.exists():
-                  excerpts.append(f'\n===== {path.as_posix()} =====\n' + path.read_text(encoding='utf-8', errors='replace')[:16000])
-
-          prompt = (
-              'We need a concrete next step for Pocket Spatial, a native iPhone audio app that already compiles in CI. '
-              'It uses AVAudioSession and AVAudioEngine to detect 5.1/7.1 output and play a single discrete PCM channel at a time.\n\n'
-              'Constraints:\n'
-              '- User has an iPhone SE on iOS 26.6.1.\n'
-              '- Goal is audio-only Lightning-to-HDMI into an AV receiver.\n'
-              '- Do not use Safari/Web Audio.\n'
-              '- Do not use Replit.\n'
-              '- Prefer no laptop if a legitimate path exists.\n'
-              '- GitHub Actions is available.\n'
-              '- Do not assume paid Apple Developer Program membership unless required.\n'
-              '- We need the fastest lawful way to get this exact app onto the physical iPhone and run it.\n'
-              '- Do not invent signing bypasses or imply unsigned iOS apps can simply install.\n\n'
-              'Review the repository excerpts below and answer as a senior iOS build/release engineer. '
-              'Rank the realistic installation paths. Explicitly distinguish free Apple ID/Xcode personal-team deployment, '
-              'paid Apple Developer/TestFlight, ad hoc/development signing, and any no-computer sideload approach. '
-              'Say what GitHub Actions can automate versus what still needs Apple credentials/device registration. '
-              'If project or CI changes are needed for a physical-device build, name them. '
-              'End with one recommended next action for this specific user.\n'
-          ) + ''.join(excerpts)
-
-          answer = request_chat(
+          system = (
               'You are Falcon3-10B-Instruct, the same local BitNet model used by the Community. '
-              'Be precise, practical, skeptical, and never fabricate Apple platform capabilities.',
-              prompt,
-              max_tokens=256,
-              temperature=0.1,
-              timeout=180,
+              'Answer only the exact question. Never invent a repository, package, Apple entitlement, signing method, or product. '
+              'If uncertain, say UNKNOWN. Keep the answer under 170 words.'
           )
+
+          questions = [
+              (
+                  '1-signing',
+                  'For a custom native iOS app on a stock U.S. iPhone, answer only these five items: '
+                  '(1) Can a free Apple ID Personal Team install a development build on its own iPhone? '
+                  '(2) Does that normal free route require Xcode on a Mac at provisioning/install time? '
+                  '(3) Does TestFlight require membership in the paid Apple Developer Program? '
+                  '(4) Can an unsigned IPA from GitHub Actions be installed normally on stock iOS? '
+                  '(5) Can GitHub Actions create a properly signed device IPA without being given valid Apple signing credentials/profiles? '
+                  'Use one line per item: YES, NO, or UNKNOWN plus one short sentence.'
+              ),
+              (
+                  '2-no-computer',
+                  'User has an iPhone SE on iOS 26.6.1 in the United States and wants to install a custom native app with no Mac or PC. '
+                  'Name only legitimate stock-iOS paths you are confident about. Exclude jailbreaks, stolen/enterprise certificates, unsigned-IPAs, '
+                  'and services whose legality or signing provenance you cannot establish. If there is no dependable no-computer path without a paid '
+                  'developer distribution mechanism, say that plainly. Maximum 120 words.'
+              ),
+              (
+                  '3-ci',
+                  'Pocket Spatial already compiles for the iOS Simulator in GitHub Actions with CODE_SIGNING_ALLOWED=NO. '
+                  'To build for a physical iPhone, list only the additional CI ingredients that are actually required for a signed development/ad-hoc/App Store build. '
+                  'Do not discuss Python, BitNet, Safari, or audio DSP. Maximum 140 words.'
+              ),
+          ]
+
+          answers = []
+          for label, question in questions:
+              answer = request_chat(system, question, max_tokens=220, temperature=0.0, timeout=180)
+              answers.append(f'## {label}\n\n{answer.strip()}\n')
+              print(f'===== {label} =====')
+              print(answer)
           (root / 'falcon-pocket-spatial-native-review.md').write_text(
-              '# Falcon 10B Pocket Spatial native review\n\n' + answer + '\n',
+              '# Falcon 10B constrained Pocket Spatial review\n\n' + '\n'.join(answers),
               encoding='utf-8',
           )
-          print('===== FALCON REVIEW =====')
-          print(answer)
-          print('===== END FALCON REVIEW =====')
           PY
 
       - name: Upload Falcon review
