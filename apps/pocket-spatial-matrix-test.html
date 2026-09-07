@@ -7,13 +7,13 @@
 <title>Pocket Spatial Matrix Test</title>
 <style>
 :root{--bg:#080b12;--panel:#111722;--line:#293347;--text:#edf2fb;--dim:#94a1b5;--good:#5ddbc7;--warn:#e0bb65}
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}body{padding:24px 14px 40px;max-width:680px;margin:auto}h1{font-size:27px;margin:4px 0 8px}.sub,.status{color:var(--dim);font-size:13px;line-height:1.55}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0}button{width:100%;min-height:56px;border-radius:14px;border:1px solid #756cf2;background:#5147c8;color:var(--text);font-size:17px;font-weight:700;padding:12px;margin:8px 0}.secondary{background:#171f2d;border-color:var(--line)}.cue{font-size:28px;font-weight:800;text-align:center;min-height:50px;padding:8px}.good{color:var(--good)}.warn{color:var(--warn)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid .wide{grid-column:1/-1}ol{padding-left:22px;color:var(--dim);line-height:1.6}b{color:var(--text)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}body{padding:24px 14px 40px;max-width:680px;margin:auto}h1{font-size:27px;margin:4px 0 8px}.sub,.status{color:var(--dim);font-size:13px;line-height:1.55}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0}button{width:100%;min-height:56px;border-radius:14px;border:1px solid #756cf2;background:#5147c8;color:var(--text);font-size:17px;font-weight:700;padding:12px;margin:8px 0}.secondary{background:#171f2d;border-color:var(--line)}.back{background:#313b65}.cue{font-size:28px;font-weight:800;text-align:center;min-height:50px;padding:8px}.good{color:var(--good)}.warn{color:var(--warn)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid .wide{grid-column:1/-1}ol{padding-left:22px;color:var(--dim);line-height:1.6}b{color:var(--text)}
 @media(max-width:420px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <h1>POCKET SPATIAL · RECEIVER TEST</h1>
-<div class="sub">Tap one speaker at a time. Each button sends a stereo matrix cue intended to steer toward the named speaker through your receiver's surround decoder.</div>
+<div class="sub">Tap one speaker at a time. The first five cues are the steering map we already calibrated. The BACK pair below is an experimental 7-channel decoder test.</div>
 <div class="card">
   <div id="cue" class="cue">READY</div>
   <div class="grid">
@@ -22,25 +22,22 @@
     <button class="speaker wide" data-pos="1" type="button">CENTER</button>
     <button class="speaker" data-pos="4" type="button">SURROUND LEFT</button>
     <button class="speaker" data-pos="3" type="button">SURROUND RIGHT</button>
+    <button class="speaker back" data-pos="5" type="button">BACK LEFT · EXPERIMENT</button>
+    <button class="speaker back" data-pos="6" type="button">BACK RIGHT · EXPERIMENT</button>
   </div>
-  <button id="sequence" class="secondary" type="button">PLAY FULL SEQUENCE</button>
+  <button id="sequence" class="secondary" type="button">PLAY ALL 7 POSITIONS</button>
   <div id="status" class="status">Keep the receiver volume modest for the first run.</div>
 </div>
 <div class="card">
-  <b>Before testing</b>
-  <ol>
-    <li>Connect the iPhone to the receiver by Bluetooth.</li>
-    <li>Use Dolby Pro Logic II, Pro Logic, Matrix, or the closest surround-decoding mode. Avoid plain Stereo.</li>
-    <li>Tap one speaker button repeatedly if needed and note which physical speaker actually responds.</li>
-  </ol>
-  <div class="status">The rear buttons are matrix encoded inside ordinary stereo. Exact separation depends on the receiver's decoder and the Bluetooth codec, so a cue may steer mostly rather than exclusively to one speaker.</div>
+  <b>Back-pair experiment</b>
+  <div class="status">Stereo matrix audio cannot promise truly discrete side-surround versus surround-back channels. These last two cues use a more strongly decorrelated rear pattern to see whether your receiver's 7-channel decoder routes them farther behind you. If they still come from the side surrounds, that is useful data rather than a failure.</div>
 </div>
 <script>
 (function(){
 'use strict';
 var AC=window.AudioContext||window.webkitAudioContext;
 var cue=document.getElementById('cue'),status=document.getElementById('status'),sequence=document.getElementById('sequence');
-var labels=['FRONT LEFT','CENTER','FRONT RIGHT','SURROUND RIGHT','SURROUND LEFT'];
+var labels=['FRONT LEFT','CENTER','FRONT RIGHT','SURROUND RIGHT','SURROUND LEFT','BACK LEFT · EXPERIMENT','BACK RIGHT · EXPERIMENT'];
 var ctx=null,timers=[];
 function clearTimers(){while(timers.length)clearTimeout(timers.pop());}
 function envelope(t,d){var e=.035;if(t<e)return t/e;if(t>d-e)return Math.max(0,(d-t)/e);return 1;}
@@ -50,12 +47,17 @@ function buildBuffer(c,positions){
   for(var p=0;p<positions.length;p++){
     var pos=positions[p],start=Math.floor(p*(dur+gap)*sr),frames=Math.floor(dur*sr);
     for(var i=0;i<frames;i++){
-      var t=i/sr,e=envelope(t,dur),s=Math.sin(2*Math.PI*f*t)*amp*e,q=Math.sin(2*Math.PI*f*t+Math.PI/2)*amp*e,l=0,r=0;
+      var t=i/sr,e=envelope(t,dur),s=Math.sin(2*Math.PI*f*t)*amp*e,q=Math.sin(2*Math.PI*f*t+Math.PI/2)*amp*e;
+      var q2=Math.sin(2*Math.PI*(f*1.17)*t+Math.PI/2)*amp*.42*e;
+      var wobble=.82+.18*Math.sin(2*Math.PI*6.3*t);
+      var l=0,r=0;
       if(pos===0){l=s;}
       else if(pos===1){l=s*.707;r=s*.707;}
       else if(pos===2){r=s;}
       else if(pos===3){l=-q*.871;r=q*.49;}
-      else {l=-q*.49;r=q*.871;}
+      else if(pos===4){l=-q*.49;r=q*.871;}
+      else if(pos===5){l=(-q*.64+q2*.28)*wobble;r=(q*.94-q2*.18)*wobble;}
+      else if(pos===6){l=(-q*.94+q2*.18)*wobble;r=(q*.64-q2*.28)*wobble;}
       L[start+i]=l;R[start+i]=r;
     }
   }
@@ -64,14 +66,14 @@ function buildBuffer(c,positions){
 function playPositions(positions){
   if(!AC){status.textContent='This Safari build does not expose Web Audio.';status.className='status warn';return;}
   clearTimers();try{if(ctx)ctx.close();}catch(e){}
-  ctx=new AC();var test=buildBuffer(ctx,positions),src=ctx.createBufferSource(),trim=ctx.createGain();trim.gain.value=.78;src.buffer=test.buffer;src.connect(trim);trim.connect(ctx.destination);
+  ctx=new AC();var test=buildBuffer(ctx,positions),src=ctx.createBufferSource(),trim=ctx.createGain();trim.gain.value=.72;src.buffer=test.buffer;src.connect(trim);trim.connect(ctx.destination);
   if(ctx.state==='suspended'&&ctx.resume)ctx.resume();src.start();status.textContent='Playing matrix cue through the iPhone audio output…';status.className='status good';
   positions.forEach(function(pos,i){timers.push(setTimeout(function(){cue.textContent=labels[pos];},Math.round(i*(test.dur+test.gap)*1000)));});
   timers.push(setTimeout(function(){cue.textContent='READY';status.textContent='Tap another speaker, or repeat the same one to confirm what you hear.';status.className='status';},Math.round(test.total*1000)+120));
   src.onended=function(){try{ctx.close();}catch(e){}};
 }
 document.querySelectorAll('.speaker').forEach(function(button){button.addEventListener('click',function(){playPositions([Number(this.getAttribute('data-pos'))]);});});
-sequence.addEventListener('click',function(){playPositions([0,1,2,3,4]);});
+sequence.addEventListener('click',function(){playPositions([0,1,2,3,4,5,6]);});
 }());
 </script>
 </body>
