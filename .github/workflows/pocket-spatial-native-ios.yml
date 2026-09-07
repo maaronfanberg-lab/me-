@@ -32,3 +32,103 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+  falcon-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
+      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_PORT: '8080'
+      COMMUNITY_BITNET_START_TIMEOUT: '1200'
+      COMMUNITY_GENERATION_TIMEOUT: '180'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Community Falcon runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v12
+          key: community-runtime-bitnet-v12-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+          restore-keys: |
+            community-runtime-bitnet-v12-${{ runner.os }}-py311-
+
+      - name: Bootstrap same Falcon 10B runtime used by Community
+        working-directory: experiments/emily-olivia-society
+        run: timeout 65m bash bootstrap_upstreams.sh
+
+      - name: Start Falcon 10B BitNet server
+        working-directory: experiments/emily-olivia-society
+        run: |
+          timeout 20m python3 bitnet_server.py start
+          python3 bitnet_server.py status
+
+      - name: Ask Falcon for the physical-iPhone path
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from bitnet_server import request_chat
+
+          root = Path('../..')
+          files = [
+              root / 'ios/PocketSpatialNative/PocketSpatialNative/AudioRouteProbe.swift',
+              root / 'ios/PocketSpatialNative/PocketSpatialNative/ContentView.swift',
+              root / 'ios/PocketSpatialNative/PocketSpatialNative/PocketSpatialNativeApp.swift',
+              root / 'ios/PocketSpatialNative/project.yml',
+              root / '.github/workflows/pocket-spatial-native-ios.yml',
+          ]
+          excerpts = []
+          for path in files:
+              if path.exists():
+                  excerpts.append(f'\n===== {path.as_posix()} =====\n' + path.read_text(encoding='utf-8', errors='replace')[:16000])
+
+          prompt = '''We need a concrete next step for Pocket Spatial, a native iPhone audio app that already compiles in CI. It uses AVAudioSession and AVAudioEngine to detect 5.1/7.1 output and play a single discrete PCM channel at a time.
+
+Constraints:
+- User has an iPhone SE on iOS 26.6.1.
+- Goal is audio-only Lightning-to-HDMI into an AV receiver.
+- Do not use Safari/Web Audio.
+- Do not use Replit.
+- Prefer no laptop if a legitimate path exists.
+- GitHub Actions is available.
+- Do not assume paid Apple Developer Program membership unless required.
+- We need the fastest lawful way to get this exact app onto the physical iPhone and run it.
+- Do not invent signing bypasses or imply unsigned iOS apps can simply install.
+
+Review the repository excerpts below and answer as a senior iOS build/release engineer. Rank the realistic installation paths. Explicitly distinguish free Apple ID/Xcode personal-team deployment, paid Apple Developer/TestFlight, ad hoc/development signing, and any no-computer sideload approach. Say what GitHub Actions can automate versus what still needs Apple credentials/device registration. If project or CI changes are needed for a physical-device build, name them. End with one recommended next action for this specific user.
+''' + ''.join(excerpts)
+
+          answer = request_chat(
+              'You are Falcon3-10B-Instruct, the same local BitNet model used by the Community. Be precise, practical, skeptical, and never fabricate Apple platform capabilities.',
+              prompt,
+              max_tokens=256,
+              temperature=0.1,
+              timeout=180,
+          )
+          Path(root / 'falcon-pocket-spatial-native-review.md').write_text(
+              '# Falcon 10B Pocket Spatial native review\n\n' + answer + '\n',
+              encoding='utf-8',
+          )
+          print('===== FALCON REVIEW =====')
+          print(answer)
+          print('===== END FALCON REVIEW =====')
+          PY
+
+      - name: Upload Falcon review
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocket-spatial-falcon-native-review
+          path: falcon-pocket-spatial-native-review.md
+          if-no-files-found: error
+          retention-days: 14
