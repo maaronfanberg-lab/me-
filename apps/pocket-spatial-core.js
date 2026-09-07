@@ -151,10 +151,145 @@
   return{calculate:calculate,calculateDepth:calculateDepth,appliedTargets:appliedTargets,readouts:readouts};
 }));
 
+/* Pocket Spatial Bluetooth Matrix Surround experimental output stage. */
+(function(root){
+  'use strict';
+  if(typeof window==='undefined'||typeof document==='undefined')return;
+  var AudioNodeCtor=root.AudioNode;
+  if(!AudioNodeCtor||!AudioNodeCtor.prototype||!AudioNodeCtor.prototype.connect||root.PocketSpatialMatrix)return;
+
+  var originalConnect=AudioNodeCtor.prototype.connect;
+  var routes=[];
+  var enabled=true;
+  var amount=0.34;
+  var patching=false;
+  var ui=null;
+
+  function connectRaw(node,destination,output,input){
+    if(output==null)return originalConnect.call(node,destination);
+    if(input==null)return originalConnect.call(node,destination,output);
+    return originalConnect.call(node,destination,output,input);
+  }
+
+  function setParam(param,value,ctx){
+    if(!param)return;
+    try{param.setTargetAtTime(value,ctx.currentTime,0.025);}catch(e){param.value=value;}
+  }
+
+  function makeHilbertKernel(ctx,taps){
+    taps=taps||129;
+    if(taps%2===0)taps+=1;
+    var impulse=ctx.createBuffer(1,taps,ctx.sampleRate);
+    var data=impulse.getChannelData(0);
+    var mid=(taps-1)/2;
+    for(var n=0;n<taps;n+=1){
+      var k=n-mid;
+      var h=0;
+      if(k!==0&&Math.abs(k%2)===1)h=2/(Math.PI*k);
+      var window=0.42-0.5*Math.cos((2*Math.PI*n)/(taps-1))+0.08*Math.cos((4*Math.PI*n)/(taps-1));
+      data[n]=h*window;
+    }
+    return impulse;
+  }
+
+  function makeRoute(source,destination){
+    var ctx=source.context;
+    var splitter=ctx.createChannelSplitter(2);
+    var merger=ctx.createChannelMerger(2);
+    var frontL=ctx.createGain(),frontR=ctx.createGain();
+    var sideL=ctx.createGain(),sideR=ctx.createGain(),side=ctx.createGain();
+    var hp=ctx.createBiquadFilter(),lp=ctx.createBiquadFilter(),hilbert=ctx.createConvolver();
+    var rearL=ctx.createGain(),rearR=ctx.createGain();
+    var protect=ctx.createDynamicsCompressor(),trim=ctx.createGain();
+
+    hp.type='highpass';hp.frequency.value=140;hp.Q.value=.55;
+    lp.type='lowpass';lp.frequency.value=7200;lp.Q.value=.55;
+    hilbert.normalize=false;hilbert.buffer=makeHilbertKernel(ctx,129);
+    sideL.gain.value=.5;sideR.gain.value=-.5;
+    protect.threshold.value=-3;protect.knee.value=4;protect.ratio.value=12;protect.attack.value=.003;protect.release.value=.10;
+
+    patching=true;
+    try{
+      connectRaw(source,splitter);
+      connectRaw(splitter,frontL,0);connectRaw(frontL,merger,0,0);
+      connectRaw(splitter,frontR,1);connectRaw(frontR,merger,0,1);
+      connectRaw(splitter,sideL,0);connectRaw(sideL,side);
+      connectRaw(splitter,sideR,1);connectRaw(sideR,side);
+      connectRaw(side,hp);connectRaw(hp,lp);connectRaw(lp,hilbert);
+      connectRaw(hilbert,rearL);connectRaw(rearL,merger,0,0);
+      connectRaw(hilbert,rearR);connectRaw(rearR,merger,0,1);
+      connectRaw(merger,protect);connectRaw(protect,trim);connectRaw(trim,destination);
+    }finally{patching=false;}
+
+    var route={ctx:ctx,rearL:rearL,rearR:rearR,trim:trim};
+    routes.push(route);
+    applyRoute(route);
+  }
+
+  function applyRoute(route){
+    var a=enabled?amount:0;
+    setParam(route.rearL.gain,a,route.ctx);
+    setParam(route.rearR.gain,-a,route.ctx);
+    setParam(route.trim.gain,enabled?0.78:0.94,route.ctx);
+  }
+
+  function applyAll(){for(var i=0;i<routes.length;i+=1)applyRoute(routes[i]);updateUI();}
+
+  AudioNodeCtor.prototype.connect=function(destination,output,input){
+    if(patching||!destination||!this.context||destination!==this.context.destination){return originalConnect.apply(this,arguments);}
+    makeRoute(this,destination);
+    return destination;
+  };
+
+  function runSteeringTest(){
+    var AC=root.AudioContext||root.webkitAudioContext;if(!AC)return;
+    var ctx;try{ctx=new AC();}catch(e){return;}
+    var sr=ctx.sampleRate||48000,segment=1.05,gap=.28,count=5,total=Math.ceil(sr*(count*(segment+gap)));
+    var buffer=ctx.createBuffer(2,total,sr),left=buffer.getChannelData(0),right=buffer.getChannelData(1);
+    var f=700,amp=.22;
+    function env(t){var edge=.035;if(t<edge)return t/edge;if(t>segment-edge)return Math.max(0,(segment-t)/edge);return 1;}
+    for(var pos=0;pos<count;pos+=1){
+      var start=Math.floor(pos*(segment+gap)*sr),frames=Math.floor(segment*sr);
+      for(var i=0;i<frames;i+=1){
+        var t=i/sr,e=env(t),s=Math.sin(2*Math.PI*f*t)*amp*e,q=Math.sin(2*Math.PI*f*t+Math.PI/2)*amp*e,l=0,r=0;
+        if(pos===0){l=s;}
+        else if(pos===1){l=s*.707;r=s*.707;}
+        else if(pos===2){r=s;}
+        else if(pos===3){l=-q*.49;r=q*.871;}
+        else {l=-q*.871;r=q*.49;}
+        left[start+i]=l;right[start+i]=r;
+      }
+    }
+    var src=ctx.createBufferSource();src.buffer=buffer;patching=true;try{connectRaw(src,ctx.destination);}finally{patching=false;}
+    if(ctx.state==='suspended'&&ctx.resume)ctx.resume();src.start(0);
+    if(ui&&ui.button){ui.button.textContent='TEST PLAYING · FL C FR SR SL';root.setTimeout(updateUI,Math.ceil((total/sr)*1000)+300);}
+    src.onended=function(){try{ctx.close();}catch(e){}};
+  }
+
+  function addUI(){
+    if(ui||!document.body)return;
+    var hero=document.querySelector('.card.hero');if(!hero||!hero.parentNode)return;
+    var card=document.createElement('div');card.className='card';card.id='matrixSurroundCard';
+    var title=document.createElement('div');title.textContent='RECEIVER MATRIX SURROUND · BLUETOOTH EXPERIMENT';title.style.fontWeight='700';title.style.fontSize='12px';title.style.letterSpacing='.06em';card.appendChild(title);
+    var note=document.createElement('div');note.className='status';note.textContent='Bluetooth stays stereo. Pocket Spatial embeds phase-coded rear ambience for a receiver matrix decoder. Select Dolby Pro Logic / Pro Logic II / a matrix-surround mode on the receiver.';card.appendChild(note);
+    var button=document.createElement('button');button.type='button';button.className='primary';button.addEventListener('click',function(){enabled=!enabled;applyAll();});card.appendChild(button);
+    var wrap=document.createElement('div');wrap.className='ctrl';var label=document.createElement('label');var span=document.createElement('span');span.textContent='REAR STEERING';var read=document.createElement('b');label.appendChild(span);label.appendChild(read);wrap.appendChild(label);
+    var slider=document.createElement('input');slider.type='range';slider.min='0';slider.max='100';slider.step='1';slider.value=String(Math.round(amount*100));slider.addEventListener('input',function(){amount=Number(slider.value)/100;applyAll();});wrap.appendChild(slider);card.appendChild(wrap);
+    var test=document.createElement('button');test.type='button';test.textContent='TEST RECEIVER: FL → C → FR → SR → SL';test.addEventListener('click',runSteeringTest);card.appendChild(test);
+    var caveat=document.createElement('div');caveat.className='legal';caveat.textContent='Experimental Lt/Rt-style matrixing. Exact steering depends on the receiver decoder and on how well the Bluetooth codec preserves inter-channel phase.';card.appendChild(caveat);
+    hero.parentNode.insertBefore(card,hero.nextSibling);ui={button:button,read:read};updateUI();
+  }
+
+  function updateUI(){if(!ui)return;ui.button.textContent=enabled?'MATRIX SURROUND ON':'MATRIX SURROUND OFF';ui.read.textContent=Math.round(amount*100)+'%';}
+
+  root.PocketSpatialMatrix={version:'20260907-bt-matrix-1',setEnabled:function(v){enabled=!!v;applyAll();},isEnabled:function(){return enabled;},setAmount:function(v){amount=Math.max(0,Math.min(1,Number(v)||0));applyAll();},getAmount:function(){return amount;},routes:routes};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',addUI);else addUI();
+}(this));
+
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
-  var build='20260907-playback-fix-1';
+  var build='20260907-bt-matrix-1';
   function versioned(src){return src+'?v='+build;}
   function load(src,next){var script=document.createElement('script');script.src=versioned(src);script.async=false;if(next)script.onload=next;document.head.appendChild(script);}
   load('pocket-spatial-commons-buffered.js',function(){load('pocket-spatial-single-playback.js',function(){load('pocket-spatial-buffered-catalog.js',function(){load('pocket-spatial-audius-catalog.js',function(){load('pocket-spatial-buffer-probe.js');});});});});
