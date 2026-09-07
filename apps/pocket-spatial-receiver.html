@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#080b12">
+<title>Pocket Spatial Receiver Matrix</title>
+<style>
+:root{--bg:#080b12;--panel:#111722;--line:#293347;--text:#edf2fb;--dim:#94a1b5;--good:#5ddbc7;--warn:#e0bb65;--bad:#ff7f8f}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}body{padding:22px 14px 40px;max-width:760px;margin:auto}h1{font-size:26px;margin:3px 0 7px}.sub,.status,.mini{color:var(--dim);font-size:12px;line-height:1.5}.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:15px;margin:10px 0}.row{display:flex;gap:8px}.row>*{flex:1}button,input{font:inherit}button{width:100%;min-height:48px;border-radius:14px;border:1px solid var(--line);background:#171f2d;color:var(--text);padding:11px 13px;font-weight:650}button.primary{background:#5147c8;border-color:#756cf2}input[type=search]{width:100%;min-height:48px;border-radius:14px;border:1px solid var(--line);background:#0b1018;color:var(--text);padding:0 13px;font-size:16px}.ctrl{margin:14px 0}.ctrl label{display:flex;justify-content:space-between;color:var(--dim);font-size:12px}.ctrl b{color:var(--text)}input[type=range]{width:100%;height:35px}.track{border-top:1px solid var(--line);padding:12px 0}.track:first-child{border-top:0}.track b{display:block}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.badge{display:inline-block;border:1px solid var(--good);color:var(--good);border-radius:999px;padding:6px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.07em}.metric{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric div{background:#0b1018;border:1px solid var(--line);border-radius:12px;padding:10px}.metric span{display:block;color:var(--dim);font-size:9px;text-transform:uppercase}.metric b{display:block;margin-top:4px}.mini{font-size:10.5px;margin-top:10px}@media(max-width:430px){.row{display:grid;grid-template-columns:1fr}.metric{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<h1>POCKET SPATIAL · RECEIVER MATRIX</h1>
+<div class="sub">Audius live stream → two-channel matrix-surround signal → Bluetooth → home-theater receiver</div>
+
+<div class="card">
+  <input id="query" type="search" placeholder="Search Audius artist or track" autocomplete="off">
+  <div class="row" style="margin-top:8px"><button id="search" class="primary">SEARCH</button><button id="trending">TRENDING</button></div>
+  <div id="catalogStatus" class="status">This test build keeps Bluetooth stereo, but deliberately carries anti-phase surround cues for a receiver decoder.</div>
+  <div id="results"></div>
+</div>
+
+<div class="card">
+  <div class="badge">Receiver matrix active</div>
+  <div id="now" style="font-weight:700;margin-top:10px">Nothing playing</div>
+  <div id="artist" class="status"></div>
+  <audio id="audio" controls preload="metadata" crossorigin="anonymous" playsinline style="width:100%;margin-top:10px"></audio>
+  <div id="playStatus" class="status">On the receiver, use Dolby Surround / Pro Logic-style decoding if available. Neural:X may also react to the cues, but its behavior is receiver-dependent.</div>
+</div>
+
+<div class="card">
+  <div class="ctrl"><label><span>FRONT WIDTH</span><b id="widthRead">125%</b></label><input id="width" type="range" min="90" max="160" value="125"></div>
+  <div class="ctrl"><label><span>MATRIX SURROUND</span><b id="matrixRead">52%</b></label><input id="matrix" type="range" min="0" max="100" value="52"></div>
+  <div class="ctrl"><label><span>SURROUND DELAY</span><b id="delayRead">14 ms</b></label><input id="delay" type="range" min="0" max="35" value="14"></div>
+  <div class="row"><button class="preset" data-w="110" data-m="30" data-d="10">SUBTLE</button><button class="preset" data-w="125" data-m="52" data-d="14">THEATER</button><button class="preset" data-w="145" data-m="72" data-d="19">DEEP</button></div>
+</div>
+
+<div class="card">
+  <div class="metric"><div><span>Audio engine</span><b id="engine">off</b></div><div><span>Output channels</span><b id="channels">unknown</b></div><div><span>Matrix method</span><b>L−R anti-phase</b></div><div><span>Surround band</span><b>120 Hz–7 kHz</b></div></div>
+  <div class="mini">This is an experimental matrix-compatible encoder, not a licensed Dolby encoder. It preserves correlated front information while deriving a band-limited side signal, phase-rotating/delaying it, then adding it to left and subtracting it from right. That gives matrix decoders a much clearer surround-direction cue than ordinary widened stereo.</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var API='https://api.audius.co/v1', APP='PocketSpatialReceiver';
+var q=document.getElementById('query'),results=document.getElementById('results'),catalogStatus=document.getElementById('catalogStatus'),audio=document.getElementById('audio'),playStatus=document.getElementById('playStatus');
+var width=document.getElementById('width'),matrix=document.getElementById('matrix'),delay=document.getElementById('delay');
+var tracks=[],idx=-1,AC=window.AudioContext||window.webkitAudioContext,ctx=null,src=null,split=null,frontMerge=null,outMerge=null,comp=null,master=null;
+var lSelf=null,lCross=null,rSelf=null,rCross=null,sideL=null,sideR=null,sideSum=null,hp=null,lp=null,ap1=null,ap2=null,sd=null,sToL=null,sToR=null;
+function text(id,v){document.getElementById(id).textContent=v}
+function esc(s){return String(s==null?'':s).replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]})}
+async function get(path,p){p=p||{};p.app_name=APP;var u=new URL(API+path);Object.keys(p).forEach(function(k){u.searchParams.set(k,p[k])});var r=await fetch(u.toString(),{mode:'cors',cache:'no-store'});if(!r.ok)throw new Error('Audius '+r.status);return r.json()}
+function artist(t){return t&&t.user&&(t.user.name||t.user.handle)||'Unknown artist'}
+function render(){results.innerHTML='';tracks.forEach(function(t,i){var d=document.createElement('div');d.className='track';d.innerHTML='<b>'+esc(t.title||'Untitled')+'</b><div class="status">'+esc(artist(t))+'</div><button type="button">PLAY MATRIXED</button>';d.querySelector('button').onclick=function(){play(i)};results.appendChild(d)})}
+async function search(){var s=q.value.trim();if(!s)return;catalogStatus.textContent='Searching Audius…';try{var j=await get('/tracks/search',{query:s,limit:25});tracks=j.data||[];render();catalogStatus.textContent=tracks.length?tracks.length+' tracks found.':'No tracks found.'}catch(e){catalogStatus.textContent=e.message;catalogStatus.className='status bad'}}
+async function trending(){catalogStatus.textContent='Loading trending…';try{var j=await get('/tracks/trending',{limit:25,time:'week'});tracks=j.data||[];render();catalogStatus.textContent=tracks.length?'Trending loaded.':'No tracks returned.'}catch(e){catalogStatus.textContent=e.message;catalogStatus.className='status bad'}}
+function param(p,v){if(!ctx)return;try{p.setTargetAtTime(v,ctx.currentTime,.025)}catch(e){p.value=v}}
+function build(){if(ctx)return true;if(!AC){playStatus.textContent='Web Audio unavailable.';return false}try{
+ ctx=new AC();src=ctx.createMediaElementSource(audio);split=ctx.createChannelSplitter(2);frontMerge=ctx.createChannelMerger(2);outMerge=ctx.createChannelMerger(2);comp=ctx.createDynamicsCompressor();master=ctx.createGain();
+ lSelf=ctx.createGain();lCross=ctx.createGain();rSelf=ctx.createGain();rCross=ctx.createGain();sideL=ctx.createGain();sideR=ctx.createGain();sideSum=ctx.createGain();hp=ctx.createBiquadFilter();lp=ctx.createBiquadFilter();ap1=ctx.createBiquadFilter();ap2=ctx.createBiquadFilter();sd=ctx.createDelay(.05);sToL=ctx.createGain();sToR=ctx.createGain();
+ hp.type='highpass';hp.frequency.value=120;lp.type='lowpass';lp.frequency.value=7000;ap1.type='allpass';ap1.frequency.value=650;ap1.Q.value=.7;ap2.type='allpass';ap2.frequency.value=2400;ap2.Q.value=.7;
+ src.connect(split);split.connect(lSelf,0);lSelf.connect(frontMerge,0,0);split.connect(lCross,1);lCross.connect(frontMerge,0,0);split.connect(rSelf,1);rSelf.connect(frontMerge,0,1);split.connect(rCross,0);rCross.connect(frontMerge,0,1);
+ split.connect(sideL,0);split.connect(sideR,1);sideL.gain.value=.5;sideR.gain.value=-.5;sideL.connect(sideSum);sideR.connect(sideSum);sideSum.connect(hp);hp.connect(lp);lp.connect(ap1);ap1.connect(ap2);ap2.connect(sd);sd.connect(sToL);sd.connect(sToR);
+ frontMerge.connect(outMerge,0,0);frontMerge.connect(outMerge,0,1);sToL.connect(outMerge,0,0);sToR.connect(outMerge,0,1);
+ comp.threshold.value=-5;comp.knee.value=6;comp.ratio.value=5;comp.attack.value=.004;comp.release.value=.14;outMerge.connect(comp);comp.connect(master);master.connect(ctx.destination);text('engine','ready');text('channels',String(ctx.destination.maxChannelCount||ctx.destination.channelCount||2));apply();return true
+ }catch(e){playStatus.textContent='Audio graph failed: '+e.message;playStatus.className='status bad';return false}}
+function apply(){text('widthRead',width.value+'%');text('matrixRead',matrix.value+'%');text('delayRead',delay.value+' ms');if(!ctx)return;var w=Number(width.value)/100,a=(1+w)/2,b=(1-w)/2,m=Number(matrix.value)/100*.58;param(lSelf.gain,a);param(lCross.gain,b);param(rSelf.gain,a);param(rCross.gain,b);param(sd.delayTime,Number(delay.value)/1000);param(sToL.gain,m);param(sToR.gain,-m);param(master.gain,.78)}
+function streamURL(t){return API+'/tracks/'+encodeURIComponent(t.id)+'/stream?app_name='+encodeURIComponent(APP)}
+function play(i){if(!tracks[i]||!build())return;idx=i;var t=tracks[i];if(ctx.state==='suspended'&&ctx.resume)ctx.resume();audio.pause();audio.crossOrigin='anonymous';audio.src=streamURL(t);text('now',t.title||'Untitled');text('artist',artist(t));playStatus.textContent='Opening Audius stream through the receiver-matrix encoder…';playStatus.className='status';var p=audio.play();if(p&&p.then)p.then(function(){playStatus.textContent='Playing matrixed stereo. Listen for stronger center anchoring and actual rear/surround steering on the receiver.';playStatus.className='status good'},function(e){playStatus.textContent='This Audius stream did not start: '+(e.message||'blocked');playStatus.className='status warn'})}
+width.oninput=matrix.oninput=delay.oninput=apply;document.getElementById('search').onclick=search;document.getElementById('trending').onclick=trending;q.addEventListener('keydown',function(e){if(e.key==='Enter')search()});Array.prototype.forEach.call(document.querySelectorAll('.preset'),function(b){b.onclick=function(){width.value=b.dataset.w;matrix.value=b.dataset.m;delay.value=b.dataset.d;apply()}});apply();
+}());
+</script>
+</body>
+</html>
