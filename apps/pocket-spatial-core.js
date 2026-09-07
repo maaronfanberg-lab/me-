@@ -151,10 +151,72 @@
   return{calculate:calculate,calculateDepth:calculateDepth,appliedTargets:appliedTargets,readouts:readouts};
 }));
 
+/* Calibrated receiver-matrix output. Narrowly intercept only the app's final compressor -> destination connection. */
+(function(root){
+  'use strict';
+  if(typeof window==='undefined'||!root.DynamicsCompressorNode||root.PocketSpatialReceiverMatrix)return;
+  var proto=root.DynamicsCompressorNode.prototype;
+  if(!proto||!proto.connect)return;
+  var originalConnect=proto.connect;
+  var building=false;
+  var amount=0.26;
+
+  function hilbertBuffer(ctx,taps){
+    taps=taps||129;if(taps%2===0)taps++;
+    var b=ctx.createBuffer(1,taps,ctx.sampleRate),d=b.getChannelData(0),m=(taps-1)/2;
+    for(var n=0;n<taps;n++){
+      var k=n-m,h=0;
+      if(k!==0&&Math.abs(k%2)===1)h=2/(Math.PI*k);
+      var w=.42-.5*Math.cos(2*Math.PI*n/(taps-1))+.08*Math.cos(4*Math.PI*n/(taps-1));
+      d[n]=h*w;
+    }
+    return b;
+  }
+
+  function wireMatrix(source,destination){
+    var ctx=source.context;
+    var split=ctx.createChannelSplitter(2),merge=ctx.createChannelMerger(2),trim=ctx.createGain();
+    var directL=ctx.createGain(),directR=ctx.createGain();
+    var hpL=ctx.createBiquadFilter(),hpR=ctx.createBiquadFilter(),lpL=ctx.createBiquadFilter(),lpR=ctx.createBiquadFilter();
+    var hL=ctx.createConvolver(),hR=ctx.createConvolver();
+    var ll=ctx.createGain(),lr=ctx.createGain(),rl=ctx.createGain(),rr=ctx.createGain();
+    hpL.type=hpR.type='highpass';hpL.frequency.value=hpR.frequency.value=160;hpL.Q.value=hpR.Q.value=.55;
+    lpL.type=lpR.type='lowpass';lpL.frequency.value=lpR.frequency.value=6800;lpL.Q.value=lpR.Q.value=.55;
+    hL.normalize=hR.normalize=false;hL.buffer=hilbertBuffer(ctx,129);hR.buffer=hilbertBuffer(ctx,129);
+
+    /* Calibrated from the receiver test: left program energy gets the working SL cue, right gets working SR cue. */
+    ll.gain.value=-.49*amount; lr.gain.value=.871*amount;
+    rl.gain.value=-.871*amount; rr.gain.value=.49*amount;
+    trim.gain.value=.82;
+
+    building=true;
+    try{
+      source.connect(split);
+      split.connect(directL,0);directL.connect(merge,0,0);
+      split.connect(directR,1);directR.connect(merge,0,1);
+
+      split.connect(hpL,0);hpL.connect(lpL);lpL.connect(hL);hL.connect(ll);hL.connect(lr);ll.connect(merge,0,0);lr.connect(merge,0,1);
+      split.connect(hpR,1);hpR.connect(lpR);lpR.connect(hR);hR.connect(rl);hR.connect(rr);rl.connect(merge,0,0);rr.connect(merge,0,1);
+
+      merge.connect(trim);trim.connect(destination);
+    }finally{building=false;}
+  }
+
+  proto.connect=function(destination){
+    if(!building&&destination&&this.context&&destination===this.context.destination){
+      wireMatrix(this,destination);
+      return destination;
+    }
+    return originalConnect.apply(this,arguments);
+  };
+
+  root.PocketSpatialReceiverMatrix={version:'20260907-calibrated-rear-1',amount:amount};
+}(window));
+
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
-  var build='20260907-playback-restore-1';
+  var build='20260907-calibrated-rear-1';
   function versioned(src){return src+'?v='+build;}
   function load(src,next){var script=document.createElement('script');script.src=versioned(src);script.async=false;if(next)script.onload=next;document.head.appendChild(script);}
   load('pocket-spatial-commons-buffered.js',function(){load('pocket-spatial-single-playback.js',function(){load('pocket-spatial-buffered-catalog.js',function(){load('pocket-spatial-audius-catalog.js',function(){load('pocket-spatial-buffer-probe.js');});});});});
