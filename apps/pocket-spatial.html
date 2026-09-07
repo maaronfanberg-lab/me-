@@ -76,13 +76,13 @@ audio{width:100%;margin-top:10px}.ctrl{margin:15px 0}.ctrl label{display:flex;ju
 </div>
 <div class="card legal">
   <b>Layer 1 · direction:</b> each stereo channel reaches its near ear directly and the opposite ear a fraction of a millisecond later with high frequencies reduced to approximate head shadow.
-  <br><br><b>Layer 2 · depth:</b> each channel also gets two quiet, un-crossed early reflections. Left reflections arrive at 17 and 31 ms; right at 19 and 34 ms. The later geometry and moderately brighter damping are tuned to create more room volume while keeping the direct center intact.
+  <br><br><b>Layer 2 · depth:</b> each channel gets two quiet early reflections. The first returns to its original side for solidity. The later 31/34 ms pair crosses to the opposite output to behave more like side-wall energy and push the apparent sound field outward without adding more DSP nodes.
 </div>
 <div class="card legal">
   <b>Audio rights:</b> use audio you own, audio you obtained through an official download, or audio whose license allows this kind of processing. This page does not rip or capture streaming services.
 </div>
 
-<script src="pocket-spatial-core.js?v=20260906-tactile-theater-1"></script>
+<script src="pocket-spatial-core.js?v=20260906-crossed-late-1"></script>
 <script>
 (function(){
 'use strict';
@@ -194,9 +194,9 @@ function buildGraph(){
     splitter.connect(delayR,1);delayR.connect(filterR);filterR.connect(crossR);crossR.connect(merger,0,0);
 
     splitter.connect(reflDelayL1,0);reflDelayL1.connect(reflFilterL1);reflFilterL1.connect(reflGainL1);reflGainL1.connect(merger,0,0);
-    splitter.connect(reflDelayL2,0);reflDelayL2.connect(reflFilterL2);reflFilterL2.connect(reflGainL2);reflGainL2.connect(merger,0,0);
+    splitter.connect(reflDelayL2,0);reflDelayL2.connect(reflFilterL2);reflFilterL2.connect(reflGainL2);reflGainL2.connect(merger,0,1);
     splitter.connect(reflDelayR1,1);reflDelayR1.connect(reflFilterR1);reflFilterR1.connect(reflGainR1);reflGainR1.connect(merger,0,1);
-    splitter.connect(reflDelayR2,1);reflDelayR2.connect(reflFilterR2);reflFilterR2.connect(reflGainR2);reflGainR2.connect(merger,0,1);
+    splitter.connect(reflDelayR2,1);reflDelayR2.connect(reflFilterR2);reflFilterR2.connect(reflGainR2);reflGainR2.connect(merger,0,0);
 
     merger.connect(master);master.connect(ctx.destination);
     text('engine','ready');

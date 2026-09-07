@@ -123,6 +123,10 @@ near(audio.gains[3].gain.value,target.farGain,'immersive cross L');
 near(audio.gains[5].gain.value,target.refl1Gain,'immersive reflection 1');
 near(audio.gains[7].gain.value,target.refl2Gain,'immersive reflection 2');
 near(audio.gains[0].gain.value,target.masterGain,'immersive headroom');
+assert.strictEqual(audio.gains[5].connections[0].input,0,'first left reflection stays on left output');
+assert.strictEqual(audio.gains[6].connections[0].input,1,'first right reflection stays on right output');
+assert.strictEqual(audio.gains[7].connections[0].input,1,'later left reflection crosses to right output');
+assert.strictEqual(audio.gains[8].connections[0].input,0,'later right reflection crosses to left output');
 
 sandbox.PocketSpatialBufferedCommons.stop();
 assert.strictEqual(ids.spatial.disabled,false);

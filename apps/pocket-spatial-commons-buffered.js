@@ -135,9 +135,9 @@ function buildGraph(){
     state.splitter.connect(state.delayR,1);state.delayR.connect(state.filterR);state.filterR.connect(state.crossR);state.crossR.connect(state.merger,0,0);
 
     state.splitter.connect(state.reflDelayL1,0);state.reflDelayL1.connect(state.reflFilterL1);state.reflFilterL1.connect(state.reflGainL1);state.reflGainL1.connect(state.merger,0,0);
-    state.splitter.connect(state.reflDelayL2,0);state.reflDelayL2.connect(state.reflFilterL2);state.reflFilterL2.connect(state.reflGainL2);state.reflGainL2.connect(state.merger,0,0);
+    state.splitter.connect(state.reflDelayL2,0);state.reflDelayL2.connect(state.reflFilterL2);state.reflFilterL2.connect(state.reflGainL2);state.reflGainL2.connect(state.merger,0,1);
     state.splitter.connect(state.reflDelayR1,1);state.reflDelayR1.connect(state.reflFilterR1);state.reflFilterR1.connect(state.reflGainR1);state.reflGainR1.connect(state.merger,0,1);
-    state.splitter.connect(state.reflDelayR2,1);state.reflDelayR2.connect(state.reflFilterR2);state.reflFilterR2.connect(state.reflGainR2);state.reflGainR2.connect(state.merger,0,1);
+    state.splitter.connect(state.reflDelayR2,1);state.reflDelayR2.connect(state.reflFilterR2);state.reflFilterR2.connect(state.reflGainR2);state.reflGainR2.connect(state.merger,0,0);
 
     state.merger.connect(state.master);state.master.connect(state.ctx.destination);
     apply();
