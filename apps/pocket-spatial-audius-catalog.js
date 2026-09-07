@@ -3,10 +3,9 @@
 
 var API='https://api.audius.co/v1';
 var APP_NAME='PocketSpatial';
-var API_LIMIT=100;
-var DISPLAY_RESULTS=24;
-var DISCOVERY_QUERIES=['CC BY','Creative Commons Attribution','creative commons','CC0'];
-var state={tracks:[]};
+var API_LIMIT=50;
+var DISPLAY_RESULTS=30;
+var state={tracks:[],currentIndex:-1,currentButton:null,currentDiagnostic:null,ui:null,audio:null,stallTimer:null,autoFailures:0,mode:'idle'};
 
 function el(tag,className,text){
   var node=document.createElement(tag);
@@ -22,39 +21,30 @@ function button(text,handler){
   return b;
 }
 
+function cleanText(value){
+  return String(value==null?'':value).replace(/\s+/g,' ').replace(/^\s+|\s+$/g,'');
+}
+
 function setStatus(ui,text,kind){
   ui.status.textContent=text;
   ui.status.className='status'+(kind?' '+kind:'');
 }
 
-function cleanText(value){
-  return String(value==null?'':value).replace(/\s+/g,' ').replace(/^\s+|\s+$/g,'');
-}
-
-function licenseAllowsSpatial(track){
-  var text=cleanText(track&&track.license).toLowerCase().replace(/_/g,'-');
-  if(!text)return false;
-  if(text.indexOf('all rights reserved')!==-1)return false;
-  if(text.indexOf('noncommercial')!==-1||text.indexOf('non-commercial')!==-1)return false;
-  if(text.indexOf('no derivatives')!==-1||text.indexOf('noderivatives')!==-1||text.indexOf('no-derivatives')!==-1)return false;
-  if(text.indexOf('by-nc')!==-1||text.indexOf('-nc-')!==-1||text.indexOf(' nc ')!==-1)return false;
-  if(text.indexOf('by-nd')!==-1||text.indexOf('-nd-')!==-1||/\bnd\b/.test(text))return false;
-  if(text.indexOf('cc0')!==-1||text.indexOf('public domain')!==-1)return true;
-  if(text.indexOf('creative commons attribution')!==-1)return true;
-  if(text.indexOf('cc by')!==-1||text.indexOf('cc-by')!==-1||text.indexOf('by-sa')!==-1)return true;
-  return false;
+function formatDuration(seconds){
+  var n=Math.max(0,Math.round(Number(seconds)||0));
+  if(!n)return '';
+  var m=Math.floor(n/60);
+  var s=n%60;
+  return m+':'+(s<10?'0':'')+s;
 }
 
 function isPlayable(track){
-  var duration;
   if(!track||!track.id)return false;
   if(track.is_streamable===false)return false;
   if(track.is_stream_gated===true)return false;
-  if(track.stream_conditions)return false;
   if(track.access&&track.access.stream===false)return false;
-  duration=Number(track.duration)||0;
-  if(duration>180)return false;
-  return licenseAllowsSpatial(track);
+  if(track.stream_conditions)return false;
+  return true;
 }
 
 function streamURL(id){
@@ -70,7 +60,6 @@ function pageURL(track){
 
 function normalizeTrack(track){
   if(!isPlayable(track))return null;
-  var duration=Number(track.duration)||0;
   var user=track.user||{};
   return{
     pageid:'audius:'+String(track.id),
@@ -78,7 +67,7 @@ function normalizeTrack(track){
     title:cleanText(track.title)||'Untitled Audius track',
     artist:cleanText(user.name||user.handle)||'Audius artist',
     license:cleanText(track.license),
-    duration:duration,
+    duration:Number(track.duration)||0,
     file_page:pageURL(track),
     audio:streamURL(track.id),
     audius_id:String(track.id)
@@ -86,15 +75,18 @@ function normalizeTrack(track){
 }
 
 function buildCatalogURL(query){
-  var q=cleanText(query)||DISCOVERY_QUERIES[0];
-  return API+'/tracks/search?query='+encodeURIComponent(q)+'&limit='+API_LIMIT+'&app_name='+encodeURIComponent(APP_NAME);
+  var q=cleanText(query);
+  if(q){
+    return API+'/tracks/search?query='+encodeURIComponent(q)+'&limit='+API_LIMIT+'&app_name='+encodeURIComponent(APP_NAME);
+  }
+  return API+'/tracks/trending?limit='+API_LIMIT+'&app_name='+encodeURIComponent(APP_NAME);
 }
 
 function xhrJSON(url,callback){
   if(!root.XMLHttpRequest){callback(new Error('xhr_unavailable'));return;}
   var xhr=new root.XMLHttpRequest();
   try{xhr.open('GET',url,true);}catch(e){callback(e);return;}
-  xhr.timeout=12000;
+  xhr.timeout=15000;
   xhr.onerror=function(){callback(new Error('audius_catalog_failed_or_cors_blocked'));};
   xhr.ontimeout=function(){callback(new Error('audius_catalog_timeout'));};
   xhr.onload=function(){
@@ -117,30 +109,147 @@ function collectTracks(data){
   return tracks;
 }
 
-function renderTracks(ui){
-  while(ui.tracks.firstChild)ui.tracks.removeChild(ui.tracks.firstChild);
-  if(!state.tracks.length){
-    ui.tracks.appendChild(el('div','status','No derivative-permitting Audius tracks were returned. Pocket Spatial will try several rights-safe searches when the box is blank.'));
+function clearStallTimer(){
+  if(state.stallTimer){root.clearTimeout(state.stallTimer);state.stallTimer=null;}
+}
+
+function setCurrentControl(buttonNode,diagnostic,text,kind){
+  if(state.currentButton&&state.currentButton!==buttonNode){
+    state.currentButton.disabled=false;
+    state.currentButton.textContent='PLAY LIVE + SPATIAL';
+  }
+  if(state.currentDiagnostic&&state.currentDiagnostic!==diagnostic){
+    state.currentDiagnostic.textContent='Ready for live Audius playback.';
+    state.currentDiagnostic.className='status';
+  }
+  state.currentButton=buttonNode||null;
+  state.currentDiagnostic=diagnostic||null;
+  if(buttonNode){buttonNode.disabled=false;buttonNode.textContent='PLAYING LIVE';}
+  if(diagnostic){diagnostic.textContent=text||'Opening live Audius stream…';diagnostic.className='status'+(kind?' '+kind:'');}
+}
+
+function ensureSpatialOn(){
+  var badge=document.getElementById('badge');
+  var spatial=document.getElementById('spatial');
+  if(spatial&&badge&&badge.className.indexOf(' on')===-1){
+    try{spatial.click();}catch(e){}
+  }
+}
+
+function updateMainTrack(track){
+  var label=document.getElementById('track');
+  if(label)label.textContent=track.title+' — '+track.artist+' · Audius live stream';
+}
+
+function playPromiseHandled(p,diagnostic){
+  if(!p||typeof p.then!=='function')return;
+  p.then(function(){
+    if(diagnostic){diagnostic.textContent='Live stream playing through Pocket Spatial.';diagnostic.className='status good';}
+  },function(error){
+    if(diagnostic){diagnostic.textContent='This stream did not start: '+(error&&error.message?error.message:'playback blocked')+'. Trying the next result…';diagnostic.className='status warn';}
+    autoAdvance('playback start failed');
+  });
+}
+
+function playTrack(index,buttonNode,diagnostic,isAuto){
+  if(!state.audio||!state.tracks.length)return;
+  if(index<0)index=0;
+  if(index>=state.tracks.length)index=0;
+  var track=state.tracks[index];
+  state.currentIndex=index;
+  state.mode='audius';
+  clearStallTimer();
+  setCurrentControl(buttonNode,diagnostic,'Opening live Audius stream…','');
+  updateMainTrack(track);
+  state.audio.pause();
+  state.audio.crossOrigin='anonymous';
+  state.audio.setAttribute('crossorigin','anonymous');
+  state.audio.src=track.audio;
+  try{state.audio.load();}catch(e){}
+  ensureSpatialOn();
+  if(state.ui){setStatus(state.ui,(isAuto?'Trying next stream: ':'Playing: ')+track.title+' — '+track.artist,'good');}
+  try{playPromiseHandled(state.audio.play(),diagnostic);}catch(e){
+    if(diagnostic){diagnostic.textContent='Stream failed to start. Trying the next result…';diagnostic.className='status warn';}
+    autoAdvance('playback exception');
+  }
+}
+
+function autoAdvance(reason){
+  if(state.mode!=='audius'||!state.tracks.length)return;
+  state.autoFailures+=1;
+  if(state.autoFailures>=state.tracks.length){
+    clearStallTimer();
+    if(state.currentDiagnostic){state.currentDiagnostic.textContent='Audius returned results, but none of these streams could be played through the browser audio pipeline.';state.currentDiagnostic.className='status warn';}
+    if(state.ui)setStatus(state.ui,'No playable live stream survived this pass. Try another search or reload Audius.','warn');
     return;
   }
-  var heading=el('div','status','AUDIUS · '+state.tracks.length+' BUFFERED IMMERSIVE CANDIDATES');
+  var next=(state.currentIndex+1)%state.tracks.length;
+  var entry=state.ui&&state.ui.entries?state.ui.entries[next]:null;
+  playTrack(next,entry&&entry.button,entry&&entry.diagnostic,true);
+}
+
+function nextTrack(){
+  if(!state.tracks.length)return;
+  state.autoFailures=0;
+  var next=(state.currentIndex+1)%state.tracks.length;
+  var entry=state.ui&&state.ui.entries?state.ui.entries[next]:null;
+  playTrack(next,entry&&entry.button,entry&&entry.diagnostic,true);
+}
+
+function bindAudioEvents(){
+  if(!state.audio)return;
+  state.audio.addEventListener('canplay',function(){clearStallTimer();state.autoFailures=0;});
+  state.audio.addEventListener('playing',function(){
+    clearStallTimer();
+    if(state.currentDiagnostic){state.currentDiagnostic.textContent='Live stream playing through Pocket Spatial.';state.currentDiagnostic.className='status good';}
+  });
+  state.audio.addEventListener('error',function(){
+    if(state.mode!=='audius')return;
+    if(state.currentDiagnostic){state.currentDiagnostic.textContent='This Audius stream failed. Trying the next result automatically…';state.currentDiagnostic.className='status warn';}
+    autoAdvance('media error');
+  });
+  state.audio.addEventListener('stalled',function(){
+    if(state.mode!=='audius')return;
+    clearStallTimer();
+    state.stallTimer=root.setTimeout(function(){
+      if(state.mode!=='audius')return;
+      if(state.currentDiagnostic){state.currentDiagnostic.textContent='Stream stalled for too long. Trying the next result…';state.currentDiagnostic.className='status warn';}
+      autoAdvance('stall timeout');
+    },12000);
+  });
+  state.audio.addEventListener('ended',function(){if(state.mode==='audius')nextTrack();});
+  var file=document.getElementById('file');
+  if(file)file.addEventListener('change',function(){state.mode='local';clearStallTimer();});
+}
+
+function renderTracks(ui){
+  while(ui.tracks.firstChild)ui.tracks.removeChild(ui.tracks.firstChild);
+  ui.entries=[];
+  if(!state.tracks.length){
+    ui.tracks.appendChild(el('div','status','Audius responded, but no ordinary ungated streamable tracks were returned for this search.'));
+    return;
+  }
+  var heading=el('div','status','AUDIUS · '+state.tracks.length+' LIVE STREAM CANDIDATES');
   heading.style.marginTop='12px';
   heading.style.fontWeight='700';
   ui.tracks.appendChild(heading);
   for(var i=0;i<state.tracks.length;i+=1){
-    (function(track){
+    (function(track,index){
       var row=el('div','metric');
       row.style.marginTop='8px';
       var name=el('b','',track.title);
       name.style.display='block';
       row.appendChild(name);
-      var meta=el('span','',track.artist+' · '+track.license+(track.duration?' · '+Math.round(track.duration)+' s':''));
+      var metaText=track.artist;
+      if(track.duration)metaText+=' · '+formatDuration(track.duration);
+      if(track.license)metaText+=' · '+track.license;
+      var meta=el('span','',metaText);
       meta.style.display='block';
       meta.style.marginTop='4px';
       row.appendChild(meta);
-      var rights=el('div','status good','Derivative-permitting Audius license verified. NC, NoDerivatives, All Rights Reserved, and gated tracks are excluded.');
-      rights.style.marginTop='4px';
-      row.appendChild(rights);
+      var access=el('div','status good','Audius reports this track as API-streamable and ungated. Pocket Spatial plays the live stream without exporting or saving the track.');
+      access.style.marginTop='4px';
+      row.appendChild(access);
       var link=el('a','','Open this track on Audius');
       link.href=track.file_page;
       link.target='_blank';
@@ -149,119 +258,95 @@ function renderTracks(ui){
       link.style.marginTop='6px';
       link.style.color='inherit';
       row.appendChild(link);
-      var diagnostic=el('div','status','Ready to fetch the Audius MP3 into temporary memory.');
+      var diagnostic=el('div','status','Ready for live Audius playback.');
       diagnostic.style.marginTop='6px';
       row.appendChild(diagnostic);
-      var play=button('BUFFER + PLAY IMMERSIVE',function(){
-        var player=root.PocketSpatialBufferedPlayer||root.PocketSpatialBufferedCommons;
-        if(!player){
-          diagnostic.textContent='The buffered immersive engine did not load.';
-          diagnostic.className='status warn';
-          return;
-        }
-        player.toggle(track,play,diagnostic);
+      var play=button('PLAY LIVE + SPATIAL',function(){
+        state.autoFailures=0;
+        playTrack(index,play,diagnostic,false);
       });
       play.style.marginTop='8px';
       row.appendChild(play);
+      ui.entries[index]={button:play,diagnostic:diagnostic};
       ui.tracks.appendChild(row);
-    }(state.tracks[i]));
+    }(state.tracks[i],i));
   }
 }
 
-function showTracks(ui,tracks,label){
-  state.tracks=tracks||[];
+function finishCatalog(ui,error,data,label){
   ui.load.disabled=false;
   ui.load.textContent='SEARCH / RELOAD AUDIUS';
-  renderTracks(ui);
-  if(state.tracks.length){
-    setStatus(ui,'Audius connected through “'+cleanText(label)+'” with derivative-permitting tracks. Pick one and tap BUFFER + PLAY IMMERSIVE.','good');
-  }else{
-    setStatus(ui,'Audius responded, but no derivative-permitting <=180 s tracks were found in the rights-safe discovery searches.','warn');
-  }
-}
-
-function finishCatalog(ui,error,data,query){
   if(error){
     state.tracks=[];
-    ui.load.disabled=false;
-    ui.load.textContent='SEARCH / RELOAD AUDIUS';
     renderTracks(ui);
     setStatus(ui,'Audius catalog request failed: '+error.message,'warn');
     return;
   }
-  showTracks(ui,collectTracks(data),query);
-}
-
-function loadDiscovery(ui,index){
-  var query;
-  if(index>=DISCOVERY_QUERIES.length){
-    showTracks(ui,[],'rights-safe discovery');
-    return;
+  state.tracks=collectTracks(data);
+  state.currentIndex=-1;
+  state.autoFailures=0;
+  renderTracks(ui);
+  if(state.tracks.length){
+    setStatus(ui,'Audius connected. '+state.tracks.length+' live stream candidates found for '+label+'. Tap any result; failures will skip automatically.','good');
+  }else{
+    setStatus(ui,'Audius connected, but this search returned no ordinary ungated streamable tracks.','warn');
   }
-  query=DISCOVERY_QUERIES[index];
-  setStatus(ui,'Audius connected. Checking rights-safe search '+(index+1)+'/'+DISCOVERY_QUERIES.length+': “'+query+'”…','');
-  xhrJSON(buildCatalogURL(query),function(error,data){
-    var tracks;
-    if(error){
-      if(index+1<DISCOVERY_QUERIES.length){loadDiscovery(ui,index+1);return;}
-      finishCatalog(ui,error,data,query);
-      return;
-    }
-    tracks=collectTracks(data);
-    if(tracks.length){showTracks(ui,tracks,query);return;}
-    loadDiscovery(ui,index+1);
-  });
 }
 
 function loadCatalog(ui){
   var query=ui.query?cleanText(ui.query.value):'';
   ui.load.disabled=true;
-  ui.load.textContent=query?'SEARCHING AUDIUS…':'DISCOVERING AUDIUS…';
-  if(query){
-    setStatus(ui,'Searching Audius for “'+query+'” and checking creator licenses…','');
-    xhrJSON(buildCatalogURL(query),function(error,data){finishCatalog(ui,error,data,query);});
-    return;
-  }
-  setStatus(ui,'Searching Audius more deeply for explicit derivative-permitting licenses…','');
-  loadDiscovery(ui,0);
+  ui.load.textContent=query?'SEARCHING AUDIUS…':'LOADING TRENDING…';
+  setStatus(ui,query?'Searching Audius for “'+query+'”…':'Loading trending Audius tracks…','');
+  xhrJSON(buildCatalogURL(query),function(error,data){finishCatalog(ui,error,data,query?'“'+query+'”':'trending');});
 }
 
 function createUI(){
   var hero=document.querySelector('.card.hero');
   if(!hero||!hero.parentNode)return null;
+  var sub=document.querySelector('.sub');
+  if(sub)sub.textContent='Live spatial processor for Audius streams and local audio · routes through the iPhone audio output';
   var card=el('div','card');
-  card.id='audiusBufferedCard';
-  var title=el('div','','AUDIUS · IMMERSIVE MUSIC');
+  card.id='audiusLiveCard';
+  var title=el('div','','AUDIUS · LIVE SPATIAL MUSIC');
   title.style.fontWeight='700';
   title.style.letterSpacing='.06em';
   title.style.fontSize='12px';
   card.appendChild(title);
-  var status=el('div','status','Second live source. Pocket Spatial queries Audius directly and only offers tracks with an affirmative derivative-permitting license.');
-  status.id='audiusBufferedStatus';
+  var status=el('div','status','Search Audius or leave the box blank for trending tracks. Playback is live; Pocket Spatial does not pre-download the whole track.');
+  status.id='audiusLiveStatus';
   card.appendChild(status);
   var query=el('input','');
   query.type='text';
-  query.placeholder='Artist, track, genre… (blank = rights-safe discovery)';
-  query.id='audiusBufferedQuery';
+  query.placeholder='Artist, track, genre… (blank = trending)';
+  query.id='audiusLiveQuery';
   query.autocapitalize='off';
   query.autocomplete='off';
   query.style.width='100%';
   query.style.boxSizing='border-box';
   query.style.margin='8px 0';
-  var ui={card:card,status:status,query:query,load:null,tracks:null};
+  query.style.minHeight='46px';
+  query.style.borderRadius='12px';
+  query.style.border='1px solid var(--line)';
+  query.style.background='#0b1018';
+  query.style.color='var(--text)';
+  query.style.padding='10px';
+  var ui={card:card,status:status,query:query,load:null,next:null,tracks:null,entries:[]};
   card.appendChild(query);
+  query.addEventListener('keydown',function(event){if((event.key||'')==='Enter')loadCatalog(ui);});
   var load=button('LOAD AUDIUS MUSIC',function(){loadCatalog(ui);});
-  load.id='audiusBufferedLoad';
+  load.id='audiusLiveLoad';
   ui.load=load;
   card.appendChild(load);
+  var next=button('NEXT LIVE TRACK',function(){nextTrack();});
+  next.id='audiusLiveNext';
+  ui.next=next;
+  card.appendChild(next);
   var tracks=el('div','');
-  tracks.id='audiusBufferedTracks';
+  tracks.id='audiusLiveTracks';
   ui.tracks=tracks;
   card.appendChild(tracks);
-  var limits=(root.PocketSpatialBufferedPlayer||root.PocketSpatialBufferedCommons);
-  limits=limits&&limits.limits;
-  var limitText=limits?Math.round(limits.compressedBytes/1048576)+' MB / '+limits.durationSeconds+' s':'conservative iPhone 6';
-  var note=el('div','legal','Temporary-memory playback only. '+limitText+' safety ceiling. Nothing is recorded, exported, or persisted by Pocket Spatial. Creator-selected Audius restrictions remain in force.');
+  var note=el('div','legal','Pocket Spatial uses Audius API-accessible streams and respects Audius stream gating/access controls. It does not rip, export, or persist streamed tracks.');
   note.style.marginTop='8px';
   card.appendChild(note);
   hero.parentNode.insertBefore(card,hero);
@@ -269,16 +354,21 @@ function createUI(){
 }
 
 function boot(){
-  var ui=createUI();
-  if(!ui)return;
+  state.audio=document.getElementById('audio');
+  if(!state.audio)return;
+  state.audio.crossOrigin='anonymous';
+  state.audio.setAttribute('crossorigin','anonymous');
+  state.ui=createUI();
+  if(!state.ui)return;
+  bindAudioEvents();
   root.PocketSpatialAudiusCatalog={
     buildCatalogURL:buildCatalogURL,
-    licenseAllowsSpatial:licenseAllowsSpatial,
     isPlayable:isPlayable,
     normalizeTrack:normalizeTrack,
     streamURL:streamURL,
-    discoveryQueries:DISCOVERY_QUERIES.slice(0),
-    ui:ui
+    load:function(query){state.ui.query.value=query||'';loadCatalog(state.ui);},
+    next:nextTrack,
+    ui:state.ui
   };
 }
 
