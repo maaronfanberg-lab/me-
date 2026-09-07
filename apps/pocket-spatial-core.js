@@ -7,61 +7,70 @@
 
   function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 
-  function calculate(spacePercent,angleDegrees){
-    var wet=clamp(Number(spacePercent)||0,0,100)/100;
-    var deg=clamp(Number(angleDegrees)||0,20,70);
+  function calculate(spacePercent,angleDegrees,delayStretchPercent,headShadowHz,crossfeedPolarityPercent){
+    var wet=clamp(Number(spacePercent)||0,0,250)/100;
+    var deg=clamp(Number(angleDegrees)||0,0,180);
+    var stretch=clamp(Number(delayStretchPercent)||100,25,800)/100;
     var theta=deg*Math.PI/180;
-    var itd=(0.0875/343)*(theta+Math.sin(theta));
-    var cutoff=7000-(3800*wet);
-    var farGain=0.22*wet;
-    var directGain=1-(0.18*wet);
-    var baseMasterGain=1-(0.06*wet);
+    var itd=(0.0875/343)*(theta+Math.sin(theta))*stretch;
+    var cutoff=clamp(Number(headShadowHz)||3300,400,12000);
+    var polarity=clamp(Number(crossfeedPolarityPercent)||0,-100,100)/100;
+    var phaseSign=polarity<0?-1:1;
+    var phaseAmount=Math.abs(polarity);
+    var farGain=0.22*wet*(0.35+0.65*phaseAmount)*phaseSign;
+    var directGain=Math.max(0.05,1-(0.18*Math.min(wet,2.5)));
     return{
       wet:wet,
       deg:deg,
+      stretch:stretch,
       itd:itd,
       cutoff:cutoff,
+      polarity:polarity,
       farGain:farGain,
-      directGain:directGain,
-      baseMasterGain:baseMasterGain
+      directGain:directGain
     };
   }
 
-  function calculateDepth(depthPercent){
-    var depth=clamp(Number(depthPercent)||0,0,100)/100;
+  function calculateDepth(depthPercent,roomScalePercent,reflectionToneHz){
+    var depth=clamp(Number(depthPercent)||0,0,300)/100;
+    var roomScale=clamp(Number(roomScalePercent)||100,25,600)/100;
+    var tone=clamp(Number(reflectionToneHz)||3300,300,12000);
     return{
       depth:depth,
-      refl1DelayL:0.017,
-      refl1DelayR:0.019,
-      refl2DelayL:0.031,
-      refl2DelayR:0.034,
+      roomScale:roomScale,
+      refl1DelayL:0.017*roomScale,
+      refl1DelayR:0.019*roomScale,
+      refl2DelayL:0.031*roomScale,
+      refl2DelayR:0.034*roomScale,
       refl1Gain:0.18*depth,
       refl2Gain:0.10*depth,
-      reflCutoff:3300,
+      reflCutoff:tone,
       reflQ:0.65
     };
   }
 
-  function appliedTargets(spacePercent,angleDegrees,depthPercent,enabled){
-    var p=calculate(spacePercent,angleDegrees);
-    var d=calculateDepth(depthPercent);
+  function appliedTargets(spacePercent,angleDegrees,depthPercent,delayStretchPercent,headShadowHz,roomScalePercent,reflectionToneHz,crossfeedPolarityPercent,enabled){
+    var p=calculate(spacePercent,angleDegrees,delayStretchPercent,headShadowHz,crossfeedPolarityPercent);
+    var d=calculateDepth(depthPercent,roomScalePercent,reflectionToneHz);
     var active=!!enabled;
     var farGain=active?p.farGain:0;
     var directGain=active?p.directGain:1;
     var refl1Gain=active?d.refl1Gain:0;
     var refl2Gain=active?d.refl2Gain:0;
-    var nominalSum=directGain+farGain+refl1Gain+refl2Gain;
-    var headroomGain=nominalSum>1?1/nominalSum:1;
-    var masterGain=active?Math.min(p.baseMasterGain,headroomGain):1;
+    var worstCaseSum=Math.abs(directGain)+Math.abs(farGain)+Math.abs(refl1Gain)+Math.abs(refl2Gain);
+    var masterGain=active?Math.min(0.92,0.88/Math.max(1,worstCaseSum)):1;
 
     return{
       wet:p.wet,
       deg:p.deg,
       depth:d.depth,
+      delayStretch:p.stretch,
       delaySeconds:p.itd,
       cutoffHz:p.cutoff,
+      polarity:p.polarity,
       farGain:farGain,
       directGain:directGain,
+      roomScale:d.roomScale,
       refl1DelayL:d.refl1DelayL,
       refl1DelayR:d.refl1DelayR,
       refl2DelayL:d.refl2DelayL,
@@ -70,22 +79,26 @@
       refl2Gain:refl2Gain,
       reflCutoff:d.reflCutoff,
       reflQ:d.reflQ,
-      nominalSum:nominalSum,
       masterGain:masterGain
     };
   }
 
-  function readouts(spacePercent,angleDegrees,depthPercent,enabled){
-    var t=appliedTargets(spacePercent,angleDegrees,depthPercent,enabled);
+  function readouts(spacePercent,angleDegrees,depthPercent,delayStretchPercent,headShadowHz,roomScalePercent,reflectionToneHz,crossfeedPolarityPercent,enabled){
+    var t=appliedTargets(spacePercent,angleDegrees,depthPercent,delayStretchPercent,headShadowHz,roomScalePercent,reflectionToneHz,crossfeedPolarityPercent,enabled);
     return{
       spaceText:Math.round(t.wet*100)+'%',
       angleText:Math.round(t.deg)+'°',
       depthText:Math.round(t.depth*100)+'%',
+      delayStretchText:Math.round(t.delayStretch*100)+'%',
+      headShadowText:Math.round(t.cutoffHz)+' Hz',
+      roomScaleText:Math.round(t.roomScale*100)+'%',
+      reflectionToneText:Math.round(t.reflCutoff)+' Hz',
+      polarityText:(t.polarity<0?'INVERTED ':'NORMAL ')+Math.round(Math.abs(t.polarity)*100)+'%',
       delayText:(t.delaySeconds*1000).toFixed(2)+' ms',
       cutoffText:Math.round(t.cutoffHz)+' Hz',
-      farText:Math.round(t.farGain*100)+'%',
+      farText:(t.farGain<0?'-':'')+Math.round(Math.abs(t.farGain)*100)+'%',
       directText:Math.round(t.directGain*100)+'%',
-      reflectionTimesText:'17/19 · 31/34 ms',
+      reflectionTimesText:Math.round(t.refl1DelayL*1000)+'/'+Math.round(t.refl1DelayR*1000)+' · '+Math.round(t.refl2DelayL*1000)+'/'+Math.round(t.refl2DelayR*1000)+' ms',
       reflectionGainText:(t.refl1Gain*100).toFixed(1)+'% / '+(t.refl2Gain*100).toFixed(1)+'%',
       reflectionCutoffText:Math.round(t.reflCutoff)+' Hz',
       masterText:Math.round(t.masterGain*100)+'%'
@@ -103,7 +116,7 @@
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
-  var build='20260907-audius-live-1';
+  var build='20260907-extreme-lab-1';
   function versioned(src){return src+'?v='+build;}
   function load(src,next){
     var script=document.createElement('script');
