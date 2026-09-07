@@ -13,15 +13,15 @@
 </head>
 <body>
 <h1>POCKET SPATIAL · RECEIVER TEST</h1>
-<div class="sub">Tap one speaker at a time. The first five cues are the steering map we already calibrated. The BACK pair below is an experimental 7-channel decoder test.</div>
+<div class="sub">Tap one speaker at a time. SIDE LEFT / SIDE RIGHT are the calibrated surround pair. BACK LEFT / BACK RIGHT are the experimental rear pair.</div>
 <div class="card">
   <div id="cue" class="cue">READY</div>
   <div class="grid">
     <button class="speaker" data-pos="0" type="button">FRONT LEFT</button>
     <button class="speaker" data-pos="2" type="button">FRONT RIGHT</button>
     <button class="speaker wide" data-pos="1" type="button">CENTER</button>
-    <button class="speaker" data-pos="4" type="button">SURROUND LEFT</button>
-    <button class="speaker" data-pos="3" type="button">SURROUND RIGHT</button>
+    <button class="speaker" data-pos="4" type="button">SIDE LEFT</button>
+    <button class="speaker" data-pos="3" type="button">SIDE RIGHT</button>
     <button class="speaker back" data-pos="5" type="button">BACK LEFT · EXPERIMENT</button>
     <button class="speaker back" data-pos="6" type="button">BACK RIGHT · EXPERIMENT</button>
   </div>
@@ -29,15 +29,15 @@
   <div id="status" class="status">Keep the receiver volume modest for the first run.</div>
 </div>
 <div class="card">
-  <b>Back-pair experiment</b>
-  <div class="status">Stereo matrix audio cannot promise truly discrete side-surround versus surround-back channels. These last two cues use a more strongly decorrelated rear pattern to see whether your receiver's 7-channel decoder routes them farther behind you. If they still come from the side surrounds, that is useful data rather than a failure.</div>
+  <b>Side vs back</b>
+  <div class="status">The SIDE buttons use the calibrated matrix cues that already worked on your receiver. The BACK buttons use a more decorrelated pattern to test whether the receiver can steer farther behind you. This lets us compare the side and back pairs directly.</div>
 </div>
 <script>
 (function(){
 'use strict';
 var AC=window.AudioContext||window.webkitAudioContext;
 var cue=document.getElementById('cue'),status=document.getElementById('status'),sequence=document.getElementById('sequence');
-var labels=['FRONT LEFT','CENTER','FRONT RIGHT','SURROUND RIGHT','SURROUND LEFT','BACK LEFT · EXPERIMENT','BACK RIGHT · EXPERIMENT'];
+var labels=['FRONT LEFT','CENTER','FRONT RIGHT','SIDE RIGHT','SIDE LEFT','BACK LEFT · EXPERIMENT','BACK RIGHT · EXPERIMENT'];
 var ctx=null,timers=[];
 function clearTimers(){while(timers.length)clearTimeout(timers.pop());}
 function envelope(t,d){var e=.035;if(t<e)return t/e;if(t>d-e)return Math.max(0,(d-t)/e);return 1;}
