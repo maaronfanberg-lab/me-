@@ -26,7 +26,7 @@ audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;ju
 </head>
 <body>
 <h1>POCKET SPATIAL</h1>
-<div class="sub">Live spatial processor · exponential geometry · room-wrap immersion field</div>
+<div class="sub">Live spatial processor · cinema-style matrix steering · room-wrap immersion field</div>
 
 <div class="card hero">
   <div id="badge" class="badge">Spatial off</div>
@@ -38,14 +38,15 @@ audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;ju
 </div>
 
 <div class="card">
-  <div class="status good"><b>RECEIVER MATRIX SURROUND:</b> calibrated rear-left / rear-right phase steering is built into this version. Turn Spatial on and use the same receiver surround-decoding mode that worked in the speaker test.</div>
-  <div class="ctrl"><label for="rearStrength"><span>REAR SURROUND STRENGTH</span><b id="rearStrengthRead">100%</b></label><input id="rearStrength" type="range" min="0" max="150" step="1" value="100"></div>
-  <div class="status">Start at 100%. If the rear pair still feels shy, push this toward 125–150% for an intentionally exaggerated test.</div>
+  <div class="status good"><b>CINEMA MATRIX STEERING:</b> left-heavy material is preserved toward front-left, right-heavy material toward front-right, common L+R material is reinforced in-phase for center decoding, and L-R spatial material is phase-encoded for the calibrated rear pair.</div>
+  <div class="ctrl"><label for="rearStrength"><span>REAR SURROUND STRENGTH</span><b id="rearStrengthRead">120%</b></label><input id="rearStrength" type="range" min="0" max="300" step="1" value="120"></div>
+  <div class="ctrl"><label for="centerAnchor"><span>CENTER ANCHOR</span><b id="centerAnchorRead">100%</b></label><input id="centerAnchor" type="range" min="0" max="200" step="1" value="100"></div>
+  <div class="ctrl"><label for="steerSep"><span>STEERING SEPARATION</span><b id="steerSepRead">100%</b></label><input id="steerSep" type="range" min="0" max="200" step="1" value="100"></div>
+  <div class="status">Use the same receiver matrix-surround decode mode that passed the speaker test. These controls intentionally allow over-steering so you can find the room's sweet spot.</div>
 </div>
 
 <div class="card dangerZone">
-  <div class="status warn">IMMERSION LAB · The controls now accelerate exponentially. Lower ranges stay tunable; upper ranges intentionally become extreme. ROOM WRAP adds later cross-fed arrivals around the listening position. Output limiting remains active.</div>
-
+  <div class="status warn">IMMERSION LAB · The controls accelerate exponentially. Upper ranges are intentionally extreme. Output limiting remains active.</div>
   <div class="ctrl"><label for="space"><span>SPATIAL AMOUNT</span><b id="spaceRead">72%</b></label><input id="space" type="range" min="0" max="250" step="1" value="72"></div>
   <div class="ctrl"><label for="angle"><span>VIRTUAL SPEAKER ANGLE</span><b id="angleRead">57°</b></label><input id="angle" type="range" min="0" max="180" step="1" value="57"></div>
   <div class="ctrl"><label for="delayStretch"><span>INTERAURAL DELAY STRETCH</span><b id="delayStretchRead">100%</b></label><input id="delayStretch" type="range" min="25" max="800" step="1" value="100"></div>
@@ -55,7 +56,6 @@ audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;ju
   <div class="ctrl"><label for="roomScale"><span>ROOM TIME SCALE</span><b id="roomScaleRead">100%</b></label><input id="roomScale" type="range" min="25" max="600" step="1" value="100"></div>
   <div class="ctrl"><label for="roomWrap"><span>ROOM WRAP / IMMERSION</span><b id="roomWrapRead">65%</b></label><input id="roomWrap" type="range" min="0" max="300" step="1" value="65"></div>
   <div class="ctrl"><label for="reflectionTone"><span>REFLECTION TONE</span><b id="reflectionToneRead">3300 Hz</b></label><input id="reflectionTone" type="range" min="300" max="12000" step="50" value="3300"></div>
-
   <div class="row">
     <button class="preset" type="button" data-space="82" data-angle="68" data-delay="105" data-shadow="3300" data-polarity="100" data-depth="60" data-room="115" data-wrap="85" data-tone="3300">ROOM</button>
     <button class="preset" type="button" data-space="155" data-angle="128" data-delay="280" data-shadow="1900" data-polarity="100" data-depth="165" data-room="255" data-wrap="185" data-tone="2400">IMMERSED</button>
@@ -76,16 +76,16 @@ audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;ju
     <div class="metric"><span>Room-wrap gains</span><b id="wrapGain">0%</b></div>
     <div class="metric"><span>Reflection LPF</span><b id="reflCutoff">3300 Hz</b></div>
     <div class="metric"><span>Protective output trim</span><b id="master">100%</b></div>
-    <div class="metric"><span>Matrix rear steering</span><b id="matrixRead">OFF</b></div>
+    <div class="metric"><span>Matrix steering</span><b id="matrixRead">OFF</b></div>
     <div class="metric"><span>Output limiter</span><b>ACTIVE</b></div>
   </div>
   <div id="status" class="status" aria-live="polite">Nothing is processed until playback starts and Spatial is on.</div>
 </div>
 
-<div class="card legal"><b>Matrix surround:</b> the final stereo output carries phase-coded cues derived from the live left/right program. Your receiver can decode those cues into the far-back surround pair using the same decoder mode that passed the speaker test. This is matrix steering over stereo Bluetooth, not a discrete 5.1 bitstream.</div>
-<div class="card legal"><b>Safety:</b> extreme settings reduce internal gain based on total path energy and then pass through output limiting. Keep your theater receiver at a sensible level while experimenting.</div>
+<div class="card legal"><b>Matrix surround:</b> Pocket Spatial outputs a two-channel Lt/Rt-style matrix signal for compatible receiver decoding. This is not a discrete 5.1 bitstream and it is not a licensed Dolby encoder.</div>
+<div class="card legal"><b>Safety:</b> the matrix stage is gain-trimmed and the main processor uses limiting, but extreme settings can still sound intentionally unnatural. Keep receiver volume sensible while calibrating.</div>
 
-<script src="pocket-spatial-core.js?v=20260907-matrix-live-3"></script>
+<script src="pocket-spatial-core.js?v=20260907-cinema-steer-1"></script>
 <script>
 (function(){
 'use strict';
@@ -94,23 +94,29 @@ var core=window.PocketSpatialCore;
 var audio=document.getElementById('audio'),file=document.getElementById('file'),spatial=document.getElementById('spatial');
 var space=document.getElementById('space'),angle=document.getElementById('angle'),depth=document.getElementById('depth');
 var delayStretch=document.getElementById('delayStretch'),headShadow=document.getElementById('headShadow'),roomScale=document.getElementById('roomScale');
-var roomWrap=document.getElementById('roomWrap'),reflectionTone=document.getElementById('reflectionTone'),polarity=document.getElementById('polarity'),rearStrength=document.getElementById('rearStrength');
+var roomWrap=document.getElementById('roomWrap'),reflectionTone=document.getElementById('reflectionTone'),polarity=document.getElementById('polarity');
+var rearStrength=document.getElementById('rearStrength'),centerAnchor=document.getElementById('centerAnchor'),steerSep=document.getElementById('steerSep');
 var badge=document.getElementById('badge'),track=document.getElementById('track'),status=document.getElementById('status');
 var ctx=null,source=null,splitter=null,merger=null,master=null,limiter=null;
 var directL=null,directR=null,crossL=null,crossR=null,delayL=null,delayR=null,filterL=null,filterR=null;
 var reflDelayL1=null,reflDelayR1=null,reflDelayL2=null,reflDelayR2=null,reflFilterL1=null,reflFilterR1=null,reflFilterL2=null,reflFilterR2=null,reflGainL1=null,reflGainR1=null,reflGainL2=null,reflGainR2=null;
 var wrapDelayL1=null,wrapDelayR1=null,wrapDelayL2=null,wrapDelayR2=null,wrapFilterL1=null,wrapFilterR1=null,wrapFilterL2=null,wrapFilterR2=null,wrapGainL1=null,wrapGainR1=null,wrapGainL2=null,wrapGainR2=null;
-var matrixSplit=null,matrixMerge=null,matrixDirectL=null,matrixDirectR=null,matrixLGainA=null,matrixLGainB=null,matrixRGainA=null,matrixRGainB=null,matrixLBus=null,matrixRBus=null,matrixLHP=null,matrixRHP=null,matrixLLP=null,matrixRLP=null,matrixLHilbert=null,matrixRHilbert=null,matrixLL=null,matrixLR=null,matrixRL=null,matrixRR=null,matrixTrim=null;
+var matrixSplit=null,matrixMerge=null,matrixDirectL=null,matrixDirectR=null,matrixCenterL=null,matrixCenterR=null,matrixCenterBus=null;
+var matrixLGainA=null,matrixLGainB=null,matrixRGainA=null,matrixRGainB=null,matrixLBus=null,matrixRBus=null,matrixLHP=null,matrixRHP=null,matrixLLP=null,matrixRLP=null,matrixLHilbert=null,matrixRHilbert=null,matrixLL=null,matrixLR=null,matrixRL=null,matrixRR=null,matrixTrim=null;
 var enabled=false,objectURL=null;
-
 function text(id,value){var n=document.getElementById(id);if(n)n.textContent=value;}
 function setParam(param,value){if(!ctx)return;var t=ctx.currentTime;try{param.cancelScheduledValues(t);param.setTargetAtTime(value,t,0.035);}catch(e){param.value=value;}}
 function targets(){return core.appliedTargets(space.value,angle.value,depth.value,delayStretch.value,headShadow.value,roomScale.value,reflectionTone.value,polarity.value,roomWrap.value,enabled);}
 function makeHilbertKernel(c,taps){taps=taps||129;if(taps%2===0)taps+=1;var impulse=c.createBuffer(1,taps,c.sampleRate),data=impulse.getChannelData(0),mid=(taps-1)/2;for(var n=0;n<taps;n++){var k=n-mid,h=0;if(k!==0&&Math.abs(k%2)===1)h=2/(Math.PI*k);var w=.42-.5*Math.cos((2*Math.PI*n)/(taps-1))+.08*Math.cos((4*Math.PI*n)/(taps-1));data[n]=h*w;}return impulse;}
-function updateReadouts(){var r=core.readouts(space.value,angle.value,depth.value,delayStretch.value,headShadow.value,roomScale.value,reflectionTone.value,polarity.value,roomWrap.value,enabled);text('spaceRead',r.spaceText);text('angleRead',r.angleText);text('depthRead',r.depthText);text('delayStretchRead',r.delayStretchText);text('headShadowRead',r.headShadowText);text('roomScaleRead',r.roomScaleText);text('roomWrapRead',r.roomWrapText);text('reflectionToneRead',r.reflectionToneText);text('polarityRead',r.polarityText);text('rearStrengthRead',Math.round(Number(rearStrength.value)||0)+'%');text('delay',r.delayText);text('cutoff',r.cutoffText);text('far',r.farText);text('direct',r.directText);text('reflTimes',r.reflectionTimesText);text('reflGain',r.reflectionGainText);text('wrapTimes',r.wrapTimesText);text('wrapGain',r.wrapGainText);text('reflCutoff',r.reflectionCutoffText);text('master',r.masterText);text('matrixRead',enabled?('ON · '+Math.round(Number(rearStrength.value)||0)+'%'):'OFF');}
+function updateReadouts(){var r=core.readouts(space.value,angle.value,depth.value,delayStretch.value,headShadow.value,roomScale.value,reflectionTone.value,polarity.value,roomWrap.value,enabled);text('spaceRead',r.spaceText);text('angleRead',r.angleText);text('depthRead',r.depthText);text('delayStretchRead',r.delayStretchText);text('headShadowRead',r.headShadowText);text('roomScaleRead',r.roomScaleText);text('roomWrapRead',r.roomWrapText);text('reflectionToneRead',r.reflectionToneText);text('polarityRead',r.polarityText);text('rearStrengthRead',Math.round(Number(rearStrength.value)||0)+'%');text('centerAnchorRead',Math.round(Number(centerAnchor.value)||0)+'%');text('steerSepRead',Math.round(Number(steerSep.value)||0)+'%');text('delay',r.delayText);text('cutoff',r.cutoffText);text('far',r.farText);text('direct',r.directText);text('reflTimes',r.reflectionTimesText);text('reflGain',r.reflectionGainText);text('wrapTimes',r.wrapTimesText);text('wrapGain',r.wrapGainText);text('reflCutoff',r.reflectionCutoffText);text('master',r.masterText);text('matrixRead',enabled?'CINEMA STEERING ON':'OFF');}
 function apply(){var t=targets();updateReadouts();if(!ctx)return;setParam(delayL.delayTime,t.delaySeconds);setParam(delayR.delayTime,t.delaySeconds);setParam(filterL.frequency,t.cutoffHz);setParam(filterR.frequency,t.cutoffHz);setParam(directL.gain,t.directGain);setParam(directR.gain,t.directGain);setParam(crossL.gain,t.farGain);setParam(crossR.gain,t.farGain);setParam(reflDelayL1.delayTime,t.refl1DelayL);setParam(reflDelayR1.delayTime,t.refl1DelayR);setParam(reflDelayL2.delayTime,t.refl2DelayL);setParam(reflDelayR2.delayTime,t.refl2DelayR);setParam(reflFilterL1.frequency,t.reflCutoff);setParam(reflFilterR1.frequency,t.reflCutoff);setParam(reflFilterL2.frequency,t.reflCutoff);setParam(reflFilterR2.frequency,t.reflCutoff);setParam(reflGainL1.gain,t.refl1Gain);setParam(reflGainR1.gain,t.refl1Gain);setParam(reflGainL2.gain,t.refl2Gain);setParam(reflGainR2.gain,t.refl2Gain);setParam(wrapDelayL1.delayTime,t.wrapDelayL1);setParam(wrapDelayR1.delayTime,t.wrapDelayR1);setParam(wrapDelayL2.delayTime,t.wrapDelayL2);setParam(wrapDelayR2.delayTime,t.wrapDelayR2);setParam(wrapFilterL1.frequency,t.wrapCutoff);setParam(wrapFilterR1.frequency,t.wrapCutoff);setParam(wrapFilterL2.frequency,t.wrapCutoff);setParam(wrapFilterR2.frequency,t.wrapCutoff);setParam(wrapGainL1.gain,t.wrapGain1);setParam(wrapGainR1.gain,t.wrapGain1);setParam(wrapGainL2.gain,t.wrapGain2);setParam(wrapGainR2.gain,t.wrapGain2);setParam(master.gain,t.masterGain);
-  var rear=enabled?(0.75*(Math.max(0,Math.min(150,Number(rearStrength.value)||0))/100)):0;
-  setParam(matrixLL.gain,-.49*rear);setParam(matrixLR.gain,.871*rear);setParam(matrixRL.gain,-.871*rear);setParam(matrixRR.gain,.49*rear);setParam(matrixTrim.gain,enabled?.74:.96);
+  var rear=enabled?(0.95*(Math.max(0,Math.min(300,Number(rearStrength.value)||0))/100)):0;
+  var center=enabled?(0.28*(Math.max(0,Math.min(200,Number(centerAnchor.value)||0))/100)):0;
+  var sep=Math.max(0,Math.min(200,Number(steerSep.value)||0))/100;
+  setParam(matrixCenterL.gain,center);setParam(matrixCenterR.gain,center);
+  setParam(matrixLGainA.gain,1);setParam(matrixLGainB.gain,-.18-.62*sep);setParam(matrixRGainA.gain,1);setParam(matrixRGainB.gain,-.18-.62*sep);
+  setParam(matrixLL.gain,-.49*rear);setParam(matrixLR.gain,.871*rear);setParam(matrixRL.gain,-.871*rear);setParam(matrixRR.gain,.49*rear);
+  setParam(matrixDirectL.gain,enabled?.68:.96);setParam(matrixDirectR.gain,enabled?.68:.96);setParam(matrixTrim.gain,enabled?.64:.96);
   badge.textContent=enabled?'Spatial on':'Spatial off';badge.className='badge'+(enabled?' on':'');spatial.textContent=enabled?'TURN SPATIAL OFF':'TURN SPATIAL ON';
 }
 function buildGraph(){if(ctx)return true;if(!core){status.textContent='The spatial parameter core did not load.';status.className='status warn';return false;}if(!AC){status.textContent='This Safari build does not expose Web Audio.';status.className='status warn';return false;}try{
@@ -122,16 +128,18 @@ function buildGraph(){if(ctx)return true;if(!core){status.textContent='The spati
   splitter.connect(reflDelayL1,0);reflDelayL1.connect(reflFilterL1);reflFilterL1.connect(reflGainL1);reflGainL1.connect(merger,0,0);splitter.connect(reflDelayL2,0);reflDelayL2.connect(reflFilterL2);reflFilterL2.connect(reflGainL2);reflGainL2.connect(merger,0,0);splitter.connect(reflDelayR1,1);reflDelayR1.connect(reflFilterR1);reflFilterR1.connect(reflGainR1);reflGainR1.connect(merger,0,1);splitter.connect(reflDelayR2,1);reflDelayR2.connect(reflFilterR2);reflFilterR2.connect(reflGainR2);reflGainR2.connect(merger,0,1);
   splitter.connect(wrapDelayL1,0);wrapDelayL1.connect(wrapFilterL1);wrapFilterL1.connect(wrapGainL1);wrapGainL1.connect(merger,0,1);splitter.connect(wrapDelayL2,0);wrapDelayL2.connect(wrapFilterL2);wrapFilterL2.connect(wrapGainL2);wrapGainL2.connect(merger,0,1);splitter.connect(wrapDelayR1,1);wrapDelayR1.connect(wrapFilterR1);wrapFilterR1.connect(wrapGainR1);wrapGainR1.connect(merger,0,0);splitter.connect(wrapDelayR2,1);wrapDelayR2.connect(wrapFilterR2);wrapFilterR2.connect(wrapGainR2);wrapGainR2.connect(merger,0,0);
   merger.connect(master);master.connect(limiter);
-  matrixSplit=ctx.createChannelSplitter(2);matrixMerge=ctx.createChannelMerger(2);matrixDirectL=ctx.createGain();matrixDirectR=ctx.createGain();matrixLGainA=ctx.createGain();matrixLGainB=ctx.createGain();matrixRGainA=ctx.createGain();matrixRGainB=ctx.createGain();matrixLBus=ctx.createGain();matrixRBus=ctx.createGain();matrixLHP=ctx.createBiquadFilter();matrixRHP=ctx.createBiquadFilter();matrixLLP=ctx.createBiquadFilter();matrixRLP=ctx.createBiquadFilter();matrixLHilbert=ctx.createConvolver();matrixRHilbert=ctx.createConvolver();matrixLL=ctx.createGain();matrixLR=ctx.createGain();matrixRL=ctx.createGain();matrixRR=ctx.createGain();matrixTrim=ctx.createGain();
-  matrixDirectL.gain.value=.82;matrixDirectR.gain.value=.82;matrixLGainA.gain.value=1;matrixLGainB.gain.value=-.35;matrixRGainA.gain.value=1;matrixRGainB.gain.value=-.35;matrixLHP.type=matrixRHP.type='highpass';matrixLLP.type=matrixRLP.type='lowpass';matrixLHP.frequency.value=matrixRHP.frequency.value=140;matrixLLP.frequency.value=matrixRLP.frequency.value=7600;matrixLHilbert.normalize=false;matrixRHilbert.normalize=false;matrixLHilbert.buffer=makeHilbertKernel(ctx,129);matrixRHilbert.buffer=makeHilbertKernel(ctx,129);
-  limiter.connect(matrixSplit);matrixSplit.connect(matrixDirectL,0);matrixDirectL.connect(matrixMerge,0,0);matrixSplit.connect(matrixDirectR,1);matrixDirectR.connect(matrixMerge,0,1);
+  matrixSplit=ctx.createChannelSplitter(2);matrixMerge=ctx.createChannelMerger(2);matrixDirectL=ctx.createGain();matrixDirectR=ctx.createGain();matrixCenterL=ctx.createGain();matrixCenterR=ctx.createGain();matrixCenterBus=ctx.createGain();matrixLGainA=ctx.createGain();matrixLGainB=ctx.createGain();matrixRGainA=ctx.createGain();matrixRGainB=ctx.createGain();matrixLBus=ctx.createGain();matrixRBus=ctx.createGain();matrixLHP=ctx.createBiquadFilter();matrixRHP=ctx.createBiquadFilter();matrixLLP=ctx.createBiquadFilter();matrixRLP=ctx.createBiquadFilter();matrixLHilbert=ctx.createConvolver();matrixRHilbert=ctx.createConvolver();matrixLL=ctx.createGain();matrixLR=ctx.createGain();matrixRL=ctx.createGain();matrixRR=ctx.createGain();matrixTrim=ctx.createGain();
+  matrixLHP.type=matrixRHP.type='highpass';matrixLLP.type=matrixRLP.type='lowpass';matrixLHP.frequency.value=matrixRHP.frequency.value=120;matrixLLP.frequency.value=matrixRLP.frequency.value=8000;matrixLHilbert.normalize=false;matrixRHilbert.normalize=false;matrixLHilbert.buffer=makeHilbertKernel(ctx,129);matrixRHilbert.buffer=makeHilbertKernel(ctx,129);
+  limiter.connect(matrixSplit);
+  matrixSplit.connect(matrixDirectL,0);matrixDirectL.connect(matrixMerge,0,0);matrixSplit.connect(matrixDirectR,1);matrixDirectR.connect(matrixMerge,0,1);
+  matrixSplit.connect(matrixCenterL,0);matrixCenterL.connect(matrixCenterBus);matrixSplit.connect(matrixCenterR,1);matrixCenterR.connect(matrixCenterBus);matrixCenterBus.connect(matrixMerge,0,0);matrixCenterBus.connect(matrixMerge,0,1);
   matrixSplit.connect(matrixLGainA,0);matrixLGainA.connect(matrixLBus);matrixSplit.connect(matrixLGainB,1);matrixLGainB.connect(matrixLBus);matrixSplit.connect(matrixRGainA,1);matrixRGainA.connect(matrixRBus);matrixSplit.connect(matrixRGainB,0);matrixRGainB.connect(matrixRBus);matrixLBus.connect(matrixLHP);matrixLHP.connect(matrixLLP);matrixLLP.connect(matrixLHilbert);matrixRBus.connect(matrixRHP);matrixRHP.connect(matrixRLP);matrixRLP.connect(matrixRHilbert);
   matrixLHilbert.connect(matrixLL);matrixLL.connect(matrixMerge,0,0);matrixLHilbert.connect(matrixLR);matrixLR.connect(matrixMerge,0,1);matrixRHilbert.connect(matrixRL);matrixRL.connect(matrixMerge,0,0);matrixRHilbert.connect(matrixRR);matrixRR.connect(matrixMerge,0,1);matrixMerge.connect(matrixTrim);matrixTrim.connect(ctx.destination);
   text('engine','ready');apply();return true;
 }catch(e){status.textContent='Could not start the audio graph: '+e.message;status.className='status warn';return false;}}
 function resume(){if(!buildGraph())return;if(ctx.state==='suspended'&&ctx.resume)ctx.resume();text('engine',ctx.state||'ready');}
 file.addEventListener('change',function(){if(!file.files||!file.files.length)return;if(objectURL){try{URL.revokeObjectURL(objectURL);}catch(e){}}objectURL=URL.createObjectURL(file.files[0]);audio.removeAttribute('crossorigin');audio.src=objectURL;track.textContent=file.files[0].name;status.textContent='Local file loaded. Press play, turn Spatial on, and use your receiver matrix-surround decoder.';status.className='status good';});
-spatial.addEventListener('click',function(){resume();enabled=!enabled;apply();});audio.addEventListener('play',function(){resume();});var controls=[space,angle,depth,delayStretch,headShadow,roomScale,roomWrap,reflectionTone,polarity,rearStrength];for(var c=0;c<controls.length;c++)controls[c].addEventListener('input',apply);var presets=document.querySelectorAll('.preset');for(var i=0;i<presets.length;i++)presets[i].addEventListener('click',function(){space.value=this.getAttribute('data-space');angle.value=this.getAttribute('data-angle');delayStretch.value=this.getAttribute('data-delay');headShadow.value=this.getAttribute('data-shadow');polarity.value=this.getAttribute('data-polarity');depth.value=this.getAttribute('data-depth');roomScale.value=this.getAttribute('data-room');roomWrap.value=this.getAttribute('data-wrap');reflectionTone.value=this.getAttribute('data-tone');apply();});document.addEventListener('visibilitychange',function(){if(!document.hidden&&ctx&&ctx.state==='suspended'&&ctx.resume)ctx.resume();});updateReadouts();
+spatial.addEventListener('click',function(){resume();enabled=!enabled;apply();});audio.addEventListener('play',function(){resume();});var controls=[space,angle,depth,delayStretch,headShadow,roomScale,roomWrap,reflectionTone,polarity,rearStrength,centerAnchor,steerSep];for(var c=0;c<controls.length;c++)controls[c].addEventListener('input',apply);var presets=document.querySelectorAll('.preset');for(var i=0;i<presets.length;i++)presets[i].addEventListener('click',function(){space.value=this.getAttribute('data-space');angle.value=this.getAttribute('data-angle');delayStretch.value=this.getAttribute('data-delay');headShadow.value=this.getAttribute('data-shadow');polarity.value=this.getAttribute('data-polarity');depth.value=this.getAttribute('data-depth');roomScale.value=this.getAttribute('data-room');roomWrap.value=this.getAttribute('data-wrap');reflectionTone.value=this.getAttribute('data-tone');apply();});document.addEventListener('visibilitychange',function(){if(!document.hidden&&ctx&&ctx.state==='suspended'&&ctx.resume)ctx.resume();});updateReadouts();
 })();
 </script>
 </body>
