@@ -25,14 +25,14 @@ audio{width:100%;margin-top:10px}.ctrl{margin:15px 0}.ctrl label{display:flex;ju
 </head>
 <body>
 <h1>POCKET SPATIAL</h1>
-<div class="sub">Headphone spatializer for older iPhones · local / rights-cleared audio · iOS 12-friendly</div>
+<div class="sub">Live spatial processor for Audius streams and local audio · routes through the iPhone audio output</div>
 
 <div class="card hero">
   <div id="badge" class="badge">Spatial off</div>
-  <label class="fileLabel" for="file">CHOOSE AUDIO FROM FILES</label>
+  <label class="fileLabel" for="file">CHOOSE LOCAL AUDIO</label>
   <input id="file" type="file" accept="audio/*">
-  <div id="track" class="status">Choose an MP3, AAC/M4A, WAV, or other audio file Safari can decode.</div>
-  <audio id="audio" controls preload="metadata"></audio>
+  <div id="track" class="status">Choose local audio, or use the Audius live catalog above.</div>
+  <audio id="audio" controls preload="metadata" crossorigin="anonymous"></audio>
   <button id="spatial" class="primary" type="button">TURN SPATIAL ON</button>
 </div>
 
@@ -68,21 +68,21 @@ audio{width:100%;margin-top:10px}.ctrl{margin:15px 0}.ctrl label{display:flex;ju
     <div class="metric"><span>Reflection absorption LPF</span><b id="reflCutoff">3300 Hz</b></div>
     <div class="metric"><span>Applied output trim</span><b id="master">100%</b></div>
   </div>
-  <div id="status" class="status" aria-live="polite">Nothing is processed until you choose a file and tap Spatial.</div>
+  <div id="status" class="status" aria-live="polite">Nothing is processed until playback starts and Spatial is on.</div>
 </div>
 
 <div class="card legal">
   <b>What the sliders mean:</b> Spatial Amount controls the cross-ear localization cue. Virtual Speaker Angle controls its physical delay. Depth controls only the strength of four short, dark early reflections at fixed arrival times, adding a distance/room cue without changing the virtual-speaker angle. Every diagnostic above is generated from the same tested target object sent to the audio nodes.
 </div>
 <div class="card legal">
-  <b>Layer 1 · direction:</b> each stereo channel reaches its near ear directly and the opposite ear a fraction of a millisecond later with high frequencies reduced to approximate head shadow.
-  <br><br><b>Layer 2 · depth:</b> each channel also gets two quiet, un-crossed early reflections. Left reflections arrive at 17 and 31 ms; right at 19 and 34 ms. The later geometry and moderately brighter damping are tuned to create more room volume while keeping the direct center intact.
+  <b>Layer 1 · direction:</b> each stereo channel reaches its near side directly and the opposite side a fraction of a millisecond later with high frequencies reduced to approximate head shadow.
+  <br><br><b>Layer 2 · depth:</b> each channel also gets two quiet, un-crossed early reflections. Left reflections arrive at 17 and 31 ms; right at 19 and 34 ms. The geometry and damping are tuned to create more room volume while keeping the direct center intact.
 </div>
 <div class="card legal">
-  <b>Audio rights:</b> use audio you own, audio you obtained through an official download, or audio whose license allows this kind of processing. This page does not rip or capture streaming services.
+  <b>Streaming:</b> Audius playback uses API-accessible live streams. Pocket Spatial does not rip, export, or persist those tracks; Audius access and gating controls remain in force.
 </div>
 
-<script src="pocket-spatial-core.js?v=20260906-tactile-theater-1"></script>
+<script src="pocket-spatial-core.js?v=20260907-audius-live-1"></script>
 <script>
 (function(){
 'use strict';
@@ -218,9 +218,10 @@ file.addEventListener('change',function(){
   if(!file.files||!file.files.length)return;
   if(objectURL){try{URL.revokeObjectURL(objectURL);}catch(e){}}
   objectURL=URL.createObjectURL(file.files[0]);
+  audio.removeAttribute('crossorigin');
   audio.src=objectURL;
   track.textContent=file.files[0].name;
-  status.textContent='File loaded. Put on headphones, press play, then compare Spatial on/off and adjust Depth.';
+  status.textContent='Local file loaded. Press play, then compare Spatial on/off and adjust Depth.';
   status.className='status good';
 });
 spatial.addEventListener('click',function(){resume();enabled=!enabled;apply();});
