@@ -4,6 +4,44 @@ This directory is a content-addressed GitHub mailbox for getting a second-model 
 
 The task presented to the model is a normal standalone software-engineering problem. Transport identity and verification are handled outside the task text.
 
+## Cross-chat quickstart
+
+This section is intentionally explicit so a fresh ChatGPT conversation can discover and operate the bridge without relying on memory from another chat.
+
+If the user asks to "use the Claude bridge", "consult Claude", or uses the standing `.` collaboration command, the assistant should use its connected GitHub tooling on repository `maaronfanberg-lab/me-` and perform this exact request/reply cycle:
+
+1. Pick a unique request id, for example `claude-consult-20260907-0915`.
+2. Create `bridge/inbox/<request-id>.json` on `main` with at least:
+
+```json
+{
+  "prompt": "Review the current engineering question and give the likeliest cause, safest next operation, and falsification tests.",
+  "context": ["Concise relevant repository context goes here."],
+  "expected_response": "Concrete read-only engineering review with evidence from repository files when useful.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 4
+}
+```
+
+3. The push automatically triggers `.github/workflows/claude-bridge.yml`, workflow name `Verified oracle mailbox`.
+4. Wait for that workflow run to complete.
+5. Read `bridge/outbox/<request-id>.json` from `main`.
+6. Accept it as a Claude consultation only if it contains all of:
+   - `protocol: "content-addressed-oracle-v1"`
+   - `ok: true`
+   - `verified_model_family: "claude"`
+   - a non-empty `response`
+   - request identity/hash fields corresponding to the inbox request
+7. If the outbox is absent or reports an error, inspect the workflow run/logs and fix the transport. Never invent or paraphrase a Claude response that did not arrive.
+8. Independently evaluate Claude's recommendation. Claude is advisory and read-only.
+
+Standing collaboration shorthand used by the project:
+
+- `.` = consult Claude through this bridge.
+- `.+` = consult Claude, independently evaluate the advice, then implement only the portions judged sound, safe, and authorized.
+
+The bridge is discrete request/reply. It is not a persistent Sarah↔Claude chat, and the Claude Code transport is invoked with no session persistence.
+
 ## How it works
 
 1. Create `bridge/inbox/<request-id>.json`.
