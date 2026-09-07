@@ -16,6 +16,17 @@ Tap that link to open the launcher with Resonator and the other current projects
 - OMEF FULL
 - Geo Pulse
 
+## Claude consultation
+
+Claude consultation is available through `.github/workflows/claude-bridge.yml`.
+
+Create a request under `bridge/inbox/`, wait for the matching `bridge/outbox/` response, then independently evaluate Claude’s advice. The bridge is read-only.
+
+Shorthand:
+
+- `.` means consult Claude.
+- `.+` means consult Claude and implement only trusted recommendations.
+
 ## Claude simulator access
 
 This repo includes both a local Claude Code MCP server and a remotely deployable MCP server for Claude custom connectors.
