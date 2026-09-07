@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-consult-20260907-1802-pocket-spatial-steering-v2.json",
+  "request_sha256": "9e81037b7ce9832b3dabbccb957fd40df5b288922d299f55c887bc5505da5655",
+  "request_nonce": "pocket-spatial-dynamic-steering-v2-20260907-1802",
+  "completed_at": "2026-09-07T23:02:25.834891Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Files inspected\n- `apps/pocket-spatial-core.js` — `calculate()`, `calculateDepth()`, `appliedTargets()` (static target math + existing `worstCaseSum`/`masterGain` headroom trick), and the second IIFE (`hilbertBuffer()`, `wireMatrix()`, `DynamicsCompressorNode.prototype.connect` patch, fixed `amount=0.26`).\n- `apps/pocket-spatial.html` — `buildGraph()`, `apply()`, `setParam()`, `makeHilbertKernel()`, and the matrix node graph (`matrixCenterL/R`, `matrixLGainA/B`, `matrixRGainA/B`, `matrixLL/LR/RL/RR`, `matrixTrim`) driven by the `rearStrength`/`centerAnchor`/`steerSep` sliders.\n- `apps/pocket-spatial-matrix-test.html` — `gains()` and `play()`, the fixed sine-burst speaker-hunt tool with known-good `rearL/rearR` coefficients matching `matrixLL/LR/RL/RR`.\n\n**Baseline finding:** there is currently *no* real-time program analysis anywhere. `apply()` only recomputes gains on slider `input` events, and `setParam()` applies a single uniform smoothing constant (`setTargetAtTime(v, t, 0.035)`) to every parameter regardless of signal content. All steering is a static function of slider percentages. This confirms the premise and defines the gap to close.\n\n## 1) Low-cost real-time measurements\nAdd one `AudioWorkletNode` tapped off the existing `splitter` (before `directL/directR`), processing native 128-sample blocks:\n- Mid/Side energy: `M=(L+R)/2`, `S=(L-R)/2`; running sums of `M²`, `S²` per block.\n- Normalized L/R correlation: `r = Σ(L·R) / sqrt(Σ(L²)·Σ(R²))`, accumulated per ~20 ms window (few hundred samples) — cheap, no FFT needed, much cheaper/more sample-accurate than `AnalyserNode`.\n- A crude one-pole (~150–200 Hz) split so bass energy is excluded from the correlation estimate — otherwise mono bass constantly reads as \"decorrelated\" once low-frequency phase wander is included, poisoning the rear cue.\n- A noise-floor RMS check to gate analysis during silence.\n\nThis is O(N) per block; trivial vs. the existing convolver/biquad chain already in `buildGraph()`.\n\n## 2) Steering logic\nDefine widthIndex `w = 1 - clamp(r,0,1)` (0 = mono/center-heavy, 1 = wide/decorrelated), smoothed with **asymmetric** attack/release (fast attack ~30–50 ms so a wide drum hit registers quickly, slow release ~400–800 ms so beat gaps don't collapse the image):\n```\nw_smoothed += (w > w_smoothed) ? (w - w_smoothed) * attackCoef : (w - w_smoothed) * releaseCoef\n```\nThen modulate *around* the user's existing fixed sliders rather than replacing them, so the already-validated `matrix-test.html` calibration remains the resting state:\n```\ncenterGain = centerBase * (1 + kC * (1 - w_smoothed))   // clamp Δ to ±40%\nrearGain   = rearBase   * (1 + kR * w_smoothed)\nsepGain    = sepBase    * (1 + kS * w_smoothed)\n```\nFeed these into `matrixCenterL/R.gain`, `matrixLL/LR/RL/RR.gain`, and `matrixLGainB/RGainB.gain` via `setParam()`, but replace the flat `0.035` tau with the asymmetric envelope computed above (control-rate, not per-parameter arbitrary smoothing).\n\n## 3) Headroom, anti-pumping, anti-phase-collapse\n- **Predictive gain-staging, not reactive limiting.** `appliedTargets()` already computes `worstCaseSum`/`masterGain` for the depth/reflection chain — extend the identical pattern to the dynamic matrix gains: before applying new `centerGain/rearGain/sepGain`, recompute worst-case `|direct|+|center|+|rear|+|sep|` and pre-scale `matrixTrim` inversely. This keeps the existing `DynamicsCompressorNode` (threshold −4 dB, ratio 20:1, attack 3 ms, release 140 ms in `buildGraph()`) from doing the heavy lifting — its 140 ms release is exactly the mechanism that causes audible pumping if dynamic steering pushes gain into it repeatedly.\n- **Rate limiting** as a second, independent safety net: cap max dB/sec change on the applied gains regardless of what the envelope computed.\n- **Phase collapse guard:** keep the existing `matrixLHP/RHP` (120 Hz) and `matrixLLP/RLP` (8 kHz) windowing so sub-120 Hz content is never routed through the Hilbert/rear path — this is the most common cause of mono-fallback bass cancellation. Also cap `kR`'s effect on `matrixLGainB/RGainB` so the cross-channel negative gain never approaches −1× the direct path (risk of near-total null if summed to mono downstream).\n- **Silence gate:** freeze `w_smoothed` (hold last value) below the noise-floor threshold to prevent random jitter on quiet passages/fades.\n\n## 4) Ranked implementation changes\n1. **Add the AudioWorklet analysis tap (mid/side RMS + banded correlation).** Nothing else is possible without it; currently `apply()` has zero signal-awareness.\n2. **Replace `setParam(...,0.035)` for the matrix gains with the asymmetric attack/release envelope driving `centerGain/rearGain/sepGain`.** This is the actual \"dynamic steering\" behavior the task asks for, and it's a bounded, low-risk change since it modulates around the existing calibrated baseline.\n3. **Extend the `worstCaseSum`/`masterGain` predictive headroom pattern from `appliedTargets()` to the matrix stage**, so the dynamic gains don't rely on the compressor's 140 ms release to avoid clipping — this is what prevents pumping once (2) makes gains actually move.\n\n## 5) Falsification test plan\n- **Reference lock:** with dynamic steering engaged, replay `pocket-spatial-matrix-test.html`'s `rearL`/`rearR` bursts unmodified. They must still decode to the same \"KNOWN FAR-BACK LEFT/RIGHT\" speakers. Any shift falsifies the phase-collapse safeguard.\n- **Correlated vs. decorrelated A/B:** synthesize (or reuse the file's `gains()` pattern) a mono burst (`r≈1`) alternating with a wide/decorrelated burst (`r≈0`) at matched amplitude; measure output level on center vs. rear busses and confirm rise/fall times match the specified attack (~30–50 ms) and release (~400–800 ms) constants — falsified if timing doesn't track or if levels don't differentiate.\n- **Real music A/B:** a solo-vocal passage vs. a wide chorus/reverb tail from the same track; confirm center firms on vocal, rear engages on chorus, with no audible pumping at the transition (falsified by audible gain-riding or level swings not explained by (3)).\n- **Silence/noise-floor test:** near-silent input should freeze steering rather than chatter — falsified by any audible modulation on noise floor.\n- **Worst-case headroom test:** full-scale wide decorrelated signal (max simultaneous center+rear+sep demand) should not clip pre-limiter and should show no audible pumping — falsified if the compressor's gain reduction becomes audible, indicating (3) failed to pre-compensate.",
+  "session_id": "a09510fb-de13-473e-a340-dcbcdefed6be",
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 21903,
+    "cache_read_input_tokens": 16966,
+    "output_tokens": 6946,
+    "output_tokens_details": {
+      "thinking_tokens": 3776
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 21903,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 6479,
+        "cache_read_input_tokens": 5292,
+        "cache_creation_input_tokens": 19794,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 19794
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.1618652,
+  "num_turns": 8
+}
