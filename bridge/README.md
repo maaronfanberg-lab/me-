@@ -8,9 +8,17 @@ The task presented to the model is a normal standalone software-engineering prob
 
 This section is intentionally explicit so a fresh ChatGPT conversation can discover and operate the bridge without relying on memory from another chat.
 
-If the user asks to "use the Claude bridge", "consult Claude", or uses the standing `.` collaboration command, the assistant should use its connected GitHub tooling on repository `maaronfanberg-lab/me-` and perform this exact request/reply cycle:
+If the user asks to "use the Claude bridge", "consult Claude", or uses the standing `.` collaboration command, the assistant should use its connected GitHub tooling on repository `maaronfanberg-lab/me-` and perform this exact request/reply cycle.
 
-1. Pick a unique request id, for example `claude-consult-20260907-0915`.
+### Preconditions
+
+- The assistant must have GitHub read access to this repository and write access sufficient to create a file on `main`. If write access is unavailable, report that limitation instead of pretending the consultation occurred.
+- Use a brand-new request id every time. Before sending, make sure the matching `bridge/outbox/<request-id>.json` does not already exist. Never reuse an id whose outbox already exists.
+- Send exactly one new `bridge/inbox/*.json` request per commit/push. The push-trigger resolver intentionally selects one inbox request from the triggering commit, so bundling multiple new requests into one push is unsupported.
+
+### Request/reply cycle
+
+1. Pick a unique request id, for example `claude-consult-20260907-0915-topic`.
 2. Create `bridge/inbox/<request-id>.json` on `main` with at least:
 
 ```json
@@ -24,16 +32,18 @@ If the user asks to "use the Claude bridge", "consult Claude", or uses the stand
 ```
 
 3. The push automatically triggers `.github/workflows/claude-bridge.yml`, workflow name `Verified oracle mailbox`.
-4. Wait for that workflow run to complete.
-5. Read `bridge/outbox/<request-id>.json` from `main`.
+4. Poll for the matching `bridge/outbox/<request-id>.json` on `main`. A normal assistant using GitHub file tools can simply retry that exact path every 10–20 seconds. The workflow has an 8-minute job timeout, so if no outbox appears within roughly 8 minutes, treat that as a transport failure and inspect the workflow run/logs when Actions-read tooling is available.
+5. Read `bridge/outbox/<request-id>.json`.
 6. Accept it as a Claude consultation only if it contains all of:
    - `protocol: "content-addressed-oracle-v1"`
    - `ok: true`
    - `verified_model_family: "claude"`
    - a non-empty `response`
    - request identity/hash fields corresponding to the inbox request
-7. If the outbox is absent or reports an error, inspect the workflow run/logs and fix the transport. Never invent or paraphrase a Claude response that did not arrive.
+7. If the outbox is absent after the wait budget or reports an error, diagnose the bridge. Never invent or paraphrase a Claude response that did not arrive.
 8. Independently evaluate Claude's recommendation. Claude is advisory and read-only.
+
+`workflow_dispatch` is an optional alternate trigger for an inbox request that already exists. It is not required for normal ChatGPT operation and should not replace the one-request-per-push path above unless the caller specifically needs to rerun an existing request and has Actions-dispatch tooling.
 
 Standing collaboration shorthand used by the project:
 
