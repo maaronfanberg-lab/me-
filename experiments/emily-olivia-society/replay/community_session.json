@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 2,
+  "completed_reply_turns": 3,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -89,6 +89,15 @@
       "to_name": "Olivia",
       "content": "Oh, I see. So it has been that hectic? What did you do?",
       "created_at": "2026-09-08T07:44:28.331644+00:00"
+    },
+    {
+      "id": 4,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Yeah, it has been that hectic. I've just been feeling really stressed lately. Have you noticed anything in particular?",
+      "created_at": "2026-09-08T07:45:58.931041+00:00"
     }
   ],
   "latest_turn": {
@@ -125,21 +134,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Hey, how's it going? You seem pretty stressed.",
+      "Olivia observes a message from Emily: Oh, I see. So it has been that hectic? What did you do?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "b2d2e2f379379acb7e41",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 5
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "5ed67039a83bb8d6fa67",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 5
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "Yeah, it has been that hectic. I've just been feeling really stressed lately. Have you noticed anything in particular?",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Hey, how's it going? You seem pretty stressed.",
+        "Olivia observes a message from Emily: Oh, I see. So it has been that hectic? What did you do?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "b2d2e2f379379acb7e41",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 5
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "5ed67039a83bb8d6fa67",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 5
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 4,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Yeah, it has been that hectic. I've just been feeling really stressed lately. Have you noticed anything in particular?",
+        "created_at": "2026-09-08T07:45:58.931041+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"long_refractory_echo: Yeah, it has been hectic lately. I've just been feeling really stressed. Have you noticed anything in particular?\""
+    "external_generation_error": ""
   }
 }
