@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-consult-20260907-1950-pocket-spatial-pseudo-objects.json",
+  "request_sha256": "033ec1c05294aa37db20f35aa0064e879a7e4d4de0108057b0795bd8c128765a",
+  "request_nonce": "pocket-spatial-pseudo-objects-20260907-1950",
+  "completed_at": "2026-09-08T00:53:30.573567Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Diagnosis (grounded in the code)\n\nThe current `pocket-spatial-steering-analyzer.js` computes exactly **one** correlation/side/balance/RMS triplet across the whole band above a single 160 Hz high-pass (`fc=160`, one-pole). `applyMatrix()` in `pocket-spatial.html` then multiplies the *entire* fixed matrix (`centerMul`, `rearMul`, `sepMul`) by that one scalar set. Because RMS-weighted correlation is dominated by whatever has the most energy — almost always bass/low-mid — a decorrelated cymbal tail or reverb sitting 20 dB under a correlated bassline barely moves `corr`/`sideRatio`. The matrix itself already band-limits the surround send (`matrixLHP`=120 Hz, `matrixLLP`=8000 Hz) but treats every Hz inside that window identically. **The fix is not a stronger global effect — it's per-band routing inside the send path that already exists**, driven by per-band, not whole-mix, statistics.\n\n## Band plan (3 pseudo-object classes, inside the existing 120–8000 Hz matrix window)\n\nUse cascaded biquad HP/LP (2×12 dB/oct ≈ LR4, cheap, native WebAudio) at:\n\n- **Bass, <150 Hz** — untouched. Already excluded by `matrixLHP` (120 Hz); no new code needed, no steering applied. Satisfies \"bass stays front-stable\" for free.\n- **Band 1 — Voice/Mid, 150–900 Hz** — candidate for center reinforcement.\n- **Band 2 — Presence, 900–3500 Hz** — hard-panned transient material; stays front L/R.\n- **Band 3 — Air/Reverb, 3500–8000 Hz** — decorrelated/reverberant tail; strong surround send.\n\nKey efficiency trick: convolution distributes over addition, so you do **not** need three Hilbert convolvers. Band-filter and gain-weight the *pre-Hilbert* L/R sums, sum them, then feed the **single existing** `matrixLHilbert`/`matrixRHilbert` (129-tap) and center bus exactly as today. Net new nodes: 6 biquads (3 bands × L/R) plus ~9 gain nodes for center/surround/direct sends — trivial next to the existing graph on iPhone Safari.\n\n## AudioWorklet: per-band measurement (extends the existing processor)\n\nAdd two more biquad stages per channel inside `process()` (simple direct-form-II difference equations, no allocation) to split into the 3 bands, then accumulate the same `eL/eR/cross/mid/side` sums **per band** over the existing 25 ms window. Add one fast/slow envelope pair per band to distinguish transient attack from sustained decorrelation within the same frequency range (this is what separates a cymbal *hit*, which should stay front, from its *tail*, which should not):\n\n```\nenvFast = envFast + (|x| - envFast) * aFast   // attack/release ~2ms/15ms\nenvSlow = envSlow + (|x| - envSlow) * aSlow   // attack/release ~2ms/120ms\ntransient = envFast / (envSlow + eps)          // >~1.6 = attacky, ~1 = sustained\n```\n\nPost message per 25 ms window: `{b1:{corr,sideRatio,balance,rms}, b2:{...,transient}, b3:{...,transient}}`.\n\n## Classification (main thread, replaces/extends `handleAnalysis`)\n\nPer band *i* (1..3), reuse the existing `clamp`/`asym` helpers already in the file:\n\n```\ncorrPos_i   = clamp(corr_i, 0, 1)\ncenterT_i   = corrPos_i * (1-|balance_i|) * clamp(1 - sideRatio_i*1.5, 0, 1)\nsurroundT_i = sqrt(max(0,1-corr_i) * sideRatio_i) * pow(1-|balance_i|,0.8)\nlateralLock_i = |balance_i| > 0.25 || transient_i > 1.6\nif (lateralLock_i) surroundT_i *= 0.25          // hard-pans/attacks stay front\n```\n\nSmooth exactly as the existing code does (attack faster than release, same magnitudes already proven on this signal):\n- `centerGain_i`: attack τ=0.035 s, release τ=0.25 s\n- `surroundGain_i`: attack τ=0.020 s, release τ=0.35 s (matches current global `steer.surround`)\n\nPer-band caps (this is the actual \"object\" behavior):\n\n| Band | centerGain range | surroundGain range |\n|---|---|---|\n| 1 Voice/Mid | 0.9–1.8 | 0.25–0.7 (kept low — voice shouldn't smear to rear) |\n| 2 Presence | 0.6–1.1 | 0.20–0.6 (hard floor — this is the \"stays front\" band) |\n| 3 Air/Reverb | 0.5–0.9 | 0.5–2.0 (the band allowed to swing hardest) |\n\nThese are multipliers on the *existing* `rear`/`center` scalars already computed in `matrixBase()`/`applyMatrix()`, applied per band-send gain node rather than to the whole matrix at once — the phase-quadrature coefficients (`-.49/.871/-.871/.49`) that the receiver was calibrated against are never touched, only how much of each band feeds them.\n\n## Graph integration (minimal diff to `buildGraph()`)\n\n```\nmatrixSplit -> [bandpass 150-900] -> gCenter1 -> matrixCenterBus\n                                   -> gSurround1 -> matrixLBus/matrixRBus (pre-Hilbert)\nmatrixSplit -> [bandpass 900-3500] -> gCenter2 -> matrixCenterBus\n                                    -> gSurround2 -> matrixLBus/matrixRBus\nmatrixSplit -> [bandpass 3500-8000] -> gCenter3 -> matrixCenterBus\n                                     -> gSurround3 -> matrixLBus/matrixRBus\n```\n`matrixDirectL/R` (broadband, unfiltered) stay wired exactly as today — front image image is never band-split, so nothing new can *remove* content from the front; band routing only decides how much *extra* copy goes to center/surround.\n\n## Headroom / auto-trim\n\nGeneralize `matrixWorst()` to sum across bands: `worst = |dL|+|dR| + 2·Σ|centerGain_i·center| + 1.361·Σ|surroundGain_i·rear|·(1+cross)`. Feed the same ratio-based auto-trim into `matrixTrim.gain` as today (`baseWorst/dynamicWorst`, clamped 0.96–1.04). Keep `matrixLimiter` (−3 dB, ratio 20, attack 2 ms/release 80 ms) as the last-resort ceiling — unchanged, no new limiter stage needed.\n\n## Fallback (must stay bit-identical)\n\n`adaptiveEnabled=false` forces all `centerGain_i`/`surroundGain_i` = 1.0, which collapses the 3-band sends back to exactly the current single-path `matrixCenterBus`/`matrixLBus`/`matrixRBus` topology and gains. This preserves the receiver-tested rear cues as a literal special case, not an approximation — verify with an offline `OfflineAudioContext` render diff against the pre-upgrade fixed-matrix output (target: <0.1% RMS delta).\n\n## Failure modes to watch\n\n- **Band leakage**: 12 dB/oct biquads have soft skirts; a strong vocal sibilant near 3–4 kHz could leak into Band 3 and get over-surrounded. Mitigate with `transient` gating (sibilants are attacky → `lateralLock` suppresses surround) and by keeping Band 3's low corner at 3500 Hz, not lower.\n- **Pumping**: three independent smoothers on shared buses can beat against each other; if audible, drop to 2 bands (merge 2+3 crossover at 900 Hz) rather than 4.\n- **CPU**: measure `AudioContext.baseLatency`/dropout via existing `limiter` chain; if iPhone Safari underruns, first cut is reducing the analyzer window resolution (25 ms → 40 ms), not removing bands.\n\n## A/B falsification test\n\nUsing `pocket-spatial-matrix-test.html` and the calibrated receiver from `pocket-spatial-receiver.html`, run three clips — (a) centered dry vocal, (b) hard-panned drum hits, (c) cymbal/reverb tail — each under: OFF, current whole-mix adaptive, new multiband adaptive. Log new per-band readouts (`centerDriveRead_1..3`, `rearDriveRead_1..3`).\n\n**Design is falsified if any of:**\n1. Clip (a): `centerGain_1` fails to exceed 1.2 despite `corr_1>0.9`, `sideRatio_1<0.1`.\n2. Clip (b): `surroundGain_2` or `surroundGain_3` rises above 0.8 during the transient onset (should stay under the 0.6/floor cap because `lateralLock` should trigger).\n3. Clip (c): `surroundGain_3` fails to exceed 1.6 despite `corr_3<0.3`, `sideRatio_3>0.3`, `transient_3≈1`.\n4. Receiver panel: rear speakers physically activate during clip (b) but not clip (c), or center speaker fails to sharpen on clip (a) — the perceptual test that must match the numeric one.\n5. OFF-state offline render differs from pre-upgrade fixed matrix by >0.1% RMS (regression on the calibrated rear cue).",
+  "session_id": "add2cf38-4996-4c05-b7b6-04d95658ceee",
+  "usage": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 25867,
+    "cache_read_input_tokens": 39192,
+    "output_tokens": 10950,
+    "output_tokens_details": {
+      "thinking_tokens": 6631
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 25867,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 9856,
+        "cache_read_input_tokens": 13640,
+        "cache_creation_input_tokens": 12227,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 12227
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.2223074,
+  "num_turns": 10
+}
