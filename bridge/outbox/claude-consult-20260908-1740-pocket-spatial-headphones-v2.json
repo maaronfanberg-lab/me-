@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-consult-20260908-1740-pocket-spatial-headphones-v2.json",
+  "request_sha256": "8e55842a13c6d01a58f2a74ca8008e0788ddc5c1e71a5cfce50498c6f3551863",
+  "request_nonce": "pocket-spatial-headphones-20260908-1740-v2",
+  "completed_at": "2026-09-08T22:40:21.661580Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Findings (grounded in current code)\n\n**`apps/pocket-spatial.html`** is no longer a headphone page — it's a receiver-first Lt/Rt matrix encoder. Its own loader (`pocket-spatial-commons-buffered.js`, `forceNeutralPreMatrix()`) zeroes out the ITD/head-shadow/reflection/room-wrap sliders on load, so in production only the post-limiter \"matrix\" stage (center bus, presence bus, Hilbert-quadrature rear bus tuned to `-.49/.871/-.871/.49` coefficients) does anything. That matrix math is receiver-decode-specific and must not be reused for headphones.\n\n**`apps/pocket-spatial-core.js`** has two unrelated things bolted together in one file:\n1. Pure functions `calculate()/calculateDepth()/appliedTargets()/readouts()` — genuinely good, reusable crossfeed/ITD/head-shadow/early-reflection/room-wrap math (classic Bauer-style crossfeed + early reflections). These are exactly what a headphone mode needs.\n2. A **global side-effecting IIFE** that patches `DynamicsCompressorNode.prototype.connect` for *any* page that loads this file, rewiring any compressor→destination connection into the receiver's Hilbert matrix. **Loading `pocket-spatial-core.js` unmodified in a new headphone page will silently corrupt its output** the moment it creates a limiter and connects to destination. This is the single biggest structural risk.\n\n**Playback/catalog files** (`pocket-spatial-commons-buffered.js`, `pocket-spatial-single-playback.js`, `pocket-spatial-buffered-catalog.js`, `pocket-spatial-audius-catalog.js`, `pocket-spatial-buffer-probe.js`) only touch the shared `<audio id=\"audio\">` element (`.src`, `.play()`, catalog UI) — they never touch Web Audio nodes. They are safely reusable unchanged in a new page.\n\n(Side note, not blocking: `tests/pocket-spatial-core.test.js` expects a 2-arg `calculate(space,angle)` with different field names than the current 5-arg implementation — the test suite is already stale relative to core.js. Don't assume old tests describe current behavior; write fresh assertions against the real API.)\n\n## Recommendation: custom graph, not PannerNode HRTF\n\nDon't use `PannerNode` HRTF as the primary engine. Reasons: it models point sources with per-node convolution HRTF sets that are inconsistent/CPU-costly on Safari iOS, it wants one panner per virtual source (expensive if you split bands), and it gives you azimuth/elevation, not the fine independent control over ITD/ILD/head-shadow/early-reflection timing that actually sells externalization on ordinary stereo headphones. The receiver page's crossfeed+reflection math (already written and tested) is the right toolset — this is a Bauer/Chu-Moore crossfeed problem, not a 3D-audio-object problem. HRTF panner is worth it only as an optional, isolated, feature-flagged experiment later (e.g., one mono stem), never as the default path.\n\n### Minimal DSP graph (headphone mode)\n```\nsource (shared #audio) → splitter\n  ├─ directL/R  ───────────────────────────────► merger L/R   (untouched, broadband — preserves center & bass)\n  ├─ delay(ITD) → highpass(~130Hz) → lowpass(head-shadow) → gain(farGain, conservative) → merger (opposite ear)\n  ├─ 1–2 early reflections (13–40ms) → highpass(~130Hz) → lowpass(reflCutoff) → low gain → merger\n  └─ (room-wrap taps 55–176ms: OMIT or default ~0 — reads as slap-echo on headphones, not room)\nmerger → master gain (headroom-normalized) → single gentle DynamicsCompressorNode (≈ -6dB threshold, 4:1, 5ms/120ms) → destination\n```\nReuse `calculate()` for ITD/head-shadow/cross gain and `calculateDepth()`'s first two reflection taps; reuse the existing `masterGain = min(0.90, 0.78/worstCaseSum)` self-normalization pattern verbatim. Add one thing that's currently missing: an explicit ~120–150Hz high-pass on the crossfeed and reflection sends (mirroring the matrix stage's own 120Hz HPF) so bass stays dual-mono and phase-coherent — this is the real guarantor of mono/bass compatibility, not just gain scaling. Drop the Hilbert convolver, the center/presence/rear \"object\" buses, and all polarity-inversion logic entirely — they exist only to fake a decodable matrix and will just smear/attenuate a headphone image.\n\n**Headroom:** normalize direct+crossfeed+reflections to ≤0.9 combined (existing formula), and use a softer limiter ceiling (~-6dB) than the receiver's (-3/-4dB, 20:1) since headphones/BT chains have less downstream margin and pumping is far more audible up close.\n\n## File-level changes\n- **New** `apps/pocket-spatial-core-shared.js`: extract the pure functions (lines 1–152 of core.js) with zero DOM/prototype side effects; `pocket-spatial-core.js` re-exports from it so the receiver page and its existing tests are untouched.\n- **New** `apps/pocket-spatial-headphones-core.js`: headphone-safe parameter curves (tamer max width/depth than IMMERSED/ABYSS presets, add `crossfeedHighpassHz`, room-wrap defaulted to ~0), built on top of the shared module.\n- **New** `apps/pocket-spatial-headphones.html`: standalone page with the graph above, its own minimal sliders (Width/Crossfeed, Head-Shadow, Depth), loading the unmodified catalog/buffered-playback scripts. Must **not** load `pocket-spatial-core.js` (the file with the patch).\n- **New** `tests/pocket-spatial-headphones-core.test.js`: headroom sum, highpass presence, mono-symmetry assertions against the real current API.\n- Leave `pocket-spatial.html`, `pocket-spatial-core.js`'s matrix IIFE, and existing tests untouched.\n\n## Prioritized checklist\n1. Split core.js into pure shared module + unchanged receiver wrapper (no behavior change, de-risks reuse).\n2. Build `pocket-spatial-headphones-core.js` with headphone-safe defaults + HPF addition.\n3. Build `pocket-spatial-headphones.html`: direct + crossfeed + 2 reflections → gentle limiter → destination.\n4. Wire existing Audius/live catalog scripts unchanged; smoke-test playback.\n5. Add unit tests (headroom, mono-sum, HPF present) + runtime guard asserting `window.PocketSpatialReceiverMatrix` is undefined on this page (tripwire against accidentally loading core.js).\n6. (Stretch, gated) Optional single-stem PannerNode-HRTF experiment behind a flag.\n\n## 5 falsification tests\n1. **Mono-fold**: sum L+R / play via mono adapter — bass/vocal level should not drop >1–2dB or hollow out; failure disproves mono/bass-safety.\n2. **Centered-mono symmetry**: feed dual-mono content — output L/R should stay near-identical in level/timing; divergence disproves \"preserves center.\"\n3. **Externalization A/B**: hard-panned pink-noise bursts on wired earbuds, mode on vs off — should localize outside the head; no perceptible shift disproves the crossfeed's core benefit.\n4. **Reflection artifact check**: dry mono vocal at max depth — should add distance cue, not audible discrete echo/metallic comb at 13–40ms; audible flutter disproves safe reflection tuning.\n5. **Headroom/clipping**: 0dBFS-normalized track at max width+depth over iPhone Bluetooth — watch limiter GR readout and listen for pumping/clipping; any audible distortion or sustained multi-dB reduction disproves the headroom budget.",
+  "session_id": "ec27000f-cf04-4b70-ab75-fc54dba15531",
+  "usage": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 30204,
+    "cache_read_input_tokens": 105859,
+    "output_tokens": 11392,
+    "output_tokens_details": {
+      "thinking_tokens": 7329
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 30204,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 8829,
+        "cache_read_input_tokens": 31753,
+        "cache_creation_input_tokens": 1634,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1634
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.2572398,
+  "num_turns": 12
+}
