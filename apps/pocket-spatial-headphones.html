@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#080b12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pocket Spatial Headphones">
+<title>Pocket Spatial · Headphones</title>
+<style>
+:root{--bg:#070a10;--panel:#101722;--panel2:#0b1018;--line:#29354a;--text:#eef4ff;--dim:#99a8bd;--good:#67e1c5;--warn:#e3bc69;--accent:#766cff;--stage-width:.55;--stage-depth:.55}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 50% -10%,#17213b 0,#090d15 38%,var(--bg) 72%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}body{padding:24px 14px 44px;max-width:740px;margin:auto}h1{font-size:29px;line-height:1.02;margin:3px 0 7px;letter-spacing:.025em}.sub{color:var(--dim);font-size:12px;line-height:1.5;margin-bottom:14px}.card{background:linear-gradient(180deg,rgba(18,25,38,.96),rgba(12,17,27,.96));border:1px solid var(--line);border-radius:19px;padding:15px;margin:11px 0;box-shadow:0 12px 30px rgba(0,0,0,.16)}.hero{text-align:center}.badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.badge.on{color:var(--good);border-color:var(--good);box-shadow:0 0 20px rgba(103,225,197,.12)}button,.fileLabel{display:block;width:100%;min-height:52px;border-radius:14px;border:1px solid var(--line);background:#171f2d;color:var(--text);padding:13px;font-size:16px;font-weight:700;text-align:center;margin:8px 0}button.primary{background:linear-gradient(135deg,#554ad4,#756cf2);border-color:#8179ff}.fileLabel{cursor:pointer}input[type=file]{position:absolute;left:-9999px}audio{width:100%;margin-top:10px}.ctrl{margin:17px 0}.ctrl label{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--dim)}.ctrl b{color:var(--text);font-weight:700;text-align:right}input[type=range]{width:100%;height:35px}.row{display:flex;gap:8px}.row button{flex:1;font-size:13px;min-height:46px}.metricGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}.metric span{display:block;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.06em}.metric b{display:block;margin-top:4px;font-size:14px}.status{font-size:12px;color:var(--dim);line-height:1.52;margin-top:8px}.good{color:var(--good)}.warn{color:var(--warn)}.legal{font-size:10.5px;color:var(--dim);line-height:1.58}.legal b{color:var(--text)}.warnButton{border-color:var(--warn);color:var(--warn)}
+.stage{position:relative;height:250px;overflow:hidden;background:radial-gradient(ellipse at 50% 74%,rgba(118,108,255,.11),transparent 50%),linear-gradient(180deg,#090e18,#0a1019);border:1px solid var(--line);border-radius:18px;margin:10px 0}.stage:before{content:'';position:absolute;left:10%;right:10%;bottom:42px;height:110px;border:1px solid rgba(153,168,189,.18);border-radius:50%;transform:perspective(260px) rotateX(62deg)}.you{position:absolute;left:50%;bottom:31px;transform:translateX(-50%);font-size:12px;font-weight:800;color:var(--good);letter-spacing:.08em}.speaker{position:absolute;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(118,108,255,.7);background:rgba(118,108,255,.13);font-size:10px;font-weight:800;transition:all .12s ease}.fl{left:calc(50% - (32% * var(--stage-width)));top:calc(100px - (34px * var(--stage-depth)))}.fr{right:calc(50% - (32% * var(--stage-width)));top:calc(100px - (34px * var(--stage-depth)))}.rl{left:calc(50% - (25% * var(--stage-width)));top:calc(145px + (25px * var(--stage-depth)));opacity:.72}.rr{right:calc(50% - (25% * var(--stage-width)));top:calc(145px + (25px * var(--stage-depth)));opacity:.72}.centerGlow{position:absolute;left:50%;top:58px;width:9px;height:9px;border-radius:50%;transform:translateX(-50%);background:var(--good);box-shadow:0 0 28px var(--good);opacity:.8}.stageNote{position:absolute;left:12px;right:12px;top:12px;text-align:center;color:var(--dim);font-size:10px;line-height:1.35}
+@media(max-width:400px){h1{font-size:25px}.row{display:grid;grid-template-columns:1fr 1fr}.metricGrid{grid-template-columns:1fr}.stage{height:225px}}
+</style>
+</head>
+<body>
+<h1>POCKET SPATIAL · HEADPHONES</h1>
+<div class="sub">Binaural stereo processor for ordinary wired or Bluetooth headphones · no receiver required</div>
+
+<div class="card hero">
+  <div id="badge" class="badge">Headphone spatial off</div>
+  <label class="fileLabel" for="file">CHOOSE LOCAL AUDIO</label>
+  <input id="file" type="file" accept="audio/*">
+  <div id="track" class="status">Choose local audio, or use the Audius catalog below.</div>
+  <audio id="audio" controls playsinline preload="metadata" crossorigin="anonymous"></audio>
+  <button id="spatial" class="primary" type="button">TURN HEADPHONE SPATIAL ON</button>
+  <button id="monoCheck" type="button">MONO CHECK: OFF</button>
+</div>
+
+<div class="stage" aria-hidden="true">
+  <div class="stageNote">The dots are a conceptual stage, not claimed discrete speakers. The DSP remains two-channel stereo.</div>
+  <div class="centerGlow"></div>
+  <div class="speaker fl">FL</div><div class="speaker fr">FR</div><div class="speaker rl">AIR</div><div class="speaker rr">AIR</div>
+  <div class="you">🎧 YOU</div>
+</div>
+
+<div class="card">
+  <div class="status good"><b>HEADPHONE ENGINE:</b> broadband direct stereo stays intact. Spatial cues are added only above 140 Hz, using sub-millisecond opposite-ear timing, head-shadow filtering, a restrained side-width path, and short asymmetric reflections.</div>
+  <div class="ctrl"><label for="externalize"><span>OUTSIDE-HEAD / CROSS-EAR CUE</span><b id="externalizeRead">58%</b></label><input id="externalize" type="range" min="0" max="100" step="1" value="58"></div>
+  <div class="ctrl"><label for="width"><span>STAGE WIDTH</span><b id="widthRead">38%</b></label><input id="width" type="range" min="0" max="100" step="1" value="38"></div>
+  <div class="ctrl"><label for="depth"><span>EARLY-REFLECTION DEPTH</span><b id="depthRead">42%</b></label><input id="depth" type="range" min="0" max="100" step="1" value="42"></div>
+  <div class="ctrl"><label for="room"><span>VIRTUAL ROOM SCALE</span><b id="roomRead">40%</b></label><input id="room" type="range" min="0" max="100" step="1" value="40"></div>
+  <div class="ctrl"><label for="headShadow"><span>HEAD-SHADOW CUTOFF</span><b id="headShadowRead">3200 Hz</b></label><input id="headShadow" type="range" min="900" max="7000" step="50" value="3200"></div>
+  <div class="row">
+    <button class="preset" type="button" data-externalize="34" data-width="22" data-depth="18" data-room="24" data-headshadow="3600">NATURAL</button>
+    <button class="preset" type="button" data-externalize="62" data-width="52" data-depth="34" data-room="38" data-headshadow="3200">WIDE</button>
+    <button class="preset" type="button" data-externalize="72" data-width="46" data-depth="72" data-room="70" data-headshadow="2700">DEEP</button>
+    <button class="preset" type="button" data-externalize="88" data-width="82" data-depth="82" data-room="76" data-headshadow="2200">ORBIT</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="metricGrid">
+    <div class="metric"><span>Audio engine</span><b id="engine">off</b></div>
+    <div class="metric"><span>Receiver-matrix tripwire</span><b id="safetyRead">CLEAR</b></div>
+    <div class="metric"><span>Cross-ear delay</span><b id="itdRead">—</b></div>
+    <div class="metric"><span>Cross-ear gain</span><b id="crossRead">—</b></div>
+    <div class="metric"><span>Spatial bass protection</span><b id="bassRead">—</b></div>
+    <div class="metric"><span>Reflection arrivals</span><b id="reflectionRead">—</b></div>
+    <div class="metric"><span>Output headroom</span><b id="headroomRead">—</b></div>
+    <div class="metric"><span>Output format</span><b>2-channel stereo</b></div>
+  </div>
+  <div id="status" class="status" aria-live="polite">Nothing is processed until playback starts and Headphone Spatial is on.</div>
+</div>
+
+<div class="card legal"><b>What this is:</b> a psychoacoustic binaural/spatial stereo experiment. It is not discrete 5.1, Atmos, or a claim that every listener will hear the same location. Head and ear geometry, headphone response, and the recording itself all change externalization.</div>
+<div class="card legal"><b>How to judge it:</b> use Spatial OFF as the reference and MONO CHECK as the stress test. A useful preset should move the stage away from the earcups without hollowing vocals, thinning bass, obvious echo, pumping, or a major mono collapse.</div>
+
+<script src="pocket-spatial-headphones-core.js?v=20260908-1"></script>
+<script src="pocket-spatial-headphones.js?v=20260908-1"></script>
+<script src="pocket-spatial-audius-catalog.js?v=20260908-headphones-1"></script>
+</body>
+</html>
