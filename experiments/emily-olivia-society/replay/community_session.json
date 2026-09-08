@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 5,
+  "completed_reply_turns": 6,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -116,6 +116,15 @@
       "to_name": "Emily",
       "content": "Yeah, it was okay. It's just been a couple of days and I've been feeling off.",
       "created_at": "2026-09-08T12:46:25.846831+00:00"
+    },
+    {
+      "id": 7,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "I understand. Have you been talking to someone else?",
+      "created_at": "2026-09-08T12:48:26.442582+00:00"
     }
   ],
   "latest_turn": {
@@ -152,21 +161,108 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Yeah, it was okay! I just had a couple of weird days. I wasn't feeling my best today.",
+      "Emily observes a message from Olivia: Yeah, I wasn't feeling my best today. Is there anything else you want to talk about?",
+      "Emily observes a message from Olivia: Yeah, it was okay. It's just been a couple of days and I've been feeling off."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "e7be9a6ba00162c63f0c",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 20.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "b81447676e6ac0a54db7",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "8b15a1565f13ef9df8a8",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 30.0,
+        "stanford_created": 7,
+        "stanford_last_retrieved": 7,
+        "observed_time_step": 8
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "I understand. Have you been talking to someone else?",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Yeah, it was okay! I just had a couple of weird days. I wasn't feeling my best today.",
+        "Emily observes a message from Olivia: Yeah, I wasn't feeling my best today. Is there anything else you want to talk about?",
+        "Emily observes a message from Olivia: Yeah, it was okay. It's just been a couple of days and I've been feeling off."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "e7be9a6ba00162c63f0c",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 20.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "b81447676e6ac0a54db7",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "8b15a1565f13ef9df8a8",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 30.0,
+          "stanford_created": 7,
+          "stanford_last_retrieved": 7,
+          "observed_time_step": 8
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 7,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "I understand. Have you been talking to someone else?",
+        "created_at": "2026-09-08T12:48:26.442582+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"exact_same_speaker_repeat: Oh my, I didn't know you were having a rough time. Can I do anything to help out?\""
+    "external_generation_error": ""
   }
 }
