@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 3,
+  "completed_reply_turns": 4,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -98,6 +98,15 @@
       "to_name": "Emily",
       "content": "That is really amazing! That's so lovely to hear that!",
       "created_at": "2026-09-08T17:47:55.192930+00:00"
+    },
+    {
+      "id": 5,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Wow! That's really amazing. You make me feel so happy!",
+      "created_at": "2026-09-08T17:50:27.341622+00:00"
     }
   ],
   "latest_turn": {
@@ -134,21 +143,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Oh! That's really lovely to hear from you. Meeting in person always makes the experience more memorable!",
+      "Emily observes a message from Olivia: That is really amazing! That's so lovely to hear that!"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "be15d8152db087a8b7d8",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 95.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 6
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "6f554000b40cd34afbf3",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 6
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Wow! That's really amazing. You make me feel so happy!",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Oh! That's really lovely to hear from you. Meeting in person always makes the experience more memorable!",
+        "Emily observes a message from Olivia: That is really amazing! That's so lovely to hear that!"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "be15d8152db087a8b7d8",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 95.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 6
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "6f554000b40cd34afbf3",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 6
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 5,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Wow! That's really amazing. You make me feel so happy!",
+        "created_at": "2026-09-08T17:50:27.341622+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'recurring_pair_attractor: It is so lovely to hear that from you!'"
+    "external_generation_error": ""
   }
 }
