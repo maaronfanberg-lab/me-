@@ -11,6 +11,20 @@ var status=document.getElementById('status');
 var track=document.getElementById('track');
 var monoButton=document.getElementById('monoCheck');
 var proofButton=document.getElementById('dspProof');
+var wetTestButton=document.getElementById('wetTest');
+
+if(!wetTestButton&&proofButton&&proofButton.parentNode){
+  wetTestButton=document.createElement('button');
+  wetTestButton.id='wetTest';
+  wetTestButton.type='button';
+  wetTestButton.textContent='WET PATH TEST: OFF';
+  proofButton.parentNode.insertBefore(wetTestButton,proofButton.nextSibling);
+  var wetNote=document.createElement('div');
+  wetNote.className='profileNote';
+  wetNote.innerHTML='<b>Claude diagnostic:</b> WET PATH TEST mutes the normal mix and sends only the wet-left branch to your right ear, before masterGain. Right-ear-only sound proves the wet branch is alive.';
+  proofButton.parentNode.insertBefore(wetNote,wetTestButton.nextSibling);
+}
+
 var controls={
   externalize:document.getElementById('externalize'),
   width:document.getElementById('width'),
@@ -18,11 +32,13 @@ var controls={
   room:document.getElementById('room'),
   headShadow:document.getElementById('headShadow')
 };
+
 var ctx=null,source=null,split=null,dryMerge=null,wetMerge=null,dryGain=null,wetGain=null,outputBus=null,monoSplit=null,monoL=null,monoR=null,monoSum=null,monoMerge=null,stereoGain=null,monoGain=null,limiter=null,proofFilter=null;
+var wetTestSplit=null,wetTestMerge=null,wetTestSilence=null,wetTestGain=null;
 var directL=null,directR=null,crossHP_L=null,crossHP_R=null,crossLP_L=null,crossLP_R=null,crossDelayL=null,crossDelayR=null,crossGainL=null,crossGainR=null;
 var sideL=null,sideR=null,sideBus=null,sideHP=null,widthL=null,widthR=null;
 var refl1L=null,refl1R=null,refl2L=null,refl2R=null,refl1FilterL=null,refl1FilterR=null,refl2FilterL=null,refl2FilterR=null,refl1GainL=null,refl1GainR=null,refl2GainL=null,refl2GainR=null;
-var enabled=false,mono=false,proof=false,objectURL=null,lastParams=null;
+var enabled=false,mono=false,proof=false,wetTest=false,objectURL=null,lastParams=null;
 
 function clamp(v,a,b){return Math.max(a,Math.min(b,Number(v)||0));}
 function text(id,value){var n=document.getElementById(id);if(n)n.textContent=value;}
@@ -51,6 +67,12 @@ function buildGraph(){
     stereoGain=ctx.createGain();monoGain=ctx.createGain();monoSplit=ctx.createChannelSplitter(2);monoL=ctx.createGain();monoR=ctx.createGain();monoSum=ctx.createGain();oneChannel(monoSum);monoMerge=ctx.createChannelMerger(2);
     limiter=ctx.createDynamicsCompressor();
     proofFilter=ctx.createBiquadFilter();proofFilter.type='lowpass';proofFilter.Q.value=.7;proofFilter.frequency.value=20000;
+
+    /* Claude-requested wet-only proof path. It taps wetMerge BEFORE wetGain/masterGain. */
+    wetTestSplit=ctx.createChannelSplitter(2);
+    wetTestMerge=ctx.createChannelMerger(2);
+    wetTestSilence=ctx.createGain();wetTestSilence.gain.value=0;
+    wetTestGain=ctx.createGain();wetTestGain.gain.value=0;
 
     directL=ctx.createGain();directR=ctx.createGain();
     crossHP_L=ctx.createBiquadFilter();crossHP_R=ctx.createBiquadFilter();crossLP_L=ctx.createBiquadFilter();crossLP_R=ctx.createBiquadFilter();crossDelayL=ctx.createDelay(.01);crossDelayR=ctx.createDelay(.01);crossGainL=ctx.createGain();crossGainR=ctx.createGain();
@@ -81,10 +103,17 @@ function buildGraph(){
     dryMerge.connect(dryGain);wetMerge.connect(wetGain);dryGain.connect(outputBus);wetGain.connect(outputBus);
     outputBus.connect(stereoGain);stereoGain.connect(limiter);
     outputBus.connect(monoSplit);monoL.gain.value=monoR.gain.value=.5;monoSplit.connect(monoL,0);monoSplit.connect(monoR,1);monoL.connect(monoSum);monoR.connect(monoSum);monoSum.connect(monoMerge,0,0);monoSum.connect(monoMerge,0,1);monoMerge.connect(monoGain);monoGain.connect(limiter);
+
+    /* Force wet-left into RIGHT ear only; feed explicit silence to LEFT ear. */
+    wetMerge.connect(wetTestSplit);
+    wetTestSplit.connect(wetTestSilence,0);wetTestSilence.connect(wetTestMerge,0,0);
+    wetTestSplit.connect(wetTestMerge,0,1);
+    wetTestMerge.connect(wetTestGain);wetTestGain.connect(limiter);
+
     limiter.connect(proofFilter);proofFilter.connect(ctx.destination);
 
     apply();applyMono();applyProof();
-    text('engine','Web Audio · custom binaural stereo');
+    text('engine','Web Audio · custom binaural stereo · wet-test build');
     text('safetyRead','RECEIVER MATRIX ABSENT ✓');
     status.textContent='Headphone engine ready. Spatial OFF is the level-matched reference.';status.className='status good';
     return true;
@@ -107,7 +136,9 @@ function apply(){
   refl1L.delayTime.value=p.refl1DelayL;refl1R.delayTime.value=p.refl1DelayR;refl2L.delayTime.value=p.refl2DelayL;refl2R.delayTime.value=p.refl2DelayR;
   [refl1FilterL,refl1FilterR,refl2FilterL,refl2FilterR].forEach(function(f){f.frequency.value=p.reflCutoffHz;});
 
-  setParam(dryGain.gain,enabled?0:.78,.015);setParam(wetGain.gain,enabled?p.masterGain:0,.015);
+  setParam(dryGain.gain,wetTest?0:(enabled?0:.78),.015);
+  setParam(wetGain.gain,wetTest?0:(enabled?p.masterGain:0),.015);
+  setParam(wetTestGain.gain,wetTest?1:0,.005);
   setParam(directL.gain,p.directGain);setParam(directR.gain,p.directGain);
   setParam(crossGainL.gain,p.crossGain);setParam(crossGainR.gain,p.crossGain);
   setParam(widthL.gain,p.widthGain);setParam(widthR.gain,-p.widthGain);
@@ -115,12 +146,37 @@ function apply(){
 }
 
 function applyMono(){if(!ctx)return;setParam(stereoGain.gain,mono?0:1,.01);setParam(monoGain.gain,mono?1:0,.01);if(monoButton){monoButton.textContent=mono?'MONO CHECK: ON':'MONO CHECK: OFF';monoButton.className=mono?'warnButton':'';}}
-function applyProof(){if(!ctx)return;setParam(proofFilter.frequency,proof?400:20000,.01);if(proofButton){proofButton.textContent=proof?'DSP PROOF: ON · SHOULD SOUND VERY MUFFLED':'DSP PROOF: OFF';proofButton.className=proof?'warnButton':'';}if(proof){status.textContent='DSP PROOF is ON. The music should sound dramatically muffled. If it does not, the browser is bypassing our Web Audio graph.';status.className='status warn';}}
-function setEnabled(next){enabled=!!next;if(!buildGraph())return;if(ctx.state==='suspended')ctx.resume();apply();badge.textContent=enabled?'Headphone spatial on':'Headphone spatial off';badge.className='badge'+(enabled?' on':'');spatial.textContent=enabled?'TURN HEADPHONE SPATIAL OFF':'TURN HEADPHONE SPATIAL ON';if(!proof){status.textContent=enabled?'Spatial field active. Listen for the stage leaving the earcups, not merely getting louder.':'Reference bypass active through the same output limiter.';status.className='status'+(enabled?' good':'');}}
+function applyProof(){if(!ctx)return;setParam(proofFilter.frequency,proof?400:20000,.01);if(proofButton){proofButton.textContent=proof?'DSP PROOF: ON · SHOULD SOUND VERY MUFFLED':'DSP PROOF: OFF';proofButton.className=proof?'warnButton':'';}if(proof){status.textContent='DSP PROOF is ON. The music should sound dramatically muffled.';status.className='status warn';}}
+function restoreStatus(){
+  badge.textContent=enabled?'Headphone spatial on':'Headphone spatial off';
+  badge.className='badge'+(enabled?' on':'');
+  spatial.textContent=enabled?'TURN HEADPHONE SPATIAL OFF':'TURN HEADPHONE SPATIAL ON';
+  if(!proof){status.textContent=enabled?'Spatial field active.':'Reference bypass active through the same output limiter.';status.className='status'+(enabled?' good':'');}
+}
+function applyWetTest(){
+  if(!ctx)return;
+  apply();
+  if(wetTestButton){wetTestButton.textContent=wetTest?'WET PATH TEST: ON · RIGHT EAR ONLY':'WET PATH TEST: OFF';wetTestButton.className=wetTest?'warnButton':'';}
+  if(wetTest){
+    badge.textContent='Wet path test active';badge.className='badge on';
+    status.textContent='WET PATH TEST: normal dry/wet output is muted. Only wetMerge LEFT is being sent at unity to your RIGHT ear, before masterGain. You should hear music only in the right ear.';status.className='status warn';
+  }else restoreStatus();
+}
+function setEnabled(next){
+  enabled=!!next;if(!buildGraph())return;if(ctx.state==='suspended')ctx.resume();
+  if(wetTest){wetTest=false;if(wetTestButton){wetTestButton.textContent='WET PATH TEST: OFF';wetTestButton.className='';}}
+  apply();restoreStatus();
+}
 
 spatial.addEventListener('click',function(){setEnabled(!enabled);});
 if(monoButton)monoButton.addEventListener('click',function(){if(!buildGraph())return;mono=!mono;applyMono();});
-if(proofButton)proofButton.addEventListener('click',function(){if(!buildGraph())return;proof=!proof;applyProof();});
+if(proofButton)proofButton.addEventListener('click',function(){if(!buildGraph())return;if(wetTest){wetTest=false;}proof=!proof;apply();applyProof();if(!proof)restoreStatus();});
+if(wetTestButton)wetTestButton.addEventListener('click',function(){
+  if(!buildGraph())return;if(ctx.state==='suspended')ctx.resume();
+  wetTest=!wetTest;
+  if(wetTest){proof=false;mono=false;applyProof();applyMono();}
+  applyWetTest();
+});
 Object.keys(controls).forEach(function(key){controls[key].addEventListener('input',apply);});
 document.querySelectorAll('.preset').forEach(function(button){button.addEventListener('click',function(){Object.keys(controls).forEach(function(key){var val=button.getAttribute('data-'+key.toLowerCase());if(val!=null)controls[key].value=val;});apply();});});
 
@@ -129,6 +185,6 @@ audio.addEventListener('play',function(){if(ctx&&ctx.state==='suspended')ctx.res
 root.addEventListener('pagehide',function(){if(objectURL){URL.revokeObjectURL(objectURL);objectURL=null;}});
 
 lastParams=core.calculate(values());updateReadouts(lastParams);
-root.PocketSpatialHeadphones={version:'20260908-headphones-dsp-proof-2',enable:function(){setEnabled(true);},disable:function(){setEnabled(false);},proof:function(next){if(!buildGraph())return;proof=!!next;applyProof();},apply:apply,values:values,parameters:function(){return lastParams;}};
+root.PocketSpatialHeadphones={version:'20260908-claude-wet-path-test-1',enable:function(){setEnabled(true);},disable:function(){setEnabled(false);},proof:function(next){if(!buildGraph())return;proof=!!next;applyProof();},wetTest:function(next){if(!buildGraph())return;wetTest=!!next;applyWetTest();},apply:apply,values:values,parameters:function(){return lastParams;}};
 
 }(window));
