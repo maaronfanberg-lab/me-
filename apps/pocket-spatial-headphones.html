@@ -27,7 +27,7 @@
   <button id="spatial" class="primary" type="button">TURN HEADPHONE SPATIAL ON</button>
   <button id="monoCheck" type="button">MONO CHECK: OFF</button>
   <button id="dspProof" type="button">DSP PROOF: OFF</button>
-  <div class="profileNote"><b>Diagnostic:</b> if Spatial ON/OFF sounds identical, turn DSP PROOF on. It deliberately low-passes the entire output to about 400 Hz, so the music should become extremely muffled. If that change is also inaudible, our Web Audio graph is being bypassed.</div>
+  <div class="profileNote"><b>Diagnostic:</b> DSP PROOF deliberately low-passes the whole output. You already confirmed it works, so the browser is definitely processing the music.</div>
 </div>
 
 <div class="stage" aria-hidden="true">
@@ -38,21 +38,21 @@
 </div>
 
 <div class="card">
-  <div class="status good"><b>HEADPHONE ENGINE:</b> broadband direct stereo stays intact. Spatial cues are added only above 140 Hz, using sub-millisecond opposite-ear timing, head-shadow filtering, a restrained side-width path, and short asymmetric reflections.</div>
+  <div class="status good"><b>HEADPHONE ENGINE v2:</b> broadband direct stereo and low bass stay anchored, while the cross-ear, side-field, and early-reflection cues are now intentionally strong enough for obvious A/B testing.</div>
   <div class="ctrl"><label for="externalize"><span>OUTSIDE-HEAD / CROSS-EAR CUE</span><b id="externalizeRead">58%</b></label><input id="externalize" type="range" min="0" max="100" step="1" value="58"></div>
   <div class="ctrl"><label for="width"><span>STAGE WIDTH</span><b id="widthRead">38%</b></label><input id="width" type="range" min="0" max="100" step="1" value="38"></div>
   <div class="ctrl"><label for="depth"><span>EARLY-REFLECTION DEPTH</span><b id="depthRead">42%</b></label><input id="depth" type="range" min="0" max="100" step="1" value="42"></div>
   <div class="ctrl"><label for="room"><span>VIRTUAL ROOM SCALE</span><b id="roomRead">40%</b></label><input id="room" type="range" min="0" max="100" step="1" value="40"></div>
   <div class="ctrl"><label for="headShadow"><span>HEAD-SHADOW CUTOFF</span><b id="headShadowRead">3200 Hz</b></label><input id="headShadow" type="range" min="900" max="7000" step="50" value="3200"></div>
 
-  <button class="preset profileButton" type="button" data-externalize="66" data-width="44" data-depth="54" data-room="46" data-headshadow="2950">🎧 SENNHEISER PXC 550-II PROFILE</button>
-  <div class="profileNote">Starting profile for Alex's PXC 550-II: a little more externalization and depth than Natural, restrained width, and a darker opposite-ear head-shadow cue. It deliberately avoids model-specific corrective EQ until we calibrate by listening.</div>
+  <button class="preset profileButton" type="button" data-externalize="84" data-width="72" data-depth="68" data-room="54" data-headshadow="2500">🎧 PXC 550-II · CALIBRATION v2</button>
+  <div class="profileNote">This is deliberately stronger than the first PXC profile. First goal: make Spatial ON versus OFF unmistakable. After that, we tune it toward convincing space instead of maximum spectacle.</div>
 
   <div class="row">
     <button class="preset" type="button" data-externalize="34" data-width="22" data-depth="18" data-room="24" data-headshadow="3600">NATURAL</button>
     <button class="preset" type="button" data-externalize="62" data-width="52" data-depth="34" data-room="38" data-headshadow="3200">WIDE</button>
     <button class="preset" type="button" data-externalize="72" data-width="46" data-depth="72" data-room="70" data-headshadow="2700">DEEP</button>
-    <button class="preset" type="button" data-externalize="88" data-width="82" data-depth="82" data-room="76" data-headshadow="2200">ORBIT</button>
+    <button class="preset" type="button" data-externalize="94" data-width="94" data-depth="88" data-room="78" data-headshadow="2100">ORBIT MAX</button>
   </div>
 </div>
 
@@ -73,7 +73,7 @@
 <div class="card legal"><b>What this is:</b> a psychoacoustic binaural/spatial stereo experiment. It is not discrete 5.1, Atmos, or a claim that every listener will hear the same location. Head and ear geometry, headphone response, and the recording itself all change externalization.</div>
 <div class="card legal"><b>How to judge it:</b> use Spatial OFF as the reference and MONO CHECK as the stress test. A useful preset should move the stage away from the earcups without hollowing vocals, thinning bass, obvious echo, pumping, or a major mono collapse.</div>
 
-<script src="pocket-spatial-headphones-core.js?v=20260908-1"></script>
+<script src="pocket-spatial-headphones-core.js?v=20260908-spatial-v2"></script>
 <script src="pocket-spatial-headphones.js?v=20260908-proof-2"></script>
 <script src="pocket-spatial-audius-catalog.js?v=20260908-headphones-1"></script>
 </body>
