@@ -16,16 +16,22 @@
     var room=clamp(values.room==null?40:values.room,0,100)/100;
     var shadow=clamp(values.headShadow==null?3200:values.headShadow,900,7000);
 
-    var e=curve01(externalize,.82);
-    var w=curve01(width,.9);
-    var d=curve01(depth,1.08);
-    var r=curve01(room,1.05);
+    var e=curve01(externalize,.78);
+    var w=curve01(width,.82);
+    var d=curve01(depth,.95);
+    var r=curve01(room,1.0);
 
-    var directGain=.78;
-    var crossGain=.015+.075*e;
-    var widthGain=.055*w;
-    var refl1Gain=.050*d;
-    var refl2Gain=.032*d;
+    /*
+      Listening-test v2: the first build proved the Web Audio path worked,
+      but its enhancement sends were too conservative to be perceptually
+      distinct on Alex's PXC 550-II. Keep the direct stereo broadband and
+      bass-safe, but make the side/cross-ear/reflection ratios clearly audible.
+    */
+    var directGain=.72;
+    var crossGain=.025+.145*e;
+    var widthGain=.165*w;
+    var refl1Gain=.095*d;
+    var refl2Gain=.060*d;
     var worstCaseSum=directGain+crossGain+widthGain+refl1Gain+refl2Gain;
     var masterGain=Math.min(.90,.78/Math.max(.78,worstCaseSum));
 
@@ -35,19 +41,19 @@
       depth:depth,
       room:room,
       crossHighpassHz:140,
-      sideHighpassHz:280,
+      sideHighpassHz:240,
       directGain:directGain,
       crossGain:crossGain,
-      crossDelaySeconds:(.00016+.00046*e),
+      crossDelaySeconds:(.00020+.00052*e),
       headShadowHz:shadow,
       widthGain:widthGain,
       refl1Gain:refl1Gain,
       refl2Gain:refl2Gain,
-      refl1DelayL:.013+.015*r,
-      refl1DelayR:.017+.018*r,
-      refl2DelayL:.027+.027*r,
-      refl2DelayR:.033+.031*r,
-      reflCutoffHz:Math.max(1800,Math.min(6200,shadow*1.18)),
+      refl1DelayL:.012+.018*r,
+      refl1DelayR:.018+.021*r,
+      refl2DelayL:.026+.030*r,
+      refl2DelayR:.034+.032*r,
+      reflCutoffHz:Math.max(1700,Math.min(6000,shadow*1.15)),
       masterGain:masterGain,
       worstCaseSum:worstCaseSum,
       outputBudget:worstCaseSum*masterGain,
