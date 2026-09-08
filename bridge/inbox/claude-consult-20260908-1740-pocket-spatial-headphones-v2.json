@@ -1,0 +1,13 @@
+{
+  "nonce": "pocket-spatial-headphones-20260908-1740-v2",
+  "prompt": "Give a concise engineering recommendation for a new headphone-only Pocket Spatial mode in this repository. Inspect only the Pocket Spatial files needed. Target: ordinary stereo wired/Bluetooth headphones on iPhone/Safari, static GitHub Pages, preserve existing Audius/live-stream playback, no AV receiver. Recommend the best minimal DSP graph for convincing width/externalization/depth without fragile monkey-patching. Specifically say what current ITD/head-shadow/reflection code to reuse, whether PannerNode HRTF is worth using or a custom/hybrid graph is better, how to preserve center and bass/mono compatibility, how much headroom to keep, and which files to create/change. End with a prioritized implementation checklist and 5 listening/falsification tests. Be concise enough to finish within the turn budget.",
+  "context": [
+    "apps/pocket-spatial.html is the current UI/audio graph.",
+    "apps/pocket-spatial-core.js contains ITD, head-shadow, reflection and room-wrap target calculations plus a receiver-specific Hilbert/matrix monkey-patch that should not be used for headphones.",
+    "apps/pocket-spatial-audius-catalog.js and buffered playback helpers provide the existing Audius/live catalog path.",
+    "The new mode should be separately testable so the working receiver version is not destabilized."
+  ],
+  "expected_response": "Concise concrete architecture, file-level changes, risks, and tests.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 8
+}
