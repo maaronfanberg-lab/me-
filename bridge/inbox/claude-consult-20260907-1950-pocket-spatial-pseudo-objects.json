@@ -1,0 +1,13 @@
+{
+  "nonce": "pocket-spatial-pseudo-objects-20260907-1950",
+  "prompt": "Collaborate on the next Pocket Spatial upgrade. Read the current apps/pocket-spatial.html, apps/pocket-spatial-steering-analyzer.js, apps/pocket-spatial-core.js, and apps/pocket-spatial-matrix-test.html. The user reports that whole-mix adaptive steering still produces only a small audible difference. We want to borrow an object-based mixing philosophy WITHOUT claiming Atmos or extracting copyrighted stems: infer pseudo-objects from the live stereo signal and route different signal classes differently into our existing two-channel Lt/Rt-style matrix encoder. Design a browser-safe, free, real-time solution for iPhone Safari. Specifically propose a 3- or 4-band pseudo-object engine where: bass stays front-stable; strongly correlated midrange/voice-like material reinforces center; hard-panned transient/lateral material stays front-left/right; decorrelated/reverberant mid-high material gets substantially stronger surround encoding. Prefer Web Audio primitives plus one AudioWorklet analyzer. Keep CPU low. Give exact crossover ranges, per-band measurements, classification equations or pseudocode, smoothing constants, gain ranges, headroom strategy, and how to integrate with the current fixed matrix without breaking the receiver-tested rear cues. Include a concrete A/B falsification test. Do not edit files. Do not propose paid services, licensed Dolby/Atmos encoding, native iOS, Replit, or hardware purchases. Keep the response implementation-focused and under 1400 words.",
+  "context": [
+    "The current app already has a post-immersion analyzer measuring correlation, side ratio, balance, and RMS and modulates the whole matrix. The user hears only a modest difference.",
+    "The receiver has already decoded deliberately constructed two-channel phase/polarity cues into convincing center and rear speaker positions.",
+    "The desired leap is selective content steering, not simply stronger global widening.",
+    "Preserve a one-button fallback to the known-good fixed matrix and keep output as ordinary two-channel audio."
+  ],
+  "expected_response": "A concrete pseudo-object DSP architecture grounded in the current code, with exact band splits, measurements, gain/steering formulas, failure modes, and a receiver A/B test plan.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 10
+}
