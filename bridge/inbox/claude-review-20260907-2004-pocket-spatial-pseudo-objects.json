@@ -1,0 +1,12 @@
+{
+  "nonce": "pocket-spatial-pseudo-object-audit-20260907-2004",
+  "prompt": "Audit the just-implemented Pocket Spatial pseudo-object engine. Read only current apps/pocket-spatial.html, apps/pocket-spatial-steering-analyzer.js, apps/pocket-spatial-core.js, and apps/pocket-spatial-matrix-test.html. This implementation intentionally preserves the old fixed matrix as the OFF path and adds parallel band-limited enhancement buses when ON: 150-900 Hz center enhancement, 900-3500 Hz front-lock enhancement, 3500-8000 Hz extra surround-difference feed into the existing Hilbert/rear matrix buses. The worklet now reports per-band correlation, side ratio, balance, RMS, and transient ratio. Look specifically for: JavaScript syntax/runtime errors; Web Audio connection mistakes; a path that could create duplicate audible audio; errors in left/right surround polarity; OFF not actually restoring the old fixed matrix; unstable gain or clipping hazards; bad transient/classification math; iPhone Safari compatibility; and any mistake that would make ON and OFF sound nearly identical. Do not edit files. Return blocking issues first, then non-blocking tuning suggestions. Be concise and exact, naming variables/functions and fixes.",
+  "context": [
+    "The user's receiver has already passed the calibrated matrix speaker-position test, so the phase/polarity coefficients -.49/.871/-.871/.49 are treated as known-good and should not be swapped.",
+    "The user reported the previous whole-mix adaptive mode made little audible difference, so the new version intentionally creates stronger per-band contrast.",
+    "OFF must remain the trusted A/B baseline."
+  ],
+  "expected_response": "Read-only implementation audit with concrete blockers and exact fixes; no general essay.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 8
+}
