@@ -10,6 +10,7 @@ var badge=document.getElementById('badge');
 var status=document.getElementById('status');
 var track=document.getElementById('track');
 var monoButton=document.getElementById('monoCheck');
+var proofButton=document.getElementById('dspProof');
 var controls={
   externalize:document.getElementById('externalize'),
   width:document.getElementById('width'),
@@ -17,11 +18,11 @@ var controls={
   room:document.getElementById('room'),
   headShadow:document.getElementById('headShadow')
 };
-var ctx=null,source=null,split=null,dryMerge=null,wetMerge=null,dryGain=null,wetGain=null,outputBus=null,monoSplit=null,monoL=null,monoR=null,monoSum=null,monoMerge=null,stereoGain=null,monoGain=null,limiter=null;
+var ctx=null,source=null,split=null,dryMerge=null,wetMerge=null,dryGain=null,wetGain=null,outputBus=null,monoSplit=null,monoL=null,monoR=null,monoSum=null,monoMerge=null,stereoGain=null,monoGain=null,limiter=null,proofFilter=null;
 var directL=null,directR=null,crossHP_L=null,crossHP_R=null,crossLP_L=null,crossLP_R=null,crossDelayL=null,crossDelayR=null,crossGainL=null,crossGainR=null;
 var sideL=null,sideR=null,sideBus=null,sideHP=null,widthL=null,widthR=null;
 var refl1L=null,refl1R=null,refl2L=null,refl2R=null,refl1FilterL=null,refl1FilterR=null,refl2FilterL=null,refl2FilterR=null,refl1GainL=null,refl1GainR=null,refl2GainL=null,refl2GainR=null;
-var enabled=false,mono=false,objectURL=null,lastParams=null;
+var enabled=false,mono=false,proof=false,objectURL=null,lastParams=null;
 
 function clamp(v,a,b){return Math.max(a,Math.min(b,Number(v)||0));}
 function text(id,value){var n=document.getElementById(id);if(n)n.textContent=value;}
@@ -49,6 +50,7 @@ function buildGraph(){
     dryGain=ctx.createGain();wetGain=ctx.createGain();outputBus=ctx.createGain();
     stereoGain=ctx.createGain();monoGain=ctx.createGain();monoSplit=ctx.createChannelSplitter(2);monoL=ctx.createGain();monoR=ctx.createGain();monoSum=ctx.createGain();oneChannel(monoSum);monoMerge=ctx.createChannelMerger(2);
     limiter=ctx.createDynamicsCompressor();
+    proofFilter=ctx.createBiquadFilter();proofFilter.type='lowpass';proofFilter.Q.value=.7;proofFilter.frequency.value=20000;
 
     directL=ctx.createGain();directR=ctx.createGain();
     crossHP_L=ctx.createBiquadFilter();crossHP_R=ctx.createBiquadFilter();crossLP_L=ctx.createBiquadFilter();crossLP_R=ctx.createBiquadFilter();crossDelayL=ctx.createDelay(.01);crossDelayR=ctx.createDelay(.01);crossGainL=ctx.createGain();crossGainR=ctx.createGain();
@@ -71,7 +73,6 @@ function buildGraph(){
 
     split.connect(sideL,0);split.connect(sideR,1);sideL.connect(sideBus);sideR.connect(sideBus);sideBus.connect(sideHP);sideHP.connect(widthL);sideHP.connect(widthR);connectMono(widthL,wetMerge,0);connectMono(widthR,wetMerge,1);
 
-    /* Early reflections remain above the bass-protection HPF and are deliberately asymmetric. */
     crossHP_L.connect(refl1L);refl1L.connect(refl1FilterL);refl1FilterL.connect(refl1GainL);connectMono(refl1GainL,wetMerge,0);
     crossHP_R.connect(refl1R);refl1R.connect(refl1FilterR);refl1FilterR.connect(refl1GainR);connectMono(refl1GainR,wetMerge,1);
     crossHP_L.connect(refl2L);refl2L.connect(refl2FilterL);refl2FilterL.connect(refl2GainL);connectMono(refl2GainL,wetMerge,1);
@@ -80,9 +81,9 @@ function buildGraph(){
     dryMerge.connect(dryGain);wetMerge.connect(wetGain);dryGain.connect(outputBus);wetGain.connect(outputBus);
     outputBus.connect(stereoGain);stereoGain.connect(limiter);
     outputBus.connect(monoSplit);monoL.gain.value=monoR.gain.value=.5;monoSplit.connect(monoL,0);monoSplit.connect(monoR,1);monoL.connect(monoSum);monoR.connect(monoSum);monoSum.connect(monoMerge,0,0);monoSum.connect(monoMerge,0,1);monoMerge.connect(monoGain);monoGain.connect(limiter);
-    limiter.connect(ctx.destination);
+    limiter.connect(proofFilter);proofFilter.connect(ctx.destination);
 
-    apply();applyMono();
+    apply();applyMono();applyProof();
     text('engine','Web Audio · custom binaural stereo');
     text('safetyRead','RECEIVER MATRIX ABSENT ✓');
     status.textContent='Headphone engine ready. Spatial OFF is the level-matched reference.';status.className='status good';
@@ -114,10 +115,12 @@ function apply(){
 }
 
 function applyMono(){if(!ctx)return;setParam(stereoGain.gain,mono?0:1,.01);setParam(monoGain.gain,mono?1:0,.01);if(monoButton){monoButton.textContent=mono?'MONO CHECK: ON':'MONO CHECK: OFF';monoButton.className=mono?'warnButton':'';}}
-function setEnabled(next){enabled=!!next;if(!buildGraph())return;if(ctx.state==='suspended')ctx.resume();apply();badge.textContent=enabled?'Headphone spatial on':'Headphone spatial off';badge.className='badge'+(enabled?' on':'');spatial.textContent=enabled?'TURN HEADPHONE SPATIAL OFF':'TURN HEADPHONE SPATIAL ON';status.textContent=enabled?'Spatial field active. Listen for the stage leaving the earcups, not merely getting louder.':'Reference bypass active through the same output limiter.';status.className='status'+(enabled?' good':'');}
+function applyProof(){if(!ctx)return;setParam(proofFilter.frequency,proof?400:20000,.01);if(proofButton){proofButton.textContent=proof?'DSP PROOF: ON · SHOULD SOUND VERY MUFFLED':'DSP PROOF: OFF';proofButton.className=proof?'warnButton':'';}if(proof){status.textContent='DSP PROOF is ON. The music should sound dramatically muffled. If it does not, the browser is bypassing our Web Audio graph.';status.className='status warn';}}
+function setEnabled(next){enabled=!!next;if(!buildGraph())return;if(ctx.state==='suspended')ctx.resume();apply();badge.textContent=enabled?'Headphone spatial on':'Headphone spatial off';badge.className='badge'+(enabled?' on':'');spatial.textContent=enabled?'TURN HEADPHONE SPATIAL OFF':'TURN HEADPHONE SPATIAL ON';if(!proof){status.textContent=enabled?'Spatial field active. Listen for the stage leaving the earcups, not merely getting louder.':'Reference bypass active through the same output limiter.';status.className='status'+(enabled?' good':'');}}
 
 spatial.addEventListener('click',function(){setEnabled(!enabled);});
 if(monoButton)monoButton.addEventListener('click',function(){if(!buildGraph())return;mono=!mono;applyMono();});
+if(proofButton)proofButton.addEventListener('click',function(){if(!buildGraph())return;proof=!proof;applyProof();});
 Object.keys(controls).forEach(function(key){controls[key].addEventListener('input',apply);});
 document.querySelectorAll('.preset').forEach(function(button){button.addEventListener('click',function(){Object.keys(controls).forEach(function(key){var val=button.getAttribute('data-'+key.toLowerCase());if(val!=null)controls[key].value=val;});apply();});});
 
@@ -126,6 +129,6 @@ audio.addEventListener('play',function(){if(ctx&&ctx.state==='suspended')ctx.res
 root.addEventListener('pagehide',function(){if(objectURL){URL.revokeObjectURL(objectURL);objectURL=null;}});
 
 lastParams=core.calculate(values());updateReadouts(lastParams);
-root.PocketSpatialHeadphones={version:'20260908-headphones-custom-1',enable:function(){setEnabled(true);},disable:function(){setEnabled(false);},apply:apply,values:values,parameters:function(){return lastParams;}};
+root.PocketSpatialHeadphones={version:'20260908-headphones-dsp-proof-2',enable:function(){setEnabled(true);},disable:function(){setEnabled(false);},proof:function(next){if(!buildGraph())return;proof=!!next;applyProof();},apply:apply,values:values,parameters:function(){return lastParams;}};
 
 }(window));
