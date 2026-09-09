@@ -1,7 +1,16 @@
 {
   "mode": "continuous_persistent_community_session",
-  "status": "running",
+  "status": "completed",
   "session_id": "1788925163-65dded4d5c",
+  "limits": {
+    "seed_messages": 1,
+    "requested_reply_turns": 8,
+    "maximum_reply_turns": 10,
+    "maximum_continuous_seconds": 19800,
+    "continuous_seconds": 17400,
+    "turn_delay_seconds": 0.0,
+    "autonomous_loop": true
+  },
   "resumed_social_state": false,
   "autonomous_opening": true,
   "discarded_pending_message_ids": [],
@@ -60,8 +69,70 @@
     "consumed_inbound": null
   },
   "completed_reply_turns": 42,
-  "continuous_seconds": 17400,
-  "turn_delay_seconds": 0.0,
+  "stop_reason": "continuous_window_complete",
+  "seed": {
+    "success": true,
+    "message": {
+      "id": 1,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Hey, what's on your mind? Are you upset?",
+      "created_at": "2026-09-09T03:39:43.447932+00:00"
+    }
+  },
+  "latest_turn": {
+    "agent": "Olivia",
+    "time_step": 44,
+    "observation": {
+      "self": {
+        "id": 2,
+        "name": "Olivia"
+      },
+      "participants": [
+        {
+          "id": 1,
+          "name": "Emily"
+        },
+        {
+          "id": 2,
+          "name": "Olivia"
+        },
+        {
+          "id": 3,
+          "name": "Alex"
+        }
+      ],
+      "inbox": [
+        {
+          "id": 43,
+          "from_id": 1,
+          "from_name": "Emily",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "Thank you for your kind words! It does mean a lot to me, and it truly helps me keep going. I appreciate your support in such trying times.",
+          "created_at": "2026-09-09T08:25:45.280157+00:00"
+        }
+      ]
+    },
+    "retrieved_memories": [],
+    "retrieved_memory_evidence": [],
+    "action": {
+      "type": "wait",
+      "reason": "speech_generation_deferred"
+    },
+    "action_result": null,
+    "consumed_inbound": false,
+    "external_inbound": null,
+    "external_action": null,
+    "external_action_result": null,
+    "external_ack": null,
+    "external_generation_error": "",
+    "generation_deferred": true,
+    "generation_attempts": 1,
+    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'recurring_pair_attractor: Thank you so much for your kind words! It does mean a lot to me, and it truly helps me keep going. Your support in these trying times is always a reminder of how much I value our relationship. Thank you again for b'"
+  },
   "messages": [
     {
       "id": 1,
@@ -450,56 +521,5 @@
       "content": "Thank you for your kind words! It does mean a lot to me, and it truly helps me keep going. I appreciate your support in such trying times.",
       "created_at": "2026-09-09T08:25:45.280157+00:00"
     }
-  ],
-  "latest_turn": {
-    "agent": "Olivia",
-    "time_step": 44,
-    "observation": {
-      "self": {
-        "id": 2,
-        "name": "Olivia"
-      },
-      "participants": [
-        {
-          "id": 1,
-          "name": "Emily"
-        },
-        {
-          "id": 2,
-          "name": "Olivia"
-        },
-        {
-          "id": 3,
-          "name": "Alex"
-        }
-      ],
-      "inbox": [
-        {
-          "id": 43,
-          "from_id": 1,
-          "from_name": "Emily",
-          "to_id": 2,
-          "to_name": "Olivia",
-          "content": "Thank you for your kind words! It does mean a lot to me, and it truly helps me keep going. I appreciate your support in such trying times.",
-          "created_at": "2026-09-09T08:25:45.280157+00:00"
-        }
-      ]
-    },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
-    "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
-    },
-    "action_result": null,
-    "consumed_inbound": false,
-    "external_inbound": null,
-    "external_action": null,
-    "external_action_result": null,
-    "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'recurring_pair_attractor: Thank you so much for your kind words! It does mean a lot to me, and it truly helps me keep going. Your support in these trying times is always a reminder of how much I value our relationship. Thank you again for b'"
-  }
+  ]
 }
