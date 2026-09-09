@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 1,
+  "completed_reply_turns": 2,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -80,6 +80,15 @@
       "to_name": "Emily",
       "content": "Oh, I'm just curious about you. What do you like to do for fun? I heard that hiking is really popular.",
       "created_at": "2026-09-09T08:36:14.165129+00:00"
+    },
+    {
+      "id": 3,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "I'm just a girl, I like to read books. I love mysteries, I was just reading something about an interesting mystery novel last week.",
+      "created_at": "2026-09-09T08:38:04.823407+00:00"
     }
   ],
   "latest_turn": {
@@ -116,21 +125,64 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Oh, I'm just curious about you. What do you like to do for fun? I heard that hiking is really popular."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "ac22ddea782913fe553a",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 4
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "I'm just a girl, I like to read books. I love mysteries, I was just reading something about an interesting mystery novel last week.",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Oh, I'm just curious about you. What do you like to do for fun? I heard that hiking is really popular."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "ac22ddea782913fe553a",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 4
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 3,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "I'm just a girl, I like to read books. I love mysteries, I was just reading something about an interesting mystery novel last week.",
+        "created_at": "2026-09-09T08:38:04.823407+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"repeated_question_stem: I love hiking because it's great for the body and mind. What about you? Do you do anything outdoors too?\""
+    "external_generation_error": ""
   }
 }
