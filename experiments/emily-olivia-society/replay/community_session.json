@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 7,
+  "completed_reply_turns": 8,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -134,6 +134,15 @@
       "to_name": "Emily",
       "content": "Wow, you're always on the gym! That must be great for your flexibility.",
       "created_at": "2026-09-09T23:34:15.202353+00:00"
+    },
+    {
+      "id": 9,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh my gosh, you're always on the gym! That is so cool for you!",
+      "created_at": "2026-09-09T23:37:21.518018+00:00"
     }
   ],
   "latest_turn": {
@@ -170,21 +179,130 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Thanks for the message! I've been really busy at work lately. How about you?",
+      "Emily observes a message from Olivia: Sure, I do a bit of yoga. It's actually quite relaxing, but not as much as stretching.",
+      "Emily observes a message from Olivia: Haha, it's good to hear that! I used to do some stretching too, but it's been a long time since I really put any effort into it. I feel like I need to work on my flexibility again.",
+      "Emily observes a message from Olivia: Wow, you're always on the gym! That must be great for your flexibility."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "3ff73913fb04364f9dad",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 70.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "36f0d99fd53a0edcf37c",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 70.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "01e07ee403268a9220fd",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 7,
+        "stanford_last_retrieved": 7,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 4,
+        "content_hash": "a44757e56f9d36737b0a",
+        "stanford_node_id": 4,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 9,
+        "stanford_last_retrieved": 9,
+        "observed_time_step": 10
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh my gosh, you're always on the gym! That is so cool for you!",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Thanks for the message! I've been really busy at work lately. How about you?",
+        "Emily observes a message from Olivia: Sure, I do a bit of yoga. It's actually quite relaxing, but not as much as stretching.",
+        "Emily observes a message from Olivia: Haha, it's good to hear that! I used to do some stretching too, but it's been a long time since I really put any effort into it. I feel like I need to work on my flexibility again.",
+        "Emily observes a message from Olivia: Wow, you're always on the gym! That must be great for your flexibility."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "3ff73913fb04364f9dad",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 70.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "36f0d99fd53a0edcf37c",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 70.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "01e07ee403268a9220fd",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 7,
+          "stanford_last_retrieved": 7,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 4,
+          "content_hash": "a44757e56f9d36737b0a",
+          "stanford_node_id": 4,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 9,
+          "stanford_last_retrieved": 9,
+          "observed_time_step": 10
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 9,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh my gosh, you're always on the gym! That is so cool for you!",
+        "created_at": "2026-09-09T23:37:21.518018+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"long_refractory_echo: Wow, I'm always on the gym!\""
+    "external_generation_error": ""
   }
 }
