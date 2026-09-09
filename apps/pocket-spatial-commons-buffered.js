@@ -5,14 +5,13 @@
  * Receiver-first mode.
  *
  * This file remains in the historical Commons loader slot, but Commons playback
- * is gone.  We use the slot for a deliberately small compatibility layer that
- * makes the main Pocket Spatial page feed CLEAN stereo into the existing,
+ * is gone. We use the slot for a deliberately small compatibility layer that
+ * makes the main Pocket Spatial page feed clean stereo into the existing,
  * receiver-tested Lt/Rt-style matrix encoder.
  *
- * Important: this does not replace or monkey-patch the matrix DSP.  It simply
- * parks the old headphone/room-virtualization controls at neutral values and
- * hides them, so the receiver sees the original stereo program plus only the
- * intentional matrix encoding / pseudo-object cues.
+ * Receiver-first deliberately parks two layers that were masking the baseline:
+ * the old headphone/room virtualization and the adaptive pseudo-object overlay.
+ * The fixed receiver-tested matrix stays fully active and unchanged.
  */
 
 function byId(id){return document.getElementById(id);}
@@ -38,14 +37,34 @@ function forceNeutralPreMatrix(){
   setValue('roomWrap',0);
   setValue('reflectionTone',3300);
 }
+function forceFixedMatrix(){
+  /*
+   * The adaptive layer used to reduce the proven base rear matrix to 35% while
+   * waiting for object confidence. Receiver-first removes that blocker entirely:
+   * use the full fixed matrix first, then add adaptive ideas back only after the
+   * baseline is audibly proven again.
+   */
+  if(root.PocketSpatialAdaptiveSteering&&typeof root.PocketSpatialAdaptiveSteering.setEnabled==='function'){
+    root.PocketSpatialAdaptiveSteering.setEnabled(false);
+    return true;
+  }
+  var adaptive=byId('adaptiveSteering');
+  if(adaptive&&/ON/i.test(adaptive.textContent||'')){
+    try{adaptive.click();return true;}catch(e){}
+  }
+  return false;
+}
 function applyReceiverFirstUI(){
   forceNeutralPreMatrix();
+  forceFixedMatrix();
+  /* Retry once in case the main inline script finished a fraction later. */
+  root.setTimeout(function(){forceNeutralPreMatrix();forceFixedMatrix();},50);
 
   var lab=document.querySelector('.dangerZone');
   if(lab)lab.style.display='none';
 
   var sub=document.querySelector('.sub');
-  if(sub)sub.textContent='Clean stereo in · receiver-first cinema matrix encoding · pseudo-object steering';
+  if(sub)sub.textContent='Clean stereo in · full receiver-tested matrix encoding · no masking layers';
 
   var badge=byId('badge');
   if(badge&&/spatial/i.test(badge.textContent||''))badge.textContent='Matrix encoder off';
@@ -67,8 +86,24 @@ function applyReceiverFirstUI(){
     button.addEventListener('click',function(){root.setTimeout(syncButton,0);});
   }
 
-  setText('status','Receiver-first mode is ready. Turn Matrix Encoding on and leave the receiver in its Pro Logic / matrix-surround mode.');
+  var adaptiveButton=byId('adaptiveSteering');
+  if(adaptiveButton)adaptiveButton.style.display='none';
+  var adaptiveStatus=byId('adaptiveStatus');
+  if(adaptiveStatus){
+    adaptiveStatus.textContent='Adaptive overlay parked. Receiver-first is using the full fixed matrix with the receiver-tested rear phase/polarity coefficients.';
+    adaptiveStatus.className='status good';
+  }
 
+  setText('status','Receiver-first baseline is ready. Turn Matrix Encoding on and leave the receiver in its Pro Logic / matrix-surround mode.');
+
+  hideMetric('Pseudo-object engine');
+  hideMetric('Program width');
+  hideMetric('Voice/mid center confidence');
+  hideMetric('Air/reverb surround confidence');
+  hideMetric('L/R balance');
+  hideMetric('Voice/mid center send');
+  hideMetric('Air/reverb rear send');
+  hideMetric('Presence front lock');
   hideMetric('Cross-ear delay');
   hideMetric('Head-shadow LPF');
   hideMetric('Far-ear path');
@@ -88,13 +123,15 @@ function applyReceiverFirstUI(){
 
   var engineCard=document.querySelector('.card .status.good');
   if(engineCard){
-    engineCard.innerHTML='<b>RECEIVER-FIRST MATRIX:</b> Pocket Spatial now leaves the incoming stereo program clean before encoding. The receiver, not a headphone-style spatializer, does the surround decoding. The tested rear phase/polarity coefficients and pseudo-object steering remain available.';
+    engineCard.innerHTML='<b>RECEIVER-FIRST MATRIX:</b> Clean stereo goes straight to the full receiver-tested fixed matrix. The headphone-style immersion layer and adaptive pseudo-object attenuation are parked so nothing weakens the proven rear encoding.';
   }
 
   root.PocketSpatialReceiverFirst={
-    version:'20260908-receiver-first-1',
+    version:'20260908-receiver-first-2',
     cleanPreMatrix:true,
-    neutralize:forceNeutralPreMatrix
+    fixedMatrixOnly:true,
+    neutralize:forceNeutralPreMatrix,
+    forceFixedMatrix:forceFixedMatrix
   };
 }
 
