@@ -90,7 +90,8 @@
     var wrapGain1=active?d.wrapGain1:0;
     var wrapGain2=active?d.wrapGain2:0;
     var worstCaseSum=Math.abs(directGain)+Math.abs(farGain)+Math.abs(refl1Gain)+Math.abs(refl2Gain)+Math.abs(wrapGain1)+Math.abs(wrapGain2);
-    var masterGain=active?Math.min(0.90,0.78/Math.max(1,worstCaseSum)):1;
+    var neutral=active&&Math.abs(directGain-1)<0.000001&&Math.abs(farGain)<0.000001&&Math.abs(refl1Gain)<0.000001&&Math.abs(refl2Gain)<0.000001&&Math.abs(wrapGain1)<0.000001&&Math.abs(wrapGain2)<0.000001;
+    var masterGain=active?(neutral?1:Math.min(0.90,0.78/Math.max(1,worstCaseSum))):1;
 
     return{
       wet:p.wet,
@@ -210,13 +211,13 @@
     return originalConnect.apply(this,arguments);
   };
 
-  root.PocketSpatialReceiverMatrix={version:'20260907-calibrated-rear-1',amount:amount};
+  root.PocketSpatialReceiverMatrix={version:'20260909-receiver-first-3',amount:amount};
 }(window));
 
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
-  var build='20260907-calibrated-rear-1';
+  var build='20260909-receiver-first-3';
   function versioned(src){return src+'?v='+build;}
   function load(src,next){var script=document.createElement('script');script.src=versioned(src);script.async=false;if(next)script.onload=next;document.head.appendChild(script);}
   load('pocket-spatial-commons-buffered.js',function(){load('pocket-spatial-single-playback.js',function(){load('pocket-spatial-buffered-catalog.js',function(){load('pocket-spatial-audius-catalog.js',function(){load('pocket-spatial-buffer-probe.js');});});});});
