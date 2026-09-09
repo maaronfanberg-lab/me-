@@ -9,14 +9,19 @@
  * makes the main Pocket Spatial page feed clean stereo into the existing,
  * receiver-tested Lt/Rt-style matrix encoder.
  *
- * Receiver-first deliberately parks two layers that were masking the baseline:
+ * Receiver-first deliberately parks layers that were masking the baseline:
  * the old headphone/room virtualization and the adaptive pseudo-object overlay.
- * The fixed receiver-tested matrix stays fully active and unchanged.
+ * It also keeps bass/front-center material out of unnecessary additive matrix
+ * reinforcement by using the receiver's natural L+R center decode instead.
  */
 
 function byId(id){return document.getElementById(id);}
 function setValue(id,value){var n=byId(id);if(n)n.value=String(value);}
 function setText(id,value){var n=byId(id);if(n)n.textContent=value;}
+function fireInput(id){
+  var n=byId(id);if(!n)return;
+  try{n.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}
+}
 function hideMetric(label){
   var spans=document.querySelectorAll('.metric span');
   for(var i=0;i<spans.length;i+=1){
@@ -38,12 +43,7 @@ function forceNeutralPreMatrix(){
   setValue('reflectionTone',3300);
 }
 function forceFixedMatrix(){
-  /*
-   * The adaptive layer used to reduce the proven base rear matrix to 35% while
-   * waiting for object confidence. Receiver-first removes that blocker entirely:
-   * use the full fixed matrix first, then add adaptive ideas back only after the
-   * baseline is audibly proven again.
-   */
+  /* Use the full fixed receiver-tested matrix, never the 35% adaptive base. */
   if(root.PocketSpatialAdaptiveSteering&&typeof root.PocketSpatialAdaptiveSteering.setEnabled==='function'){
     root.PocketSpatialAdaptiveSteering.setEnabled(false);
     return true;
@@ -54,17 +54,35 @@ function forceFixedMatrix(){
   }
   return false;
 }
+function forceMusicMatrixBaseline(){
+  /*
+   * Bass protection:
+   * 1) Do not add the broadband Center Anchor copy. Ordinary in-phase L+R
+   *    already decodes to center in a matrix receiver; the extra copy was also
+   *    reinforcing centered bass and could drive the output limiter harder.
+   * 2) Raise separation to the encoder's 0.96 cross ceiling. This makes the
+   *    surround extraction much closer to a pure L-R difference, so common
+   *    kick/bass energy largely stays out of the phase-shifted rear branch.
+   *
+   * The empirically proven rear output coefficients themselves are untouched.
+   */
+  setValue('centerAnchor',0);
+  setValue('steerSep',126);
+  fireInput('centerAnchor');
+  fireInput('steerSep');
+}
 function applyReceiverFirstUI(){
   forceNeutralPreMatrix();
   forceFixedMatrix();
+  forceMusicMatrixBaseline();
   /* Retry once in case the main inline script finished a fraction later. */
-  root.setTimeout(function(){forceNeutralPreMatrix();forceFixedMatrix();},50);
+  root.setTimeout(function(){forceNeutralPreMatrix();forceFixedMatrix();forceMusicMatrixBaseline();},50);
 
   var lab=document.querySelector('.dangerZone');
   if(lab)lab.style.display='none';
 
   var sub=document.querySelector('.sub');
-  if(sub)sub.textContent='Clean stereo in · full receiver-tested matrix encoding · no masking layers';
+  if(sub)sub.textContent='Clean stereo in · bass-protected receiver matrix · no masking layers';
 
   var badge=byId('badge');
   if(badge&&/spatial/i.test(badge.textContent||''))badge.textContent='Matrix encoder off';
@@ -90,7 +108,7 @@ function applyReceiverFirstUI(){
   if(adaptiveButton)adaptiveButton.style.display='none';
   var adaptiveStatus=byId('adaptiveStatus');
   if(adaptiveStatus){
-    adaptiveStatus.textContent='Adaptive overlay parked. Receiver-first is using the full fixed matrix with the receiver-tested rear phase/polarity coefficients.';
+    adaptiveStatus.textContent='Adaptive overlay parked. Bass protection is active: no extra broadband center copy, and rear extraction is near-pure L-R difference.';
     adaptiveStatus.className='status good';
   }
 
@@ -123,15 +141,17 @@ function applyReceiverFirstUI(){
 
   var engineCard=document.querySelector('.card .status.good');
   if(engineCard){
-    engineCard.innerHTML='<b>RECEIVER-FIRST MATRIX:</b> Clean stereo goes straight to the full receiver-tested fixed matrix. The headphone-style immersion layer and adaptive pseudo-object attenuation are parked so nothing weakens the proven rear encoding.';
+    engineCard.innerHTML='<b>RECEIVER-FIRST MATRIX:</b> Clean stereo goes to the full fixed receiver-tested matrix. Bass/front-center material is protected from unnecessary additive encoding, while the proven rear phase/polarity coefficients remain untouched.';
   }
 
   root.PocketSpatialReceiverFirst={
-    version:'20260908-receiver-first-2',
+    version:'20260908-receiver-first-3',
     cleanPreMatrix:true,
     fixedMatrixOnly:true,
+    bassProtected:true,
     neutralize:forceNeutralPreMatrix,
-    forceFixedMatrix:forceFixedMatrix
+    forceFixedMatrix:forceFixedMatrix,
+    forceMusicMatrixBaseline:forceMusicMatrixBaseline
   };
 }
 
