@@ -14,8 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from falcon_live import FalconBackend
-from living_world import WorldEngine, load_config
+from cedar_falcon import CedarFalconBackend as FalconBackend
+from cedar_world import CedarWorldEngine as WorldEngine
+from living_world import load_config
 
 LIVE_STATE_VERSION = 1
 DEFAULT_EVENT_TAIL = 120
