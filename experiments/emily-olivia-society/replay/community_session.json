@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 3,
+  "completed_reply_turns": 4,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -98,6 +98,15 @@
       "to_name": "Emily",
       "content": "Oh, I know. Just a quick note: I'll definitely try to catch up soon and let you know.",
       "created_at": "2026-09-10T19:16:12.824702+00:00"
+    },
+    {
+      "id": 5,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, really? That's pretty interesting. Can you give me some details about it?",
+      "created_at": "2026-09-10T19:17:46.152221+00:00"
     }
   ],
   "latest_turn": {
@@ -134,21 +143,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Yeah, I can imagine how that must be frustrating. Can you give me some details about it?",
+      "Emily observes a message from Olivia: Oh, I know. Just a quick note: I'll definitely try to catch up soon and let you know."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "75e26c4ce9acd5c3edcd",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 6
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "817457223a975fe970e1",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 6
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh, really? That's pretty interesting. Can you give me some details about it?",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Yeah, I can imagine how that must be frustrating. Can you give me some details about it?",
+        "Emily observes a message from Olivia: Oh, I know. Just a quick note: I'll definitely try to catch up soon and let you know."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "75e26c4ce9acd5c3edcd",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 6
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "817457223a975fe970e1",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 6
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 5,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, really? That's pretty interesting. Can you give me some details about it?",
+        "created_at": "2026-09-10T19:17:46.152221+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"long_refractory_echo: Oh, you know. Just a quick note: I'll definitely try to catch up soon and let you know. What is it that's been so challenging for you lately?\""
+    "external_generation_error": ""
   }
 }
