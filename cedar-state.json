@@ -2,7 +2,7 @@
   "actors_per_tick": 2,
   "agents": {
     "Arden": {
-      "energy": 0,
+      "energy": 0.0,
       "goals": [
         "keep water available",
         "inspect problems before acting"
@@ -454,17 +454,6 @@
       "location": "square",
       "memories": [
         {
-          "id": "bc6c6050db3b85f6",
-          "importance": 1.2,
-          "tags": [
-            "action",
-            "move",
-            "Lena"
-          ],
-          "text": "I moved from square to kitchen.",
-          "tick": 11026
-        },
-        {
           "id": "552d4a08601410fe",
           "importance": 1.2,
           "tags": [
@@ -584,6 +573,17 @@
           ],
           "text": "I moved from kitchen to square.",
           "tick": 11085
+        },
+        {
+          "id": "277dc480f392e260",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "observe",
+            "Lena"
+          ],
+          "text": "I paused to observe square.",
+          "tick": 11093
         }
       ],
       "name": "Lena",
@@ -594,7 +594,7 @@
       ]
     },
     "Mira": {
-      "energy": 0,
+      "energy": 0.0,
       "goals": [
         "keep the greenhouse productive",
         "learn what neighbors need"
@@ -1038,24 +1038,13 @@
       ]
     },
     "Theo": {
-      "energy": 0.0,
+      "energy": 0,
       "goals": [
         "keep shared equipment working",
         "avoid wasting scarce parts"
       ],
-      "location": "kitchen",
+      "location": "square",
       "memories": [
-        {
-          "id": "62a476bebf4e57a0",
-          "importance": 1.2,
-          "tags": [
-            "action",
-            "move",
-            "Theo"
-          ],
-          "text": "I moved from kitchen to square.",
-          "tick": 11051
-        },
         {
           "id": "4661e3ef42e5de5a",
           "importance": 1.2,
@@ -1176,6 +1165,17 @@
           ],
           "text": "I moved from square to kitchen.",
           "tick": 11090
+        },
+        {
+          "id": "01782933da90dab3",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "move",
+            "Theo"
+          ],
+          "text": "I moved from kitchen to square.",
+          "tick": 11093
         }
       ],
       "name": "Theo",
@@ -1246,10 +1246,10 @@
   },
   "metrics": {
     "action_counts": {
-      "move": 703,
-      "observe": 205
+      "move": 702,
+      "observe": 206
     },
-    "action_entropy_bits": 0.7706,
+    "action_entropy_bits": 0.7725,
     "action_feasibility_breakdown": {
       "help": {
         "chosen_and_accepted_ticks": 0,
@@ -1262,11 +1262,11 @@
         "unavailable_ticks": 8
       },
       "move": {
-        "chosen_and_accepted_ticks": 702,
+        "chosen_and_accepted_ticks": 701,
         "chosen_and_rejected_ticks": 169,
-        "chosen_ticks": 871,
+        "chosen_ticks": 870,
         "feasible_ticks": 907,
-        "feasible_unchosen_ticks": 36,
+        "feasible_unchosen_ticks": 37,
         "rejection_reasons": {
           "repeated_action_loop": 169
         },
@@ -1275,12 +1275,12 @@
       },
       "observe": {
         "chosen_and_accepted_ticks": 16,
-        "chosen_and_rejected_ticks": 20,
-        "chosen_ticks": 36,
+        "chosen_and_rejected_ticks": 21,
+        "chosen_ticks": 37,
         "feasible_ticks": 907,
-        "feasible_unchosen_ticks": 871,
+        "feasible_unchosen_ticks": 870,
         "rejection_reasons": {
-          "repeated_action_loop": 20
+          "repeated_action_loop": 21
         },
         "schema_violation_ticks": 0,
         "unavailable_ticks": 0
@@ -1322,9 +1322,9 @@
     "exact_repeated_utterance_rate": 0.0,
     "location_entropy_bits": 0.9974,
     "note": "These are engineering diagnostics, not measures of human realism or consciousness.",
-    "proposal_rejections": 189,
+    "proposal_rejections": 190,
     "talk_turns": 0,
-    "ticks": 11092,
+    "ticks": 11093,
     "total_actions": 908,
     "unique_interaction_pairs": 0
   },
@@ -1333,119 +1333,6 @@
   "note": "Cedar Hollow is running autonomously. The viewer is read-only.",
   "read_only_note": "This snapshot is observational. The viewer cannot propose actions or mutate WorldEngine state.",
   "recent_events": [
-    {
-      "action": {
-        "type": "observe"
-      },
-      "actor": "Theo",
-      "kind": "action",
-      "location": "kitchen",
-      "outcome": {
-        "ok": false,
-        "validation_note": "repeated_action_loop"
-      },
-      "seq": 48666,
-      "tick": 11067
-    },
-    {
-      "accepted": true,
-      "actor": "Lena",
-      "chosen_type": "move",
-      "co_located_agents": [
-        "Arden",
-        "Ivo",
-        "Mira",
-        "Nia"
-      ],
-      "energy": 0.0,
-      "feasible_action_types": [
-        "help",
-        "move",
-        "observe",
-        "rest",
-        "talk",
-        "work"
-      ],
-      "kind": "decision",
-      "location": "square",
-      "proposed_action": {
-        "location": "kitchen",
-        "type": "move"
-      },
-      "proposed_type": "move",
-      "recent_local_incidents": [],
-      "rejection_reason": null,
-      "resources_visible": {
-        "water": 4
-      },
-      "seq": 48667,
-      "tick": 11067
-    },
-    {
-      "action": {
-        "location": "kitchen",
-        "type": "move"
-      },
-      "actor": "Lena",
-      "kind": "action",
-      "location": "square",
-      "outcome": {
-        "from": "square",
-        "ok": true,
-        "to": "kitchen"
-      },
-      "seq": 48668,
-      "tick": 11067
-    },
-    {
-      "accepted": true,
-      "actor": "Sol",
-      "chosen_type": "move",
-      "co_located_agents": [
-        "Jun",
-        "Lena",
-        "Theo"
-      ],
-      "energy": 0.0,
-      "feasible_action_types": [
-        "help",
-        "move",
-        "observe",
-        "rest",
-        "talk",
-        "work"
-      ],
-      "kind": "decision",
-      "location": "kitchen",
-      "proposed_action": {
-        "location": "square",
-        "type": "move"
-      },
-      "proposed_type": "move",
-      "recent_local_incidents": [],
-      "rejection_reason": null,
-      "resources_visible": {
-        "food": 5
-      },
-      "seq": 48669,
-      "tick": 11068
-    },
-    {
-      "action": {
-        "location": "square",
-        "type": "move"
-      },
-      "actor": "Sol",
-      "kind": "action",
-      "location": "kitchen",
-      "outcome": {
-        "from": "kitchen",
-        "ok": true,
-        "to": "square"
-      },
-      "seq": 48670,
-      "tick": 11068
-    },
     {
       "accepted": true,
       "actor": "Ivo",
@@ -3973,6 +3860,111 @@
       },
       "seq": 48785,
       "tick": 11092
+    },
+    {
+      "actor": "Lena",
+      "kind": "proposal_rejected",
+      "proposed": {
+        "type": "observe"
+      },
+      "reason": "repeated_action_loop",
+      "seq": 48786,
+      "tick": 11093
+    },
+    {
+      "accepted": false,
+      "actor": "Lena",
+      "chosen_type": "observe",
+      "co_located_agents": [
+        "Arden",
+        "Nia"
+      ],
+      "energy": 0.0,
+      "feasible_action_types": [
+        "help",
+        "move",
+        "observe",
+        "rest",
+        "talk",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "square",
+      "proposed_action": {
+        "type": "observe"
+      },
+      "proposed_type": "observe",
+      "recent_local_incidents": [],
+      "rejection_reason": "repeated_action_loop",
+      "resources_visible": {
+        "water": 4
+      },
+      "seq": 48787,
+      "tick": 11093
+    },
+    {
+      "action": {
+        "type": "observe"
+      },
+      "actor": "Lena",
+      "kind": "action",
+      "location": "square",
+      "outcome": {
+        "ok": false,
+        "validation_note": "repeated_action_loop"
+      },
+      "seq": 48788,
+      "tick": 11093
+    },
+    {
+      "accepted": true,
+      "actor": "Theo",
+      "chosen_type": "move",
+      "co_located_agents": [
+        "Ivo",
+        "Jun",
+        "Mira",
+        "Sol"
+      ],
+      "energy": 0.0,
+      "feasible_action_types": [
+        "help",
+        "move",
+        "observe",
+        "rest",
+        "talk",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "kitchen",
+      "proposed_action": {
+        "location": "square",
+        "type": "move"
+      },
+      "proposed_type": "move",
+      "recent_local_incidents": [],
+      "rejection_reason": null,
+      "resources_visible": {
+        "food": 5
+      },
+      "seq": 48789,
+      "tick": 11093
+    },
+    {
+      "action": {
+        "location": "square",
+        "type": "move"
+      },
+      "actor": "Theo",
+      "kind": "action",
+      "location": "kitchen",
+      "outcome": {
+        "from": "kitchen",
+        "ok": true,
+        "to": "square"
+      },
+      "seq": 48790,
+      "tick": 11093
     }
   ],
   "seed": 7,
@@ -3980,8 +3972,8 @@
   "started_at": "2026-09-06T02:13:51.522554Z",
   "status": "live",
   "temperature": 0.1,
-  "tick": 11092,
-  "updated_at": "2026-09-10T23:24:05.284044Z",
+  "tick": 11093,
+  "updated_at": "2026-09-10T23:24:37.488901Z",
   "version": 1,
   "world_name": "Cedar Hollow"
 }
