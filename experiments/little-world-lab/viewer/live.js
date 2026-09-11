@@ -148,9 +148,13 @@
   function renderAgents() {
     if (!state?.agents) { els.agentGrid.innerHTML = ""; return; }
     const rows = Object.values(state.agents);
-    els.agentGrid.innerHTML = rows.map(a => `<button type="button" class="agent-card ${selectedAgent === a.name ? "active" : ""}" data-card="${esc(a.name)}">
-      <b>${esc(a.name)}</b><span>${esc(titleCase(a.location))} · energy ${esc(a.energy)}</span>
-    </button>`).join("");
+    els.agentGrid.innerHTML = rows.map(a => {
+      const s = a.social_wellbeing || {};
+      const social = s.connection === undefined ? "" : ` · connection ${s.connection}`;
+      return `<button type="button" class="agent-card ${selectedAgent === a.name ? "active" : ""}" data-card="${esc(a.name)}">
+        <b>${esc(a.name)}</b><span>${esc(titleCase(a.location))} · energy ${esc(a.energy)}${esc(social)}</span>
+      </button>`;
+    }).join("");
     els.agentGrid.querySelectorAll("[data-card]").forEach(btn => btn.addEventListener("click", () => {
       selectedAgent = btn.dataset.card;
       renderAgents();
@@ -171,10 +175,20 @@
     }
     const memories = (a.memories || []).slice(-5).reverse();
     const decisions = recentAgentDecisions(a.name);
+    const s = a.social_wellbeing || {};
+    const recentSocial = (s.recent_social || []).slice(-4).reverse();
+    const wellbeing = s.connection === undefined
+      ? "not available on this live snapshot"
+      : `connection ${esc(s.connection)} · loneliness ${esc(s.loneliness)} · resilience ${esc(s.resilience)}`;
+    const socialRows = recentSocial.length
+      ? recentSocial.map(r => `tick ${esc(r.tick)}: ${esc(r.kind)} with ${esc(r.with)} · ${r.meaningful ? "meaningful" : "passing"}${r.reciprocal ? " · reciprocal" : ""}${r.strained ? " · strained" : ""}`).join("<br>")
+      : "none yet";
     els.detail.className = "agent-detail";
     els.detail.innerHTML = `
       <div class="decision-top"><b>${esc(a.name)}</b><span class="chip">${esc(titleCase(a.location))}</span></div>
       <p class="small">${esc((a.traits || []).join(" · "))} · energy ${esc(a.energy)}</p>
+      <p><b>Social wellbeing</b><br>${wellbeing}<br>meaningful interactions ${esc(s.meaningful_interactions ?? 0)}</p>
+      <p><b>Recent social experience</b><br>${socialRows}</p>
       <p><b>Goals</b><br>${(a.goals || []).map(g => esc(g)).join("<br>")}</p>
       <p><b>Recent decisions</b><br>${decisions.length ? decisions.map(d => `tick ${esc(d.tick)}: ${esc(actionSummary(d))}`).join("<br>") : "none yet"}</p>
       <p><b>Recent memories</b><br>${memories.length ? memories.map(m => `tick ${esc(m.tick)}: ${esc(m.text)}`).join("<br>") : "none yet"}</p>`;
@@ -183,6 +197,10 @@
   function eventText(e) {
     if (e.kind === "incident") return e.description || `${e.resource} changed at ${e.location}`;
     if (e.kind === "action") return `${e.actor}: ${actionSummary(e)}`;
+    if (e.kind === "social_appraisal") {
+      const flags = [e.meaningful ? "meaningful" : "passing", e.reciprocal ? "reciprocal" : null, e.strained ? "strained" : null].filter(Boolean).join(" · ");
+      return `${e.actor} ↔ ${e.target}: ${e.interaction} · ${flags}`;
+    }
     if (e.kind === "decision" && e.accepted === false) return `${e.actor}: ${actionSummary(e)} rejected (${e.rejection_reason || "unknown"})`;
     if (e.kind === "backend_error") return `${e.actor}: Falcon backend error`;
     return null;
@@ -190,7 +208,7 @@
 
   function renderEvents() {
     const rows = (state?.recent_events || []).filter(e =>
-      e.kind === "incident" || e.kind === "action" || e.kind === "backend_error" || (e.kind === "decision" && e.accepted === false)
+      e.kind === "incident" || e.kind === "action" || e.kind === "social_appraisal" || e.kind === "backend_error" || (e.kind === "decision" && e.accepted === false)
     ).slice(-14).reverse();
     if (!rows.length) {
       els.events.className = "empty";
