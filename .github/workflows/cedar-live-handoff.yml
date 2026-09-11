@@ -1,0 +1,29 @@
+name: Cedar Hollow immediate handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/little-world-lab/runtime/live-handoff.json'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cedar-hollow-live
+      cancel-in-progress: true
+    steps:
+      - name: Start fresh Cedar runner from current checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/little-world-cedar-live.yml/dispatches" \
+            -f ref=main
+          echo 'Requested a fresh Cedar runner from the current published checkpoint.'
