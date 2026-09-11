@@ -31,7 +31,7 @@ class CedarLiveSessionTests(unittest.TestCase):
                 temperature=0.1,
             )
 
-            self.assertEqual(state["version"], 1)
+            self.assertEqual(state["version"], 2)
             self.assertEqual(state["status"], "live")
             self.assertEqual(state["tick"], 1)
             self.assertEqual(state["session_id"], "unit-session")
@@ -39,6 +39,7 @@ class CedarLiveSessionTests(unittest.TestCase):
             self.assertEqual(set(state["locations"]), set(engine.locations))
             self.assertTrue(any(event.get("kind") == "decision" for event in state["recent_events"]))
             self.assertIn("observational", state["read_only_note"].lower())
+            self.assertIn("social_wellbeing", next(iter(state["agents"].values())))
 
     def test_write_live_state_is_valid_json(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
