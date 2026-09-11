@@ -18,7 +18,7 @@ from cedar_falcon import CedarFalconBackend as FalconBackend
 from cedar_world import CedarWorldEngine as WorldEngine
 from living_world import load_config
 
-LIVE_STATE_VERSION = 1
+LIVE_STATE_VERSION = 2
 DEFAULT_EVENT_TAIL = 120
 
 
@@ -66,23 +66,29 @@ def build_live_state(
     temperature: float,
     event_tail: int = DEFAULT_EVENT_TAIL,
 ) -> dict[str, Any]:
-    """Return public simulation state suitable for a read-only viewer."""
+    """Return public Cedar state suitable for the read-only live viewer."""
     metadata = _session_metadata(engine.output_dir, session_id)
-    agents = {
-        name: {
+    agents = {}
+    for name, agent in sorted(engine.agents.items()):
+        social = (
+            engine.public_social_state(name)
+            if hasattr(engine, "public_social_state")
+            else None
+        )
+        agents[name] = {
             "name": agent.name,
             "traits": list(agent.traits),
             "goals": list(agent.goals),
             "location": agent.location,
             "energy": round(agent.energy, 1),
+            "social_wellbeing": social,
             "memories": [asdict(memory) for memory in agent.memories[-12:]],
             "relationships": {
                 other: asdict(rel)
                 for other, rel in sorted(agent.relationships.items())
             },
         }
-        for name, agent in sorted(engine.agents.items())
-    }
+
     return {
         "version": LIVE_STATE_VERSION,
         "status": str(status),
@@ -106,7 +112,8 @@ def build_live_state(
         "recent_events": _read_event_tail(engine.event_path, event_tail),
         "metrics": engine.compute_metrics(),
         "read_only_note": (
-            "This snapshot is observational. The viewer cannot propose actions or mutate WorldEngine state."
+            "This snapshot is observational. The viewer cannot propose actions "
+            "or mutate WorldEngine state."
         ),
     }
 
@@ -131,7 +138,10 @@ def write_live_state(
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    temp_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temp_path.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     temp_path.replace(output_path)
     return state
 
@@ -147,7 +157,11 @@ def load_or_create_engine(
 ) -> WorldEngine:
     checkpoint = output_dir / "checkpoint.json"
     if checkpoint.exists():
-        return WorldEngine.from_checkpoint(checkpoint, backend=backend, output_dir=output_dir)
+        return WorldEngine.from_checkpoint(
+            checkpoint,
+            backend=backend,
+            output_dir=output_dir,
+        )
     return WorldEngine(
         load_config(config_path),
         backend=backend,
@@ -159,8 +173,14 @@ def load_or_create_engine(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Advance Cedar Hollow and emit a live read-only snapshot.")
-    parser.add_argument("--config", type=Path, default=Path(__file__).with_name("world.json"))
+    parser = argparse.ArgumentParser(
+        description="Advance Cedar Hollow and emit a live read-only snapshot."
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path(__file__).with_name("world.json"),
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--state-output", type=Path)
     parser.add_argument("--ticks", type=int, default=1)
@@ -172,7 +192,11 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--max-tokens", type=int, default=256)
-    parser.add_argument("--status", choices=["starting", "live", "complete", "error"], default="live")
+    parser.add_argument(
+        "--status",
+        choices=["starting", "live", "complete", "error"],
+        default="live",
+    )
     parser.add_argument("--session-id", required=True)
     parser.add_argument("--event-tail", type=int, default=DEFAULT_EVENT_TAIL)
     args = parser.parse_args()
