@@ -7,6 +7,7 @@ import room_private_model_autonomy_legacy as _legacy
 PROCESS_TERMS = {
     "ground", "grounded", "grounding",
     "clarify", "clarifies", "clarified", "clarifying", "clarification", "clarifications", "clarity",
+    "utterance", "utterances", "turn", "turns", "contribution", "contributions",
 }
 
 try:
@@ -26,35 +27,27 @@ for _name, _value in vars(_legacy).items():
     if not _name.startswith("__"):
         globals()[_name] = _value
 
-AUTONOMY_ENGINE = "structural-base-selective-context-behavior-shaped-v5"
+AUTONOMY_ENGINE = "structural-base-selective-context-natural-social-v6"
 AUTONOMY_PROMPTS = dict(_legacy.AUTONOMY_PROMPTS)
 AUTONOMY_PROMPTS["thought"] = (
-    "Decide what this participant personally wants to do next in the conversation. "
-    "Use their own identity, values, motives, attention, relationship state, evidence_context, and what was actually said. "
-    "Form this participant's own position rather than inferring a group consensus. "
-    "Before choosing a move, identify what this turn would add. Prefer a contribution that changes the informational state: "
-    "derive an implication, distinguish possibilities, notice a contradiction, connect separate facts, challenge an assumption with a reason, "
-    "revise a belief, identify missing evidence, make a supported prediction, or recognize an important human consequence. "
-    "Paraphrase, automatic agreement, repeated process language, and unnecessary process questions add little and should not drive the next move. "
-    "When a phrase or concept is already dominating the conversation, look underneath it for the unresolved cause, assumption, evidence, disagreement, or consequence instead of repeating it. "
-    "Novelty alone is not valuable; the contribution must remain relevant and supported. "
+    "Decide what this participant personally wants to say or do next. "
+    "Use their own identity, values, motives, attention, relationships, and what was actually said. "
+    "Form their own view rather than guessing a group consensus. "
+    "Prefer something that genuinely moves the exchange forward: a reason, inference, distinction, disagreement, connection, change of mind, question, consequence, or personal reaction. "
+    "Do not copy another speaker or agree automatically. If the same idea keeps repeating, respond to what is underneath it instead of repeating the wording. "
+    "Do not invent a setting, event, relationship, plan, or role that the conversation has not established. "
     "A reported claim may be questioned, believed weakly, or left unresolved; it is not a witnessed event merely because someone said it. "
     "Choose among ANSWER, DEEPEN, DISCLOSE, COMPARE, DISAGREE, REPAIR, SUPPORT, CALLBACK, BRIDGE, or CLOSE. "
-    "No move is preferred. SUPPORT is appropriate only when this participant actually wants to reinforce or affiliate. "
-    "If this participant has nothing meaningful to add, CLOSE is better than filler. "
-    "Choose another Room participant as the intended partner. Choose for yourself what matters next."
+    "No move is preferred. If this participant has nothing worth adding, CLOSE is better than filler. "
+    "Choose another Room participant as the intended partner."
 )
 AUTONOMY_PROMPTS["expression"] = (
-    "Speak as this participant in the ongoing conversation. "
-    "Realize the internally generated intent supplied in the situation: keep its move, focus, and intended partner. "
-    "Respond to the meaning of recent speech rather than copying its wording or conversational structure. "
-    "A strong turn stays coherent with the conversation while transforming information: it adds an inference, distinction, reason, revision, connection, prediction, or human consequence. "
-    "Reuse another speaker's terminology only when it is needed for precision. Do not merely paraphrase, echo agreement, or keep a repeated concept alive because it is salient. "
-    "When the conversation is looping, address the unresolved assumption, evidence, disagreement, cause, or consequence underneath the repeated language. "
-    "Demonstrate understanding through the substance of the reply rather than announcing that you understand, are listening, or are coherent. "
-    "Novel wording without new meaning is not an improvement. Keep the reply relevant, defensible, natural, and concise. "
-    "Use evidence_context to distinguish what was observed from what was merely claimed. "
-    "Use only details supported by the conversation and choose your own wording."
+    "Speak naturally as this participant in the ongoing exchange. "
+    "Say what they actually mean to the intended person in their own voice. "
+    "Respond to the substance of what was said rather than copying its wording. "
+    "Use ordinary human conversational language, not analytical or procedural commentary about the exchange itself. "
+    "Do not invent a setting, event, relationship, plan, organization, or role that has not been established. "
+    "Use only details supported by what was actually said. Keep the reply natural and concise."
 )
 
 _legacy.AUTONOMY_PROMPTS = AUTONOMY_PROMPTS
@@ -64,19 +57,11 @@ _ORIGINAL_REQUEST_AUTONOMY = _legacy._request_autonomy
 
 def _request_autonomy(model_url: str, prompt: str, role: str, temperature: float, timeout: int,
                       self_entity: str | None = None, attempt: int = 0, intent: dict | None = None) -> str:
-    if role in {"thought", "expression"}:
+    if role in {"thought", "expression"} and attempt:
         prompt += (
-            "\nBEHAVIORAL_CONTINGENCY\n"
-            "High-value behavior: make one evidence-linked contribution that changes what the conversation knows, distinguishes, predicts, revises, connects, or recognizes. "
-            "Low-value behavior: repeat, lightly paraphrase, automatically agree, recycle process words, or ask unnecessary process questions. "
-            "If recent speakers are converging on the same wording, respond to the underlying meaning and take a different reasoning step. "
-            "Do not manufacture novelty; relevance and evidence still control.\n"
+            "\nTRY_AGAIN_NATURALLY\n"
+            "Keep the same purpose, but use a genuinely different idea or sentence rather than a cosmetic rewording.\n"
         )
-        if attempt:
-            prompt += (
-                "SHAPING_RETRY\n"
-                "The prior attempt did not satisfy the active quality boundary. Preserve the intended conversational goal, but choose a more substantive reasoning step rather than merely changing phrasing.\n"
-            )
     return _ORIGINAL_REQUEST_AUTONOMY(
         model_url, prompt, role, temperature, timeout, self_entity, attempt, intent
     )
