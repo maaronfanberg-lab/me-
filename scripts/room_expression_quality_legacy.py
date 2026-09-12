@@ -1,0 +1,553 @@
+from __future__ import annotations
+
+import hashlib
+import os
+import re
+
+import room_private_model as _private_model
+
+MAX_EXPRESSION_CHARS = 420
+
+_AUTONOMOUS = {"sarah", "mara", "owen", "jules"}
+_PRONOUN_R = re.compile(r"\b(?:i|we|you|they)\s+r\b", re.I)
+_TRAILING_FRAGMENT = re.compile(r",\s*$")
+_DANGLING_END = re.compile(
+    r"\b(?:a|an|the|and|or|but|because|so|to|for|with|about|if|when|while|which|who|what|how|why|where|whether|than)\b"
+    r"(?:\s+\b(?:what|which|who|how|why|where|whether|to)\b)?\s*$",
+    re.I,
+)
+_PUNCTUATED_DANGLING_END = re.compile(r"\b(?:a|an|the|to)\s*$", re.I)
+_LOCAL_REPEAT = re.compile(
+    r"\b(?P<phrase>[A-Za-z][A-Za-z']*(?:\s+[A-Za-z][A-Za-z']*){1,4})\s+and\s+(?P=phrase)\b",
+    re.I,
+)
+_RETRY_PROSE = (
+    "\nUse a different idea and wording while staying with the same conversation. "
+    "Keep the reply concise and grammatically complete."
+)
+_NOVELTY_STOP = set(
+    "a an the and or but because so to for of in on at by with about from as is are was were be been being "
+    "i me my mine myself we us our ours ourselves you your yours yourself yourselves he him his himself she her hers herself "
+    "it its itself they them their theirs themselves this that these those there here do does did doing done have has had having "
+    "can could should would will may might must if when while what which who how why where whether than then one ones really very "
+    "just more most much many some any all each not no yes".split()
+)
+_GENERIC_CONTENT = set(
+    "care caring cared cares other others people important hard harder hardest way ways need needs needed try tries trying tried "
+    "figure figures figuring know knows knowing knew understand understands understanding understood feel feels feeling felt think "
+    "thinks thinking thought make makes making made change changes changing changed focus focuses focusing focused help helps helping "
+    "helped say says saying said talk talks talking talked discuss discusses discussing discussed explain explains explaining explained "
+    "good bad better best worse challenge challenges challenging challenged matter matters meaning means mean show shows showing shown "
+    "something thing things point points idea ideas question questions answer answers fact facts seem seems seems want wants wanted "
+    "work works working worked get gets getting got going do doing done".split()
+)
+
+
+def _tokens(value: object) -> list[str]:
+    return re.findall(r"[a-z0-9']+", str(value or "").lower())
+
+
+def _self_address(utterance: str, self_entity: str | None) -> bool:
+    name = str(self_entity or "").strip()
+    if not name:
+        return False
+    return bool(re.match(rf"^\s*(?:hey\s*[,!]?\s*)?{re.escape(name)}\b\s*[,!:.-]", utterance, re.I))
+
+
+def _self_perspective_leak(utterance: str, self_entity: str | None) -> bool:
+    """An autonomous speaker uses I/me/my for self, never its own proper name."""
+    name = str(self_entity or "").strip()
+    if not name:
+        return False
+    return bool(re.search(rf"\b{re.escape(name)}\b", str(utterance or ""), re.I))
+
+
+_INTERNAL_MOVE_SPEECH = re.compile(
+    r"\b(?:i\s+(?:want|need|plan|try|would\s+like|would\s+really\s+like|['’]?d\s+like)\s+to\s+)?"
+    r"(?:disclose|bridge|deepen|callback)\s+(?:with|to|about)\b"
+    r"|\b(?:i\s+(?:want|need|would\s+like|would\s+really\s+like|['’]?d\s+like)\s+to\s+)?repair\s+with\s+(?:you|sarah|mara|owen|jules|allen)\b",
+    re.I,
+)
+
+
+def _internal_move_speech_leak(utterance: str) -> bool:
+    """Reject public sentences that verbalize internal discourse-action labels."""
+    return bool(_INTERNAL_MOVE_SPEECH.search(str(utterance or "")))
+
+
+def _drop_self_address(text: str, self_entity: str | None) -> str:
+    name = str(self_entity or "").strip()
+    if not name:
+        return text
+    cleaned = re.sub(
+        rf"^\s*(?:hey\s*[,!]?\s*)?{re.escape(name)}\b\s*[,!:.-]\s*",
+        "",
+        text,
+        count=1,
+        flags=re.I,
+    ).strip()
+    return cleaned or text
+
+
+def _repair_pronoun_fragments(text: str) -> str:
+    replacements = (
+        (r"\bi\s+r\s+are\b", "I am"),
+        (r"\bi\s+r\s+am\b", "I am"),
+        (r"\bi\s+r\s+not\b", "I'm not"),
+        (r"\bi\s+r\b", "I'm"),
+        (r"\bwe\s+r\b", "we're"),
+        (r"\byou\s+r\b", "you're"),
+        (r"\bthey\s+r\b", "they're"),
+    )
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text, flags=re.I)
+    text = re.sub(r"\s+'s\b", "'s", text)
+    if text and text[0].isalpha():
+        text = text[0].upper() + text[1:]
+    return text
+
+
+def _sentence_similarity(left: str, right: str) -> float:
+    a, b = set(_tokens(left)), set(_tokens(right))
+    if not a or not b:
+        return 0.0
+    return len(a & b) / max(1, len(a | b))
+
+
+def _sentences(text: object) -> list[str]:
+    raw = str(text or "").strip()
+    if not raw:
+        return []
+    return [part.strip() for part in re.split(r"(?<=[.!?])\s+", raw) if part.strip()]
+
+
+def _dedupe_sentences(text: str) -> str:
+    parts = _sentences(text)
+    if len(parts) < 2:
+        return text.strip()
+    kept: list[str] = []
+    for part in parts:
+        norm = re.sub(r"\s+", " ", part.lower()).strip()
+        duplicate = False
+        for prior in kept:
+            prior_norm = re.sub(r"\s+", " ", prior.lower()).strip()
+            if norm == prior_norm:
+                duplicate = True
+                break
+            if min(len(_tokens(part)), len(_tokens(prior))) >= 6 and _sentence_similarity(part, prior) >= 0.84:
+                duplicate = True
+                break
+        if not duplicate:
+            kept.append(part)
+    return " ".join(kept).strip()
+
+
+def _dedupe_local_phrase(text: str) -> str:
+    """Collapse only exact 2-5 word phrases repeated around 'and'."""
+    previous = None
+    current = text
+    for _ in range(3):
+        if current == previous:
+            break
+        previous = current
+        current = _LOCAL_REPEAT.sub(lambda match: match.group("phrase"), current)
+    return current.strip()
+
+
+def _truncate_before_repeated_ngram(text: str, n: int = 6) -> str:
+    matches = list(re.finditer(r"[A-Za-z0-9']+", text))
+    if len(matches) < n * 2:
+        return text
+    words = [match.group(0).lower() for match in matches]
+    seen: dict[tuple[str, ...], int] = {}
+    for index in range(len(words) - n + 1):
+        gram = tuple(words[index:index + n])
+        previous = seen.get(gram)
+        if previous is not None and index - previous >= n:
+            cut = matches[index].start()
+            candidate = text[:cut].rstrip(" ,;:-")
+            candidate = re.sub(r"\b(?:and|but|or|because|so)\s*$", "", candidate, flags=re.I).rstrip(" ,;:-")
+            if len(candidate) >= 20:
+                if candidate[-1:] not in ".!?":
+                    candidate += "."
+                return candidate
+        seen.setdefault(gram, index)
+    return text
+
+
+def _cap_complete(text: str) -> str:
+    text = text.strip()
+    if len(text) <= MAX_EXPRESSION_CHARS:
+        return text
+    parts = _sentences(text)
+    out: list[str] = []
+    for part in parts:
+        candidate = " ".join([*out, part]).strip()
+        if len(candidate) > MAX_EXPRESSION_CHARS:
+            break
+        out.append(part)
+    if out:
+        return " ".join(out).strip()
+    cut = text[: MAX_EXPRESSION_CHARS - 1].rstrip()
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    cut = cut.rstrip(" ,;:-")
+    return (cut + ".") if cut else ""
+
+
+def _terminal_body(text: str) -> str:
+    return re.sub(r"[.!?]+\s*$", "", str(text or "").strip()).strip()
+
+
+def _terminal_incomplete(text: str) -> bool:
+    raw = str(text or "").strip()
+    body = _terminal_body(raw)
+    if not body:
+        return False
+    if raw[-1:] in ".!?":
+        return bool(_PUNCTUATED_DANGLING_END.search(body))
+    return bool(_DANGLING_END.search(body))
+
+
+def _drop_incomplete_tail(text: str) -> str:
+    """Drop a dangling final sentence/clause only when a complete prefix exists."""
+    text = text.strip()
+    if not text or not _terminal_incomplete(text):
+        return text
+    body = _terminal_body(text)
+    endings = list(re.finditer(r"[.!?]", body))
+    if not endings:
+        return text
+    candidate = body[: endings[-1].end()].strip()
+    return candidate or text
+
+
+def repair_expression(utterance: object, self_entity: str | None = None) -> str:
+    """Repair mechanical generation damage without inventing new content."""
+    text = re.sub(r"\s+", " ", str(utterance or "")).strip()
+    if not text:
+        return text
+    text = _repair_pronoun_fragments(text)
+    text = _drop_self_address(text, self_entity)
+    text = _dedupe_sentences(text)
+    text = _dedupe_local_phrase(text)
+    text = _truncate_before_repeated_ngram(text)
+    text = _cap_complete(text)
+    text = _drop_incomplete_tail(text)
+    if _TRAILING_FRAGMENT.search(text):
+        text = _TRAILING_FRAGMENT.sub(".", text)
+    return text.strip()
+
+
+def _has_repeated_ngram(utterance: str, n: int = 6) -> bool:
+    words = _tokens(utterance)
+    if len(words) < n * 2:
+        return False
+    seen: dict[tuple[str, ...], int] = {}
+    for index in range(len(words) - n + 1):
+        gram = tuple(words[index:index + n])
+        previous = seen.get(gram)
+        if previous is not None and index - previous >= n:
+            return True
+        seen.setdefault(gram, index)
+    return False
+
+
+def _lexical_degeneracy(utterance: str) -> bool:
+    """Reject sampler collapse around one token before it becomes public speech."""
+    words = [word for word in _tokens(utterance) if word]
+    if len(words) < 4:
+        return False
+    counts: dict[str, int] = {}
+    for word in words:
+        counts[word] = counts.get(word, 0) + 1
+    peak = max(counts.values(), default=0)
+    if peak >= 4 and peak / max(1, len(words)) >= 0.40:
+        return True
+    if len(words) >= 6 and len(set(words)) <= 2:
+        return True
+    return False
+
+
+def _context_too_similar(utterance: str, compact: dict, similarity_fn) -> bool:
+    context = compact.get("context") if isinstance(compact.get("context"), list) else []
+    current_tokens = len(_tokens(utterance))
+    for message in context[-4:]:
+        text = message.get("text") if isinstance(message, dict) else message
+        other_tokens = len(_tokens(text))
+        score = float(similarity_fn(utterance, text))
+        shortest = min(current_tokens, other_tokens)
+        if score >= 0.88:
+            return True
+        if shortest >= 35 and score >= 0.52:
+            return True
+        if shortest >= 18 and score >= 0.68:
+            return True
+    return False
+
+
+def _expression_rank() -> int:
+    try:
+        return max(0, min(3, int(os.environ.get("ROOM_EXPRESSION_RANK", "0"))))
+    except Exception:
+        return 0
+
+
+def _same_beat_prior_turns(compact: dict) -> list[dict]:
+    rank = _expression_rank()
+    if rank <= 0:
+        return []
+    context = compact.get("context") if isinstance(compact.get("context"), list) else []
+    if not context:
+        return []
+    out = []
+    for item in context[-rank:]:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("speaker") or "").lower() not in _AUTONOMOUS:
+            continue
+        if str(item.get("text") or "").strip():
+            out.append(item)
+    return out
+
+
+def _substantial_sentence_copy(utterance: str, prior_turns: list[dict]) -> bool:
+    current_sentences = _sentences(utterance)
+    for current in current_sentences:
+        current_tokens = set(_tokens(current))
+        if len(current_tokens) < 8:
+            continue
+        for turn in prior_turns:
+            for earlier in _sentences(turn.get("text")):
+                earlier_tokens = set(_tokens(earlier))
+                shortest = min(len(current_tokens), len(earlier_tokens))
+                if shortest < 8:
+                    continue
+                overlap = len(current_tokens & earlier_tokens)
+                union = len(current_tokens | earlier_tokens)
+                jaccard = overlap / max(1, union)
+                containment = overlap / max(1, shortest)
+                if jaccard >= 0.78 or (shortest >= 10 and containment >= 0.88):
+                    return True
+    return False
+
+
+def _stem(word: str) -> str:
+    word = str(word or "").lower().strip("'")
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if len(word) > 5 and word.endswith("ing"):
+        return word[:-3]
+    if len(word) > 4 and word.endswith("ed"):
+        return word[:-2]
+    if len(word) > 4 and word.endswith("es"):
+        return word[:-2]
+    if len(word) > 3 and word.endswith("s"):
+        return word[:-1]
+    return word
+
+
+def _anchor_tokens(text: object) -> set[str]:
+    out: set[str] = set()
+    for raw in re.findall(r"[a-z][a-z']+", str(text or "").lower()):
+        if len(raw) < 3 or raw in _NOVELTY_STOP:
+            continue
+        word = _stem(raw)
+        if not word or word in _GENERIC_CONTENT or raw in _GENERIC_CONTENT:
+            continue
+        out.add(word)
+    return out
+
+
+def _low_substantive_novelty(utterance: str, prior_turns: list[dict]) -> bool:
+    # Only later voices get this stronger test. The first response can establish
+    # the subject; the third/fourth should contribute at least one new anchor.
+    if len(prior_turns) < 2:
+        return False
+    event_speaker = str((prior_turns[-1] or {}).get("speaker") or "").lower()
+    if event_speaker not in _AUTONOMOUS:
+        return False
+    current = _anchor_tokens(utterance)
+    if len(current) < 2:
+        return True
+    prior: set[str] = set()
+    for turn in prior_turns:
+        prior.update(_anchor_tokens(turn.get("text")))
+    novel = current - prior
+    return len(novel) < 1
+
+
+def _cross_beat_attractor_saturation(utterance: str, compact: dict) -> bool:
+    """Reject replies that only weakly elaborate concepts dominating recent beats."""
+    context = compact.get("context") if isinstance(compact.get("context"), list) else []
+    recent = [item for item in context[-6:] if isinstance(item, dict) and str(item.get("text") or "").strip()]
+    if len(recent) < 4:
+        return False
+    current = _anchor_tokens(utterance)
+    if not current:
+        return False
+    counts: dict[str, int] = {}
+    for item in recent:
+        for anchor in _anchor_tokens(item.get("text")):
+            counts[anchor] = counts.get(anchor, 0) + 1
+    saturated = {anchor for anchor, count in counts.items() if count >= 3}
+    if not saturated:
+        return False
+    dominant = current & saturated
+    if not dominant:
+        return False
+    novel = current - saturated
+    # Once an attractor dominates, staying on it requires two genuinely new
+    # substantive anchors. A cosmetic verb/adjective cannot buy another lap.
+    return len(novel) < 2
+
+
+def _recovery_subject(compact: dict, self_entity: str | None) -> str:
+    """Choose a recovery concept only from the conversation already in evidence."""
+    discussion = compact.get("discussion") if isinstance(compact.get("discussion"), dict) else {}
+    event = compact.get("event") if isinstance(compact.get("event"), dict) else None
+    context = compact.get("context") if isinstance(compact.get("context"), list) else []
+
+    current = set()
+    for value in (discussion.get("subject"), discussion.get("focus")):
+        current.update(_anchor_tokens(value))
+
+    candidates = []
+    for key in ("open_questions", "related", "shared"):
+        values = discussion.get(key)
+        if isinstance(values, list):
+            candidates.extend(values)
+    if event:
+        candidates.append(event.get("text"))
+        candidates.extend(event.get("cues") if isinstance(event.get("cues"), list) else [])
+    for item in reversed(context[-6:]):
+        if isinstance(item, dict):
+            candidates.append(item.get("text"))
+            candidates.extend(item.get("cues") if isinstance(item.get("cues"), list) else [])
+        else:
+            candidates.append(item)
+
+    for value in candidates:
+        anchors = sorted(_anchor_tokens(value))
+        for anchor in anchors:
+            if anchor not in current:
+                return anchor
+
+    for value in (discussion.get("focus"), discussion.get("subject")):
+        anchors = sorted(_anchor_tokens(value))
+        if anchors:
+            return anchors[0]
+    return "conversation"
+
+
+def _escape_stale_context(compact: dict, self_entity: str | None) -> None:
+    """Retry from one grounded live edge without inventing a replacement subject."""
+    event = compact.get("event") if isinstance(compact.get("event"), dict) else None
+    fresh = _recovery_subject(compact, self_entity)
+
+    # Keep the newest event as the grounding edge. Remove older context only.
+    compact["context"] = [event] if event else []
+    compact["event"] = event
+    compact["discussion"] = {
+        "subject": fresh,
+        "focus": fresh,
+        "related": [],
+        "shared": [],
+        "open_questions": [],
+    }
+    # Preserve intent and personality state across retries. A quality rejection
+    # should change wording/angle, not erase who is speaking or what they wanted.
+
+def quality_issue(utterance: object, compact: dict, self_entity: str | None, similarity_fn) -> str | None:
+    text = str(utterance or "").strip()
+    if not text:
+        return "empty_expression"
+    if len(text) > MAX_EXPRESSION_CHARS:
+        return "rambling_expression"
+
+    # High-temperature first attempts are allowed to be socially wild, but they
+    # still have to be readable speech. Reject mechanical sampler damage and let
+    # the existing retry path regenerate at a cooler temperature.
+    words = _tokens(text)
+    if re.match(r"^[,.;:)}\]]", text):
+        return "malformed_opening"
+    if re.search(r"[\"'”’]?\}\s*,?\s*\{", text):
+        return "structured_debris"
+    if re.search(r"\b([A-Za-z]{3,})-\1\b", text, re.I):
+        return "local_word_duplication"
+    if len(words) < 3 and not re.search(r"\b(?:no|nope|wrong|fuck|shit|bullshit|idiot|moron|damn|hell)\b", text, re.I):
+        return "empty_fragment"
+    if len(words) > 48:
+        return "wordy_expression"
+    if any(len(_tokens(sentence)) > 36 for sentence in _sentences(text)):
+        return "run_on_expression"
+    if _PRONOUN_R.search(text):
+        return "malformed_pronoun"
+    if _self_perspective_leak(text, self_entity):
+        return "self_perspective_leak"
+    if _internal_move_speech_leak(text):
+        return "internal_move_speech_leak"
+    if _TRAILING_FRAGMENT.search(text):
+        return "trailing_fragment"
+    if _terminal_incomplete(text):
+        return "trailing_fragment"
+    if _lexical_degeneracy(text):
+        _escape_stale_context(compact, self_entity)
+        return "lexical_degeneracy"
+    if _has_repeated_ngram(text):
+        _escape_stale_context(compact, self_entity)
+        return "self_repetition"
+
+    same_beat = _same_beat_prior_turns(compact)
+    if same_beat and _substantial_sentence_copy(text, same_beat):
+        _escape_stale_context(compact, self_entity)
+        return "same_beat_sentence_copy"
+    if same_beat and _low_substantive_novelty(text, same_beat):
+        _escape_stale_context(compact, self_entity)
+        return "same_beat_low_novelty"
+
+    if _cross_beat_attractor_saturation(text, compact):
+        _escape_stale_context(compact, self_entity)
+        return "cross_beat_attractor_saturation"
+
+    if _context_too_similar(text, compact, similarity_fn):
+        _escape_stale_context(compact, self_entity)
+        return "duplicate_context"
+    return None
+
+
+def _strip_retry_prose(prompt: object) -> str:
+    """Retry control is internal state; never expose it as model-visible prose."""
+    return str(prompt or "").replace(_RETRY_PROSE, "")
+
+
+if not getattr(_private_model._sanitize_expression, "_room_quality_repair", False):
+    _original_sanitize_expression = _private_model._sanitize_expression
+
+    def _quality_sanitize_expression(obj: dict, compact: dict, self_entity: str | None = None) -> dict:
+        cleaned = _original_sanitize_expression(obj, compact, self_entity)
+        if isinstance(cleaned, dict):
+            cleaned = dict(cleaned)
+            cleaned["utterance"] = repair_expression(cleaned.get("utterance"), self_entity)
+        return cleaned
+
+    _quality_sanitize_expression._room_quality_repair = True
+    _private_model._sanitize_expression = _quality_sanitize_expression
+
+
+if not getattr(_private_model._request, "_room_retry_boundary", False):
+    _original_request = _private_model._request
+
+    def _quality_request(model_url, prompt, role, temperature, timeout, self_entity=None, attempt=0):
+        return _original_request(
+            model_url,
+            _strip_retry_prose(prompt),
+            role,
+            temperature,
+            timeout,
+            self_entity,
+            attempt,
+        )
+
+    _quality_request._room_retry_boundary = True
+    _private_model._request = _quality_request
