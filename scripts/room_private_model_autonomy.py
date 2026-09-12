@@ -1,411 +1,99 @@
 from __future__ import annotations
 
-import fcntl
-import importlib.util
-import json
-import os
-from pathlib import Path
-import re
-import urllib.error
-import urllib.request
+"""Behavior-shaped autonomy overlay for The Room.
 
-import room_research_architecture as _research
+The previous autonomy implementation is preserved as
+``room_private_model_autonomy_legacy``.  This module keeps its API intact while
+changing the model-facing contingencies so independent, consequential thought
+is favored over mimicry, recursive clarification, and lexical convergence.
+"""
 
-# Load the plain structural model directly, bypassing the legacy live overlay.
-_BASE_PATH = Path(__file__).resolve().parent / "room_private_model.py"
-_SPEC = importlib.util.spec_from_file_location("_room_autonomy_structural_base", _BASE_PATH)
-if _SPEC is None or _SPEC.loader is None:
-    raise ImportError(f"cannot load structural Room model base from {_BASE_PATH}")
-base = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(base)
+import room_private_model_autonomy_legacy as _legacy
 
-# Allen is a real conversational participant even though only Sarah/Mara/Owen/Jules generate autonomously.
-if "allen" not in base.PEOPLE:
-    base.PEOPLE = [*base.PEOPLE, "allen"]
+# Re-export the legacy module surface, including private helpers that the live
+# Room engine intentionally monkey-patches at runtime.
+for _name, _value in vars(_legacy).items():
+    if not _name.startswith("__"):
+        globals()[_name] = _value
 
-AUTONOMY_ENGINE = "structural-base-selective-context-provenance-v3"
-PEOPLE = base.PEOPLE
+AUTONOMY_ENGINE = "structural-base-selective-context-behavior-shaped-v4"
 
-AUTONOMY_PROMPTS = {
-    "comprehension": (
-        "Understand the conversation from this participant's point of view. "
-        "Use the supplied conversation, relationship state, attention lens, and evidence_context as evidence. "
-        "Treat observed speech as evidence that the speaker said something, not automatic proof that its proposition is true. "
-        "Base your understanding only on details supported by the conversation."
-    ),
-    "thought": (
-        "Decide what this participant personally wants to do next in the conversation. "
-        "Use their own identity, values, motives, attention, relationship state, evidence_context, and what was actually said. "
-        "Form this participant's own position rather than inferring a group consensus. "
-        "A reported claim may be questioned, believed weakly, or left unresolved; it is not a witnessed event merely because someone said it. "
-        "Choose among ANSWER, DEEPEN, DISCLOSE, COMPARE, DISAGREE, REPAIR, SUPPORT, CALLBACK, BRIDGE, or CLOSE. "
-        "No move is preferred. SUPPORT is appropriate only when this participant actually wants to reinforce or affiliate. "
-        "Choose another Room participant as the intended partner. Choose for yourself what matters next."
-    ),
-    "expression": (
-        "Speak as this participant in the ongoing conversation. "
-        "Realize the internally generated intent supplied in the situation: keep its move, focus, and intended partner. "
-        "Choose the actual wording yourself from the conversation and this participant's speaking identity. "
-        "Use evidence_context to distinguish what was observed from what was merely claimed. "
-        "Use only details supported by the conversation and choose your own wording."
-    ),
-}
+# These are deliberately concise because the production brain is small.  They
+# act as discriminative stimuli: the useful replacement behaviors are concrete,
+# observable conversational moves, not vague requests to "be thoughtful".
+AUTONOMY_PROMPTS = dict(_legacy.AUTONOMY_PROMPTS)
+AUTONOMY_PROMPTS["thought"] = (
+    "Decide what this participant personally wants to do next in the conversation. "
+    "Use their own identity, values, motives, attention, relationship state, evidence_context, and what was actually said. "
+    "Form this participant's own position rather than inferring a group consensus. "
+    "Before choosing a move, identify what this turn would add. Prefer a contribution that changes the informational state: "
+    "derive an implication, distinguish possibilities, notice a contradiction, connect separate facts, challenge an assumption with a reason, "
+    "revise a belief, identify missing evidence, make a grounded prediction, or recognize an important human consequence. "
+    "Paraphrase, automatic agreement, repeated process language, and recursive clarification add little and should not drive the next move. "
+    "When a phrase or concept is already dominating the conversation, look underneath it for the unresolved cause, assumption, evidence, disagreement, or consequence instead of repeating it. "
+    "Novelty alone is not valuable; the contribution must remain relevant and supported. "
+    "A reported claim may be questioned, believed weakly, or left unresolved; it is not a witnessed event merely because someone said it. "
+    "Choose among ANSWER, DEEPEN, DISCLOSE, COMPARE, DISAGREE, REPAIR, SUPPORT, CALLBACK, BRIDGE, or CLOSE. "
+    "No move is preferred. SUPPORT is appropriate only when this participant actually wants to reinforce or affiliate. "
+    "If this participant has nothing meaningful to add, CLOSE is better than filler. "
+    "Choose another Room participant as the intended partner. Choose for yourself what matters next."
+)
+AUTONOMY_PROMPTS["expression"] = (
+    "Speak as this participant in the ongoing conversation. "
+    "Realize the internally generated intent supplied in the situation: keep its move, focus, and intended partner. "
+    "Respond to the meaning of recent speech rather than copying its wording or conversational structure. "
+    "A strong turn stays coherent with the conversation while transforming information: it adds an inference, distinction, reason, revision, connection, prediction, or human consequence. "
+    "Reuse another speaker's terminology only when it is needed for precision. Do not merely paraphrase, echo agreement, or keep a repeated concept alive because it is salient. "
+    "When the conversation is looping, address the unresolved assumption, evidence, disagreement, cause, or consequence underneath the repeated language. "
+    "Demonstrate understanding through the substance of the reply rather than announcing that you understand, are listening, are grounded, or are coherent. "
+    "Novel wording without new meaning is not an improvement. Keep the reply relevant, defensible, natural, and concise. "
+    "Use evidence_context to distinguish what was observed from what was merely claimed. "
+    "Use only details supported by the conversation and choose your own wording."
+)
 
+# Patch the backing module because its functions resolve globals in the module
+# where they were originally defined.
+_legacy.AUTONOMY_PROMPTS = AUTONOMY_PROMPTS
+_legacy.AUTONOMY_ENGINE = AUTONOMY_ENGINE
 
-def enabled(role: str) -> bool:
-    return bool(os.environ.get("ROOM_MODEL_URL", "").strip())
-
-
-def _clip_list(value: object, limit: int) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item or "").strip()][:limit]
-
-
-def _profile_lens(profile: object, role: str) -> dict:
-    if not isinstance(profile, dict):
-        return {}
-    psychology = profile.get("psychology_v2") if isinstance(profile.get("psychology_v2"), dict) else {}
-    traits = profile.get("traits") if isinstance(profile.get("traits"), dict) else {}
-
-    if role == "comprehension":
-        out = {
-            "name": profile.get("name"),
-            "core_identity": psychology.get("core_identity"),
-            "attention_magnets": _clip_list(psychology.get("attention_magnets"), 4),
-            "attention_blindspots": _clip_list(psychology.get("attention_blindspots"), 2),
-            "evidence_style": psychology.get("evidence_style"),
-            "traits": {key: traits.get(key) for key in (
-                "social_sensitivity", "curiosity", "skepticism"
-            ) if key in traits},
-        }
-    elif role == "thought":
-        out = {
-            "name": profile.get("name"),
-            "core_identity": psychology.get("core_identity"),
-            "values": _clip_list(psychology.get("values"), 4),
-            "motives": _clip_list(psychology.get("motives"), 3),
-            "attention_magnets": _clip_list(psychology.get("attention_magnets"), 4),
-            "topic_mobility": psychology.get("topic_mobility"),
-            "novelty_response": psychology.get("novelty_response"),
-            "evidence_style": psychology.get("evidence_style"),
-            "disagreement_style": psychology.get("disagreement_style"),
-            "affiliation_style": psychology.get("affiliation_style"),
-            "traits": {key: traits.get(key) for key in (
-                "curiosity", "skepticism", "self_disclosure", "social_sensitivity",
-                "novelty_seeking", "inhibition"
-            ) if key in traits},
-        }
-    else:
-        out = {
-            "name": profile.get("name"),
-            "core_identity": psychology.get("core_identity"),
-            "agency_style": psychology.get("agency_style"),
-            "communion_style": psychology.get("communion_style"),
-            "reciprocity_style": psychology.get("reciprocity_style"),
-            "disagreement_style": psychology.get("disagreement_style"),
-            "affiliation_style": psychology.get("affiliation_style"),
-            "novelty_response": psychology.get("novelty_response"),
-            "traits": {key: traits.get(key) for key in (
-                "extraversion", "self_disclosure", "social_sensitivity",
-                "novelty_seeking", "inhibition", "humor"
-            ) if key in traits},
-        }
-    return {key: value for key, value in out.items() if value not in (None, "", [], {})}
-
-
-def _relationship_context(value: object) -> dict:
-    if not isinstance(value, dict):
-        return {}
-    keys = (
-        "direct_familiarity", "trust", "reciprocity", "warmth", "respect",
-        "disclosure_depth", "tension",
-    )
-    return {key: value.get(key) for key in keys if key in value}
-
-
-def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) -> dict:
-    # Smallville/AutoGen lesson: retrieval happens before prompt construction.
-    # Each mind receives a bounded, scored subset rather than the same broadcast window.
-    clean_payload = _research.select_context(dict(payload or {}), role, limit=6)
-    clean_payload.pop("conversation_job", None)
-    deliberation = clean_payload.get("deliberation")
-    if isinstance(deliberation, dict):
-        deliberation = dict(deliberation)
-        deliberation.pop("conversation_job", None)
-        raw_goal = str(deliberation.get("new_information_goal") or "")
-        marker = "Distinct contribution:"
-        lower = raw_goal.lower()
-        if marker.lower() in lower:
-            raw_goal = raw_goal[: lower.index(marker.lower())].strip()
-        deliberation["new_information_goal"] = raw_goal
-        clean_payload["deliberation"] = deliberation
-
-    profile = clean_payload.get("profile")
-    relationship = clean_payload.get("relationship")
-    compact = base._compact_payload(clean_payload, role, self_entity)
-
-    self_description = _profile_lens(profile, role)
-    if self_description:
-        compact["self"] = self_description
-    relation = _relationship_context(relationship)
-    if role in {"thought", "expression"} and relation:
-        compact["relationship_context"] = relation
-
-    evidence = _research.evidence_context(clean_payload, self_entity, limit=6)
-    if evidence:
-        compact["evidence_context"] = evidence
-
-    if role == "expression":
-        compact.pop("angle", None)
-        intent = compact.get("intent")
-        if isinstance(intent, dict):
-            intent = dict(intent)
-            intent.pop("aim", None)
-            if isinstance(deliberation, dict):
-                partner = base._norm(deliberation.get("preferred_partner"))
-                if partner in PEOPLE and partner != self_entity:
-                    intent["partner"] = partner
-            compact["intent"] = intent
-    return compact
-
-
-def _autonomy_schema(role: str, self_entity: str | None = None, intent: dict | None = None) -> dict:
-    schema = json.loads(json.dumps(base._schema(role, self_entity)))
-    properties = schema.get("properties", {})
-    if role == "comprehension":
-        for key, limit in {
-            "new_details": 3,
-            "bids": 3,
-            "relationship_events": 3,
-            "shared_references": 3,
-        }.items():
-            if isinstance(properties.get(key), dict):
-                properties[key]["maxItems"] = limit
-    elif role == "thought" and self_entity in PEOPLE:
-        preferred = properties.get("preferred_partner")
-        if isinstance(preferred, dict):
-            preferred["enum"] = [person for person in PEOPLE if person != self_entity]
-    elif role == "expression" and isinstance(intent, dict):
-        intended_move = base._norm(intent.get("move"))
-        move_schema = properties.get("move")
-        if intended_move and isinstance(move_schema, dict):
-            allowed_moves = set(move_schema.get("enum") or [])
-            if intended_move in allowed_moves:
-                move_schema["enum"] = [intended_move]
-        intended_partner = base._norm(intent.get("partner"))
-        target_schema = properties.get("target")
-        if intended_partner in PEOPLE and intended_partner != self_entity and isinstance(target_schema, dict):
-            target_schema["enum"] = [intended_partner]
-    return schema
-
-
-def _read_completion(req: urllib.request.Request, timeout: int) -> str:
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return str(json.loads(resp.read().decode("utf-8", "replace")).get("content", ""))
+_ORIGINAL_REQUEST_AUTONOMY = _legacy._request_autonomy
 
 
 def _request_autonomy(model_url: str, prompt: str, role: str, temperature: float, timeout: int,
                       self_entity: str | None = None, attempt: int = 0, intent: dict | None = None) -> str:
-    body = {
-        "prompt": prompt,
-        "n_predict": {"comprehension": 200, "thought": 170, "expression": 180}.get(role, 180),
-        "temperature": temperature,
-        "cache_prompt": True,
-        "json_schema": _autonomy_schema(role, self_entity, intent),
-    }
+    """Add differential-reinforcement cues at the point of generation.
+
+    Existing validators provide the consequence layer by rejecting echoes and
+    low-novelty expressions.  This overlay supplies the replacement behavior so
+    retries have somewhere useful to go instead of producing cosmetic rewrites.
+    """
     if role in {"thought", "expression"}:
-        body.update({
-            "seed": base._sample_seed(role, self_entity, attempt),
-            "top_k": 60,
-            "top_p": 0.95,
-            "min_p": 0.007,
-        })
-    req = urllib.request.Request(
-        base._completion_url(model_url),
-        data=json.dumps(body, ensure_ascii=False).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+        prompt += (
+            "\nBEHAVIORAL_CONTINGENCY\n"
+            "High-value behavior: make one grounded contribution that changes what the conversation knows, distinguishes, predicts, revises, connects, or recognizes. "
+            "Low-value behavior: repeat, lightly paraphrase, automatically agree, recycle process words, or ask for clarification that is not needed to reason. "
+            "If recent speakers are converging on the same wording, respond to the underlying meaning and take a different reasoning step. "
+            "Do not manufacture novelty; relevance and evidence still control.\n"
+        )
+        if attempt:
+            prompt += (
+                "SHAPING_RETRY\n"
+                "The prior attempt did not satisfy the active quality boundary. Preserve the intended conversational goal, but choose a more substantive reasoning step rather than merely changing phrasing.\n"
+            )
+    return _ORIGINAL_REQUEST_AUTONOMY(
+        model_url, prompt, role, temperature, timeout, self_entity, attempt, intent
     )
-    if role == "thought":
-        lock_path = Path(os.environ.get("ROOM_LLAMA_THOUGHT_LOCK", "/tmp/room-llama-thought.lock"))
-        with lock_path.open("a+") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            return _read_completion(req, timeout)
-    return _read_completion(req, timeout)
 
 
-def _words(value: object) -> list[str]:
-    return re.findall(r"[a-z0-9']+", str(value or "").lower())
-
-
-def _has_context_echo(utterance: str, compact: dict, n: int = 5) -> bool:
-    output = _words(utterance)
-    if len(output) < n:
-        return False
-    grams = {tuple(output[i:i + n]) for i in range(len(output) - n + 1)}
-    context = compact.get("context") if isinstance(compact.get("context"), list) else []
-    event = compact.get("event")
-    sources = list(context[-5:])
-    if event:
-        sources.append(event)
-    for item in sources:
-        text = item.get("text") if isinstance(item, dict) else item
-        incoming = _words(text)
-        for i in range(max(0, len(incoming) - n + 1)):
-            if tuple(incoming[i:i + n]) in grams:
-                return True
-    return False
-
-
-def _public_meta_language(utterance: str, compact: dict) -> bool:
-    """Reject ungrounded process/scaffold talk while allowing real subjects."""
-    if base._contains_meta_language(utterance):
-        return True
-    low = base._norm(utterance)
-    hard_patterns = (
-        r"\b(?:prompt|schema|field)\s+(?:says|requires|expects|allows|forces|tells)\b",
-        r"\b(?:output|generation|response)\s+(?:format|process|schema)\b",
-        r"\b(?:return|output|generate)\s+(?:only\s+)?(?:json|structured\s+(?:data|object))\b",
-        r"\bkeep\s+(?:the|your|its)\s+(?:chosen\s+)?move.{0,32}focus.{0,32}(?:intended\s+)?partner\b",
-        r"\b(?:move|focus)\s*(?:,|and)\s*(?:focus|partner).{0,24}(?:partner|intact)\b",
-        r"\bdo\s+not\s+(?:resolve|invent|copy).{0,48}\b(?:issue|conflict|speech|conversation)\b",
-        r"\buse\s+only\s+details\s+supported\s+by\s+(?:what|the conversation)\b",
-        r"\bbase\s+(?:the\s+)?reply\s+only\s+on\s+what\s+was\s+actually\s+said\b",
-    )
-    if any(re.search(pattern, low) for pattern in hard_patterns):
-        return True
-
-    script_process = re.search(
-        r"\b(?:focus|stick|follow|ignore|change|rewrite)\b.{0,28}\b(?:the\s+)?script\b",
-        low,
-    )
-    if not script_process:
-        return False
-
-    sources = []
-    context = compact.get("context") if isinstance(compact.get("context"), list) else []
-    sources.extend(context[-5:])
-    if compact.get("event"):
-        sources.append(compact.get("event"))
-    evidence = " ".join(
-        str(item.get("text") or "") if isinstance(item, dict) else str(item or "")
-        for item in sources
-    ).lower()
-    discussion = compact.get("discussion") if isinstance(compact.get("discussion"), dict) else {}
-    evidence += " " + " ".join(str(v or "") for v in discussion.values()).lower()
-    return not bool(re.search(r"\b(?:script|screenplay|screenwriter|screenwriting)\b", evidence))
+# Keep the wrapper-visible helper as the one the engine patches.  Before each
+# call, sync those runtime patches into the legacy function namespace.
+_has_context_echo = _legacy._has_context_echo
+base = _legacy.base
 
 
 def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
-    if role not in AUTONOMY_PROMPTS:
-        raise ValueError(f"unknown private model role: {role}")
-
-    model_url = os.environ.get("ROOM_MODEL_URL", "").strip()
-    if not model_url:
-        raise RuntimeError(f"private model unavailable for {role}")
-
-    prompt = AUTONOMY_PROMPTS[role]
-    self_entity = base._norm(payload.get("entity")) if role in {"thought", "expression"} else None
-    compact = _autonomy_compact(payload, role, self_entity)
-    compact_intent = compact.get("intent") if role == "expression" and isinstance(compact.get("intent"), dict) else None
-
-    base_guard = ""
-    if role == "expression":
-        base_guard = (
-            "\nAUTONOMY_RULE\n"
-            "Respond naturally to the current conversation. Keep the chosen move, focus, and intended partner while choosing your own words. "
-            "Use only details supported by what was actually said. Do not invent unsupported conflict, jealousy, secrets, threats, shared memories, "
-            "or dramatic incidents. Treat reported claims as reports unless independent evidence is present. Avoid copying recent speech. Stay inside the conversation.\n"
-        )
-
-    attempts = 3 if role == "expression" else 2
-    last_reason = "unknown"
-    for attempt in range(attempts):
-        retry_guard = ""
-        if attempt:
-            retry_guard = (
-                "\nTRY_AGAIN\n"
-                "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n"
-            )
-
-        combined = (
-            prompt + base_guard + retry_guard + "\nSITUATION_DATA\n"
-            + json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
-            + "\nRETURN_STRUCTURED_DATA_ONLY\n"
-        )
-
-        if role == "expression":
-            voice_index = PEOPLE.index(self_entity) if self_entity in PEOPLE else 0
-            temperature = min(1.35, 0.82 + 0.08 * voice_index + 0.10 * attempt)
-        elif role == "thought":
-            temperature = 0.72 + 0.06 * attempt
-        else:
-            temperature = 0.15 + 0.04 * attempt
-
-        try:
-            out = _request_autonomy(model_url, combined, role, temperature, timeout,
-                                    self_entity, attempt, compact_intent)
-            if not out:
-                last_reason = "empty_output"
-                continue
-            obj = base._validate(role, base._extract_json(out), compact, prompt, self_entity)
-            if role == "thought":
-                if self_entity in PEOPLE and base._norm(obj.get("preferred_partner")) == self_entity:
-                    last_reason = "self_selected_as_partner"
-                    continue
-            if role == "expression":
-                obj = base._sanitize_expression(obj, compact, self_entity)
-                intent = compact_intent or {}
-                intended_move = base._norm(intent.get("move"))
-                intended_partner = base._norm(intent.get("partner"))
-                if intended_move and base._norm(obj.get("move")) != intended_move:
-                    last_reason = "intent_move_not_realized"
-                    continue
-                if intended_partner and base._norm(obj.get("target")) != intended_partner:
-                    last_reason = "intent_partner_not_realized"
-                    continue
-                utterance = str(obj.get("utterance") or "").strip()
-                bare_words = _words(utterance)
-                bare_move_labels = {
-                    "acknowledge", "appreciate", "support", "repair", "answer",
-                    "respond", "response", "disclose", "compare", "disagree",
-                    "agree", "bridge", "close", "deepen", "callback",
-                }
-                if (
-                    attempt < attempts - 1
-                    and len(bare_words) == 1
-                    and bare_words[0] in bare_move_labels
-                ):
-                    last_reason = "bare_move_label"
-                    continue
-                if len(utterance.split()) < max(1, int(min_words)):
-                    last_reason = "utterance_too_short"
-                    continue
-                if _public_meta_language(utterance, compact):
-                    last_reason = "meta_language"
-                    continue
-                if base._too_similar_to_context(utterance, compact) or _has_context_echo(utterance, compact):
-                    last_reason = "duplicate_context"
-                    continue
-            return obj
-        except urllib.error.HTTPError as exc:
-            detail = base._safe_http_detail(exc)
-            suffix = f": {detail}" if detail else ""
-            if role == "expression":
-                print(f"Expression quarantined for {self_entity}: HTTP {exc.code}{suffix}")
-                return None
-            raise RuntimeError(f"private model request failed for {role}: HTTP {exc.code}{suffix}") from exc
-        except ValueError as exc:
-            last_reason = str(exc)[:80]
-            continue
-        except Exception as exc:
-            if role == "expression":
-                print(f"Expression quarantined for {self_entity}: {type(exc).__name__}")
-                return None
-            raise RuntimeError(f"private model request failed for {role}: {type(exc).__name__}") from exc
-
-    if role == "expression":
-        print(f"Expression quarantined for {self_entity}: {last_reason}")
-        return None
-    raise RuntimeError(f"private model output rejected for {role}: {last_reason}")
+    _legacy.AUTONOMY_PROMPTS = AUTONOMY_PROMPTS
+    _legacy._request_autonomy = globals().get("_request_autonomy", _request_autonomy)
+    _legacy._has_context_echo = globals().get("_has_context_echo", _has_context_echo)
+    _legacy.AUTONOMY_ENGINE = AUTONOMY_ENGINE
+    return _legacy.run(role, payload, timeout=timeout, min_words=min_words)
