@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 4,
+  "completed_reply_turns": 5,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -107,6 +107,15 @@
       "to_name": "Olivia",
       "content": "Oh, awesome! What kind of cool things are happening today?",
       "created_at": "2026-09-12T01:14:59.853199+00:00"
+    },
+    {
+      "id": 6,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Oh, awesome! I love hearing about your amazing day. What are you doing? Are you going out today?",
+      "created_at": "2026-09-12T01:16:01.041135+00:00"
     }
   ],
   "latest_turn": {
@@ -143,21 +152,108 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Hi, Olivia. How are you today?",
+      "Olivia observes a message from Emily: Wow, that's so cool! I have an amazing day planned today. What about you? Do you have anything exciting happening?",
+      "Olivia observes a message from Emily: Oh, awesome! What kind of cool things are happening today?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "0be3afd4671cabc488e6",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 7
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "4452298c39769ea06210",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 7
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "cf2c1ab30bf843b4a6d3",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 6,
+        "stanford_last_retrieved": 6,
+        "observed_time_step": 7
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "Oh, awesome! I love hearing about your amazing day. What are you doing? Are you going out today?",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Hi, Olivia. How are you today?",
+        "Olivia observes a message from Emily: Wow, that's so cool! I have an amazing day planned today. What about you? Do you have anything exciting happening?",
+        "Olivia observes a message from Emily: Oh, awesome! What kind of cool things are happening today?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "0be3afd4671cabc488e6",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 7
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "4452298c39769ea06210",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 7
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "cf2c1ab30bf843b4a6d3",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 6,
+          "stanford_last_retrieved": 6,
+          "observed_time_step": 7
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 6,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Oh, awesome! I love hearing about your amazing day. What are you doing? Are you going out today?",
+        "created_at": "2026-09-12T01:16:01.041135+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'long_refractory_echo: Oh, awesome! That sounds so great. What kind of cool things are happening today?'"
+    "external_generation_error": ""
   }
 }
