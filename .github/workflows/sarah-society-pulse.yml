@@ -41,7 +41,10 @@ jobs:
           last_cooled_failure=""
           queued_timeout=90
           startup_grace=240
-          publish_stale_timeout=240
+          # room/state.json intentionally does not mutate when every candidate
+          # expression is quarantined. Allow several complete beats before
+          # treating unchanged public state as a dead runner.
+          publish_stale_timeout=900
           next_oracle_at=0
           oracle_pid=""
 
