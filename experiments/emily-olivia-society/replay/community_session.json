@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 2,
+  "completed_reply_turns": 3,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -89,6 +89,15 @@
       "to_name": "Olivia",
       "content": "That's really kind of you, thank you. I didn't expect to get to know you so well.",
       "created_at": "2026-09-12T21:03:58.818572+00:00"
+    },
+    {
+      "id": 4,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "What about you, Emily? It's been a while since we saw each other. What have you been up to?",
+      "created_at": "2026-09-12T21:05:59.178283+00:00"
     }
   ],
   "latest_turn": {
@@ -125,21 +134,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Oh, thank you for coming with me!",
+      "Olivia observes a message from Emily: That's really kind of you, thank you. I didn't expect to get to know you so well."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "596c37b8cb073147c984",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 5
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "fb3a18fe95b6136a0ddf",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 5
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "What about you, Emily? It's been a while since we saw each other. What have you been up to?",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Oh, thank you for coming with me!",
+        "Olivia observes a message from Emily: That's really kind of you, thank you. I didn't expect to get to know you so well."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "596c37b8cb073147c984",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 5
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "fb3a18fe95b6136a0ddf",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 5
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 4,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "What about you, Emily? It's been a while since we saw each other. What have you been up to?",
+        "created_at": "2026-09-12T21:05:59.178283+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'long_refractory_echo: Thanks for coming with me, Emily!'"
+    "external_generation_error": ""
   }
 }
