@@ -92,12 +92,12 @@
     }
   ],
   "latest_turn": {
-    "agent": "Emily",
-    "time_step": 3,
+    "agent": "Olivia",
+    "time_step": 4,
     "observation": {
       "self": {
-        "id": 1,
-        "name": "Emily"
+        "id": 2,
+        "name": "Olivia"
       },
       "participants": [
         {
@@ -115,74 +115,31 @@
       ],
       "inbox": [
         {
-          "id": 2,
-          "from_id": 2,
-          "from_name": "Olivia",
-          "to_id": 1,
-          "to_name": "Emily",
-          "content": "What kind of movie are you watching? That's pretty interesting!",
-          "created_at": "2026-09-13T21:37:42.402894+00:00"
+          "id": 3,
+          "from_id": 1,
+          "from_name": "Emily",
+          "to_id": 2,
+          "to_name": "Olivia",
+          "content": "That's pretty interesting! I wonder if we can find any more movies like that.",
+          "created_at": "2026-09-13T21:38:26.034140+00:00"
         }
       ]
     },
-    "retrieved_memories": [
-      "Emily observes a message from Olivia: What kind of movie are you watching? That's pretty interesting!"
-    ],
-    "retrieved_memory_evidence": [
-      {
-        "retrieval_rank": 1,
-        "content_hash": "6565949c6e191c55c715",
-        "stanford_node_id": 1,
-        "stanford_node_type": "observation",
-        "stanford_importance_raw": 75.0,
-        "stanford_created": 3,
-        "stanford_last_retrieved": 3,
-        "observed_time_step": 4
-      }
-    ],
+    "retrieved_memories": [],
+    "retrieved_memory_evidence": [],
     "action": {
-      "type": "message",
-      "recipient_id": 2,
-      "content": "That's pretty interesting! I wonder if we can find any more movies like that.",
-      "retrieved_memories": [
-        "Emily observes a message from Olivia: What kind of movie are you watching? That's pretty interesting!"
-      ],
-      "retrieved_memory_evidence": [
-        {
-          "retrieval_rank": 1,
-          "content_hash": "6565949c6e191c55c715",
-          "stanford_node_id": 1,
-          "stanford_node_type": "observation",
-          "stanford_importance_raw": 75.0,
-          "stanford_created": 3,
-          "stanford_last_retrieved": 3,
-          "observed_time_step": 4
-        }
-      ],
-      "cognition": {
-        "reaction": "chat with Olivia",
-        "reflected": false,
-        "plan_present": false,
-        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
-      }
+      "type": "wait",
+      "reason": "speech_generation_deferred"
     },
-    "action_result": {
-      "success": true,
-      "message": {
-        "id": 3,
-        "from_id": 1,
-        "from_name": "Emily",
-        "to_id": 2,
-        "to_name": "Olivia",
-        "content": "That's pretty interesting! I wonder if we can find any more movies like that.",
-        "created_at": "2026-09-13T21:38:26.034140+00:00"
-      }
-    },
-    "consumed_inbound": true,
+    "action_result": null,
+    "consumed_inbound": false,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": ""
+    "external_generation_error": "",
+    "generation_deferred": true,
+    "generation_attempts": 1,
+    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"recurring_pair_attractor: That's pretty interesting! What kind of movies are you into? That sounds like a great idea!\""
   }
 }
