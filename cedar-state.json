@@ -1184,24 +1184,13 @@
       ]
     },
     "Nia": {
-      "energy": 9.6,
+      "energy": 7.6,
       "goals": [
         "keep basic supplies available",
         "notice when someone needs assistance"
       ],
-      "location": "kitchen",
+      "location": "square",
       "memories": [
-        {
-          "id": "369b8572b501cc04",
-          "importance": 1.2,
-          "tags": [
-            "action",
-            "observe",
-            "Nia"
-          ],
-          "text": "I paused to observe kitchen.",
-          "tick": 26751
-        },
         {
           "id": "f2c5913487193b28",
           "importance": 1.2,
@@ -1322,6 +1311,17 @@
           ],
           "text": "I paused to observe kitchen.",
           "tick": 26786
+        },
+        {
+          "id": "5e392fe432d05a4b",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "move",
+            "Nia"
+          ],
+          "text": "I moved from kitchen to square.",
+          "tick": 26787
         }
       ],
       "name": "Nia",
@@ -1417,17 +1417,6 @@
       ],
       "location": "kitchen",
       "memories": [
-        {
-          "id": "a8f23c3fb5dfff23",
-          "importance": 1.2,
-          "tags": [
-            "action",
-            "observe",
-            "Sol"
-          ],
-          "text": "I paused to observe kitchen.",
-          "tick": 26736
-        },
         {
           "id": "2a520c96ea55755b",
           "importance": 1.2,
@@ -1548,6 +1537,17 @@
           ],
           "text": "I paused to observe kitchen.",
           "tick": 26786
+        },
+        {
+          "id": "ccd93b91815d0646",
+          "importance": 1.2,
+          "tags": [
+            "action",
+            "observe",
+            "Sol"
+          ],
+          "text": "I paused to observe kitchen.",
+          "tick": 26787
         }
       ],
       "name": "Sol",
@@ -1942,11 +1942,11 @@
   },
   "metrics": {
     "action_counts": {
-      "move": 6,
-      "observe": 506,
+      "move": 7,
+      "observe": 505,
       "rest": 1
     },
-    "action_entropy_bits": 0.1122,
+    "action_entropy_bits": 0.1244,
     "action_feasibility_breakdown": {
       "help": {
         "chosen_and_accepted_ticks": 0,
@@ -1959,11 +1959,11 @@
         "unavailable_ticks": 99
       },
       "move": {
-        "chosen_and_accepted_ticks": 6,
+        "chosen_and_accepted_ticks": 7,
         "chosen_and_rejected_ticks": 0,
-        "chosen_ticks": 6,
+        "chosen_ticks": 7,
         "feasible_ticks": 425,
-        "feasible_unchosen_ticks": 419,
+        "feasible_unchosen_ticks": 418,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
         "unavailable_ticks": 88
@@ -2004,22 +2004,22 @@
         "chosen_and_accepted_ticks": 0,
         "chosen_and_rejected_ticks": 0,
         "chosen_ticks": 0,
-        "feasible_ticks": 360,
-        "feasible_unchosen_ticks": 360,
+        "feasible_ticks": 361,
+        "feasible_unchosen_ticks": 361,
         "rejection_reasons": {},
         "schema_violation_ticks": 0,
-        "unavailable_ticks": 153
+        "unavailable_ticks": 152
       }
     },
     "agents": 8,
-    "backend_errors": 476,
+    "backend_errors": 475,
     "decision_count": 513,
     "exact_repeated_utterance_rate": 0.0,
     "location_entropy_bits": 0.3444,
     "note": "These are engineering diagnostics, not measures of human realism or consciousness.",
-    "proposal_rejections": 506,
+    "proposal_rejections": 505,
     "talk_turns": 0,
-    "ticks": 26786,
+    "ticks": 26787,
     "total_actions": 513,
     "unique_interaction_pairs": 0
   },
@@ -2028,90 +2028,6 @@
   "note": "Cedar Hollow is running autonomously. The viewer is read-only.",
   "read_only_note": "This snapshot is observational. The viewer cannot propose actions or mutate WorldEngine state.",
   "recent_events": [
-    {
-      "actor": "Sol",
-      "error_type": "RuntimeError",
-      "kind": "backend_error",
-      "message": "Falcon HTTP 400: {\"error\":{\"code\":400,\"message\":\"request (2345 tokens) exceeds the available context size (2048 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":2345,\"n_ctx\":2048}}",
-      "seq": 171890,
-      "tick": 26772
-    },
-    {
-      "actor": "Sol",
-      "kind": "proposal_rejected",
-      "proposed": {
-        "type": "observe"
-      },
-      "reason": "repeated_action_loop",
-      "seq": 171891,
-      "tick": 26772
-    },
-    {
-      "accepted": false,
-      "actor": "Sol",
-      "chosen_type": "observe",
-      "co_located_agents": [
-        "Arden",
-        "Ivo",
-        "Jun",
-        "Lena",
-        "Mira",
-        "Nia",
-        "Theo"
-      ],
-      "energy": 39.2,
-      "feasible_action_types": [
-        "help",
-        "move",
-        "observe",
-        "rest",
-        "talk",
-        "work"
-      ],
-      "kind": "decision",
-      "location": "kitchen",
-      "proposed_action": null,
-      "proposed_type": null,
-      "recent_local_incidents": [],
-      "rejection_reason": "repeated_action_loop",
-      "resources_visible": {
-        "food": 5
-      },
-      "seq": 171892,
-      "tick": 26772
-    },
-    {
-      "action": {
-        "type": "observe"
-      },
-      "actor": "Sol",
-      "kind": "action",
-      "location": "kitchen",
-      "outcome": {
-        "ok": false,
-        "validation_note": "repeated_action_loop"
-      },
-      "seq": 171893,
-      "tick": 26772
-    },
-    {
-      "actor": "Jun",
-      "error_type": "RuntimeError",
-      "kind": "backend_error",
-      "message": "Falcon HTTP 400: {\"error\":{\"code\":400,\"message\":\"request (2267 tokens) exceeds the available context size (2048 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":2267,\"n_ctx\":2048}}",
-      "seq": 171894,
-      "tick": 26772
-    },
-    {
-      "actor": "Jun",
-      "kind": "proposal_rejected",
-      "proposed": {
-        "type": "observe"
-      },
-      "reason": "repeated_action_loop",
-      "seq": 171895,
-      "tick": 26772
-    },
     {
       "accepted": false,
       "actor": "Jun",
@@ -3992,6 +3908,124 @@
       },
       "seq": 172009,
       "tick": 26786
+    },
+    {
+      "accepted": true,
+      "actor": "Nia",
+      "chosen_type": "move",
+      "co_located_agents": [
+        "Arden",
+        "Ivo",
+        "Jun",
+        "Lena",
+        "Mira",
+        "Sol",
+        "Theo"
+      ],
+      "energy": 9.6,
+      "feasible_action_types": [
+        "help",
+        "move",
+        "observe",
+        "rest",
+        "talk",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "kitchen",
+      "proposed_action": {
+        "location": "square",
+        "type": "move"
+      },
+      "proposed_type": "move",
+      "recent_local_incidents": [],
+      "rejection_reason": null,
+      "resources_visible": {
+        "food": 5
+      },
+      "seq": 172010,
+      "tick": 26787
+    },
+    {
+      "action": {
+        "location": "square",
+        "type": "move"
+      },
+      "actor": "Nia",
+      "kind": "action",
+      "location": "kitchen",
+      "outcome": {
+        "from": "kitchen",
+        "ok": true,
+        "to": "square"
+      },
+      "seq": 172011,
+      "tick": 26787
+    },
+    {
+      "actor": "Sol",
+      "error_type": "RuntimeError",
+      "kind": "backend_error",
+      "message": "Falcon HTTP 400: {\"error\":{\"code\":400,\"message\":\"request (2267 tokens) exceeds the available context size (2048 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":2267,\"n_ctx\":2048}}",
+      "seq": 172012,
+      "tick": 26787
+    },
+    {
+      "actor": "Sol",
+      "kind": "proposal_rejected",
+      "proposed": {
+        "type": "observe"
+      },
+      "reason": "repeated_action_loop",
+      "seq": 172013,
+      "tick": 26787
+    },
+    {
+      "accepted": false,
+      "actor": "Sol",
+      "chosen_type": "observe",
+      "co_located_agents": [
+        "Arden",
+        "Ivo",
+        "Jun",
+        "Lena",
+        "Mira",
+        "Theo"
+      ],
+      "energy": 39.2,
+      "feasible_action_types": [
+        "help",
+        "move",
+        "observe",
+        "rest",
+        "talk",
+        "work"
+      ],
+      "kind": "decision",
+      "location": "kitchen",
+      "proposed_action": null,
+      "proposed_type": null,
+      "recent_local_incidents": [],
+      "rejection_reason": "repeated_action_loop",
+      "resources_visible": {
+        "food": 5
+      },
+      "seq": 172014,
+      "tick": 26787
+    },
+    {
+      "action": {
+        "type": "observe"
+      },
+      "actor": "Sol",
+      "kind": "action",
+      "location": "kitchen",
+      "outcome": {
+        "ok": false,
+        "validation_note": "repeated_action_loop"
+      },
+      "seq": 172015,
+      "tick": 26787
     }
   ],
   "seed": 7,
@@ -3999,8 +4033,8 @@
   "started_at": "2026-09-06T02:13:51.522554Z",
   "status": "live",
   "temperature": 0.4,
-  "tick": 26786,
-  "updated_at": "2026-09-13T15:46:55.049895Z",
+  "tick": 26787,
+  "updated_at": "2026-09-13T15:47:26.738341Z",
   "version": 2,
   "world_name": "Cedar Hollow"
 }
