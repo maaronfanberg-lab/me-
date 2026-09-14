@@ -1,5 +1,3 @@
-import { loadPyodide } from 'https://cdn.jsdelivr.net/pyodide/v314.0.6/full/pyodide.mjs';
-
 const CDN = 'https://cdn.jsdelivr.net/pyodide/v314.0.6/full/';
 const VALIDATED = '21a551fb13ab78ec7a6d0d714e29bf4cba07b33a';
 const CORE = `https://raw.githubusercontent.com/maaronfanberg-lab/me-/${VALIDATED}/bubble/core.py`;
@@ -11,6 +9,7 @@ function say(type, text) { postMessage({ type, text }); }
 async function init() {
   try {
     say('status', 'Loading Python 3.14 runtime…');
+    const { loadPyodide } = await import(CDN + 'pyodide.mjs');
     py = await loadPyodide({ indexURL: CDN });
     say('status', 'Loading NumPy and SciPy…');
     await py.loadPackage(['numpy', 'scipy']);
