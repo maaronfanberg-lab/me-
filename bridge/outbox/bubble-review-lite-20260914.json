@@ -1,9 +1,52 @@
 {
   "protocol": "content-addressed-oracle-v1",
-  "ok": false,
+  "ok": true,
   "request_file": "bridge/inbox/bubble-review-lite-20260914.json",
-  "request_sha256": "4362c1283a68f17659570be259f9722a1bcdbf007141aea58edf377aa05a104d",
-  "request_nonce": "bubble-review-lite-20260914",
-  "completed_at": "2026-09-14T11:43:48.178358Z",
-  "error": "RuntimeError: Claude Code exited 1: payload=[\"Reached maximum number of turns (6)\"] stderr="
+  "request_sha256": "32e4dcd0d8dea11f1b0884d3606fbd3a87c03b47a86b4a0fed19b45ab7d80f52",
+  "request_nonce": "bubble-review-lite-20260914-v2",
+  "completed_at": "2026-09-14T11:45:26.471017Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Evidence check (repo scope)\n\nI searched the full repository for anything matching the described project — Rayleigh‑Plesset, Keller‑Miksis, Gilmore, Minnaert, \"polytropic,\" `*bubble*`, `*ode*` implementation files, etc. There is **no modular ODE bubble-dynamics simulator in this repository**. The only \"bubble\" hits are unrelated bridge request/response JSON files (`bridge/inbox/bubble-review-lite-20260914.json`, `bridge/outbox/...`), and the repo's actual content (`README.md`, `bridge/README.md`) shows this is a personal web-experiments repo (Resonator, Harmonograph, Attractor Lab, OMEF prototypes, a \"room/society\" simulation stack) with an oracle/consultation mechanism, not a CFD/ODE physics codebase.\n\n**Consequence for this review:** I cannot audit code that doesn't exist here. What follows is a standalone engineering/design review of the task as posed — a specification and skepticism pass you'd want *before* any such simulator is built or merged, not a code audit. If you intended to point me at a different repo/branch/path, that path isn't present in this checkout.\n\n## Recommended first version (v1) scope\n\n**Governing equation:** Rayleigh‑Plesset (RP) with a polytropic gas closure (`p_gas = p_gas0 (R0/R)^{3γ}`), linear viscous damping, surface tension, and a prescribed far-field driving pressure `p∞(t)`. State vector `[R, Ṙ]`, two coupled first-order ODEs.\n\n**Why RP as the default, with a caveat, not a free pass:** RP is incompressible-liquid, so it's the right *minimal* baseline — it has closed-form limiting cases for validation and is the common reference every more complex model (Keller-Miksis, Gilmore) is checked against. But RP is known to be quantitatively wrong once bubble-wall velocity approaches liquid sound speed, which happens routinely during violent inertial collapse (e.g., sonoluminescence-type forcing). RP has no mechanism to cap `Ṙ`, so it can report unphysical super-sonic wall velocities right when the physics matters most.\n\n**Concrete recommendation:** ship RP as the validated reference/default for weak-to-moderate forcing, but implement Keller-Miksis (first-order-in-Mach compressible correction) alongside it from day one, behind the same interface, and add a runtime guard: compute wall Mach number `M = |Ṙ|/c_liquid` at every step; flag/warn when `M` exceeds ~0.1–0.2, since RP results in that regime should not be trusted quantitatively. Don't let \"first version\" mean \"only version that ships\" — the compressible variant is not optional physics to defer if collapse dynamics are in scope; it's cheap to add and its absence is a known correctness gap in this equation family.\n\n**Scope explicitly excluded from v1** (not because they're unimportant, but because each breaks the spherical/single-bubble assumption and needs different governing equations, not just extra terms): thermal diffusion / non-adiabatic gas response, mass/vapor transfer, bubble translation and Bjerknes forces, shape-mode (non-spherical/Rayleigh-Taylor) instability, and multi-bubble interaction. These should be architecturally fenced off (see below), not bolted onto the RP/KM RHS.\n\n## Solver strategy\n\n- **Nondimensionalize before integrating** (scale by `R0`, `p0`, `ρ`) so the solver operates in O(1) magnitudes; this is a common, avoidable source of silent accuracy loss.\n- **Adaptive explicit RK with dense output** (Dormand-Prince/RK45 or DOP853) at tight tolerance (`rtol`, `atol` ~1e-10–1e-12) is standard and defensible. The near-collapse regime is *physically* stiff (timescales compress sharply as `R→R_min`), not just numerically stiff — that argues for adaptive step control plus explicit event detection on `Ṙ=0` to pin down the collapse minimum accurately, rather than for switching to an implicit/BDF integrator by default.\n- **Invariant guard:** the polytropic gas pressure diverges as `R→0`; add a hard stop/event when `R` approaches a floor (e.g., a small fraction of `R0`) rather than letting the integrator chase a singularity into negative or NaN radius.\n- **No closed-form solution exists for the general forced case**, so \"ground truth\" for convergence testing has to be a very-high-precision reference run of the same integrator (tolerance halved repeatedly until outputs stop changing), not an analytic answer — say this explicitly in any test suite so results aren't mistaken for validation against theory.\n\n## Validation tests (falsifiable, in priority order)\n\n1. **Minnaert resonance** — small-amplitude linearized oscillation frequency must match `f0 = (1/2πR0)√(3γp0/ρ)` analytically. Any first version that fails this is wrong regardless of how \"modular\" the code looks.\n2. **Rayleigh collapse time** — zero-gas-content bubble collapsing under constant `Δp` should match `t_c ≈ 0.915 R0√(ρ/Δp)` within numerical tolerance.\n3. **Tolerance/convergence sweep** — halve `rtol`/`atol` repeatedly; peak/min radius and period must stabilize below a stated threshold (e.g. <0.1%) before any result is trusted, especially near collapse.\n4. **RP vs Keller-Miksis agreement in the low-Mach limit** — the two models must converge as forcing amplitude → 0 and diverge measurably as `M` grows; quantify the divergence vs. `M` as a regression check, since this is the whole justification for carrying both models.\n5. **Time-reversal check** — integrate forward then backward from the endpoint; recovered initial state should match within tolerance. This catches integrator/RHS bugs, not physics, but it's cheap and effective.\n6. **Literature regression** — reproduce a published `R(t)` trace for a known parameter set (standard single-bubble sonoluminescence parameters) qualitatively over several acoustic cycles, as a sanity check against a second independent implementation.\n\n## Clean extension boundaries\n\n- **Integrator core**: physics-agnostic, takes any RHS(state, t, params) — never hardcode RP/KM terms into the stepper.\n- **Equation-of-motion module**: RP, Keller-Miksis, Gilmore as interchangeable implementations of one interface, sharing one parameter struct (`R0, p0, ρ, μ, σ, γ, c`).\n- **Gas closure module**: polytropic now; explicit seam for later thermal/mass-transfer models (Plesset-Zwick / Toegel-Lohse style) — do not let this leak into the wall-dynamics RHS.\n- **Driving/forcing module**: `p∞(t)` as a swappable function — sinusoidal now, arbitrary waveform later.\n- **Liquid module**: constant `ρ, μ, σ` now; Tait-EOS compressibility as a later, clearly separated addition (needed for Gilmore anyway).\n- **Diagnostics**: compute derived quantities (wall Mach number, gas temperature/pressure, radiated pressure) as post-processing on a stored trajectory, not inline in the solver — keeps the solver minimal and independently testable.\n- **Hard boundary, not a TODO**: multi-bubble interaction, translation, and shape instabilities require different state variables and equations; keep them in a separate module that the v1 solver has no dependency on, so v1 can't be silently broken by later physics.\n\n**Bottom line:** the task as posed is answerable and the recommendations above are self-consistent, but there is no code in this repository to actually review — treat this as a pre-implementation design/skepticism pass, and re-run this review against the real source once it exists, since the validation tests above are the actual falsification mechanism, not this document.",
+  "session_id": "822404d0-0933-462f-87ad-28da43b93164",
+  "usage": {
+    "input_tokens": 14,
+    "cache_creation_input_tokens": 13560,
+    "cache_read_input_tokens": 50088,
+    "output_tokens": 8096,
+    "output_tokens_details": {
+      "thinking_tokens": 4285
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 13560,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2769,
+        "cache_read_input_tokens": 13207,
+        "cache_creation_input_tokens": 3944,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 3944
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.1462666,
+  "num_turns": 13
 }
