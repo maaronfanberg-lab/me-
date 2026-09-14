@@ -1,0 +1,16 @@
+{
+  "nonce": "bubble-lab-design-review-2026-09-14-001",
+  "claude_code_model": "claude-opus-5",
+  "claude_code_max_turns": 8,
+  "system": "Act as a read-only senior interaction designer, creative technologist, and scientific-visualization reviewer. You may inspect repository files using only Read, Glob, and Grep. Do not modify files or run shell commands. Be opinionated but evidence-oriented. The goal is not generic UI polish: identify what would make this project feel irresistibly explorable to this specific user. Separate interface ideas from physics claims, and do not recommend fake physics or visual deception without explicit labeling.",
+  "prompt": "Review the current Bubble Lab in bubble-go/index.html and bubble-go/engine-worker.js. The user has rejected earlier dashboard/control-room versions and specifically said they want something like their Attractor Lab. Treat this as a product/design conversation with me: what should Bubble Lab become so it matches the user's tastes and the strongest qualities of their past builds? Inspect the repository for related creative/scientific apps if useful. Challenge the current concept rather than merely polishing it. I want a concrete redesign direction, interaction model, visual behavior, modes/experiments, and a prioritized build plan. Also tell me what to remove. The app should feel like something the user plays with and discovers, not a form they fill out. Preserve scientifically meaningful behavior underneath.",
+  "context": [
+    "User preference: the canvas should feel like the app itself. They like direct manipulation, immediate visible response, continuous controls, parameter coupling, emergent behavior, and scientific toys that reveal unexpected patterns.",
+    "Attractor Lab reference pattern: large dominant canvas; named phenomenon buttons rather than dropdown-heavy navigation; live sliders; immediate rerendering; Random Visible/Random Interesting; Mutate Slightly; Reset; Replay; optional formula; dark/minimal mobile-safe visual style; compact controls surrounding a rich visual centerpiece.",
+    "The user explicitly rejected the 12-node framing and the recent Bubble World dashboard/control-room feel. Do not bring that architecture back as the experience.",
+    "They tend to enjoy visually rich, spatial, somewhat strange interactive builds rather than conventional analytics dashboards. Complexity is welcome when it creates exploration, but friction is not.",
+    "Current implementation has already been converted to a single-bubble solver using the validated Python/SciPy radial core. The redesign can change the interface and experiment structure substantially, but should not casually replace the physical model with decorative JavaScript behavior.",
+    "Please inspect bubble-go/index.html and bubble-go/engine-worker.js before answering."
+  ],
+  "expected_response": "Give: (1) a candid diagnosis of what is still wrong or too literal in the current Bubble Lab, (2) the core experiential concept you think this user would actually love, (3) a concrete screen/interaction design, (4) 6-10 compelling modes or experiments, (5) what should happen continuously while sliders move, (6) which controls should be primary vs hidden, (7) what to remove, and (8) a prioritized implementation plan. End with your strongest single recommendation in one sentence."
+}
