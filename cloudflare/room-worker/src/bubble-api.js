@@ -1,9 +1,9 @@
 import { BubbleState, cleanId } from "./bubble-state.js";
 
 const ISSUER = "https://token.actions.githubusercontent.com";
-const EXPECTED_AUDIENCE = "room-live-mirror";
-const EXPECTED_REPOSITORY = "maaronfanberg-lab/me-";
-const EXPECTED_REF = "refs/heads/main";
+const DEFAULT_AUDIENCE = "room-live-mirror";
+const DEFAULT_REPOSITORY = "maaronfanberg-lab/me-";
+const DEFAULT_ALLOWED_REFS = "refs/heads/main";
 
 let oidcMetadataCache = null;
 let jwksCache = null;
@@ -56,7 +56,19 @@ async function getJwks() {
   return jwksCache;
 }
 
-async function verifyGitHubToken(token) {
+function authConfig(env) {
+  const allowedRefs = String(env?.GITHUB_ALLOWED_REFS || DEFAULT_ALLOWED_REFS)
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return {
+    audience: String(env?.GITHUB_WORKFLOW_AUDIENCE || DEFAULT_AUDIENCE),
+    repository: String(env?.GITHUB_EXPECTED_REPOSITORY || DEFAULT_REPOSITORY),
+    allowedRefs,
+  };
+}
+
+async function verifyGitHubToken(token, env) {
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("malformed-token");
   const header = decodeJwtJson(parts[0]);
@@ -89,19 +101,20 @@ async function verifyGitHubToken(token) {
 
   const now = Math.floor(Date.now() / 1000);
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  const config = authConfig(env);
   if (claims.iss !== ISSUER) throw new Error("wrong-token-issuer");
-  if (!audiences.includes(EXPECTED_AUDIENCE)) throw new Error("wrong-token-audience");
-  if (claims.repository !== EXPECTED_REPOSITORY) throw new Error("wrong-repository");
-  if (claims.ref !== EXPECTED_REF) throw new Error("wrong-branch");
+  if (!audiences.includes(config.audience)) throw new Error("wrong-token-audience");
+  if (claims.repository !== config.repository) throw new Error("wrong-repository");
+  if (!config.allowedRefs.includes(claims.ref)) throw new Error("wrong-branch");
   if (!claims.exp || claims.exp < now - 5) throw new Error("expired-token");
   if (claims.nbf && claims.nbf > now + 30) throw new Error("token-not-active");
   return claims;
 }
 
-async function requireGitHub(request) {
+async function requireGitHub(request, env) {
   const token = bearer(request);
   if (!token) throw new Error("missing-token");
-  return verifyGitHubToken(token);
+  return verifyGitHubToken(token, env);
 }
 
 function simIdFrom(url, body = null) {
@@ -125,7 +138,7 @@ export async function handleBubbleApi(request, env) {
   }
 
   try {
-    await requireGitHub(request);
+    await requireGitHub(request, env);
   } catch (error) {
     return json({ error: "unauthorized", detail: String(error?.message || error) }, 401);
   }
