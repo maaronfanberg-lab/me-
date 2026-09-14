@@ -5,11 +5,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 import random
+import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from bubble.core import BubbleParams, integrate_segment
 
@@ -144,7 +150,6 @@ def run_node(args: argparse.Namespace) -> int:
 
         inject_ms = max(0.0, args.inject_latency_ms)
         if inject_ms:
-            # Validation hook: wall-clock delay must not alter simulated state.
             time.sleep((inject_ms / 1000.0) * rng.random())
 
         submission = {
