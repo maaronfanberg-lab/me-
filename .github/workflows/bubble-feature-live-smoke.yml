@@ -1,4 +1,4 @@
-name: Bubble Feature Live Smoke
+name: Keyless Coupled Bubble World
 
 on:
   push:
@@ -6,168 +6,78 @@ on:
     paths:
       - '.github/workflows/bubble-feature-live-smoke.yml'
       - 'bubble/**'
-      - 'scripts/bubble_cluster_node.py'
+      - 'scripts/run_coupled_bubbles.py'
       - 'scripts/test_bubble_core.py'
-      - 'cloudflare/room-worker/**'
+      - 'scripts/test_coupled_bubbles.py'
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
-  group: bubble-feature-live-smoke
+  group: keyless-coupled-bubble-world
   cancel-in-progress: true
 
-env:
-  BUBBLE_COORDINATOR_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
-
 jobs:
-  validate:
+  simulate:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
+
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+
       - name: Install numerical dependencies
         run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
-      - name: Validate radial physics
-        run: python -m unittest scripts.test_bubble_core
-      - name: Validate worker bundle
-        run: |
-          node --check cloudflare/room-worker/src/bubble-state.js
-          node --check cloudflare/room-worker/src/bubble-state-terminal.js
-          node --check cloudflare/room-worker/src/bubble-api.js
-          node --check cloudflare/room-worker/src/open-allen-things-v2.js
-          npx --yes wrangler@4 deploy --dry-run --config cloudflare/room-worker/wrangler.toml --outdir /tmp/bubble-worker
 
-  deploy:
-    needs: validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      CLOUDFLARE_API_TOKEN_RAW: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-      - name: Probe currently deployed bubble route
-        id: live
-        shell: bash
-        run: |
-          set -euo pipefail
-          code=$(curl -sS -o /tmp/bubble-before.json -w '%{http_code}' "$BUBBLE_COORDINATOR_URL/api/bubble/status?sim_id=route-probe")
-          cat /tmp/bubble-before.json
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-      - name: Normalize Cloudflare credential
-        shell: bash
-        run: |
-          set -euo pipefail
-          raw="${CLOUDFLARE_API_TOKEN_RAW:-}"
-          if [ -z "$raw" ]; then
-            echo 'No Cloudflare token present; live-route fallback will be tested.'
-            exit 0
-          fi
-          token="${raw#Bearer }"
-          token="${token#bearer }"
-          token="$(printf '%s' "$token" | tr -d '\r\n')"
-          test -n "$token" || exit 0
-          printf 'CLOUDFLARE_API_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24.14.0'
-      - id: cf_auth
-        name: Verify Cloudflare authentication if available
-        continue-on-error: true
-        run: npx --yes wrangler@4 whoami
-      - name: Deploy terminal-aware bubble coordinator when authenticated
-        if: steps.cf_auth.outcome == 'success'
-        run: npx --yes wrangler@4 deploy --config cloudflare/room-worker/wrangler.toml
-      - name: Require a live bubble route
-        shell: bash
-        run: |
-          set -euo pipefail
-          code=$(curl -sS -o /tmp/bubble-route.json -w '%{http_code}' "$BUBBLE_COORDINATOR_URL/api/bubble/status?sim_id=route-probe")
-          cat /tmp/bubble-route.json
-          test "$code" = "401" || { echo "Expected authenticated bubble route to return 401 without OIDC, got $code"; exit 1; }
+      - name: Validate single-bubble and coupled physics
+        run: python -m unittest scripts.test_bubble_core scripts.test_coupled_bubbles
 
-  prepare:
-    needs: deploy
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      sim_id: ${{ steps.ids.outputs.sim_id }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
-      - id: ids
-        run: echo "sim_id=feature-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
-      - name: Establish one-cycle 12-bubble world
-        env:
-          SIM_ID: ${{ steps.ids.outputs.sim_id }}
+      - name: Run 12 communicating virtual bubble nodes
         run: |
-          python scripts/bubble_cluster_node.py start \
-            --sim-id "$SIM_ID" --reset --nodes 12 --model km \
+          python scripts/run_coupled_bubbles.py \
+            --nodes 12 --model km \
             --radius 1e-5 --radius-spread 0.02 --spacing 1e-3 \
             --drive-amplitude 1000 --drive-frequency 20000 \
             --end-time 5e-5 --macro-dt 2.5e-6 --min-macro-dt 7.8125e-8 \
-            --max-corrections 3 --coupling-rel-tol 1e-3 \
-            --coupling-abs-tol 0.5 --under-relaxation 0.65 --rtol 1e-8
+            --max-corrections 4 --coupling-rel-tol 1e-3 \
+            --coupling-abs-tol 0.5 --under-relaxation 0.65 --rtol 1e-8 \
+            --output artifacts/coupled-bubble-world.json
 
-  compute:
-    needs: prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      max-parallel: 12
-      matrix:
-        node: [0,1,2,3,4,5,6,7,8,9,10,11]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
-      - name: Integrate one bubble and exchange macrostep pressure
-        env:
-          SIM_ID: ${{ needs.prepare.outputs.sim_id }}
-          NODE_ID: ${{ matrix.node }}
+      - name: Summarize coupled world
         run: |
-          python scripts/bubble_cluster_node.py node \
-            --sim-id "$SIM_ID" --node "$NODE_ID" \
-            --poll-seconds 0.25 --poll-jitter 0.10 --max-wall-seconds 1200
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('artifacts/coupled-bubble-world.json')
+          data = json.loads(p.read_text())
+          hist = data.get('history', [])
+          max_mach = max((x['max_wall_mach'] for x in hist), default=0.0)
+          max_coupling = max((max(abs(v) for v in x['coupling_pressure_pa']) for x in hist), default=0.0)
+          print('status:', data['status'])
+          print('simulation_time:', data['simulation_time'])
+          print('accepted_steps:', len(hist))
+          print('rollbacks:', data['rollbacks'])
+          print('max_wall_mach:', max_mach)
+          print('max_abs_coupling_pressure_pa:', max_coupling)
+          with open(Path(__import__('os').environ['GITHUB_STEP_SUMMARY']), 'a') as f:
+              f.write('## Keyless coupled bubble world\n')
+              f.write(f"- Status: `{data['status']}`\n")
+              f.write(f"- Virtual nodes: `{data['config']['node_count']}`\n")
+              f.write(f"- Accepted macrosteps: `{len(hist)}`\n")
+              f.write(f"- Rollbacks: `{data['rollbacks']}`\n")
+              f.write(f"- Max wall Mach: `{max_mach:.6g}`\n")
+              f.write(f"- Max |coupling pressure|: `{max_coupling:.6g} Pa`\n")
+          if data['status'] not in {'complete', 'collapsed'}:
+              raise SystemExit(2)
+          PY
 
-  report:
-    if: always() && needs.prepare.result == 'success'
-    needs: [prepare, compute]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
-      - name: Read authoritative state
-        env:
-          SIM_ID: ${{ needs.prepare.outputs.sim_id }}
-        run: python scripts/bubble_cluster_node.py status --sim-id "$SIM_ID" | tee bubble-feature-smoke.json
       - uses: actions/upload-artifact@v4
         with:
-          name: bubble-feature-smoke-${{ needs.prepare.outputs.sim_id }}
-          path: bubble-feature-smoke.json
+          name: coupled-bubble-world-${{ github.run_id }}
+          path: artifacts/coupled-bubble-world.json
           retention-days: 30
