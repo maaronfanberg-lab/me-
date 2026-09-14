@@ -43,10 +43,22 @@ jobs:
             page.on('console', m => console.log('browser:', m.type(), m.text()));
             page.on('pageerror', e => console.error('pageerror:', e.message));
             await page.goto('http://127.0.0.1:8000', { waitUntil: 'domcontentloaded' });
-            await page.waitForFunction(() => document.querySelector('#engineBadge')?.textContent === 'ENGINE READY', null, { timeout: 240000 });
+
+            await Promise.race([
+              page.waitForFunction(() => document.querySelector('#engineBadge')?.textContent === 'ENGINE READY', null, { timeout: 240000 }),
+              page.waitForFunction(() => document.querySelector('#engineBadge')?.textContent === 'ENGINE ERROR', null, { timeout: 240000 })
+                .then(async () => { throw new Error('Engine failed: ' + (await page.locator('#errorBox').textContent())); }),
+            ]);
+
             console.log('engine:', await page.locator('#engineBadge').textContent());
             await page.locator('#go').click();
-            await page.waitForFunction(() => ['complete','collapsed'].includes((document.querySelector('#resultStatus')?.textContent || '').toLowerCase()), null, { timeout: 240000 });
+
+            await Promise.race([
+              page.waitForFunction(() => ['complete','collapsed'].includes((document.querySelector('#resultStatus')?.textContent || '').toLowerCase()), null, { timeout: 240000 }),
+              page.waitForFunction(() => document.querySelector('#engineBadge')?.textContent === 'ENGINE ERROR', null, { timeout: 240000 })
+                .then(async () => { throw new Error('Simulation failed: ' + (await page.locator('#errorBox').textContent())); }),
+            ]);
+
             const result = {
               status: await page.locator('#resultStatus').textContent(),
               coupling: await page.locator('#mCoupling').textContent(),
