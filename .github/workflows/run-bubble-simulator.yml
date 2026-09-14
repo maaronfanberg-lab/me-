@@ -1,0 +1,118 @@
+name: "🫧 Run Bubble Simulator"
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: "Choose a bubble experiment"
+        required: true
+        default: "gentle-demo"
+        type: choice
+        options:
+          - gentle-demo
+          - stronger-feedback
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bubble-simulator-manual
+  cancel-in-progress: true
+
+jobs:
+  simulate:
+    name: "Run the bubble world"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Load the bubble simulator
+        uses: actions/checkout@v6
+        with:
+          ref: bubble-coupled-sim-v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install numerical engine
+        run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
+
+      - name: Check the physics first
+        run: python -m unittest scripts.test_bubble_core scripts.test_coupled_bubbles
+
+      - name: Choose experiment settings
+        id: settings
+        shell: bash
+        env:
+          EXPERIMENT: ${{ inputs.experiment }}
+        run: |
+          set -euo pipefail
+          case "$EXPERIMENT" in
+            gentle-demo)
+              echo "drive_pa=1000" >> "$GITHUB_OUTPUT"
+              echo "spacing_m=0.001" >> "$GITHUB_OUTPUT"
+              echo "end_time=0.00005" >> "$GITHUB_OUTPUT"
+              echo "macro_dt=0.0000025" >> "$GITHUB_OUTPUT"
+              ;;
+            stronger-feedback)
+              echo "drive_pa=5000" >> "$GITHUB_OUTPUT"
+              echo "spacing_m=0.0005" >> "$GITHUB_OUTPUT"
+              echo "end_time=0.00010" >> "$GITHUB_OUTPUT"
+              echo "macro_dt=0.00000125" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unknown experiment: $EXPERIMENT" >&2
+              exit 2
+              ;;
+          esac
+
+      - name: "🫧 Run 12 communicating bubbles"
+        shell: bash
+        env:
+          DRIVE_PA: ${{ steps.settings.outputs.drive_pa }}
+          SPACING_M: ${{ steps.settings.outputs.spacing_m }}
+          END_TIME: ${{ steps.settings.outputs.end_time }}
+          MACRO_DT: ${{ steps.settings.outputs.macro_dt }}
+        run: |
+          python scripts/run_coupled_bubbles.py \
+            --nodes 12 --model km \
+            --radius 1e-5 --radius-spread 0.02 --spacing "$SPACING_M" \
+            --drive-amplitude "$DRIVE_PA" --drive-frequency 20000 \
+            --end-time "$END_TIME" --macro-dt "$MACRO_DT" --min-macro-dt 7.8125e-8 \
+            --max-corrections 6 --coupling-rel-tol 1e-3 \
+            --coupling-abs-tol 0.5 --under-relaxation 0.65 --rtol 1e-8 \
+            --output artifacts/coupled-bubble-world.json
+
+      - name: Show the result
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path('artifacts/coupled-bubble-world.json').read_text())
+          hist = data.get('history', [])
+          max_mach = max((x['max_wall_mach'] for x in hist), default=0.0)
+          max_coupling = max((max(abs(v) for v in x['coupling_pressure_pa']) for x in hist), default=0.0)
+          summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          summary.write_text(
+              '# 🫧 Bubble Simulator Result\n\n'
+              f"**Status:** {data['status']}\n\n"
+              f"**Bubbles:** {data['config']['node_count']}\n\n"
+              f"**Accepted simulation steps:** {len(hist)}\n\n"
+              f"**Rollbacks:** {data['rollbacks']}\n\n"
+              f"**Maximum bubble-wall Mach number:** {max_mach:.6g}\n\n"
+              f"**Strongest bubble-to-bubble pressure:** {max_coupling:.6g} Pa\n\n"
+              'The bubbles exchanged acoustic pressure after every macrostep and iterated until the shared field converged.\n'
+          )
+          print(summary.read_text())
+          if data['status'] not in {'complete', 'collapsed'}:
+              raise SystemExit(2)
+          PY
+
+      - name: Save detailed results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bubble-simulation-results-${{ github.run_id }}
+          path: artifacts/coupled-bubble-world.json
+          retention-days: 30
