@@ -97,7 +97,10 @@ jobs:
 
   prepare:
     name: Establish authoritative simulation
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && contains(github.event.head_commit.message, '[bubble-smoke]')))
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -118,9 +121,9 @@ jobs:
       - id: config
         name: Resolve SI simulation parameters
         env:
-          FREQ: ${{ inputs.drive_frequency_hz }}
-          CYCLES: ${{ inputs.cycles }}
-          STEPS: ${{ inputs.macrosteps_per_cycle }}
+          FREQ: ${{ inputs.drive_frequency_hz || '20000' }}
+          CYCLES: ${{ inputs.cycles || '2' }}
+          STEPS: ${{ inputs.macrosteps_per_cycle || '40' }}
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import os
@@ -135,18 +138,18 @@ jobs:
       - name: Initialize Durable Object simulation clock
         env:
           SIM_ID: ${{ steps.config.outputs.sim_id }}
-          MODEL: ${{ inputs.model }}
-          RADIUS_UM: ${{ inputs.radius_um }}
-          RADIUS_SPREAD: ${{ inputs.radius_spread_fraction }}
-          SPACING_MM: ${{ inputs.spacing_mm }}
-          DRIVE_PA: ${{ inputs.drive_amplitude_pa }}
-          DRIVE_HZ: ${{ inputs.drive_frequency_hz }}
+          MODEL: ${{ inputs.model || 'km' }}
+          RADIUS_UM: ${{ inputs.radius_um || '10' }}
+          RADIUS_SPREAD: ${{ inputs.radius_spread_fraction || '0.02' }}
+          SPACING_MM: ${{ inputs.spacing_mm || '1.0' }}
+          DRIVE_PA: ${{ inputs.drive_amplitude_pa || '5000' }}
+          DRIVE_HZ: ${{ inputs.drive_frequency_hz || '20000' }}
           END_TIME: ${{ steps.config.outputs.end_time }}
           MACRO_DT: ${{ steps.config.outputs.macro_dt }}
           MIN_MACRO_DT: ${{ steps.config.outputs.min_macro_dt }}
         run: |
           python - <<'PY'
-          import os, subprocess
+          import os, subprocess, time
           cmd=[
             'python','scripts/bubble_cluster_node.py','start',
             '--sim-id',os.environ['SIM_ID'], '--nodes','12', '--model',os.environ['MODEL'],
@@ -159,12 +162,19 @@ jobs:
             '--coupling-rel-tol','1e-3', '--coupling-abs-tol','0.5',
             '--under-relaxation','0.65', '--rtol','1e-8',
           ]
-          subprocess.run(cmd, check=True)
+          for attempt in range(60):
+              result=subprocess.run(cmd)
+              if result.returncode == 0:
+                  break
+              print(f'Coordinator not ready yet; retry {attempt + 1}/60', flush=True)
+              time.sleep(2)
+          else:
+              raise SystemExit('live bubble coordinator did not become ready')
           PY
 
   compute:
     name: Bubble node ${{ matrix.node }}
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: needs.prepare.result == 'success'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -186,7 +196,7 @@ jobs:
         env:
           SIM_ID: ${{ needs.prepare.outputs.sim_id }}
           NODE_ID: ${{ matrix.node }}
-          INJECT_LATENCY_MS: ${{ inputs.inject_latency_ms }}
+          INJECT_LATENCY_MS: ${{ inputs.inject_latency_ms || '0' }}
         run: |
           python scripts/bubble_cluster_node.py node \
             --sim-id "$SIM_ID" \
