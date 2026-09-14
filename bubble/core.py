@@ -209,7 +209,12 @@ def integrate_segment(
     atol: tuple[float, float] | None = None,
     primary_solver: str = "DOP853",
 ) -> SegmentResult:
-    """Integrate one rollback-safe macrostep from an authoritative checkpoint."""
+    """Integrate one rollback-safe macrostep from an authoritative checkpoint.
+
+    ``success`` means the numerical integration ended cleanly, either at the
+    requested macrostep boundary or at the explicit physical collapse event.
+    ``collapsed`` reports that physical terminal event separately.
+    """
     if t_end <= t_start:
         raise ValueError("t_end must be greater than t_start")
     y0 = np.asarray(list(state), dtype=float)
@@ -288,7 +293,7 @@ def integrate_segment(
         emitted_pressure_coeff=emitted_pressure_coefficient(R_final, U_final, A_final, p.rho),
         solver=used,
         nfev=int(sol.nfev),
-        success=bool(sol.success and not collapsed and reached_end),
+        success=bool(sol.success and (collapsed or reached_end)),
         collapsed=collapsed,
         message=str(sol.message),
     )
