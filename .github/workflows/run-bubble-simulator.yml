@@ -1,16 +1,8 @@
-name: "🫧 Run Bubble Simulator"
+name: "🫧 GO"
+run-name: "🫧 Bubble simulation"
 
 on:
   workflow_dispatch:
-    inputs:
-      experiment:
-        description: "Choose a bubble experiment"
-        required: true
-        default: "gentle-demo"
-        type: choice
-        options:
-          - gentle-demo
-          - stronger-feedback
 
 permissions:
   contents: read
@@ -21,7 +13,7 @@ concurrency:
 
 jobs:
   simulate:
-    name: "Run the bubble world"
+    name: "🫧 Running bubble world"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -41,45 +33,13 @@ jobs:
       - name: Check the physics first
         run: python -m unittest scripts.test_bubble_core scripts.test_coupled_bubbles
 
-      - name: Choose experiment settings
-        id: settings
-        shell: bash
-        env:
-          EXPERIMENT: ${{ inputs.experiment }}
-        run: |
-          set -euo pipefail
-          case "$EXPERIMENT" in
-            gentle-demo)
-              echo "drive_pa=1000" >> "$GITHUB_OUTPUT"
-              echo "spacing_m=0.001" >> "$GITHUB_OUTPUT"
-              echo "end_time=0.00005" >> "$GITHUB_OUTPUT"
-              echo "macro_dt=0.0000025" >> "$GITHUB_OUTPUT"
-              ;;
-            stronger-feedback)
-              echo "drive_pa=5000" >> "$GITHUB_OUTPUT"
-              echo "spacing_m=0.0005" >> "$GITHUB_OUTPUT"
-              echo "end_time=0.00010" >> "$GITHUB_OUTPUT"
-              echo "macro_dt=0.00000125" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "Unknown experiment: $EXPERIMENT" >&2
-              exit 2
-              ;;
-          esac
-
       - name: "🫧 Run 12 communicating bubbles"
-        shell: bash
-        env:
-          DRIVE_PA: ${{ steps.settings.outputs.drive_pa }}
-          SPACING_M: ${{ steps.settings.outputs.spacing_m }}
-          END_TIME: ${{ steps.settings.outputs.end_time }}
-          MACRO_DT: ${{ steps.settings.outputs.macro_dt }}
         run: |
           python scripts/run_coupled_bubbles.py \
             --nodes 12 --model km \
-            --radius 1e-5 --radius-spread 0.02 --spacing "$SPACING_M" \
-            --drive-amplitude "$DRIVE_PA" --drive-frequency 20000 \
-            --end-time "$END_TIME" --macro-dt "$MACRO_DT" --min-macro-dt 7.8125e-8 \
+            --radius 1e-5 --radius-spread 0.02 --spacing 0.001 \
+            --drive-amplitude 1000 --drive-frequency 20000 \
+            --end-time 0.00005 --macro-dt 0.0000025 --min-macro-dt 7.8125e-8 \
             --max-corrections 6 --coupling-rel-tol 1e-3 \
             --coupling-abs-tol 0.5 --under-relaxation 0.65 --rtol 1e-8 \
             --output artifacts/coupled-bubble-world.json
