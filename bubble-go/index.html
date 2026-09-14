@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#07111f" />
+<title>Bubble World GO</title>
+<style>
+:root{color-scheme:dark;--bg:#07111f;--panel:#0c1a2d;--text:#eef6ff;--muted:#95a9c2;--accent:#69d7ff;--ok:#7ff0bd}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 50% 0,#123252 0,#07111f 48%,#040912 100%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{padding:18px 14px 44px}.wrap{max-width:760px;margin:0 auto}.hero{text-align:center;padding:7vh 8px 24px}.title{font-size:clamp(30px,8vw,54px);font-weight:900;letter-spacing:-.04em}.sub{margin:10px auto 24px;max-width:520px;color:var(--muted);font-size:15px;line-height:1.45}.go{appearance:none;border:0;border-radius:999px;min-width:210px;padding:22px 38px;background:linear-gradient(180deg,#8ee8ff,#44c7f4);color:#032238;font-weight:950;font-size:31px;letter-spacing:.08em;box-shadow:0 16px 44px #1aaee744,0 0 0 1px #bff4ff inset;cursor:pointer;touch-action:manipulation}.go:active{transform:translateY(2px)}.go:disabled{opacity:.6;cursor:default}.status{min-height:28px;margin-top:18px;font-size:14px;color:var(--muted)}.status.ok{color:var(--ok)}.panel{display:none;background:#091729dd;border:1px solid #203a55;border-radius:18px;padding:14px;margin-top:14px;box-shadow:0 14px 50px #0005}.panel.show{display:block}.metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:6px 0 14px}.metric{background:#0d2036;border:1px solid #203f5d;border-radius:14px;padding:12px}.k{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}.v{font-size:19px;font-weight:800;margin-top:4px}canvas{width:100%;height:280px;display:block;border-radius:12px;background:#06111f}.note{color:var(--muted);font-size:12px;line-height:1.45;margin-top:12px}.error{color:#ffadad;white-space:pre-wrap;font-size:13px}.bubble-row{display:flex;justify-content:center;gap:7px;margin-top:20px;height:26px;align-items:center}.b{width:10px;height:10px;border:1px solid #8ceaff;border-radius:50%;opacity:.7;animation:float 2.4s ease-in-out infinite}.b:nth-child(2n){animation-delay:-.7s}.b:nth-child(3n){animation-delay:-1.2s}@keyframes float{50%{transform:translateY(-8px) scale(1.15);opacity:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <div class="title">🫧 Bubble World</div>
+    <div class="sub">Twelve Keller–Miksis bubbles exchange acoustic pressure and change one another's motion. No setup. No keys. Just go.</div>
+    <button id="go" class="go">GO</button>
+    <div id="status" class="status">Ready.</div>
+    <div class="bubble-row" aria-hidden="true"><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span></div>
+  </section>
+
+  <section id="panel" class="panel">
+    <div class="metrics">
+      <div class="metric"><div class="k">Status</div><div id="mStatus" class="v">—</div></div>
+      <div class="metric"><div class="k">Bubbles</div><div id="mNodes" class="v">12</div></div>
+      <div class="metric"><div class="k">Macrosteps</div><div id="mSteps" class="v">—</div></div>
+      <div class="metric"><div class="k">Peak coupling</div><div id="mCoupling" class="v">—</div></div>
+    </div>
+    <canvas id="chart" width="720" height="360"></canvas>
+    <div class="note">Chart: radius of each bubble relative to its equilibrium radius over one 20 kHz acoustic cycle. The browser version uses the same Keller–Miksis wall equation and macrostep acoustic coupling idea as the validated Python model, with a fixed-step RK4 inner integrator for browser portability.</div>
+    <div id="err" class="error"></div>
+  </section>
+</div>
+<script>
+(() => {
+'use strict';
+const N=12;
+const base={rho:997,mu:8.9e-4,sigma:0.072,c:1480,p0:101325,pv:2339,R0:1e-5,kappa:1.4,driveA:1000,driveF:20000};
+const cfg={spacing:1e-3,spread:0.02,endTime:5e-5,macroDt:2.5e-6,minDt:7.8125e-8,maxCorr:6,relTol:1e-3,absTol:0.5,relax:0.65,microsteps:64};
+
+function nodeParams(){
+  return Array.from({length:N},(_,i)=>{const s=1+cfg.spread*Math.sin(2*Math.PI*i/N); const p={...base,R0:base.R0*s}; p.pg0=p.p0-p.pv+2*p.sigma/p.R0; return p;});
+}
+function ringPositions(){
+  const rr=cfg.spacing/(2*Math.sin(Math.PI/N));
+  return Array.from({length:N},(_,i)=>{const a=2*Math.PI*i/N;return [rr*Math.cos(a),rr*Math.sin(a),0];});
+}
+function distances(pos){
+  return pos.map((a,i)=>pos.map((b,j)=>i===j?Infinity:Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2])));
+}
+function pg(R,p){return p.pg0*Math.pow(p.R0/R,3*p.kappa)}
+function ramp(t,t0,t1,p0,p1){if(t1<=t0)return p1;let a=(t-t0)/(t1-t0);a=Math.max(0,Math.min(1,a));return p0+a*(p1-p0)}
+function rampSlope(t0,t1,p0,p1){return t1<=t0?0:(p1-p0)/(t1-t0)}
+function accel(t,R,U,p,t0,t1,c0,c1){
+  if(!(R>0)&&Number.isFinite(R)) throw new Error('Non-positive radius');
+  const gas=pg(R,p);
+  const coupling=ramp(t,t0,t1,c0,c1);
+  const pinf=p.p0+p.driveA*Math.sin(2*Math.PI*p.driveF*t)+coupling;
+  const q=gas+p.pv-2*p.sigma/R-4*p.mu*U/R-pinf;
+  const dpg=-3*p.kappa*gas*U/R;
+  const dpinf=p.driveA*2*Math.PI*p.driveF*Math.cos(2*Math.PI*p.driveF*t)+rampSlope(t0,t1,c0,c1);
+  const dqNoAcc=dpg+2*p.sigma*U/(R*R)+4*p.mu*U*U/(R*R)-dpinf;
+  const den=(1-U/p.c)*R+4*p.mu/(p.rho*p.c);
+  if(!(den>0)) throw new Error('Keller–Miksis denominator became non-positive');
+  const rhs=(1+U/p.c)*q/p.rho + R*dqNoAcc/(p.rho*p.c) -1.5*(1-U/(3*p.c))*U*U;
+  return rhs/den;
+}
+function deriv(t,y,p,t0,t1,c0,c1){return [y[1],accel(t,y[0],y[1],p,t0,t1,c0,c1)]}
+function rk4Step(t,y,h,p,t0,t1,c0,c1){
+  const k1=deriv(t,y,p,t0,t1,c0,c1);
+  const y2=[y[0]+h*k1[0]/2,y[1]+h*k1[1]/2];
+  const k2=deriv(t+h/2,y2,p,t0,t1,c0,c1);
+  const y3=[y[0]+h*k2[0]/2,y[1]+h*k2[1]/2];
+  const k3=deriv(t+h/2,y3,p,t0,t1,c0,c1);
+  const y4=[y[0]+h*k3[0],y[1]+h*k3[1]];
+  const k4=deriv(t+h,y4,p,t0,t1,c0,c1);
+  return [
+    y[0]+h*(k1[0]+2*k2[0]+2*k3[0]+k4[0])/6,
+    y[1]+h*(k1[1]+2*k2[1]+2*k3[1]+k4[1])/6
+  ];
+}
+function integrateSegment(state,p,t0,t1,c0,c1){
+  let y=[state[0],state[1]],t=t0,maxMach=Math.abs(y[1])/p.c,minR=y[0],maxR=y[0];
+  const h=(t1-t0)/cfg.microsteps;
+  const collapse=Math.max(1e-12,p.R0*1e-5);
+  for(let s=0;s<cfg.microsteps;s++){
+    y=rk4Step(t,y,h,p,t0,t1,c0,c1);t+=h;
+    if(!Number.isFinite(y[0])||!Number.isFinite(y[1])||y[0]<=collapse) return {collapsed:true,state:y};
+    minR=Math.min(minR,y[0]);maxR=Math.max(maxR,y[0]);maxMach=Math.max(maxMach,Math.abs(y[1])/p.c);
+  }
+  const A=accel(t,y[0],y[1],p,t0,t1,c0,c1);
+  const K=p.rho*(2*y[0]*y[1]*y[1]+y[0]*y[0]*A);
+  return {collapsed:false,state:y,A,K,maxMach,minR,maxR};
+}
+function coupling(K,D){
+  return Array.from({length:N},(_,i)=>{let s=0;for(let j=0;j<N;j++) if(i!==j) s+=K[j]/D[i][j];return s;});
+}
+function residual(target,guess){
+  let norm=0,abs=0;for(let i=0;i<N;i++){const d=Math.abs(target[i]-guess[i]);const scale=cfg.absTol+cfg.relTol*Math.max(Math.abs(target[i]),Math.abs(guess[i]));norm=Math.max(norm,d/scale);abs=Math.max(abs,d)}return {norm,abs};
+}
+function simulate(){
+  const ps=nodeParams(),pos=ringPositions(),D=distances(pos);
+  let states=ps.map(p=>[p.R0,0]),cStart=Array(N).fill(0),t=0,dt=cfg.macroDt,rollbacks=0,history=[];
+  while(t<cfg.endTime-1e-18){
+    let stepDt=Math.min(dt,cfg.endTime-t),checkpoint=states.map(x=>x.slice()),guess=cStart.slice(),accepted=null,targetAccepted=null,last={norm:Infinity,abs:Infinity},used=0;
+    for(let corr=0;corr<cfg.maxCorr;corr++){
+      used=corr+1;
+      const res=[]; let collapsed=[];
+      for(let i=0;i<N;i++){const r=integrateSegment(checkpoint[i],ps[i],t,t+stepDt,cStart[i],guess[i]);res.push(r);if(r.collapsed)collapsed.push(i)}
+      if(collapsed.length) return {status:'collapsed',time:t,rollbacks,history,states:res.map(x=>x.state),collapsed};
+      const K=res.map(x=>x.K); const target=coupling(K,D); last=residual(target,guess);
+      if(last.norm<=1){accepted=res;targetAccepted=target;break}
+      guess=guess.map((g,i)=>g+cfg.relax*(target[i]-g));
+    }
+    if(!accepted){
+      const nd=stepDt/2;rollbacks++;
+      if(nd<cfg.minDt*(1-1e-12)) return {status:'failed',time:t,rollbacks,history,states,message:'Coupling did not converge'};
+      dt=Math.max(cfg.minDt,nd);continue;
+    }
+    states=accepted.map(x=>x.state);cStart=targetAccepted;t+=stepDt;
+    history.push({t,dt:stepDt,corrections:used,residual:last.norm,radii:states.map(x=>x[0]),velocity:states.map(x=>x[1]),coupling:cStart.slice(),maxMach:Math.max(...accepted.map(x=>x.maxMach))});
+    dt=(stepDt<cfg.macroDt&&used<=2)?Math.min(cfg.macroDt,2*stepDt):stepDt;
+  }
+  return {status:'complete',time:t,rollbacks,history,states,params:ps};
+}
+function draw(result){
+  const canvas=document.getElementById('chart'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height,pad=42;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#06111f';ctx.fillRect(0,0,W,H);
+  const hist=result.history;if(!hist.length)return;
+  let vals=[];for(let i=0;i<N;i++)for(const h of hist)vals.push(h.radii[i]/result.params[i].R0);
+  let ymin=Math.min(...vals),ymax=Math.max(...vals);const ym=Math.max(1e-6,(ymax-ymin)*.12);ymin-=ym;ymax+=ym;
+  ctx.strokeStyle='#29445f';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad,14);ctx.lineTo(pad,H-pad);ctx.lineTo(W-12,H-pad);ctx.stroke();
+  ctx.fillStyle='#8fa9c3';ctx.font='12px -apple-system,Segoe UI,sans-serif';ctx.fillText('R / R₀',6,20);ctx.fillText('time →',W-62,H-12);
+  const colors=['#6ee7ff','#7ff0bd','#ffd27f','#ff9fcf','#bd9cff','#8fb8ff','#9fffe0','#ffb08f','#d3ff8f','#f1a3ff','#78f4ff','#ffe58e'];
+  for(let i=0;i<N;i++){
+    ctx.strokeStyle=colors[i%colors.length];ctx.lineWidth=1.6;ctx.beginPath();
+    hist.forEach((h,k)=>{const x=pad+(W-pad-16)*(h.t/cfg.endTime),y=14+(H-pad-18)*(1-(h.radii[i]/result.params[i].R0-ymin)/(ymax-ymin));if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();
+  }
+}
+function fmtPa(x){return Math.abs(x)>=1000?(x/1000).toFixed(2)+' kPa':x.toFixed(3)+' Pa'}
+const go=document.getElementById('go'),status=document.getElementById('status'),panel=document.getElementById('panel'),err=document.getElementById('err');
+go.addEventListener('click',()=>{
+  go.disabled=true;go.textContent='RUNNING';status.className='status';status.textContent='The 12 bubbles are talking…';panel.classList.remove('show');err.textContent='';
+  setTimeout(()=>{
+    try{
+      const r=simulate();
+      if(r.status==='failed') throw new Error(r.message||'Simulation failed');
+      let maxC=0,maxM=0;for(const h of r.history){maxM=Math.max(maxM,h.maxMach);for(const x of h.coupling)maxC=Math.max(maxC,Math.abs(x))}
+      document.getElementById('mStatus').textContent=r.status.toUpperCase();document.getElementById('mNodes').textContent=N;document.getElementById('mSteps').textContent=r.history.length;document.getElementById('mCoupling').textContent=fmtPa(maxC);
+      panel.classList.add('show');draw(r);status.className='status ok';status.textContent='Finished ✓';go.textContent='GO AGAIN';
+    }catch(e){panel.classList.add('show');err.textContent=String(e&&e.stack||e);status.textContent='Something went wrong.';go.textContent='TRY AGAIN';}
+    go.disabled=false;
+  },30);
+});
+})();
+</script>
+</body>
+</html>
