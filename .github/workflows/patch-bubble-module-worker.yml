@@ -1,0 +1,46 @@
+name: Patch Bubble World Module Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-bubble-module-worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - name: Switch Bubble World to the supported module worker
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('bubble-go/index.html')
+          s = p.read_text()
+          old = "const worker=new Worker('./engine-worker.js');"
+          new = "const worker=new Worker('./engine-worker.js',{type:'module'});"
+          if new in s:
+              print('Bubble World already uses a module worker.')
+          elif old in s:
+              p.write_text(s.replace(old, new, 1))
+              print('Patched Bubble World worker type.')
+          else:
+              raise SystemExit('Expected Bubble World worker launcher was not found')
+          PY
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then
+            echo 'No patch needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add bubble-go/index.html
+          git commit -m 'Use module worker for Bubble World Pyodide engine'
+          git push origin HEAD:main
