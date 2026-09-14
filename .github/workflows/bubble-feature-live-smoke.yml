@@ -1,0 +1,159 @@
+name: Bubble Feature Live Smoke
+
+on:
+  push:
+    branches: [bubble-coupled-sim-v1]
+    paths:
+      - '.github/workflows/bubble-feature-live-smoke.yml'
+      - 'bubble/**'
+      - 'scripts/bubble_cluster_node.py'
+      - 'scripts/test_bubble_core.py'
+      - 'cloudflare/room-worker/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: bubble-feature-live-smoke
+  cancel-in-progress: true
+
+env:
+  BUBBLE_COORDINATOR_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install numerical dependencies
+        run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
+      - name: Validate radial physics
+        run: python -m unittest scripts.test_bubble_core
+      - name: Validate worker bundle
+        run: |
+          node --check cloudflare/room-worker/src/bubble-state.js
+          node --check cloudflare/room-worker/src/bubble-state-terminal.js
+          node --check cloudflare/room-worker/src/bubble-api.js
+          node --check cloudflare/room-worker/src/open-allen-things-v2.js
+          npx --yes wrangler@4 deploy --dry-run --config cloudflare/room-worker/wrangler.toml --outdir /tmp/bubble-worker
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN_RAW: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Normalize Cloudflare credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="${CLOUDFLARE_API_TOKEN_RAW:-}"
+          test -n "$raw" || { echo 'Missing CLOUDFLARE_API_TOKEN/CF_API_TOKEN'; exit 1; }
+          token="${raw#Bearer }"
+          token="${token#bearer }"
+          token="$(printf '%s' "$token" | tr -d '\r\n')"
+          test -n "$token" || { echo 'Cloudflare token became empty'; exit 1; }
+          printf 'CLOUDFLARE_API_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+      - name: Verify Cloudflare authentication
+        run: npx --yes wrangler@4 whoami
+      - name: Deploy terminal-aware bubble coordinator
+        run: npx --yes wrangler@4 deploy --config cloudflare/room-worker/wrangler.toml
+      - name: Verify bubble route exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/bubble-route.json -w '%{http_code}' "$BUBBLE_COORDINATOR_URL/api/bubble/status?sim_id=route-probe")
+          cat /tmp/bubble-route.json
+          test "$code" = "401" || { echo "Expected authenticated bubble route to return 401 without OIDC, got $code"; exit 1; }
+
+  prepare:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sim_id: ${{ steps.ids.outputs.sim_id }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
+      - id: ids
+        run: echo "sim_id=feature-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - name: Establish one-cycle 12-bubble world
+        env:
+          SIM_ID: ${{ steps.ids.outputs.sim_id }}
+        run: |
+          python scripts/bubble_cluster_node.py start \
+            --sim-id "$SIM_ID" --reset --nodes 12 --model km \
+            --radius 1e-5 --radius-spread 0.02 --spacing 1e-3 \
+            --drive-amplitude 1000 --drive-frequency 20000 \
+            --end-time 5e-5 --macro-dt 2.5e-6 --min-macro-dt 7.8125e-8 \
+            --max-corrections 3 --coupling-rel-tol 1e-3 \
+            --coupling-abs-tol 0.5 --under-relaxation 0.65 --rtol 1e-8
+
+  compute:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        node: [0,1,2,3,4,5,6,7,8,9,10,11]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
+      - name: Integrate one bubble and exchange macrostep pressure
+        env:
+          SIM_ID: ${{ needs.prepare.outputs.sim_id }}
+          NODE_ID: ${{ matrix.node }}
+        run: |
+          python scripts/bubble_cluster_node.py node \
+            --sim-id "$SIM_ID" --node "$NODE_ID" \
+            --poll-seconds 0.25 --poll-jitter 0.10 --max-wall-seconds 1200
+
+  report:
+    if: always() && needs.prepare.result == 'success'
+    needs: [prepare, compute]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
+      - name: Read authoritative state
+        env:
+          SIM_ID: ${{ needs.prepare.outputs.sim_id }}
+        run: python scripts/bubble_cluster_node.py status --sim-id "$SIM_ID" | tee bubble-feature-smoke.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bubble-feature-smoke-${{ needs.prepare.outputs.sim_id }}
+          path: bubble-feature-smoke.json
+          retention-days: 30
