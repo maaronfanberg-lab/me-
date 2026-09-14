@@ -1,3 +1,4 @@
+// Bubble World scientific worker. Kept separate so the UI stays responsive on mobile.
 import { loadPyodide } from 'https://cdn.jsdelivr.net/pyodide/v314.0.6/full/pyodide.mjs';
 
 const CDN = 'https://cdn.jsdelivr.net/pyodide/v314.0.6/full/';
