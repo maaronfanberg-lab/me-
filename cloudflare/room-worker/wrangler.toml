@@ -5,6 +5,7 @@ workers_dev = true
 # keyless Allen participant wrapper 2026-08-24
 # Things Universe Falcon relay 2026-09-03
 # self-cleaning Things enrichment queue 2026-09-03
+# coupled bubble simulation coordinator 2026-09-14
 
 [[durable_objects.bindings]]
 name = "ROOM"
@@ -14,11 +15,19 @@ class_name = "RoomState"
 name = "THINGS"
 class_name = "ThingsState"
 
+[[durable_objects.bindings]]
+name = "BUBBLE"
+class_name = "BubbleState"
+
 [exports.RoomState]
 type = "durable-object"
 storage = "sqlite"
 
 [exports.ThingsState]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.BubbleState]
 type = "durable-object"
 storage = "sqlite"
 

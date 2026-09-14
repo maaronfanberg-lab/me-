@@ -1,6 +1,7 @@
 import base, { RoomState, ThingsState as BaseThingsState } from "./open-allen-things.js";
+import { BubbleState, handleBubbleApi } from "./bubble-api.js";
 
-export { RoomState };
+export { RoomState, BubbleState };
 
 const STALE_JOB_MS = 15 * 60 * 1000;
 
@@ -32,11 +33,17 @@ export class ThingsState extends BaseThingsState {
   }
 
   async result(id) {
-    // A result lookup also provides a cheap cleanup opportunity when the browser
-    // is active but no Falcon runner happens to be polling at that instant.
     await this.pruneStaleJobs();
     return super.result(id);
   }
 }
 
-export default base;
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/bubble/")) {
+      return handleBubbleApi(request, env);
+    }
+    return base.fetch(request, env, ctx);
+  },
+};

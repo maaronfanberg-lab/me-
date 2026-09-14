@@ -1,154 +1,219 @@
-name: Shared Supercomputer Cluster
+name: Coupled Bubble Supercomputer
 
 on:
+  push:
+    branches: [main, bubble-coupled-sim-v1]
+    paths:
+      - 'bubble/**'
+      - 'scripts/bubble_cluster_node.py'
+      - 'scripts/test_bubble_core.py'
+      - 'cloudflare/room-worker/**'
+      - '.github/workflows/supercomputer-cluster.yml'
   workflow_dispatch:
     inputs:
-      workload:
-        description: Manual compute engine
+      model:
+        description: Radial bubble model
         required: true
-        default: montecarlo
+        default: km
         type: choice
-        options:
-          - montecarlo
-          - primes
-          - hashstorm
-      scale:
-        description: Intensity per node (1-20)
+        options: [km, rp]
+      radius_um:
+        description: Mean equilibrium radius in micrometres
+        required: true
+        default: '10'
+        type: string
+      radius_spread_fraction:
+        description: Deterministic radius heterogeneity across the 12 bubbles
+        required: true
+        default: '0.02'
+        type: string
+      spacing_mm:
+        description: Nearest-neighbour bubble spacing in millimetres
+        required: true
+        default: '1.0'
+        type: string
+      drive_amplitude_pa:
+        description: Acoustic drive pressure amplitude in pascals
+        required: true
+        default: '5000'
+        type: string
+      drive_frequency_hz:
+        description: Acoustic drive frequency in hertz
+        required: true
+        default: '20000'
+        type: string
+      cycles:
+        description: Number of drive cycles to simulate
         required: true
         default: '5'
-        type: choice
-        options: ['1','2','3','4','5','6','8','10','12','15','20']
-  issues:
-    types: [opened]
+        type: string
+      macrosteps_per_cycle:
+        description: Initial coupling macrosteps per acoustic cycle
+        required: true
+        default: '40'
+        type: string
+      inject_latency_ms:
+        description: Random wall-clock delay per exchange for latency-invariance tests
+        required: true
+        default: '0'
+        type: string
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
+  id-token: write
 
 concurrency:
-  group: shared-supercomputer
+  group: coupled-bubble-supercomputer
   cancel-in-progress: false
 
+env:
+  BUBBLE_COORDINATOR_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+
 jobs:
-  prepare:
-    name: Resolve and validate shared job
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issues' &&
-       github.event.issue.user.login == github.repository_owner &&
-       startsWith(github.event.issue.title, '[cluster-job]'))
+  validate:
+    name: Validate bubble physics and coordinator source
     runs-on: ubuntu-latest
-    outputs:
-      mode: ${{ steps.request.outputs.mode }}
-      workload: ${{ steps.request.outputs.workload }}
-      scale: ${{ steps.request.outputs.scale }}
-      job_id: ${{ steps.request.outputs.job_id }}
-      request_b64: ${{ steps.request.outputs.request_b64 }}
+    timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
-      - id: request
-        name: Validate request and build semantic packet
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install numerical dependencies
+        run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
+      - name: Run physical validation suite
+        run: python -m unittest scripts.test_bubble_core
+      - name: Compile Python transport
+        run: python -m py_compile bubble/core.py scripts/bubble_cluster_node.py
+      - name: Check Worker JavaScript syntax
+        run: |
+          node --check cloudflare/room-worker/src/bubble-state.js
+          node --check cloudflare/room-worker/src/bubble-api.js
+          node --check cloudflare/room-worker/src/open-allen-things-v2.js
+      - name: Bundle Worker without deploying
+        run: npx --yes wrangler@4 deploy --dry-run --config cloudflare/room-worker/wrangler.toml --outdir /tmp/room-worker-dry-run
+
+  prepare:
+    name: Establish authoritative simulation
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sim_id: ${{ steps.config.outputs.sim_id }}
+      end_time: ${{ steps.config.outputs.end_time }}
+      macro_dt: ${{ steps.config.outputs.macro_dt }}
+      min_macro_dt: ${{ steps.config.outputs.min_macro_dt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install numerical dependencies
+        run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
+      - id: config
+        name: Resolve SI simulation parameters
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          CLUSTER_REQUEST: ${{ github.event.issue.body }}
-          MANUAL_WORKLOAD: ${{ inputs.workload }}
-          MANUAL_SCALE: ${{ inputs.scale }}
-        run: python3 scripts/cluster_request.py >> "$GITHUB_OUTPUT"
+          FREQ: ${{ inputs.drive_frequency_hz }}
+          CYCLES: ${{ inputs.cycles }}
+          STEPS: ${{ inputs.macrosteps_per_cycle }}
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os
+          f=float(os.environ['FREQ']); cycles=float(os.environ['CYCLES']); steps=float(os.environ['STEPS'])
+          if not (f > 0 and cycles > 0 and steps >= 8): raise SystemExit('frequency/cycles must be positive and macrosteps_per_cycle >= 8')
+          dt=1.0/(f*steps)
+          print(f"sim_id=bubble-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}")
+          print(f"end_time={cycles/f:.17g}")
+          print(f"macro_dt={dt:.17g}")
+          print(f"min_macro_dt={dt/32.0:.17g}")
+          PY
+      - name: Initialize Durable Object simulation clock
+        env:
+          SIM_ID: ${{ steps.config.outputs.sim_id }}
+          MODEL: ${{ inputs.model }}
+          RADIUS_UM: ${{ inputs.radius_um }}
+          RADIUS_SPREAD: ${{ inputs.radius_spread_fraction }}
+          SPACING_MM: ${{ inputs.spacing_mm }}
+          DRIVE_PA: ${{ inputs.drive_amplitude_pa }}
+          DRIVE_HZ: ${{ inputs.drive_frequency_hz }}
+          END_TIME: ${{ steps.config.outputs.end_time }}
+          MACRO_DT: ${{ steps.config.outputs.macro_dt }}
+          MIN_MACRO_DT: ${{ steps.config.outputs.min_macro_dt }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          cmd=[
+            'python','scripts/bubble_cluster_node.py','start',
+            '--sim-id',os.environ['SIM_ID'], '--nodes','12', '--model',os.environ['MODEL'],
+            '--radius',str(float(os.environ['RADIUS_UM'])*1e-6),
+            '--radius-spread',os.environ['RADIUS_SPREAD'],
+            '--spacing',str(float(os.environ['SPACING_MM'])*1e-3),
+            '--drive-amplitude',os.environ['DRIVE_PA'], '--drive-frequency',os.environ['DRIVE_HZ'],
+            '--end-time',os.environ['END_TIME'], '--macro-dt',os.environ['MACRO_DT'],
+            '--min-macro-dt',os.environ['MIN_MACRO_DT'], '--max-corrections','3',
+            '--coupling-rel-tol','1e-3', '--coupling-abs-tol','0.5',
+            '--under-relaxation','0.65', '--rtol','1e-8',
+          ]
+          subprocess.run(cmd, check=True)
+          PY
 
   compute:
-    name: Node ${{ matrix.worker }}
+    name: Bubble node ${{ matrix.node }}
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: prepare
-    continue-on-error: true
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       max-parallel: 12
       matrix:
-        worker: [0,1,2,3,4,5,6,7,8,9,10,11]
+        node: [0,1,2,3,4,5,6,7,8,9,10,11]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
-      - name: Run compute shard
-        env:
-          WORKER_ID: ${{ matrix.worker }}
-          WORKER_COUNT: '12'
-          WORKLOAD: ${{ needs.prepare.outputs.workload }}
-          SCALE: ${{ needs.prepare.outputs.scale }}
-          CLUSTER_REQUEST_B64: ${{ needs.prepare.outputs.request_b64 }}
-        run: python3 scripts/cluster_worker.py
-      - uses: actions/upload-artifact@v4
-        if: success()
+      - uses: actions/setup-python@v6
         with:
-          name: cluster-part-${{ matrix.worker }}
-          path: cluster_parts/*.json
-          retention-days: 1
+          python-version: '3.12'
+      - name: Install numerical dependencies
+        run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
+      - name: Join the coupled bubble world
+        env:
+          SIM_ID: ${{ needs.prepare.outputs.sim_id }}
+          NODE_ID: ${{ matrix.node }}
+          INJECT_LATENCY_MS: ${{ inputs.inject_latency_ms }}
+        run: |
+          python scripts/bubble_cluster_node.py node \
+            --sim-id "$SIM_ID" \
+            --node "$NODE_ID" \
+            --inject-latency-ms "$INJECT_LATENCY_MS"
 
-  aggregate:
-    name: Combine available nodes
-    if: ${{ always() && needs.prepare.result == 'success' }}
+  report:
+    name: Read authoritative final state
+    if: always() && needs.prepare.result == 'success'
     needs: [prepare, compute]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/setup-python@v6
         with:
-          pattern: cluster-part-*
-          path: cluster_parts
-          merge-multiple: true
-      - name: Aggregate cluster result
-        run: python3 scripts/aggregate_cluster.py
-      - name: Publish result transactionally onto newest main
+          python-version: '3.12'
+      - name: Install numerical dependencies
+        run: python -m pip install 'numpy>=1.26,<3' 'scipy>=1.12,<2'
+      - name: Read simulation state from coordinator
         env:
-          JOB_ID: ${{ needs.prepare.outputs.job_id }}
-        run: |
-          set -euo pipefail
-          publish_dir="$(mktemp -d)"
-          cp cluster/latest.json "$publish_dir/latest.json"
-          if [ -n "$JOB_ID" ] && [ -f "cluster/jobs/$JOB_ID.json" ]; then
-            cp "cluster/jobs/$JOB_ID.json" "$publish_dir/job.json"
-          fi
-
-          git config user.name "supercomputer-bot"
-          git config user.email "actions@users.noreply.github.com"
-
-          for attempt in 1 2 3 4 5; do
-            git fetch origin main
-            git reset --hard origin/main
-            mkdir -p cluster/jobs
-            cp "$publish_dir/latest.json" cluster/latest.json
-            if [ -f "$publish_dir/job.json" ]; then
-              cp "$publish_dir/job.json" "cluster/jobs/$JOB_ID.json"
-            fi
-            git add cluster/latest.json
-            if [ -f "$publish_dir/job.json" ]; then git add "cluster/jobs/$JOB_ID.json"; fi
-            if git diff --cached --quiet; then
-              echo "Result already published."
-              exit 0
-            fi
-            git commit -m "Publish shared supercomputer result"
-            if git push origin HEAD:main; then
-              echo "Published on attempt $attempt."
-              exit 0
-            fi
-            echo "main moved during publish; retrying from newest main ($attempt/5)."
-            sleep $((attempt * 2))
-          done
-          echo "Could not publish after 5 race-safe attempts."
-          exit 1
-      - name: Close completed queue issue
-        if: github.event_name == 'issues'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          JOB_ID: ${{ needs.prepare.outputs.job_id }}
-        run: |
-          gh issue comment "$ISSUE_NUMBER" --body "Shared Supercomputer job \`$JOB_ID\` completed. The published result records how many of the 12 nodes participated."
-          gh issue close "$ISSUE_NUMBER" --reason completed
+          SIM_ID: ${{ needs.prepare.outputs.sim_id }}
+        run: python scripts/bubble_cluster_node.py status --sim-id "$SIM_ID" | tee bubble-result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coupled-bubble-${{ needs.prepare.outputs.sim_id }}
+          path: bubble-result.json
+          retention-days: 30
