@@ -1,4 +1,4 @@
-import { BubbleState, cleanId } from "./bubble-state.js";
+import { BubbleState, cleanId } from "./bubble-state-terminal.js";
 
 const ISSUER = "https://token.actions.githubusercontent.com";
 const DEFAULT_AUDIENCE = "room-live-mirror";
