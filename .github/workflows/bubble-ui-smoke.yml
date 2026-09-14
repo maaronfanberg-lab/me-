@@ -1,4 +1,4 @@
-name: Bubble World Browser Smoke
+name: Bubble Lab Browser Smoke
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: bubble-world-browser-smoke
+  group: bubble-lab-browser-smoke
   cancel-in-progress: true
 
 jobs:
@@ -29,11 +29,11 @@ jobs:
           npm init -y >/dev/null 2>&1
           npm install --silent playwright
           npx playwright install chromium
-      - name: Serve Bubble World
+      - name: Serve Bubble Lab
         run: |
           python3 -m http.server 8000 --directory bubble-go >/tmp/bubble-http.log 2>&1 &
           echo $! > /tmp/bubble-http.pid
-      - name: Load engine, press GO, and require a physical result
+      - name: Load engine and require a single-bubble trajectory
         run: |
           cat > /tmp/bubble-smoke.cjs <<'JS'
           const { chromium } = require(process.cwd() + '/node_modules/playwright');
@@ -44,32 +44,42 @@ jobs:
             page.on('pageerror', e => console.error('pageerror:', e.message));
             await page.goto('http://127.0.0.1:8000', { waitUntil: 'domcontentloaded' });
 
-            await Promise.race([
-              page.waitForFunction(() => document.querySelector('#engineBadge')?.textContent === 'ENGINE READY', null, { timeout: 240000 }),
-              page.waitForFunction(() => document.querySelector('#engineBadge')?.textContent === 'ENGINE ERROR', null, { timeout: 240000 })
-                .then(async () => { throw new Error('Engine failed: ' + (await page.locator('#errorBox').textContent())); }),
-            ]);
+            await page.waitForFunction(() => {
+              const s = document.querySelector('#status')?.textContent || '';
+              return ['ready','solving','complete','collapsed','error'].includes(s.toLowerCase());
+            }, null, { timeout: 240000 });
 
-            console.log('engine:', await page.locator('#engineBadge').textContent());
-            await page.locator('#go').click();
+            if ((await page.locator('#status').textContent()).toLowerCase() === 'error') {
+              throw new Error('Engine failed: ' + await page.locator('#errorBox').textContent());
+            }
 
-            await Promise.race([
-              page.waitForFunction(() => ['complete','collapsed'].includes((document.querySelector('#resultStatus')?.textContent || '').toLowerCase()), null, { timeout: 240000 }),
-              page.waitForFunction(() => document.querySelector('#engineBadge')?.textContent === 'ENGINE ERROR', null, { timeout: 240000 })
-                .then(async () => { throw new Error('Simulation failed: ' + (await page.locator('#errorBox').textContent())); }),
-            ]);
+            await page.waitForFunction(() => {
+              const s = (document.querySelector('#status')?.textContent || '').toLowerCase();
+              return s === 'complete' || s === 'collapsed' || s === 'error';
+            }, null, { timeout: 240000 });
+
+            if ((await page.locator('#status').textContent()).toLowerCase() === 'error') {
+              throw new Error('Simulation failed: ' + await page.locator('#errorBox').textContent());
+            }
 
             const result = {
-              status: await page.locator('#resultStatus').textContent(),
-              coupling: await page.locator('#mCoupling').textContent(),
-              mach: await page.locator('#mMach').textContent(),
-              steps: await page.locator('#mSteps').textContent(),
-              rollbacks: await page.locator('#mRoll').textContent(),
-              engine: await page.locator('#engineBadge').textContent(),
+              status: await page.locator('#status').textContent(),
+              points: await page.locator('#count').textContent(),
+              minRadius: await page.locator('#minR').textContent(),
+              maxRadius: await page.locator('#maxR').textContent(),
+              mach: await page.locator('#mach').textContent(),
+              solver: await page.locator('#solver').textContent(),
+              runButton: await page.locator('#go').textContent(),
             };
             console.log(JSON.stringify(result, null, 2));
-            if (!result.steps || result.steps === '—') throw new Error('No simulation steps were rendered');
-            await page.screenshot({ path: 'bubble-world-smoke.png', fullPage: true });
+            if (!/trajectory points:\s*[1-9]/i.test(result.points)) throw new Error('No trajectory was rendered');
+            if (!result.minRadius.includes('µm') || !result.maxRadius.includes('µm')) throw new Error('Radius diagnostics missing');
+
+            await page.locator('[data-mode="resonance"]').click();
+            await page.waitForTimeout(100);
+            if (!(await page.locator('[data-mode="resonance"]').evaluate(el => el.classList.contains('active')))) throw new Error('Mode tiles are not interactive');
+
+            await page.screenshot({ path: 'bubble-lab-smoke.png', fullPage: true });
             await browser.close();
           })().catch(e => { console.error(e); process.exit(1); });
           JS
@@ -77,7 +87,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: bubble-world-browser-smoke-${{ github.run_id }}
-          path: bubble-world-smoke.png
+          name: bubble-lab-browser-smoke-${{ github.run_id }}
+          path: bubble-lab-smoke.png
           if-no-files-found: ignore
           retention-days: 14
