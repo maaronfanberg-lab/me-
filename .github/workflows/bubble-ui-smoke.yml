@@ -1,0 +1,71 @@
+name: Bubble World Browser Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bubble-go/**'
+      - '.github/workflows/bubble-ui-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bubble-world-browser-smoke
+  cancel-in-progress: true
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser harness
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright
+          npx playwright install chromium
+      - name: Serve Bubble World
+        run: |
+          python3 -m http.server 8000 --directory bubble-go >/tmp/bubble-http.log 2>&1 &
+          echo $! > /tmp/bubble-http.pid
+      - name: Load engine, press GO, and require a physical result
+        run: |
+          cat > /tmp/bubble-smoke.cjs <<'JS'
+          const { chromium } = require(process.cwd() + '/node_modules/playwright');
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1170, height: 900 } });
+            page.on('console', m => console.log('browser:', m.type(), m.text()));
+            page.on('pageerror', e => console.error('pageerror:', e.message));
+            await page.goto('http://127.0.0.1:8000', { waitUntil: 'domcontentloaded' });
+            await page.waitForFunction(() => document.querySelector('#engineBadge')?.textContent === 'ENGINE READY', null, { timeout: 240000 });
+            console.log('engine:', await page.locator('#engineBadge').textContent());
+            await page.locator('#go').click();
+            await page.waitForFunction(() => ['complete','collapsed'].includes((document.querySelector('#resultStatus')?.textContent || '').toLowerCase()), null, { timeout: 240000 });
+            const result = {
+              status: await page.locator('#resultStatus').textContent(),
+              coupling: await page.locator('#mCoupling').textContent(),
+              mach: await page.locator('#mMach').textContent(),
+              steps: await page.locator('#mSteps').textContent(),
+              rollbacks: await page.locator('#mRoll').textContent(),
+              engine: await page.locator('#engineBadge').textContent(),
+            };
+            console.log(JSON.stringify(result, null, 2));
+            if (!result.steps || result.steps === '—') throw new Error('No simulation steps were rendered');
+            await page.screenshot({ path: 'bubble-world-smoke.png', fullPage: true });
+            await browser.close();
+          })().catch(e => { console.error(e); process.exit(1); });
+          JS
+          node /tmp/bubble-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bubble-world-browser-smoke-${{ github.run_id }}
+          path: bubble-world-smoke.png
+          if-no-files-found: ignore
+          retention-days: 14
