@@ -204,8 +204,19 @@ def _recurring_content_blocker(text: str, histories: list[str]) -> str | None:
         pair_counts.update(_pairs(tokens))
     if len(set(candidate)) == 1 and token_counts[candidate[0]] >= 4:
         return "single_token_attractor"
-    if any(pair_counts[pair] >= 2 for pair in _pairs(candidate)):
-        return "recurring_pair_attractor"
+
+    # A single familiar two-word phrase is ordinary conversational continuity,
+    # not an attractor. Block recurring pairs only when they dominate the
+    # candidate, or when a strongly overused pair is part of a substantially
+    # recycled candidate. Exact/cosmetic/long echoes are checked separately.
+    candidate_pairs = _pairs(candidate)
+    repeated_pairs = {pair for pair in candidate_pairs if pair_counts[pair] >= 2}
+    if repeated_pairs:
+        coverage = len(repeated_pairs) / max(1, len(candidate_pairs))
+        peak = max(pair_counts[pair] for pair in repeated_pairs)
+        if coverage >= 0.60 or (peak >= 4 and coverage >= 0.35):
+            return "recurring_pair_attractor"
+
     candidate_set = set(candidate)
     hot = {token for token, count in token_counts.items() if count >= 3}
     shared = candidate_set & hot
