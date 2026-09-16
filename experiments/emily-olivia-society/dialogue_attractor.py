@@ -255,8 +255,22 @@ def candidate_dialogue_blocker(text: str, dialogue_history, *, inbound: str = ""
         return "unfinished_cutoff"
     if _is_bare_short_fragment(cleaned):
         return "bare_short_fragment"
+
     history_rows = list(dialogue_history or [])[-max(1, history_limit):]
-    histories = [str(prior).strip() for _speaker, prior in history_rows if str(prior).strip()]
+
+    # The live inbound turn is the message being answered, not refractory
+    # history. Keep it available separately for grounding checks below, but do
+    # not classify ordinary acknowledgement, repetition, or paraphrase of that
+    # one message as a recurring dialogue attractor. Exact full-message copying
+    # remains rejected by paper_act_adapter.is_usable_spoken_action().
+    refractory_rows = history_rows
+    live = str(inbound or "").strip()
+    if live and history_rows:
+        last = history_rows[-1]
+        if len(last) >= 2 and str(last[1] or "").strip() == live:
+            refractory_rows = history_rows[:-1]
+
+    histories = [str(prior).strip() for _speaker, prior in refractory_rows if str(prior).strip()]
     if _is_short_subset_echo(cleaned, histories):
         return "short_subset_echo"
     if _is_cosmetic_echo(cleaned, histories):
@@ -265,7 +279,7 @@ def candidate_dialogue_blocker(text: str, dialogue_history, *, inbound: str = ""
         return "long_refractory_echo"
     if _is_repeated_question_stem(cleaned, histories):
         return "repeated_question_stem"
-    if _is_social_reset(cleaned, history_rows):
+    if _is_social_reset(cleaned, refractory_rows):
         return "mid_conversation_social_reset"
     recurring = _recurring_content_blocker(cleaned, histories[-24:])
     if recurring:
