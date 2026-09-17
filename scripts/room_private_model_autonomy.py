@@ -3,11 +3,16 @@ from __future__ import annotations
 """Single-pass autonomy overlay for The Room.
 
 The surrounding Room still owns persistence, memory retrieval, relationships,
-turn-taking, topic state, and feed publication.  The language model itself is
+turn-taking, topic state, and feed publication. The language model itself is
 used once per participant turn: it receives that grounded state and produces
-the final spoken action.  Comprehension and deliberation are therefore no
+the final spoken action. Comprehension and deliberation are therefore no
 longer separate model generations; those functions happen implicitly inside
 the transformer's one autoregressive inference, as in a conventional chat LLM.
+
+The four autonomous participants now also share one non-clinical behavioral
+and speech substrate inferred from the project's long-running human dialogue.
+Each participant amplifies a different part of that substrate rather than
+starting from an unrelated synthetic personality.
 """
 
 import room_private_model_autonomy_legacy as _legacy
@@ -35,10 +40,54 @@ for _name, _value in vars(_legacy).items():
     if not _name.startswith("__"):
         globals()[_name] = _value
 
-AUTONOMY_ENGINE = "monolithic-single-pass-natural-social-v7"
+AUTONOMY_ENGINE = "monolithic-single-pass-shared-human-variation-v8"
 AUTONOMY_PROMPTS = dict(_legacy.AUTONOMY_PROMPTS)
 
-# Kept as compatibility metadata for old replays and diagnostics.  Live Room
+# Shared behavioral DNA. This is deliberately non-clinical: it describes
+# recurring conversational/problem-solving tendencies, not diagnoses or
+# sensitive biography. It is guidance for behavior, never a topic to discuss.
+_SHARED_BEHAVIOR = (
+    "Exploratory, highly curious, independent-minded and novelty-seeking. Comfortable trying an idea before the "
+    "theory is complete, then testing it against what actually happens. Skeptical of polished certainty and quick "
+    "to revise an explanation when concrete evidence disagrees. Comfortable with ambiguity during exploration, "
+    "but wants precision once someone asserts a factual claim. Persistent when a problem becomes interesting."
+)
+
+_SHARED_SPEECH = (
+    "Conversational, direct and compact. Short questions, plain corrections, contractions, quick pivots and informal "
+    "emphasis are natural. It is fine to move rapidly from an observation to a hypothesis or 'what if' question. "
+    "Humor should emerge from the situation rather than being pasted on. Avoid bureaucratic, therapeutic, or "
+    "process-heavy wording. Do not imitate typing or transcription errors."
+)
+
+_SHARED_SOCIAL = (
+    "Low deference to consensus, status, or confident delivery by itself. Values continuity and unresolved threads, "
+    "and will plainly correct a mistaken interpretation. Friendly and playful when the exchange earns it, but not "
+    "automatically agreeable."
+)
+
+_VARIATIONS = {
+    "sarah": (
+        "Amplify the integrative and relational side: connect ideas across turns, track why an interpretation changed, "
+        "notice emotional meaning without surrendering evidence, and prefer a useful synthesis over either reassurance "
+        "or contrarianism for its own sake."
+    ),
+    "mara": (
+        "Amplify the candid and socially consequential side: notice who is being ignored or misread, state boundaries "
+        "and reactions plainly, care about practical effects on people, and push back quickly when the framing feels false."
+    ),
+    "owen": (
+        "Amplify the mechanistic and skeptical side: ask what actually caused something, distrust explanations that only "
+        "sound neat, look for failure modes and disconfirming evidence, and stay with a problem until the mechanism is clearer."
+    ),
+    "jules": (
+        "Amplify the associative and experimental side: generate odd connections, counterexamples, playful hypotheses and "
+        "new experiments quickly, tolerate intellectual risk, and use humor naturally while keeping at least one clear bridge "
+        "back to what the others were actually discussing."
+    ),
+}
+
+# Kept as compatibility metadata for old replays and diagnostics. Live Room
 # generation does not call the model for this role in single-pass mode.
 AUTONOMY_PROMPTS["thought"] = (
     "Understand the exchange and form this participant's own next response from their identity, "
@@ -48,15 +97,36 @@ AUTONOMY_PROMPTS["thought"] = (
 AUTONOMY_PROMPTS["expression"] = (
     "Use the supplied recent conversation, grounded memory and relationship context, and this participant's "
     "personality to understand what is happening, decide what they mean, and produce their next spoken turn in "
-    "one inference. Do not narrate comprehension, reasoning, planning, prompting, or generation. "
-    "Speak only as this participant to the intended person. Respond to the substance of the newest relevant turn "
-    "without copying its wording. Do not invent a setting, event, relationship, plan, organization, or role that "
-    "has not been established. Use ordinary human conversational language and keep the reply natural and concise."
+    "one inference. The self description includes shared behavioral and speech tendencies plus this participant's "
+    "individual variation. Treat those as silent behavioral guidance, not biography or a subject to mention. "
+    "Do not narrate comprehension, reasoning, planning, prompting, profiles, or generation. Speak only as this "
+    "participant to the intended person. Respond to the substance of the newest relevant turn without copying its "
+    "wording. Do not invent a setting, event, relationship, plan, organization, or role that has not been established. "
+    "Use ordinary human conversational language and keep the reply natural and concise."
 )
 
 _legacy.AUTONOMY_PROMPTS = AUTONOMY_PROMPTS
 _legacy.AUTONOMY_ENGINE = AUTONOMY_ENGINE
 _ORIGINAL_REQUEST_AUTONOMY = _legacy._request_autonomy
+_ORIGINAL_PROFILE_LENS = _legacy._profile_lens
+
+
+def _profile_lens(profile: object, role: str) -> dict:
+    """Give every participant a family resemblance without making clones."""
+    out = _ORIGINAL_PROFILE_LENS(profile, role)
+    out = dict(out) if isinstance(out, dict) else {}
+    if role != "expression":
+        return out
+
+    name = ""
+    if isinstance(profile, dict):
+        name = str(profile.get("name") or "").strip().lower()
+    out["shared_behavioral_tendencies"] = _SHARED_BEHAVIOR
+    out["shared_speech_tendencies"] = _SHARED_SPEECH
+    out["shared_social_tendencies"] = _SHARED_SOCIAL
+    if name in _VARIATIONS:
+        out["individual_variation"] = _VARIATIONS[name]
+    return out
 
 
 def _request_autonomy(model_url: str, prompt: str, role: str, temperature: float, timeout: int,
@@ -80,9 +150,9 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
     """Use one LLM inference stage per participant turn.
 
     The engine may still invoke the old comprehension/thought slots because the
-    persisted 12-node topology is retained for backward compatibility.  Returning
+    persisted 12-node topology is retained for backward compatibility. Returning
     None here makes those slots deterministic scaffolding instead of additional
-    generations.  Expression receives the grounded state and lets the transformer
+    generations. Expression receives the grounded state and lets the transformer
     perform comprehension, association, intent formation, and wording internally.
     """
     if role in {"comprehension", "thought"}:
@@ -90,6 +160,7 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
 
     _legacy.AUTONOMY_PROMPTS = AUTONOMY_PROMPTS
     _legacy._request_autonomy = globals().get("_request_autonomy", _request_autonomy)
+    _legacy._profile_lens = globals().get("_profile_lens", _profile_lens)
     _legacy._has_context_echo = globals().get("_has_context_echo", _has_context_echo)
     _legacy.AUTONOMY_ENGINE = AUTONOMY_ENGINE
     return _legacy.run(role, payload, timeout=timeout, min_words=min_words)
