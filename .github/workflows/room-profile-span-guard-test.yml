@@ -1,0 +1,22 @@
+name: Room profile span guard test
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/room_private_model_autonomy/**'
+      - 'scripts/test_room_profile_span_guard.py'
+      - '.github/workflows/room-profile-span-guard-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compile Room guard
+        run: python3 -m py_compile scripts/room_private_model_autonomy/__init__.py scripts/test_room_profile_span_guard.py
+      - name: Run Room guard regression test
+        run: python3 scripts/test_room_profile_span_guard.py
