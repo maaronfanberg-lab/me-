@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 3,
+  "completed_reply_turns": 4,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -98,6 +98,15 @@
       "to_name": "Emily",
       "content": "Oh, that sounds like a pretty busy schedule! I'm doing well! It's just been... [CHAT CONVERSATION] (here is the chat conversation).",
       "created_at": "2026-09-18T08:38:36.081124+00:00"
+    },
+    {
+      "id": 5,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, that sounds like a pretty busy schedule! I'm doing well! I have a very hectic week. Would love to catch up if it means we can hang out sometime soon.",
+      "created_at": "2026-09-18T08:50:02.779806+00:00"
     }
   ],
   "latest_turn": {
@@ -134,21 +143,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Hey, I'm doing well! It's just been busy lately. Have you been good too? Maybe we could catch up sometime soon.",
+      "Emily observes a message from Olivia: Oh, that sounds like a pretty busy schedule! I'm doing well! It's just been... [CHAT CONVERSATION] (here is the chat conversation)."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "a5a4f5fce81cb49f37fa",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 70.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 6
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "7f4896d1bd76abd98f71",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 5.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 6
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh, that sounds like a pretty busy schedule! I'm doing well! I have a very hectic week. Would love to catch up if it means we can hang out sometime soon.",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Hey, I'm doing well! It's just been busy lately. Have you been good too? Maybe we could catch up sometime soon.",
+        "Emily observes a message from Olivia: Oh, that sounds like a pretty busy schedule! I'm doing well! It's just been... [CHAT CONVERSATION] (here is the chat conversation)."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "a5a4f5fce81cb49f37fa",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 70.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 6
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "7f4896d1bd76abd98f71",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 5.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 6
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 5,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, that sounds like a pretty busy schedule! I'm doing well! I have a very hectic week. Would love to catch up if it means we can hang out sometime soon.",
+        "created_at": "2026-09-18T08:50:02.779806+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"inner_sampler_exhaustion: Emily paper-derived Stanford act repeatedly crossed the live dialogue grounding boundary: 'speech-exhaustion:Emily paper-derived Stanford act produced no usable spoken line after 4 unique samples / 4 completion req\""
+    "external_generation_error": ""
   }
 }
