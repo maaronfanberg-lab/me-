@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#05060c">
+<title>CIRCLE LIMIT LAB · LIVE</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05060c;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{touch-action:none}canvas{position:fixed;inset:0;width:100%;height:100%;display:block}.top{position:fixed;left:22px;right:22px;top:max(18px,env(safe-area-inset-top));display:flex;justify-content:space-between;align-items:center;pointer-events:none}.brand{font-weight:800;letter-spacing:.18em;font-size:12px}.status{font-size:11px;color:#b8c0cf;background:rgba(9,11,20,.65);border:1px solid rgba(255,255,255,.12);padding:8px 12px;border-radius:999px;backdrop-filter:blur(14px)}.status:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#7ef3d0;box-shadow:0 0 12px #7ef3d0;margin-right:8px}.controls{position:fixed;left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom));display:flex;align-items:center;gap:6px;padding:6px;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(8,10,20,.72);backdrop-filter:blur(18px)}button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;border-radius:12px;height:42px;padding:0 12px;font-weight:750;letter-spacing:.06em}input{width:72px;accent-color:#b7a5ff}.hint{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;color:rgba(255,255,255,.52);font-size:11px;white-space:nowrap}.panel{position:fixed;right:16px;top:74px;width:min(360px,calc(100vw - 32px));padding:15px;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(7,9,17,.88);backdrop-filter:blur(20px);font-size:12px;line-height:1.5;color:#c7ccda;display:none}.panel.open{display:block}.eq{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:rgba(255,255,255,.05);padding:8px 10px;border-radius:10px;color:#eef1ff;margin:8px 0}@media(max-width:520px){button{padding:0 9px;height:40px}.controls{gap:4px}.hint{bottom:78px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top"><div class="brand">CIRCLE LIMIT LAB</div><div class="status" id="status">LIVE</div></div>
+<div class="hint">tap for a pulse · drag to bend the disk</div>
+<div class="controls"><button id="pause">PAUSE</button><button id="mode">BLOOM</button><input id="energy" type="range" min="0" max="100" value="66"><button id="reset">RESET</button><button id="math">MATH</button></div>
+<div class="panel" id="panel"><b>Poincaré pulse field</b><div class="eq">fₐ(z)=(z−a)/(1−āz)</div><div class="eq">d(z,w)=2 atanh |(z−w)/(1−w̄z)|</div><div>Motion uses a disk-preserving Möbius automorphism. Pulse phase uses hyperbolic distance. The small circles keep a fixed hyperbolic radius, so their Euclidean size collapses toward the rim.</div></div>
+<script>
+(function(){
+'use strict';
+var TAU=Math.PI*2,cv=document.getElementById('c'),x=cv.getContext('2d'),D=1,W=0,H=0,CX=0,CY=0,R=0,t=0,last=performance.now(),running=true,mode=0,drag=false,down=null,view={x:0,y:0},target={x:0,y:0},pulses=[],pts=[];
+function C(a,b){return{x:a||0,y:b||0}} function sub(a,b){return C(a.x-b.x,a.y-b.y)} function mul(a,b){return C(a.x*b.x-a.y*b.y,a.x*b.y+a.y*b.x)} function conj(a){return C(a.x,-a.y)} function a2(a){return a.x*a.x+a.y*a.y} function mag(a){return Math.hypot(a.x,a.y)} function sc(a,s){return C(a.x*s,a.y*s)} function div(a,b){var d=a2(b);return C((a.x*b.x+a.y*b.y)/d,(a.y*b.x-a.x*b.y)/d)} function expi(q){return C(Math.cos(q),Math.sin(q))} function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function mob(z,a){return div(sub(z,a),sub(C(1,0),mul(conj(a),z)))} function inv(w,a){return mob(w,sc(a,-1))}
+function hd(z,w){var q=div(sub(z,w),sub(C(1,0),mul(conj(w),z)));return 2*Math.atanh(clamp(mag(q),0,.999999999))}
+function hc(c,q){var c2=a2(c),den=1-q*q*c2;return{c:sc(c,(1-q*q)/den),r:q*(1-c2)/den}}
+function resize(){D=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=Math.round(W*D);cv.height=Math.round(H*D);cv.style.width=W+'px';cv.style.height=H+'px';x.setTransform(D,0,0,D,0,0);CX=W/2;CY=H/2-12;R=Math.max(110,Math.min(W*.45,H*.39))}
+function seed(){pts=[];for(var j=0;j<19;j++){var s=.18+j*.225,rad=Math.tanh(s/2),n=Math.max(8,Math.round(8+rad*58)),tw=j*.37;for(var k=0;k<n;k++)pts.push({z:sc(expi(TAU*k/n+tw),rad),ring:j})}pts.push({z:C(0,0),ring:0})}
+function pulse(z,s){pulses.push({z:z,t:t,s:s||1});if(pulses.length>10)pulses.shift()}
+function field(p){var u=.18*Math.sin(1.9*t-2.0*hd(p,C(0,0)));for(var i=0;i<pulses.length;i++){var P=pulses[i],age=t-P.t;if(age<0||age>7)continue;var d=hd(p,P.z),front=d-1.65*age,env=Math.exp(-front*front/.15)*Math.exp(-age*.13);u+=P.s*env*Math.sin(10.5*front-1.15*age)}return u}
+function screen(z){return[CX+R*z.x,CY-R*z.y]}
+function bg(){var g=x.createRadialGradient(CX,CY,0,CX,CY,Math.max(W,H)*.7);g.addColorStop(0,'#141936');g.addColorStop(.48,'#090c19');g.addColorStop(1,'#020308');x.fillStyle=g;x.fillRect(0,0,W,H)}
+function draw(){bg();if(!drag){target.x=.14*(Math.sin(t*.29)+.26*Math.sin(t*.11+1));target.y=.14*(Math.cos(t*.25)-.22*Math.cos(t*.09-.7))}view.x+=(target.x-view.x)*.045;view.y+=(target.y-view.y)*.045;var vm=mag(view);if(vm>.55)view=sc(view,.55/vm);x.save();x.beginPath();x.arc(CX,CY,R,0,TAU);x.clip();var dg=x.createRadialGradient(CX-R*.15,CY-R*.18,R*.03,CX,CY,R);dg.addColorStop(0,'#20275a');dg.addColorStop(.62,'#0a0d20');dg.addColorStop(1,'#02030a');x.fillStyle=dg;x.fillRect(CX-R,CY-R,R*2,R*2);var e=+document.getElementById('energy').value/100,arr=[];for(var i=0;i<pts.length;i++){var z=mob(pts[i].z,view);arr.push({p:pts[i],z:z,m:mag(z),u:field(pts[i].z)})}arr.sort(function(a,b){return b.m-a.m});x.globalCompositeOperation='lighter';for(i=0;i<arr.length;i++){var o=arr[i],u=Math.tanh(o.u*(1.4+2.7*e)),ph=.5+.5*u,q=.009+.014*e*(.3+.7*ph),g=hc(o.z,q),rr=g.r*R;if(rr<.16)continue;var s=screen(g.c),hue=205+105*ph+14*Math.sin(t*.16+o.p.ring*.45),alpha=.08+.42*(.2+.8*Math.abs(u));if(mode===0){x.fillStyle='hsla('+hue+',96%,65%,'+(alpha*.22)+')';x.beginPath();x.arc(s[0],s[1],rr*(2.2+1.7*Math.abs(u)),0,TAU);x.fill();x.strokeStyle='hsla('+(hue+12)+',98%,80%,'+alpha+')';x.lineWidth=Math.max(.35,rr*.1);x.beginPath();x.arc(s[0],s[1],rr*(1+.4*u),0,TAU);x.stroke()}else{x.fillStyle='hsla('+hue+',98%,74%,'+(.12+.5*Math.abs(u))+')';x.beginPath();x.arc(s[0],s[1],Math.max(.5,rr*(.4+.9*ph)),0,TAU);x.fill()}}
+x.globalCompositeOperation='source-over';for(i=0;i<pulses.length;i++){var P=pulses[i],age=t-P.t;if(age<0||age>4.5)continue;var os=screen(mob(P.z,view)),pr=R*Math.tanh((1.65*age)/2);x.strokeStyle='rgba(205,220,255,'+(.42*Math.exp(-age*.35))+')';x.lineWidth=1.3;x.beginPath();x.arc(os[0],os[1],pr,0,TAU);x.stroke()}x.restore();x.strokeStyle='rgba(225,230,255,.65)';x.lineWidth=1.1;x.beginPath();x.arc(CX,CY,R,0,TAU);x.stroke()}
+function frame(now){var dt=Math.min(.05,(now-last)/1000);last=now;if(running)t+=dt;pulses=pulses.filter(function(p){return t-p.t<7});draw();requestAnimationFrame(frame)}
+function eventZ(e){return C((e.clientX-CX)/R,(CY-e.clientY)/R)}
+cv.addEventListener('pointerdown',function(e){down={x:e.clientX,y:e.clientY};drag=false;cv.setPointerCapture(e.pointerId)});cv.addEventListener('pointermove',function(e){if(!down)return;drag=Math.hypot(e.clientX-down.x,e.clientY-down.y)>7;if(drag){var z=eventZ(e),m=mag(z);if(m>.82)z=sc(z,.82/m);target=sc(z,.48)}});cv.addEventListener('pointerup',function(e){var z=eventZ(e);if(!drag&&mag(z)<.98)pulse(inv(z,view),1);down=null;drag=false});
+document.getElementById('pause').onclick=function(){running=!running;this.textContent=running?'PAUSE':'PLAY'};document.getElementById('mode').onclick=function(){mode=(mode+1)%2;this.textContent=mode?'PEARLS':'BLOOM'};document.getElementById('reset').onclick=function(){view=C(0,0);target=C(0,0);pulses=[];t=0;pulse(C(0,0),.8)};document.getElementById('math').onclick=function(){document.getElementById('panel').classList.toggle('open')};addEventListener('resize',resize,{passive:true});
+resize();seed();pulse(C(0,0),.72);setTimeout(function(){pulse(C(.22,-.07),.58)},850);requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
