@@ -13,7 +13,10 @@
 .controls{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:max(13px,env(safe-area-inset-bottom));display:flex;gap:5px;align-items:center;padding:5px;border:1px solid var(--line);border-radius:17px;background:rgba(8,10,20,.74);backdrop-filter:blur(20px);box-shadow:0 18px 58px rgba(0,0,0,.42)}
 button,select{appearance:none;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:white;border-radius:11px;height:39px;padding:0 10px;font:760 10px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.06em;-webkit-tap-highlight-color:transparent}button:active{transform:translateY(1px);background:rgba(255,255,255,.11)}button.primary{background:rgba(185,167,255,.15);border-color:rgba(185,167,255,.29)}
 .deck{position:fixed;z-index:9;left:9px;top:max(56px,calc(env(safe-area-inset-top) + 44px));bottom:max(70px,calc(env(safe-area-inset-bottom) + 60px));width:min(370px,calc(100vw - 18px));border:1px solid var(--line);border-radius:18px;background:rgba(6,8,17,.92);backdrop-filter:blur(25px);box-shadow:0 25px 75px rgba(0,0,0,.55);overflow:auto;touch-action:pan-y;transform:translateX(calc(-100% - 22px));transition:transform .2s ease}.deck.open{transform:none}
-.deckbar{position:sticky;z-index:2;top:0;display:flex;justify-content:space-between;align-items:center;padding:10px 11px;background:rgba(6,8,17,.95);border-bottom:1px solid rgba(255,255,255,.07);backdrop-filter:blur(18px)}.decktitle{font-size:10px;font-weight:850;letter-spacing:.14em}.sub{font-size:9px;color:var(--muted);margin-top:2px}.barbuttons{display:flex;gap:5px}.barbuttons button{height:32px;padding:0 8px;font-size:9px}
+.deckbar{position:sticky;z-index:4;top:0;display:flex;justify-content:space-between;align-items:center;padding:10px 11px;background:rgba(6,8,17,.96);border-bottom:1px solid rgba(255,255,255,.07);backdrop-filter:blur(18px)}.decktitle{font-size:10px;font-weight:850;letter-spacing:.14em}.sub{font-size:9px;color:var(--muted);margin-top:2px}.barbuttons{display:flex;gap:5px}.barbuttons button{height:32px;padding:0 8px;font-size:9px}
+.previewCard{position:sticky;z-index:3;top:53px;margin:8px 9px 6px;padding:7px;border:1px solid rgba(255,255,255,.11);border-radius:14px;background:rgba(3,4,10,.94);box-shadow:0 10px 28px rgba(0,0,0,.34)}
+.previewHead{display:flex;align-items:center;justify-content:space-between;padding:1px 2px 6px}.previewHead span{font-size:9px;font-weight:800;letter-spacing:.13em;color:rgba(255,255,255,.62)}.previewHead button{height:27px;padding:0 8px;font-size:8px}
+.previewFrame{height:190px;border-radius:10px;overflow:hidden;background:#020309;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center}.previewFrame canvas{position:static;width:100%;height:100%;display:block}.previewCard.hidden .previewFrame{display:none}.previewCard.hidden{padding-bottom:5px}
 .presetrow{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:9px}.presetrow button{height:33px;padding:0 4px;font-size:8.5px}
 details{border-top:1px solid rgba(255,255,255,.075)}details:last-child{border-bottom:1px solid rgba(255,255,255,.075)}summary{list-style:none;display:flex;align-items:center;justify-content:space-between;padding:11px 12px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:.11em;color:rgba(255,255,255,.78)}summary::-webkit-details-marker{display:none}summary:after{content:"＋";font-size:15px;font-weight:400;color:rgba(255,255,255,.45)}details[open] summary:after{content:"−"}details[open] summary{background:rgba(255,255,255,.025)}.section{padding:3px 11px 10px}.row{display:grid;grid-template-columns:95px 1fr 48px;gap:8px;align-items:center;min-height:35px}.row label{font-size:10px;color:rgba(255,255,255,.69)}.row output{font:9.5px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;color:#d8d2ff;font-variant-numeric:tabular-nums}.row input[type=range]{width:100%;margin:0;accent-color:var(--accent)}.row select{width:100%;height:31px;padding:0 8px;font-size:9px;letter-spacing:.03em}.row.check{grid-template-columns:1fr auto}.row.check input{width:18px;height:18px;accent-color:var(--accent)}
 .mathpanel{position:fixed;z-index:9;right:14px;top:max(62px,calc(env(safe-area-inset-top) + 50px));width:min(360px,calc(100vw - 28px));padding:15px;border:1px solid var(--line);border-radius:16px;background:rgba(6,8,17,.91);backdrop-filter:blur(22px);font-size:11.5px;line-height:1.55;color:#c9cedb;display:none}.mathpanel.open{display:block}.eq{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:rgba(255,255,255,.05);padding:8px 9px;border-radius:9px;color:#eef1ff;margin:8px 0;overflow:auto;white-space:nowrap}
@@ -36,6 +39,10 @@ details{border-top:1px solid rgba(255,255,255,.075)}details:last-child{border-bo
   <div class="deckbar">
     <div><div class="decktitle">CONTROL DECK</div><div class="sub">36 controls · collapsible</div></div>
     <div class="barbuttons"><button id="collapse">COLLAPSE</button><button id="close">CLOSE</button></div>
+  </div>
+  <div id="previewCard" class="previewCard">
+    <div class="previewHead"><span>LIVE PREVIEW</span><button id="togglePreview">HIDE</button></div>
+    <div class="previewFrame"><canvas id="preview"></canvas></div>
   </div>
   <div class="presetrow">
     <button data-preset="calm">CALM</button><button data-preset="storm">STORM</button><button data-preset="glass">GLASS</button><button data-preset="alien">ALIEN</button><button data-preset="chaos">CHAOS</button>
@@ -109,7 +116,7 @@ details{border-top:1px solid rgba(255,255,255,.075)}details:last-child{border-bo
 <script>
 (function(){
 'use strict';
-var TAU=Math.PI*2,cv=document.getElementById('c'),ctx=cv.getContext('2d'),D=1,W=0,H=0,CX=0,CY=0,R=0,t=0,last=performance.now(),running=true,down=null,dragged=false,manualUntil=0,pulses=[],pts=[],lastAuto=-99;
+var TAU=Math.PI*2,cv=document.getElementById('c'),ctx=cv.getContext('2d'),pv=document.getElementById('preview'),pctx=pv.getContext('2d'),D=1,W=0,H=0,CX=0,CY=0,R=0,t=0,last=performance.now(),running=true,down=null,dragged=false,manualUntil=0,pulses=[],pts=[],lastAuto=-99;
 var view={x:0,y:0},target={x:0,y:0};
 var cfg={drift:.14,driftSpeed:.29,spin:.045,pearl:.016,density:19,radialBias:1,ringTwist:.37,viewClamp:.72,energy:1.35,pulseSpeed:1.65,frequency:10.5,width:.15,damping:.13,standing:.18,dispersion:0,phaseShear:0,autoRate:.34,autoStrength:.68,pattern:'orbit',orbitRadius:.32,patternSpeed:.7,symmetry:'1',render:'bloom',glow:1,lineWidth:1,contrast:1,opacity:1,bgLevel:.42,fronts:true,palette:'aurora',hue:205,hueRange:105,saturation:96,lightness:68,colorSpeed:0,timeScale:1,breathing:.08,breathSpeed:.55,jitter:0};
 
@@ -117,7 +124,9 @@ function C(a,b){return{x:a||0,y:b||0}} function sub(a,b){return C(a.x-b.x,a.y-b.
 function mob(z,a){return div(sub(z,a),sub(C(1,0),mul(conj(a),z)))} function inv(w,a){return mob(w,sc(a,-1))}
 function hd(z,w){var q=div(sub(z,w),sub(C(1,0),mul(conj(w),z)));return 2*Math.atanh(clamp(mag(q),0,.999999999))}
 function hc(c,q){var c2=a2(c),den=1-q*q*c2;return{c:sc(c,(1-q*q)/den),r:q*(1-c2)/den}}
-function resize(){D=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=Math.round(W*D);cv.height=Math.round(H*D);cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(D,0,0,D,0,0);CX=W/2;CY=H/2-12;R=Math.max(110,Math.min(W*.455,H*.39))}
+function resize(){D=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=Math.round(W*D);cv.height=Math.round(H*D);cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(D,0,0,D,0,0);CX=W/2;CY=H/2-12;R=Math.max(110,Math.min(W*.455,H*.39));resizePreview()}
+function resizePreview(){var r=pv.getBoundingClientRect(),pd=Math.min(2,devicePixelRatio||1);pv.width=Math.max(1,Math.round(r.width*pd));pv.height=Math.max(1,Math.round(r.height*pd));pctx.setTransform(pd,0,0,pd,0,0)}
+function updatePreview(){if(!document.getElementById('deck').classList.contains('open')||document.getElementById('previewCard').classList.contains('hidden'))return;var box=pv.getBoundingClientRect(),pw=box.width,ph=box.height;if(!pw||!ph)return;pctx.setTransform(1,0,0,1,0,0);pctx.clearRect(0,0,pv.width,pv.height);var pd=pv.width/pw;var crop=Math.min(W,H)*.78,sx=CX-crop/2,sy=CY-crop/2,dx=(pw-ph)/2,side=ph;pctx.save();pctx.scale(pd,pd);pctx.fillStyle='#020309';pctx.fillRect(0,0,pw,ph);pctx.drawImage(cv,sx,sy,crop,crop,Math.max(0,dx),0,Math.min(side,pw),ph);pctx.restore()}
 function seed(){pts=[];var rings=Math.round(cfg.density);for(var j=0;j<rings;j++){var u=j/Math.max(1,rings-1),s=.12+4.3*Math.pow(u,cfg.radialBias),rad=Math.tanh(s/2),n=Math.max(8,Math.round(7+rad*(28+rings*1.9))),tw=j*cfg.ringTwist;for(var k=0;k<n;k++)pts.push({z:sc(expi(TAU*k/n+tw),rad),ring:j})}pts.push({z:C(0,0),ring:0})}
 function pulse(z,s){var n=Math.max(1,+cfg.symmetry||1);for(var j=0;j<n;j++){pulses.push({z:rot(z,TAU*j/n),t:t,s:s||1});if(pulses.length>30)pulses.shift()}}
 function field(p){var d0=hd(p,C(0,0)),freq=cfg.frequency+cfg.dispersion*d0,u=cfg.standing*Math.sin((1.2+cfg.driftSpeed*2)*t-2*d0+cfg.phaseShear*Math.atan2(p.y,p.x));for(var i=0;i<pulses.length;i++){var P=pulses[i],age=t-P.t;if(age<0||age>12)continue;var d=hd(p,P.z),front=d-cfg.pulseSpeed*age,env=Math.exp(-(front*front)/Math.max(.004,cfg.width))*Math.exp(-age*cfg.damping);u+=P.s*env*Math.sin(freq*front-.7*age+cfg.phaseShear*Math.atan2(p.y,p.x))}return u}
@@ -146,7 +155,7 @@ function draw(){
 }
 function autoPoint(){var a=t*cfg.patternSpeed,r=cfg.orbitRadius;if(cfg.pattern==='center')return C(0,0);if(cfg.pattern==='random'){var q=(Math.sin(t*12.9898)*43758.5453)%1,qq=(Math.sin(t*78.233+3)*12345.678)%1;return sc(expi(TAU*Math.abs(q)),r*Math.sqrt(Math.abs(qq)))}if(cfg.pattern==='lissajous')return C(r*Math.sin(a*1.7),r*Math.sin(a*2.3+.8));if(cfg.pattern==='spiral'){var sr=r*(.1+.9*((t*.12*cfg.patternSpeed)%1));return sc(expi(a*2.1),sr)}return sc(expi(a),r)}
 function maybeAuto(){if(cfg.autoRate<=0)return;var gap=1/cfg.autoRate;if(t-lastAuto>=gap){lastAuto=t;pulse(autoPoint(),cfg.autoStrength)}}
-function frame(now){var dt=Math.min(.05,(now-last)/1000);last=now;if(running){t+=dt*cfg.timeScale;maybeAuto()}pulses=pulses.filter(function(p){return t-p.t<12});draw();requestAnimationFrame(frame)}
+function frame(now){var dt=Math.min(.05,(now-last)/1000);last=now;if(running){t+=dt*cfg.timeScale;maybeAuto()}pulses=pulses.filter(function(p){return t-p.t<12});draw();updatePreview();requestAnimationFrame(frame)}
 function eventZ(e){return C((e.clientX-CX)/R,(CY-e.clientY)/R)}
 
 cv.addEventListener('pointerdown',function(e){down={x:e.clientX,y:e.clientY};dragged=false;cv.setPointerCapture(e.pointerId)});
@@ -155,9 +164,10 @@ cv.addEventListener('pointerup',function(e){var z=eventZ(e);if(!dragged&&mag(z)<
 
 document.getElementById('pause').onclick=function(){running=!running;this.textContent=running?'PAUSE':'PLAY'};
 document.getElementById('mode').onclick=function(){var list=['bloom','pearls','wire','hybrid'],i=(list.indexOf(cfg.render)+1)%list.length;cfg.render=list[i];this.textContent=cfg.render.toUpperCase();syncUI()};
-document.getElementById('tune').onclick=function(){document.getElementById('deck').classList.toggle('open')};
+document.getElementById('tune').onclick=function(){var d=document.getElementById('deck'),open=d.classList.toggle('open');if(open)setTimeout(resizePreview,60)};
 document.getElementById('close').onclick=function(){document.getElementById('deck').classList.remove('open')};
 document.getElementById('collapse').onclick=function(){document.querySelectorAll('#deck details').forEach(function(d){d.open=false})};
+document.getElementById('togglePreview').onclick=function(){var card=document.getElementById('previewCard'),hidden=card.classList.toggle('hidden');this.textContent=hidden?'SHOW':'HIDE';if(!hidden)setTimeout(resizePreview,40)};
 document.getElementById('math').onclick=function(){document.getElementById('mathPanel').classList.toggle('open')};
 document.getElementById('reset').onclick=function(){view=C(0,0);target=C(0,0);pulses=[];t=0;manualUntil=0;lastAuto=-99;pulse(C(0,0),.8)};
 
