@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 6,
+  "completed_reply_turns": 7,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -125,6 +125,15 @@
       "to_name": "Olivia",
       "content": "Thank you, Olivia! My family is doing well, thank you.",
       "created_at": "2026-09-21T16:11:40.760096+00:00"
+    },
+    {
+      "id": 8,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "That's good to hear. I hope your family is taking care of themselves as well, and that any stress was outweighed by success.",
+      "created_at": "2026-09-21T16:14:14.022451+00:00"
     }
   ],
   "latest_turn": {
@@ -161,21 +170,130 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: So how are you and your family? I just got back from work. And you?",
+      "Olivia observes a message from Emily: Thank you, I'm listening.",
+      "Olivia observes a message from Emily: Oh, that's really interesting! I can tell why you were worried because I saw the message.",
+      "Olivia observes a message from Emily: Thank you, Olivia! My family is doing well, thank you."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "da9c2f9e47f0c6804551",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 90.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 9
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "9e67d47c0e887b253efb",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 30.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 9
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "5bd1355391f43045148f",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 6,
+        "stanford_last_retrieved": 6,
+        "observed_time_step": 9
+      },
+      {
+        "retrieval_rank": 4,
+        "content_hash": "f6b822c23b05e2daf571",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 8,
+        "stanford_last_retrieved": 8,
+        "observed_time_step": 9
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "That's good to hear. I hope your family is taking care of themselves as well, and that any stress was outweighed by success.",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: So how are you and your family? I just got back from work. And you?",
+        "Olivia observes a message from Emily: Thank you, I'm listening.",
+        "Olivia observes a message from Emily: Oh, that's really interesting! I can tell why you were worried because I saw the message.",
+        "Olivia observes a message from Emily: Thank you, Olivia! My family is doing well, thank you."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "da9c2f9e47f0c6804551",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 90.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 9
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "9e67d47c0e887b253efb",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 30.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 9
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "5bd1355391f43045148f",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 6,
+          "stanford_last_retrieved": 6,
+          "observed_time_step": 9
+        },
+        {
+          "retrieval_rank": 4,
+          "content_hash": "f6b822c23b05e2daf571",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 8,
+          "stanford_last_retrieved": 8,
+          "observed_time_step": 9
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 8,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "That's good to hear. I hope your family is taking care of themselves as well, and that any stress was outweighed by success.",
+        "created_at": "2026-09-21T16:14:14.022451+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"short_subset_echo: Thank you, I'm listening.\""
+    "external_generation_error": ""
   }
 }
