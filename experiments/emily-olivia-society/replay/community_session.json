@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 3,
+  "completed_reply_turns": 4,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -98,6 +98,15 @@
       "to_name": "Emily",
       "content": "Thank you so much for your message, I've been doing really well recently and my family is settling down. How about yourself? Any exciting news lately?",
       "created_at": "2026-09-22T21:42:00.508902+00:00"
+    },
+    {
+      "id": 5,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, I am so glad to see you again. It has been way too long! What's been happening in your family lately? How is your job progressing?",
+      "created_at": "2026-09-22T21:44:45.972909+00:00"
     }
   ],
   "latest_turn": {
@@ -134,21 +143,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Thank you so much for the update. It's always a delight to catch up with you. What's been happening with your family and job?",
+      "Emily observes a message from Olivia: Thank you so much for your message, I've been doing really well recently and my family is settling down. How about yourself? Any exciting news lately?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "369854bd3012cfc8aabe",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 80.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 6
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "43cdb6c4c11321275b2c",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 6
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh, I am so glad to see you again. It has been way too long! What's been happening in your family lately? How is your job progressing?",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Thank you so much for the update. It's always a delight to catch up with you. What's been happening with your family and job?",
+        "Emily observes a message from Olivia: Thank you so much for your message, I've been doing really well recently and my family is settling down. How about yourself? Any exciting news lately?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "369854bd3012cfc8aabe",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 80.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 6
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "43cdb6c4c11321275b2c",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 6
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": true,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 5,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, I am so glad to see you again. It has been way too long! What's been happening in your family lately? How is your job progressing?",
+        "created_at": "2026-09-22T21:44:45.972909+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'short_subset_echo: Thank you so much for the update.'"
+    "external_generation_error": ""
   }
 }
