@@ -1,0 +1,36 @@
+name: SpatialSoundCloud
+options:
+  bundleIdPrefix: lab.maaronfanberg
+  deploymentTarget:
+    iOS: "27.0"
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    IPHONEOS_DEPLOYMENT_TARGET: 27.0
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  SpatialSoundCloud:
+    type: application
+    platform: iOS
+    sources:
+      - path: SpatialSoundCloud
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: lab.maaronfanberg.SpatialSoundCloud
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: SpatialSoundCloud/Info.plist
+        CODE_SIGN_STYLE: Automatic
+    scheme:
+      testTargets:
+        - SpatialSoundCloudTests
+
+  SpatialSoundCloudTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: SpatialSoundCloud
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
