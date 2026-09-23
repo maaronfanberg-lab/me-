@@ -10,6 +10,7 @@ entities = {}
 for entity_id, mind in (live.get("minds", {}).get("entities", {}) or {}).items():
     entities[entity_id] = {
         "name": mind.get("name", entity_id),
+        "status": mind.get("status", "awake"),
         "genome": mind.get("genome", {}),
         "development": mind.get("development", {}),
         "memory": mind.get("memory", [])[-12:],

@@ -14,6 +14,12 @@ import room_topic_bounded as _bounded_topic
 
 LEGACY_RETRY_POLICY = 'attempts = 9 if role == "expression" else 2'
 _AUTONOMOUS = set(_social.ORDER)
+_SLEEPING_ENTITIES = {
+    str(entity).strip().lower()
+    for entity in (_legacy._core.CFG.get("sleeping_entities") or [])
+    if str(entity).strip()
+}
+_AWAKE_AUTONOMOUS = _AUTONOMOUS - _SLEEPING_ENTITIES
 
 _DISCOURSE_CUE_NOISE = {
     "despite", "although", "though", "however", "nevertheless", "nonetheless",
@@ -224,6 +230,9 @@ def _sanitize_declared_topic_terms(message: object) -> list[str]:
 
 
 def _llama_model_run(role: str, payload: dict, timeout: int = 30):
+    entity = str(payload.get("entity") or "").strip().lower()
+    if entity in _SLEEPING_ENTITIES:
+        return None
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():
         return None
     import room_private_model_autonomy as autonomy
