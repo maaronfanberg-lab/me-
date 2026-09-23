@@ -14,6 +14,13 @@ import room_topic_bounded as _bounded_topic
 
 LEGACY_RETRY_POLICY = 'attempts = 9 if role == "expression" else 2'
 _AUTONOMOUS = set(_social.ORDER)
+_REMOVED_ENTITIES = {
+    str(entity).strip().lower()
+    for entity in (_legacy._core.CFG.get("removed_entities") or [])
+    if str(entity).strip()
+}
+_ACTIVE_AUTONOMOUS = _AUTONOMOUS - _REMOVED_ENTITIES
+_ACTIVE_PARTICIPANTS = _ACTIVE_AUTONOMOUS | {"allen"}
 
 _DISCOURSE_CUE_NOISE = {
     "despite", "although", "though", "however", "nevertheless", "nonetheless",
@@ -224,6 +231,9 @@ def _sanitize_declared_topic_terms(message: object) -> list[str]:
 
 
 def _llama_model_run(role: str, payload: dict, timeout: int = 30):
+    entity = str(payload.get("entity") or "").strip().lower()
+    if entity in _REMOVED_ENTITIES:
+        return None
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():
         return None
     import room_private_model_autonomy as autonomy
@@ -287,7 +297,7 @@ def _coherent_recurrent(node, key, bus_data):
     thought = ((routed.get("recurrent", {}).get(entity, {}) or {}).get("thought", {}) or {})
     thought_private = thought.get("private") if isinstance(thought.get("private"), dict) else {}
     deliberation = thought_private.get("deliberation") if isinstance(thought_private.get("deliberation"), dict) else None
-    participants = set(_social.PARTICIPANTS)
+    participants = set(_ACTIVE_PARTICIPANTS)
     planned = str((deliberation or {}).get("preferred_partner") or base.get("partner") or "").lower()
     live_partner = planned if planned in participants and planned != entity else None
     live_event = None
