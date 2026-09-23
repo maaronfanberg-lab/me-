@@ -53,6 +53,18 @@ def _restore_sleeping_minds(minds: dict, snapshots: dict[str, dict]) -> None:
         entities[entity] = copy.deepcopy(snapshot)
 
 
+def _prune_absent_live_models(state: dict, entity: str) -> dict:
+    state = dict(state or {})
+    models = state.get("models_of_others")
+    if isinstance(models, dict):
+        state["models_of_others"] = {
+            other: value
+            for other, value in models.items()
+            if other in AWAKE_ORDER and other != entity
+        }
+    return state
+
+
 def norm(value) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
@@ -339,6 +351,7 @@ def private_commit(parts: list[dict], key: str):
         if candidate.get("root") and not bad_term(candidate.get("root")):
             topic = candidate
 
+    topic["participants"] = list(AWAKE_ORDER) + ["allen"]
     S["topic_episode"] = topic
     S["context_scope_version"] = CONTEXT_SCOPE_VERSION
 
@@ -356,9 +369,10 @@ def private_commit(parts: list[dict], key: str):
         perception, deliberation = _research.guard_private_self_inputs(perception, deliberation, latest_event)
 
         prior_private_self = M["entities"][entity].get("private_self_state")
-        M["entities"][entity]["private_self_state"] = _private_self_state.update(
-            prior_private_self, c.P[entity], entity, c.ORDER, perception, deliberation, V, cycle
+        updated_private_self = _private_self_state.update(
+            prior_private_self, c.P[entity], entity, AWAKE_ORDER, perception, deliberation, V, cycle
         )
+        M["entities"][entity]["private_self_state"] = _prune_absent_live_models(updated_private_self, entity)
 
     for entity in AWAKE_ORDER:
         M["entities"][entity]["medium"] = {
