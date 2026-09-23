@@ -7,7 +7,7 @@ import room_private_commit as commit
 assert "jules" in engine._SLEEPING_ENTITIES
 assert "jules" not in engine._AWAKE_AUTONOMOUS
 assert "jules" in engine._AUTONOMOUS
-assert "jules" in engine._social.PARTICIPANTS
+assert engine._AWAKE_PARTICIPANTS == {"sarah", "mara", "owen", "allen"}
 
 assert "jules" in commit.SLEEPING_ENTITIES
 assert commit.AWAKE_ORDER == ("sarah", "mara", "owen")
@@ -16,18 +16,28 @@ assert "jules" in commit.c.ORDER
 # Sleeping means no new model generation for Jules.
 assert engine._llama_model_run("expression", {"entity": "jules"}, timeout=1) is None
 
-# Awake participants can still perceive/address Jules as a Room participant.
+# Awake participants cannot select or target Jules while she is asleep.
 minds = commit.c.fresh_minds()
 topic = commit.c.fresh_state().get("topic_episode") or {}
-plans = commit.c.plan_actions(list(commit.AWAKE_ORDER), "jules", minds, topic, 1)
-assert set(plans) == {"sarah", "mara", "owen"}
-assert all(plan["target"] == "jules" for plan in plans.values())
+for cycle in range(1, 40):
+    for entity in commit.AWAKE_ORDER:
+        assert engine._awake_choose_partner(entity, minds, topic, cycle) in commit.AWAKE_ORDER
 
-# Jules' private state is frozen while asleep.
+plans = commit.c.plan_actions(list(commit.AWAKE_ORDER), None, minds, topic, 1)
+assert set(plans) == {"sarah", "mara", "owen"}
+assert all(plan["target"] in commit.AWAKE_ORDER for plan in plans.values())
+assert all(plan["target"] != "jules" for plan in plans.values())
+
+# A question previously aimed at Jules is ignored as a live target while she sleeps.
+historical_target = "jules"
+visible_qtarget = historical_target if historical_target in commit.AWAKE_ORDER else None
+assert visible_qtarget is None
+
+# Jules' private state is frozen while asleep, so she cannot observe new turns.
 snapshot = copy.deepcopy(minds["entities"]["jules"])
 minds["entities"]["jules"]["last_event"] = "new-event"
 minds["entities"]["jules"]["room_memories"].append({"text": "should disappear"})
 commit._restore_sleeping_minds(minds, {"jules": snapshot})
 assert minds["entities"]["jules"] == snapshot
 
-print("PASS: Jules is asleep, remains visible/addressable, and receives no new private state")
+print("PASS: Jules is asleep, hidden from awake participants, and receives no new private state")

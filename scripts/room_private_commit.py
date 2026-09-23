@@ -248,7 +248,8 @@ def private_commit(parts: list[dict], key: str):
     if not topic.get("root"):
         topic = seed_topic(expressions, valid_order, cycle, topic)
 
-    plans = c.plan_actions(awake_order, c.target(q) if q else None, M, topic, cycle)
+    qtarget = c.target(q) if q and c.target(q) in AWAKE_ORDER else None
+    plans = c.plan_actions(awake_order, qtarget, M, topic, cycle)
     staged: list[tuple[str, str, str, str, list[str]]] = []
 
     # Candidate N is checked against accepted candidates 1..N-1. Any invalid
@@ -280,10 +281,10 @@ def private_commit(parts: list[dict], key: str):
         if move not in ALLOWED_MOVES:
             move = planned["action"] if planned["action"] in ALLOWED_MOVES else "deepen"
         target = norm(expr.get("target") or planned["target"])
-        if target not in c.ORDER or target == entity:
+        if target not in AWAKE_ORDER or target == entity:
             target = planned["target"]
-        if target not in c.ORDER or target == entity:
-            target = next(other for other in c.ORDER if other != entity)
+        if target not in AWAKE_ORDER or target == entity:
+            target = next(other for other in AWAKE_ORDER if other != entity)
         staged.append((entity, move, target, text, terms))
 
     if not staged:
@@ -304,9 +305,9 @@ def private_commit(parts: list[dict], key: str):
 
     speakers = [m["speaker"] for m in spoken]
 
-    # Sleeping participants remain socially visible, but their private state is
-    # frozen while they nap: no new heard memories, relationship observations,
-    # attention updates, or private-self updates from the ongoing conversation.
+    # Sleeping participants are absent from the live social field and their
+    # private state is frozen while they nap: no new heard memories, relationship
+    # observations, attention updates, or private-self updates.
     _restore_sleeping_minds(M, sleeping_snapshots)
 
     # Migrate legacy memory non-destructively and label new memories by what was
@@ -434,6 +435,7 @@ def private_commit(parts: list[dict], key: str):
             "entities": len(c.ORDER),
             "awake_entities": len(AWAKE_ORDER),
             "sleeping_entities": sorted(SLEEPING_ENTITIES),
+            "sleeping_visibility": "hidden_from_awake_participants",
             "nodes_per_entity": 3,
             "tasks_per_node": 4,
             "active_processes": 48,

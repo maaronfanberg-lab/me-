@@ -20,6 +20,43 @@ _SLEEPING_ENTITIES = {
     if str(entity).strip()
 }
 _AWAKE_AUTONOMOUS = _AUTONOMOUS - _SLEEPING_ENTITIES
+_AWAKE_PARTICIPANTS = _AWAKE_AUTONOMOUS | {"allen"}
+
+
+def _awake_choose_partner(entity, minds, topic, cycle):
+    """Choose only among participants who are present in the Room right now."""
+    scored = []
+    for other in _social.ORDER:
+        if other == entity or other in _SLEEPING_ENTITIES:
+            continue
+        relationship = minds["entities"][entity]["people"][other]
+        strength = (
+            .20 * relationship.get("direct_familiarity", 0)
+            + .12 * relationship.get("trust", 0)
+            + .10 * relationship.get("reciprocity", 0)
+            + .08 * relationship.get("respect", 0)
+            + .06 * relationship.get("warmth", 0)
+            - .10 * relationship.get("tension", 0)
+        )
+        last = int(relationship.get("last_direct_cycle") or 0)
+        gap = max(0, cycle - last)
+        novelty = min(1., gap / 40.)
+        recent = sum(
+            1 for event in relationship.get("events", [])
+            if int(event.get("cycle", -999999)) >= cycle - 24
+        )
+        saturation = min(.42, .045 * recent)
+        jitter = _social.randomish(entity, other, cycle)
+        scored.append((.18 + .55 * strength + .38 * novelty - saturation + jitter, other))
+    if not scored:
+        raise RuntimeError(f"no awake Room partner available for {entity}")
+    return max(scored)[1]
+
+
+# Sleeping entities remain in persisted topology/history, but are not present to
+# awake agents while asleep.
+_social.choose_partner = _awake_choose_partner
+_legacy._core.choose_partner = _awake_choose_partner
 
 _DISCOURSE_CUE_NOISE = {
     "despite", "although", "though", "however", "nevertheless", "nonetheless",
@@ -296,7 +333,7 @@ def _coherent_recurrent(node, key, bus_data):
     thought = ((routed.get("recurrent", {}).get(entity, {}) or {}).get("thought", {}) or {})
     thought_private = thought.get("private") if isinstance(thought.get("private"), dict) else {}
     deliberation = thought_private.get("deliberation") if isinstance(thought_private.get("deliberation"), dict) else None
-    participants = set(_social.PARTICIPANTS)
+    participants = set(_AWAKE_PARTICIPANTS)
     planned = str((deliberation or {}).get("preferred_partner") or base.get("partner") or "").lower()
     live_partner = planned if planned in participants and planned != entity else None
     live_event = None
