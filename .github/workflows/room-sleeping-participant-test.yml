@@ -1,0 +1,25 @@
+name: Room sleeping participant test
+
+on:
+  pull_request:
+    paths:
+      - 'room/config.json'
+      - 'scripts/room_engine_v5.py'
+      - 'scripts/room_private_commit.py'
+      - 'scripts/build_room_feed.py'
+      - 'scripts/test_room_sleeping_entity.py'
+      - '.github/workflows/room-sleeping-participant-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compile Room nap path
+        run: python3 -m py_compile scripts/room_engine_v5.py scripts/room_private_commit.py scripts/build_room_feed.py scripts/test_room_sleeping_entity.py
+      - name: Verify sleeping participant
+        run: python3 scripts/test_room_sleeping_entity.py
