@@ -23,6 +23,13 @@ _AWAKE_AUTONOMOUS = _AUTONOMOUS - _SLEEPING_ENTITIES
 _AWAKE_PARTICIPANTS = _AWAKE_AUTONOMOUS | {"allen"}
 
 
+def _room_presence() -> dict:
+    return {
+        "present": sorted(_AWAKE_PARTICIPANTS),
+        "absent": sorted(_SLEEPING_ENTITIES),
+    }
+
+
 def _awake_choose_partner(entity, minds, topic, cycle):
     """Choose only among participants who are present in the Room right now."""
     scored = []
@@ -268,6 +275,9 @@ def _sanitize_declared_topic_terms(message: object) -> list[str]:
 
 def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     entity = str(payload.get("entity") or "").strip().lower()
+    if role == "expression":
+        payload = dict(payload or {})
+        payload["room_presence"] = _room_presence()
     if entity in _SLEEPING_ENTITIES:
         return None
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():
