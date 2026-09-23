@@ -8,6 +8,9 @@ assert "jules" in engine._SLEEPING_ENTITIES
 assert "jules" not in engine._AWAKE_AUTONOMOUS
 assert "jules" in engine._AUTONOMOUS
 assert engine._AWAKE_PARTICIPANTS == {"sarah", "mara", "owen", "allen"}
+presence = engine._room_presence()
+assert presence["present"] == ["allen", "mara", "owen", "sarah"]
+assert presence["absent"] == ["jules"]
 
 assert "jules" in commit.SLEEPING_ENTITIES
 assert commit.AWAKE_ORDER == ("sarah", "mara", "owen")
@@ -33,6 +36,18 @@ historical_target = "jules"
 visible_qtarget = historical_target if historical_target in commit.AWAKE_ORDER else None
 assert visible_qtarget is None
 
+# Awake participants retain history, but Jules is not represented as a current
+# live mind-model while absent.
+live_state = {
+    "models_of_others": {
+        "sarah": {"belief_hypothesis": "x"},
+        "jules": {"belief_hypothesis": "stale"},
+    }
+}
+pruned = commit._prune_absent_live_models(live_state, "owen")
+assert "jules" not in pruned["models_of_others"]
+assert "sarah" in pruned["models_of_others"]
+
 # Jules' private state is frozen while asleep, so she cannot observe new turns.
 snapshot = copy.deepcopy(minds["entities"]["jules"])
 minds["entities"]["jules"]["last_event"] = "new-event"
@@ -40,4 +55,4 @@ minds["entities"]["jules"]["room_memories"].append({"text": "should disappear"})
 commit._restore_sleeping_minds(minds, {"jules": snapshot})
 assert minds["entities"]["jules"] == snapshot
 
-print("PASS: Jules is asleep, hidden from awake participants, and receives no new private state")
+print("PASS: Jules is absent, awake agents know the current presence state, and Jules receives no new private state")
