@@ -23,10 +23,15 @@ for cycle in range(1, 40):
     for entity in commit.AWAKE_ORDER:
         assert engine._awake_choose_partner(entity, minds, topic, cycle) in commit.AWAKE_ORDER
 
-plans = commit.c.plan_actions(list(commit.AWAKE_ORDER), "jules", minds, topic, 1)
+plans = commit.c.plan_actions(list(commit.AWAKE_ORDER), None, minds, topic, 1)
 assert set(plans) == {"sarah", "mara", "owen"}
 assert all(plan["target"] in commit.AWAKE_ORDER for plan in plans.values())
 assert all(plan["target"] != "jules" for plan in plans.values())
+
+# A question previously aimed at Jules is ignored as a live target while she sleeps.
+historical_target = "jules"
+visible_qtarget = historical_target if historical_target in commit.AWAKE_ORDER else None
+assert visible_qtarget is None
 
 # Jules' private state is frozen while asleep, so she cannot observe new turns.
 snapshot = copy.deepcopy(minds["entities"]["jules"])
