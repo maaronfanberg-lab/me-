@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import copy
 import re
 from datetime import datetime, timezone
 
@@ -36,14 +37,20 @@ CONTROL_SENTINELS = {
 }
 CONTEXT_SCOPE_VERSION = 1
 
-REMOVED_ENTITIES = frozenset(
+SLEEPING_ENTITIES = frozenset(
     str(entity).strip().lower()
-    for entity in (c._core.CFG.get("removed_entities") or [])
+    for entity in (c._core.CFG.get("sleeping_entities") or [])
     if str(entity).strip()
 )
-ACTIVE_ORDER = tuple(entity for entity in c.ORDER if entity not in REMOVED_ENTITIES)
-if not ACTIVE_ORDER:
-    raise RuntimeError("Room has no active autonomous participants")
+AWAKE_ORDER = tuple(entity for entity in c.ORDER if entity not in SLEEPING_ENTITIES)
+if not AWAKE_ORDER:
+    raise RuntimeError("Room has no awake autonomous participants")
+
+
+def _restore_sleeping_minds(minds: dict, snapshots: dict[str, dict]) -> None:
+    entities = minds.setdefault("entities", {})
+    for entity, snapshot in snapshots.items():
+        entities[entity] = copy.deepcopy(snapshot)
 
 
 def norm(value) -> str:
@@ -199,6 +206,11 @@ def validate_public_expression(entity: str, text: str, terms: list[str], context
 def private_commit(parts: list[dict], key: str):
     S = c.state()
     M = c.minds()
+    sleeping_snapshots = {
+        entity: copy.deepcopy(M["entities"][entity])
+        for entity in SLEEPING_ENTITIES
+        if entity in M.get("entities", {})
+    }
     T = c.tree()
     V = c.conv()
     prev = c.event()
@@ -210,7 +222,7 @@ def private_commit(parts: list[dict], key: str):
 
     q = prev if c.isq(prev) and topic.get("root") else None
     order, E = c.order4(parts, prev, cycle)
-    active_order = [entity for entity in order if entity in ACTIVE_ORDER]
+    awake_order = [entity for entity in order if entity in AWAKE_ORDER]
     beat = f"beat-{c.BOOT}-{cycle:06d}"
 
     # A failed expression belongs to that agent, not to the whole Room. Preserve
@@ -218,7 +230,7 @@ def private_commit(parts: list[dict], key: str):
     # independently valid peers to publish.
     expressions: dict[str, dict] = {}
     quarantined: list[str] = []
-    for entity in ACTIVE_ORDER:
+    for entity in AWAKE_ORDER:
         expr = (E[entity].get("private") or {}).get("expression")
         if not isinstance(expr, dict):
             quarantined.append(f"{entity}:missing_expression")
@@ -232,11 +244,11 @@ def private_commit(parts: list[dict], key: str):
         print("All Room expressions quarantined before publication; skipping beat without state mutation")
         return
 
-    valid_order = [entity for entity in active_order if entity in expressions]
+    valid_order = [entity for entity in awake_order if entity in expressions]
     if not topic.get("root"):
         topic = seed_topic(expressions, valid_order, cycle, topic)
 
-    plans = c.plan_actions(active_order, c.target(q) if q and c.target(q) in ACTIVE_ORDER else None, M, topic, cycle)
+    plans = c.plan_actions(awake_order, c.target(q) if q else None, M, topic, cycle)
     staged: list[tuple[str, str, str, str, list[str]]] = []
 
     # Candidate N is checked against accepted candidates 1..N-1. Any invalid
@@ -268,10 +280,10 @@ def private_commit(parts: list[dict], key: str):
         if move not in ALLOWED_MOVES:
             move = planned["action"] if planned["action"] in ALLOWED_MOVES else "deepen"
         target = norm(expr.get("target") or planned["target"])
-        if target not in ACTIVE_ORDER or target == entity:
+        if target not in c.ORDER or target == entity:
             target = planned["target"]
-        if target not in ACTIVE_ORDER or target == entity:
-            target = next(other for other in ACTIVE_ORDER if other != entity)
+        if target not in c.ORDER or target == entity:
+            target = next(other for other in c.ORDER if other != entity)
         staged.append((entity, move, target, text, terms))
 
     if not staged:
@@ -292,9 +304,15 @@ def private_commit(parts: list[dict], key: str):
 
     speakers = [m["speaker"] for m in spoken]
 
+    # Sleeping participants remain socially visible, but their private state is
+    # frozen while they nap: no new heard memories, relationship observations,
+    # attention updates, or private-self updates from the ongoing conversation.
+    _restore_sleeping_minds(M, sleeping_snapshots)
+
     # Migrate legacy memory non-destructively and label new memories by what was
     # actually observed. Hearing a proposition is not the same thing as witnessing it.
     _research.annotate_memory_provenance(M)
+    _restore_sleeping_minds(M, sleeping_snapshots)
 
     previous_vocabulary = {
         norm(x)
@@ -324,7 +342,7 @@ def private_commit(parts: list[dict], key: str):
     S["context_scope_version"] = CONTEXT_SCOPE_VERSION
 
     part_index = {(part.get("entity"), part.get("role")): part for part in parts}
-    for entity in ACTIVE_ORDER:
+    for entity in AWAKE_ORDER:
         comprehension_part = part_index.get((entity, "comprehension"), {})
         comprehension_private = comprehension_part.get("private") if isinstance(comprehension_part.get("private"), dict) else {}
         comprehension_source = comprehension_private.get("source") if isinstance(comprehension_private.get("source"), dict) else {}
@@ -341,7 +359,7 @@ def private_commit(parts: list[dict], key: str):
             prior_private_self, c.P[entity], entity, c.ORDER, perception, deliberation, V, cycle
         )
 
-    for entity in ACTIVE_ORDER:
+    for entity in AWAKE_ORDER:
         M["entities"][entity]["medium"] = {
             "topics": [
                 x for x in [topic.get("root"), topic.get("current_facet")] + list(topic.get("facets", []))[:8]
@@ -366,20 +384,23 @@ def private_commit(parts: list[dict], key: str):
         "beat_contributors": speakers,
         "beat_message_count": len(spoken),
         "silence_cycles": 0,
+        "sleeping_entities": sorted(SLEEPING_ENTITIES),
         "note": "research-informed v5: selective agent context; provenance-tagged memory; guarded private beliefs; per-agent quality+privacy quarantine",
     })
 
     c.audit_invariants(M, topic)
+    _restore_sleeping_minds(M, sleeping_snapshots)
     c.save(c.ROOM / "conversation.json", V)
     c.save(c.ROOM / "discourse.json", T)
     c.save(c.ROOM / "cognitive_state.json", M)
     c.save(c.ROOM / "state.json", S)
 
     cm = {"schema": 5, "entities": {}}
-    for entity in ACTIVE_ORDER:
+    for entity in c.ORDER:
         ent = M["entities"][entity]
         cm["entities"][entity] = {
             "name": c.N[entity],
+            "status": "sleeping" if entity in SLEEPING_ENTITIES else "awake",
             "profile": c.P[entity],
             "genome": c.P[entity]["traits"],
             "development": {
@@ -403,15 +424,16 @@ def private_commit(parts: list[dict], key: str):
         "architecture_version": c.VERSION,
         "boot_id": c.BOOT,
         "minds": cm,
-        "profiles": {entity: c.P[entity] for entity in ACTIVE_ORDER},
+        "profiles": c.P,
         "state": S,
         "conversation": V,
         "discourse": T,
         "topic_episode": topic,
         "network": {
             "compute_nodes": 12,
-            "entities": len(ACTIVE_ORDER),
-            "removed_entities": sorted(REMOVED_ENTITIES),
+            "entities": len(c.ORDER),
+            "awake_entities": len(AWAKE_ORDER),
+            "sleeping_entities": sorted(SLEEPING_ENTITIES),
             "nodes_per_entity": 3,
             "tasks_per_node": 4,
             "active_processes": 48,
