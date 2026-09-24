@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 4,
+  "completed_reply_turns": 5,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -107,6 +107,15 @@
       "to_name": "Olivia",
       "content": "Great! What kind of exercise do you enjoy? I've been trying to get into running recently, but I haven't found the right motivation yet. Do you have any tips or advice?",
       "created_at": "2026-09-24T13:29:28.538767+00:00"
+    },
+    {
+      "id": 6,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Of course! I love running in the morning as well. It's my favorite workout routine.",
+      "created_at": "2026-09-24T13:31:43.021462+00:00"
     }
   ],
   "latest_turn": {
@@ -143,21 +152,108 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: What would you like to do today?",
+      "Olivia observes a message from Emily: Wow! That's really interesting! I haven't even considered that option. Are you into running or yoga?",
+      "Olivia observes a message from Emily: Great! What kind of exercise do you enjoy? I've been trying to get into running recently, but I haven't found the right motivation yet. Do you have any tips or advice?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "7be7c64c9e385c5d0f9f",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 7
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "7dbb3429047a6cee128e",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 40.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 7
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "057a8f03fd24584a7f7d",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 90.0,
+        "stanford_created": 6,
+        "stanford_last_retrieved": 6,
+        "observed_time_step": 7
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "Of course! I love running in the morning as well. It's my favorite workout routine.",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: What would you like to do today?",
+        "Olivia observes a message from Emily: Wow! That's really interesting! I haven't even considered that option. Are you into running or yoga?",
+        "Olivia observes a message from Emily: Great! What kind of exercise do you enjoy? I've been trying to get into running recently, but I haven't found the right motivation yet. Do you have any tips or advice?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "7be7c64c9e385c5d0f9f",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 7
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "7dbb3429047a6cee128e",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 40.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 7
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "057a8f03fd24584a7f7d",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 90.0,
+          "stanford_created": 6,
+          "stanford_last_retrieved": 6,
+          "observed_time_step": 7
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 6,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Of course! I love running in the morning as well. It's my favorite workout routine.",
+        "created_at": "2026-09-24T13:31:43.021462+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"long_refractory_echo: Thank you for your input! As far as I know, that would be a great way to start the day! I'm actually really into running. It's my favorite form of exercise and helps me stay both physically fit and mentally sharp.\""
+    "external_generation_error": ""
   }
 }
