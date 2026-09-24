@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 7,
+  "completed_reply_turns": 8,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -134,6 +134,15 @@
       "to_name": "Emily",
       "content": "Oh wow that does sound fun. What is your favorite part of the meal?",
       "created_at": "2026-09-24T03:39:59.167064+00:00"
+    },
+    {
+      "id": 9,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "I'm glad to hear that!",
+      "created_at": "2026-09-24T03:42:28.745247+00:00"
     }
   ],
   "latest_turn": {
@@ -170,21 +179,130 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Sure! I would definitely go there. What is your favorite part of the meal?",
+      "Emily observes a message from Olivia: Oh wow, that does sound fun. I'd love to try that if it's open!",
+      "Emily observes a message from Olivia: Great! What part of the meal do you enjoy the most?",
+      "Emily observes a message from Olivia: Oh wow that does sound fun. What is your favorite part of the meal?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "2782a0cb9ce26c8a9966",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 45.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "74fdbffa978c53e807f3",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "c07d65496011e8840783",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 7,
+        "stanford_last_retrieved": 7,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 4,
+        "content_hash": "d812f72013632e6ab284",
+        "stanford_node_id": 4,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 9,
+        "stanford_last_retrieved": 9,
+        "observed_time_step": 10
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "I'm glad to hear that!",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Sure! I would definitely go there. What is your favorite part of the meal?",
+        "Emily observes a message from Olivia: Oh wow, that does sound fun. I'd love to try that if it's open!",
+        "Emily observes a message from Olivia: Great! What part of the meal do you enjoy the most?",
+        "Emily observes a message from Olivia: Oh wow that does sound fun. What is your favorite part of the meal?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "2782a0cb9ce26c8a9966",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 45.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "74fdbffa978c53e807f3",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "c07d65496011e8840783",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 7,
+          "stanford_last_retrieved": 7,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 4,
+          "content_hash": "d812f72013632e6ab284",
+          "stanford_node_id": 4,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 9,
+          "stanford_last_retrieved": 9,
+          "observed_time_step": 10
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 9,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "I'm glad to hear that!",
+        "created_at": "2026-09-24T03:42:28.745247+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'repeated_question_stem: Oh wow, that does sound fun. I love the fact that it has a full bar and there are many live music artists playing throughout the night. What is your favorite part of the meal?'"
+    "external_generation_error": ""
   }
 }
