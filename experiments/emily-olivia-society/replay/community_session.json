@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 5,
+  "completed_reply_turns": 6,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -116,6 +116,15 @@
       "to_name": "Emily",
       "content": "Of course! I love running in the morning as well. It's my favorite workout routine.",
       "created_at": "2026-09-24T13:31:43.021462+00:00"
+    },
+    {
+      "id": 7,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "I'm glad to hear you enjoy running. It's important for me to stay active and try out different workout routines. I've been trying to get into running recently, but I haven't found the right motivation yet.",
+      "created_at": "2026-09-24T13:34:03.247056+00:00"
     }
   ],
   "latest_turn": {
@@ -152,21 +161,108 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Sure, I like to start the day with a bit of exercise. What about you? Do you like running in the morning or do you prefer yoga or something more low-impact?",
+      "Emily observes a message from Olivia: Thank you for your input! As far as I know, that would be a great way to start the day!",
+      "Emily observes a message from Olivia: Of course! I love running in the morning as well. It's my favorite workout routine."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "8256622ff27512a90e93",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "7fababc8b51247b60e40",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "c5fce1d55dbf2102d9a1",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 5.0,
+        "stanford_created": 7,
+        "stanford_last_retrieved": 7,
+        "observed_time_step": 8
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "I'm glad to hear you enjoy running. It's important for me to stay active and try out different workout routines. I've been trying to get into running recently, but I haven't found the right motivation yet.",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Sure, I like to start the day with a bit of exercise. What about you? Do you like running in the morning or do you prefer yoga or something more low-impact?",
+        "Emily observes a message from Olivia: Thank you for your input! As far as I know, that would be a great way to start the day!",
+        "Emily observes a message from Olivia: Of course! I love running in the morning as well. It's my favorite workout routine."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "8256622ff27512a90e93",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "7fababc8b51247b60e40",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "c5fce1d55dbf2102d9a1",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 5.0,
+          "stanford_created": 7,
+          "stanford_last_retrieved": 7,
+          "observed_time_step": 8
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 7,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "I'm glad to hear you enjoy running. It's important for me to stay active and try out different workout routines. I've been trying to get into running recently, but I haven't found the right motivation yet.",
+        "created_at": "2026-09-24T13:34:03.247056+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"long_refractory_echo: Oh, that's awesome! What kind of exercise do you enjoy? I haven't even considered that option. Are you into running or yoga?\""
+    "external_generation_error": ""
   }
 }
