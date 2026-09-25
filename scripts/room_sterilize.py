@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,7 +11,7 @@ ROOM = ROOT / "room"
 SOCIETY = ROOT / "society"
 CONFIG = ROOM / "config.json"
 MARKER = ROOM / "sterilization.json"
-STERILIZATION_VERSION = 5
+STERILIZATION_VERSION = 6
 
 
 def load(path: Path, default):
@@ -59,22 +60,31 @@ def clean_subject_state() -> dict:
 def main() -> int:
     now = datetime.now(timezone.utc)
     stamp = now.isoformat().replace("+00:00", "Z")
-    clean_boot = "room-fresh-" + now.strftime("%Y%m%dT%H%M%S%fZ")
+    clean_boot = "room-reset-v6-" + now.strftime("%Y%m%dT%H%M%S%fZ")
 
     cfg = load(CONFIG, {})
     cfg["boot_id"] = clean_boot
     save(CONFIG, cfg)
 
     order = ["sarah", "mara", "owen", "jules"]
+    sleeping = {
+        str(entity).strip().lower()
+        for entity in (cfg.get("sleeping_entities") or [])
+        if str(entity).strip()
+    }
+    awake = [entity for entity in order if entity not in sleeping]
     profiles = cfg.get("p", {})
     minds = fresh_minds(order)
     subject_state = clean_subject_state()
+    subject_state["participants"] = awake + ["allen"]
     state = {
         "version": "room-cognition-v5", "boot_id": clean_boot, "cycle": 0,
         "silence_cycles": 0, "last_speaker": None, "last_run": stamp, "messages": 0,
         "last_public_event": None, "note": "fresh Room boot; prior conversation deleted",
         "last_beat_id": None, "beat_contributors": [], "beat_message_count": 0,
         "topic_episode": subject_state,
+        "sleeping_entities": sorted(sleeping),
+        "room_generation": int(cfg.get("room_generation", 6) or 6),
     }
     discourse = {"nodes": [], "roots": []}
 
@@ -83,7 +93,9 @@ def main() -> int:
         profile = profiles.get(entity, {})
         rels = minds["entities"][entity]["people"]
         summary_entities[entity] = {
-            "name": profile.get("name", entity.title()), "profile": profile,
+            "name": profile.get("name", entity.title()),
+            "status": "sleeping" if entity in sleeping else "awake",
+            "profile": profile,
             "genome": profile.get("traits", {}),
             "development": {"turns": 0, "spoken": 0, "silences": 0, "topic_weights": {},
                 "relationships": {other: {key: value for key, value in rel.items() if key in {
@@ -117,10 +129,11 @@ def main() -> int:
     save(SOCIETY / "state.json", {"sterilized": True, "boot_id": clean_boot, "at": stamp})
     save(SOCIETY / "live.json", live)
 
-    archive = SOCIETY / "archive"
-    if archive.exists():
-        for path in archive.rglob("*"):
-            if path.is_file(): path.unlink()
+    # Purge archived semantic/conversational reservoirs too. This resets what the
+    # Room can remember, not merely what the live viewer happens to show.
+    for archive in (ROOM / "archive", SOCIETY / "archive"):
+        if archive.exists():
+            shutil.rmtree(archive)
 
     for name in ("private-full-beat-diagnostic.json", "private-model-diagnostic.json", "private-secret-presence.json"):
         path = ROOM / name
@@ -130,7 +143,7 @@ def main() -> int:
         "sterilized_at": stamp, "policy": "Prior conversational and derived historical state deleted.",
         "reset": ["room conversation", "room discourse", "entity self histories", "entity room memories",
                   "relationship histories", "subject history", "live snapshots", "public feed",
-                  "legacy society state", "society archives", "diagnostic historical traces"]})
+                  "legacy society state", "room semantic archives", "society archives", "diagnostic historical traces"]})
     print(f"STERILIZED_V5 {clean_boot}")
     return 0
 
