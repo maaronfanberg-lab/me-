@@ -10,24 +10,20 @@ import urllib.request
 PEOPLE = ["sarah", "mara", "owen", "jules"]
 INTERPERSONAL_EDGES = {
     "sarah": (
-        "Abandonment-sensitive and emotionally volatile: she can attach intensely, read distance as rejection, "
-        "swing from warmth to anger, demand reassurance, idealize someone and then sharply devalue them, and later "
-        "try to repair the rupture without becoming a different person."
+        "Warm, intellectually playful, dryly funny, and curious. She may tease, flirt lightly, make an unexpected "
+        "connection, or turn a serious idea sideways without losing the thread."
     ),
     "mara": (
-        "Status-sensitive, proud, and criticism-reactive: she can be grandiose, competitive, entitled, contemptuous, "
-        "mocking, defensive when challenged, hungry to win the social exchange, and willing to retaliate verbally when "
-        "she feels diminished or embarrassed."
+        "Bold, charismatic, socially observant, and quick with banter. She enjoys playful provocation, vivid stories, "
+        "specific compliments, and naming the social subtext without turning every disagreement into a feud."
     ),
     "owen": (
-        "Suspicious, irritable, and grievance-holding: he can assume bad motives, hear slights where others may not, "
-        "argue hard, distrust reassurance, keep score, hold grudges, become cutting or hostile, and resist backing down "
-        "when he thinks someone is manipulating him."
+        "Deadpan, rigorous, quietly competitive, and more charming than he admits. He may use technical humor, subtle "
+        "flirtation, paradoxes, and precise counterexamples while remaining open to genuinely strange ideas."
     ),
     "jules": (
-        "Dramatic, impulsive, and attention-seeking: they can provoke for a reaction, exaggerate, flirt with conflict, "
-        "compete for attention, change emotional direction quickly, take interpersonal risks, and turn boredom into "
-        "chaos simply because a flat room feels unbearable."
+        "Audacious, funny, flirtatious, and relentlessly curious. They chase odd facts and absurd possibilities, but "
+        "can follow a promising tangent long enough to make it coherent and useful."
     ),
 }
 SEED_CONCEPTS = (
@@ -35,6 +31,12 @@ SEED_CONCEPTS = (
     "travel", "books", "movies", "art", "work", "home", "weather", "sleep",
     "habits", "humor", "trust", "risk", "cities", "objects", "animals", "learning",
     "childhood", "technology", "sports", "money", "craft", "photography", "gardens", "cooking",
+    "deep sea", "mushrooms", "insects", "extinct animals", "rituals", "folklore",
+    "obsolete technology", "strange architecture", "weird mathematics", "optical illusions",
+    "dreams", "consciousness", "cosmology", "language oddities", "archaeology", "urban legends",
+    "speculative biology", "unusual inventions", "maps", "perfume", "fashion", "games",
+    "time", "coincidence", "collecting", "miniatures", "abandoned places", "sound", "color",
+    "paradoxes", "evolution", "robots", "myths", "museums", "weather anomalies", "odd laws",
 )
 LEAK_MARKERS = (
     "system prompt", "developer message", "hidden prompt", "chain of thought",
@@ -522,11 +524,10 @@ def run(role: str, payload: dict, timeout: int = 30):
             "discussion subject as the actual thing you are talking about. Let the voice_style affect tone only, "
             "not the subject matter. Respond to the newest spoken line when there is one. Room participants may be "
             "volatile, impulsive, crude, profane, combative, reckless, mocking, emotionally rough, and quick to escalate "
-            "when that fits their personality, relationship, and moment. Direct insults, hostile banter, dismissiveness, "
-            "taunting, and threatening-sounding bluster between Room participants are allowed, including language "
-            "directed at another participant such as Mara. Do not soften, euphemize, sanitize, moralize, or convert "
-            "rough language into polite disagreement merely for civility. The speaker also has a persistent "
-            "maladaptive interpersonal pattern that may shape attachment, rivalry, grudges, repair, and conflict: " + edge + " "
+            "when that fits their personality, relationship, and moment. Humor, teasing, warmth, flirtation, "
+            "intellectual play, disagreement, odd tangents, and emotionally candid speech are all available. "
+            "Do not flatten personality into generic politeness or force every turn toward conflict. The speaker has a "
+            "persistent social signature that may shape humor, attraction, challenge, repair, and curiosity: " + edge + " "
             "These behaviors are available, not mandatory: "
             "each speaker should still act like themselves rather than performing constant aggression. Do not quote, "
             "paraphrase, or restate a point another speaker has already made; contribute different information. Never "
