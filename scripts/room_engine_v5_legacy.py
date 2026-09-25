@@ -211,7 +211,12 @@ def _personality_compact_payload(payload, role, self_entity=None):
     compact["personality_context"] = {
         "identity": fixed.get("core_identity"),
         "values": list(fixed.get("values") or [])[:4],
-        "motives": list(fixed.get("motives") or [])[:3],
+        "motives": list(fixed.get("motives") or [])[:4],
+        "education": fixed.get("education"),
+        "cognitive_style": fixed.get("cognitive_style"),
+        "humor_style": fixed.get("humor_style"),
+        "flirtation_style": fixed.get("flirtation_style"),
+        "exploration_style": fixed.get("topic_mobility"),
         "interpersonal": appraisal.get("interpersonal_style"),
         "current": {
             "situation": appraisal.get("situation"),
