@@ -10,7 +10,7 @@ SCHEMA = 9
 MAX_FACETS = 8
 MAX_HISTORY = 8
 MAX_RECENT_TERMS = 10
-MAX_EPISODE_UPDATES = 12
+MAX_EPISODE_UPDATES = 7
 MIN_FACET_SUPPORT = 2
 MIN_ROOT_SUPPORT = 2
 
@@ -431,7 +431,7 @@ def update_topic(topic: dict | None, messages, cycle: int) -> dict:
     next_turns = int(current.get("turns", 0) or 0) + 1
     hard_escape = next_turns >= MAX_EPISODE_UPDATES
     bridge_pending = bridge_pending or hard_escape
-    status = "ready_to_bridge" if bridge_pending or low_novelty >= 3 else "active"
+    status = "ready_to_bridge" if bridge_pending or low_novelty >= 2 else "active"
 
     current.update({
         "semantic_schema": SCHEMA,
