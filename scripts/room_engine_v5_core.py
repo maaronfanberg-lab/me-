@@ -46,8 +46,12 @@ CONVERSATION_JOBS = (
     "Make a comparison or unexpected connection that introduces a genuinely new direction.",
 )
 BREAKOUT_SUBJECTS = (
-    "music", "places", "food", "friendship", "nature", "travel", "books", "art",
-    "work", "home", "weather", "skills", "movies", "gardens", "photography", "humor",
+    "deep sea creatures", "lost technologies", "weird mathematics", "rituals", "folklore",
+    "speculative biology", "unusual architecture", "dreams", "consciousness", "language oddities",
+    "paradoxes", "extinct animals", "mushrooms", "insects", "cosmology", "optical illusions",
+    "archaeology", "strange maps", "urban legends", "sound", "color", "perfume", "games",
+    "unusual inventions", "abandoned places", "evolution", "robots", "myths", "miniatures",
+    "weather anomalies", "fashion", "collecting", "music", "food", "cities", "art", "nature",
 )
 
 
@@ -135,8 +139,12 @@ def breakout_subject(key):
     if alternatives:
         return min(alternatives, key=lambda term: (counts.get(term, 0), -recency.get(term, -1), term))
 
-    # Cold-start fallback remains tied to existing episode state; no invented noun.
-    return str(topic.get("current_facet") or topic.get("root") or "conversation").strip().lower()
+    # If the semantic field has genuinely collapsed, inject a deterministic curiosity
+    # seed instead of recycling the dead subject forever.
+    options = [subject for subject in BREAKOUT_SUBJECTS if not any(term in subject for term in active)]
+    if not options:
+        options = list(BREAKOUT_SUBJECTS)
+    return options[rr("breakout-subject", key).randrange(len(options))]
 
 
 def _simple_norm(text):
