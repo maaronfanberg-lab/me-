@@ -60,7 +60,7 @@ def clean_subject_state() -> dict:
 def main() -> int:
     now = datetime.now(timezone.utc)
     stamp = now.isoformat().replace("+00:00", "Z")
-    clean_boot = "room-reset-v6-" + now.strftime("%Y%m%dT%H%M%S%fZ")
+    clean_boot = "room-sterile-v4-" + now.strftime("%Y%m%dT%H%M%S%fZ")
 
     cfg = load(CONFIG, {})
     cfg["boot_id"] = clean_boot
