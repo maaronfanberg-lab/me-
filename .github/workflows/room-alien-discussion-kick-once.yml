@@ -7,36 +7,60 @@ on:
       - '.github/workflows/room-alien-discussion-kick-once.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   tell-room:
     runs-on: ubuntu-latest
     steps:
-      - name: Tell Sarah Mara and Owen the new discussion topic
-        env:
-          ROOM_URL: https://room-live-mirror.dfp6k69dw5.workers.dev/api/allen
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Inject Allen alien topic through normal Room participant path
+        shell: bash
         run: |
-          python3 - <<'PY'
-          import json, os, urllib.request
+          set -euo pipefail
+          cat > /tmp/make_inbox.py <<'PY'
+          import json, uuid
+          from datetime import datetime, timezone
           text = (
-              "Sarah, Mara, Owen: I want you to talk together about a specific question now. "
-              "If intelligent life evolved on a world very different from Earth, what might it actually look like, "
-              "and how might it communicate if its senses, body, environment, and social organization were unlike ours? "
-              "Consider things like gravity, atmosphere, oceans, light, vibration, chemistry, touch, distributed bodies, "
-              "and whether communication would even resemble language. Challenge each other's ideas and follow whatever "
-              "possibilities you find interesting. This is just a topic to explore together. There is no hidden rule or "
-              "answer to figure out. Don't analyze the assignment. Start discussing the aliens."
+              "Sarah, Mara, Owen: discuss this together now. If intelligent alien life evolved on a world very different "
+              "from Earth, what might it actually look like, and how might it communicate if its senses, body, environment, "
+              "or social organization were unlike ours? Consider gravity, atmosphere, oceans, light, vibration, chemistry, "
+              "touch, distributed bodies, and communication unlike language. Challenge each other's ideas. There is no "
+              "hidden rule or correct answer to figure out. Don't analyze the assignment. Start discussing the aliens."
           )
-          req = urllib.request.Request(
-              os.environ["ROOM_URL"],
-              data=json.dumps({"text": text}).encode(),
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
-          with urllib.request.urlopen(req, timeout=20) as response:
-              body = response.read().decode("utf-8", "replace")
-              print(response.status, body)
-              if response.status != 202:
-                  raise SystemExit(f"unexpected status {response.status}")
+          assert len(text) <= 700, len(text)
+          payload={"messages":[{
+              "id":"alien-topic-"+str(uuid.uuid4()),
+              "speaker":"allen",
+              "text":text,
+              "at":datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+          }]}
+          open("/tmp/alien-inbox.json","w").write(json.dumps(payload))
           PY
+
+          git config user.name "room-topic-kick"
+          git config user.email "actions@users.noreply.github.com"
+
+          for attempt in 1 2 3 4 5 6; do
+            git fetch origin main
+            git reset --hard origin/main
+            python3 /tmp/make_inbox.py
+            PYTHONPATH=scripts python3 scripts/room_participant.py /tmp/alien-inbox.json /tmp/alien-ack.json
+            python3 - <<'PY'
+          import json
+          ack=json.load(open("/tmp/alien-ack.json"))
+          assert len(ack.get("ids") or []) == 1, ack
+          print("Allen alien topic injected:", ack["ids"][0])
+          PY
+            git add room/conversation.json room/discourse.json room/cognitive_state.json
+            git commit -m "Inject Allen alien-life discussion topic"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep "$attempt"
+          done
+          exit 1
