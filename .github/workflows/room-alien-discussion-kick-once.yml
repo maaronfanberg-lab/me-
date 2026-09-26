@@ -1,0 +1,42 @@
+name: Room alien discussion kick once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-alien-discussion-kick-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tell-room:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tell Sarah Mara and Owen the new discussion topic
+        env:
+          ROOM_URL: https://room-live-mirror.dfp6k69dw5.workers.dev/api/allen
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          text = (
+              "Sarah, Mara, Owen: I want you to talk together about a specific question now. "
+              "If intelligent life evolved on a world very different from Earth, what might it actually look like, "
+              "and how might it communicate if its senses, body, environment, and social organization were unlike ours? "
+              "Consider things like gravity, atmosphere, oceans, light, vibration, chemistry, touch, distributed bodies, "
+              "and whether communication would even resemble language. Challenge each other's ideas and follow whatever "
+              "possibilities you find interesting. This is just a topic to explore together. There is no hidden rule or "
+              "answer to figure out. Don't analyze the assignment. Start discussing the aliens."
+          )
+          req = urllib.request.Request(
+              os.environ["ROOM_URL"],
+              data=json.dumps({"text": text}).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=20) as response:
+              body = response.read().decode("utf-8", "replace")
+              print(response.status, body)
+              if response.status != 202:
+                  raise SystemExit(f"unexpected status {response.status}")
+          PY
