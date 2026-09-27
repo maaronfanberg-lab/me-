@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 5,
+  "completed_reply_turns": 6,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -116,6 +116,15 @@
       "to_name": "Emily",
       "content": "Oh, you have no idea. I loved the food and atmosphere! It was amazing!",
       "created_at": "2026-09-27T07:11:56.980416+00:00"
+    },
+    {
+      "id": 7,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, you have no idea! I've had the best time at the restaurant. You can see how excited and thrilled I am.",
+      "created_at": "2026-09-27T07:15:24.937308+00:00"
     }
   ],
   "latest_turn": {
@@ -152,21 +161,108 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Yeah, it was amazing! I loved the food and atmosphere. I definitely plan to go back soon!",
+      "Emily observes a message from Olivia: Yeah, it was amazing! What do you think about the food and atmosphere?",
+      "Emily observes a message from Olivia: Oh, you have no idea. I loved the food and atmosphere! It was amazing!"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "dd9d93ff788dbc958807",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 85.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "0d2b277b88bc544af426",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 8
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "ef5e385212ac7fb2f551",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 7,
+        "stanford_last_retrieved": 7,
+        "observed_time_step": 8
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh, you have no idea! I've had the best time at the restaurant. You can see how excited and thrilled I am.",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Yeah, it was amazing! I loved the food and atmosphere. I definitely plan to go back soon!",
+        "Emily observes a message from Olivia: Yeah, it was amazing! What do you think about the food and atmosphere?",
+        "Emily observes a message from Olivia: Oh, you have no idea. I loved the food and atmosphere! It was amazing!"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "dd9d93ff788dbc958807",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 85.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "0d2b277b88bc544af426",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 8
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "ef5e385212ac7fb2f551",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 7,
+          "stanford_last_retrieved": 7,
+          "observed_time_step": 8
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 7,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, you have no idea! I've had the best time at the restaurant. You can see how excited and thrilled I am.",
+        "created_at": "2026-09-27T07:15:24.937308+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"role_swapped_personal_fact: Oh, you have no idea. I know that you enjoyed the food and atmosphere! You'll have an amazing time here.\""
+    "external_generation_error": ""
   }
 }
