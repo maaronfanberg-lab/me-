@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#050608">
+<title>OMEF FULL — Total-State Attractor</title>
+<style>
+:root{--bg:#030405;--panel:#090b0f;--panel2:#11151c;--line:#222832;--text:#f4f2eb;--muted:#8e98a7;--accent:#d8c68d;--stage:#010203}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{min-height:100svh;overflow-x:hidden}
+.app{max-width:1100px;margin:auto;min-height:100svh;padding:0}
+header{display:none}
+.stage{position:relative;height:calc(100svh - 88px);min-height:480px;max-height:900px;background:radial-gradient(circle at 50% 44%,#090b0f 0,#030405 48%,#010203 100%);overflow:hidden;border:0}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.hud{position:absolute;left:18px;top:max(18px,env(safe-area-inset-top));width:8px;height:8px;padding:0;border:0;border-radius:999px;background:rgba(216,198,141,.88);box-shadow:0 0 18px rgba(216,198,141,.72);overflow:hidden;font-size:0;color:transparent}
+.hud *{display:none}
+.focus,.tune{position:absolute;top:max(14px,env(safe-area-inset-top));width:48px;height:48px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.13);border-radius:999px;background:rgba(7,9,12,.68);color:#f7f4ec;font:700 22px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 8px 30px rgba(0,0,0,.28);cursor:pointer;z-index:5}
+.focus{right:14px}
+.tune{right:72px}
+#panelToggle{position:absolute;opacity:0;pointer-events:none}
+.panel{margin:0;border:0;border-top:1px solid var(--line);border-radius:24px 24px 0 0;background:linear-gradient(180deg,rgba(14,17,23,.98),rgba(6,8,11,.99));overflow:hidden;box-shadow:0 -18px 60px rgba(0,0,0,.25)}
+.section{padding:14px 16px;border-bottom:1px solid var(--line)}
+.section:last-child{border-bottom:0}
+.section h2{display:none}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+button,select,input{font:inherit}
+button{border:1px solid rgba(255,255,255,.10);border-radius:16px;background:#151a22;color:var(--text);padding:11px;font-weight:760;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.025)}
+button.primary{background:var(--accent);color:#111;border-color:var(--accent)}
+button.active{outline:1px solid var(--accent)}
+.dock{padding:12px 14px calc(12px + env(safe-area-inset-bottom))}
+.dock .grid3 button{min-height:62px;font-size:29px;line-height:1}
+.dock .row{display:none}
+#panelToggle:not(:checked)+.panel .section:not(.dock){display:none}
+#panelToggle:checked+.panel{max-height:68svh;overflow:auto;-webkit-overflow-scrolling:touch}
+#panelToggle:checked+.panel .section{display:block}
+#panelToggle:checked+.panel .dock .row{display:grid}
+#panelToggle:checked+.panel .dock .grid3 button{min-height:48px;font-size:21px}
+.row{display:grid;grid-template-columns:108px 1fr 48px;gap:9px;align-items:center;margin:10px 0}
+.row label{color:var(--muted);font-size:12px}
+.value{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;color:#cfd5df}
+.row input[type=range]{width:100%;accent-color:var(--accent)}
+.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.check{display:flex;align-items:center;gap:8px;color:#cfd5df;font-size:12px}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+.audit,.note{display:none!important}
+.tests{font:10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:#8bd9bd;white-space:pre-wrap;max-height:180px;overflow:auto}
+.warn{color:#e7bc83}
+body.focusMode{overflow:hidden}
+body.focusMode header,body.focusMode .panel,body.focusMode .tune,body.focusMode #panelToggle{display:none}
+body.focusMode .stage{position:fixed;inset:0;width:100vw;height:100svh;max-height:none;aspect-ratio:auto;z-index:999}
+.focusMode .focus{z-index:1000}
+@media(max-width:700px){
+  .stage{height:calc(100svh - 86px);min-height:430px;max-height:none}
+  .focus,.tune{top:max(12px,env(safe-area-inset-top));width:44px;height:44px;font-size:20px}
+  .focus{right:12px}.tune{right:64px}
+  .hud{left:14px;top:max(16px,env(safe-area-inset-top))}
+  .section{padding:13px 12px}
+  .dock{padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+  .dock .grid3 button{min-height:58px}
+  .row{grid-template-columns:86px 1fr 42px;gap:8px}
+  .checks{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body data-selftest="PENDING">
+<div class="app">
+<header aria-hidden="true"></header>
+<div class="stage"><canvas id="cv" width="1400" height="1400"></canvas><div class="hud" id="hud" aria-live="polite"><b>building organism…</b></div><button class="focus" id="focus" aria-label="Focus" title="Focus">⤢</button><label class="tune" for="panelToggle" aria-label="Controls" title="Controls">⌁</label></div>
+<input type="checkbox" id="panelToggle" aria-label="Show controls">
+<div class="panel">
+<div class="section dock"><h2>Organism</h2><div class="grid3"><button class="primary" id="regen" aria-label="Regenerate" title="Regenerate">↻</button><button id="mutate" aria-label="Mutate species" title="Mutate species">✦</button><button id="fold" aria-label="Unfold" title="Unfold">◇</button></div><div class="row"><label>Orbit density</label><input id="density" type="range" min="4000" max="26000" step="1000" value="14000"><div class="value" id="densityV">14K</div></div><div class="row"><label>Projection</label><input id="projection" type="range" min="0" max="100" value="53"><div class="value" id="projectionV">53</div></div><div class="row"><label>Regime space</label><input id="regimeSpace" type="range" min="0" max="100" value="68"><div class="value" id="regimeSpaceV">68</div></div></div>
+<div class="section"><h2>Formula geometry</h2><div class="row"><label>Particles</label><input id="particles" type="range" min="0" max="100" value="58"><div class="value" id="particlesV">58</div></div><div class="row"><label>Golden braids</label><input id="braids" type="range" min="0" max="100" value="72"><div class="value" id="braidsV">72</div></div><div class="row"><label>Fibonacci memory</label><input id="memory" type="range" min="0" max="100" value="63"><div class="value" id="memoryV">63</div></div><div class="row"><label>Coupling tissue</label><input id="tissue" type="range" min="0" max="100" value="56"><div class="value" id="tissueV">56</div></div><div class="row"><label>Correction ghosts</label><input id="ghosts" type="range" min="0" max="100" value="49"><div class="value" id="ghostsV">49</div></div><div class="checks" id="checks"></div></div>
+<div class="section"><div class="grid"><button id="save" aria-label="Save image" title="Save image">⇩</button><button id="testsBtn" aria-label="Run self-check" title="Run self-check">✓</button></div><div class="tests" id="tests"></div></div>
+</div></div>
+<script>
+(function(){"use strict";
+const TAU=Math.PI*2, PHI=(1+Math.sqrt(5))/2;
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d',{alpha:false});
+const hud=document.getElementById('hud'), testsEl=document.getElementById('tests');
+const params={density:14000,projection:.53,regimeSpace:.68,particles:.58,braids:.72,memory:.63,tissue:.56,ghosts:.49};
+let seed=14, unfolded=false, records=[], stopped=false;
+const ORGAN=['rates','money','debt','production','fiscal','labor','inflation','stress','growth','hidden strain'];
+const REGIME=['Expansion','Inflation / Rate Stress','Credit / Market Stress','Recession / Contraction'];
+const U0=[.044664,-.253966,-.014980,-.463764,.652854,.189435,2.207535,.488329,.025189,.203578];
+const OMEGA_U=[.1954,.0681,.0914,.0687,.0733,.1093,.0603,.0554,.2302,.0480];
+const BETA_REC=[-.2855,.0666,-.0688,-.0043,.0910,-.0051,-.0706,-.0698,-.2840,.0542];
+const BETA_EQ=[.0927,-.0708,.0970,-.1468,-.0411,-.2242,.0353,.0176,.2458,-.0288];
+const BETA_REL=[-.1348,-.0670,-.1536,.1008,.0893,-.1885,-.0842,-.0958,-.0140,-.0718];
+const FIB=[1,1,2,3,5,8,13,21], FIBW=[.304611,.304611,.152306,.101537,.0609222,.0380764,.0234316,.0145053];
+const TSHORT=[18,30,48,18,30,48,18,30,48], TLONG=[29,49,78,29,49,78,29,49,78];
+const RHOS=[.94,.93,.92,.95,.91,.96,.93,.92,.94], RHOL=[.978,.972,.968,.981,.965,.984,.973,.969,.976];
+const LAYERS=[['core','Total-state trail'],['regime','Regime topology'],['particle','Particle geometry'],['braid','Golden-cycle braids'],['memory','Fibonacci memory'],['tissue','Coupling membranes'],['ghost','Correction ghosts'],['frames','Local deformation']];
+const layerOn={core:true,regime:true,particle:true,braid:true,memory:true,tissue:true,ghost:true,frames:true};
+function clamp(x,a=-1,b=1){return Math.max(a,Math.min(b,x))} function sigmoid(x){return 1/(1+Math.exp(-x))}
+function softmax(a){let m=Math.max(...a),e=a.map(x=>Math.exp(x-m)),s=e.reduce((p,c)=>p+c,0);return e.map(x=>x/s)}
+function dot(a,b){let s=0;for(let i=0;i<Math.min(a.length,b.length);i++)s+=a[i]*b[i];return s}
+function hash01(n){let x=Math.sin(n*12.9898+seed*78.233)*43758.5453;return x-Math.floor(x)}
+function signed(n){return hash01(n)*2-1}
+function argmax(a){let k=0;for(let i=1;i<a.length;i++)if(a[i]>a[k])k=i;return k}
+function avg(a){return a.reduce((p,c)=>p+c,0)/(a.length||1)}
+function stateVector(s){return s.U.concat(s.S,s.Z,s.X,s.F,s.L,s.P,s.D)}
+function makePair(){let A=Array.from({length:10},()=>Array(10).fill(0));for(let i=0;i<10;i++)for(let j=0;j<10;j++)if(i!==j){let r=signed(100+i*17+j*31);A[i][j]=r*(.035+.06*hash01(200+i*19+j*7));}return A}
+function makeTriads(){let t=[];for(let n=0;n<24;n++){let i=n%10,j=(n*3+2)%10,k=(n*7+5)%10;if(j===i)j=(j+1)%10;if(k===i||k===j)k=(k+2)%10;t.push({i,j,k,w:signed(600+n)*(.012+.022*hash01(700+n))});}return t}
+let BASE_A=makePair(), TRIADS=makeTriads();
+function initState(){let Z=[];for(let i=0;i<9;i++){let a=TAU*hash01(800+i),b=TAU*hash01(900+i);Z.push(Math.cos(a),Math.sin(a),Math.cos(b),Math.sin(b));}
+ let X=Array.from({length:24},(_,i)=>.18*signed(1000+i)); let F=Array.from({length:8},(_,i)=>.12*signed(1100+i)); let L=Array(12).fill(0); let P=Array(21).fill(0); let D=Array(8).fill(0);
+ return {U:U0.map((x,i)=>clamp(x/2.4 + .035*signed(1200+i),-1.4,1.4)),S:[.22,.44,.18,.16],Z,X,F,L,P,D,hist:Array(24).fill(U0[9]/2.4),rawU:null,revision:.05,step:0,regime:1,lastRegime:1,resample:false,rawResidual:0,residual:0};}
+function outcomes(U){let prec=sigmoid(-1.18+4*dot(BETA_REC,U)),eq=dot(BETA_EQ,U),rel=dot(BETA_REL,U);return [prec,eq,rel]}
+function regimeProb(U,prev,out,X){let r=U[0],m=U[1],d=U[2],p=U[3],f=U[4],l=U[5],pi=U[6],s=U[7],g=U[8],h=U[9];let scores=[1.2*g+.75*p+.65*l+.2*m-.65*s-.45*h+.12*X[0],1.05*pi+.65*r+.48*s+.4*h-.2*g+.1*X[1],1.15*s+.7*d+.8*h-.35*m-.45*g+.12*X[2],-.95*g-.75*p-.65*l+.8*h+.72*out[0]+.12*X[3]];let q=softmax(scores);return q.map((v,i)=>.72*prev[i]+.28*v).map((v,_,a)=>v/a.reduce((x,y)=>x+y,0))}
+function accountingResidual(U){return .32*U[3]+.24*U[8]+.18*U[4]-.15*U[2]-.11*U[7]-.08*U[6];}
+function correctAccounting(raw){let res=accountingResidual(raw);let v=[0,0,-.15,.32,.18,0,-.08,-.11,.24,0],den=dot(v,v)+1e-6;let out=raw.map((x,i)=>clamp(x-res*v[i]/den*.72,-1.35,1.35));return {U:out,residual:accountingResidual(out),rawResidual:res}}
+function updateZ(Z,U,n){let out=Z.slice();for(let i=0;i<9;i++){let si=i*4,as=Math.atan2(Z[si+1],Z[si]),al=Math.atan2(Z[si+3],Z[si+2]);as+=TAU/TSHORT[i]+.006*U[i];al+=TAU/TLONG[i]+.0035*U[(i+3)%10];let rs=RHOS[i],rl=RHOL[i];out[si]=rs*Math.cos(as)+(1-rs)*Math.tanh(U[i]);out[si+1]=rs*Math.sin(as);out[si+2]=rl*Math.cos(al)+(1-rl)*Math.tanh(U[(i+1)%10]);out[si+3]=rl*Math.sin(al);}return out}
+function stepState(s){let n=s.step+1, outc=outcomes(s.U);let F=s.F.map((v,i)=>clamp(.91*v+.045*s.U[(i*3)%10]+.025*Math.sin(.013*n*(i+1)+seed),-1.2,1.2));
+ let X=s.X.map((v,i)=>clamp(Math.tanh(.91*v+.045*s.U[i%10]+.027*F[i%8]+.018*s.L[i%12]+.025*Math.sin(.017*n*(i+2)+seed*.3)),-1.2,1.2));
+ let S=regimeProb(s.U,s.S,outc,X), reg=argmax(S), Z=updateZ(s.Z,s.U,n); let rev=clamp(.88*s.revision+.1*Math.sin(.021*n+seed)+.08*X[7],-.6,.6);
+ let mem=0;for(let k=0;k<8;k++)mem+=FIBW[k]*(s.hist[k]||0);let pair=Array(10).fill(0),tri=Array(10).fill(0);for(let i=0;i<10;i++)for(let j=0;j<10;j++)if(i!==j){let gate=Math.abs(BASE_A[i][j])<.041?.15:1;pair[i]+=BASE_A[i][j]*gate*Math.tanh(s.U[j]);}
+ for(const t of TRIADS){let gate=Math.abs(t.w)<.017?.2:1;tri[t.i]+=t.w*gate*Math.tanh(s.U[t.j])*Math.tanh(s.U[t.k]);}
+ let osc=Array(10).fill(0);for(let i=0;i<9;i++)osc[i]=.045*(Z[i*4]+Z[i*4+2]);osc[9]=.018*avg(osc.slice(0,9));
+ let bias=[[0,.02,-.01,.035,-.005,.04,-.03,-.04,.06,-.03],[.055,-.01,.025,-.03,.025,-.02,.08,.05,-.04,.07],[.03,-.055,.065,-.04,.025,-.045,.025,.09,-.07,.095],[-.02,-.04,.06,-.09,.01,-.08,-.01,.07,-.1,.11]][reg];
+ let raw=s.U.map((u,i)=>{let driver=.03*X[(i*2)%24]+.02*F[i%8]+.014*s.L[i%12];return Math.tanh(.83*u+pair[i]+tri[i]+osc[i]+driver+bias[i]+.012*Math.sin(n*.011*(i+1)+seed));});
+ raw[9]=Math.tanh(.56*raw[9]+.20*mem+.28*s.U[7]+.22*s.U[2]+.17*s.U[4]+.14*s.U[6]-.10*s.U[8]-.05*s.U[1]+.04*rev);
+ let corr=correctAccounting(raw); let movement=Math.sqrt(corr.U.reduce((z,x,i)=>z+(x-s.U[i])**2,0)/10); let spread=avg(corr.U.map((x,i)=>(x-s.U[i])**2));
+ let spectral=clamp(1-(.58+.23*avg(corr.U.map(Math.abs))+.12*Math.abs(pair[7])+.06*Math.abs(rev)),.05,.95); let connectivity=clamp(1-avg(BASE_A.flat().map(Math.abs))*5+.15*Math.cos(n*.004),0,1); let rank=clamp(3.2+6*(.4*movement+.6*(1-spectral)),1,10);
+ let uncertainty=clamp(.07+.5*spread+.12*Math.abs(corr.residual)+.09*(1-connectivity),.025,.65); let degeneracy=clamp(.055+.58*uncertainty+.08*Math.max(0,-spectral+.25),0,.82); let neff=5000*(1-degeneracy);
+ let humility=clamp(.38+1.25*uncertainty+.6*(1-spectral)+.25*Math.abs(rev)+.15*outc[0],.05,2.3), confidence=Math.exp(-humility); let resample=neff<2500;
+ let L=s.L.map((v,i)=>clamp(.86*v+.04*(corr.U[i%10]-s.U[i%10])+.025*rev*(i%2?1:-1)+.018*(S[i%4]-.25)+.012*Math.sin(n*.007*(i+1)),-1,1)); if(resample)L=L.map(v=>v*.82);
+ let P=corr.U.slice();for(let i=0;i<10;i++)P.push(Math.log(.03+uncertainty*(.35+.65*hash01(1500+i))));P.push(degeneracy);
+ let D=[confidence,humility,spectral,rank/10,movement,connectivity,Math.abs(rev),Math.abs(corr.residual)]; let hist=[corr.U[9]].concat(s.hist).slice(0,24);
+ return {U:corr.U,S,Z,X,F,L,P,D,hist,rawU:raw,revision:rev,step:n,regime:reg,lastRegime:s.regime,resample,rawResidual:corr.rawResidual,residual:corr.residual,outcomes:outc,mem};}
+const BLOCKS=[['U',0,10],['S',10,14],['Z',14,50],['X',50,74],['F',74,82],['L',82,94],['P',94,115],['D',115,123]];
+function projWeights(k,axis,twist){let a=(k+1)*(1.61803398875+twist*.013)+(axis+1)*2.41421356237+seed*.173;let v=Math.sin(a*1.77)+.63*Math.cos(a*.731)+.31*Math.sin(a*PHI*.43);return v===0?1e-6:v}
+function projectVector(v,twist=params.projection){let xyz=[0,0,0];for(let axis=0;axis<3;axis++){let sum=0,norm=0;for(const [name,a,b] of BLOCKS){let blockScale=1/Math.sqrt(b-a);for(let k=a;k<b;k++){let w=projWeights(k,axis,twist);sum+=v[k]*w*blockScale;norm+=Math.abs(w)*blockScale*.14;}}xyz[axis]=sum/(norm||1);}return xyz}
+const RANCHOR=[[1,0,.2],[-.5,.86,-.35],[-.55,-.78,.5],[.35,-.25,-.88]];
+function projectState(s){let p=projectVector(stateVector(s));let rs=params.regimeSpace*1.25;for(let j=0;j<4;j++){p[0]+=rs*s.S[j]*RANCHOR[j][0];p[1]+=rs*s.S[j]*RANCHOR[j][1];p[2]+=rs*s.S[j]*RANCHOR[j][2];}return p}
+function rawProject(s){if(!s.rawU)return projectState(s);let v=stateVector(s).slice();for(let i=0;i<10;i++)v[i]=s.rawU[i];let p=projectVector(v);let rs=params.regimeSpace*1.25;for(let j=0;j<4;j++){p[0]+=rs*s.S[j]*RANCHOR[j][0];p[1]+=rs*s.S[j]*RANCHOR[j][1];p[2]+=rs*s.S[j]*RANCHOR[j][2];}return p}
+function rotate3(p){let a=(params.projection-.5)*2.2,b=.46+(params.projection-.5)*.7;let ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);let x=p[0]*ca-p[2]*sa,z=p[0]*sa+p[2]*ca;return [x,p[1]*cb-z*sb,p[1]*sb+z*cb]}
+function buildOrbit(N=params.density){let s=initState(), arr=[], burn=900;let visited=new Set();for(let n=0;n<N+burn;n++){s=stepState(s);if(n>=burn){let p=rotate3(projectState(s)),rp=rotate3(rawProject(s));arr.push({x:p[0],y:p[1],z:p[2],rx:rp[0],ry:rp[1],U:s.U.slice(),S:s.S.slice(),reg:s.regime,last:s.lastRegime,Z:s.Z.slice(),D:s.D.slice(),mem:s.mem||0,residual:s.residual,rawResidual:s.rawResidual,resample:s.resample,outcomes:s.outcomes.slice()});visited.add(s.regime);}}
+ arr.visited=visited;records=arr;return arr}
+function bounds(arr){let xs=arr.map(p=>p.x),ys=arr.map(p=>p.y);let minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys),pad=.06*Math.max(maxx-minx,maxy-miny);return [minx-pad,maxx+pad,miny-pad,maxy+pad]}
+function screenMap(B){let [minx,maxx,miny,maxy]=B,w=cv.width,h=cv.height,s=.92*Math.min(w/(maxx-minx||1),h/(maxy-miny||1)),ox=w/2-s*(minx+maxx)/2,oy=h/2+s*(miny+maxy)/2;return (x,y)=>[ox+x*s,oy-y*s]}
+function clear(){ctx.fillStyle='#020304';ctx.fillRect(0,0,cv.width,cv.height)}
+function drawCore(map){ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineWidth=1.05;ctx.strokeStyle='rgba(232,236,240,.075)';ctx.beginPath();for(let i=0;i<records.length;i++){let p=map(records[i].x,records[i].y);if(i===0)ctx.moveTo(p[0],p[1]);else ctx.lineTo(p[0],p[1]);}ctx.stroke();ctx.fillStyle='rgba(246,244,235,.27)';let skip=Math.max(1,Math.floor(records.length/9500));for(let i=0;i<records.length;i+=skip){let p=map(records[i].x,records[i].y),a=.22+.42*records[i].D[0];ctx.globalAlpha=a;ctx.fillRect(p[0],p[1],.9,.9)}ctx.restore()}
+function drawRegime(map){let cent=Array.from({length:4},()=>[0,0,0]);for(const r of records){cent[r.reg][0]+=r.x;cent[r.reg][1]+=r.y;cent[r.reg][2]++}ctx.save();ctx.globalCompositeOperation='screen';for(let j=0;j<4;j++){if(!cent[j][2])continue;let c=map(cent[j][0]/cent[j][2],cent[j][1]/cent[j][2]);let rad=55+params.regimeSpace*80;let g=ctx.createRadialGradient(c[0],c[1],0,c[0],c[1],rad);g.addColorStop(0,'rgba(220,225,230,.025)');g.addColorStop(1,'rgba(220,225,230,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(c[0],c[1],rad,0,TAU);ctx.fill();}ctx.strokeStyle='rgba(245,219,155,.19)';ctx.lineWidth=1.1;for(let i=1;i<records.length;i++)if(records[i].reg!==records[i-1].reg){let p=map(records[i].x,records[i].y);ctx.beginPath();ctx.arc(p[0],p[1],5+9*params.regimeSpace,0,TAU);ctx.stroke();}ctx.restore()}
+function drawParticles(map){if(params.particles<=.001)return;ctx.save();ctx.globalCompositeOperation='screen';let stride=Math.max(9,Math.floor(records.length/850));for(let i=0;i<records.length;i+=stride){let r=records[i],c=map(r.x,r.y),u=.7+5.5*(1-r.D[0])*params.particles;let ang=(i*.618+seed)*2.1,co=Math.cos(ang),si=Math.sin(ang);for(let k=0;k<5;k++){let rr=u*(.35+.16*k),a=ang+k*2.399,dx=Math.cos(a)*rr*(1+.8*(1-r.D[2])),dy=Math.sin(a)*rr*.6;ctx.fillStyle='rgba(205,220,231,'+(0.025+.035*(1-r.D[0]))+')';ctx.beginPath();ctx.arc(c[0]+dx*co-dy*si,c[1]+dx*si+dy*co,.7+(k===0?.4:0),0,TAU);ctx.fill();}}ctx.restore()}
+function drawBraids(map){if(params.braids<=.001)return;ctx.save();ctx.globalCompositeOperation='screen';let paths=[[],[],[]];let stride=Math.max(1,Math.floor(records.length/7000));for(let i=2;i<records.length-2;i+=stride){let r=records[i],p=map(r.x,r.y),pa=map(records[i-2].x,records[i-2].y),pb=map(records[i+2].x,records[i+2].y),dx=pb[0]-pa[0],dy=pb[1]-pa[1],ll=Math.hypot(dx,dy)||1,nx=-dy/ll,ny=dx/ll;for(let b=0;b<3;b++){let z=r.Z[(b*3)%36]+.7*r.Z[(b*3+2)%36];let off=z*(2.8+6.5*params.braids);paths[b].push([p[0]+nx*off,p[1]+ny*off]);}}
+ for(let b=0;b<3;b++){ctx.strokeStyle='rgba('+(220+b*7)+','+(226+b*4)+','+(232-b*3)+','+(0.055+.025*b)+')';ctx.lineWidth=.72+.2*b;ctx.beginPath();paths[b].forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();}ctx.restore()}
+function drawMemory(map){if(params.memory<=.001)return;ctx.save();ctx.globalCompositeOperation='screen';for(let k=2;k<FIB.length;k++){let lag=FIB[k]*17,alpha=.016+.035*FIBW[k]/FIBW[2];ctx.strokeStyle='rgba(215,205,183,'+alpha*params.memory+')';ctx.lineWidth=.55;ctx.beginPath();let started=false;for(let i=lag;i<records.length;i+=Math.max(9,Math.floor(records.length/950))){let a=records[i],b=records[i-lag],p=map((a.x+b.x)*.5,(a.y+b.y)*.5);if(!started){ctx.moveTo(p[0],p[1]);started=true}else ctx.lineTo(p[0],p[1]);}ctx.stroke();}ctx.restore()}
+function anchorFor(r,i,map){let c=map(r.x,r.y),a=TAU*i/10+.23*Math.sin(r.U[i]*2+i),rad=8+17*Math.abs(r.U[i])*(.45+params.tissue);return [c[0]+Math.cos(a)*rad,c[1]+Math.sin(a)*rad]}
+function drawTissue(map){if(params.tissue<=.001)return;ctx.save();ctx.globalCompositeOperation='screen';let stride=Math.max(170,Math.floor(records.length/36));for(let n=0;n<records.length;n+=stride){let r=records[n],anchors=Array.from({length:10},(_,i)=>anchorFor(r,i,map));let edges=[];for(let i=0;i<10;i++)for(let j=i+1;j<10;j++){let w=Math.abs(BASE_A[i][j])+Math.abs(BASE_A[j][i]);edges.push([w,i,j]);}edges.sort((a,b)=>b[0]-a[0]);ctx.strokeStyle='rgba(224,229,232,'+(0.045+.07*params.tissue)+')';ctx.lineWidth=.55;for(let e=0;e<10;e++){let [,i,j]=edges[e];ctx.beginPath();ctx.moveTo(...anchors[i]);ctx.lineTo(...anchors[j]);ctx.stroke();}
+ ctx.fillStyle='rgba(208,217,222,'+(0.012+.025*params.tissue)+')';for(let q=0;q<TRIADS.length;q+=5){let t=TRIADS[q],strength=Math.abs(t.w*Math.tanh(r.U[t.j])*Math.tanh(r.U[t.k]));if(strength<.002)continue;ctx.beginPath();ctx.moveTo(...anchors[t.i]);ctx.lineTo(...anchors[t.j]);ctx.lineTo(...anchors[t.k]);ctx.closePath();ctx.fill();}}
+ ctx.restore()}
+function drawGhosts(map){if(params.ghosts<=.001)return;ctx.save();ctx.globalCompositeOperation='screen';let stride=Math.max(20,Math.floor(records.length/600));ctx.strokeStyle='rgba(245,198,180,'+(0.035+.07*params.ghosts)+')';ctx.fillStyle='rgba(245,198,180,'+(0.06+.1*params.ghosts)+')';for(let i=0;i<records.length;i+=stride){let r=records[i];if(Math.abs(r.rawResidual)<.025)continue;let a=map(r.rx,r.ry),b=map(r.x,r.y);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.fillRect(a[0]-1,a[1]-1,2,2)}ctx.restore()}
+function drawFrames(map){ctx.save();ctx.globalCompositeOperation='screen';let stride=Math.max(55,Math.floor(records.length/260));for(let i=2;i<records.length-2;i+=stride){let r=records[i],c=map(r.x,r.y),a=map(records[i-2].x,records[i-2].y),b=map(records[i+2].x,records[i+2].y),dx=b[0]-a[0],dy=b[1]-a[1],ll=Math.hypot(dx,dy)||1,tx=dx/ll,ty=dy/ll,nx=-ty,ny=tx;let stretch=3+11*(1-r.D[2]),width=1+5*r.D[3];ctx.strokeStyle='rgba(214,224,233,'+(0.025+.04*(1-r.D[0]))+')';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(c[0]-tx*stretch,c[1]-ty*stretch);ctx.lineTo(c[0]+tx*stretch,c[1]+ty*stretch);ctx.moveTo(c[0]-nx*width,c[1]-ny*width);ctx.lineTo(c[0]+nx*width,c[1]+ny*width);ctx.stroke();}ctx.restore()}
+function render(){if(!records.length)return;clear();let B=bounds(records),map=screenMap(B);if(unfolded){let original=records.map(r=>[r.x,r.y]);let shifts={core:0,regime:-.42,particle:-.28,braid:-.14,memory:.0,tissue:.14,ghost:.28,frames:.42};let layers=['regime','particle','braid','memory','tissue','ghost','frames'];for(const key of layers){for(let i=0;i<records.length;i++)records[i].y=original[i][1]+shifts[key]*(B[3]-B[2]);({regime:drawRegime,particle:drawParticles,braid:drawBraids,memory:drawMemory,tissue:drawTissue,ghost:drawGhosts,frames:drawFrames}[key])(map);for(let i=0;i<records.length;i++)records[i].y=original[i][1];}drawCore(map);}else{if(layerOn.regime)drawRegime(map);if(layerOn.particle)drawParticles(map);if(layerOn.memory)drawMemory(map);if(layerOn.braid)drawBraids(map);if(layerOn.tissue)drawTissue(map);if(layerOn.ghost)drawGhosts(map);if(layerOn.frames)drawFrames(map);if(layerOn.core)drawCore(map);}updateHud()}
+function updateHud(){let last=records[records.length-1],visited=records.visited?records.visited.size:new Set(records.map(r=>r.reg)).size;hud.innerHTML='<b>OMEF FULL</b><br><span>123-D → 3-D → 2-D · '+records.length.toLocaleString()+' states<br>'+REGIME[last.reg]+' · '+visited+' regimes visited<br>confidence '+last.D[0].toFixed(3)+' · spectral margin '+last.D[2].toFixed(3)+'<br>particle degeneracy '+(1-last.D[0]).toFixed(3)+' · memory '+last.mem.toFixed(3)+'</span>'}
+function primitiveCounts(){let c={core:records.length,regime:0,particle:0,braid:0,memory:0,tissue:0,ghost:0,frames:0};for(let i=1;i<records.length;i++)if(records[i].reg!==records[i-1].reg)c.regime++;c.particle=Math.floor(records.length/Math.max(9,Math.floor(records.length/850)))*5;c.braid=3*Math.floor(records.length/Math.max(1,Math.floor(records.length/7000)));c.memory=6*Math.floor(records.length/Math.max(9,Math.floor(records.length/950)));c.tissue=Math.floor(records.length/Math.max(170,Math.floor(records.length/36)));c.ghost=records.filter((r,i)=>i%Math.max(20,Math.floor(records.length/600))===0&&Math.abs(r.rawResidual)>=.025).length;c.frames=Math.floor(records.length/Math.max(55,Math.floor(records.length/260)));return c}
+function runTests(verbose=true){let out=[],ok=true;function T(name,cond,detail=''){out.push((cond?'PASS ':'FAIL ')+name+(detail?' · '+detail:''));if(!cond)ok=false}
+ let s=initState();T('state vector = 123 dimensions',stateVector(s).length===123,String(stateVector(s).length));T('block anatomy sums to 123',BLOCKS.reduce((z,b)=>z+b[2]-b[1],0)===123);let finite=true,bounded=true,qok=true,resBetter=true;let regimes=new Set();for(let n=0;n<1800;n++){s=stepState(s);finite=finite&&stateVector(s).every(Number.isFinite);bounded=bounded&&s.U.every(x=>Math.abs(x)<=1.351);qok=qok&&s.S.every(x=>x>=0&&x<=1)&&Math.abs(s.S.reduce((a,b)=>a+b,0)-1)<1e-6;resBetter=resBetter&&Math.abs(s.residual)<=Math.abs(s.rawResidual)+1e-6;regimes.add(s.regime)}T('1800-step finite-state run',finite);T('organ state remains bounded',bounded);T('regime probabilities normalized',qok);T('accounting correction never worsens residual',resBetter);T('golden-cycle block = 36 coordinates',s.Z.length===36);T('particle-moment block = 21 coordinates',s.P.length===21);T('diagnostics block = 8 coordinates',s.D.length===8);T('particle degeneracy bounded',s.P[20]>=0&&s.P[20]<=1,s.P[20].toFixed(3));T('multiple regime basins reached',regimes.size>=2,String(regimes.size));
+ let v=stateVector(s),base=projectVector(v),allInfluence=true;for(const [name,a,b] of BLOCKS){let vv=v.slice();for(let i=a;i<b;i++)vv[i]=0;let p=projectVector(vv),d=Math.hypot(p[0]-base[0],p[1]-base[1],p[2]-base[2]);if(d<1e-8)allInfluence=false;}T('all eight OMEF blocks influence projection',allInfluence);let nonzero=true;for(let k=0;k<123;k++)for(let ax=0;ax<3;ax++)if(Math.abs(projWeights(k,ax,params.projection))<1e-12)nonzero=false;T('all 123 coordinates have non-zero projection routes',nonzero);
+ if(!records.length)buildOrbit(Math.min(params.density,7000));let pc=primitiveCounts();T('core geometry emits primitives',pc.core>1000,String(pc.core));T('particle geometry emits primitives',pc.particle>100);T('golden braid geometry emits primitives',pc.braid>100);T('Fibonacci memory emits primitives',pc.memory>100);T('coupling tissue emits primitives',pc.tissue>5);T('correction ghosts emit primitives',pc.ghost>0,String(pc.ghost));T('local deformation frames emit primitives',pc.frames>10);T('rendered records are finite',records.every(r=>[r.x,r.y,r.z,r.rx,r.ry].every(Number.isFinite)));document.body.dataset.selftest=ok?'PASS':'FAIL';if(verbose)testsEl.textContent=out.join('\n')+'\n\n'+(ok?'ALL CHECKS PASSED':'CHECK FAILURE');return {ok,out,pc}}
+function rebuild(){testsEl.textContent='building…';buildOrbit(params.density);render();runTests(false);testsEl.textContent='state rebuilt · '+records.length.toLocaleString()+' projected states · self-check '+document.body.dataset.selftest}
+function bindSlider(id,key,fmt=v=>v){let el=document.getElementById(id),vo=document.getElementById(id+'V');el.addEventListener('input',()=>{let n=+el.value;params[key]=key==='density'?n:n/100;vo.textContent=key==='density'?Math.round(n/1000)+'K':n; if(key==='projection'||key==='regimeSpace'||key==='density')rebuild();else render()})}
+bindSlider('density','density');bindSlider('projection','projection');bindSlider('regimeSpace','regimeSpace');bindSlider('particles','particles');bindSlider('braids','braids');bindSlider('memory','memory');bindSlider('tissue','tissue');bindSlider('ghosts','ghosts');
+const checks=document.getElementById('checks');for(const [k,label] of LAYERS){let d=document.createElement('label');d.className='check';d.innerHTML='<input type="checkbox" '+(layerOn[k]?'checked':'')+' data-layer="'+k+'">'+label;checks.appendChild(d)}checks.addEventListener('change',e=>{if(e.target.dataset.layer){layerOn[e.target.dataset.layer]=e.target.checked;render()}});
+document.getElementById('regen').onclick=()=>rebuild();document.getElementById('mutate').onclick=()=>{seed=(seed+1)%997;BASE_A=makePair();TRIADS=makeTriads();rebuild()};document.getElementById('fold').onclick=e=>{unfolded=!unfolded;e.target.textContent=unfolded?'◆':'◇';e.target.setAttribute('aria-label',unfolded?'Fold':'Unfold');e.target.title=unfolded?'Fold':'Unfold';render()};document.getElementById('focus').onclick=e=>{document.body.classList.toggle('focusMode');let on=document.body.classList.contains('focusMode');e.target.textContent=on?'×':'⤢';e.target.setAttribute('aria-label',on?'Exit focus':'Focus');e.target.title=on?'Exit focus':'Focus'};document.getElementById('testsBtn').onclick=()=>runTests(true);document.getElementById('save').onclick=()=>{let a=document.createElement('a');a.download='OMEF_FULL_total_state_'+seed+'.png';a.href=cv.toDataURL('image/png');a.click()};
+let qs=new URLSearchParams(location.search),layer=+(qs.get('layer')||8);for(let i=layer;i<LAYERS.length;i++)layerOn[LAYERS[i][0]]=false;if(qs.has('fast'))params.density=5000;document.getElementById('density').value=params.density;document.getElementById('densityV').textContent=Math.round(params.density/1000)+'K';
+try{rebuild();let result=runTests(qs.has('selftest'));window.__OMEF_TEST__=result}catch(err){document.body.dataset.selftest='FAIL';testsEl.textContent='BOOT FAILURE\n'+(err&&err.stack||err);hud.innerHTML='<b>BOOT FAILURE</b><br><span>'+String(err)+'</span>';console.error(err)}
+
+/* OMEF FULL v2 sculpt + dynamics patch. Injected inside the base IIFE. */
+const sculpt={lens:'basin',lobes:.72,fold:.58,twist:.48,radial:.18,shear:0,aspect:1.0,phase:.72};
+const dyn={coupling:1.0,higher:1.0,regimePersistence:.72,cycleSpeed:1.0,cyclePersistence:1.0,memory:1.0,accounting:.72};
+const _pairRaw=()=>BASE_A.map(row=>row.slice());
+const _triRaw=()=>TRIADS.map(t=>({...t}));
+let PAIR_SOURCE=_pairRaw(), TRIAD_SOURCE=_triRaw();
+const TS0=TSHORT.slice(), TL0=TLONG.slice(), RS0=RHOS.slice(), RL0=RHOL.slice(), FW0=FIBW.slice();
+
+function applyDynamics(){
+  BASE_A=PAIR_SOURCE.map(row=>row.map(w=>w*dyn.coupling));
+  TRIADS=TRIAD_SOURCE.map(t=>({...t,w:t.w*dyn.higher}));
+  for(let i=0;i<TSHORT.length;i++) TSHORT[i]=TS0[i]/dyn.cycleSpeed;
+  for(let i=0;i<TLONG.length;i++) TLONG[i]=TL0[i]/dyn.cycleSpeed;
+  for(let i=0;i<RHOS.length;i++) RHOS[i]=clamp(1-(1-RS0[i])*dyn.cyclePersistence,.72,.998);
+  for(let i=0;i<RHOL.length;i++) RHOL[i]=clamp(1-(1-RL0[i])*dyn.cyclePersistence,.82,.999);
+  for(let i=0;i<FIBW.length;i++) FIBW[i]=FW0[i]*dyn.memory;
+}
+
+const _regimeProbBase=regimeProb;
+regimeProb=function(U,prev,out,X){
+  let r=U[0],m=U[1],d=U[2],p=U[3],f=U[4],l=U[5],pi=U[6],s=U[7],g=U[8],h=U[9];
+  let scores=[1.2*g+.75*p+.65*l+.2*m-.65*s-.45*h+.12*X[0],1.05*pi+.65*r+.48*s+.4*h-.2*g+.1*X[1],1.15*s+.7*d+.8*h-.35*m-.45*g+.12*X[2],-.95*g-.75*p-.65*l+.8*h+.72*out[0]+.12*X[3]];
+  let q=softmax(scores), keep=clamp(dyn.regimePersistence,.02,.985), fresh=1-keep;
+  let mix=q.map((v,i)=>keep*prev[i]+fresh*v), den=mix.reduce((a,b)=>a+b,0)||1;
+  return mix.map(v=>v/den);
+};
+correctAccounting=function(raw){
+  let res=accountingResidual(raw),v=[0,0,-.15,.32,.18,0,-.08,-.11,.24,0],den=dot(v,v)+1e-6;
+  let strength=clamp(dyn.accounting,0,1);
+  let out=raw.map((x,i)=>clamp(x-res*v[i]/den*strength,-1.35,1.35));
+  return {U:out,residual:accountingResidual(out),rawResidual:res};
+};
+
+function captureBase(){for(const r of records){r.__bx=r.x;r.__by=r.y;r.__bz=r.z;}}
+function regimeVector(r){let q=[0,0,0];for(let j=0;j<4;j++){q[0]+=r.S[j]*RANCHOR[j][0];q[1]+=r.S[j]*RANCHOR[j][1];q[2]+=r.S[j]*RANCHOR[j][2];}return q;}
+function sculptOne(r,i,N){
+  let x=r.__bx??r.x,y=r.__by??r.y,z=r.__bz??r.z;
+  const rv=regimeVector(r), stress=r.U[7]||0, growth=r.U[8]||0, hidden=r.U[9]||0, infl=r.U[6]||0;
+  const p1=Math.atan2(r.Z[1]||0,r.Z[0]||1),p2=Math.atan2(r.Z[5]||0,r.Z[4]||1),p3=Math.atan2(r.Z[9]||0,r.Z[8]||1);
+  const phase=p1+.55*p2+.32*p3, t=i/Math.max(1,N-1), conf=r.D[0]||0, spec=r.D[2]||0;
+  x+=sculpt.lobes*1.65*rv[0]; y+=sculpt.lobes*1.65*rv[1]; z+=sculpt.lobes*1.2*rv[2];
+  let rad=Math.hypot(x,y)+1e-6,ang=Math.atan2(y,x),warp=Math.exp(sculpt.radial*.72*Math.tanh(hidden+stress-growth+.3*infl));rad*=warp;x=rad*Math.cos(ang);y=rad*Math.sin(ang);
+  const fg=sculpt.fold;
+  x+=fg*.24*Math.sin(1.35*y-phase+2.2*infl)*(0.45+.2*Math.abs(y));
+  y+=fg*.42*Math.sin(1.55*x+sculpt.phase*phase+2.5*hidden)*(0.48+.18*Math.abs(x));
+  const ta=sculpt.twist*(1.05*z+.42*phase+.5*(r.mem||0))*2.2,ct=Math.cos(ta),st=Math.sin(ta);let xx=x*ct-y*st,yy=x*st+y*ct;x=xx;y=yy;
+  x+=sculpt.shear*.72*y+.18*sculpt.shear*z;y+=sculpt.shear*.18*z;
+  if(sculpt.lens==='ribbon'){
+    const u=.72*x+.28*z, width=.20*y+.26*(stress-growth), wave=sculpt.phase*phase+TAU*t*1.7;
+    x=u+.16*Math.sin(wave);y=width+.62*Math.sin(wave)*(0.38+.45*(1-conf));z=.3*z+.48*Math.cos(wave);
+  }else if(sculpt.lens==='shell'){
+    const currentRad=Math.hypot(x,y)+1e-6,currentAng=Math.atan2(y,x);
+    const rr=.72+.33*Math.tanh(currentRad)+.16*hidden+.10*(1-conf),theta=currentAng+sculpt.twist*phase+.45*rv[0],phi=.72*Math.tanh(z)+.34*phase+.30*rv[2];
+    x=rr*Math.cos(theta)*Math.cos(phi);y=rr*Math.sin(theta)*Math.cos(phi);z=rr*Math.sin(phi);
+  }else if(sculpt.lens==='knot'){
+    const currentAng=Math.atan2(y,x);
+    const th=currentAng+sculpt.twist*(phase+.8*t*TAU),ph=1.4*phase+TAU*t*(1.2+.55*sculpt.phase),R=1.0+.18*Math.tanh(hidden-stress),tube=.24+.16*(1-spec)+.10*Math.abs(growth);
+    x=(R+tube*Math.cos(ph))*Math.cos(2*th+.35*rv[0]);y=(R+tube*Math.cos(ph))*Math.sin(2*th+.35*rv[1]);z=tube*Math.sin(ph)+.22*z;
+  }else if(sculpt.lens==='filament'){
+    const u=.86*x+.22*z,ph=phase+TAU*t*(1.8+.8*sculpt.phase),amp=.18+.34*(1-conf)+.16*Math.abs(hidden);
+    x=u;y=.18*y+amp*Math.sin(ph);z=.18*z+amp*Math.cos(ph);
+  }else if(sculpt.lens==='membrane'){
+    const q=.42*Math.sin(phase+2.1*x)+.28*Math.sin(2.3*y-hidden*3)+.18*rv[2];
+    x=x+.35*q*sculpt.phase;y=y+.28*Math.sin(q*3+phase)*fg;z=.35*z+.65*q;
+  }
+  x*=sculpt.aspect;y/=Math.max(.28,sculpt.aspect);
+  return [x,y,z];
+}
+function applySculpt(){
+  if(!records.length)return;
+  for(let i=0;i<records.length;i++){let r=records[i],p=sculptOne(r,i,records.length);r.x=p[0];r.y=p[1];r.z=p[2];}
+  render();
+}
+function restoreBase(){for(const r of records){if(r.__bx!=null){r.x=r.__bx;r.y=r.__by;r.z=r.__bz;}}}
+function resculpt(){restoreBase();applySculpt();}
+function rebuildSculpt(){applyDynamics();rebuild();captureBase();applySculpt();runTests(false);}
+
+const style=document.createElement('style');style.textContent=`
+.sculptBox{background:linear-gradient(180deg,rgba(216,198,141,.055),transparent)}
+.sculptBox select{width:100%;background:#171c24;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:9px}
+.sculptBtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.micro{font-size:11px;color:var(--muted);line-height:1.4;margin-top:8px}
+`;
+document.head.appendChild(style);
+const organismSection=document.querySelector('.panel .section');
+const sec=document.createElement('div');sec.className='section sculptBox';sec.innerHTML=`<h2>Sculpt the organism</h2>
+<div class="row"><label>Topology lens</label><select id="shapeLens"><option value="basin">Regime basins</option><option value="ribbon">Phase ribbon</option><option value="shell">State shell</option><option value="knot">OMEF knot</option><option value="filament">Filament</option><option value="membrane">Interaction membrane</option></select><div class="value">MODE</div></div>
+<div class="row"><label>Lobe force</label><input id="shapeLobes" type="range" min="0" max="200" value="72"><div class="value" id="shapeLobesV">72</div></div>
+<div class="row"><label>Nonlinear fold</label><input id="shapeFold" type="range" min="0" max="200" value="58"><div class="value" id="shapeFoldV">58</div></div>
+<div class="row"><label>State twist</label><input id="shapeTwist" type="range" min="0" max="200" value="48"><div class="value" id="shapeTwistV">48</div></div>
+<div class="row"><label>Radial warp</label><input id="shapeRadial" type="range" min="-100" max="100" value="18"><div class="value" id="shapeRadialV">18</div></div>
+<div class="row"><label>Shear</label><input id="shapeShear" type="range" min="-100" max="100" value="0"><div class="value" id="shapeShearV">0</div></div>
+<div class="row"><label>Aspect</label><input id="shapeAspect" type="range" min="35" max="180" value="100"><div class="value" id="shapeAspectV">100</div></div>
+<div class="row"><label>Phase gain</label><input id="shapePhase" type="range" min="0" max="200" value="72"><div class="value" id="shapePhaseV">72</div></div>
+<div class="sculptBtns"><button id="shapeRandom">Wild shape</button><button id="shapeReset">Reset shape</button></div><div class="micro">These controls transform geometry with regime probabilities, organ state, golden-cycle phase, hidden strain, confidence and spectral state. They are not opacity controls.</div>`;
+organismSection.insertAdjacentElement('afterend',sec);
+const dynSec=document.createElement('div');dynSec.className='section';dynSec.innerHTML=`<h2>Change the mathematics</h2>
+<div class="row"><label>Pair coupling</label><input id="dynCoupling" type="range" min="0" max="220" value="100"><div class="value" id="dynCouplingV">100</div></div>
+<div class="row"><label>Higher-order</label><input id="dynHigher" type="range" min="0" max="260" value="100"><div class="value" id="dynHigherV">100</div></div>
+<div class="row"><label>Regime memory</label><input id="dynRegime" type="range" min="5" max="98" value="72"><div class="value" id="dynRegimeV">72</div></div>
+<div class="row"><label>Cycle speed</label><input id="dynCycle" type="range" min="35" max="240" value="100"><div class="value" id="dynCycleV">100</div></div>
+<div class="row"><label>Cycle persistence</label><input id="dynPersist" type="range" min="45" max="160" value="100"><div class="value" id="dynPersistV">100</div></div>
+<div class="row"><label>Fibonacci feedback</label><input id="dynMemory" type="range" min="0" max="260" value="100"><div class="value" id="dynMemoryV">100</div></div>
+<div class="row"><label>Accounting pull</label><input id="dynAccounting" type="range" min="0" max="100" value="72"><div class="value" id="dynAccountingV">72</div></div>
+<div class="micro">These rebuild the 123-D orbit. Pair and higher-order controls rescale OMEF interaction structure; cycle controls alter the paired golden oscillators; regime memory changes transition persistence; Fibonacci feedback changes hidden-strain memory; accounting pull changes projection back toward the constraint manifold.</div>`;
+sec.insertAdjacentElement('afterend',dynSec);
+
+function bindShape(id,key,scale=100){let el=document.getElementById(id),vo=document.getElementById(id+'V');el.addEventListener('input',()=>{sculpt[key]=+el.value/scale;vo.textContent=el.value;resculpt();});}
+bindShape('shapeLobes','lobes');bindShape('shapeFold','fold');bindShape('shapeTwist','twist');bindShape('shapeRadial','radial');bindShape('shapeShear','shear');bindShape('shapeAspect','aspect');bindShape('shapePhase','phase');
+document.getElementById('shapeLens').addEventListener('change',e=>{sculpt.lens=e.target.value;resculpt();});
+let dynTimer=0;function dynChange(id,key,scale=100){let el=document.getElementById(id),vo=document.getElementById(id+'V');el.addEventListener('input',()=>{dyn[key]=+el.value/scale;vo.textContent=el.value;clearTimeout(dynTimer);dynTimer=setTimeout(rebuildSculpt,140);});}
+dynChange('dynCoupling','coupling');dynChange('dynHigher','higher');dynChange('dynRegime','regimePersistence',100);dynChange('dynCycle','cycleSpeed');dynChange('dynPersist','cyclePersistence');dynChange('dynMemory','memory');dynChange('dynAccounting','accounting',100);
+
+document.getElementById('shapeReset').onclick=()=>{Object.assign(sculpt,{lens:'basin',lobes:.72,fold:.58,twist:.48,radial:.18,shear:0,aspect:1,phase:.72});document.getElementById('shapeLens').value='basin';[['shapeLobes',72],['shapeFold',58],['shapeTwist',48],['shapeRadial',18],['shapeShear',0],['shapeAspect',100],['shapePhase',72]].forEach(([id,v])=>{document.getElementById(id).value=v;document.getElementById(id+'V').textContent=v;});resculpt();};
+document.getElementById('shapeRandom').onclick=()=>{const lenses=['basin','ribbon','shell','knot','filament','membrane'];sculpt.lens=lenses[Math.floor(hash01(seed*41+records.length)*lenses.length)];sculpt.lobes=.15+1.65*hash01(seed*43+1);sculpt.fold=.15+1.65*hash01(seed*47+2);sculpt.twist=.1+1.8*hash01(seed*53+3);sculpt.radial=-.75+1.5*hash01(seed*59+4);sculpt.shear=-.65+1.3*hash01(seed*61+5);sculpt.aspect=.55+1.05*hash01(seed*67+6);sculpt.phase=.2+1.65*hash01(seed*71+7);document.getElementById('shapeLens').value=sculpt.lens;[['shapeLobes','lobes'],['shapeFold','fold'],['shapeTwist','twist'],['shapeRadial','radial'],['shapeShear','shear'],['shapeAspect','aspect'],['shapePhase','phase']].forEach(([id,k])=>{let mul=k==='aspect'?100:100,v=Math.round(sculpt[k]*mul);document.getElementById(id).value=v;document.getElementById(id+'V').textContent=v;});resculpt();};
+
+const oldMut=document.getElementById('mutate');oldMut.onclick=()=>{seed=(seed+1)%997;BASE_A=makePair();TRIADS=makeTriads();PAIR_SOURCE=_pairRaw();TRIAD_SOURCE=_triRaw();applyDynamics();rebuild();captureBase();applySculpt();};
+const oldReg=document.getElementById('regen');oldReg.onclick=()=>{seed=(seed+37)%997;rebuild();captureBase();applySculpt();};
+['density','projection','regimeSpace'].forEach(id=>document.getElementById(id).addEventListener('input',()=>setTimeout(()=>{captureBase();applySculpt();},0)));
+const detailHeading=[...document.querySelectorAll('.section h2')].find(h=>h.textContent==='Formula geometry');if(detailHeading)detailHeading.textContent='Detail layers (appearance only)';
+const densityEl=document.getElementById('density');densityEl.min='1500';densityEl.max='32000';
+if(!qs.has('fast')){params.density=7000;densityEl.value=7000;document.getElementById('densityV').textContent='7K';rebuild();}
+captureBase();applyDynamics();applySculpt();
+
+/* Strong-response detail renderer.
+   The original controls were technically connected, but most only nudged alpha or spacing,
+   which made 0→100 look nearly unchanged on a phone. Each slider below now controls several
+   visible dimensions at once while staying an appearance-only layer. */
+const detailGain=v=>v<=0?0:Math.pow(clamp(v,0,1),.72);
+
+drawParticles=function(map){
+  const g=detailGain(params.particles);if(!g)return;ctx.save();ctx.globalCompositeOperation='screen';
+  const target=160+Math.round(760*g),stride=Math.max(4,Math.floor(records.length/target)),cloud=2+Math.round(6*g);
+  for(let i=0;i<records.length;i+=stride){let r=records[i],c=map(r.x,r.y),unc=1-r.D[0],spread=(2+22*g)*(.45+1.25*unc),ang=(i*.618+seed)*2.1,co=Math.cos(ang),si=Math.sin(ang);
+    for(let k=0;k<cloud;k++){let rr=spread*(.18+.14*k),a=ang+k*2.399+i*.0017,dx=Math.cos(a)*rr*(1+.8*(1-r.D[2])),dy=Math.sin(a)*rr*(.45+.3*g),alpha=.018+.12*g*(.45+.55*unc);ctx.fillStyle='rgba(205,220,231,'+alpha+')';ctx.beginPath();ctx.arc(c[0]+dx*co-dy*si,c[1]+dx*si+dy*co,.45+1.15*g+(k===0?.35:0),0,TAU);ctx.fill();}
+  }ctx.restore();
+};
+
+drawBraids=function(map){
+  const g=detailGain(params.braids);if(!g)return;ctx.save();ctx.globalCompositeOperation='screen';
+  const count=1+Math.round(4*g),target=900+Math.round(1600*g),stride=Math.max(1,Math.floor(records.length/target)),paths=Array.from({length:count},()=>[]);
+  for(let i=2;i<records.length-2;i+=stride){let r=records[i],p=map(r.x,r.y),pa=map(records[i-2].x,records[i-2].y),pb=map(records[i+2].x,records[i+2].y),dx=pb[0]-pa[0],dy=pb[1]-pa[1],ll=Math.hypot(dx,dy)||1,nx=-dy/ll,ny=dx/ll;
+    for(let b=0;b<count;b++){let zi=(b*7)%36,z=r.Z[zi]+.7*r.Z[(zi+2)%36],wave=Math.sin(i*.017+b*1.7+seed*.13)*4*g,off=z*(3+24*g)+wave;paths[b].push([p[0]+nx*off,p[1]+ny*off]);}}
+  for(let b=0;b<count;b++){ctx.strokeStyle='rgba('+(218+b*5)+','+(224+b*4)+','+(234-b*2)+','+(.04+.20*g)+')';ctx.lineWidth=.55+1.45*g+.08*b;ctx.beginPath();paths[b].forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();}
+  ctx.restore();
+};
+
+drawMemory=function(map){
+  const g=detailGain(params.memory);if(!g)return;ctx.save();ctx.globalCompositeOperation='screen';
+  const first=Math.max(0,6-Math.round(5*g));
+  for(let k=first;k<FIB.length;k++){let lag=FIB[k]*(7+Math.round(14*(1-g))),weight=Math.pow((FIBW[k]||.01)/FIBW[0],.28),alpha=.025+.19*g*weight;ctx.strokeStyle='rgba(225,211,181,'+alpha+')';ctx.lineWidth=.45+1.05*g*weight;ctx.beginPath();let started=false,step=Math.max(5,Math.floor(records.length/(550+1350*g)));
+    for(let i=lag;i<records.length;i+=step){let a=records[i],b=records[i-lag],mix=.35+.3*Math.sin(i*.009+k),p=map(a.x*(1-mix)+b.x*mix,a.y*(1-mix)+b.y*mix);if(!started){ctx.moveTo(p[0],p[1]);started=true}else ctx.lineTo(p[0],p[1]);}ctx.stroke();}
+  ctx.restore();
+};
+
+drawTissue=function(map){
+  const g=detailGain(params.tissue);if(!g)return;ctx.save();ctx.globalCompositeOperation='screen';
+  const target=8+Math.round(34*g),stride=Math.max(95,Math.floor(records.length/target)),edgeCount=2+Math.round(24*g),triStep=Math.max(1,6-Math.round(5*g));
+  for(let n=0;n<records.length;n+=stride){let r=records[n],anchors=Array.from({length:10},(_,i)=>anchorFor(r,i,map)),edges=[];for(let i=0;i<10;i++)for(let j=i+1;j<10;j++){let w=Math.abs(BASE_A[i][j])+Math.abs(BASE_A[j][i]);edges.push([w,i,j]);}edges.sort((a,b)=>b[0]-a[0]);ctx.strokeStyle='rgba(224,229,232,'+(.025+.27*g)+')';ctx.lineWidth=.45+1.15*g;for(let e=0;e<Math.min(edgeCount,edges.length);e++){let [,i,j]=edges[e];ctx.beginPath();ctx.moveTo(...anchors[i]);ctx.lineTo(...anchors[j]);ctx.stroke();}
+    ctx.fillStyle='rgba(208,217,222,'+(.008+.11*g)+')';for(let q=0;q<TRIADS.length;q+=triStep){let t=TRIADS[q],strength=Math.abs(t.w*Math.tanh(r.U[t.j])*Math.tanh(r.U[t.k]));if(strength<.0015*(1-g))continue;ctx.beginPath();ctx.moveTo(...anchors[t.i]);ctx.lineTo(...anchors[t.j]);ctx.lineTo(...anchors[t.k]);ctx.closePath();ctx.fill();}}
+  ctx.restore();
+};
+
+drawGhosts=function(map){
+  const g=detailGain(params.ghosts);if(!g)return;ctx.save();ctx.globalCompositeOperation='screen';
+  const target=80+Math.round(620*g),stride=Math.max(5,Math.floor(records.length/target)),threshold=.05*(1-g);ctx.strokeStyle='rgba(245,198,180,'+(.035+.30*g)+')';ctx.fillStyle='rgba(255,205,185,'+(.06+.34*g)+')';ctx.lineWidth=.45+1.25*g;
+  for(let i=0;i<records.length;i+=stride){let r=records[i];if(Math.abs(r.rawResidual)<threshold)continue;let raw=map(r.rx,r.ry),corr=map(r.x,r.y),dx=raw[0]-corr[0],dy=raw[1]-corr[1],amp=1+7*g,gx=corr[0]+dx*amp,gy=corr[1]+dy*amp;ctx.beginPath();ctx.moveTo(corr[0],corr[1]);ctx.lineTo(gx,gy);ctx.stroke();ctx.beginPath();ctx.arc(gx,gy,.7+1.8*g,0,TAU);ctx.fill();}
+  ctx.restore();
+};
+
+const detailSection=detailHeading&&detailHeading.parentElement;if(detailSection&&!detailSection.querySelector('.detailResponseNote')){let note=document.createElement('div');note.className='micro detailResponseNote';note.textContent='These now have a deliberately wide visual range: 0 removes the layer; 100 makes that structure strongly visible.';detailSection.appendChild(note);}
+render();
+window.__OMEF_SCULPT__={sculpt,dyn,resculpt,rebuildSculpt,captureBase};
+
+})();
+</script>
+</body></html>
