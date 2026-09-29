@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 6,
+  "completed_reply_turns": 7,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -125,6 +125,15 @@
       "to_name": "Olivia",
       "content": "Oh, I'm so glad to hear that! What are you up to today?",
       "created_at": "2026-09-29T13:59:24.328283+00:00"
+    },
+    {
+      "id": 8,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "Sure thing, let's chat about something interesting!",
+      "created_at": "2026-09-29T14:01:20.762545+00:00"
     }
   ],
   "latest_turn": {
@@ -161,21 +170,130 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: Oh, how are you doing today?",
+      "Olivia observes a message from Emily: I am so glad to hear that, thanks for asking!",
+      "Olivia observes a message from Emily: Thank you for your kind words! That means a lot to me.",
+      "Olivia observes a message from Emily: Oh, I'm so glad to hear that! What are you up to today?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "4a15430e71d7f30e7fbb",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "65eb83e97ea5e8c4f060",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "98beb5c42e3d095dd98a",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 10.0,
+        "stanford_created": 6,
+        "stanford_last_retrieved": 6,
+        "observed_time_step": 10
+      },
+      {
+        "retrieval_rank": 4,
+        "content_hash": "a476464b145c1a4e9b8c",
+        "stanford_node_id": 3,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 8,
+        "stanford_last_retrieved": 8,
+        "observed_time_step": 10
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "Sure thing, let's chat about something interesting!",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: Oh, how are you doing today?",
+        "Olivia observes a message from Emily: I am so glad to hear that, thanks for asking!",
+        "Olivia observes a message from Emily: Thank you for your kind words! That means a lot to me.",
+        "Olivia observes a message from Emily: Oh, I'm so glad to hear that! What are you up to today?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "4a15430e71d7f30e7fbb",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "65eb83e97ea5e8c4f060",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "98beb5c42e3d095dd98a",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 10.0,
+          "stanford_created": 6,
+          "stanford_last_retrieved": 6,
+          "observed_time_step": 10
+        },
+        {
+          "retrieval_rank": 4,
+          "content_hash": "a476464b145c1a4e9b8c",
+          "stanford_node_id": 3,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 8,
+          "stanford_last_retrieved": 8,
+          "observed_time_step": 10
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 8,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "Sure thing, let's chat about something interesting!",
+        "created_at": "2026-09-29T14:01:20.762545+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"long_refractory_echo: Oh, so I see. That's great to hear that you have a good day! What are you doing today?\""
+    "external_generation_error": ""
   }
 }
