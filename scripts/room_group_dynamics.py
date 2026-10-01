@@ -12,6 +12,7 @@ import room_research_architecture as research
 import room_social_v5 as social
 
 VERSION = 1
+QUARANTINED_IDS = frozenset({"20261001T015450948-jules-v5"})
 MAX_ENCOUNTERS = 48
 MAX_ACTIVITIES = 12
 _INVITE = re.compile(r"\b(?:let['’]s|shall we|what if we|we could|would you both|want to)\b", re.I)
@@ -24,6 +25,29 @@ _SCAFFOLD = re.compile(r"\b(?:input_json|output_json|mandatory_speech|conversati
 
 def enabled(config: dict) -> bool:
     return bool((config.get("group_dynamics") or {}).get("enabled"))
+
+
+def sanitize_persisted(minds: dict, state: dict, history: list[dict], discourse: dict) -> None:
+    """Remove the one verified deployment-time instruction echo, by provenance.
+
+    Do not erase a whole episode, reboot, or remove legitimate uses of 'track'.
+    Idempotent migration also prevents reloaded copies from re-entering recall.
+    """
+    history[:] = [m for m in history if m.get("id") not in QUARANTINED_IDS]
+    bad_nodes = {"d-" + key for key in QUARANTINED_IDS}
+    discourse["nodes"] = [n for n in discourse.get("nodes", []) if n.get("id") not in bad_nodes]
+    discourse["roots"] = [key for key in discourse.get("roots", []) if key not in bad_nodes]
+    for ent in minds.get("entities", {}).values():
+        for key in ("room_memories", "self_history"):
+            ent[key] = [m for m in ent.get(key, []) if m.get("source") not in QUARANTINED_IDS and m.get("id") not in QUARANTINED_IDS]
+        data = ent.get("group_dynamics") or {}
+        data["encounters"] = [m for m in data.get("encounters", []) if m.get("id") not in QUARANTINED_IDS]
+        data["revisions"] = [r for r in data.get("revisions", []) if r.get("statement", {}).get("id") not in QUARANTINED_IDS and r.get("in_response_to") not in QUARANTINED_IDS]
+        for relation in ent.get("people", {}).values():
+            for key in ("events", "reports"):
+                relation[key] = [r for r in relation.get(key, []) if r.get("message_id") not in QUARANTINED_IDS and r.get("source") not in QUARANTINED_IDS]
+    group = state.get("group_dynamics") or {}
+    group["observed_ids"] = [key for key in group.get("observed_ids", []) if key not in QUARANTINED_IDS]
 
 
 def _terms(text: str) -> set[str]:
@@ -55,6 +79,7 @@ def _encounter(message: dict, cycle: int) -> dict:
 
 def _safe(message: dict) -> bool:
     return bool(message.get("id") and message.get("speaker") in social.PARTICIPANTS
+                and message.get("id") not in QUARANTINED_IDS
                 and str(message.get("text") or "").strip()
                 and (message.get("speaker") == "allen" or not _SCAFFOLD.search(str(message.get("text"))))
                 and not research.autonomous_text_issue(message))
@@ -252,8 +277,7 @@ def model_context(minds: dict, entity: str, partner: str | None,
         unfinished = next((item for item in reversed(data.get("encounters", []))
                            if item["speaker"] == entity and unspecific_initiative(item["text"])), None)
         if unfinished:
-            out["unfinished_idea"] = {"said": unfinished["text"][:120],
-                                      "missing": "a concrete subject and something specific to try"}
+            out["unfinished_idea"] = {"said": unfinished["text"][:120]}
     if data.get("revisions"):
         out["last_revision"] = data["revisions"][-1]["statement"]["text"][:180]
     return out

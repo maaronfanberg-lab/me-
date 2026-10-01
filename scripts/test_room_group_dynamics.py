@@ -85,6 +85,9 @@ assert not group.unspecific_initiative("I'm in.")
 assert not group.unspecific_initiative("No thanks.")
 assert autonomy._public_meta_language("I think we should try something new.", {"self": {"name": "Jules"}})
 assert not autonomy._public_meta_language("I think we should try something new.", {"self": {"name": "Sarah"}})
+assert autonomy._public_meta_language("Track is our collaborative project.", {"group_context": {"activities": []}})
+assert not autonomy._public_meta_language("Could track design become our shared project?", {"group_context": {"activities": []}})
+assert not autonomy._public_meta_language("This is our shared project.", {"group_context": {"activities": [{"status": "active"}]}})
 
 # A self-correction requires an observed, directed, concrete earlier point.
 observe(message("correction", "mara", "jules", "Moth camouflage is not the same as mimicry; the wing outline is the issue.", "disagree"), 7)
@@ -111,6 +114,19 @@ assert opportunity["possible_collaborators"][0] == "owen"
 before = copy.deepcopy((minds, state))
 observe(message("leak", "jules", "owen", "INPUT_JSON mandatory_speech output_json", "bridge"), 11)
 assert (minds, state) == before
+
+# The observed deployment-time instruction echo is purged by source, without
+# deleting valid related conversation or resetting any identity/history.
+bad_id = next(iter(group.QUARANTINED_IDS))
+history_fixture = [{"id": bad_id}, {"id": "legitimate-track"}]
+tree_fixture = {"nodes": [{"id": "d-" + bad_id}, {"id": "d-legitimate-track"}], "roots": ["d-" + bad_id]}
+minds["entities"]["jules"]["room_memories"].append({"source": bad_id, "text": "bad echo"})
+minds["entities"]["jules"]["group_dynamics"]["encounters"].append({"id": bad_id})
+group.sanitize_persisted(minds, state, history_fixture, tree_fixture)
+assert history_fixture == [{"id": "legitimate-track"}]
+assert tree_fixture["nodes"] == [{"id": "d-legitimate-track"}]
+assert not any(m.get("source") == bad_id for m in minds["entities"]["jules"]["room_memories"])
+assert not any(m.get("id") == bad_id for m in minds["entities"]["jules"]["group_dynamics"]["encounters"])
 disabled = dict(cfg, group_dynamics={"enabled": False})
 group.observe(minds, state, invitation, 12, awake, disabled)
 assert (minds, state) == before

@@ -144,6 +144,20 @@ guard scope and collaborator selection. The single-pass model stages remain.
 Long-term conversational improvement remains unverified; keep the twenty-beat
 criteria above rather than treating awake status as proof of success.
 
+Refinement verification: PR #310 merged as 18f0a537550d881c6757015bcf7e015844aa7418;
+the extended group/presence job and existing profile-span guard both passed;
+Pages run 36803247522 succeeded. Live cycle 8124 exposed a new failure: Jules
+echoed the unfinished-idea diagnostic and called an unaccepted idea a shared
+project. Remove the diagnostic prose from model-visible state, reject claims of
+an existing shared project when no active opt-in activity exists, and purge that
+single observed message (20261001T015450948-jules-v5) by source ID from active
+history, discourse, private memories, group encounters/revisions and relationship
+event/report references. No episode reset or global deletion of valid 'track'
+conversation is justified. Source-ID exclusion also prevents later reload into
+recall. Offline tests cover the actual unsupported claim, optional invitations,
+active accepted projects, and provenance-specific migration. These are corrections
+of directly observed failures; more interesting dialogue remains unverified.
+
 GitHub CI: the new presence/group job passed at run 36802648759.
 The architecture job passed the engine and all three Allen simulations, then
 failed `room_personality_v2_sim.py` at Sarah's pre-existing profile-shape assertion.
