@@ -124,3 +124,13 @@ appear, disable group dynamics and revise the recognisers/profile changes. Do no
 reset Room history as a repair.
 
 Post-deployment result: pending live verification at the time of this commit.
+
+GitHub CI: the new presence/group job passed at run 36802648759.
+The architecture job passed the engine and all three Allen simulations, then
+failed `room_personality_v2_sim.py` at Sarah's pre-existing profile-shape assertion.
+That exact assertion was reproduced in an unchanged baseline checkout. The Allen
+social simulator failed its old expectation that `progress` remains a valid topic
+root; that failure was likewise reproduced against unchanged baseline code. Its
+automation also updated the branch's diagnostic timestamp/tested SHA. An unrelated
+Emily/Olivia workflow reported a failure; that workflow is outside this change.
+No failing gate or assertion was removed or weakened.
