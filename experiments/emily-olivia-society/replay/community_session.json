@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 3,
+  "completed_reply_turns": 4,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -98,6 +98,15 @@
       "to_name": "Emily",
       "content": "I noticed that some of the jokes were not funny. I hope everyone has a great time.",
       "created_at": "2026-10-01T02:20:45.721893+00:00"
+    },
+    {
+      "id": 5,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Thank you for the info!",
+      "created_at": "2026-10-01T02:21:43.262940+00:00"
     }
   ],
   "latest_turn": {
@@ -134,21 +143,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: I liked the food! What else happened at the party?",
+      "Emily observes a message from Olivia: I noticed that some of the jokes were not funny. I hope everyone has a great time."
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "f3449ec92c5b07be8df4",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 95.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 6
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "ec83ae4127fbac2be1d0",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 6
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Thank you for the info!",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: I liked the food! What else happened at the party?",
+        "Emily observes a message from Olivia: I noticed that some of the jokes were not funny. I hope everyone has a great time."
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "f3449ec92c5b07be8df4",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 95.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 6
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "ec83ae4127fbac2be1d0",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 6
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 5,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Thank you for the info!",
+        "created_at": "2026-10-01T02:21:43.262940+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'long_refractory_echo: What did you like most?'"
+    "external_generation_error": ""
   }
 }
