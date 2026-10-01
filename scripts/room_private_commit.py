@@ -11,6 +11,7 @@ import room_social_v5 as _social
 import room_topic_bounded as _bounded_topic
 import room_private_self_state as _private_self_state
 import room_research_architecture as _research
+import room_group_dynamics as _group
 
 for _topic_name in (
     "topic_template",
@@ -311,6 +312,7 @@ def private_commit(parts: list[dict], key: str):
         parent = (q or answer_msg or prev or {}).get("discourse_id")
         msg, node = c.emit(entity, move, target, parent, None, text, beat, len(spoken), topic, terms)
         c.record(V, T, M, msg, node, cycle)
+        _group.observe(M, S, msg, cycle, AWAKE_ORDER, c._core.CFG)
         spoken.append(msg)
         if move == "answer":
             answer_msg = msg

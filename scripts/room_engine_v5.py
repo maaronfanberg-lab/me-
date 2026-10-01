@@ -11,6 +11,7 @@ import re
 import room_engine_v5_legacy as _legacy
 import room_social_v5 as _social
 import room_topic_bounded as _bounded_topic
+import room_group_dynamics as _group
 
 LEGACY_RETRY_POLICY = 'attempts = 9 if role == "expression" else 2'
 _AUTONOMOUS = set(_social.ORDER)
@@ -54,7 +55,8 @@ def _awake_choose_partner(entity, minds, topic, cycle):
         )
         saturation = min(.42, .045 * recent)
         jitter = _social.randomish(entity, other, cycle)
-        scored.append((.18 + .55 * strength + .38 * novelty - saturation + jitter, other))
+        obligation = _group.partner_bonus(minds, entity, other, cycle) if _group.enabled(_legacy._core.CFG) else 0.
+        scored.append((.18 + .55 * strength + .38 * novelty - saturation + jitter + obligation, other))
     if not scored:
         raise RuntimeError(f"no awake Room partner available for {entity}")
     return max(scored)[1]
@@ -278,6 +280,11 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     if role == "expression":
         payload = dict(payload or {})
         payload["room_presence"] = _room_presence()
+        payload["group_context"] = _group.model_context(
+            _legacy._core.minds(), entity, payload.get("partner"),
+            list(payload.get("context") or []), tuple(sorted(_AWAKE_AUTONOMOUS)),
+            _legacy._core.CFG,
+        )
     if entity in _SLEEPING_ENTITIES:
         return None
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():

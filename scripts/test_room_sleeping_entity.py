@@ -1,5 +1,25 @@
 #!/usr/bin/env python3
 import copy
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+# Test the nap mechanism independently of who happens to be sleeping in the
+# production configuration. Import-time engine initialisation stays isolated.
+if "--sleep-fixture" not in sys.argv:
+    root = Path(__file__).resolve().parents[1]
+    with tempfile.TemporaryDirectory(prefix="room-nap-") as directory:
+        fixture = Path(directory)
+        shutil.copytree(root / "scripts", fixture / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
+        (fixture / "room").mkdir()
+        config = json.loads((root / "room/config.json").read_text())
+        config["sleeping_entities"] = ["jules"]
+        (fixture / "room/config.json").write_text(json.dumps(config))
+        subprocess.run([sys.executable, str(fixture / "scripts" / Path(__file__).name), "--sleep-fixture"], check=True)
+    raise SystemExit(0)
 
 import room_engine_v5 as engine
 import room_private_commit as commit
