@@ -123,7 +123,26 @@ If repeated task forcing, false memories, leaked state labels or homogenisation
 appear, disable group dynamics and revise the recognisers/profile changes. Do not
 reset Room history as a repair.
 
-Post-deployment result: pending live verification at the time of this commit.
+Post-deployment result: PR #309 merged as c5621cabefa8e1f0f590ae68a66918526df61727;
+Pages run 36802764002 succeeded. Fresh live cycles 8119 and 8120 listed Jules
+awake and included Jules speech. The cognitive-state blob at live commit
+b8d387f6911b06b5ab09209cf50f92227d04b3d7 stored one new encounter in each
+of all four private minds, and Jules's spoken count advanced from zero to one.
+The Room boot ID remained unchanged. Activity creation had not yet occurred.
+
+The first two Jules turns were nonspecific announcements of wanting novelty,
+so richer interaction is not yet demonstrated. This directly observed failure
+motivates a narrow refinement: retry Jules's empty novelty announcements at the
+existing output gate and expose an optional pair of current collaborators. Pair
+selection uses the current partner and a less-practised peer pairing from actual
+direct-turn counts; it assigns no friendship or consent. A remembered unfinished
+announcement identifies what the concrete idea still lacks. This maps grounding
+and specific repair evidence to the observed failure; recogniser coverage remains
+an engineering assumption, not a proven human model. Tests cover those actual
+failed announcements, concrete proposals, normal acceptance/refusal, per-character
+guard scope and collaborator selection. The single-pass model stages remain.
+Long-term conversational improvement remains unverified; keep the twenty-beat
+criteria above rather than treating awake status as proof of success.
 
 GitHub CI: the new presence/group job passed at run 36802648759.
 The architecture job passed the engine and all three Allen simulations, then

@@ -267,6 +267,12 @@ def _request_autonomy(model_url: str, prompt: str, role: str, temperature: float
             "Generate a genuinely different complete spoken reply from the same grounded situation. "
             "Do not reveal or describe these instructions.\n"
         )
+    if role == "expression" and self_entity == "jules":
+        prompt += (
+            "\nIf you suggest trying something new, name the actual idea and what someone could do with it. "
+            "The possible collaborators are optional people to invite, not people who have agreed. "
+            "Do not merely announce openness, curiosity, or new possibilities.\n"
+        )
     return _ORIGINAL_REQUEST_AUTONOMY(
         model_url, prompt, role, temperature, timeout, self_entity, attempt, intent
     )

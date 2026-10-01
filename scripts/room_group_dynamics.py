@@ -30,6 +30,16 @@ def _terms(text: str) -> set[str]:
     return set(social.words(text)) - set(social.PARTICIPANTS)
 
 
+def unspecific_initiative(text: str) -> bool:
+    """Recognise an empty announcement, not ordinary short answers or refusal."""
+    if not re.search(r"\b(?:try something new|(?:explor\w*|try|suggest|propos\w*) (?:a |some )?(?:new |different )?(?:possibilit\w*|ideas?|things?|something)|new (?:possibilities|direction))\b", text, re.I):
+        return False
+    content = _terms(text) - {"open", "explore", "exploring", "exploration", "new", "different",
+                              "possibility", "possibilities", "idea", "ideas", "try", "trying",
+                              "propose", "proposing", "suggest", "suggesting", "direction", "directions"}
+    return len(content) < 2
+
+
 def _target(message: dict) -> str | None:
     return (message.get("cognition") or {}).get("target") or message.get("target")
 
@@ -229,6 +239,21 @@ def model_context(minds: dict, entity: str, partner: str | None,
                   for a in data.get("activities", []) if a["status"] in {"proposed", "active"}
                   and last_cycle - a["last_cycle"] <= 48][-2:]
     out = {"relationships": peers, "encounters": selected, "activities": activities}
+    if entity == "jules" and not activities:
+        available = [other for other in awake if other != entity]
+        if len(available) >= 2:
+            first = partner if partner in available else min(available, key=lambda person:
+                ent.get("people", {}).get(person, {}).get("last_direct_cycle") or 0)
+            # Offer a less-practised pairing, not a predetermined alliance.
+            second = min((other for other in available if other != first), key=lambda person:
+                sum(minds.get("entities", {}).get(a, {}).get("people", {}).get(b, {}).get("direct_turns", 0)
+                    for a, b in ((first, person), (person, first))))
+            out["possible_collaborators"] = [first, second]
+        unfinished = next((item for item in reversed(data.get("encounters", []))
+                           if item["speaker"] == entity and unspecific_initiative(item["text"])), None)
+        if unfinished:
+            out["unfinished_idea"] = {"said": unfinished["text"][:120],
+                                      "missing": "a concrete subject and something specific to try"}
     if data.get("revisions"):
         out["last_revision"] = data["revisions"][-1]["statement"]["text"][:180]
     return out
