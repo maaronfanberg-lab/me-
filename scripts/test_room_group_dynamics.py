@@ -77,6 +77,14 @@ compact = autonomy._impl._legacy._autonomy_compact(payload, "expression", "jules
 assert compact["group_context"] == context
 assert autonomy._impl._has_context_echo(contribution["text"], compact, n=8)
 assert autonomy.run("thought", payload) is None, "Keep single-pass generation"
+assert len(context["activities"]) == 1
+assert group.unspecific_initiative("I think we should try something new.")
+assert group.unspecific_initiative("I am open to exploring new possibilities...")
+assert not group.unspecific_initiative("Mara and Owen, let's try a moth camouflage comparison using spotted wings and plain leaves.")
+assert not group.unspecific_initiative("I'm in.")
+assert not group.unspecific_initiative("No thanks.")
+assert autonomy._public_meta_language("I think we should try something new.", {"self": {"name": "Jules"}})
+assert not autonomy._public_meta_language("I think we should try something new.", {"self": {"name": "Sarah"}})
 
 # A self-correction requires an observed, directed, concrete earlier point.
 observe(message("correction", "mara", "jules", "Moth camouflage is not the same as mimicry; the wing outline is the issue.", "disagree"), 7)
@@ -95,6 +103,9 @@ assert not any(e["source"] == "absent" for e in returned["encounters"])
 observe(message("close", "jules", "owen", "Let's stop the moth camouflage comparison here.", "close"), 10)
 assert state["group_dynamics"]["activities"][0]["status"] == "closed"
 assert group.partner_bonus(minds, "owen", "jules", 10) == 0
+opportunity = group.model_context(minds, "jules", "owen", [], awake, cfg)
+assert len(opportunity["possible_collaborators"]) == 2
+assert opportunity["possible_collaborators"][0] == "owen"
 
 # Privacy and contamination guards remain upstream of durable group memory.
 before = copy.deepcopy((minds, state))

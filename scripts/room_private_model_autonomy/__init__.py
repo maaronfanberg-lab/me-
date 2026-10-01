@@ -12,6 +12,7 @@ ordinary personality expression.
 import importlib.util
 from pathlib import Path
 import re
+import room_group_dynamics as _group
 
 
 _IMPL_PATH = Path(__file__).resolve().parent.parent / "room_private_model_autonomy.py"
@@ -103,6 +104,9 @@ def _configuration_span_reused(utterance: str, compact: dict) -> bool:
 
 
 def _public_meta_language(utterance: str, compact: dict) -> bool:
+    identity = compact.get("self") or {}
+    if isinstance(identity, dict) and str(identity.get("name") or "").lower() == "jules" and _group.unspecific_initiative(utterance):
+        return True
     if _ORIGINAL_PUBLIC_META_LANGUAGE(utterance, compact):
         return True
     return _configuration_span_reused(utterance, compact)
