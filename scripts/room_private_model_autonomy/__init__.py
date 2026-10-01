@@ -107,6 +107,9 @@ def _public_meta_language(utterance: str, compact: dict) -> bool:
     identity = compact.get("self") or {}
     if isinstance(identity, dict) and str(identity.get("name") or "").lower() == "jules" and _group.unspecific_initiative(utterance):
         return True
+    group = compact.get("group_context") or {}
+    if isinstance(group, dict) and not any(a.get("status") == "active" for a in group.get("activities", [])) and re.search(r"\b(?:is|that's|this is) our (?:collaborative|shared|joint) project\b", utterance, re.I):
+        return True
     if _ORIGINAL_PUBLIC_META_LANGUAGE(utterance, compact):
         return True
     return _configuration_span_reused(utterance, compact)
