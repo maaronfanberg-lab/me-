@@ -167,3 +167,5 @@ root; that failure was likewise reproduced against unchanged baseline code. Its
 automation also updated the branch's diagnostic timestamp/tested SHA. An unrelated
 Emily/Olivia workflow reported a failure; that workflow is outside this change.
 No failing gate or assertion was removed or weakened.
+
+Final correction verification: PR #311 merged as df2dfda43e60b4dc4e0c79d16a0267c8ece0dd44. Group/presence run 36803587860 and profile-span run 36803587808 passed; Pages run 36803643082 succeeded. Live cycle 8129 at 2026-10-01T02:01:13Z, commit 1e7226b2149e5001f8545fe52634d21775ab3f17, no longer contained the quarantined message. The matching cognitive-state blob had zero references to that source in all four agents' room memories, self histories and group encounters. Jules remained awake; encounter records persisted for all four characters. Pulse kick 344d99a199a914bd1836c5927bd9a86a99176151 started a fresh normal runner (36803843702), preserving the boot and history. Early dialogue remained repetitive and no opt-in joint activity had yet been observed. Implementation delivery and memory cleanup are verified; improved conversational quality is not.
