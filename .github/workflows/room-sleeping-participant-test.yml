@@ -1,4 +1,4 @@
-name: Room sleeping participant test
+name: Room presence and group dynamics tests
 
 on:
   pull_request:
@@ -8,6 +8,9 @@ on:
       - 'scripts/room_private_commit.py'
       - 'scripts/build_room_feed.py'
       - 'scripts/test_room_sleeping_entity.py'
+      - 'scripts/room_group_dynamics.py'
+      - 'scripts/room_private_model_autonomy.py'
+      - 'scripts/test_room_group_dynamics.py'
       - '.github/workflows/room-sleeping-participant-test.yml'
   workflow_dispatch:
 
@@ -23,3 +26,5 @@ jobs:
         run: python3 -m py_compile scripts/room_engine_v5.py scripts/room_private_commit.py scripts/build_room_feed.py scripts/test_room_sleeping_entity.py
       - name: Verify sleeping participant
         run: python3 scripts/test_room_sleeping_entity.py
+      - name: Verify Jules return and group consequences
+        run: python3 scripts/test_room_group_dynamics.py
