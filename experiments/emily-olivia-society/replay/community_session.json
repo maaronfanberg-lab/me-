@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 4,
+  "completed_reply_turns": 5,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -107,6 +107,15 @@
       "to_name": "Olivia",
       "content": "I'm so sorry to hear that. How did it go wrong?",
       "created_at": "2026-10-04T02:35:36.725313+00:00"
+    },
+    {
+      "id": 6,
+      "from_id": 2,
+      "from_name": "Olivia",
+      "to_id": 1,
+      "to_name": "Emily",
+      "content": "What if they still get together? I don't know, maybe they should try and see where that goes. It could be a learning experience.",
+      "created_at": "2026-10-04T02:37:22.021748+00:00"
     }
   ],
   "latest_turn": {
@@ -143,21 +152,108 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Olivia observes a message from Emily: How's your family, I heard your family was divorced.",
+      "Olivia observes a message from Emily: Oh my, that is really sad. I guess they couldn't live together after a divorce? That's totally understandable.",
+      "Olivia observes a message from Emily: I'm so sorry to hear that. How did it go wrong?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "8a01327eb0259f8d6681",
+        "stanford_node_id": 0,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 90.0,
+        "stanford_created": 2,
+        "stanford_last_retrieved": 2,
+        "observed_time_step": 7
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "402d476ac8a9aa3e3832",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 4,
+        "stanford_last_retrieved": 4,
+        "observed_time_step": 7
+      },
+      {
+        "retrieval_rank": 3,
+        "content_hash": "51b2be7aeef8f547aefd",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 50.0,
+        "stanford_created": 6,
+        "stanford_last_retrieved": 6,
+        "observed_time_step": 7
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 1,
+      "content": "What if they still get together? I don't know, maybe they should try and see where that goes. It could be a learning experience.",
+      "retrieved_memories": [
+        "Olivia observes a message from Emily: How's your family, I heard your family was divorced.",
+        "Olivia observes a message from Emily: Oh my, that is really sad. I guess they couldn't live together after a divorce? That's totally understandable.",
+        "Olivia observes a message from Emily: I'm so sorry to hear that. How did it go wrong?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "8a01327eb0259f8d6681",
+          "stanford_node_id": 0,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 90.0,
+          "stanford_created": 2,
+          "stanford_last_retrieved": 2,
+          "observed_time_step": 7
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "402d476ac8a9aa3e3832",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 4,
+          "stanford_last_retrieved": 4,
+          "observed_time_step": 7
+        },
+        {
+          "retrieval_rank": 3,
+          "content_hash": "51b2be7aeef8f547aefd",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 50.0,
+          "stanford_created": 6,
+          "stanford_last_retrieved": 6,
+          "observed_time_step": 7
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Emily",
+        "reflected": false,
+        "plan_present": true,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 6,
+        "from_id": 2,
+        "from_name": "Olivia",
+        "to_id": 1,
+        "to_name": "Emily",
+        "content": "What if they still get together? I don't know, maybe they should try and see where that goes. It could be a learning experience.",
+        "created_at": "2026-10-04T02:37:22.021748+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Olivia repeatedly hit structural dialogue blockers after 1 paper-derived resamples: 'role_swapped_personal_fact: I really am, I am really sorry to hear that. How did it go wrong?'"
+    "external_generation_error": ""
   }
 }
