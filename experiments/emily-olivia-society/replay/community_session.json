@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 3,
+  "completed_reply_turns": 4,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -98,6 +98,15 @@
       "to_name": "Emily",
       "content": "Emily, it's wonderful to catch up with you. I've been looking forward to our chat. What brings you here? How can we make the most of our time together?",
       "created_at": "2026-10-05T23:12:08.606333+00:00"
+    },
+    {
+      "id": 5,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, that's lovely of you to say! I've been looking forward to our chat too. What brings you here? How can we make the most of our time together?",
+      "created_at": "2026-10-05T23:16:06.955772+00:00"
     }
   ],
   "latest_turn": {
@@ -134,21 +143,86 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Emily, it's great to see you again! I've been looking forward to this visit.",
+      "Emily observes a message from Olivia: Emily, it's wonderful to catch up with you. I've been looking forward to our chat. What brings you here? How can we make the most of our time together?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "5f0f455ed2aa5ce2766c",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 75.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 6
+      },
+      {
+        "retrieval_rank": 2,
+        "content_hash": "058abdb1a5e6de0b9e34",
+        "stanford_node_id": 2,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 100.0,
+        "stanford_created": 5,
+        "stanford_last_retrieved": 5,
+        "observed_time_step": 6
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh, that's lovely of you to say! I've been looking forward to our chat too. What brings you here? How can we make the most of our time together?",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Emily, it's great to see you again! I've been looking forward to this visit.",
+        "Emily observes a message from Olivia: Emily, it's wonderful to catch up with you. I've been looking forward to our chat. What brings you here? How can we make the most of our time together?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "5f0f455ed2aa5ce2766c",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 75.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 6
+        },
+        {
+          "retrieval_rank": 2,
+          "content_hash": "058abdb1a5e6de0b9e34",
+          "stanford_node_id": 2,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 100.0,
+          "stanford_created": 5,
+          "stanford_last_retrieved": 5,
+          "observed_time_step": 6
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 5,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, that's lovely of you to say! I've been looking forward to our chat too. What brings you here? How can we make the most of our time together?",
+        "created_at": "2026-10-05T23:16:06.955772+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"exact_same_speaker_repeat: I'm delighted to hear you're having such a wonderful time here! It truly goes to show how much our paths have intertwined.\""
+    "external_generation_error": ""
   }
 }
