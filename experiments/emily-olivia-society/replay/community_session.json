@@ -59,7 +59,7 @@
     },
     "consumed_inbound": null
   },
-  "completed_reply_turns": 1,
+  "completed_reply_turns": 2,
   "continuous_seconds": 17400,
   "turn_delay_seconds": 0.0,
   "messages": [
@@ -80,6 +80,15 @@
       "to_name": "Emily",
       "content": "Hey Emily, how's it going?",
       "created_at": "2026-10-06T23:53:39.382110+00:00"
+    },
+    {
+      "id": 3,
+      "from_id": 1,
+      "from_name": "Emily",
+      "to_id": 2,
+      "to_name": "Olivia",
+      "content": "Oh, I'm doing great. Just going through an intense phase in my life and really struggling with mental health issues. It's hard sometimes but it's not as difficult as it seemed before.",
+      "created_at": "2026-10-06T23:54:55.159564+00:00"
     }
   ],
   "latest_turn": {
@@ -116,21 +125,64 @@
         }
       ]
     },
-    "retrieved_memories": [],
-    "retrieved_memory_evidence": [],
+    "retrieved_memories": [
+      "Emily observes a message from Olivia: Hey Emily, how's it going?"
+    ],
+    "retrieved_memory_evidence": [
+      {
+        "retrieval_rank": 1,
+        "content_hash": "5b78990124e48d60be6e",
+        "stanford_node_id": 1,
+        "stanford_node_type": "observation",
+        "stanford_importance_raw": 80.0,
+        "stanford_created": 3,
+        "stanford_last_retrieved": 3,
+        "observed_time_step": 4
+      }
+    ],
     "action": {
-      "type": "wait",
-      "reason": "speech_generation_deferred"
+      "type": "message",
+      "recipient_id": 2,
+      "content": "Oh, I'm doing great. Just going through an intense phase in my life and really struggling with mental health issues. It's hard sometimes but it's not as difficult as it seemed before.",
+      "retrieved_memories": [
+        "Emily observes a message from Olivia: Hey Emily, how's it going?"
+      ],
+      "retrieved_memory_evidence": [
+        {
+          "retrieval_rank": 1,
+          "content_hash": "5b78990124e48d60be6e",
+          "stanford_node_id": 1,
+          "stanford_node_type": "observation",
+          "stanford_importance_raw": 80.0,
+          "stanford_created": 3,
+          "stanford_last_retrieved": 3,
+          "observed_time_step": 4
+        }
+      ],
+      "cognition": {
+        "reaction": "chat with Olivia",
+        "reflected": false,
+        "plan_present": false,
+        "act_research_source": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+      }
     },
-    "action_result": null,
-    "consumed_inbound": false,
+    "action_result": {
+      "success": true,
+      "message": {
+        "id": 3,
+        "from_id": 1,
+        "from_name": "Emily",
+        "to_id": 2,
+        "to_name": "Olivia",
+        "content": "Oh, I'm doing great. Just going through an intense phase in my life and really struggling with mental health issues. It's hard sometimes but it's not as difficult as it seemed before.",
+        "created_at": "2026-10-06T23:54:55.159564+00:00"
+      }
+    },
+    "consumed_inbound": true,
     "external_inbound": null,
     "external_action": null,
     "external_action_result": null,
     "external_ack": null,
-    "external_generation_error": "",
-    "generation_deferred": true,
-    "generation_attempts": 1,
-    "generation_error": "Emily repeatedly hit structural dialogue blockers after 1 paper-derived resamples: \"exact_same_speaker_repeat: Hey, how's it going?\""
+    "external_generation_error": ""
   }
 }
