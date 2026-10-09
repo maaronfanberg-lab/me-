@@ -41,6 +41,13 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--ink);color:var(-
 .tool[aria-pressed="true"]{border-color:var(--compress);color:var(--live);background:rgba(19,37,56,.9)}
 .tool:disabled{opacity:.3}
 #undo,#redo{font-size:14px;padding:6px 10px}
+#nudge{position:absolute;right:10px;top:52px;display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:3px}
+#nudge[hidden]{display:none}
+#nudge .nb{appearance:none;border:1px solid rgba(74,88,122,.6);background:rgba(10,17,32,.8);color:var(--live);
+  font-family:var(--mono);font-size:16px;border-radius:3px;padding:0;cursor:pointer;touch-action:none;backdrop-filter:blur(8px)}
+#nudge .nb:active{border-color:var(--compress)}
+#nudge .nl{grid-column:2;grid-row:2;align-self:center;text-align:center;font-size:9px;color:var(--dim);pointer-events:none}
+#nudgeMsg{position:absolute;right:10px;top:182px;font-size:10px;color:var(--tension);pointer-events:none;text-shadow:0 1px 3px #000}
 #level{position:absolute;right:14px;top:30px;font-size:10.5px;color:var(--tension);pointer-events:none;text-shadow:0 1px 3px #000}
 #brand{position:absolute;right:14px;top:10px;font-family:var(--display);font-weight:800;
   font-size:12px;letter-spacing:.34em;color:var(--faint);pointer-events:none}
@@ -138,6 +145,7 @@ body.hints .knob{margin-bottom:16px}
     <canvas id="view"></canvas>
     <div id="readout"></div>
     <div id="brand">RESONATOR</div>
+    <div id="nudge" hidden aria-label="Nudge"><button class="nb" data-nx="0" data-ny="-1" style="grid-column:2;grid-row:1" aria-label="up">&#9650;</button><button class="nb" data-nx="-1" data-ny="0" style="grid-column:1;grid-row:2" aria-label="left">&#9664;</button><span class="nl" id="nudgeLab">turn</span><button class="nb" data-nx="1" data-ny="0" style="grid-column:3;grid-row:2" aria-label="right">&#9654;</button><button class="nb" data-nx="0" data-ny="1" style="grid-column:2;grid-row:3" aria-label="down">&#9660;</button></div><div id="nudgeMsg"></div>
     <div id="tools">
       <button class="tool" data-tool="orbit" aria-pressed="true">orbit</button>
       <button class="tool" data-tool="strike" aria-pressed="false">strike</button>
@@ -395,11 +403,25 @@ class Resonator extends AudioWorkletProcessor {
     this.calDirty=false; this.capped=false;           // FIX4 / FIX2
     this.clampHits=0; this.trips=0; this.scan=0; this.badScans=0; this.governed=0; this.load=0;      // FIX1 / D9 telemetry
     this.pool=[];                                     // FIX8: frame buffer pool
+    // F1: seeded PRNG so the same input always gives the same output
+    this.seed0=0x2545F491; this.rs=this.seed0;
+    // F2/F3: level calibration and ceiling limiter (gain is exactly 1 below the ceiling)
+    this.lvl=1; this.limG=1; this.limC=0.7674;   /* -2.3 dBFS internal: covers the measured 1.1 dB under-read of the 16-tap estimator, so output holds -1 dBTP */ this.limRel=1-Math.exp(-1/(0.08*sampleRate));
+    // 16-sample lookahead (0.33 ms at 48 kHz). Peaks between samples are found by 4x
+    // windowed-sinc interpolation, so the ceiling holds as true peak, not just sample peak.
+    this.tpD=16; this.tpL=new Float64Array(32); this.tpR=new Float64Array(32); this.tpGr=new Float64Array(32).fill(1); this.tpI=0;
+    this.tpK=[]; for(let f=1;f<4;f++){ const fr=f/4, k=new Float64Array(16);
+      for(let j=0;j<16;j++){ const t=(j-7)-fr; const w=0.5+0.5*Math.cos(Math.PI*t/8.5); k[j]=(t===0?1:Math.sin(Math.PI*t)/(Math.PI*t))*w; }
+      this.tpK.push(k); }
     this.port.onmessage = e => this.msg(e.data);
   }
+  rnd(){ let t=(this.rs=(this.rs+0x6D2B79F5)|0); t=Math.imul(t^(t>>>15),1|t);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }
   msg(d){
     switch(d.t){
-      case 'struct': this.build(d); break;
+      case 'struct': this.rs=this.seed0; this.build(d); break;
+      case 'seed': this.seed0=(d.v|0)||0x2545F491; this.rs=this.seed0; break;
+      case 'lvl': this.lvl=(d.v>0&&d.v<32)?d.v:1; break;
       case 'p':
         this[d.k]=d.v; this.modBase[d.k]=d.v; this.coupBase[d.k]=d.v;
         if(d.k==='angle'){ this.vectors(); }
@@ -968,7 +990,7 @@ class Resonator extends AudioWorkletProcessor {
       case 1: return 4*Math.abs(ph-0.5)-1;
       case 2: return ph<0.5?1:-1;
       case 3: return 2*ph-1;
-      case 4: { if(ph<m.lastPh){ m.rnd=Math.random()*2-1; } m.lastPh=ph; return m.rnd||0; }
+      case 4: { if(ph<m.lastPh){ m.rnd=this.rnd()*2-1; } m.lastPh=ph; return m.rnd||0; }
       default: return Math.sin(2*Math.PI*ph);
     }
   }
@@ -1105,7 +1127,7 @@ class Resonator extends AudioWorkletProcessor {
       }
       // Y^A = H(Uhat + eps*Omega_shadow); L = rho L + K(Y - H Uhat) = rho L + K H eps Omega
       for(let i=0;i<N;i++){
-        const shadow=(Math.random()+Math.random()+Math.random()-1.5)*0.9;
+        const shadow=(this.rnd()+this.rnd()+this.rnd()-1.5)*0.9;
         L[i]=this.attRho*L[i]+this.attK*this.attEps*shadow;
       }
       // C = AccountingProject(Uhat + rho L + G): force the budget identity to close
@@ -1372,7 +1394,7 @@ class Resonator extends AudioWorkletProcessor {
     const N=this.NP, sig2=0.055, pSwitch=Math.min(0.5,this.rswitch*dtBlock*40);
     let sum=0;
     for(let i=0;i<N;i++){
-      if(Math.random()<pSwitch) this.pf[i]=(Math.random()*4)|0;
+      if(this.rnd()<pSwitch) this.pf[i]=(this.rnd()*4)|0;
       const m=MU[this.pf[i]];
       let d=0; for(let k=0;k<4;k++){ const e=o[k]-m[k]; d+=e*e; }
       const w=Math.exp(-d/(2*sig2));
@@ -1389,7 +1411,7 @@ class Resonator extends AudioWorkletProcessor {
     this.dPF=Math.min(1,H/Math.log(4));
     if(ess<N*0.5){   // systematic resample
       const nf=new Uint8Array(N); let c=this.pw[0], i=0;
-      const step=1/N, u0=Math.random()*step;
+      const step=1/N, u0=this.rnd()*step;
       for(let m=0;m<N;m++){
         const u=u0+m*step;
         while(u>c&&i<N-1){ i++; c+=this.pw[i]; }
@@ -1445,7 +1467,7 @@ class Resonator extends AudioWorkletProcessor {
     for(let j=0;j<4;j++){
       const ph=j*Math.PI/2;
       const drive=Math.cos(2*Math.PI*this.rT/Tl+ph)*0.7+Math.cos(2*Math.PI*this.rT/Ts+ph*1.618)*0.5;
-      this.rL[j]+=rate*(drive-this.rL[j]*0.35)+Math.sqrt(rate)*0.45*(Math.random()-0.5);
+      this.rL[j]+=rate*(drive-this.rL[j]*0.35)+Math.sqrt(rate)*0.45*(this.rnd()-0.5);
       if(this.rL[j]>6) this.rL[j]=6; else if(this.rL[j]<-6) this.rL[j]=-6;
     }
     let mx=-1e9; for(let j=0;j<4;j++) if(this.rL[j]>mx) mx=this.rL[j];
@@ -1630,7 +1652,23 @@ class Resonator extends AudioWorkletProcessor {
         if(this.spLive()){ const s=this.spatial(mid, mi); mid=(s[0]+s[1])*0.5; side+=(s[0]-s[1])*0.5; }
         ll=mid+side; rr=mid-side;
       }
-      L[k]=Math.max(-1.2,Math.min(1.2,ll)); if(R) R[k]=Math.max(-1.2,Math.min(1.2,rr));
+      if(this.lvl!==1){ ll*=this.lvl; rr*=this.lvl; }          // F3: per-shape level calibration
+      if(!isFinite(ll)) ll=0; if(!isFinite(rr)) rr=0;
+      { // F2: true-peak lookahead limiter, ceiling -1 dBTP. Gain is exactly 1 below the ceiling.
+        const B=this.tpL, C=this.tpR, I=this.tpI, D=this.tpD, Cc=this.limC;
+        B[I]=ll; C[I]=rr;
+        // peak around the sample 8 behind the newest, including the three points between it and the next
+        const c0=(I-8)&31; let pk=Math.max(Math.abs(B[c0]),Math.abs(C[c0]));
+        let near=0; for(let j=0;j<16;j++){ const q=(I-15+j)&31; const a=Math.max(Math.abs(B[q]),Math.abs(C[q])); if(a>near) near=a; }
+        if(near>Cc*0.3){ for(let f=0;f<3;f++){ const K=this.tpK[f]; let xl=0,xr=0;
+            for(let j=0;j<16;j++){ const q=(I-15+j)&31; xl+=B[q]*K[j]; xr+=C[q]*K[j]; }
+            const a=Math.max(Math.abs(xl),Math.abs(xr)); if(a>pk) pk=a; } }
+        this.tpGr[c0]=pk>Cc?Cc/pk:1;
+        let need=1; for(let j=0;j<24;j++){ const q=(I-8-j)&31; if(this.tpGr[q]<need) need=this.tpGr[q]; }
+        let g=this.limG; if(g<1){ g+=(1-g)*this.limRel; if(g>0.99999) g=1; } if(need<g) g=need;
+        this.limG=g; const o=(I-D)&31; let ol=B[o], or=C[o]; if(g<1){ ol*=g; or*=g; }
+        this.tpI=(I+1)&31;
+        L[k]=ol; if(R) R[k]=or; }
       if(this.rec){
         this.recL[this.recN]=L[k]; this.recR[this.recN]=R?R[k]:L[k];
         if(++this.recN>=4096){
@@ -1806,6 +1844,8 @@ const KNOBS={
  m3a:{label:'Depth 3',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
  cab:{label:'Cabinet',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'direct':Math.round(v*100)+'%',hint:'A speaker in a box: nothing below 95 Hz, nothing above 4.2 kHz. This is what stops it sounding like a computer.'}
 };
+// F3: per-shape output calibration to -21 LUFS at default settings (measured, see qa-resonator)
+const SHAPE_LVL={String:1.4928,Tine:0.8082,Chime:0.866,Drum:0.9784,Hoop:1.5171,Web:0.7379,Tank:8.8716,Twins:1.8793};
 const RATE=v=>0.01*Math.pow(200000,v);
 const fmtRate=v=>{const r=RATE(v);return r<1?r.toFixed(2)+' Hz':r<1000?r.toFixed(1)+' Hz':(r/1000).toFixed(2)+' kHz';};
 const MDEST=['','bowSpd','bowVc','spImg','spRot','spDist','fxCho','fxDly','fxWow','fxTrem','fxSat','att','infer','mem','regime','coup','fbAmt','fbTime','tune','ratio','loss','sub','nl','drive','hard','angle','blend','bite','tone','width','pkRes','pkQ','amp','bass','treb','cab','gain'];
@@ -1827,7 +1867,7 @@ function buildShape(resetPickups){
  if(node){const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:g.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc'])send(k);
    node.port.postMessage({t:'pk',v:state.pk||0});
    node.port.postMessage({t:'mode',v:state.mode||0});
-   node.port.postMessage({t:'spec',v:state.spec||0});}
+   node.port.postMessage({t:'spec',v:state.spec||0});sendLvl();}
  document.getElementById('bodytext').textContent=S.note;state.geo.note=S.note;[...axesEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.axis));state.disp=new Float32Array(g.P.length*3);state.spd=new Float32Array(g.P.length);drawInfo();
 }
 function placeMicHit(){
@@ -1844,6 +1884,7 @@ function placeMicHit(){
  }
 }
 function send(k){if(node)node.port.postMessage({t:'p',k,v:val[k]});}
+function sendLvl(){if(node)node.port.postMessage({t:'lvl',v:SHAPE_LVL[state.shape]||1});}
 
 function bareProcessor(rate){
  let Klass=null;
@@ -2484,7 +2525,36 @@ for(const tb of document.querySelectorAll('.tool[data-tool]')) tb.onclick=()=>{
   state.tool=tb.dataset.tool; state.linkFrom=-1; state.sel=-1;
   document.querySelectorAll('.tool').forEach(t=>t.setAttribute('aria-pressed',String(t===tb)));
   state.spin = state.tool==='orbit';
+  syncNudge();
 };
+// F4: tap path for the two drag-only tools. Hold to repeat, like the knob steppers.
+const nudgeEl=document.getElementById('nudge'),nudgeMsg=document.getElementById('nudgeMsg');
+function syncNudge(){const on=state.tool==='orbit'||state.tool==='move';nudgeEl.hidden=!on;
+ document.getElementById('nudgeLab').textContent=state.tool==='move'?'move':'turn';nudgeMsg.textContent='';}
+let nudgeMoved=false;
+function nudge(nx,ny){
+ if(state.tool==='orbit'){state.spin=false;if(nx)camRotate(1,nx*0.12);if(ny)camRotate(0,ny*0.12);return true;}
+ if(state.tool!=='move')return false;
+ const g=state.geo,i=state.sel;
+ if(!g||i<0||i>=g.P.length){nudgeMsg.textContent='tap a mass first';return false;}
+ if(!nudgeMoved){geoPush();nudgeMoved=true;}
+ const {R,U}=camBasis(),st=0.012,p=g.P[i];
+ for(let a=0;a<3;a++)p[a]=Math.max(-0.6,Math.min(0.6,p[a]+(R[a]*nx+U[a]*ny)*st));
+ if(node)node.port.postMessage({t:'mv',i,x:p[0],y:p[1],z:p[2]});
+ return true;
+}
+for(const nb of nudgeEl.querySelectorAll('.nb')){
+ const nx=+nb.dataset.nx,ny=+nb.dataset.ny;let timer=null,held=0;
+ const stop=()=>{if(timer){clearInterval(timer);timer=null;}held=0;if(nudgeMoved){nudgeMoved=false;drawInfo();}};
+ const start=()=>{if(!nudge(nx,ny))return;held=0;timer=setInterval(()=>{held++;const n=held>14?3:held>6?2:1;for(let q=0;q<n;q++)nudge(nx,ny);},90);};
+ nb.addEventListener('pointerdown',e=>{e.preventDefault();if(!timer)start();});
+ nb.addEventListener('pointerup',stop);nb.addEventListener('pointerleave',stop);nb.addEventListener('pointercancel',stop);
+ nb.addEventListener('touchstart',e=>{e.preventDefault();if(!timer)start();},{passive:false});
+ nb.addEventListener('touchend',stop,{passive:true});nb.addEventListener('touchcancel',stop,{passive:true});
+ nb.addEventListener('click',e=>e.preventDefault());
+ nb.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nudge(nx,ny);if(nudgeMoved){nudgeMoved=false;drawInfo();}}});
+}
+syncNudge();
 // screen-space camera basis, so a drag moves a mass in the plane you are looking at
 function camBasis(){
   const M=state.M;
@@ -2524,6 +2594,7 @@ function rebuild(){
   for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc'])send(k);
   node.port.postMessage({t:'pk',v:state.pk||0});
   node.port.postMessage({t:'mode',v:state.mode||0});
+  sendLvl();
   state.disp=new Float32Array(g.P.length*3);state.spd=new Float32Array(g.P.length);
   drawInfo();
 }
