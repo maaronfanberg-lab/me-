@@ -98,3 +98,31 @@ moving calibration off the audio thread. Not done: out of approved scope.
   (`qa-resonator/f5verify.mjs`).
 - Every browser check switches shapes and back (`qa-resonator/tank_switch.py`), and any
   silent or near-silent result is reported, never left in the output unmentioned.
+
+---
+
+# Known issue — the octave trap (found 2026-10-10, not yet changed)
+
+## Observed
+While verifying the learning-path claims: on String, moving the strike point near an end and
+then touching **Stiffness** makes the E3 key sound **E2**; on Twins it sounds **G2**. Tine and
+Hoop are unaffected. Reproduced in the browser with real taps (E3 → E2), and identical in the
+original build (3a484d7), so it predates this week's changes.
+
+## Mechanism
+`calibrate()` tunes the *loudest* mode (modal amplitude for the current strike and mic points)
+to the key. It re-runs when Stiffness or Substrate changes (`calDirty`), using wherever the
+strike and mic points sit at that moment, while moving the points alone does not re-run it.
+The tuned partial therefore depends on the order of actions.
+
+## Escape (taught in the learning path)
+Tap the shape's button again: `buildShape(true)` resets the strike and mic points (and Size) and
+re-tunes. Verified in the browser: E3 → E2 → E3.
+
+## Proposed (awaiting Alex at gate 1)
+Lock the tuned partial when a shape loads, so later strike/mic moves can never change the
+octave. The normal load path should stay bit-identical; that has to be proven before shipping.
+
+## Check
+`qa-resonator/learn_claims.mjs` verifies every sound claim the learning path makes (mallet,
+decay, spring damping, centre strike/mic nodes, String vs Drum partials) and reports this issue.
