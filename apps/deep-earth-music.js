@@ -22,16 +22,16 @@ const chordPitches=[
 // These are newly composed phrases, never taken from a recording.
 const sections=[
  {name:'I · BLUE HORIZON',level:.75,pulse:.32,notes:[
- [0,7,2.55],[3,10,.75],[4,12,2.6],[8,10,1.4],[9.75,9,.48],[10.25,7,1.75],
+ [0,7,2.55],[3,10,.75],[4,12,2.6],[8,10,1.4],[9.5,9,.5],[10.25,7,1.75],
  [12.5,3,1.3],[14,2,1.45]]},
  {name:'II · OPEN SKY',level:.95,pulse:.70,notes:[
- [0,9,2.3],[2.8,7,.8],[4,12,2.35],[6.8,14,.65],[8,15,1.75],[10,14,.8],
- [11.1,12,.8],[12.1,9,2.65],[15,7,.65]]},
+ [0,9,2.3],[3,7,.8],[4,12,2.35],[7,14,.65],[8,15,1.75],[10,14,.8],
+ [11,12,.8],[12,9,2.65],[15,7,.65]]},
  {name:'III · THE SUMMIT',level:1.0,pulse:.90,notes:[
- [0,12,1.25],[1.5,15,2.0],[4,14,1.0],[5.25,12,1.4],[7.3,10,.9],
- [8.4,9,.8],[9.4,10,1.1],[10.8,12,1.65],[12.8,15,1.75],[15,12,.8]]},
+ [0,12,1.25],[1.5,15,2.0],[4,14,1.0],[5.5,12,1.4],[7.5,10,.9],
+ [8.5,9,.8],[9.5,10,1.1],[11,12,1.65],[13,15,1.75],[15,12,.8]]},
  {name:'IV · AFTERGLOW',level:.65,pulse:.27,notes:[
- [0,7,2.7],[3.2,10,.7],[4.2,12,3.5],[8.4,10,1.6],[11,7,2.3]]}
+ [0,7,2.7],[3,10,.7],[4,12,3.5],[8.4,10,1.6],[11,7,2.3]]}
 ];
 export const musicSections=sections.map(s=>s.name);
 const makeGain=(ctx,x=1)=>{const g=ctx.createGain();g.gain.value=x;return g};
@@ -62,13 +62,13 @@ export function createMusic(ctx,P,atmos,padVoices){
   sum.connect(lp);lp.connect(env);env.connect(hp1);hp1.connect(hp2);hp2.connect(pan);
   pan.connect(isLead?leadBus:pulseBus);
   let attack=isLead?.05:.035,release=isLead?.60:.36;
-  let value=(isLead?.26:.17)*overall*accent*(P.musicDynamics??.82);
-  value=clamp(value,0,.24);
+  let value=(isLead?.26:.17)*overall*amount*accent*(P.musicDynamics??.82);
+  value=clamp(value,0,.33);
   env.gain.setValueAtTime(0,t);
   env.gain.linearRampToValueAtTime(value,t+attack);
   env.gain.setTargetAtTime(value*(isLead?.68:.46),t+attack,.2);
-  const releaseStart=t+Math.max(attack+.15,secs-(isLead?.25:.15));
-  env.gain.setTargetAtTime(.000001,releaseStart,release/3.5);
+  const releaseStart=t+Math.max(attack+.15,secs-(isLead?.38:.17));
+  env.gain.setTargetAtTime(.000001,releaseStart,isLead?.29:.15);
   lp.frequency.setValueAtTime(isLead?1400+bright*2200:780+bright*770,t);
   lp.frequency.setTargetAtTime(isLead?700+bright*1200:660+bright*430,t+.14,isLead?.65:.16);
   if(isLead&&secs>.85){
@@ -76,7 +76,7 @@ export function createMusic(ctx,P,atmos,padVoices){
    // Oscillator pitch stays unison; slow detune after attack is subtle vibrato.
    a.detune.setTargetAtTime(Math.sin(semitones*1.7)*2.3,t+.4,.5);
   }
-  const end=t+secs+Math.max(.9,release*2.8);
+  const end=t+secs+Math.max(1.8,release*3.2);
   a.start(t);b.start(t);a.stop(end);b.stop(end);
   voiceCount+=2;events++;if(isLead)leadEvents++;else pulseEvents++;
   let cleaned=false;const clean=()=>{if(cleaned)return;cleaned=true;try{a.disconnect();b.disconnect();ag.disconnect();bg.disconnect();sum.disconnect();env.disconnect();lp.disconnect();hp1.disconnect();hp2.disconnect();pan.disconnect()}catch(_){}};
@@ -86,11 +86,11 @@ export function createMusic(ctx,P,atmos,padVoices){
  function chord(bar){
    if(bar===lastChord)return;
    lastChord=bar;
-   if(padVoices&&padVoices.chord){padVoices.chord(bar%4);}
+   if(padVoices&&padVoices.chord){padVoices.chord(bar%4,false,chordPitches[bar%16]);}
  }
  function pulsePattern(bar,beatWithinBar){
-  const i=bar%16,chord=chordPitches[i],index=(Math.round(beatWithinBar*2)+bar)%5;
-  return chord[[3,4,2,3,4][index]];
+  const i=bar%16,chord=chordPitches[i],index=Math.round(beatWithinBar*2)%5;
+  return chord[[2,3,2,1,3][index]];
  }
  function scheduleBar(b){
   const bar=b%16,sectionIndex=Math.floor(bar/4),section=sections[sectionIndex],barStart=origin+b*4*beatDuration();
@@ -106,18 +106,18 @@ export function createMusic(ctx,P,atmos,padVoices){
    note(atTime,pitch+variance,duration,section.level,'lead');
   }
   // Gentle ostinato: recognizable pulse rather than a bass drum.
-  const steps=P.pulseDensity===0?0:P.pulseDensity<.38?2:P.pulseDensity<.75?4:8;
+  const steps=P.pulseDensity===0?0:P.pulseDensity<.38?2:P.pulseDensity<.75?4:8;const pattern=steps===2?[0,2.5]:steps===4?[0,1.5,2.5,3.5]:[0,.5,1.5,2,2.5,3,3.5,3.75];
   for(let n=0;n<steps;n++){
-   const localBeat=n*4/steps,atTime=barStart+localBeat*beatDuration();
+   const localBeat=pattern[n],atTime=barStart+localBeat*beatDuration();
    const pitch=pulsePattern(bar,localBeat)-36;
-   const dynamics=section.pulse*(n===0?1.16:.82);
+   const dynamics=section.pulse*[1.12,.68,.82,.62,.78,.66,.74,.57][n];
    note(atTime,pitch,Math.min(.9,3.2/steps),dynamics,'pulse');
   }
  }
  // Always quantize to bar grid. Dedicated lookahead runs off the audio clock.
  function tick(){
   if(paused)return;
-  const horizon=ctx.currentTime+.24;
+  const horizon=ctx.currentTime+1.0;
   const d=beatDuration();
   if(ctx.currentTime-origin>0&&origin+cursor*4*d<ctx.currentTime-.5){
    cursor=Math.floor((ctx.currentTime-origin)/(4*d));
