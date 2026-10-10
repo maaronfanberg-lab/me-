@@ -30,7 +30,7 @@ jobs:
       - name: Serve GitHub Pages content locally
         run: |
           python3 -m http.server 8000 --directory . >/tmp/cathedral-http.log 2>&1 &
-      - name: Require visual responses to slider input
+      - name: Verify startup and pixel changes for each scene's sliders
         run: |
           cat >/tmp/cathedral-smoke.cjs <<'JS'
           const {chromium}=require(process.cwd()+'/node_modules/playwright');
