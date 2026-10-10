@@ -69,6 +69,27 @@ jobs:
            for(const [name,m] of Object.entries(readings)){if(!(m.peak<.98))throw Error('Peak overload '+name);if(!(m.rms>0.00001))throw Error('Silence '+name);if(!(m.rootMonoRetention>.94))throw Error('Fundamental phase cancellation '+name);}
            if(readings.monoSub.sideRatio>.008)throw Error('Mono foundation leaked into stereo difference');
            if(readings.monoSub.below20Relative>.18)throw Error('Unwanted very-low-frequency energy');
+           // Verify a preset does not unmute a paused synth and does not detach the params object.
+           await page.locator('#power').click();
+           await page.waitForTimeout(300);
+           await page.evaluate(()=>window.__earthlight.setParam('master',.4));
+           await page.locator('[data-preset="deep"]').click();
+           await page.waitForTimeout(300);
+           const mutedState=await page.evaluate(()=>window.__earthlight.getStatus());
+           if(mutedState.playing||mutedState.audioState==='running')throw Error('Mute was undone by preset or volume slider: '+JSON.stringify(mutedState));
+           console.log('PASS muted volume and preset safety');
+           // Stress simulation with all energetic layers and the output trim at their maxima.
+           const stress=await page.evaluate(async()=>{
+             for(const id of ['master','sub','subHarm','warmth','body','bodyDrive','pad','padDensity','shimmer','reverb','echo','feedback']){
+               const el=document.querySelector('#c-'+id);window.__earthlight.setParam(id,Number(el.max));
+             }
+             const b=await window.__earthlight.simulate({seconds:3.5});
+             const a=b.getChannelData(0),r=b.getChannelData(1);let peak=0,energy=0,finite=true;
+             for(let i=0;i<a.length;i++){peak=Math.max(peak,Math.abs(a[i]),Math.abs(r[i]));energy+=a[i]*a[i]+r[i]*r[i];finite=finite&&Number.isFinite(a[i])&&Number.isFinite(r[i]);}
+             return {peak,rms:Math.sqrt(energy/(2*a.length)),finite};
+           });
+           console.log('ALL MAXIMUM DSP STRESS',stress);
+           if(!stress.finite||stress.peak>=.72||stress.rms<.002)throw Error('Unsafe maximum-output stress render');
            if(errors.length)throw Error('Browser errors '+errors.join(' | '));
            await page.screenshot({path:'/tmp/earthlight-mobile.png',fullPage:true});
            await browser.close();
