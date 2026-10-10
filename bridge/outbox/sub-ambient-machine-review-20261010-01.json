@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/sub-ambient-machine-review-20261010-01.json",
+  "request_sha256": "93b7574c1712f0117092f10c1759189342a1387da1519b34f49f2e18cbaaa087",
+  "request_nonce": "sub-ambient-machine-review-20261010-01",
+  "completed_at": "2026-10-10T12:29:55.675515Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "# Deep Earth Ambient: advisory design\n\nI haven't opened the repo. The target is `maaronfanberg-lab/me-` at `apps/deep-earth-ambient.html`, a single file with no dependencies and no samples.\n\n## 1. Routing and safety\n\n```\nSubEngine(mono) ─────────────────────────┐\nGrit ─► LP ─► shaper ─► HP70 ─► pan L/R ─┤\nPad (5 voices, panned) ─► LP ────────────┼► preBus (0.7)\nEcho/Verb returns ───────────────────────┘\npreBus ─► HP 32 Hz (Q .707, 2 cascaded = 24 dB/oct)\n       ─► Comp ─► master (0→0.22, ≤0.5) ─► Limiter ─► trim 0.8 ─► destination\n                                          └► Analyser (meter + tests)\n```\n\n- **Sends:** Pad and Grit feed the Echo and Reverb sends. The sub never does, which keeps the low end tight and mono.\n- **Compressor:** threshold −20, knee 12, ratio 3, attack 0.03 s, release 0.4 s.\n- **Limiter:** a second `DynamicsCompressor` with threshold −4, knee 0, ratio 20, attack 0.003 s, release 0.1 s. It sits after master, so no slider combination can clip.\n- **Gain staging:** the worst-case sum of engine levels should come to about 0.7 before master.\n- **Start-up and mute:** fade master in over 3 s from 0, and add a Mute/Panic button that ramps to 0 over 0.1 s.\n- **Headphone caveat:** headphones and phone speakers can't reproduce 40–60 Hz, so they will sound thin. The 80–250 Hz grit layer and the sub's 2nd harmonic carry the weight there. Put a \"start quiet, sub loudness is deceptive, protect speakers and ears\" note on screen.\n- **Infrasound:** nothing is designed below 40 Hz.\n\n## 2. Tuning and harmony\n\n- **Tonic pedal:** the sub stays on a fixed tonic of 41–65 Hz, default A1 = 55 Hz. Upper layers move over it, because chord roots like D would fall outside 40–70 Hz.\n- **Dorian on A**, as semitone offsets from the root (frequency = root × 2^(n/12)):\n\n  | Chord | Offsets |\n  |---|---|\n  | i | 0, 7, 12, 15, 19 |\n  | IV | 5, 12, 17, 21, 24 |\n  | bVII | 10, 17, 22, 26 |\n\n  Progression: i – IV – i – bVII.\n- **Harmonic minor** (select box): i – V (7, 11, 14, 19) – bVI (8, 12, 15, 20) – iv (5, 8, 12, 17).\n- Voices glide with `setTargetAtTime`, using the Glide slider as the time constant. Oscillators are never retriggered.\n\n## 3. Four engines\n\n1. **Sub floor (mono):**\n   - Sine at f0.\n   - Second sine at f0 plus a Drift offset.\n   - 2f0 sine, a quiet triangle at 3f0 for warmth, and a slow swell gain.\n   - The 2f0 sine is what makes it audible on small speakers.\n2. **Grit-body:**\n   - Two saws at 2×f0 and 4×f0, plus a fifth at 3×f0.\n   - Each is detuned ±7 cents and hard-panned L/R.\n   - Chain: waveshaper (tanh curve, 4× oversample, post-gain compensation), lowpass at 420 Hz Q 0.7, then HP70.\n   - A 0.05 Hz LFO modulates the cutoff.\n3. **Slow pad:**\n   - 5 voices (saw and triangle) in the 110–440 Hz octaves, detuned ±8 cents.\n   - Spread across the stereo field by panners.\n   - Lowpass at 900 Hz.\n   - On chord change, a 5 s envelope swell.\n4. **Echo/shimmer:**\n   - Feedback delay of 0.62 s with a damping lowpass at 2.5 kHz and a 200 Hz HP inside the loop. Feedback is capped at 0.7.\n   - Synthetic reverb: a convolver with a generated 5 s noise IR, exponentially decaying and lowpassed, built directly in a buffer.\n   - Shimmer is an honest approximation: octave-up sine partials (4×f0 and 8×f0) fed into the reverb. Don't claim a true pitch shifter.\n\n## 4. Motion without pulsing\n\n- All LFOs are sine, ≤0.2 Hz, and none control amplitude except the sub swell.\n- Sub swell: rate 0.04 Hz, depth ≤0.12.\n- Sub Drift: default 0.06 Hz of beating, a cycle of about 16 s.\n- A random walk on the filter cutoffs, rescheduled every 4–8 s with `setTargetAtTime` and a time constant of 3 s.\n- No tremolo, no sidechain, no envelope above 1 Hz.\n\n## 5. Sliders (28, min–max, default → target)\n\n**Safety and master**\n1. Master: 0–0.5, 0.22 → `master.gain`\n2. Limiter ceiling: −12 to −1 dB, −4 → `limiter.threshold`\n3. Comp threshold: −36 to −6 dB, −20 → `comp.threshold`\n4. HP cutoff: 28–40 Hz, 32 → both HP `frequency` values\n\n**Harmony**\n5. Root: 41–65 Hz (semitone steps), 55 → all oscillator frequencies\n6. Chord dwell: 8–60 s, 28 → progression scheduler interval\n7. Glide: 0.5–8 s, 3 → frequency time constant\n\n**Sub**\n8. Sub level: 0–1, 0.6 → sub bus gain\n9. 2nd harmonic: 0–0.6, 0.25 → 2f0 gain\n10. 3rd-harmonic warmth: 0–0.3, 0.1 → triangle gain\n11. Drift: 0–0.3 Hz, 0.06 → osc B frequency offset\n12. Swell rate: 0.01–0.15 Hz, 0.04 → LFO `frequency`\n13. Swell depth: 0–0.3, 0.12 → LFO gain into sub gain\n\n**Grit**\n14. Grit level: 0–1, 0.45 → grit bus gain\n15. Drive: 0.5–8, 2.5 → shaper pre-gain\n16. Cutoff: 120–1200 Hz, 420 → grit LP `frequency`\n17. Filter motion depth: 0–800 Hz, 150 → LFO gain into the cutoff\n18. Filter motion rate: 0.01–0.2 Hz, 0.05 → LFO `frequency`\n19. Detune: 0–20 cents, 7 → `osc.detune`\n\n**Pad**\n20. Pad level: 0–1, 0.4 → pad bus gain\n21. Brightness: 300–3000 Hz, 900 → pad LP `frequency`\n22. Width: 0–1, 0.7 → panner `pan` = ±width\n23. Swell time: 2–12 s, 5 → envelope time constant\n24. Pad detune: 0–25 cents, 8 → `osc.detune`\n\n**Echo and reverb**\n25. Echo send: 0–0.8, 0.3 → send gain\n26. Echo time: 0.25–1.2 s, 0.62 → `delayTime`, smoothed with a 0.3 s time constant\n27. Feedback: 0–0.7, 0.45 → feedback gain\n28. Reverb mix: 0–1, 0.35 → convolver wet gain\n\nShimmer amount (0–0.5) would be a 29th slider, to the octave partials' gain.\n\n## 6. Implementation pitfalls\n\n- **iOS start:** create or resume the `AudioContext` inside a `touchend` or `click` handler. Await `ctx.resume()` before starting any oscillator. Use the `webkitAudioContext` fallback.\n- **Interruptions:** Safari can enter an `interrupted` state after a call, a lock or a tab switch. Handle `ctx.onstatechange` and `visibilitychange` and call `resume()`. Show a \"Tap to resume\" overlay if it still isn't `running`.\n- **Silent switch:** the iOS ringer switch can mute Web Audio. Mention it in the UI, or play a looping silent `<audio>` element as a workaround.\n- **Zipper noise and clicks:**\n  - Never assign `.value` live. Use `setTargetAtTime(v, now, 0.05)`.\n  - Call `cancelScheduledValues` before ramps.\n  - Never `exponentialRamp` to 0.\n  - Time constants must be above 0.\n- **LFO routing:** an LFO needs a scaling `GainNode` into the AudioParam. Never wire a ±1 signal directly to a frequency.\n- **Feedback loop:** it must contain a `DelayNode`, with gain below 1 and a damping filter.\n- **Waveshaper:** use a `Float32Array` curve, `oversample = '4x'`, and compensate the gain afterwards.\n- **Oscillators:** start each once and never restart it. Stop and disconnect on teardown.\n- **Reverb IR:** generate it at `ctx.sampleRate`, since iOS may run at 48 kHz.\n- **Sliders:** use the `input` event and `parseFloat`. Give each slider a labelled readout.\n- **Dead sliders:** build a single registry `[{id, min, max, def, apply(v)}]` that generates the UI. A slider with no `apply` can't exist.\n- **Panning:** `StereoPannerNode` needs Safari 14.1+. Fall back to a mono sum if it's missing.\n\n## 7. Tests\n\n- **Offline slider audit:**\n  - Build the graph as `buildGraph(ctx)`, so it runs in both a live and an `OfflineAudioContext`.\n  - For each registry entry, render 6 s at min and at max with everything else at default.\n  - Compare band energy (sub 40–70 Hz, body 80–250 Hz, high above 1 kHz) and spectral centroid.\n  - Fail if the difference is under 0.5 dB or 1% in any relevant band.\n  - Since the audit iterates the registry, a dead slider fails CI.\n- **All-max stress:** peak output must stay below 0.99 with no NaN, and DC offset below 0.001.\n- **Spectrum checks:**\n  - Energy below 30 Hz must be at least 24 dB below the 40–70 Hz energy.\n  - The sub band must dominate the low end.\n- **Motion check:** the 10 s RMS envelope must have no periodic modulation above 0.3 Hz.\n- **Browser run:** Playwright with WebKit and Chromium on a mobile viewport. Check the tap-to-start overlay, a state of `running`, and that the Mute button works.\n- **Manual iPhone test:**\n  - Silent switch on and off.\n  - Screen lock and unlock.\n  - Incoming-call interruption.\n  - Tab switch.\n  - Headphones, phone speaker and subwoofer.\n  - A 30-minute run for drift and CPU load.",
+  "session_id": "e11588b7-8c1d-4249-8805-6e14a0531e20",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1024,
+    "cache_read_input_tokens": 2604,
+    "output_tokens": 7817,
+    "output_tokens_details": {
+      "thinking_tokens": 3930
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 1024,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 7817,
+        "cache_read_input_tokens": 2604,
+        "cache_creation_input_tokens": 1024,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1024
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.08253039999999999,
+  "num_turns": 1
+}
