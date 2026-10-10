@@ -39,9 +39,9 @@ export function makeVoices(ctx,P,monoBus,atmos){
  const shimmer=osc('sine',P.root*8),shGain=g(P.shimmer*.032),shHP=f('highpass',390);
  shimmer.connect(shGain);shGain.connect(shHP);shHP.connect(atmos);
  let chordIndex=0,mode='speaker',lastChord=ctx.currentTime;
- function chord(i,gliss=false){
+ function chord(i,gliss=false,custom=null){
   chordIndex=((i%4)+4)%4;lastChord=ctx.currentTime;
-  for(const x of pads){let pitch=P.root*Math.pow(2,voicings[chordIndex][x.i]/12);if(gliss){const p=x.o.frequency,t=ctx.currentTime;p.cancelScheduledValues(t);p.setValueAtTime(p.value,t);p.linearRampToValueAtTime(pitch*1.014,t+.05);p.setTargetAtTime(pitch,t+.055,Math.max(.10,P.glide/3));}else sm(x.o.frequency,pitch,ctx,Math.max(.10,P.glide/3));}
+  for(const x of pads){let pitch=P.root*Math.pow(2,(custom||voicings[chordIndex])[x.i]/12);if(gliss){const p=x.o.frequency,t=ctx.currentTime;p.cancelScheduledValues(t);p.setValueAtTime(p.value,t);p.linearRampToValueAtTime(pitch*1.014,t+.05);p.setTargetAtTime(pitch,t+.055,Math.max(.10,P.glide/3));}else sm(x.o.frequency,pitch,ctx,Math.max(.10,P.glide/3));}
  }
  function panUpdate(t=0){for(const x of pads){
    let theta=t*(.05+P.motion*.14)+x.i*2.31;
