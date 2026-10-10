@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/earth-phase-brief-v2.json",
+  "request_sha256": "8f3bba8a5e15651702042dbff32d3b6dacde397ff549b3ca81957f731a67d691",
+  "request_nonce": "earth-phase-brief-v2",
+  "completed_at": "2026-10-10T12:44:10.772866Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "**Design assumption (not verified against any repo code):** a crossover splits the signal into three bands. Below about 130 Hz, a single mono path carries the ~43 Hz oscillator, centered, with no detune. Above about 200 Hz, independent voices are panned for the surround effect. The 130–200 Hz range is a transition band.\n\n## 3 likely cancellation risks\n\n1. **Crossover phase mismatch.** If the low band and the mid/high bands come from different filters, such as a Linkwitz-Riley low-pass beside a plain high-pass, they can have different phase and group delay near the 130–200 Hz overlap. Summing them there can produce notches or bumps. Keep the filters complementary and phase-aligned, or leave a clear gap between the bands.\n\n2. **Harmonic overlap between the mono bass and the panned voices.** A 43 Hz oscillator has harmonics at 86, 129, 172 and 215 Hz. If the panned voices carry the same fundamental or harmonics, whether detuned or not, they can beat against or cancel the mono bass in the 172–215 Hz range. Panning can also make the L and R phase relationships differ per voice. Opposite-polarity or phase-offset copies in L and R will cancel when summed to mono.\n\n3. **Mono-sum and surround-matrix cancellation.** Simulated surround often uses inter-channel delay or decorrelation, such as a Haas delay, all-pass filters or polarity flips. These comb-filter when folded to mono, for example on a phone speaker or in a downmix. Even equal-power panning can drop the level in the sum if the voices are correlated. Any stereo widening that leaks below 130 Hz would also break the mono-bass guarantee.\n\n## 3 OfflineAudioContext measurements\n\n1. **Band-split sum magnitude response.** Render an impulse or a log sweep through the full graph. Take an FFT of the L+R sum and of each channel, then check the magnitude from 100 to 250 Hz. Pass criterion: no notch deeper than about 3 dB at the crossover region compared with the sum of the individual bands.\n\n2. **Low-band inter-channel correlation and side energy.** Render the oscillator and the voices together for several seconds. Measure L–R correlation and the RMS of the side signal (L–R) after a low-pass at 130 Hz. Pass criteria: correlation is close to 1, and side energy is at least 40 dB below mid. Also confirm that the 43 Hz peak frequency is exact, using a long FFT with a window.\n\n3. **Mono-fold compatibility of the high band.** Render the voices above 200 Hz and compare the RMS of the mono sum (L+R)/2 with the RMS of the power sum of L and R. Run this per pan position and with several voice phases. Pass criterion: the loss stays within about 3 dB. Also check the 43 Hz and 86–215 Hz harmonic bins in the full mix against the oscillator rendered alone, to catch beating or cancellation caused by overlap.\n\n**Falsification:** if measurement 1 shows a flat sum, 2 shows a high correlation, and 3 shows less than 3 dB of loss, the cancellation hypotheses are mostly ruled out. A notch located exactly at the crossover points to risk 1. A dip that moves with voice phase points to risk 2 or 3.",
+  "session_id": "e6b28c8c-5bc1-42ee-9684-7685f321f7fd",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 514,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 1119,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 514,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1119,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 514,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 514
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.013527500000000001,
+  "num_turns": 1
+}
