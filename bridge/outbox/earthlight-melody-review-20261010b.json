@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/earthlight-melody-review-20261010b.json",
+  "request_sha256": "cb0baa455230b5cab75c3ab3afc6d081e6935e567beb9461e9df1ab89a7d952e",
+  "request_nonce": "earthlight-melody-review-20261010b",
+  "completed_at": "2026-10-10T20:52:13.201385Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "**Verdict:** the pitch math and the 205 Hz highpass guard are sound. The bass stays mono and clean as long as you keep that guard. But the \"form\" is mostly not reaching the audio, and one control bug can produce long silences. These are the six changes I'd make, in priority order.\n\n**1. Dynamics are discarded (lines 49, 65–66, 106, 114).**\n- The signature is `note(t,semitones,length,amount,type,accent=1)`, but the calls pass `section.level` and `section.pulse*…` as `amount`. `amount` is never read, and `accent` is always 1.\n- Every lead is therefore identical at `.26*.82 ≈ .213`, and every pulse is identical at `.139`. The `n===0 ? 1.16 : .82` downbeat accent and the Section I → III → IV arc do nothing.\n- This is the main reason it feels flat.\n- Fix: pass `section.level` or `dynamics` as `accent` and drop the `amount` parameter. Then raise the `clamp(value,0,.24)` ceiling, or scale before the clamp. Right now it would flatten the accents anyway.\n- Add a velocity contour on the pulse, for example 1 / .6 / .75 / .6.\n\n**2. The section jump schedules far in the future (line 131).**\n- It sets `origin=now+.08` and `cursor=selected*4`, but `barStart=origin+b*4*d`. Choosing Section III therefore starts at about `now + 8 bars ≈ 27 s`, which is silence.\n- Notes already scheduled for the old position are never cancelled, so they overlap.\n- Fix: use `origin=now+.08-cursor*4*d`. Track scheduled voices in a list and ramp their gains to 0 over about 50 ms before a jump.\n- The tempo branch (line 130) has the same weakness. Already-created notes keep the old tempo, and its `cursor=max(...)` can skip bars.\n\n**3. The scheduler is too tight and creates whole bars at once (lines 118–127).**\n- The lookahead is 0.24 s and it is driven by the app's 75 ms `setInterval`. A throttled or background tab, or a main-thread hiccup over about 250 ms, makes `note()` drop events through `t<currentTime-.04`. The `cursor` re-sync at line 122 then skips whole bars.\n- Fix: use a lookahead of about 1.0–1.5 s and a 100 ms timer, and schedule per beat or per step rather than per bar.\n- Scheduling per beat also removes the burst of about 12–20 voices, each with 11 nodes and 4 biquads, created in one tick. Those bursts are where glitches come from.\n\n**4. The pulse is metronomic and its pitch pattern doesn't repeat (lines 91–93, 109–115).**\n- `(round(beat*2)+bar)%5` indexes a 5-cycle against a 4/4 bar, so the figure shifts every bar and never settles into a hook.\n- At the default density of .60 it is plain quarter notes, with equal length and level (see item 1).\n- Chord tones `[3,4,2,3,4]` all sit in F4–C5, the same register as the lead, so the two mask each other.\n- The sound I'd aim for is a rhythmic atmosphere, with delay-like repetition rather than a plain arpeggio. A dotted-eighth figure on an 8th grid (steps 0, 1.5, 3, 4.5, …) would give that.\n- Fix: use a fixed 8-step figure per chord, such as root–5th–octave–5th–3rd. Keep it identical for 4 bars, with a different-length gate or velocity contour per section, and only vary it in Section III.\n- Move the pulse register about an octave away from the lead, either lower toward 260–350 Hz or higher.\n- Sync the echo to the tempo (`echoTime ≈ 0.75*beatDuration()`) so the repeats lock to the groove. Currently it is a free 0.72 s against a beat of 0.857 s.\n\n**5. The chord layers don't agree, and the lead is partly off-grid.**\n- `chordPitches` has 16 distinct bars, but `chord()` sends only `bar%4` to the pad voices (line 89). The pad's four-chord loop and the pulse's 16-bar progression drift apart. Section 2 bars 6–7 clash with the pad, for example.\n- Fix: send the actual chord index to the pad, or build the pad from `chordPitches[bar]`.\n- Lead onsets at 8.4, 7.3, 5.25, 2.8, 6.8, 3.2, 4.2, 11.1 and 12.1 are 0.1–0.3 beat off the grid, against a metronomic pulse. That reads as a sloppy edit, not rubato. Snap them to 1/8 or 1/16 steps, or to dotted eighths.\n- The 4-bar sections (about 14 s each) change faster than a spacious piece should. Repeat each phrase twice before moving on.\n\n**6. The lead voice doesn't do what the comments claim, and the envelopes waste CPU (lines 57–79).**\n- `Math.sin(semitones*1.7)*2.3` is a static per-pitch detune of ±2.3 cents. It is not vibrato, and it makes some notes sound slightly out of tune.\n- Replace it with a delayed 5 Hz LFO on `detune`, about ±6–10 cents, fading in after about 0.4 s.\n- Add a second detuned saw (±6 cents) to the lead so it sounds like a played guitar.\n- The release is only about 0.17 s (`release/3.5`), so long notes end abruptly. Use legato overlap, with the next note's attack starting before the previous release ends, and a slower tail.\n- Voices run on for `secs+max(.9, release*2.8)` after the envelope is already inaudible. Stop at `releaseStart + 6*tc` instead. That roughly halves live voices.\n- `tracked` is only pruned above 180 entries. Prune it on each tick.\n\n**What to keep:**\n- **Pitch math:** `root*8*2^(n/12)` gives F4 as 0, which matches the section comments.\n- **Pulse register:** the pulse pitches land at 262–523 Hz, above the guard. Don't lower them without also keeping the 205 Hz highpass on that bus.\n- **Mono bass:** each music voice has two 220 Hz highpasses and the bus has two 205 Hz highpasses, so no music energy reaches the bass region. That is why the bass stays mono, and changes 1–6 don't affect it.",
+  "session_id": "5795f2b2-164e-48ff-8715-5310e8fa4a42",
+  "usage": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 11134,
+    "cache_read_input_tokens": 9404,
+    "output_tokens": 8340,
+    "output_tokens_details": {
+      "thinking_tokens": 5919
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 11134,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 8136,
+        "cache_read_input_tokens": 3471,
+        "cache_creation_input_tokens": 10267,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 10267
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.12888840000000001,
+  "num_turns": 4
+}
