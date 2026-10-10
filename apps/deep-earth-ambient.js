@@ -12,7 +12,7 @@ const groups=[
  ['04 · EXPANSIVE DISTANCE',false,[
  ['reverb','Cathedral space',0,1,.01,'','Highpassed generated reverb.'],['echo','Distant reflection amount',0,1,.01,'','Highpassed repeats only.'],['echoTime','Reflection delay',.28,1.18,.01,' sec','Same delay on both channels.'],['feedback','Echo persistence',0,.6,.01,'','Stability-limited feedback amount.'],['air','Air brightness',0,1,.01,'','High shelving color.']]]
 ];
-let P={...defaults},engine=null,playing=false,mono=false,spatial='speaker',lastFrame=0,visualTime=0,lastMeter=0,lastUpdate=0;
+const P={...defaults};let engine=null,playing=false,mono=false,spatial='speaker',lastFrame=0,visualTime=0,lastMeter=0,lastUpdate=0;
 const controlDefs=groups.flatMap(g=>g[2]);
 const presets={
  horizon:{...defaults},
@@ -31,7 +31,7 @@ for(const [name,opened,fields] of groups){
   box.innerHTML='<div class="sliderline"><label for="c-'+key+'">'+label+'</label><output id="v-'+key+'"></output></div><div class="hint">'+hint+'</div>';
   const input=document.createElement('input');Object.assign(input,{type:'range',id:'c-'+key,min,max,step,value:P[key]});input.setAttribute('aria-label',label);
   box.insertBefore(input,box.lastChild);content.appendChild(box);
-  input.addEventListener('input',()=>{P[key]=Number(input.value);sync();if(engine)engine.apply(key,P[key]);});
+  input.addEventListener('input',()=>{P[key]=Number(input.value);sync();if(engine&&(key!=='master'||playing))engine.apply(key,P[key]);});
  }
  details.append(title,content);$('#controls').appendChild(details);
 }
@@ -39,19 +39,19 @@ $('#controlCount').textContent=controlDefs.length+' CONNECTED CONTROLS';sync();
 function status(text,message){$('#live').textContent=text;$('#engineStatus').textContent=text;$('#activity').textContent=text;if(message)$('#message').textContent=message}
 async function play(){
  if(!AC){status('UNAVAILABLE','Web Audio is not supported by this browser.');return;}
- try{if(!engine){const c=new AC({latencyHint:'playback'});engine=createEngine(c,P);}
+ try{if(!engine){const c=new AC({latencyHint:'playback'});engine=createEngine(c,P);c.onstatechange=()=>{if(playing&&c.state!=='running')status('TAP TO RESUME','Audio interrupted. Tap Begin to resume.');};}
  await engine.c.resume();if(engine.c.state!=='running')throw Error('Browser blocked audio; tap again');
  engine.setSpace(spatial);engine.setMono(mono);engine.output(P.master,.8);playing=true;
  $('#power').innerHTML='Ⅱ <span>PAUSE SOUND</span>';$('#power').setAttribute('aria-pressed','true');
  status('SOUND LIVE','Fundamental is centered; only the upper harmonies move through space.');
  }catch(e){status('TAP TO RESUME','Audio could not start: '+String(e.message||e))}
 }
-function stop(){if(engine)engine.output(0,.025);playing=false;$('#power').innerHTML='▶ <span>BEGIN THE JOURNEY</span>';$('#power').setAttribute('aria-pressed','false');status('MUTED','Output faded to silence. Tap BEGIN to resume.')}
+function stop(){if(engine)engine.output(0,.025);playing=false;setTimeout(()=>{if(engine&&!playing)engine.c.suspend().catch(()=>{});},180);$('#power').innerHTML='▶ <span>BEGIN THE JOURNEY</span>';$('#power').setAttribute('aria-pressed','false');status('MUTED','Output faded to silence. Tap BEGIN to resume.')}
 $('#power').addEventListener('click',()=>playing?stop():play());
 $('#panic').addEventListener('click',stop);
 $('#spatialMode').addEventListener('change',e=>{spatial=e.target.value;engine?.setSpace(spatial);$('#message').textContent=spatial==='headphone'?'HRTF acts only on independent highpassed voices.':'Speaker mode uses gentle panning of independent higher voices.'});
 $('#mono').addEventListener('click',()=>{mono=!mono;engine?.setMono(mono);$('#mono').classList.toggle('on',mono);$('#mono').setAttribute('aria-pressed',String(mono));$('#mono').textContent=mono?'✓ MONO MONITOR':'◉ MONO CHECK';$('#message').textContent=mono?'True L+R fold-down enabled. Bass should remain unchanged.':'Stereo spatial movement restored; bass is still mono.'});
-$$('[data-preset]').forEach(b=>b.addEventListener('click',()=>{P={...presets[b.dataset.preset]};sync();$$('[data-preset]').forEach(x=>x.classList.toggle('selected',x===b));if(engine)for(const [key,value] of Object.entries(P))engine.apply(key,value);$('#message').textContent=b.textContent+' landscape selected.';}));
+$$('[data-preset]').forEach(b=>b.addEventListener('click',()=>{{const oldMaster=P.master;Object.assign(P,presets[b.dataset.preset]);P.master=oldMaster;}sync();$$('[data-preset]').forEach(x=>x.classList.toggle('selected',x===b));if(engine)for(const [key,value] of Object.entries(P))if(key!=='master'||playing)engine.apply(key,value);$('#message').textContent=b.textContent+' landscape selected.';}));
 const canvas=$('#scope'),cx=canvas.getContext('2d'),bins=new Uint8Array(1024);
 function frame(now){requestAnimationFrame(frame);if(now-lastFrame<33)return;let delta=Math.min(.06,(now-lastFrame)/1000||.033);lastFrame=now;const dpr=Math.min(devicePixelRatio||1,1.5),w=canvas.clientWidth,h=canvas.clientHeight;if(w<1||h<1)return;
  if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
@@ -64,9 +64,10 @@ function frame(now){requestAnimationFrame(frame);if(now-lastFrame<33)return;let 
   cx.strokeStyle=layer%2?'rgba(141,225,211,'+(.10+env*.14)+')':'rgba(229,186,136,'+(.06+env*.1)+')';cx.lineWidth=dpr*(layer===4?1.6:1);cx.stroke();
  }
  $('#orb').style.transform='translate(-50%,-50%) rotate('+(visualTime*7)+'deg) scale('+(1+env*.018)+')';
- if(engine&&playing&&now-lastUpdate>300){engine.update();lastUpdate=now;}
+ 
  if(engine&&playing&&now-lastMeter>900){let val=engine.lowCorrelation();$('#monoStatus').textContent=mono?'MONO PREVIEW':val===null?'QUIET':val>.9?'COHERENT':'CHECK LOW END';$('#monoStatus').title=val===null?'':('Measured low-frequency L/R correlation '+val.toFixed(3));lastMeter=now;}
 }
 requestAnimationFrame(frame);
+setInterval(()=>{if(engine&&playing&&engine.c.state==='running')engine.update();},350);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&playing&&engine){engine.c.resume().then(()=>status('SOUND LIVE')).catch(()=>status('TAP TO RESUME'))}});
 window.__earthlight={getParams:()=>({...P}),getStatus:()=>({playing,mono,spatial,audioState:engine?.c.state||'off',coherence:engine?.lowCorrelation()??null}),setParam:(key,value)=>{const el=$('#c-'+key);if(!el)throw Error('Unknown slider: '+key);el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}))},createEngine,async simulate(options={}){if(!OC)throw Error('No OfflineAudioContext');const sec=options.seconds||3,sr=44100,c=new OC(2,Math.round(sec*sr),sr),params={...P};const g=createEngine(c,params,{offline:true});g.setSpace(options.spatial||'speaker');if(options.subOnly){for(const k of ['body','pad','shimmer','echo','reverb','subHarm','warmth'])g.apply(k,0)}g.master.gain.value=params.master;return c.startRendering()}};
