@@ -38,9 +38,9 @@ jobs:
           (async()=>{
             const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-webgl','--disable-dev-shm-usage']});
             const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
-            const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')console.log('console:',m.text())});
+            const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')console.log('console:',m.text())});page.on('requestfailed',r=>console.log('FAILED RESOURCE',r.url(),r.failure()?.errorText));
             await page.goto('http://127.0.0.1:8000/apps/geometry-cathedral.html',{waitUntil:'domcontentloaded'});
-            await page.waitForFunction(()=>window.__geometryReady===true&&document.querySelector('#status')?.textContent==='ENGINE ACTIVE',null,{timeout:90000});
+            await page.waitForFunction(()=>window.__geometryReady===true&&document.querySelector('#status')?.textContent==='ENGINE ACTIVE',null,{timeout:35000}).catch(async e=>{console.log('BOOT DETAILS',await page.evaluate(()=>({ready:window.__geometryReady,status:document.querySelector('#status')?.textContent,desc:document.querySelector('#sceneDesc')?.textContent,html:document.documentElement.outerHTML.slice(0,500)})));console.log('PAGE ERRORS',errors);throw e});
             await page.locator('#pause').click();
             const hash=async()=>crypto.createHash('sha256').update(await page.locator('#three').screenshot()).digest('hex');
             const set=async(key,value)=>await page.evaluate(([k,v])=>{const input=document.querySelector('#p-'+k);if(!input||getComputedStyle(input.closest('.field')).display==='none')throw Error('Slider invisible: '+k);input.value=v;input.dispatchEvent(new Event('input',{bubbles:true}))},[key,value]);
