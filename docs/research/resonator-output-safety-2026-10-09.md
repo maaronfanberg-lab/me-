@@ -51,3 +51,50 @@ Approved by Alex at gate 1 (Stage 1 audit). Harness and scripts: `qa-resonator/`
 | true peak, 112 extreme cases (8 shapes × 7 settings × 2 modes) | worst −1.19 dBTP, 0 NaN |
 | browser (390×844 touch): orbit/move nudges, hint, select, move, undo, hold-repeat, hide, overlap | all pass |
 | app Self-test, original vs patched | identical, no script errors, 0 underruns |
+
+---
+
+# F5 — Tank froze the audio (2026-10-10)
+
+## Observed problem
+Alex on iPhone: "It stops playing after using tank." Reproduced in Chromium: Tank's first note
+peaked at 0.036 (String 0.586), and String stayed at 0.036 after switching back. The 2026-10-09
+browser check had already measured Tank at 0.000 in both the old and new builds; that result
+was not reported at the time. Process failure, recorded here.
+
+## Cause (profiled)
+Building a body runs `calibrate()` on the audio thread: 18 symmetric eigen-solves by cyclic
+Jacobi (O(n³) per sweep, up to 60 sweeps). Tank has 174 degrees of freedom → 3.2 s on the dev
+machine (7.9 s at max size; Drum at max 0.9 s). Audio stops until it finishes; a phone is
+several times slower.
+
+## Source
+Householder tridiagonalisation + implicit QL (tred2/tql2): Wilkinson & Reinsch, *Handbook for
+Automatic Computation* Vol. II (1971); EISPACK; public-domain JAMA port (NIST/MathWorks, 1998).
+Standard method for dense symmetric eigenproblems; Jacobi is accurate but slow at this size.
+
+## Implementation mapping
+- `tql()` method added to the worklet. Bodies with > 60 dof use it; ≤ 60 dof keep `jacobi()`.
+- 17 of 18 solves need frequencies only, so they skip the mode shapes. On unanchored bodies the
+  engine discards rigid (drift) modes using the shapes; the fast path drops the same number of
+  lowest modes, **only if** the full solve proved they are exactly the lowest. Both table ends
+  are then re-solved in full and must agree to 1e-9 in log-frequency, or the whole table is
+  recomputed the original way (`fastFallbacks` counts this).
+
+## Validation
+| check | result |
+|---|---|
+| 24 shape × size cases (min/default/max), old vs new | ≤ 60 dof: audio bit-identical; > 60 dof: same reference mode, table Δ ≤ 7e-9 cents, max band Δ 0.0000 dB, 0 fallbacks |
+| Tank build | 3181 → 355 ms; max size 7919 → 819 ms; Drum max 938 → 252 ms |
+| Rigid-mode assumption, Tank, 4 substrates × 3 stiffness ratios | always 3 rigid modes, always the lowest, identical frequencies |
+| Browser: String → Tank → String → Chime | 0.586 / 0.691 / 0.586 / 0.606 (was 0.586 / 0.036 / 0.036 / 0.068) |
+
+## Limits
+355 ms is still a short gap when Tank is first built, longer on a phone. Fully removing it means
+moving calibration off the audio thread. Not done: out of approved scope.
+
+## Ratchet (new permanent checks)
+- Every shape is built at min, default and max size with its build time measured
+  (`qa-resonator/f5verify.mjs`).
+- Every browser check switches shapes and back (`qa-resonator/tank_switch.py`), and any
+  silent or near-silent result is reported, never left in the output unmentioned.
