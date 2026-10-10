@@ -37,7 +37,7 @@ export const musicSections=sections.map(s=>s.name);
 const makeGain=(ctx,x=1)=>{const g=ctx.createGain();g.gain.value=x;return g};
 const makeFilter=(ctx,type,hz)=>{const f=ctx.createBiquadFilter();f.type=type;f.frequency.value=hz;f.Q.value=.707;return f};
 export function createMusic(ctx,P,atmos,padVoices){
- const leadBus=makeGain(ctx,.50*(P.lead??.8)*(P.musicDynamics??.82)),pulseBus=makeGain(ctx,.22*(P.pulse??.55)*(P.musicDynamics??.82));
+ const leadBus=makeGain(ctx,1.30*(P.lead??.8)*(P.musicDynamics??.82)),pulseBus=makeGain(ctx,.49*(P.pulse??.55)*(P.musicDynamics??.82));
  const leadTone=makeFilter(ctx,'lowpass',1050+(P.expression??.6)*2000);
  const guardA=makeFilter(ctx,'highpass',205),guardB=makeFilter(ctx,'highpass',205);
  leadBus.connect(leadTone);leadTone.connect(guardA);pulseBus.connect(guardA);guardA.connect(guardB);guardB.connect(atmos);
@@ -62,7 +62,7 @@ export function createMusic(ctx,P,atmos,padVoices){
   sum.connect(lp);lp.connect(env);env.connect(hp1);hp1.connect(hp2);hp2.connect(pan);
   pan.connect(isLead?leadBus:pulseBus);
   let attack=isLead?.05:.035,release=isLead?.60:.36;
-  let value=(isLead?.21:.13)*overall*accent*(P.musicDynamics??.82);
+  let value=(isLead?.26:.17)*overall*accent*(P.musicDynamics??.82);
   value=clamp(value,0,.24);
   env.gain.setValueAtTime(0,t);
   env.gain.linearRampToValueAtTime(value,t+attack);
@@ -129,9 +129,9 @@ export function createMusic(ctx,P,atmos,padVoices){
  function setParam(id,v){
   if(id==='tempo'){const elapsed=Math.max(0,ctx.currentTime-origin),old=lastTime||beatDuration();const beat=elapsed/old;origin=ctx.currentTime-beat*beatDuration();lastTime=beatDuration();cursor=Math.max(cursor,Math.floor((ctx.currentTime-origin)/(4*lastTime))); }
   if(id==='section'){if(v>0){const selected=clamp(Math.round(v)-1,0,3);origin=ctx.currentTime+.08;cursor=selected*4;lastChord=-1;}else{origin=ctx.currentTime+.08;cursor=0;lastChord=-1;}}
-  if(id==='lead')leadBus.gain.setTargetAtTime(.50*v*P.musicDynamics,ctx.currentTime,.07);
-  if(id==='pulse'||id==='pulseDensity')pulseBus.gain.setTargetAtTime((P.pulseDensity===0?0:.22*P.pulse*P.musicDynamics),ctx.currentTime,.07);
-  if(id==='musicDynamics'){leadBus.gain.setTargetAtTime(.50*P.lead*v,ctx.currentTime,.06);pulseBus.gain.setTargetAtTime((P.pulseDensity===0?0:.22*P.pulse*v),ctx.currentTime,.06);}
+  if(id==='lead')leadBus.gain.setTargetAtTime(1.30*v*P.musicDynamics,ctx.currentTime,.07);
+  if(id==='pulse'||id==='pulseDensity')pulseBus.gain.setTargetAtTime((P.pulseDensity===0?0:.49*P.pulse*P.musicDynamics),ctx.currentTime,.07);
+  if(id==='musicDynamics'){leadBus.gain.setTargetAtTime(1.30*P.lead*v,ctx.currentTime,.06);pulseBus.gain.setTargetAtTime((P.pulseDensity===0?0:.49*P.pulse*v),ctx.currentTime,.06);}
   if(id==='expression')leadTone.frequency.setTargetAtTime(1050+v*2000,ctx.currentTime,.06);
  }
  lastTime=beatDuration();
