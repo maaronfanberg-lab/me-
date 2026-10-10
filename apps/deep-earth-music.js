@@ -89,7 +89,7 @@ export function createMusic(ctx,P,atmos,padVoices){
  }
  function pulsePattern(bar,beatWithinBar){
   const i=bar%16,chord=chordPitches[i],index=(Math.round(beatWithinBar*2)+bar)%5;
-  return chord[[0,2,4,1,3][index]]-12;
+  return chord[[3,4,2,3,4][index]];
  }
  function scheduleBar(b){
   const bar=b%16,sectionIndex=Math.floor(bar/4),section=sections[sectionIndex],barStart=origin+b*4*beatDuration();
