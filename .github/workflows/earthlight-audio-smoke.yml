@@ -7,6 +7,7 @@ on:
       - 'apps/deep-earth-ambient.js'
       - 'apps/deep-earth-core.js'
       - 'apps/deep-earth-voices.js'
+      - 'apps/deep-earth-music.js'
       - 'apps/deep-earth-ambient.css'
       - '.github/workflows/earthlight-audio-smoke.yml'
   workflow_dispatch:
@@ -39,11 +40,14 @@ jobs:
            const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2});
            const errors=[];page.on('pageerror',e=>errors.push(e.stack||e.message));page.on('console',x=>{if(x.type()==='error')console.log('CONSOLE ERROR',x.text())});
            await page.goto('http://127.0.0.1:8100/apps/earthlight.html',{waitUntil:'domcontentloaded'});
-           await page.waitForFunction(()=>window.__earthlight&&document.querySelectorAll('#controls input').length>=25,{timeout:20000});
+           await page.waitForFunction(()=>window.__earthlight&&document.querySelectorAll('#controls input').length>=30,{timeout:20000});
            console.log('CONTROL COUNT',await page.locator('#controls input').count());
            await page.locator('#power').click();
            await page.waitForFunction(()=>window.__earthlight.getStatus().audioState==='running',{timeout:12000});
            console.log('AUDIO BOOT',await page.evaluate(()=>window.__earthlight.getStatus()));
+           const musicState=await page.evaluate(()=>window.__earthlight.getStatus().musicStats);
+           if(!musicState||musicState.lead<1||musicState.pulse<1)throw Error('No composed melody or musical pulse on startup');
+           console.log('MUSICAL COMPOSITION ACTIVE',musicState);
            await page.locator('#spatialMode').selectOption('headphone');
            await page.locator('#mono').click();
            if((await page.locator('#mono').getAttribute('aria-pressed'))!=='true')throw Error('Mono fold down did not enable');
@@ -66,6 +70,16 @@ jobs:
             return {monoSub,stereo,headphone};
            });
            console.log('DSP RESULTS',JSON.stringify(readings,null,2));
+           const musicalContrast=await page.evaluate(async()=>{
+             let buf=await window.__earthlight.simulate({seconds:2.9});
+             let on=buf.getChannelData(0);let saved=window.__earthlight.getParams();
+             window.__earthlight.setParam('lead',0);window.__earthlight.setParam('pulse',0);
+             let off=(await window.__earthlight.simulate({seconds:2.9})).getChannelData(0);
+             window.__earthlight.setParam('lead',saved.lead);window.__earthlight.setParam('pulse',saved.pulse);
+             let difference=0,total=0;for(let i=12000;i<on.length;i+=3){difference+=(on[i]-off[i])**2;total+=on[i]**2;}return Math.sqrt(difference/Math.max(total,1e-10));
+           });
+           console.log('MUSIC LAYER SIGNAL CONTRAST',musicalContrast);
+           if(musicalContrast<.075)throw Error('Music layer too weak to distinguish from drone');
            for(const [name,m] of Object.entries(readings)){if(!(m.peak<.98))throw Error('Peak overload '+name);if(!(m.rms>0.00001))throw Error('Silence '+name);if(!(m.rootMonoRetention>.94))throw Error('Fundamental phase cancellation '+name);}
            if(readings.monoSub.sideRatio>.008)throw Error('Mono foundation leaked into stereo difference');
            if(readings.monoSub.below20Relative>.18)throw Error('Unwanted very-low-frequency energy');
@@ -80,7 +94,7 @@ jobs:
            console.log('PASS muted volume and preset safety');
            // Stress simulation with all energetic layers and the output trim at their maxima.
            const stress=await page.evaluate(async()=>{
-             for(const id of ['master','sub','subHarm','warmth','body','bodyDrive','pad','padDensity','shimmer','reverb','echo','feedback']){
+             for(const id of ['lead','pulse','master','sub','subHarm','warmth','body','bodyDrive','pad','padDensity','shimmer','reverb','echo','feedback']){
                const el=document.querySelector('#c-'+id);window.__earthlight.setParam(id,Number(el.max));
              }
              const b=await window.__earthlight.simulate({seconds:3.5});
@@ -93,7 +107,7 @@ jobs:
            if(errors.length)throw Error('Browser errors '+errors.join(' | '));
            await page.screenshot({path:'/tmp/earthlight-mobile.png',fullPage:true});
            await browser.close();
-           console.log('PASS: audio boots, 25 controls present, mono monitor routes, DSP simulations preserve deep bass and peak headroom');
+           console.log('PASS: real composed melody, musical pulse, 30 controls, mono phase preservation, all-max safety and browser startup');
           })().catch(e=>{console.error('FAIL',e);process.exit(1)});
           JS
           node /tmp/earthlight-test.cjs
