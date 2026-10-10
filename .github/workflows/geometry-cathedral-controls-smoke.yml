@@ -1,0 +1,74 @@
+name: Geometry Cathedral interactive controls smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/geometry-cathedral.html'
+      - '.github/workflows/geometry-cathedral-controls-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cathedral-visual-smoke
+  cancel-in-progress: true
+
+jobs:
+  visual-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser
+        run: |
+          npm install --no-save --silent playwright
+          npx playwright install --with-deps chromium
+      - name: Serve GitHub Pages content locally
+        run: |
+          python3 -m http.server 8000 --directory . >/tmp/cathedral-http.log 2>&1 &
+      - name: Require visual responses to slider input
+        run: |
+          cat >/tmp/cathedral-smoke.cjs <<'JS'
+          const {chromium}=require(process.cwd()+'/node_modules/playwright');
+          const crypto=require('crypto');
+          (async()=>{
+            const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-webgl','--disable-dev-shm-usage']});
+            const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+            const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')console.log('console:',m.text())});
+            await page.goto('http://127.0.0.1:8000/apps/geometry-cathedral.html',{waitUntil:'domcontentloaded'});
+            await page.waitForFunction(()=>window.__geometryReady===true&&document.querySelector('#status')?.textContent==='ENGINE ACTIVE',null,{timeout:90000});
+            await page.locator('#pause').click();
+            const hash=async()=>crypto.createHash('sha256').update(await page.locator('#three').screenshot()).digest('hex');
+            const set=async(key,value)=>await page.evaluate(([k,v])=>{const input=document.querySelector('#p-'+k);if(!input||getComputedStyle(input.closest('.field')).display==='none')throw Error('Slider invisible: '+k);input.value=v;input.dispatchEvent(new Event('input',{bubbles:true}))},[key,value]);
+            const change=async(key,value)=>{const a=await hash();await set(key,value);await page.waitForTimeout(420);const b=await hash();if(a===b)throw Error('Slider produced identical rendered canvas: '+key+' -> '+value);console.log('PASS changed pixels',key,value)};
+            await change('branches',80);
+            await change('resonance',7.6);
+            await change('hue',135);
+            await change('pearls',210);
+            await page.locator('.mode[data-mode="torus"]').click();
+            await change('chaos',1.3);
+            await change('pearls',220);
+            await page.locator('.mode[data-mode="gravity"]').click();
+            if(await page.locator('#p-branches').isVisible())throw Error('Gravity shows inactive branches slider');
+            await change('mass',2.1);
+            await change('warp',1.9);
+            await change('hue',-140);
+            await page.locator('.mode[data-mode="control"]').click();
+            await change('branches',75);
+            await change('pearls',250);
+            await page.locator('#pause').click();
+            await page.waitForTimeout(1500);
+            if(await page.locator('#pidValue').textContent()==='0.000')throw Error('PID feedback failed to evolve');
+            if((await page.locator('canvas[aria-label="Actual PID target and output over time"]').evaluate(el=>getComputedStyle(el).display))==='none')throw Error('Control response plot absent');
+            await set('kp',3.4);
+            await page.waitForTimeout(500);
+            if(errors.length)throw Error('Browser runtime errors: '+errors.join(' / '));
+            console.log('PASS: all sampled sliders alter the 3D scene and PID plot is live');
+            await browser.close();
+          })().catch(e=>{console.error('FAIL',e);process.exit(1)});
+          JS
+          node /tmp/cathedral-smoke.cjs
