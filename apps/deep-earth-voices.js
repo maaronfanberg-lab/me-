@@ -24,7 +24,7 @@ export function makeVoices(ctx,P,monoBus,atmos){
  // Independent chord tones, never delayed or polarity-inverted copies.
  const padGain=g(P.pad*.58),padHP=f('highpass',195),padHP2=f('highpass',195),padLP=f('lowpass',P.padBrightness);
  padGain.connect(padHP);padHP.connect(padHP2);padHP2.connect(padLP);padLP.connect(atmos);
- const voicings=[[26,31,34,39,43],[29,34,41,45,48],[26,31,34,39,43],[34,41,46,50,53]];
+ const voicings=[[24,27,31,38,43],[24,29,33,36,41],[24,27,31,34,39],[24,29,34,38,41]];
  const panPositions=[-.86,.66,.12,-.68,.92],pads=[];
  function hrtf(){try{let p=ctx.createPanner();p.panningModel='HRTF';p.distanceModel='inverse';p.refDistance=2;p.maxDistance=35;p.rolloffFactor=.2;p.setPosition(0,0,-3);return p}catch(_){return null}}
  for(let i=0;i<5;i++){
@@ -68,7 +68,7 @@ export function makeVoices(ctx,P,monoBus,atmos){
   case'glide':chord(chordIndex,true);break;
  }}
  function update(t){const now=ctx.currentTime;
-  if(now-lastChord>=P.dwell)chord(chordIndex+1);
+  // Musical conductor handles all pad chord transitions.
   for(const x of pads){let depth=P.motion*.21,amp=.039+(x.i>1?.09:.038)*P.padDensity;
     sm(x.env.gain,amp*(1+depth*Math.sin(t*(.13+x.i*.011)+x.i*1.35)),ctx,.32)}
   sm(padLP.frequency,P.padBrightness*(1+P.motion*.15*Math.sin(t*.17)),ctx,.28);
