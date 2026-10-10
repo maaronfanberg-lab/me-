@@ -8,7 +8,7 @@ export function makeVoices(ctx,P,monoBus,atmos){
  const osc=(type,Hz)=>{let x=ctx.createOscillator();x.type=type;x.frequency.value=Hz;x.start(start);sources.push(x);return x};
  const root=osc('sine',P.root),subAmp=g(.45*P.sub),low=f('lowpass',P.subTone);
  root.connect(subAmp);subAmp.connect(low);low.connect(monoBus);
- const lfo=osc('sine',.036),swell=g(.055*P.subSwell);lfo.connect(swell);swell.connect(subAmp.gain);
+ const lfo=osc('sine',.036),swell=g(.07*P.subSwell);lfo.connect(swell);swell.connect(subAmp.gain);
  // Harmonics are exact integer multiples, never detuned sub-bass oscillators.
  const h2=osc('sine',P.root*2),h2gain=g(P.subHarm*.115),h2hp=f('highpass',82),h2lp=f('lowpass',340);
  h2.connect(h2gain);h2gain.connect(h2hp);h2hp.connect(h2lp);h2lp.connect(monoBus);
@@ -29,7 +29,7 @@ export function makeVoices(ctx,P,monoBus,atmos){
  function hrtf(){try{let p=ctx.createPanner();p.panningModel='HRTF';p.distanceModel='inverse';p.refDistance=2;p.maxDistance=35;p.rolloffFactor=.2;p.setPosition(0,0,-3);return p}catch(_){return null}}
  for(let i=0;i<5;i++){
   const x=osc(i%2?'triangle':'sawtooth',P.root*Math.pow(2,voicings[0][i]/12));
-  const env=g(.05),cut1=f('highpass',205),cut2=f('highpass',205),pan=ctx.createStereoPanner?ctx.createStereoPanner():g(1),dry=g(1),bin=hrtF=>hrtF?g(0):null;
+  const env=g(.039+(i>1?.09:.038)*P.padDensity),cut1=f('highpass',205),cut2=f('highpass',205),pan=ctx.createStereoPanner?ctx.createStereoPanner():g(1),dry=g(1),bin=hrtF=>hrtF?g(0):null;
   const hp=hrtf(),hGate=bin(hp);
   x.connect(env);env.connect(cut1);cut1.connect(cut2);
   cut2.connect(pan);pan.connect(dry);dry.connect(padGain);
@@ -56,7 +56,7 @@ export function makeVoices(ctx,P,monoBus,atmos){
   case'subHarm':sm(h2gain.gain,.115*v,ctx);break;
   case'warmth':sm(h3gain.gain,.06*v,ctx);break;
   case'subTone':sm(low.frequency,v,ctx);break;
-  case'subSwell':sm(swell.gain,.055*v,ctx);break;
+  case'subSwell':sm(swell.gain,.07*v,ctx);break;
   case'body':sm(bodyAmp.gain,.14*v,ctx);break;
   case'bodyDrive':sm(bodyDrive.gain,1+5*v,ctx);break;
   case'bodyCutoff':sm(bodyLP.frequency,v,ctx);break;
