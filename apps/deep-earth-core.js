@@ -14,7 +14,7 @@ export function createEngine(c,P,opt={}){
  const lowL=F(c,'lowpass',105),lowR=F(c,'lowpass',105),aL=c.createAnalyser(),aR=c.createAnalyser(),silence=G(c,0);
  aL.fftSize=aR.fftSize=2048;split.connect(lowL,0);split.connect(lowR,1);lowL.connect(aL);lowR.connect(aR);aL.connect(silence);aR.connect(silence);silence.connect(c.destination);
  const atmos=G(c),atHP=F(c,'highpass',175),atHP2=F(c,'highpass',175),air=F(c,'highshelf',1450);
- atmos.connect(atHP);atHP.connect(atHP2);atHP2.connect(air);air.connect(mix);
+ atmos.connect(atHP);atHP.connect(atHP2);atHP2.connect(air);air.gain.value=(P.air-.45)*10;air.connect(mix);
  const eSend=G(c,P.echo*.34),eHP=F(c,'highpass',225),eHP2=F(c,'highpass',225),delay=c.createDelay(2),damp=F(c,'lowpass',2400),feedback=G(c,P.feedback),eWet=G(c,.6),ePost=F(c,'highpass',205);
  atmos.connect(eSend);eSend.connect(eHP);eHP.connect(eHP2);eHP2.connect(delay);delay.delayTime.value=P.echoTime;
  delay.connect(damp);damp.connect(feedback);feedback.connect(delay);delay.connect(eWet);eWet.connect(ePost);ePost.connect(mix);
