@@ -7,14 +7,14 @@ export function createEngine(c,P,opt={}){
  comp.threshold.value=-20;comp.knee.value=12;comp.ratio.value=3;comp.attack.value=.025;comp.release.value=.36;
  lim.threshold.value=-4.5;lim.knee.value=0;lim.ratio.value=20;lim.attack.value=.003;lim.release.value=.12;
  mix.connect(hi1);hi1.connect(hi2);hi2.connect(comp);comp.connect(master);master.connect(lim);
- const stereo=G(c,1),mono=G(c,0),split=c.createChannelSplitter(2),left=G(c,.5),right=G(c,.5),sum=G(c,1);
- lim.connect(stereo);stereo.connect(c.destination);lim.connect(split);
+ const finalSoft=c.createWaveShaper(),softCurve=new Float32Array(2048);for(let i=0;i<softCurve.length;i++){const x=i/(softCurve.length-1)*2-1;softCurve[i]=Math.tanh(x*1.75)/1.75;}finalSoft.curve=softCurve;finalSoft.oversample='2x';lim.connect(finalSoft);const stereo=G(c,1),mono=G(c,0),split=c.createChannelSplitter(2),left=G(c,.5),right=G(c,.5),sum=G(c,1);
+ finalSoft.connect(stereo);stereo.connect(c.destination);finalSoft.connect(split);
  split.connect(left,0);split.connect(right,1);left.connect(sum);right.connect(sum);sum.connect(mono);mono.connect(c.destination);
- const analyser=c.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=.8;lim.connect(analyser);
+ const analyser=c.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=.8;finalSoft.connect(analyser);
  const lowL=F(c,'lowpass',105),lowR=F(c,'lowpass',105),aL=c.createAnalyser(),aR=c.createAnalyser(),silence=G(c,0);
  aL.fftSize=aR.fftSize=2048;split.connect(lowL,0);split.connect(lowR,1);lowL.connect(aL);lowR.connect(aR);aL.connect(silence);aR.connect(silence);silence.connect(c.destination);
  const atmos=G(c),atHP=F(c,'highpass',175),atHP2=F(c,'highpass',175),air=F(c,'highshelf',1450);
- atmos.connect(atHP);atHP.connect(atHP2);atHP2.connect(air);air.gain.value=(P.air-.45)*10;air.connect(mix);
+ atmos.connect(atHP);atHP.connect(atHP2);atHP2.connect(air);air.gain.value=(P.air-.5)*10;air.connect(mix);
  const eSend=G(c,P.echo*.34),eHP=F(c,'highpass',225),eHP2=F(c,'highpass',225),delay=c.createDelay(2),damp=F(c,'lowpass',2400),feedback=G(c,P.feedback),eWet=G(c,.6),ePost=F(c,'highpass',205);
  atmos.connect(eSend);eSend.connect(eHP);eHP.connect(eHP2);eHP2.connect(delay);delay.delayTime.value=P.echoTime;
  delay.connect(damp);damp.connect(feedback);feedback.connect(delay);delay.connect(eWet);eWet.connect(ePost);ePost.connect(mix);
@@ -29,7 +29,7 @@ export function createEngine(c,P,opt={}){
  case'echo':sm(eSend.gain,v*.34,c);break;
  case'echoTime':sm(delay.delayTime,v,c,.22);break;
  case'feedback':sm(feedback.gain,clamp(v,0,.6),c);break;
- case'air':sm(air.gain,(v-.45)*10,c);break;
+ case'air':sm(air.gain,(v-.5)*10,c);break;
  case'dwell':voices.chord(voices.chordIndex);break;
  case'motion':voices.update(c.currentTime);break;
  default:voices.apply(k,v);
