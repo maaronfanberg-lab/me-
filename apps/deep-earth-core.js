@@ -1,4 +1,5 @@
 import {makeVoices,sm,clamp} from './deep-earth-voices.js';
+import {createMusic} from './deep-earth-music.js';
 const G=(c,v=1)=>{const x=c.createGain();x.gain.value=v;return x};
 const F=(c,t,h)=>{const x=c.createBiquadFilter();x.type=t;x.frequency.value=h;x.Q.value=.707;return x};
 function impulse(c){const n=Math.floor(c.sampleRate*3.25),b=c.createBuffer(1,n,c.sampleRate),a=b.getChannelData(0);let seed=29713;for(let i=0;i<n;i++){seed=(Math.imul(seed,1664525)+1013904223)|0;a[i]=((seed>>>0)/2147483648-1)*Math.exp(-7*i/n)*(1-Math.exp(-i/260))}return b}
@@ -20,10 +21,11 @@ export function createEngine(c,P,opt={}){
  delay.connect(damp);damp.connect(feedback);feedback.connect(delay);delay.connect(eWet);eWet.connect(ePost);ePost.connect(mix);
  const vSend=G(c,P.reverb*.59),vHP=F(c,'highpass',240),reverb=c.createConvolver(),vWet=G(c,.43),vPost=F(c,'highpass',205);
  reverb.buffer=impulse(c);atmos.connect(vSend);vSend.connect(vHP);vHP.connect(reverb);reverb.connect(vWet);vWet.connect(vPost);vPost.connect(mix);
- const voices=makeVoices(c,P,mix,atmos);
- return {c,voices,master,analyser,aL,aR,
+ const voices=makeVoices(c,P,mix,atmos);const music=createMusic(c,P,atmos,voices);
+ return {c,voices,music,master,analyser,aL,aR,
  apply(k,v){switch(k){
  case'master':sm(master.gain,v,c,.13);break;
+ case'lead':case'pulse':case'pulseDensity':case'tempo':case'expression':case'musicDynamics':case'section':music.setParam(k,v);break;
  case'lowcut':sm(hi1.frequency,v,c);sm(hi2.frequency,v,c);break;
  case'reverb':sm(vSend.gain,v*.59,c);break;
  case'echo':sm(eSend.gain,v*.34,c);break;
@@ -37,8 +39,8 @@ export function createEngine(c,P,opt={}){
  setSpace(m){voices.spatial(m)},
  setMono(on){sm(stereo.gain,on?0:1,c,.04);sm(mono.gain,on?1:0,c,.04)},
  output(v,sec=.13){sm(master.gain,v,c,sec)},
- update(){voices.update(c.currentTime)},
- stop(){voices.stop();master.disconnect()},
+ update(){voices.update(c.currentTime);music.tick()},
+ stop(){music.stop();voices.stop();master.disconnect()},
  lowCorrelation(){let L=new Float32Array(2048),R=new Float32Array(2048);aL.getFloatTimeDomainData(L);aR.getFloatTimeDomainData(R);let dot=0,l=0,r=0;for(let i=0;i<L.length;i++){dot+=L[i]*R[i];l+=L[i]*L[i];r+=R[i]*R[i]}return l+r<1e-9?null:clamp(dot/Math.sqrt(l*r+1e-15),-1,1)}
  };
 }
