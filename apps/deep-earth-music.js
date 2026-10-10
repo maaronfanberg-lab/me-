@@ -37,7 +37,7 @@ export const musicSections=sections.map(s=>s.name);
 const makeGain=(ctx,x=1)=>{const g=ctx.createGain();g.gain.value=x;return g};
 const makeFilter=(ctx,type,hz)=>{const f=ctx.createBiquadFilter();f.type=type;f.frequency.value=hz;f.Q.value=.707;return f};
 export function createMusic(ctx,P,atmos,padVoices){
- const leadBus=makeGain(ctx,.85),pulseBus=makeGain(ctx,.34);
+ const leadBus=makeGain(ctx,.50*(P.lead??.8)),pulseBus=makeGain(ctx,.22*(P.pulse??.55));
  const guardA=makeFilter(ctx,'highpass',205),guardB=makeFilter(ctx,'highpass',205);
  leadBus.connect(guardA);pulseBus.connect(guardA);guardA.connect(guardB);guardB.connect(atmos);
  let origin=ctx.currentTime+.16,cursor=0,paused=false,voiceCount=0,part=0,lastChord=-1,lastTime=0;
@@ -48,7 +48,7 @@ export function createMusic(ctx,P,atmos,padVoices){
  function note(t,semitones,length,amount,type='lead',accent=1){
   if(t<ctx.currentTime-.04)return;
   const secs=length*beatDuration(),isLead=type==='lead';
-  const overall=isLead?clamp(P.lead??.75,0,1):clamp(P.pulse??.45,0,1);
+  const overall=1;
   if(overall<.003)return;
   const noteFreq=noteHz(semitones),bright=P.expression??.6;
   const a=ctx.createOscillator(),b=ctx.createOscillator(),ag=makeGain(ctx,isLead?.72:.24),bg=makeGain(ctx,isLead?.30:.7);
@@ -108,7 +108,7 @@ export function createMusic(ctx,P,atmos,padVoices){
   const steps=P.pulseDensity===0?0:P.pulseDensity<.38?2:P.pulseDensity<.75?4:8;
   for(let n=0;n<steps;n++){
    const localBeat=n*4/steps,atTime=barStart+localBeat*beatDuration();
-   const pitch=pulsePattern(bar,localBeat)+12;
+   const pitch=pulsePattern(bar,localBeat)-36;
    const dynamics=section.pulse*(n===0?1.16:.82);
    note(atTime,pitch,Math.min(.9,3.2/steps),dynamics,'pulse');
   }
@@ -128,7 +128,9 @@ export function createMusic(ctx,P,atmos,padVoices){
  function setParam(id,v){
   if(id==='tempo'){const elapsed=Math.max(0,ctx.currentTime-origin),old=lastTime||beatDuration();const beat=elapsed/old;origin=ctx.currentTime-beat*beatDuration();lastTime=beatDuration();cursor=Math.max(cursor,Math.floor((ctx.currentTime-origin)/(4*lastTime))); }
   if(id==='section'){if(v>0){const selected=clamp(Math.round(v)-1,0,3);origin=ctx.currentTime+.08;cursor=selected*4;lastChord=-1;}else{origin=ctx.currentTime+.08;cursor=0;lastChord=-1;}}
-  if(id==='lead'||id==='expression'||id==='pulse'||id==='pulseDensity'||id==='musicDynamics')return;
+  if(id==='lead')leadBus.gain.setTargetAtTime(.50*v,ctx.currentTime,.07);
+  if(id==='pulse'||id==='pulseDensity')pulseBus.gain.setTargetAtTime((P.pulseDensity===0?0:.22*P.pulse),ctx.currentTime,.07);
+  if(id==='musicDynamics'){leadBus.gain.setTargetAtTime(.50*P.lead*v,ctx.currentTime,.06);pulseBus.gain.setTargetAtTime(.22*P.pulse*v,ctx.currentTime,.06);}
  }
  lastTime=beatDuration();
  // Essential: first notes are scheduled even for offline simulations without JS timers.
