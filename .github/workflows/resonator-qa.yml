@@ -48,6 +48,12 @@ jobs:
       - name: Stage 2 browser checks (add/delete masses, undo across shape changes, presets, mics)
         if: hashFiles('apps/resonator-next.html') != ''
         run: python qa-resonator/stage2_browser.py .
+      - name: Stage 3 levels (plectrum, oscillator, wind, mic vs mallet; pitch; onset; no NaN)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: node qa-resonator/stage3_measure.mjs --check
+      - name: Stage 3 browser checks (exciters, hold-to-sustain, wind, Mic in with a fake microphone)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: python qa-resonator/stage3_browser.py .
       - name: Tap controls — preview page
         if: hashFiles('apps/resonator-next.html') != ''
         run: python qa-resonator/ui_test.py . ui-preview.png apps/resonator-next.html

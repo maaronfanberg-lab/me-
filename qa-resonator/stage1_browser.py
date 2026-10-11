@@ -23,8 +23,8 @@ STALL_JS = """async(action)=>{ const t=[]; let last=ctx.currentTime, lastWall=pe
 PEAK_JS = """async()=>{ if(!window._an){window._an=ctx.createAnalyser();window._an.fftSize=2048;(master||node).connect(window._an);}
   const an=window._an,buf=new Float32Array(2048);let pk=0;
   document.querySelector('#pads .pad').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
-  for(let i=0;i<60;i++){await new Promise(r=>setTimeout(r,25));an.getFloatTimeDomainData(buf);for(const v of buf)pk=Math.max(pk,Math.abs(v));}
-  return +pk.toFixed(3); }"""
+  for(let i=0;i<120;i++){await new Promise(r=>setTimeout(r,25));an.getFloatTimeDomainData(buf);for(const v of buf)pk=Math.max(pk,Math.abs(v));}
+  return +pk.toFixed(3); }"""   # 3 s: a heavy body (Tank) is tuned before its first note sounds
 PITCH_JS = """async()=>{ if(!window._af){const a=ctx.createAnalyser();a.fftSize=32768;a.smoothingTimeConstant=0;(master||node).connect(a);window._af=a;}
   const a=window._af, d=new Float32Array(a.frequencyBinCount), bin=ctx.sampleRate/a.fftSize;
   document.querySelector('#pads .pad').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));

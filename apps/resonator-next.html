@@ -228,6 +228,11 @@ body.hints .knob{margin-bottom:16px}
       <div class="knob" data-k="hit"></div>
       <div class="knob" data-k="angle"></div>
       <div class="knob" data-k="gain"></div>
+      <div class="secttl">Air and microphone</div>
+      <div class="knob" data-k="wind"></div>
+      <div class="knob" data-k="inGain"></div>
+      <div class="row"><button class="chip" id="micin" aria-pressed="false">Mic in</button></div>
+      <div class="hint" style="display:block">Your voice or any sound drives the body. While the mic is on, iPhone plays everything at about half volume (an iOS limitation), and headphones stop feedback.</div>
       <div class="secttl">Scale</div>
       <div class="row">
         <button class="chip" data-scale="0" aria-pressed="true">Pentatonic</button>
@@ -405,7 +410,14 @@ class Resonator extends AudioWorkletProcessor {
     this.calDirty=false; this.capped=false;           // FIX4 / FIX2
     this.clampHits=0; this.trips=0; this.scan=0; this.badScans=0; this.governed=0; this.load=0;      // FIX1 / D9 telemetry
     this.pool=[];                                     // FIX8: frame buffer pool
-    this.asyncCal=false; this.refPick=null;           // S1: tuning computed off the audio thread / reference pickups
+    this.asyncCal=false; this.refPick=null;
+    // S3: exciters. Calibrated so each lands near the mallet's level at default settings.
+    this.wind=0; this.inGain=0.5; this.micIn=0; this.windL=null; this.windW=null; this.windOn=false;
+    this.exAny=false; this.exLive=false; this.plK=0.022; this.oscK=0.0002; this.windK=0.0014; this.inK=0.07; this.oscNz=4;
+    this.oscOn=new Uint8Array(this.VMAX); this.oscEnv=new Float64Array(this.VMAX); this.oscPh=new Float64Array(this.VMAX);
+    this.oscF=new Float64Array(this.VMAX); this.oscA=new Float64Array(this.VMAX); this.exF=new Float64Array(this.VMAX);
+    this.oscAtk=1-Math.exp(-1/(0.012*sampleRate)); this.oscRel=1-Math.exp(-1/(0.15*sampleRate));
+    this.windA=1-Math.exp(-2*Math.PI*400/sampleRate);           // S1: tuning computed off the audio thread / reference pickups
     // F1: seeded PRNG so the same input always gives the same output
     this.seed0=0x2545F491; this.rs=this.seed0;
     // F2/F3: level calibration and ceiling limiter (gain is exactly 1 below the ceiling)
@@ -444,7 +456,8 @@ class Resonator extends AudioWorkletProcessor {
       case 'mic2': this.micJ=d.i; this.vectors(); break;
       case 'pk': this.pkType=d.v; break;
       case 'rec': this.rec=d.v?1:0; this.recN=0; break;
-      case 'mode': this.mode=d.v; break;
+      case 'mode': this.mode=d.v; if(d.v!==3) this.oscOn.fill(0); break;   // S3: leaving oscillator mode releases it
+      case 'off': for(let v=0;v<this.VMAX;v++) if(this.oscOn[v]&&this.vf0[v]===d.f) this.oscOn[v]=0; break;   // S3: key released
       case 'spec': this.spec=d.v|0; this.setTrim(); break;
       case 'mv': this.moveMass(d.i,d.x,d.y,d.z); break;
       case 'mod': {
@@ -457,6 +470,7 @@ class Resonator extends AudioWorkletProcessor {
       }
       case 'hit': this.hitI=d.i; this.hitA=d.a; this.vectors(); break;
       case 'hush': this.gateTarget=0; this.pendingReset=true; this.bow=0; this.modBase.bow=0;
+        this.oscOn.fill(0); this.oscEnv.fill(0); if(this.windL) this.windL.fill(0);   // S3
         for(let v=0;v<this.VMAX;v++){ this.vPul[v].length=0; this.vPen[v].length=0; this.vOn[v]=0; }
         this.dl.fill(0); this.dr.fill(0); this.sl.fill(0); this.sr.fill(0); this.airL=0; this.airR=0; this.choL=0; this.choR=0; this.wowP=0;
         this.pulses=this.vPul[0]; this.pending=this.vPen[0]; break; // FIX7
@@ -765,7 +779,7 @@ class Resonator extends AudioWorkletProcessor {
     }
     const {lam,V}=big?this.tql(K,n,false):this.jacobi(K,n);
     this.orderedScan=big; if(big){ for(let m=1;m<n;m++) if(lam[m]<lam[m-1]){ this.orderedScan=false; break; } }
-    let rigN=0,rigLow=true,elastic=0;                          // F5: record whether rigid modes are the lowest ones
+    let rigN=0,rigLow=true,elastic=0,cmp=0;                          // F5: record whether rigid modes are the lowest ones
     const hi=this.map[this.hitI], mi=this.map[this.micI];
     if(hi<0||mi<0) return null;
     const out=[];
@@ -779,13 +793,15 @@ class Resonator extends AudioWorkletProcessor {
       for(let a=0;a<3;a++){ let s=0; for(let q=0;q<F;q++) s+=V[(3*q+a)*n+m]; rig+=s*s/F; }
       for(let d=0;d<n;d++) tot+=V[d*n+m]*V[d*n+m];
       if(!this.anchored && tot>0 && rig/tot>0.5){ rigN++; if(elastic) rigLow=false; continue; }   // anchored bodies have no rigid modes
+      elastic++;   // S3: count accepted modes (the rigid-modes-are-lowest check was never armed)
       const w=Math.sqrt(lam[m]);
       let h=0,c=0;
       for(let a=0;a<3;a++){ h+=V[(3*hi+a)*n+m]*this.hitVec[a]; c+=V[(3*mi+a)*n+m]*this.micVec[a]; }
+      cmp+=h*h/lam[m];   // S3: static compliance at the strike point
       out.push({f:w/(2*Math.PI), amp:Math.abs(h*c)/w});
     }
     out.sort((p,q)=>p.f-q.f);
-    this.rigidN=rigN; this.rigidLow=rigLow&&this.orderedScan;
+    this.rigidN=rigN; this.rigidLow=rigLow&&this.orderedScan; this.lastComp=cmp;
     return out;
   }
   lowestMode(kT,kL,sub){
@@ -847,9 +863,10 @@ class Resonator extends AudioWorkletProcessor {
     finally{ this.hitI=cur.hitI; this.micI=cur.micI; this.hitVec=cur.hitVec; this.micVec=cur.micVec; }
   }
   calState(){ return {anchored:this.anchored,modeIdx:this.modeIdx,fRef:this.fRef,modeAmp:this.modeAmp,table:this.table,
-    fastFallbacks:this.fastFallbacks||0,rigidN:this.rigidN,rigidLow:this.rigidLow,orderedScan:this.orderedScan}; }
+    fastFallbacks:this.fastFallbacks||0,rigidN:this.rigidN,rigidLow:this.rigidLow,orderedScan:this.orderedScan,comp0:this.comp0}; }
   applyCal(c){ this.anchored=c.anchored; this.dofMap(); this.modeIdx=c.modeIdx; this.fRef=c.fRef; this.modeAmp=c.modeAmp;
-    this.table=c.table; this.fastFallbacks=c.fastFallbacks; this.rigidN=c.rigidN; this.rigidLow=c.rigidLow; this.orderedScan=c.orderedScan; }
+    this.table=c.table; this.fastFallbacks=c.fastFallbacks; this.rigidN=c.rigidN; this.rigidLow=c.rigidLow; this.orderedScan=c.orderedScan; this.comp0=c.comp0; }
+  compAt(kT){ return this.comp0>0?this.comp0*this.kRef/Math.max(1e-9,kT):1/(0.3*Math.max(1e-9,kT)); }   // S3: compliance at this stiffness
   calibrateNow(){
     this.anchored=false; for(let q=0;q<this.N;q++) if(this.fixed[q]) this.anchored=true;
     this.dofMap();
@@ -861,7 +878,7 @@ class Resonator extends AudioWorkletProcessor {
     // F5: large bodies take the frequencies-only path when the full solve shows the rigid
     // modes are exactly the lowest ones; both table ends are then re-checked with full solves.
     const fast=3*this.F>60 && this.rigidLow;
-    this.modeIdx=bi; this.fRef=sp0[bi].f; this.modeAmp=sp0[bi].amp;
+    this.modeIdx=bi; this.fRef=sp0[bi].f; this.modeAmp=sp0[bi].amp; this.comp0=this.lastComp;   // S3
     const T=[], P=17;
     for(let i=0;i<P;i++){
       const kT=this.kRef*Math.pow(10,-4+6*i/(P-1));
@@ -958,10 +975,57 @@ class Resonator extends AudioWorkletProcessor {
   }
   strikeVoice(vi,vel){
     this.pulses=this.vPul[vi]; this.pending=this.vPen[vi];
+    if(this.mode===3){ this.pulses.length=0; this.pending.length=0; this.oscStart(vi,vel); return; }   // S3
     this.strike(vel);
+  }
+  // S3 oscillator exciter: a force at the strike point at the played pitch, with a short attack and
+  // a release when the key comes up. Mallet sets the tone (hard = brighter, soft = a pure sine).
+  oscStart(v,vel){
+    this.oscF[v]=this.vf0[v]*Math.pow(2,this.tune/1200); this.oscOn[v]=1; this.exLive=true;
+    this.oscA[v]=this.oscK*this.drive*vel*this.aChar/this.compAt(this.vkTt[v]||this.kT);
+  }
+  // S3: oscillator, microphone and wind forces for one audio sample (held across its substeps).
+  // Does nothing at all while every exciter is off, so ordinary sounds are unchanged.
+  exciteSample(inp,k){
+    let any=false; const sr=sampleRate;
+    let xin=0;
+    if(this.micIn&&this.inGain>0&&inp&&inp[0]&&inp[0][0]){ xin=inp[0][0][k]||0; if(!isFinite(xin)) xin=0; }
+    let osc=false;
+    for(let v=0;v<this.voices;v++){
+      let F=0;
+      if(this.oscOn[v]||this.oscEnv[v]>0){
+        osc=true;
+        const tgt=this.oscOn[v]?1:0;
+        this.oscEnv[v]+=(tgt-this.oscEnv[v])*(tgt?this.oscAtk:this.oscRel); if(!tgt&&this.oscEnv[v]<1e-5) this.oscEnv[v]=0;
+        let ph=this.oscPh[v]+this.oscF[v]/sr; ph-=Math.floor(ph); this.oscPh[v]=ph;
+        const bb=1-this.hard, w=2*Math.PI*ph;
+        // the body only rings at its own partials, so harmonics of the drive barely sound; a little
+        // broadband roughness (hard = rough, soft = a pure sine) is what reaches the upper partials
+        const nz=bb>0.02?(this.rnd()*2-1):0;
+        F+=this.oscA[v]*this.oscEnv[v]*(Math.sin(w)+bb*0.5*Math.sin(2*w)+bb*bb*0.3333*Math.sin(3*w)+bb*bb*this.oscNz*nz);
+      }
+      if(xin!==0) F+=this.inK*this.inGain*this.inGain*xin*this.aChar/this.compAt(this.vkT[v]||this.kT);
+      this.exF[v]=F; if(F!==0) any=true;
+    }
+    if(this.wind>0&&this.N){
+      const n3=this.N*3;
+      if(!this.windL||this.windL.length!==n3){ this.windL=new Float64Array(n3); this.windW=new Float64Array(n3); }
+      const W=this.windK*this.wind*this.wind*this.aChar/this.compAt(this.vkT[0]||this.kT), a=this.windA, L=this.windL, Wf=this.windW, fx=this.fixed;
+      for(let q=0;q<this.N;q++){ if(fx[q]) continue; const i=q*3;
+        for(let c=0;c<3;c++){ L[i+c]+=a*((this.rnd()*2-1)-L[i+c]); Wf[i+c]=W*L[i+c]; } }
+      this.windOn=true; any=true;
+    } else if(this.windOn){ this.windW.fill(0); this.windOn=false; }
+    this.exAny=any; this.exLive=osc||this.windOn||(this.micIn&&this.inGain>0);
   }
   strike(v){
     this.pulses.length=0; this.pending.length=0;
+    if(this.mode===2){   // S3 plectrum: pull the strike point aside, then let it slip off
+      const sr=sampleRate, os=this.os, f=Math.max(20,this.f0);
+      const rise=Math.min(0.03,Math.max(0.005,1.2/f+0.004))*sr*os;
+      const slip=Math.max(2,(0.00008+0.004*this.hard*this.hard)*Math.pow(220/f,0.6)*sr*os);
+      this.pulses.push({left:rise+slip,dur:rise+slip,amp:this.plK*this.drive*v*this.aChar/this.compAt(this.kT),rise});
+      return;
+    }
     let secs=(0.00025+0.007*this.hard*this.hard)*Math.pow(220/Math.max(20,this.f0),0.6);
     secs=Math.min(0.02,Math.max(0.00018,secs));
     const J=1.1*this.drive*v*this.f0*this.aChar*Math.min(1.5,Math.max(0.35,this.specTrim||1));
@@ -1043,11 +1107,21 @@ class Resonator extends AudioWorkletProcessor {
         let A=0, hv=this.hitVec, hb=b+this.hitI*3;
         for(let q=pul.length-1;q>=0;q--){
           const p=pul[q];
-          const t=1-p.left/p.dur, w=Math.sin(Math.PI*t);
-          A+=p.amp*w*w;
+          if(p.rise){   // S3 plectrum: smooth pull, then the string slips off
+            const el=p.dur-p.left;
+            A+=p.amp*(el<p.rise?0.5-0.5*Math.cos(Math.PI*el/p.rise):0.5+0.5*Math.cos(Math.PI*(el-p.rise)/Math.max(1,p.dur-p.rise)));
+          } else {
+            const t=1-p.left/p.dur, w=Math.sin(Math.PI*t);
+            A+=p.amp*w*w;
+          }
           p.left-=dt_scale; if(p.left<=0) pul.splice(q,1);
         }
         frc[hb]+=A*hv[0]; frc[hb+1]+=A*hv[1]; frc[hb+2]+=A*hv[2];
+      }
+      if(this.exAny){   // S3: oscillator / microphone force at the strike point, wind on every mass
+        const F=this.exF[v];
+        if(F!==0){ const hv=this.hitVec, hb=b+this.hitI*3; frc[hb]+=F*hv[0]; frc[hb+1]+=F*hv[1]; frc[hb+2]+=F*hv[2]; }
+        if(this.windOn){ const Wf=this.windW, n3=N*3; for(let i=0;i<n3;i++) frc[b+i]+=Wf[i]; }
       }
       if(this.fbF!==0){
         const fv=this.micVec, fb=b+this.micI*3;
@@ -1651,6 +1725,7 @@ class Resonator extends AudioWorkletProcessor {
     if(pd) this.pitch();
     for(let k=0;k<n;k++){
       this.applyMods(true);
+      if(this.exLive||this.micIn||this.wind>0) this.exciteSample(inputs,k);   // S3
       for(let s=0;s<os;s++){ this.advance(1);
         if(this.voices>1){
           for(let vv=0;vv<this.voices;vv++){
@@ -1958,6 +2033,8 @@ const KNOBS={
  mic:{label:'Mic point',min:0,max:1,step:0.001,val:0.15,fmt:v=>'#'+state.micIdx,hint:'And a mode with a node here will be inaudible even if it is ringing.'},
  blend:{label:'Mic type',min:0,max:1,step:0.01,val:0.12,fmt:v=>v<0.34?'velocity':v<0.7?'mixed':'displacement',hint:'Velocity is bright and close-mic’d. Displacement is rounder and further away.'},
  gain:{label:'Level',min:0,max:1.6,step:0.01,val:0.85,fmt:v=>Math.round(v*62)+'',hint:''},
+ wind:{label:'Wind',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'still':Math.round(v*100)+'%',hint:'Turbulent air pushing on every mass at once. Keeps the body singing with no strike at all: breathy, and it never repeats.'},
+ inGain:{label:'Mic input',min:0,max:1,step:0.01,val:0.5,fmt:v=>Math.round(v*100)+'%',hint:'How hard the sound from your phone’s microphone pushes the strike point. Turn on Mic in below.'},
  tone:{label:'Mic tone',min:140,max:12000,step:20,val:6000,fmt:v=>v>=1000?(v/1000).toFixed(1)+' kHz':v+' Hz',hint:'Rolls off the top of the pickup. Low settings sound like listening through the body of the instrument.'},
  bite:{label:'Bite',min:0,max:2.5,step:0.01,val:0,fmt:v=>v.toFixed(2),hint:'Adds acceleration to the pickup — what a contact mic hears. Hard, percussive, and it exposes the attack.'},
  nl:{label:'Nonlinearity',min:0,max:8,step:0.05,val:0,fmt:v=>v.toFixed(2)+'×',hint:'Springs stiffen as they stretch. Turn it up and hard notes bend sharp on the attack, then settle.'},
@@ -2001,7 +2078,7 @@ function buildShape(resetPickups){
  if(g.needSub&&val.sub<g.needSub){val.sub=g.needSub;syncKnob('sub');}
  if(resetPickups){const F=state.free,span=Math.max(1,F.length-1),at=i=>{const k=F.indexOf(i);return k<0?0:k/span;};val.mic=at(g.mic);val.hit=at(g.hit);syncKnob('mic');syncKnob('hit');}
  placeMicHit();
- if(node){const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:g.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc'])send(k);
+ if(node){const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:g.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain'])send(k);
    node.port.postMessage({t:'pk',v:state.pk||0});
    node.port.postMessage({t:'mode',v:state.mode||0});
    node.port.postMessage({t:'spec',v:state.spec||0});sendLvl();}
@@ -2033,18 +2110,20 @@ function send(k){if(node)node.port.postMessage({t:'p',k,v:val[k]});}
 const TUNER={on:false,w:null,url:null,raw:null,seq:0,q:[],recalWant:0,recalDone:0,timer:0,up:false,upTimer:0,
   stats:{structs:0,recals:0,lastMs:0,maxMs:0,fails:0,why:''}};
 const TUNER_SRC=[
-"let P=null,deb=0,last=0;",
+"let P=null,deb=0,last=0,sSeq=0,sT=0;",
 "function reply(kind,seq){postMessage({t:'cal',kind:kind,seq:seq,cal:P.calState()});}",
-"function recalNow(){deb=0;if(P.calDirty){P.calibrate();P.calDirty=false;}reply('recal',last);}",
+"function flush(){deb=0;if(sSeq){P.calibrate();P.calDirty=false;reply('struct',sSeq);if(last>sSeq)reply('recal',last);sSeq=0;return;}if(P.calDirty){P.calibrate();P.calDirty=false;}reply('recal',last);}",
+"function later(ms){if(deb)clearTimeout(deb);deb=setTimeout(function(){try{flush();}catch(err){fail(err);}},ms);}",
 "function fail(err){postMessage({t:'err',msg:String(err&&err.message||err)});}",
 "onmessage=function(e){var d=e.data;try{",
 " if(d.t==='init'){var K=null;class Shim{constructor(){this.port={onmessage:null,postMessage:function(){}};}}",
 "  new Function('AudioWorkletProcessor','registerProcessor','sampleRate',d.src)(Shim,function(n,k){K=k;},d.rate);",
 "  P=new K();postMessage({t:'up'});return;}",
-" if(d.t==='struct'){if(deb){clearTimeout(deb);recalNow();}last=d.seq;P.msg(d);P.calDirty=false;reply('struct',d.seq);return;}",
+" if(d.t==='struct'){if(deb){clearTimeout(deb);flush();}last=d.seq;var real=P.calibrate;P.calibrate=function(){};try{P.msg(d);}finally{P.calibrate=real;}sSeq=d.seq;sT=Date.now();later(12);return;}",
 " last=d.seq;P.msg(d);",
 " var trig=(d.t==='p'&&(d.k==='ratio'||d.k==='sub'))||d.t==='mv';",
-" if(trig||P.calDirty){if(deb)clearTimeout(deb);deb=setTimeout(function(){try{recalNow();}catch(err){fail(err);}},30);}",
+" if(sSeq){P.calDirty=false;if(Date.now()-sT<60)later(12);return;}",
+" if(trig||P.calDirty)later(30);",
 "}catch(err){fail(err);}};"
 ].join('\n');
 function tunerStart(){
@@ -2070,7 +2149,7 @@ function tunerRoute(m,tr){
     TUNER.q.push({m,struct:true,seq,cal:null,t0:performance.now()});
     tunerArm(); tunerUI(); return;
   }
-  if(t!=='note'&&t!=='ret'&&t!=='rec'){
+  if(t!=='note'&&t!=='off'&&t!=='ret'&&t!=='rec'){
     const seq=++TUNER.seq; TUNER.w.postMessage(Object.assign({},m,{seq}));
     if((t==='p'&&(m.k==='ratio'||m.k==='sub'))||t==='mv') TUNER.recalWant=seq;
   }
@@ -2185,7 +2264,7 @@ async function boot(){
    for(const [kind,url] of tries){
      try{
        await ctx.audioWorklet.addModule(url);
-       node=new AudioWorkletNode(ctx,'resonator',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
+       node=new AudioWorkletNode(ctx,'resonator',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2]});   // S3: one input, for Mic in
        state.audioMode='audio worklet';
        break;
      }catch(e){ workletError=e; }
@@ -2239,6 +2318,9 @@ function drawInfo(){
  if(load>190){m.className='warn';m.textContent='This one is heavy — if the sound crackles, drop Size or Stiffness.';}
  else if(state.audioMode==='buffered'){m.className='';m.textContent='Buffered engine — pads respond about a third of a second late. Hosting this page over HTTPS switches to the low-latency engine.';}
  else{m.className='';m.textContent='';}
+}
+function stop(semi){   // S3: key released
+ if(!node)return; const m=state.root+semi; node.port.postMessage({t:'off',f:440*Math.pow(2,(m-69)/12)});
 }
 function play(semi,vel){
  if(!node)return;if(ctx&&ctx.state==='suspended')ctx.resume();
@@ -2350,6 +2432,39 @@ for(const wrap of document.querySelectorAll('.knob[data-k]')){
  paint();
 }
 const diagEl=document.getElementById('diag');
+
+// ---- S3: Mic in -------------------------------------------------------------------------
+// The phone's microphone drives the strike point. iOS switches to a play-and-record session while
+// the mic is on (Web Audio plays at about half volume: WebKit bug 236219); switching the session
+// back to playback when the mic goes off restores the volume.
+const MIC={on:false,stream:null,src:null};
+async function micToggle(){
+  const b=document.getElementById('micin');
+  if(MIC.on){
+    try{ if(MIC.src) MIC.src.disconnect(); }catch(e){}
+    try{ if(MIC.stream) MIC.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    MIC.on=false; MIC.src=null; MIC.stream=null;
+    if(node) node.port.postMessage({t:'p',k:'micIn',v:0});
+    try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch(e){}
+    b.setAttribute('aria-pressed','false'); b.textContent='Mic in'; return;
+  }
+  if(!node||state.audioMode!=='audio worklet'){ b.textContent='Mic in: needs the low-latency engine'; return; }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ b.textContent='Mic in: not available here'; return; }
+  b.textContent='Mic in: asking…';
+  try{
+    try{ if(navigator.audioSession) navigator.audioSession.type='play-and-record'; }catch(e){}
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:false,autoGainControl:false}});
+    if(ctx.state==='suspended') await ctx.resume();
+    const src=ctx.createMediaStreamSource(stream); src.connect(node);
+    MIC.on=true; MIC.stream=stream; MIC.src=src;
+    node.port.postMessage({t:'p',k:'micIn',v:1});
+    b.setAttribute('aria-pressed','true'); b.textContent='Mic in: on';
+  }catch(e){
+    try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch(_){}
+    b.textContent='Mic in: '+(e&&e.name==='NotAllowedError'?'permission denied':'unavailable');
+  }
+}
+document.getElementById('micin').onclick=micToggle;
 
 // S1: one tap copies everything needed to debug on a phone (paste it into the chat)
 document.getElementById('copydiag').onclick=async()=>{
@@ -2666,7 +2781,7 @@ const hintsBtn=document.getElementById('hints');
 hintsBtn.onclick=()=>{const on=document.body.classList.toggle('hints');
  hintsBtn.setAttribute('aria-pressed',String(on));hintsBtn.textContent=on?'Hide hints':'Show hints';};
 const modeEl=document.getElementById('modes');
-['Mallet','Worthington splash'].forEach((nm,i)=>{
+['Mallet','Worthington splash','Plectrum','Oscillator'].forEach((nm,i)=>{   // S3: plectrum and oscillator
  const b=document.createElement('button');b.className='chip';b.textContent=nm;
  b.setAttribute('aria-pressed',i===0);
  b.onclick=()=>{state.mode=i;[...modeEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===i));
@@ -2702,7 +2817,7 @@ const pickEl=document.getElementById('pickups');
  pickEl.appendChild(b);});
 const shapesEl=document.getElementById('shapes');for(const name in SHAPES){const b=document.createElement('button');b.className='chip';b.textContent=name;b.setAttribute('aria-pressed',name===state.shape);b.onclick=()=>{state.shape=name;const S=SHAPES[name];state.n=S.def;val.size=(S.def-S.min)/(S.max-S.min);syncKnob('size');[...shapesEl.children].forEach(c=>c.setAttribute('aria-pressed',c.textContent===name));buildShape(true);};shapesEl.appendChild(b);}
 const axesEl=document.getElementById('axes');['X','Y','Z'].forEach((ax,i)=>{const b=document.createElement('button');b.className='chip';b.textContent='Mic axis '+ax;b.setAttribute('aria-pressed',false);b.onclick=()=>{state.axis=i;[...axesEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===i));placeMicHit();};axesEl.appendChild(b);});
-document.getElementById('scramble').onclick=()=>{const g=state.geo;if(!g||!node)return;geoPush();const F=state.free,add=2+Math.floor(Math.random()*3);for(let q=0;q<add;q++){const a=F[Math.floor(Math.random()*F.length)],b=g.P.map((_,i)=>i)[Math.floor(Math.random()*g.P.length)];if(a!==b&&!g.S.some(s=>(s[0]===a&&s[1]===b)||(s[0]===b&&s[1]===a)))g.S.push([a,b]);}for(const i of F)g.P[i]=g.P[i].map(v=>v+(Math.random()-0.5)*0.03);const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:state.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc'])send(k);
+document.getElementById('scramble').onclick=()=>{const g=state.geo;if(!g||!node)return;geoPush();const F=state.free,add=2+Math.floor(Math.random()*3);for(let q=0;q<add;q++){const a=F[Math.floor(Math.random()*F.length)],b=g.P.map((_,i)=>i)[Math.floor(Math.random()*g.P.length)];if(a!==b&&!g.S.some(s=>(s[0]===a&&s[1]===b)||(s[0]===b&&s[1]===a)))g.S.push([a,b]);}for(const i of F)g.P[i]=g.P[i].map(v=>v+(Math.random()-0.5)*0.03);const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:state.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain'])send(k);
    node.port.postMessage({t:'pk',v:state.pk||0});
    node.port.postMessage({t:'mode',v:state.mode||0});
    node.port.postMessage({t:'spec',v:state.spec||0});drawInfo();};
@@ -2716,7 +2831,7 @@ const deckEl=document.getElementById('deck'),handleEl=document.getElementById('h
 handleEl.onclick=()=>{const shut=deckEl.classList.toggle('shut');
  handleEl.setAttribute('aria-expanded',String(!shut));
  handleEl.querySelector('b').innerHTML=shut?'&#9652;':'&#9662;';};
-const padsEl=document.getElementById('pads');function buildPads(){padsEl.innerHTML='';const sc=SCALES[state.scale],count=12;for(let i=0;i<count;i++){const semi=sc[i%sc.length]+12*Math.floor(i/sc.length),b=document.createElement('button');b.className='pad';b.textContent=NAMES[(state.root+semi)%12]+(Math.floor((state.root+semi)/12)-1);const fire=e=>{e.preventDefault();if(!state.running)return;play(semi,0.55+0.45*Math.random());b.classList.add('lit');setTimeout(()=>b.classList.remove('lit'),130);};b.addEventListener('pointerdown',fire);padsEl.appendChild(b);}}buildPads();
+const padsEl=document.getElementById('pads');function buildPads(){padsEl.innerHTML='';const sc=SCALES[state.scale],count=12;for(let i=0;i<count;i++){const semi=sc[i%sc.length]+12*Math.floor(i/sc.length),b=document.createElement('button');b.className='pad';b.textContent=NAMES[(state.root+semi)%12]+(Math.floor((state.root+semi)/12)-1);const fire=e=>{e.preventDefault();if(!state.running)return;play(semi,0.55+0.45*Math.random());b.classList.add('lit');setTimeout(()=>b.classList.remove('lit'),130);};b.addEventListener('pointerdown',fire);const rel=()=>{if(state.running)stop(semi);};b.addEventListener('pointerup',rel);b.addEventListener('pointercancel',rel);b.addEventListener('pointerleave',rel);padsEl.appendChild(b);}}buildPads();
 for(const b of document.querySelectorAll('[data-scale]'))b.onclick=()=>{state.scale=+b.dataset.scale;document.querySelectorAll('[data-scale]').forEach(x=>x.setAttribute('aria-pressed',x===b));buildPads();};
 addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){e.shiftKey?doRedo():doUndo();e.preventDefault();return;}
  if(e.repeat)return;const i='zxcvbnasdfgh'.indexOf(e.key.toLowerCase());if(i<0)return;const sc=SCALES[state.scale];play(sc[i%sc.length]+12*Math.floor(i/sc.length),0.8);});
@@ -2916,7 +3031,7 @@ function rebuild(){
   node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),
     si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),
     mic:state.micIdx,hit:state.hitIdx,axis:state.axis});
-  for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc'])send(k);
+  for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain'])send(k);
   node.port.postMessage({t:'pk',v:state.pk||0});
   node.port.postMessage({t:'mode',v:state.mode||0});
   sendLvl();
@@ -2938,7 +3053,7 @@ cv.addEventListener('pointerdown',e=>{
     if(node) node.port.postMessage({t:'hit',i,a:state.axis});
     syncPickSliders();
     // audition it, so you hear where you just put the mallet
-    if(state.running) play(SCALES[state.scale][0], 0.75);
+    if(state.running){ play(SCALES[state.scale][0], 0.75); setTimeout(()=>stop(SCALES[state.scale][0]),450); }   // S3: auditions release themselves
     return;
   }
   if(state.tool==='mic'){

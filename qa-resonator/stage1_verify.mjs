@@ -58,7 +58,20 @@ function run(H, shape, async) {
     while (si < script.length && script[si][0] <= b) {
       const m = script[si++][1];
       if (!async) { send(m); continue; }
-      if (m.t === 'struct') { shadow.port.onmessage({ data: m }); send(Object.assign({}, m, { cal: shadow.calState() })); continue; }
+      if (m.t === 'struct') {
+        // the page's tuner: the shadow takes the body without tuning it, folds in the burst of
+        // messages that follows (up to the next note), tunes once, and the engine receives the body
+        // with that table, then the burst
+        const real = shadow.calibrate; shadow.calibrate = () => {};
+        shadow.port.onmessage({ data: m }); shadow.calibrate = real;
+        const burst = [];
+        while (si < script.length && script[si][0] <= b && script[si][1].t !== 'note' && script[si][1].t !== 'struct') burst.push(script[si++][1]);
+        for (const x of burst) shadow.port.onmessage({ data: x });
+        shadow.calibrate(); shadow.calDirty = false;
+        send(Object.assign({}, m, { cal: shadow.calState() }));
+        for (const x of burst) send(x);
+        pendingRecal = false; continue;
+      }
       if (m.t !== 'note') { shadow.port.onmessage({ data: m }); if (shadow.calDirty) pendingRecal = true; send(m); continue; }
       if (pendingRecal) { shadow.calibrate(); shadow.calDirty = false; send({ t: 'cal', cal: shadow.calState() }); pendingRecal = false; }
       send(m);
