@@ -32,3 +32,17 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
 - Edits that change nothing physical must send the engine exactly the untouched body (`stage4_browser.py`; mutation-tested).
 - Page and engine must agree on every mic after pin and undo (`stage4_browser.py`).
 - Depth 0 must return a modulator's destination to its own setting (`stage5_verify.mjs`).
+
+## Safari's engine (WebKit)
+- `webkit_check.py` — both pages in Playwright WebKit with iPhone 13 emulation: start-up with no
+  script error, background tuner, live audio (when the machine has an audio device; otherwise
+  reported as NOTE), every shape, the Tank freeze, the engine rendered offline inside WebKit and
+  compared with Node fed the same messages (`webkit_ref.mjs`), JavaScriptCore speed, every tap
+  flow (turn pad, add, delete, undo, exciter chips, envelope type, Mic 2), screenshots of every tab.
+  `--browser=chromium` runs the same checks locally.
+- `.github/workflows/resonator-webkit.yml` ("RESONATOR WebKit") runs it on Linux and macOS and
+  pushes the results to branches `qa-results/webkit-linux` and `qa-results/webkit-macos`:
+  `git fetch origin qa-results/webkit-linux && git show FETCH_HEAD:summary.txt`.
+- Ratchet: an offline render does not deliver the engine's messages while it runs (measured in
+  Chromium). The check waits for the engine's `ready` before rendering; a fixed 250 ms wait was
+  shorter than Tank's tuning and rendered silence (a test artefact, not an engine fault).

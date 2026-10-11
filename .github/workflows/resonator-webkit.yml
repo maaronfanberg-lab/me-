@@ -1,0 +1,82 @@
+name: RESONATOR WebKit
+
+# RESONATOR in Safari's engine (Playwright WebKit, iPhone 13 emulation), on Linux and macOS.
+# The workspace that builds RESONATOR cannot install WebKit or download Actions logs, so each job
+# pushes its results (summary.txt, results.json, screenshots) to the branch
+# qa-results/webkit-<os>, readable with `git fetch`. Pushes made with GITHUB_TOKEN do not start
+# other workflows, so the results branch triggers nothing.
+on:
+  push:
+    paths:
+      - 'apps/resonator.html'
+      - 'apps/resonator-next.html'
+      - 'qa-resonator/**'
+      - '.github/workflows/resonator-webkit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: resonator-webkit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  webkit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Playwright (Python) and WebKit
+        run: |
+          python -m pip install --quiet playwright==1.56.0
+          python -m playwright install --with-deps webkit
+      - name: Give Linux a silent audio device
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y -qq pulseaudio >/dev/null
+          pulseaudio -D --exit-idle-time=-1 || true
+          pactl load-module module-null-sink sink_name=ci_sink || true
+          pactl set-default-sink ci_sink || true
+          pactl info | grep -i 'default sink' || true
+      - name: RESONATOR in WebKit (iPhone emulation)
+        id: check
+        continue-on-error: true
+        run: python qa-resonator/webkit_check.py . webkit-out
+      - name: Publish results to branch qa-results/webkit-<os>
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          OSN=$(echo "${{ runner.os }}" | tr 'A-Z' 'a-z')
+          mkdir -p webkit-out
+          echo "${{ github.sha }}" > webkit-out/commit.txt
+          echo "${{ steps.check.outcome }}" > webkit-out/outcome.txt
+          cd webkit-out
+          git init -q
+          git checkout -q -b results
+          git add -A
+          git -c user.name=resonator-webkit -c user.email=actions@users.noreply.github.com commit -qm "WebKit QA ${{ github.sha }} (${OSN}): ${{ steps.check.outcome }}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" HEAD:refs/heads/qa-results/webkit-${OSN}
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resonator-webkit-${{ runner.os }}
+          path: webkit-out/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Enforce the result
+        if: always()
+        run: test "${{ steps.check.outcome }}" = success
