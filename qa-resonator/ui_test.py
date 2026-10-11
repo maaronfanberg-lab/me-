@@ -13,7 +13,7 @@ with sync_playwright() as p:
     pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.on('console', lambda m: errs.append(m.text) if m.type == 'error' else None)
     pg.route('**/fonts.g*/**', lambda r: r.abort())
-    pg.goto('http://127.0.0.1:8765/apps/resonator.html'); pg.wait_for_timeout(500)
+    pg.goto('http://127.0.0.1:8765/' + (sys.argv[3] if len(sys.argv) > 3 else 'apps/resonator.html')); pg.wait_for_timeout(500)
     pg.tap('#start'); pg.wait_for_timeout(2500)
     E = pg.evaluate
     res['running'] = E('state.running')
@@ -62,3 +62,10 @@ with sync_playwright() as p:
     b.close()
 srv.shutdown()
 print(json.dumps(res, indent=1)); print('ERRORS:', errs)
+# fail the run when any tap path is broken (the font request is blocked on purpose in tests)
+must = ['running','nudge visible on orbit','orbit right turns view','spin stopped','orbit up turns view','label says move',
+        'tap selects a mass','mass moved','undo enabled','undo restores','hidden on strike']
+bad = [k for k in must if not res.get(k)] + (['hold repeats'] if res.get('hold repeats (distance)', 0) <= 0.05 else []) \
+      + [k for k, v in res.get('overlaps', {}).items() if v] + [e for e in errs if 'Failed to load resource' not in e]
+print('FAIL tap controls: ' + ', '.join(map(str, bad)) if bad else 'PASS tap controls (orbit/move pad, select, undo, hold-to-repeat, no overlaps)')
+sys.exit(1 if bad else 0)

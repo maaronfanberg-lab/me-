@@ -1,7 +1,7 @@
 // RESONATOR offline harness — Stage 1 audit (read-only; does not modify resonator.html)
 import fs from 'node:fs';
 
-const SRC = new URL(import.meta.url).searchParams.get('src') || new URL('../apps/resonator.html', import.meta.url).pathname;
+const SRC = new URL(import.meta.url).searchParams.get('src') || process.env.RESONATOR_SRC || new URL('../apps/resonator.html', import.meta.url).pathname;
 const html = fs.readFileSync(SRC, 'utf8');
 const wStart = html.indexOf('const WORKLET = String.raw`') + 'const WORKLET = String.raw`'.length;
 const wEnd = html.indexOf('`;', wStart);

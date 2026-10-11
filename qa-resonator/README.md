@@ -12,3 +12,10 @@ Runs the RESONATOR audio engine offline in Node (no browser) and measures it.
 - `eig_tql.js` — the fast eigen-solver (also embedded in the engine); `f5verify.mjs` — old vs new on every shape/size; `tank_switch.py` — shape-switch browser check.
 
 Check (ratchet): controls that only act in one strike mode are tested in that mode.
+
+## Stage 1 (preview page `apps/resonator-next.html`)
+- `patch_s1.py` — builds the preview from the live page (tuning off the audio thread, octave-trap fix, Copy report).
+- `stage1_verify.mjs` — offline proofs: live vs preview bit-identical; background tuning vs ordinary tuning bit-identical; octave trap gone.
+- `stage1_browser.py` — browser proofs: audio-clock stalls (live vs preview), every shape sounds, trap via real taps, shadow failure and no-Worker fallbacks, Copy report.
+- Any harness script can target the preview with `RESONATOR_SRC=apps/resonator-next.html`.
+- All of the above run on GitHub Actions: `.github/workflows/resonator-qa.yml` ("RESONATOR QA").

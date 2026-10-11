@@ -1,0 +1,57 @@
+name: RESONATOR QA
+
+# Runs the RESONATOR proofs on every change to the instrument or its tests, so a phone-only
+# problem can be debugged from the results here. Results: Actions tab → "RESONATOR QA".
+on:
+  push:
+    paths:
+      - 'apps/resonator.html'
+      - 'apps/resonator-next.html'
+      - 'qa-resonator/**'
+      - '.github/workflows/resonator-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: resonator-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Playwright (Python) and Chromium
+        run: |
+          python -m pip install --quiet playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Learning-path claims — live page
+        run: node qa-resonator/learn_claims.mjs
+      - name: Learning-path claims — preview page
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: RESONATOR_SRC=apps/resonator-next.html node qa-resonator/learn_claims.mjs
+      - name: Stage 1 engine proofs (bit-identical audio, async tuning, octave trap)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: node qa-resonator/stage1_verify.mjs
+      - name: Stage 1 browser checks (audio-thread stalls, shapes, fallbacks, Copy report)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: python qa-resonator/stage1_browser.py .
+      - name: Tap controls — preview page
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: python qa-resonator/ui_test.py . ui-preview.png apps/resonator-next.html
+      - name: Keep the screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resonator-qa-screens
+          path: ui-preview.png
+          if-no-files-found: ignore
