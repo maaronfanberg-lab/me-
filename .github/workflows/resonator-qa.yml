@@ -54,6 +54,12 @@ jobs:
       - name: Stage 3 browser checks (exciters, hold-to-sustain, wind, Mic in with a fake microphone)
         if: hashFiles('apps/resonator-next.html') != ''
         run: python qa-resonator/stage3_browser.py .
+      - name: Stage 4 engine proofs (extra mics, pan isolation, worst-case ceiling, level)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: node qa-resonator/stage4_verify.mjs
+      - name: Stage 4 browser checks (Mics 2–4, undo, pin, net-zero edits, presets)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: python qa-resonator/stage4_browser.py .
       - name: Tap controls — preview page
         if: hashFiles('apps/resonator-next.html') != ''
         run: python qa-resonator/ui_test.py . ui-preview.png apps/resonator-next.html

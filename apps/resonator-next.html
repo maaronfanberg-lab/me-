@@ -303,6 +303,12 @@ body.hints .knob{margin-bottom:16px}
       <div class="knob" data-k="bite"></div>
       <div class="knob" data-k="tone"></div>
       <div class="knob" data-k="width"></div>
+      <div class="secttl">More mics</div>
+      <div class="row" id="micslots"></div>
+      <div class="knob" data-k="xLevel"></div>
+      <div class="knob" data-k="xPan"></div>
+      <div class="row"><button class="chip" id="xmremove">Remove this mic</button></div>
+      <div class="hint" id="xmhint" style="display:block"></div>
       <div class="secttl">Feedback</div>
       <div class="knob" data-k="fbAmt"></div>
       <div class="knob" data-k="fbTime"></div>
@@ -417,7 +423,12 @@ class Resonator extends AudioWorkletProcessor {
     this.oscOn=new Uint8Array(this.VMAX); this.oscEnv=new Float64Array(this.VMAX); this.oscPh=new Float64Array(this.VMAX);
     this.oscF=new Float64Array(this.VMAX); this.oscA=new Float64Array(this.VMAX); this.exF=new Float64Array(this.VMAX);
     this.oscAtk=1-Math.exp(-1/(0.012*sampleRate)); this.oscRel=1-Math.exp(-1/(0.15*sampleRate));
-    this.windA=1-Math.exp(-2*Math.PI*400/sampleRate);           // S1: tuning computed off the audio thread / reference pickups
+    this.windA=1-Math.exp(-2*Math.PI*400/sampleRate);
+    // S4: up to three extra point mics (clean room mics), each with its own level and pan
+    this.xmN=0; this.xmI=new Int32Array([-1,-1,-1]); this.xmG=new Float64Array([0.7,0.7,0.7]); this.xmP=new Float64Array(3);
+    this.xmVec=[[0,1,0],[0,1,0],[0,1,0]]; this.xmLp=new Float64Array(24); this.xmLpB=new Float64Array(24); this.xmDx=new Float64Array(3); this.xmDy=new Float64Array(3);
+    this.xmT=new Int32Array(24); this.xmS=new Int32Array(24); this.xmK=new Float64Array(24); this.xmX=new Float64Array(24); this.xmY=new Float64Array(24); this.xmZ=new Float64Array(24);
+    this.xmGL=new Float64Array(3); this.xmGR=new Float64Array(3);           // S1: tuning computed off the audio thread / reference pickups
     // F1: seeded PRNG so the same input always gives the same output
     this.seed0=0x2545F491; this.rs=this.seed0;
     // F2/F3: level calibration and ceiling limiter (gain is exactly 1 below the ceiling)
@@ -476,7 +487,11 @@ class Resonator extends AudioWorkletProcessor {
         this.pulses=this.vPul[0]; this.pending=this.vPen[0]; break; // FIX7
       case 'ret': if(this.pool.length<3) this.pool.push(d.P); break; // FIX8
       case 'cal': if(!this.ok) break; this.applyCal(d.cal); this.calDirty=false; this.pitch(); this.report('ready'); break; // S1
-      case 'asyncCal': this.asyncCal=!!d.v; break;                                                                         // S1
+      case 'asyncCal': this.asyncCal=!!d.v; break;
+      case 'xmic': { const q=d.k|0; if(q<0||q>2) break;   // S4: place / move / remove an extra mic
+        this.xmI[q]=(d.i>=0&&d.i<this.N&&!(this.fixed&&this.fixed[d.i]))?d.i:-1;
+        if(d.g!=null) this.xmG[q]=d.g; if(d.p!=null) this.xmP[q]=d.p;
+        this.xmN=(this.xmI[0]>=0)+(this.xmI[1]>=0)+(this.xmI[2]>=0); this.vectors(); break; }                                                                         // S1
     }
   }
   build(d){
@@ -514,6 +529,8 @@ class Resonator extends AudioWorkletProcessor {
     this.shapeTrim=Math.pow(Math.max(1,this.deg/2),0.55)*Math.pow(Math.max(0.02,this.aChar)/0.056,0.30);
     this.micI=d.mic; this.hitI=d.hit; this.micA=d.axis; this.hitA=d.axis; this.axis=d.axis;
     if(this.micJ>=N||(this.micJ>=0&&this.fixed[this.micJ])) this.micJ=-1;   // S2: second mic re-placed if its mass is gone or pinned
+    for(let q=0;q<3;q++) if(this.xmI[q]>=N||(this.xmI[q]>=0&&this.fixed[this.xmI[q]])) this.xmI[q]=-1;   // S4
+    this.xmN=(this.xmI[0]>=0)+(this.xmI[1]>=0)+(this.xmI[2]>=0); this.xmLp.fill(0); this.xmLpB.fill(0); this.xmDx.fill(0); this.xmDy.fill(0);
     this.pool.length=0; this.clampHits=0; this.trips=0;
     this.vectors();
     this.refPick={hitI:this.hitI,micI:this.micI,hitVec:this.hitVec.slice(),micVec:this.micVec.slice()}; // S1: tuning reference fixed at build
@@ -571,6 +588,7 @@ class Resonator extends AudioWorkletProcessor {
       this.micJ=far;
     }
     this.micVec2=mk(this.micJ>=0?this.micJ:this.micI,this.micA,AXM);
+    for(let q=0;q<3;q++) if(this.xmI[q]>=0) this.xmVec[q]=mk(this.xmI[q],this.micA,AXM);   // S4
     this.buildCoils();
   }
   moveMass(n,x,y,z){
@@ -1723,10 +1741,21 @@ class Resonator extends AudioWorkletProcessor {
     this.observe(n/sampleRate); this.filter(n/sampleRate);
     this.attractor(n/sampleRate);
     if(pd) this.pitch();
+    // S4: one tap per (extra mic, voice), built once per block (pitches and scale only change between blocks)
+    let nXT=0; const XT=this.xmT, XS=this.xmS, XK=this.xmK, XX=this.xmX, XY=this.xmY, XZ=this.xmZ, XL=this.xmLp, XB=this.xmLpB;
+    if(this.xmN){ const V=this.voices;
+      for(let q=0;q<3;q++){ if(this.xmI[q]<0) continue; const xi=this.xmI[q]*3, xv=this.xmVec[q];
+        const th=(Math.max(-1,Math.min(1,this.xmP[q]))+1)*Math.PI/4;   // constant-power pan, centre = unity
+        this.xmGL[q]=Math.cos(th)*1.4142135623730951; this.xmGR[q]=Math.sin(th)*1.4142135623730951;
+        for(let vv=0;vv<V;vv++){ XT[nXT]=vv*this.stride+xi; XS[nXT]=q*8+vv; XK[nXT]=V>1?1/(2*Math.PI*this.vf0[vv]*this.aChar):vk;
+          XX[nXT]=xv[0]; XY[nXT]=xv[1]; XZ[nXT]=xv[2]; nXT++; } } }
     for(let k=0;k<n;k++){
       this.applyMods(true);
       if(this.exLive||this.micIn||this.wind>0) this.exciteSample(inputs,k);   // S3
       for(let s=0;s<os;s++){ this.advance(1);
+        if(nXT){ const vel=this.vel;   // S4: extra mics hear every voice
+          for(let t=0;t<nXT;t++){ const vb=XT[t], s8=XS[t], rx=(vel[vb]*XX[t]+vel[vb+1]*XY[t]+vel[vb+2]*XZ[t])*XK[t];
+            XL[s8]+=g*(rx-XL[s8]); XB[s8]+=g*(XL[s8]-XB[s8]); } }
         if(this.voices>1){
           for(let vv=0;vv<this.voices;vv++){
             const vb=vv*this.stride+mi;
@@ -1856,6 +1885,16 @@ class Resonator extends AudioWorkletProcessor {
         let o2=Math.tanh(y2*this.gain*13)*this.gate; if(!isFinite(o2)) o2=0;
         const w=Math.min(1,this.width), a=0.5+0.5*w, b=0.5-0.5*w;
         ll=o*a+o2*b; rr=o2*a+o*b;
+      }
+      if(this.xmN){   // S4: extra mics, each a clean point pickup with its own level and pan
+        const V=this.voices, nrm=V>1?1/Math.sqrt(V):1;
+        for(let q=0;q<3;q++){ if(this.xmI[q]<0) continue; const xi=this.xmI[q]*3, xv=this.xmVec[q]; let sv=0, sd=0;
+          for(let vv=0;vv<V;vv++){ const vb=vv*this.stride+xi; sv+=this.xmLpB[q*8+vv];
+            sd+=((this.pos[vb]-this.rest[vb])*xv[0]+(this.pos[vb+1]-this.rest[vb+1])*xv[1]+(this.pos[vb+2]-this.rest[vb+2])*xv[2])*dispK; }
+          let x3=((1-this.blend)*sv+this.blend*sd)*nrm; if(!isFinite(x3)) x3=0;
+          const y3=x3-this.xmDx[q]+0.9985*this.xmDy[q]; this.xmDx[q]=x3; this.xmDy[q]=y3;
+          let o3=Math.tanh(y3*this.gain*13)*this.gate*this.xmG[q]; if(!isFinite(o3)) o3=0;
+          ll+=o3*this.xmGL[q]; rr+=o3*this.xmGR[q]; }
       }
       if(this.fxLive()||this.spLive()){
         // carry the width through as the side signal instead of discarding it
@@ -2034,6 +2073,8 @@ const KNOBS={
  blend:{label:'Mic type',min:0,max:1,step:0.01,val:0.12,fmt:v=>v<0.34?'velocity':v<0.7?'mixed':'displacement',hint:'Velocity is bright and close-mic’d. Displacement is rounder and further away.'},
  gain:{label:'Level',min:0,max:1.6,step:0.01,val:0.85,fmt:v=>Math.round(v*62)+'',hint:''},
  wind:{label:'Wind',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'still':Math.round(v*100)+'%',hint:'Turbulent air pushing on every mass at once. Keeps the body singing with no strike at all: breathy, and it never repeats.'},
+ xLevel:{label:'Extra mic level',min:0,max:1.5,step:0.01,val:0.7,fmt:v=>Math.round(v*100)+'%',hint:'Level of the mic picked above (Mic 2, 3 or 4).'},
+ xPan:{label:'Extra mic pan',min:-1,max:1,step:0.02,val:0,fmt:v=>v<-0.03?'L '+Math.round(-v*100):v>0.03?'R '+Math.round(v*100):'centre',hint:'Where the mic picked above sits between your ears.'},
  inGain:{label:'Mic input',min:0,max:1,step:0.01,val:0.5,fmt:v=>Math.round(v*100)+'%',hint:'How hard the sound from your phone’s microphone pushes the strike point. Turn on Mic in below.'},
  tone:{label:'Mic tone',min:140,max:12000,step:20,val:6000,fmt:v=>v>=1000?(v/1000).toFixed(1)+' kHz':v+' Hz',hint:'Rolls off the top of the pickup. Low settings sound like listening through the body of the instrument.'},
  bite:{label:'Bite',min:0,max:2.5,step:0.01,val:0,fmt:v=>v.toFixed(2),hint:'Adds acceleration to the pickup — what a contact mic hears. Hard, percussive, and it exposes the attack.'},
@@ -2081,7 +2122,7 @@ function buildShape(resetPickups){
  if(node){const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:g.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain'])send(k);
    node.port.postMessage({t:'pk',v:state.pk||0});
    node.port.postMessage({t:'mode',v:state.mode||0});
-   node.port.postMessage({t:'spec',v:state.spec||0});sendLvl();}
+   node.port.postMessage({t:'spec',v:state.spec||0});sendLvl();if(state.xm){state.xm.forEach(x=>{x.i=-1;});xmSendAll();syncMicSlots();}}
  document.getElementById('bodytext').textContent=S.note;state.geo.note=S.note;[...axesEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.axis));state.disp=new Float32Array(g.P.length*3);state.spd=new Float32Array(g.P.length);drawInfo();
 }
 function placeMicHit(){
@@ -2466,6 +2507,27 @@ async function micToggle(){
 }
 document.getElementById('micin').onclick=micToggle;
 
+// ---- S4: extra mics ---------------------------------------------------------------------
+// Mic 1 is the main pickup (with the Amp tab's pickups, amp and cabinet). Mics 2–4 are clean point
+// pickups placed with the mic tool, each with its own level and pan.
+state.xm=[{i:-1,g:0.7,p:-0.6},{i:-1,g:0.7,p:0.6},{i:-1,g:0.7,p:0}]; state.micSlot=0;
+function xmSend(q){ if(node){ const x=state.xm[q]; node.port.postMessage({t:'xmic',k:q,i:x.i,g:x.g,p:x.p}); } }
+function xmSendAll(){ for(let q=0;q<3;q++) xmSend(q); }
+const micSlotsEl=document.getElementById('micslots');
+function syncMicSlots(){
+  [...micSlotsEl.children].forEach((c,j)=>{ c.setAttribute('aria-pressed',String(j===state.micSlot)); c.textContent='Mic '+(j+1)+(j>0&&state.xm[j-1].i<0?' (off)':''); });
+  const q=state.micSlot-1, hint=document.getElementById('xmhint');
+  if(q>=0){ val.xLevel=state.xm[q].g; val.xPan=state.xm[q].p; syncKnob('xLevel'); syncKnob('xPan'); }
+  hint.textContent=q<0?'Mic 1 is the main pickup: Level and the Amp tab shape it. Pick Mic 2, 3 or 4 to add more mics.'
+    :(state.xm[q].i<0?'Now tap a ball with the mic tool (above the picture) to place Mic '+(q+2)+'.'
+    :'Mic '+(q+2)+' is on ball #'+state.xm[q].i+'. Tap another ball with the mic tool to move it.');
+}
+for(let j=0;j<4;j++){ const b=document.createElement('button'); b.className='chip'; b.onclick=()=>{ state.micSlot=j; syncMicSlots(); }; micSlotsEl.appendChild(b); }
+document.getElementById('xmremove').onclick=()=>{ const q=state.micSlot-1; if(q<0) return; state.xm[q].i=-1; xmSend(q); syncMicSlots(); };
+for(const k of ['xLevel','xPan']){ const w=document.querySelector('.knob[data-k="'+k+'"] input');
+  if(w) w.addEventListener('input',()=>{ const q=state.micSlot-1; if(q<0) return; if(k==='xLevel') state.xm[q].g=val.xLevel; else state.xm[q].p=val.xPan; xmSend(q); }); }
+syncMicSlots();
+
 // S1: one tap copies everything needed to debug on a phone (paste it into the chat)
 document.getElementById('copydiag').onclick=async()=>{
   const s=TUNER.stats, g=state.geo;
@@ -2561,7 +2623,7 @@ function snapshot(){
     pk:state.pk||0,mode:state.mode||0,spec:state.spec||0,micIdx:state.micIdx,hitIdx:state.hitIdx,
     P:g.P.map(p=>p.map(q=>+q.toFixed(4))),F:Array.from(g.F),S:g.S.map(s=>[s[0],s[1]]),
     val:Object.assign({},val),
-    mods:state.mods.map(m=>({d:m.d,sh:m.sh}))};
+    mods:state.mods.map(m=>({d:m.d,sh:m.sh})),xm:state.xm?state.xm.map(x=>({i:x.i,g:x.g,p:x.p})):null};
 }
 function restore(o){
   if(!o||!o.P) return false;
@@ -2571,6 +2633,7 @@ function restore(o){
   for(const k in o.val) if(k in val) val[k]=o.val[k];
   state.geo={P:o.P.map(p=>p.slice()),F:Uint8Array.from(o.F),S:o.S.map(s=>s.slice()),
              axis:state.axis,mic:o.micIdx,hit:o.hitIdx,note:'',shape:state.shape,n:state.n};   // S2
+  if(state.xm) state.xm=o.xm?o.xm.map(x=>({i:x.i,g:x.g,p:x.p})):[{i:-1,g:0.7,p:-0.6},{i:-1,g:0.7,p:0.6},{i:-1,g:0.7,p:0}];   // S4
   state.free=state.geo.P.map((_,i)=>i).filter(i=>!state.geo.F[i]);
   state.micIdx=o.micIdx; state.hitIdx=o.hitIdx;
   state.mods=(o.mods||[]).map(m=>({d:m.d||'',sh:m.sh||0}));
@@ -2894,6 +2957,7 @@ function deleteMass(i){
   geoPush();
   const P0=g.P[i];
   g.P.splice(i,1); g.F=Uint8Array.from(Array.from(g.F).filter((_,k)=>k!==i)); g.S=S2;
+  if(state.xm) state.xm.forEach(x=>{ if(x.i===i) x.i=-1; else if(x.i>i) x.i--; });   // S4: extra mics follow the renumbering
   const d2=(a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2;
   const nearestFree=(set)=>{ let best=-1, bd=1e9; g.P.forEach((p,k)=>{ if(g.F[k]||(set&&!set.has(k))) return; const d=d2(p,P0); if(d<bd){ bd=d; best=k; } }); return best; };
   const shift=idx=>idx>i?idx-1:idx;
@@ -2919,7 +2983,8 @@ function deleteMass(i){
 function geoSnap(){
   const g=state.geo;
   return {P:g.P.map(p=>p.slice()),F:Array.from(g.F),S:g.S.map(s=>s.slice()),
-          mic:state.micIdx,hit:state.hitIdx,shape:g.shape||state.shape,n:g.n||state.n,axis:g.axis!=null?g.axis:state.axis};   // S2: the body's own shape and size
+          mic:state.micIdx,hit:state.hitIdx,shape:g.shape||state.shape,n:g.n||state.n,axis:g.axis!=null?g.axis:state.axis,
+          xm:state.xm?state.xm.map(x=>x.i):null};   // S4: where the extra mics sit   // S2: the body's own shape and size
 }
 function geoPush(){
   if(!state.geo) return;
@@ -2932,6 +2997,7 @@ function geoApply(s){
   const g=state.geo;
   g.P=s.P.map(p=>p.slice()); g.F=Uint8Array.from(s.F); g.S=s.S.map(x=>x.slice());
   state.micIdx=s.mic; state.hitIdx=s.hit;
+  if(s.xm&&state.xm) s.xm.forEach((i,q)=>{ state.xm[q].i=i; });   // S4
   if(s.shape&&SHAPES[s.shape]&&(s.shape!==state.shape||s.n!==state.n)){   // S2: undo across a shape or Size change
     const S=SHAPES[s.shape]; state.shape=s.shape; state.n=s.n; state.axis=s.axis!=null?s.axis:state.axis; g.axis=state.axis; g.shape=s.shape; g.n=s.n;
     val.size=(s.n-S.min)/Math.max(1,S.max-S.min); syncKnob('size');
@@ -3035,6 +3101,7 @@ function rebuild(){
   node.port.postMessage({t:'pk',v:state.pk||0});
   node.port.postMessage({t:'mode',v:state.mode||0});
   sendLvl();
+  if(state.xm){ state.xm.forEach(x=>{ if(x.i>=g.P.length||(x.i>=0&&g.F[x.i])) x.i=-1; }); xmSendAll(); syncMicSlots(); }   // S4: page mirrors the engine
   state.disp=new Float32Array(g.P.length*3);state.spd=new Float32Array(g.P.length);
   drawInfo();
 }
@@ -3057,6 +3124,7 @@ cv.addEventListener('pointerdown',e=>{
     return;
   }
   if(state.tool==='mic'){
+    if(state.micSlot>0){ const q=state.micSlot-1; state.xm[q].i=i; state.sel=i; xmSend(q); syncMicSlots(); return; }   // S4: place an extra mic
     state.micIdx=i; state.sel=i;
     if(node){ node.port.postMessage({t:'mic',i,a:state.axis});
       const F=state.free,nn=F.length;
@@ -3235,6 +3303,7 @@ function frame(ts){requestAnimationFrame(frame);if(!W)resize();if(state.tool!=='
    g2.fillStyle='var(--faint)';
  }
  mark(state.hitIdx,'#FF9A55','strike');mark(state.micIdx,'#4ED8EA','mic');
+ if(state.xm) state.xm.forEach((x,q)=>{ if(x.i>=0) mark(x.i,'#A7F0C8','mic '+(q+2)); });   // S4
  if(state.tool==='strike'||state.tool==='mic'){
    const col=state.tool==='strike'?'#FF9A55':'#4ED8EA';
    const idx=state.tool==='strike'?state.hitIdx:state.micIdx;
