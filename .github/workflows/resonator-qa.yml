@@ -60,6 +60,12 @@ jobs:
       - name: Stage 4 browser checks (Mics 2–4, undo, pin, net-zero edits, presets)
         if: hashFiles('apps/resonator-next.html') != ''
         run: python qa-resonator/stage4_browser.py .
+      - name: Stage 5 engine proofs (envelopes, followers, Depth 0, LFOs unchanged)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: node qa-resonator/stage5_verify.mjs
+      - name: Stage 5 browser checks (modulator types by taps, meters, fake phone mic, presets)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: python qa-resonator/stage5_browser.py .
       - name: Tap controls — preview page
         if: hashFiles('apps/resonator-next.html') != ''
         run: python qa-resonator/ui_test.py . ui-preview.png apps/resonator-next.html

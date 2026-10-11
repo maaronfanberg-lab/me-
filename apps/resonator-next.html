@@ -136,6 +136,9 @@ body.hints .knob{margin-bottom:16px}
   padding:15px 34px;border-radius:2px;cursor:pointer}
 #start:disabled{opacity:.45}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.mmeter{height:4px;background:#101A2E;border-radius:2px;margin:-4px 0 12px;overflow:hidden}
+.mmeter i{display:block;height:100%;width:0;background:var(--compress)}
+.mhint{font-size:10.5px;color:var(--faint);margin:-4px 0 14px;line-height:1.45}
 </style>
 </head>
 <body>
@@ -269,17 +272,53 @@ body.hints .knob{margin-bottom:16px}
 
     <section class="page" id="page-mod">
       <div class="secttl">Modulator 1</div>
+      <div class="row" data-mty="0"></div>
       <div class="mrow" data-m="0"></div>
+      <div class="row" data-msrc="0"></div>
+      <div class="mmeter" data-mm="0"><i></i></div>
       <div class="knob" data-k="m1r"></div>
+      <div class="knob" data-k="m1at"></div>
+      <div class="knob" data-k="m1dc"></div>
+      <div class="knob" data-k="m1su"></div>
+      <div class="knob" data-k="m1rl"></div>
+      <div class="knob" data-k="m1fa"></div>
+      <div class="knob" data-k="m1fr"></div>
+      <div class="knob" data-k="m1se"></div>
       <div class="knob" data-k="m1a"></div>
+      <div class="row" data-mdir="0"></div>
+      <div class="mhint" data-mhint="0"></div>
       <div class="secttl">Modulator 2</div>
+      <div class="row" data-mty="1"></div>
       <div class="mrow" data-m="1"></div>
+      <div class="row" data-msrc="1"></div>
+      <div class="mmeter" data-mm="1"><i></i></div>
       <div class="knob" data-k="m2r"></div>
+      <div class="knob" data-k="m2at"></div>
+      <div class="knob" data-k="m2dc"></div>
+      <div class="knob" data-k="m2su"></div>
+      <div class="knob" data-k="m2rl"></div>
+      <div class="knob" data-k="m2fa"></div>
+      <div class="knob" data-k="m2fr"></div>
+      <div class="knob" data-k="m2se"></div>
       <div class="knob" data-k="m2a"></div>
+      <div class="row" data-mdir="1"></div>
+      <div class="mhint" data-mhint="1"></div>
       <div class="secttl">Modulator 3</div>
+      <div class="row" data-mty="2"></div>
       <div class="mrow" data-m="2"></div>
+      <div class="row" data-msrc="2"></div>
+      <div class="mmeter" data-mm="2"><i></i></div>
       <div class="knob" data-k="m3r"></div>
+      <div class="knob" data-k="m3at"></div>
+      <div class="knob" data-k="m3dc"></div>
+      <div class="knob" data-k="m3su"></div>
+      <div class="knob" data-k="m3rl"></div>
+      <div class="knob" data-k="m3fa"></div>
+      <div class="knob" data-k="m3fr"></div>
+      <div class="knob" data-k="m3se"></div>
       <div class="knob" data-k="m3a"></div>
+      <div class="row" data-mdir="2"></div>
+      <div class="mhint" data-mhint="2"></div>
     </section>
 
     <section class="page" id="page-amp">
@@ -364,6 +403,9 @@ class Resonator extends AudioWorkletProcessor {
     this.nlCap=6; this.pkAp=0.18; this.pkRes=3000; this.pkQ=1.6; this.pkType=0; this.pkSpc=0.28;
     this.amp=0; this.bass=0; this.treb=0; this.cab=0;
     this.mods=[{d:'',r:1,a:0,s:0,ph:0,sh:0},{d:'',r:1,a:0,s:0,ph:0,sh:0},{d:'',r:1,a:0,s:0,ph:0,sh:0}];
+    // S5: modulator type (0 LFO, 1 envelope, 2 follower), its state, and what followers listen to
+    for(const m of this.mods){ m.ty=0; m.e=0; m.st=0; m.kA=0; m.kD=0; m.kR=0; m.S=0; m.aA=0; m.aR=0; m.y1=0; m.y=0; m.sens=2; m.src=0; m.inv=0; }
+    this.fIn=new Float64Array(5); this.fOn=false; this.held=new Float64Array(16); this.nHeld=0;
     this.modBase={}; this.modTick=0;
     this.c1=0; this.c2=0; this.b1=0; this.b2=0; this.t1=0; this.t2=0; this.lp1b=0;
     this.hp1=0; this.lp1=0;
@@ -468,19 +510,29 @@ class Resonator extends AudioWorkletProcessor {
       case 'pk': this.pkType=d.v; break;
       case 'rec': this.rec=d.v?1:0; this.recN=0; break;
       case 'mode': this.mode=d.v; if(d.v!==3) this.oscOn.fill(0); break;   // S3: leaving oscillator mode releases it
-      case 'off': for(let v=0;v<this.VMAX;v++) if(this.oscOn[v]&&this.vf0[v]===d.f) this.oscOn[v]=0; break;   // S3: key released
+      case 'off': for(let v=0;v<this.VMAX;v++) if(this.oscOn[v]&&this.vf0[v]===d.f) this.oscOn[v]=0; this.envNote(d.f,0); break;   // S3: key released; S5: envelopes
       case 'spec': this.spec=d.v|0; this.setTrim(); break;
       case 'mv': this.moveMass(d.i,d.x,d.y,d.z); break;
       case 'mod': {
         const m=this.mods[d.i]; const was=m.d;
         m.d=d.d; m.r=d.r; m.a=d.a; m.sh=d.sh;
+        { const ty=(d.ty===1||d.ty===2)?d.ty:0; if(ty!==m.ty){ m.e=0; m.st=0; m.y1=0; m.y=0; } m.ty=ty;   // S5
+          if(ty){ const fs=sampleRate, T=x=>Math.max(0.0005,+x||0.001);
+            m.inv=d.inv?1:0; m.src=Math.max(0,Math.min(4,d.src|0)); m.sens=Math.max(0,+d.sens||0); m.S=Math.max(0,Math.min(1,+d.S||0));
+            // envelope segments are analog-style curves that arrive in the set time: attack aims past 1 (at 1.5),
+            // decay and release aim 0.05 past their goal
+            m.kA=1-Math.exp(-Math.log(3)/(T(d.A)*fs)); m.kD=1-Math.exp(-Math.log((1.05-m.S)/0.05)/(T(d.D)*fs)); m.kR=1-Math.exp(-Math.log(21)/(T(d.R)*fs));
+            m.aA=Math.exp(-1/(T(d.fa)*fs)); m.aR=Math.exp(-1/(T(d.fr)*fs)); }
+          this.fOn=this.mods[0].ty===2||this.mods[1].ty===2||this.mods[2].ty===2; }
         if(was&&was!==d.d&&this.modBase[was]!==undefined) this[was]=this.modBase[was];
         if(d.d==='nl'||d.d==='ratio'||was==='nl'||was==='ratio') this.pitch();
         if(d.d&&this.modBase[d.d]===undefined) this.modBase[d.d]=this[d.d];
+        if(m.d&&!(m.a>0)&&this.modBase[m.d]!==undefined&&this[m.d]!==this.modBase[m.d]){ this[m.d]=this.modBase[m.d]; if(m.d==='tune'||m.d==='nl'||m.d==='ratio') this.pitch(); }   // S5: Depth 0 returns the parameter to its own setting
         break;
       }
       case 'hit': this.hitI=d.i; this.hitA=d.a; this.vectors(); break;
       case 'hush': this.gateTarget=0; this.pendingReset=true; this.bow=0; this.modBase.bow=0;
+        for(const m of this.mods){ m.e=0; m.st=0; m.y1=0; m.y=0; } this.nHeld=0; this.fIn.fill(0);   // S5
         this.oscOn.fill(0); this.oscEnv.fill(0); if(this.windL) this.windL.fill(0);   // S3
         for(let v=0;v<this.VMAX;v++){ this.vPul[v].length=0; this.vPen[v].length=0; this.vOn[v]=0; }
         this.dl.fill(0); this.dr.fill(0); this.sl.fill(0); this.sr.fill(0); this.airL=0; this.airR=0; this.choL=0; this.choR=0; this.wowP=0;
@@ -955,6 +1007,7 @@ class Resonator extends AudioWorkletProcessor {
     return best;
   }
   noteOn(f,vel){
+    this.envNote(f,1);   // S5
     const v=this.pickVoice();
     this.vf0[v]=f; this.vAge[v]=++this.ageC; this.vOn[v]=1;
     this.memAcc+=vel*vel*0.19;
@@ -1223,12 +1276,33 @@ class Resonator extends AudioWorkletProcessor {
       default: return Math.sin(2*Math.PI*ph);
     }
   }
+  // S5: one sample of an envelope or a follower. The follower is a smooth decoupled peak detector
+  // (Giannoulis, Massberg and Reiss, JAES 2012): no steps in its output, whatever the input does.
+  modStep(m){
+    if(m.ty===1){
+      if(m.st===1){ m.e+=(1.5-m.e)*m.kA; if(m.e>=1){ m.e=1; m.st=2; } }
+      else if(m.st===2){ if(m.e>m.S){ m.e+=(m.S-0.05-m.e)*m.kD; if(m.e<m.S) m.e=m.S; } else if(m.e<m.S) m.e+=(m.S-m.e)*m.kD; }
+      else if(m.st===3){ m.e+=(-0.05-m.e)*m.kR; if(m.e<=0){ m.e=0; m.st=0; } }
+    } else {
+      const x=this.fIn[m.src]||0, r=m.aR*m.y1+(1-m.aR)*x;
+      m.y1=x>r?x:r; m.y=m.aA*m.y+(1-m.aA)*m.y1;
+      const c=m.y*m.sens; m.e=c<1?c:1;
+    }
+  }
+  envNote(f,on){   // S5: every key starts the envelopes; they let go when the last key comes up
+    const H=this.held; let i=-1; for(let k=0;k<this.nHeld;k++) if(H[k]===f){ i=k; break; }
+    if(on){ if(i<0&&this.nHeld<16) H[this.nHeld++]=f; for(const m of this.mods) if(m.ty===1) m.st=1; return; }
+    if(i>=0) H[i]=H[--this.nHeld];
+    if(!this.nHeld) for(const m of this.mods) if(m.ty===1&&m.st&&m.st<3) m.st=3;
+  }
   applyMods(perSample){
     let pitchDirty=false;
     for(const m of this.mods){
+      if(m.ty&&perSample) this.modStep(m);   // S5: envelopes and followers run even at Depth 0 (the meter shows them)
       if(!m.d||m.a<=0) continue;
-      m.ph+=m.r/sampleRate; if(m.ph>=1) m.ph-=Math.floor(m.ph);
-      const w=this.modShape(m.sh,m.ph,m);
+      let w;
+      if(m.ty) w=m.inv?-m.e:m.e;
+      else { m.ph+=m.r/sampleRate; if(m.ph>=1) m.ph-=Math.floor(m.ph); w=this.modShape(m.sh,m.ph,m); }
       const base=this.modBase[m.d]!==undefined?this.modBase[m.d]:0;
       let v=base+m.a*w*this.modSpan(m.d);
       if(m.d==='tune'){ v=Math.max(-2400,Math.min(2400,v)); if(this[m.d]!==v){this[m.d]=v;pitchDirty=true;} continue; }
@@ -1749,7 +1823,9 @@ class Resonator extends AudioWorkletProcessor {
         this.xmGL[q]=Math.cos(th)*1.4142135623730951; this.xmGR[q]=Math.sin(th)*1.4142135623730951;
         for(let vv=0;vv<V;vv++){ XT[nXT]=vv*this.stride+xi; XS[nXT]=q*8+vv; XK[nXT]=V>1?1/(2*Math.PI*this.vf0[vv]*this.aChar):vk;
           XX[nXT]=xv[0]; XY[nXT]=xv[1]; XZ[nXT]=xv[2]; nXT++; } } }
+    const fin=inputs&&inputs[0]&&inputs[0][0];   // S5: the phone mic, for followers
     for(let k=0;k<n;k++){
+      if(this.fOn) this.fIn[4]=fin?Math.abs(fin[k]):0;
       this.applyMods(true);
       if(this.exLive||this.micIn||this.wind>0) this.exciteSample(inputs,k);   // S3
       for(let s=0;s<os;s++){ this.advance(1);
@@ -1875,6 +1951,7 @@ class Resonator extends AudioWorkletProcessor {
       let o=Math.tanh(y*this.gain*13*(st/Math.min(1.5,Math.max(0.35,st))))*this.gate;
       if(!isFinite(o)) o=0;
       const ao=o<0?-o:o; if(ao>this.peak) this.peak=ao;
+      if(this.fOn) this.fIn[0]=ao*this.lvl;   // S5: follower source, Mic 1, as loud as it is heard (after the shape trim)
       let ll=o, rr=o;
       if(R&&this.width>0){
         const disp2=((this.pos[mj]-this.rest[mj])*mv2[0]+(this.pos[mj+1]-this.rest[mj+1])*mv2[1]+(this.pos[mj+2]-this.rest[mj+2])*mv2[2])*dispK;
@@ -1886,6 +1963,7 @@ class Resonator extends AudioWorkletProcessor {
         const w=Math.min(1,this.width), a=0.5+0.5*w, b=0.5-0.5*w;
         ll=o*a+o2*b; rr=o2*a+o*b;
       }
+      if(this.fOn){ this.fIn[1]=0; this.fIn[2]=0; this.fIn[3]=0; }   // S5
       if(this.xmN){   // S4: extra mics, each a clean point pickup with its own level and pan
         const V=this.voices, nrm=V>1?1/Math.sqrt(V):1;
         for(let q=0;q<3;q++){ if(this.xmI[q]<0) continue; const xi=this.xmI[q]*3, xv=this.xmVec[q]; let sv=0, sd=0;
@@ -1894,6 +1972,7 @@ class Resonator extends AudioWorkletProcessor {
           let x3=((1-this.blend)*sv+this.blend*sd)*nrm; if(!isFinite(x3)) x3=0;
           const y3=x3-this.xmDx[q]+0.9985*this.xmDy[q]; this.xmDx[q]=x3; this.xmDy[q]=y3;
           let o3=Math.tanh(y3*this.gain*13)*this.gate*this.xmG[q]; if(!isFinite(o3)) o3=0;
+          if(this.fOn) this.fIn[q+1]=(o3<0?-o3:o3)*this.lvl;   // S5: follower sources, Mics 2-4
           ll+=o3*this.xmGL[q]; rr+=o3*this.xmGR[q]; }
       }
       if(this.fxLive()||this.spLive()){
@@ -1967,7 +2046,8 @@ class Resonator extends AudioWorkletProcessor {
     if(this.tick>=1400){
       this.tick=0;
       // Meter only: keep audio physics internal and do not ship body motion to the UI.
-      this.port.postMessage({t:'frame',pk:this.peak});
+      const M=this.mods;   // S5: envelope and follower meters
+      this.port.postMessage(M[0].ty||M[1].ty||M[2].ty?{t:'frame',pk:this.peak,mv:[M[0].e,M[1].e,M[2].e]}:{t:'frame',pk:this.peak});
       if(this.att>0){
         const O=new Float32Array(512*2);
         for(let i=0;i<512;i++){ const j=((this.attN+i)%512)*2; O[i*2]=this.attHist[j]; O[i*2+1]=this.attHist[j+1]; }
@@ -2097,6 +2177,27 @@ const KNOBS={
  m2a:{label:'Depth 2',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
  m3r:{label:'Rate 3',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtRate(v),hint:''},
  m3a:{label:'Depth 3',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
+ m1at:{label:'Attack 1',min:0,max:1,step:0.005,val:0.175,fmt:v=>fmtTime(v),hint:'How long the envelope takes to rise when a key goes down.'},
+ m1dc:{label:'Decay 1',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:'How long it takes to fall to the sustain level.'},
+ m1su:{label:'Sustain 1',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:'Where it rests while keys stay down. At 0% it is a one-shot.'},
+ m1rl:{label:'Release 1',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:'How long it takes to fall away after the last key comes up.'},
+ m1fa:{label:'Follow attack 1',min:0,max:1,step:0.005,val:0.335,fmt:v=>fmtTime(v),hint:'How fast it rises when the mic gets louder. About 20 ms follows loudness roughly the way ears do.'},
+ m1fr:{label:'Follow release 1',min:0,max:1,step:0.005,val:0.425,fmt:v=>fmtTime(v),hint:'How fast it falls when the mic gets quieter.'},
+ m1se:{label:'Sensitivity 1',min:0,max:1,step:0.01,val:0.36,fmt:v=>fmtSens(v),hint:'How loud the mic must be to reach full movement. At +13 dB a firm hit reaches most of the way.'},
+ m2at:{label:'Attack 2',min:0,max:1,step:0.005,val:0.175,fmt:v=>fmtTime(v),hint:''},
+ m2dc:{label:'Decay 2',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:''},
+ m2su:{label:'Sustain 2',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
+ m2rl:{label:'Release 2',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:''},
+ m2fa:{label:'Follow attack 2',min:0,max:1,step:0.005,val:0.335,fmt:v=>fmtTime(v),hint:''},
+ m2fr:{label:'Follow release 2',min:0,max:1,step:0.005,val:0.425,fmt:v=>fmtTime(v),hint:''},
+ m2se:{label:'Sensitivity 2',min:0,max:1,step:0.01,val:0.36,fmt:v=>fmtSens(v),hint:''},
+ m3at:{label:'Attack 3',min:0,max:1,step:0.005,val:0.175,fmt:v=>fmtTime(v),hint:''},
+ m3dc:{label:'Decay 3',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:''},
+ m3su:{label:'Sustain 3',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
+ m3rl:{label:'Release 3',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:''},
+ m3fa:{label:'Follow attack 3',min:0,max:1,step:0.005,val:0.335,fmt:v=>fmtTime(v),hint:''},
+ m3fr:{label:'Follow release 3',min:0,max:1,step:0.005,val:0.425,fmt:v=>fmtTime(v),hint:''},
+ m3se:{label:'Sensitivity 3',min:0,max:1,step:0.01,val:0.36,fmt:v=>fmtSens(v),hint:''},
  cab:{label:'Cabinet',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'direct':Math.round(v*100)+'%',hint:'A speaker in a box: nothing below 95 Hz, nothing above 4.2 kHz. This is what stops it sounding like a computer.'}
 };
 // F3: per-shape output calibration to -21 LUFS at default settings (measured, see qa-resonator)
@@ -2318,6 +2419,7 @@ async function boot(){
    const d=e.data;
    if(d.t==='frame'){
      state.peak=d.pk; state.ranOnce=true; drawLevel();
+     if(d.mv||state.mvShown) modMeters(d.mv||null);   // S5
    } else if(d.t==='rec'){
      if(REC.on){
        REC.L.push(d.L); REC.R.push(d.R); REC.n+=d.L.length;
@@ -2467,7 +2569,7 @@ for(const wrap of document.querySelectorAll('.knob[data-k]')){
      if(nn!==state.n){state.n=nn;buildShape();}
      paint();
    } else if(k==='mic'||k==='hit'){ placeMicHit(); paint(); }
-   else if(/^m[123][ra]$/.test(k)) sendMod(+k[1]-1);
+   else if(/^m[123]([ra]|at|dc|su|rl|fa|fr|se)$/.test(k)) sendMod(+k[1]-1);   // S5: envelope and follower knobs too
    else if(k!=='mag') send(k);
  });
  paint();
@@ -2591,8 +2693,12 @@ addEventListener('unhandledrejection',e=>{
 state.mods=[{d:'',sh:0},{d:'',sh:0},{d:'',sh:0}];
 function sendMod(i){
   if(!node)return;
-  const r=RATE(val[['m1r','m2r','m3r'][i]]), a=val[['m1a','m2a','m3a'][i]];
-  node.port.postMessage({t:'mod',i,d:state.mods[i].d,r,a,sh:state.mods[i].sh});
+  const r=RATE(val[['m1r','m2r','m3r'][i]]), a=val[['m1a','m2a','m3a'][i]], m=state.mods[i];
+  const msg={t:'mod',i,d:m.d,r,a,sh:m.sh};
+  if(m.ty){ const p='m'+(i+1); msg.ty=m.ty; msg.inv=m.dn?1:0; msg.src=m.src||0;   // S5: envelope / follower
+    msg.A=MTIME(val[p+'at']); msg.D=MTIME(val[p+'dc']); msg.S=val[p+'su']; msg.R=MTIME(val[p+'rl']);
+    msg.fa=MTIME(val[p+'fa']); msg.fr=MTIME(val[p+'fr']); msg.sens=Math.pow(64,val[p+'se']); }
+  node.port.postMessage(msg);
 }
 for(const row of document.querySelectorAll('.mrow[data-m]')){
   const i=+row.dataset.m;
@@ -2604,6 +2710,46 @@ for(const row of document.querySelectorAll('.mrow[data-m]')){
   ss.onchange=()=>{state.mods[i].sh=+ss.value;sendMod(i);};
   row.appendChild(ds);row.appendChild(ss);
 }
+
+// ---- S5: envelopes and envelope followers ------------------------------------------------
+// Each modulator is an LFO (as before), an envelope (every key starts it; it lets go when the last key
+// comes up) or a follower (how loud a mic is becomes movement). Envelopes and followers push one way.
+const MTYPES=['LFO','Envelope','Follower'], MSRCS=['Mic 1','Mic 2','Mic 3','Mic 4','Phone mic'];
+function MTIME(v){ return 0.001*Math.pow(10000,v); }   // 1 ms … 10 s
+function fmtTime(v){ const t=MTIME(v); return t<1?Math.round(t*1000)+' ms':t.toFixed(t<10?2:1)+' s'; }
+function fmtSens(v){ return '+'+(20*Math.log10(Math.pow(64,v))).toFixed(1)+' dB'; }   // 0 … +36 dB
+function modHint(i){
+  const m=state.mods[i], ty=m.ty||0, h=document.querySelector('[data-mhint="'+i+'"]'); if(!h) return;
+  let t='';
+  if(ty===1) t='Every key starts it; it lets go when the last key comes up.';
+  else if(ty===2){ const sc=m.src||0;
+    if(sc>=1&&sc<=3&&state.xm&&state.xm[sc-1].i<0) t='Mic '+(sc+1)+' is off: place it on the Mic tab (More mics).';
+    else if(sc===4&&!MIC.on) t='Turn on Mic in (Strike tab). With Mic input at 0, your voice steers without driving the body.';
+    else t='How loud '+MSRCS[sc]+' is becomes movement.'; }
+  if(ty&&!m.d) t+=' Pick what it moves above.';
+  h.textContent=t; h.style.display=t?'':'none';
+}
+function modUI(i){
+  const m=state.mods[i], ty=m.ty||0, p='m'+(i+1);
+  const show=(el,on)=>{ if(el) el.style.display=on?'':'none'; }, knob=k=>document.querySelector('.knob[data-k="'+k+'"]');
+  document.querySelectorAll('[data-mty="'+i+'"] .chip').forEach((c,j)=>c.setAttribute('aria-pressed',String(j===ty)));
+  document.querySelectorAll('[data-msrc="'+i+'"] .chip').forEach((c,j)=>c.setAttribute('aria-pressed',String(j===(m.src||0))));
+  document.querySelectorAll('[data-mdir="'+i+'"] .chip').forEach((c,j)=>c.setAttribute('aria-pressed',String(j===(m.dn?1:0))));
+  show(document.querySelectorAll('.mrow[data-m="'+i+'"] select')[1],!ty);   // the LFO wave
+  show(document.querySelector('[data-msrc="'+i+'"]'),ty===2); show(document.querySelector('[data-mdir="'+i+'"]'),!!ty); show(document.querySelector('[data-mm="'+i+'"]'),!!ty);
+  show(knob(p+'r'),!ty); for(const x of ['at','dc','su','rl']) show(knob(p+x),ty===1); for(const x of ['fa','fr','se']) show(knob(p+x),ty===2);
+  modHint(i);
+}
+function modMeters(mv){ for(let i=0;i<3;i++){ const b=document.querySelector('[data-mm="'+i+'"] i'); if(b) b.style.width=(mv?Math.max(0,Math.min(1,mv[i]||0))*100:0)+'%'; } state.mvShown=!!mv; }
+for(let i=0;i<3;i++){
+  const chips=(sel,names,set)=>{ const r=document.querySelector(sel); names.forEach((n,j)=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=n; b.onclick=()=>{ set(j); modUI(i); sendMod(i); }; r.appendChild(b); }); };
+  chips('[data-mty="'+i+'"]',MTYPES,j=>{ state.mods[i].ty=j; });
+  chips('[data-msrc="'+i+'"]',MSRCS,j=>{ state.mods[i].src=j; });
+  chips('[data-mdir="'+i+'"]',['Push up','Push down'],j=>{ state.mods[i].dn=j; });
+  const ds=document.querySelectorAll('.mrow[data-m="'+i+'"] select')[0]; if(ds) ds.addEventListener('change',()=>modHint(i));
+  modUI(i);
+}
+{ const mt=document.querySelector('.tab[data-page=mod]'); if(mt) mt.addEventListener('click',()=>{ for(let i=0;i<3;i++) modHint(i); }); }
 
 // ---------- presets ----------
 const MEM={};
@@ -2623,7 +2769,7 @@ function snapshot(){
     pk:state.pk||0,mode:state.mode||0,spec:state.spec||0,micIdx:state.micIdx,hitIdx:state.hitIdx,
     P:g.P.map(p=>p.map(q=>+q.toFixed(4))),F:Array.from(g.F),S:g.S.map(s=>[s[0],s[1]]),
     val:Object.assign({},val),
-    mods:state.mods.map(m=>({d:m.d,sh:m.sh})),xm:state.xm?state.xm.map(x=>({i:x.i,g:x.g,p:x.p})):null};
+    mods:state.mods.map(m=>({d:m.d,sh:m.sh,ty:m.ty||0,dn:m.dn||0,src:m.src||0})),xm:state.xm?state.xm.map(x=>({i:x.i,g:x.g,p:x.p})):null};
 }
 function restore(o){
   if(!o||!o.P) return false;
@@ -2636,13 +2782,14 @@ function restore(o){
   if(state.xm) state.xm=o.xm?o.xm.map(x=>({i:x.i,g:x.g,p:x.p})):[{i:-1,g:0.7,p:-0.6},{i:-1,g:0.7,p:0.6},{i:-1,g:0.7,p:0}];   // S4
   state.free=state.geo.P.map((_,i)=>i).filter(i=>!state.geo.F[i]);
   state.micIdx=o.micIdx; state.hitIdx=o.hitIdx;
-  state.mods=(o.mods||[]).map(m=>({d:m.d||'',sh:m.sh||0}));
+  state.mods=(o.mods||[]).map(m=>({d:m.d||'',sh:m.sh||0,ty:m.ty||0,dn:m.dn||0,src:m.src||0}));   // S5
   while(state.mods.length<3) state.mods.push({d:'',sh:0});
   document.querySelectorAll('.mrow[data-m]').forEach(row=>{
     const i=+row.dataset.m, sels=row.querySelectorAll('select');
     if(sels[0]) sels[0].value=state.mods[i].d;
     if(sels[1]) sels[1].value=String(state.mods[i].sh);
   });
+  for(let i=0;i<3;i++) modUI(i);   // S5
   [...shapesEl.children].forEach(c=>c.setAttribute('aria-pressed',c.textContent===state.shape));
   [...pickEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.pk));
   [...modeEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.mode));

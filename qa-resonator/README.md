@@ -26,7 +26,9 @@ Each stage is a verified patch applied on top of the previous one (`patch_s2.py`
 - Stage 2, free building: `stage2_browser.py` — add/delete masses, undo across shape changes, presets, mic placement across cuts.
 - Stage 3, new exciters: `stage3_measure.mjs --check` (levels vs mallet, pitch, onset, NaN, determinism); `stage3_browser.py` (plectrum, oscillator hold/release, wind, Mic in with Chromium's fake microphone).
 - Stage 4, more mics: `stage4_verify.mjs` (pan isolation, every voice, refusal, worst-case ceiling, determinism, level); `stage4_browser.py` (Mics 2–4 by taps, renumbering, undo, pin, presets, remove).
+- Stage 5, envelopes and followers: `stage5_verify.mjs` (LFOs bit-identical to live, envelope times, retrigger/gate, follower vs its equations, calibration across shapes, worst case); `stage5_browser.py` (types by taps, meters, fake phone mic, presets).
 
 Checks added by the ratchet (an error a check missed becomes a permanent check):
 - Edits that change nothing physical must send the engine exactly the untouched body (`stage4_browser.py`; mutation-tested).
 - Page and engine must agree on every mic after pin and undo (`stage4_browser.py`).
+- Depth 0 must return a modulator's destination to its own setting (`stage5_verify.mjs`).
