@@ -186,10 +186,10 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
   it rings, on the preview and on the preview before Stage I. It shows whether a freeze is the engine's
   own work or happens outside it. It runs in WebKit CI, unenforced.
 - Ratchet (judging against the same machine): CI Macs froze the audio clock for about 0.2 s on Size
-  changes on some machines and not others. It hit the page before Stage I as well as this one, and
-  `stall_probe.py` found no engine message or render call of 2 ms or more during it (five runs,
-  2026-10-12). `webkit_check.py` therefore judges a preview freeze beside the page before Stage I on the
-  same machine:
-  - worse than that page: FAIL;
-  - both froze: NOTE, with both numbers;
-  - no comparison possible: FAIL.
+  changes now and then, on the page before Stage I as much as on this one.
+  - `stall_probe.py` found the engine idle through these freezes: no message or render call of 2 ms
+    or more. Often the browser simply stopped calling the engine's render for 185–253 ms, with no
+    message in between.
+  - `webkit_check.py` therefore also taps the page before Stage I five times on the same machine.
+  - A preview freeze counts as a FAIL only if that page never froze there. Otherwise it is a NOTE, with
+    both sets of numbers. With no comparison possible, it is a FAIL.

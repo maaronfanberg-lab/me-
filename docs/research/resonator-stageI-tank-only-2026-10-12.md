@@ -156,13 +156,19 @@ known references, **not re-read on 2026-10-12**:
       - the preview before Stage I, with the same taps on the same machines: 165–200 ms on some taps in
         three of the four runs where it was measured. In the fourth its largest was 38 ms.
     - The page's main thread stayed free (gaps 7–35 ms).
-    - `stall_probe.py` times the engine from inside the audio thread. It caught one 247 ms freeze with
-      no engine message and no render call of 2 ms or more, so the time went outside the engine's own
-      code: the browser's audio path, or the machine.
+    - `stall_probe.py` times the engine from inside the audio thread.
+      - In one run, a 247 ms freeze came with no engine message and no render call of 2 ms or more.
+      - In a sixth run, on a machine where both pages froze on about half the taps (up to 430 ms), it
+        also logged the waits between render calls. Freezes lined up with the browser not calling the
+        engine's render at all for 185–253 ms, with no message arriving in that time. Other freezes
+        happened while render calls continued normally and the clock the page reads stood still.
+      - Either way the engine was idle: the time is spent in the browser's audio path or the machine,
+        not in RESONATOR's code.
     - WebKit on Linux: 13–35 ms. Chromium: 9–24 ms.
     - It is older than Stage I, and was hidden while the stall check built no body (error 1).
-    - The WebKit check now fails only if the preview freezes worse than the page before Stage I on the
-      same machine. When both freeze, it is reported as a note, with both numbers.
+    - The WebKit check now taps the page before Stage I five times on the same machine. A preview freeze
+      fails only if that page never froze there; otherwise it is reported as a note, with both sets of
+      numbers.
     - Alex's phone is the real test.
   - **Leftover code.** The engine code for the removed features is still in the file, switched off and
     unreachable; it will be cut when the engine is reworked for the water tower. The page also still

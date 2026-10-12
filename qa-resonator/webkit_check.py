@@ -321,21 +321,22 @@ with sync_playwright() as p:
             pg.tap('#start'); pg.wait_for_timeout(2500)
             pg.click('#shapes .chip:text-is("Tank")'); pg.wait_for_timeout(3000)
             stalls, gaps, builts = [], [], []
-            for k in range(3):
+            for k in range(5):   # five: on a machine that freezes now and then, three clean taps prove little
                 st, gp, bt = pg.evaluate(STALL_JS, '1' if k % 2 == 0 else '-1'); stalls.append(st); gaps.append(gp); builts.append(bt)
             R['live']['before_stage_I'] = {'tank_stall_ms': stalls, 'main_thread_gap_ms': gaps, 'bodies_built': builts}
-            check('preview before Stage I (same engine, all features): audio clock freeze for the same Size taps (median of 3, for comparison)', False,
-                  f'{sorted(stalls)[1]} ms (runs {stalls}; page main-thread gaps {gaps}; new bodies {builts})', critical=False)
+            check('preview before Stage I (same engine, all features): audio clock freeze for the same Size taps (5 runs, for comparison)', False,
+                  f'median {sorted(stalls)[2]} ms, worst {max(stalls)} ms (runs {stalls}; page main-thread gaps {gaps}; new bodies {builts})', critical=False)
             c.close()
             # A freeze the page before Stage I also shows on this machine is the machine's or older than Stage I:
-            # reported, not failed. (CI Macs froze ~0.2 s on some machines and not others, on both pages, with
-            # no engine message or render call of 2 ms or more: stall_probe.py, 2026-10-12.)
+            # reported, not failed. CI Macs froze ~0.2 s now and then on both pages, and stall_probe.py found the
+            # engine idle through it: no message or render call of 2 ms or more, and render calls simply
+            # stopping for 185-253 ms with no message in between (2026-10-12).
             if R.get('pending_stall'):
-                name, _, detail = R.pop('pending_stall'); old = sorted(stalls)[1]
-                if old >= 120 and all(builts):
-                    check(name + ' — the page before Stage I froze too on this machine', False, detail + f'; before Stage I {old} ms', critical=False)
+                name, _, detail = R.pop('pending_stall')
+                if max(stalls) >= 120 and all(builts):
+                    check(name + ' — the page before Stage I froze too on this machine', False, detail + f'; before Stage I up to {max(stalls)} ms (runs {stalls})', critical=False)
                 else:
-                    check(name, False, detail + f'; before Stage I {old} ms on this machine', critical=True)
+                    check(name, False, detail + f'; before Stage I never above {max(stalls)} ms on this machine (runs {stalls})', critical=True)
         except Exception:
             import traceback
             check('preview before Stage I: the same Size taps', False, traceback.format_exc()[-600:], critical=False)
