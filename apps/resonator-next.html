@@ -458,6 +458,11 @@ class Resonator extends AudioWorkletProcessor {
     this.calDirty=false; this.capped=false;           // FIX4 / FIX2
     this.clampHits=0; this.trips=0; this.scan=0; this.badScans=0; this.governed=0; this.load=0;      // FIX1 / D9 telemetry
     this.pool=[];                                     // FIX8: frame buffer pool
+    // P1: per-voice rest/mute flags, sleep and CPU governor (both off unless the page turns them on)
+    this.vRest=new Uint8Array(8).fill(1); this.vMute=new Uint8Array(8); this.anyMute=false;
+    this.perfSleep=false; this.perfGov=false; this.vCap=8; this.govHot=0; this.govCool=0; this.govActs=0;
+    this.sleeps=0; this.slScan=0; this.cpuAcc=0; this.cpuN=0; this.cpu=0; this.cpuMax=0;
+    this.spL=0; this.spR=0; this.fxL=0; this.fxR=0;
     this.asyncCal=false; this.refPick=null;
     // S3: exciters. Calibrated so each lands near the mallet's level at default settings.
     this.wind=0; this.inGain=0.5; this.micIn=0; this.windL=null; this.windW=null; this.windOn=false;
@@ -512,7 +517,9 @@ class Resonator extends AudioWorkletProcessor {
       case 'mode': this.mode=d.v; if(d.v!==3) this.oscOn.fill(0); break;   // S3: leaving oscillator mode releases it
       case 'off': for(let v=0;v<this.VMAX;v++) if(this.oscOn[v]&&this.vf0[v]===d.f) this.oscOn[v]=0; this.envNote(d.f,0); break;   // S3: key released; S5: envelopes
       case 'spec': this.spec=d.v|0; this.setTrim(); break;
-      case 'mv': this.moveMass(d.i,d.x,d.y,d.z); break;
+      case 'mv': this.moveMass(d.i,d.x,d.y,d.z); this.vRest.fill(0); break;   // P1: a moved mass may no longer be at rest
+      case 'perf': this.perfSleep=!!d.sleep; this.perfGov=!!d.gov; if(!this.perfGov){ this.vCap=this.VMAX; } break;   // P1
+      case 'perfTest': if(this.perfGov) this.governCpu(d.c); break;   // P1: lets a test drive the governor
       case 'mod': {
         const m=this.mods[d.i]; const was=m.d;
         m.d=d.d; m.r=d.r; m.a=d.a; m.sh=d.sh;
@@ -554,6 +561,7 @@ class Resonator extends AudioWorkletProcessor {
     for(let v=0;v<V;v++){ this.rest.set(this.restOne, v*N*3); }
     for(let v=0;v<V;v++){ this.vPul[v].length=0; this.vPen[v].length=0; this.vOn[v]=0; }
     this.pos.set(this.rest);
+    this.vRest.fill(1); this.vMute.fill(0); this.anyMute=false;   // P1: every voice exactly at rest
     this.vel=new Float64Array(V*N*3); this.frc=new Float64Array(V*N*3);
     this.goodPos=new Float64Array(V*N*3); this.goodVel=new Float64Array(V*N*3); this.haveGood=false;
     this.fixed=Uint8Array.from(d.fixed); this.si=Int32Array.from(d.si); this.sj=Int32Array.from(d.sj);
@@ -1002,6 +1010,14 @@ class Resonator extends AudioWorkletProcessor {
   }
   pickVoice(){
     if(this.voices<=1) return 0;
+    if(this.perfGov&&this.vCap<this.voices){   // P1: at the governor's limit, reuse a ringing voice
+      let aw=0; for(let v=0;v<this.voices;v++) if(!this.vRest[v]&&!this.vMute[v]) aw++;
+      if(aw>=this.vCap){
+        for(let v=0;v<this.voices;v++) if(!this.vRest[v]&&!this.vMute[v]&&!this.vOn[v]) return v;
+        let best=-1; for(let v=0;v<this.voices;v++) if(!this.vRest[v]&&!this.vMute[v]&&(best<0||this.vAge[v]<this.vAge[best])) best=v;
+        if(best>=0) return best;
+      }
+    }
     for(let v=0;v<this.voices;v++) if(!this.vOn[v]) return v;
     let best=0; for(let v=1;v<this.voices;v++) if(this.vAge[v]<this.vAge[best]) best=v;
     return best;
@@ -1009,6 +1025,7 @@ class Resonator extends AudioWorkletProcessor {
   noteOn(f,vel){
     this.envNote(f,1);   // S5
     const v=this.pickVoice();
+    if(this.vMute[v]) this.vMute[v]=0;   // P1: a new note on a muted voice un-mutes it
     this.vf0[v]=f; this.vAge[v]=++this.ageC; this.vOn[v]=1;
     this.memAcc+=vel*vel*0.19;
     this.obsRate+=1; this.obsVel=0.75*this.obsVel+0.5*vel;
@@ -1141,8 +1158,16 @@ class Resonator extends AudioWorkletProcessor {
     const live=this.voices*st;
     frc.fill(0,0,live);   // only the voices that exist
     const dmp=this.decay>0?Math.exp(-(6.91/this.decay)*dt):1;
+    // P1: read once per step (same values, same arithmetic as before)
+    const nl=this.nl, nlCap=this.nlCap||6, vRest=this.vRest;
+    const gForce=this.windOn||this.fbF!==0||this.bow>0;            // forces that reach every voice
+    const mk=this.anyMute?Math.exp(-(6.91/0.015)*dt):1;               // a muted voice loses 60 dB in 15 ms
     for(let v=0;v<this.voices;v++){
       const b=v*st;
+      if(vRest[v]){   // P1: exactly at rest and nothing pushing it: zero force, so nothing to compute
+        if(!gForce&&!this.vPul[v].length&&!this.vPen[v].length&&!(this.exAny&&this.exF[v]!==0)) continue;
+        vRest[v]=0;
+      }
       const kT=this.vkT[v]||this.kT, kL=this.vkL[v]||this.kL;
       const c=this.lossK*Math.sqrt(kT), sub=this.sub*kT;
       const pul=this.vPul[v], pen=this.vPen[v];
@@ -1153,14 +1178,14 @@ class Resonator extends AudioWorkletProcessor {
         if(L<a*0.05){ L=a*0.05; this.clampHits++; }        // D9: counted, not silent
         const ux=dx/L, uy=dy/L, uz=dz/L; const st=(L-a)/a;
         let T=kT*a;
-        if(this.nl>0){
+        if(nl>0){
           const bx=ux-su[s3], by=uy-su[s3+1], bz=uz-su[s3+2];
           // Adjacent masses move nearly together, so per-spring angular deviation
           // is small and its square is smaller still. Scaled to make this audible,
           // clamped so the stiffness rise cannot eat the stability margin.
-          T*=Math.min(this.nlCap||6,1+this.nl*1600*(bx*bx+by*by+bz*bz));
+          T*=Math.min(nlCap,1+nl*1600*(bx*bx+by*by+bz*bz));
         }
-        const e=kL*(L-a)*(1+this.nl*st*st);
+        const e=kL*(L-a)*(1+nl*st*st);
         const rvx=vel[j]-vel[i], rvy=vel[j+1]-vel[i+1], rvz=vel[j+2]-vel[i+2];
         const gg=e;
         const fx=T*(ux-su[s3])+gg*ux+c*rvx,
@@ -1216,18 +1241,64 @@ class Resonator extends AudioWorkletProcessor {
         if(!isFinite(A)) A=0;
         frc[hb]+=A*hv[0]; frc[hb+1]+=A*hv[1]; frc[hb+2]+=A*hv[2];
       }
+      const dmpv=(mk!==1&&this.vMute[v])?dmp*mk:dmp;   // P1: muted voices are damped hard, then sleep
       for(let n=0;n<N;n++){
         if(fixed[n]) continue; const i=b+n*3;
         let vx=vel[i]+(frc[i]-sub*(pos[i]-rest[i]))*dt,
             vy=vel[i+1]+(frc[i+1]-sub*(pos[i+1]-rest[i+1]))*dt,
             vz=vel[i+2]+(frc[i+2]-sub*(pos[i+2]-rest[i+2]))*dt;
-        vx*=dmp;vy*=dmp;vz*=dmp; vel[i]=vx;vel[i+1]=vy;vel[i+2]=vz;
+        vx*=dmpv;vy*=dmpv;vz*=dmpv; vel[i]=vx;vel[i+1]=vy;vel[i+2]=vz;
         pos[i]+=vx*dt;pos[i+1]+=vy*dt;pos[i+2]+=vz*dt;
       }
     }
   }
+  // P1: a voice whose motion has died below 1e-8 (velocity re its pitch, displacement re the body's
+  // size; about -110 dBFS at the output) is set exactly to rest and skipped until something moves it.
+  // all=false: only voices the governor muted are considered.
+  sleepCheck(all){
+    const st=this.stride, V=this.voices, ac=this.aChar||1, pos=this.pos, vel=this.vel, rest=this.rest; let mute=false;
+    const gForce=this.windOn||this.fbF!==0||this.bow>0;
+    for(let v=0;v<V;v++){
+      if(this.vRest[v]) continue;
+      if(!all&&!this.vMute[v]) continue;
+      if(gForce||this.vPul[v].length||this.vPen[v].length||(this.exAny&&this.exF[v]!==0)||this.oscOn[v]){ if(this.vMute[v]) mute=true; continue; }
+      const b=v*st, e=b+st; let mv=0, mp=0;
+      for(let i=b;i<e;i++){ const a=Math.abs(vel[i]); if(a>mv) mv=a; const d=Math.abs(pos[i]-rest[i]); if(d>mp) mp=d; }
+      const f=this.vf0[v]||this.f0||220;
+      if(mv/(2*Math.PI*f*ac)<1e-8&&mp/ac<1e-8){
+        for(let i=b;i<e;i++){ pos[i]=rest[i]; vel[i]=0; }
+        this.vRest[v]=1; this.vMute[v]=0; this.vOn[v]=0; this.sleeps++;
+      } else if(this.vMute[v]) mute=true;
+    }
+    this.anyMute=mute;
+  }
+  awakeCount(){ let n=0; for(let v=0;v<this.voices;v++) if(!this.vRest[v]&&!this.vMute[v]) n++; return n; }
+  // P1: the load is measured on the device itself. Past 85% of real time twice in a row (0.5 s), the
+  // quietest older voice is muted and fewer voices may ring at once; the limit climbs back after 2 s
+  // under 60%.
+  governCpu(c){
+    if(c>0.85){ this.govCool=0; if(++this.govHot>=2){ this.govHot=0; this.shedVoice(); } }
+    else if(c<0.6){ this.govHot=0; if(++this.govCool>=8){ this.govCool=0; if(this.vCap<this.voices) this.vCap++; } }
+    else { this.govHot=0; this.govCool=0; }
+  }
+  shedVoice(){
+    const V=this.voices; if(V<=1) return;
+    let aw=0, newest=-1;
+    for(let v=0;v<V;v++) if(!this.vRest[v]&&!this.vMute[v]){ aw++; if(newest<0||this.vAge[v]>this.vAge[newest]) newest=v; }
+    if(aw<=1) return;
+    const st=this.stride, vel=this.vel; let best=-1, bq=Infinity;
+    for(let v=0;v<V;v++){
+      if(this.vRest[v]||this.vMute[v]||v===newest||this.oscOn[v]) continue;   // never the newest note or a held key
+      let m=0; for(let i=v*st;i<(v+1)*st;i++){ const a=Math.abs(vel[i]); if(a>m) m=a; }
+      const q=m/(2*Math.PI*(this.vf0[v]||this.f0||220));
+      if(q<bq){ bq=q; best=v; }
+    }
+    if(best<0) return;
+    this.vMute[best]=1; this.anyMute=true; this.vOn[best]=0; this.vCap=Math.max(1,aw-1); this.govActs++;
+  }
   hardReset(){
     this.vel.fill(0); this.pos.set(this.rest); this.pulses.length=0; this.pending.length=0; this.haveGood=false;
+    this.vRest.fill(1); this.vMute.fill(0); this.anyMute=false;   // P1
     this.lp=0; this.lpB=0; this.lp2B=0; this.dcx=0; this.dcy=0;
     this.gate=0; this.gateTarget=1;                    // FIX7: ramp back in
   }
@@ -1601,7 +1672,7 @@ class Resonator extends AudioWorkletProcessor {
     const load=1+0.45*(this.fxCho+this.fxWow+this.fxDly);
     l/=load; r/=load;
     if(!isFinite(l)) l=0; if(!isFinite(r)) r=0;
-    return [l,r];
+    this.spL=l; this.spR=r;   // P1: results in fields, no array per sample
   }
   fx(o){
     const M=this.dl.length, U=this.U;
@@ -1678,7 +1749,7 @@ class Resonator extends AudioWorkletProcessor {
     this.dl[this.di]=Math.max(-3,Math.min(3,o+l*fb));
     this.dr[this.di]=Math.max(-3,Math.min(3,o+r*fb));
     this.di=(this.di+1)%M;
-    return [Math.max(-1.2,Math.min(1.2,l)),Math.max(-1.2,Math.min(1.2,r))];
+    this.fxL=Math.max(-1.2,Math.min(1.2,l)); this.fxR=Math.max(-1.2,Math.min(1.2,r));   // P1
   }
   observe(dtBlock){
     const dec=Math.exp(-dtBlock/3.5);
@@ -1799,7 +1870,16 @@ class Resonator extends AudioWorkletProcessor {
     }
     return pitchDirty;
   }
+  // P1: how much of real time the audio thread spends here, measured on the device (Date.now has
+  // 1 ms steps; summed over 0.25 s of audio). The page shows it; the governor uses it.
   process(inputs, outputs){
+    const t0=Date.now(); const r=this.processInner(inputs, outputs);
+    this.cpuAcc+=Date.now()-t0; this.cpuN+=(outputs[0]&&outputs[0][0])?outputs[0][0].length:128;
+    if(this.cpuN>=0.25*sampleRate){ const c=this.cpuAcc/(1000*this.cpuN/sampleRate); this.cpuAcc=0; this.cpuN=0;
+      this.cpu=c; if(c>this.cpuMax) this.cpuMax=c; if(this.perfGov) this.governCpu(c); }
+    return r;
+  }
+  processInner(inputs, outputs){
     const out=outputs[0]; if(!this.ok){ for(const ch of out) ch.fill(0); return true; }
     const L=out[0], R=out.length>1?out[1]:null, n=L.length;
     const mi=this.micI*3, mv=this.micVec;
@@ -1978,8 +2058,8 @@ class Resonator extends AudioWorkletProcessor {
       if(this.fxLive()||this.spLive()){
         // carry the width through as the side signal instead of discarding it
         let mid=(ll+rr)*0.5, side=(ll-rr)*0.5;
-        if(this.fxLive()){ const f=this.fx(mid); mid=(f[0]+f[1])*0.5; side+=(f[0]-f[1])*0.5; }
-        if(this.spLive()){ const s=this.spatial(mid, mi); mid=(s[0]+s[1])*0.5; side+=(s[0]-s[1])*0.5; }
+        if(this.fxLive()){ this.fx(mid); mid=(this.fxL+this.fxR)*0.5; side+=(this.fxL-this.fxR)*0.5; }
+        if(this.spLive()){ this.spatial(mid, mi); mid=(this.spL+this.spR)*0.5; side+=(this.spL-this.spR)*0.5; }
         ll=mid+side; rr=mid-side;
       }
       if(this.lvl!==1){ ll*=this.lvl; rr*=this.lvl; }          // F3: per-shape level calibration
@@ -2021,6 +2101,9 @@ class Resonator extends AudioWorkletProcessor {
         }
       }
     }
+    if(this.perfSleep||this.anyMute){   // P1
+      this.slScan+=n; if(this.slScan>=1024){ this.slScan=0; this.sleepCheck(this.perfSleep); }
+    }
     this.scan+=n;
     if(this.scan>=128){
       this.scan=0;
@@ -2033,6 +2116,7 @@ class Resonator extends AudioWorkletProcessor {
           const lv=Math.max(1,this.voices)*this.stride;
           this.pos.set(this.goodPos.subarray(0,lv)); this.vel.set(this.goodVel.subarray(0,lv));
           for(let i=0;i<lv;i++) this.vel[i]*=0.35;
+          this.vRest.fill(0);   // P1: a rewind can put any voice back in motion
           this.lp=0; this.lpB=0; this.dcx=0; this.dcy=0;
           this.c1=0; this.c2=0; this.b1=0; this.b2=0; this.t1=0; this.t2=0;
           this.hp1=0; this.lp1=0; this.lp1b=0;
@@ -2047,7 +2131,9 @@ class Resonator extends AudioWorkletProcessor {
       this.tick=0;
       // Meter only: keep audio physics internal and do not ship body motion to the UI.
       const M=this.mods;   // S5: envelope and follower meters
-      this.port.postMessage(M[0].ty||M[1].ty||M[2].ty?{t:'frame',pk:this.peak,mv:[M[0].e,M[1].e,M[2].e]}:{t:'frame',pk:this.peak});
+      const fr=M[0].ty||M[1].ty||M[2].ty?{t:'frame',pk:this.peak,mv:[M[0].e,M[1].e,M[2].e]}:{t:'frame',pk:this.peak};
+      fr.cpu=this.cpu; fr.cpuMax=this.cpuMax; fr.aw=this.awakeCount(); fr.cap=Math.min(this.vCap,this.voices); fr.ga=this.govActs; fr.sl=this.sleeps;   // P1
+      this.port.postMessage(fr);
       if(this.att>0){
         const O=new Float32Array(512*2);
         for(let i=0;i<512;i++){ const j=((this.attN+i)%512)*2; O[i*2]=this.attHist[j]; O[i*2+1]=this.attHist[j+1]; }
@@ -2419,6 +2505,8 @@ async function boot(){
    const d=e.data;
    if(d.t==='frame'){
      state.peak=d.pk; state.ranOnce=true; drawLevel();
+     if(d.cpu!==undefined){ state.cpu=d.cpu; state.cpuMax=d.cpuMax; state.aw=d.aw; state.cap=d.cap; state.sl=d.sl;   // P1
+       if(d.ga>(state.ga||0)){ state.ga=d.ga; govNote(); } cpuShow(); }
      if(d.mv||state.mvShown) modMeters(d.mv||null);   // S5
    } else if(d.t==='rec'){
      if(REC.on){
@@ -2435,9 +2523,15 @@ async function boot(){
    }
  };
  tunerStart();   // S1
+ node.port.postMessage({t:'perf',sleep:1,gov:1});   // P1: sleeping voices and the CPU governor, live play only
  if(state.audioMode==='buffered'){node.port.postMessage({t:'p',k:'osMax',v:10});}
  state.running=true;buildShape(true);
 }
+// P1: the audio thread's own load, measured on this device
+function cpuShow(){ const el=document.getElementById('cpuinfo'); if(!el||state.cpu===undefined) return;
+ const c=Math.round(state.cpu*100); el.textContent='CPU '+c+'%'; el.style.color=c>=85?'var(--tension)':''; }
+function govNote(){ const m=document.getElementById('msg'); if(!m) return; m.className='warn';
+ m.textContent='The phone was running out of time, so a quiet older voice was let go to keep the sound clean. Fewer Voices, a smaller Size or a lower engine rate gives more room.'; }
 function drawLevel(){
  const el=document.getElementById('level'); if(!el) return;
  if(!state.ranOnce){ el.textContent='engine not running'; el.style.color='var(--tension)'; return; }
@@ -2449,14 +2543,14 @@ function drawInfo(){
  const i=state.info,g=state.geo,el=document.getElementById('readout');
  if(!g){el.innerHTML='';return;}
  let s=`<b>${g.P.length}</b> masses &nbsp; <b>${g.S.length}</b> springs<br>`;
- s+= i?`reference mode <b>${i.fRef.toFixed(1)} Hz</b><br>${i.os}× · ${(ctx.sampleRate/1000).toFixed(0)} kHz · ${state.audioMode}`:'measuring…';
+ s+= i?`reference mode <b>${i.fRef.toFixed(1)} Hz</b><br>${i.os}× · ${(ctx.sampleRate/1000).toFixed(0)} kHz · ${state.audioMode} · <span id="cpuinfo"></span>`:'measuring…';
  if(state.tuning) s+='<br><b>tuning…</b>';   // S1
  if(i&&val.infer>0.02) s+='<br>certainty: <b>'+Math.round((1-(i.dpf||1))*100)+'%</b>';
  if(i&&val.mem>0.02) s+='<br>strain: <b>'+Math.round((i.h||0)*100)+'%</b>';
  if(i&&val.regime>0.02) s+='<br>regime: <b>'+['expansion','rate stress','credit stress','recession'][i.regime||0]+'</b>';
  if(i&&i.capped) s+=`<br><b>Stiffness is at its ceiling</b> — the knob is doing nothing at this pitch.`;
  if(i&&i.trips)  s+=`<br>${i.trips} safety reset${i.trips>1?'s':''}`;
- el.innerHTML=s;
+ el.innerHTML=s; cpuShow();
  const load=g.S.length*(i?i.os:1),m=document.getElementById('msg');
  if(load>190){m.className='warn';m.textContent='This one is heavy — if the sound crackles, drop Size or Stiffness.';}
  else if(state.audioMode==='buffered'){m.className='';m.textContent='Buffered engine — pads respond about a third of a second late. Hosting this page over HTTPS switches to the low-latency engine.';}
@@ -2637,6 +2731,7 @@ document.getElementById('copydiag').onclick=async()=>{
     'engine: '+(state.audioMode||'not started')+(ctx?' · '+ctx.sampleRate+' Hz':''),
     'tuning thread: '+(TUNER.on?'background':'audio')+' · bodies '+s.structs+' · retunes '+s.recals+' · last '+s.lastMs+' ms · slowest '+s.maxMs+' ms'+(s.fails?' · fallbacks '+s.fails+' ('+s.why+')':''),
     'shape: '+state.shape+' · masses '+(g?g.P.length:0)+' · springs '+(g?g.S.length:0),
+    'cpu: '+(state.cpu!==undefined?Math.round(state.cpu*100)+'% now · '+Math.round((state.cpuMax||0)*100)+'% highest · voices ringing '+state.aw+' of '+val.voices+' (limit '+state.cap+') · let go '+(state.ga||0)+' · slept '+(state.sl||0):'not measured yet'),   // P1
     '', (diagEl.textContent||'(tap Self-test or Benchmark first for more detail)'),
     '', 'recent: '+JSON.stringify((window.RESONATOR_DIAG||[]).slice(-4))].join('\n');
   let ok=false;

@@ -54,6 +54,12 @@ jobs:
         id: check
         continue-on-error: true
         run: python qa-resonator/webkit_check.py . webkit-out
+      - name: P1 checks in WebKit (CPU shown, governor, sleeping voices)
+        id: p1
+        continue-on-error: true
+        run: |
+          mkdir -p webkit-out
+          python qa-resonator/p1_browser.py . --browser=webkit | tee webkit-out/p1.txt
       - name: Publish results to branch qa-results/webkit-<os>
         if: always()
         env:
@@ -62,7 +68,7 @@ jobs:
           OSN=$(echo "${{ runner.os }}" | tr 'A-Z' 'a-z')
           mkdir -p webkit-out
           echo "${{ github.sha }}" > webkit-out/commit.txt
-          echo "${{ steps.check.outcome }}" > webkit-out/outcome.txt
+          echo "${{ steps.check.outcome }} / p1 ${{ steps.p1.outcome }}" > webkit-out/outcome.txt
           cd webkit-out
           git init -q
           git checkout -q -b results
@@ -79,4 +85,4 @@ jobs:
           retention-days: 14
       - name: Enforce the result
         if: always()
-        run: test "${{ steps.check.outcome }}" = success
+        run: test "${{ steps.check.outcome }}" = success && test "${{ steps.p1.outcome }}" = success

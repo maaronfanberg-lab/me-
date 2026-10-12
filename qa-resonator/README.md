@@ -46,3 +46,15 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
 - Ratchet: an offline render does not deliver the engine's messages while it runs (measured in
   Chromium). The check waits for the engine's `ready` before rendering; a fixed 250 ms wait was
   shorter than Tank's tuning and rendered silence (a test artefact, not an engine fault).
+
+## Phone performance P1 (preview)
+- `patch_p1.py` — the verified edits (skip voices at rest, sleep, CPU measurement, governor, no
+  per-sample arrays in the effects).
+- `p1_verify.mjs [baseline.html]` — sleep and governor off are bit-identical to the preview before P1
+  (189 setups); the sleep bound (< −100 dBFS) with real sleeps; the governor (sheds smoothly, respects
+  its limit, recovers, consulted only when switched on); the CPU estimate vs a precise clock; a
+  timing table (skip with `P1_SKIP_COST=1`).
+- `p1_cost_one.mjs` — one timing in a fresh process. Ratchet: several engine copies in one process
+  share compiled code and distort small timings (a sleep that looked 4× costlier was this).
+- `p1_browser.py [--browser=webkit]` — perf turned on, CPU shown, live reading rises with work,
+  governor and its message, voices sleep and wake, Copy report line.

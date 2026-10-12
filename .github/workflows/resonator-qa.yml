@@ -66,6 +66,14 @@ jobs:
       - name: Stage 5 browser checks (modulator types by taps, meters, fake phone mic, presets)
         if: hashFiles('apps/resonator-next.html') != ''
         run: python qa-resonator/stage5_browser.py .
+      - name: P1 engine proofs (sleep off bit-identical, sleep bound, governor, CPU estimate)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: |
+          git fetch -q --depth=1 origin 4d9404e8d63176c1e1e8ee5e50c494bc4a1fa84f
+          P1_SKIP_COST=1 node qa-resonator/p1_verify.mjs
+      - name: P1 browser checks (CPU shown, governor, sleeping voices, Copy report)
+        if: hashFiles('apps/resonator-next.html') != ''
+        run: python qa-resonator/p1_browser.py .
       - name: Tap controls — preview page
         if: hashFiles('apps/resonator-next.html') != ''
         run: python qa-resonator/ui_test.py . ui-preview.png apps/resonator-next.html
