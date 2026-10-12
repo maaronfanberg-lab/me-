@@ -101,6 +101,10 @@ jobs:
         id: f1b
         continue-on-error: true
         run: python qa-resonator/f1_browser.py . 2>&1 | tee qa-out/f1_browser.txt
+      - name: Stage G browser checks (video with sound — file streams, sound level, frame, saving)
+        id: g1b
+        continue-on-error: true
+        run: python qa-resonator/g1_browser.py . 2>&1 | tee qa-out/g1_browser.txt
       - name: Tap controls — preview page
         id: taps
         continue-on-error: true
@@ -115,7 +119,7 @@ jobs:
             s3m=${{ steps.s3m.outcome }} s3b=${{ steps.s3b.outcome }} s4v=${{ steps.s4v.outcome }}
             s4b=${{ steps.s4b.outcome }} s5v=${{ steps.s5v.outcome }} s5b=${{ steps.s5b.outcome }}
             p1v=${{ steps.p1v.outcome }} p1b=${{ steps.p1b.outcome }} f1v=${{ steps.f1v.outcome }}
-            f1b=${{ steps.f1b.outcome }} taps=${{ steps.taps.outcome }}
+            f1b=${{ steps.f1b.outcome }} g1b=${{ steps.g1b.outcome }} taps=${{ steps.taps.outcome }}
         run: |
           mkdir -p qa-out
           echo "${{ github.sha }}" > qa-out/commit.txt

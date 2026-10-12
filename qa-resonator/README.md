@@ -70,3 +70,16 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
   change, Hush, presets old and new, double-tap reset.
 - Ratchet: a bit-identity sweep iterates the *baseline's* controls; a control added later is
   supposed to change the sound (`p1_verify.mjs` swept the new page's knobs and flagged Reverb).
+
+## Stage G, video with sound (preview)
+- `patch_g1.py` (Record video / Save video on the Strike tab: canvas.captureStream + a stream tap on
+  the master gain, MediaRecorder, the share sheet or a download) and `patch_g2.py` (the stage
+  gradient painted into the canvas while recording).
+- `g1_browser.py [--browser=webkit]` — records 4 s while playing, then checks the file: the browser
+  decodes its own recording (picture size, sound level); ffprobe/ffmpeg confirm one video and one
+  audio stream, the length, the sound in it, and a frame that shows the body (full resolution:
+  a downscale averaged the small balls away, a test artefact). Also: Save hands over a named file,
+  the time limit stops by itself, it still plays afterwards, and without MediaRecorder the page
+  explains.
+- `webkit_check.py` now also records the page's main-thread gaps beside the audio-clock freeze, so
+  an audio stall can be told from a page stall.

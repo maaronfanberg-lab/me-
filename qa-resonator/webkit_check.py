@@ -42,11 +42,14 @@ PEAK_JS = """async () => { if (!window._an) { window._an = ctx.createAnalyser();
   for (let i = 0; i < 120; i++) { await new Promise(r => setTimeout(r, 25)); an.getFloatTimeDomainData(buf);
     for (const v of buf) { if (!isFinite(v)) bad++; else pk = Math.max(pk, Math.abs(v)); } }
   return { pk: +pk.toFixed(3), bad }; }"""
-STALL_JS = """async () => { let last = ctx.currentTime, lastWall = performance.now(), worst = 0;
-  const tick = () => { const now = performance.now(), c = ctx.currentTime; if (c !== last) { last = c; lastWall = now; } else worst = Math.max(worst, now - lastWall); };
-  const iv = setInterval(tick, 4); await new Promise(r => setTimeout(r, 150));
+# the audio clock's longest stand-still, and the main thread's longest gap between ticks (if the page
+# itself is blocked, the clock cannot be read either: the two together tell audio stalls from page stalls)
+STALL_JS = """async () => { let last = ctx.currentTime, lastWall = performance.now(), worst = 0, prevTick = performance.now(), gap = 0;
+  const tick = () => { const now = performance.now(), c = ctx.currentTime; gap = Math.max(gap, now - prevTick); prevTick = now;
+    if (c !== last) { last = c; lastWall = now; } else worst = Math.max(worst, now - lastWall); };
+  const iv = setInterval(tick, 4); await new Promise(r => setTimeout(r, 150)); gap = 0;
   document.querySelector('#shapes .chip:nth-child(7)').click();
-  await new Promise(r => setTimeout(r, 2500)); clearInterval(iv); tick(); return Math.round(worst); }"""
+  await new Promise(r => setTimeout(r, 2500)); clearInterval(iv); tick(); return [Math.round(worst), Math.round(gap)]; }"""
 # The engine rendered offline inside the browser, with exactly the messages webkit_ref.mjs sends in Node.
 OFFLINE_JS = """async ({ shape, secs, sr }) => {
   const S = SHAPES[shape], g = S.make(S.def), NN = g.P.length;
@@ -152,13 +155,14 @@ with sync_playwright() as p:
             R['live'][label]['peaks'] = peaks
             check(f'{label}: every shape sounds (live)', all(v['pk'] > 0.05 and v['bad'] == 0 for _, v in peaks),
                   ' · '.join(f"{s} {v['pk']}" for s, v in peaks))
-            stalls = []
+            stalls, gaps = [], []
             for _ in range(3):   # median of three: one sample on a busy CI machine is noise-prone
                 pg.click('#shapes .chip:text-is("String")'); pg.wait_for_timeout(1200)
-                stalls.append(pg.evaluate(STALL_JS))
+                st, gp = pg.evaluate(STALL_JS); stalls.append(st); gaps.append(gp)
             stall = sorted(stalls)[1]
-            R['live'][label]['tank_stall_ms'] = stalls
-            check(f'{label}: audio clock freeze when choosing Tank (median of 3)', stall < 120 or label == 'live', f'{stall} ms (runs {stalls})', critical=(label == 'preview'))
+            R['live'][label]['tank_stall_ms'] = stalls; R['live'][label]['main_thread_gap_ms'] = gaps
+            check(f'{label}: audio clock freeze when choosing Tank (median of 3)', stall < 120 or label == 'live',
+                  f'{stall} ms (runs {stalls}; page main-thread gaps {gaps})', critical=(label == 'preview'))
 
         # ---------- the engine itself, rendered offline inside this browser ----------
         try:
