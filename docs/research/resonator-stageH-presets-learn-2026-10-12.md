@@ -112,14 +112,17 @@ his phone (section 10).
 - **The preset "Feedback organ" was dropped.** Its self-oscillation landed about 160 to 570 cents from the
   key on the Hoop (the String and Tine were further off or fell silent), and the output sat at full scale
   whatever the Level (the output's tanh saturates). "Turning bell" replaced it.
-- **The "Breathing pad" changed exciter.** In oscillator mode the output rose about 11–12 dB from E3
-  to E5, so the pad uses long mallet strings with a tone envelope. Measured flat across keys within
-  1.1 dB.
+- **The "Breathing pad" changed exciter.** In oscillator mode the pad's draft settings rose 11–12 dB
+  from E3 to E5, so the pad uses long mallet strings with a tone envelope. Measured flat across keys
+  within 1.1 dB.
 - **Not fixed here (engine or wider page changes; for Alex to decide as their own stages):**
   - The octave trap can still occur within a session. After moving the strike and mic near an end,
     changing Size or editing the body rebuilds with the moved pickups and may tune the 2nd partial.
     Keeping the build-time reference sticky would fix it.
-  - Oscillator mode is about 11–12 dB louder two octaves up.
+  - Oscillator mode gets louder up the keyboard. From E3 to E5 (single keys, LUFS): 8 dB on the
+    default string, 9 dB on the tine, 11 dB on the chime, 11–12 dB with the pad's draft settings.
+    (Corrected 2026-10-12: an earlier version of this line, and the message to Alex, gave 11–12 dB
+    for all of them.)
   - Feedback past half way saturates the output.
   - The heavy-body note can flash with the previous body's oversampling.
 - **Limits.**
