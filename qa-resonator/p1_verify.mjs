@@ -50,7 +50,8 @@ const sparse = (n, gap) => Array.from({ length: n }, (_, i) => ({ at: 0.05 + i *
 // ---------- 1. bit-identical with sleep and governor off ----------
 const cfgs = [{ name: 'default' }];
 for (const s of Object.keys(N.SHAPES)) cfgs.push({ name: 'shape ' + s, shape: s });
-for (const k in N.KNOBS) for (const e of ['min', 'max']) if (!['size', 'mag', 'hit', 'mic'].includes(k)) cfgs.push({ name: `${k} ${e}`, params: { [k]: N.KNOBS[k][e] } });
+// the baseline's knobs: a control added after P1 (e.g. Reverb) legitimately changes the sound
+for (const k in B.KNOBS) for (const e of ['min', 'max']) if (!['size', 'mag', 'hit', 'mic'].includes(k)) cfgs.push({ name: `${k} ${e}`, params: { [k]: B.KNOBS[k][e] } });
 for (const v of [2, 4, 8]) for (const s of ['String', 'Drum', 'Tank']) cfgs.push({ name: `${s} ${v} voices, sparse`, shape: s, params: { voices: v }, notes: sparse(3, 1.1) });
 cfgs.push({ name: '8 voices dense', params: { voices: 8 } });
 cfgs.push({ name: 'plectrum 4 voices', mode: 2, params: { voices: 4 } });

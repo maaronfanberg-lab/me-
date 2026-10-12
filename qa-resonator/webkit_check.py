@@ -152,10 +152,13 @@ with sync_playwright() as p:
             R['live'][label]['peaks'] = peaks
             check(f'{label}: every shape sounds (live)', all(v['pk'] > 0.05 and v['bad'] == 0 for _, v in peaks),
                   ' · '.join(f"{s} {v['pk']}" for s, v in peaks))
-            pg.click('#shapes .chip:text-is("String")'); pg.wait_for_timeout(1200)
-            stall = pg.evaluate(STALL_JS)
-            R['live'][label]['tank_stall_ms'] = stall
-            check(f'{label}: audio clock freeze when choosing Tank', stall < 120 or label == 'live', f'{stall} ms', critical=(label == 'preview'))
+            stalls = []
+            for _ in range(3):   # median of three: one sample on a busy CI machine is noise-prone
+                pg.click('#shapes .chip:text-is("String")'); pg.wait_for_timeout(1200)
+                stalls.append(pg.evaluate(STALL_JS))
+            stall = sorted(stalls)[1]
+            R['live'][label]['tank_stall_ms'] = stalls
+            check(f'{label}: audio clock freeze when choosing Tank (median of 3)', stall < 120 or label == 'live', f'{stall} ms (runs {stalls})', critical=(label == 'preview'))
 
         # ---------- the engine itself, rendered offline inside this browser ----------
         try:

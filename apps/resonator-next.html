@@ -268,6 +268,11 @@ body.hints .knob{margin-bottom:16px}
       <div class="knob" data-k="fxWow"></div>
       <div class="knob" data-k="fxTrem"></div>
       <div class="knob" data-k="fxSat"></div>
+      <div class="secttl">Plate reverb</div>
+      <div class="knob" data-k="rvMix"></div>
+      <div class="knob" data-k="rvTime"></div>
+      <div class="knob" data-k="rvTone"></div>
+      <div class="knob" data-k="rvPre"></div>
     </section>
 
     <section class="page" id="page-mod">
@@ -463,6 +468,9 @@ class Resonator extends AudioWorkletProcessor {
     this.perfSleep=false; this.perfGov=false; this.vCap=8; this.govHot=0; this.govCool=0; this.govActs=0;
     this.sleeps=0; this.slScan=0; this.cpuAcc=0; this.cpuN=0; this.cpu=0; this.cpuMax=0;
     this.spL=0; this.spR=0; this.fxL=0; this.fxR=0;
+    // F: plate reverb (Dattorro 1997). Off until Reverb is above 0; buffers made on first use.
+    this.rvMix=0; this.rvTime=2.5; this.rvTone=9000; this.rvPre=20; this.rvOn=false; this.rv=null;
+    this.rvDec=0.5; this.rvDd2=0.5; this.rvDamp=0; this.rvPreN=0; this.rvK=0.736; this.rvOutL=0; this.rvOutR=0;   // rvK: reverb alone at 100% = dry loudness
     this.asyncCal=false; this.refPick=null;
     // S3: exciters. Calibrated so each lands near the mallet's level at default settings.
     this.wind=0; this.inGain=0.5; this.micIn=0; this.windL=null; this.windW=null; this.windOn=false;
@@ -504,6 +512,7 @@ class Resonator extends AudioWorkletProcessor {
           for(let v=1;v<this.VMAX;v++){ this.vOn[v]=0; this.vPul[v].length=0; this.vPen[v].length=0; }
           this.pitch(); }
         if(d.k==='pkAp'||d.k==='pkSpc'){ this.buildCoils(); }
+        if(d.k==='rvMix'||d.k==='rvTime'||d.k==='rvTone'||d.k==='rvPre') this.rvSet();   // F
         if(d.k==='ratio'||d.k==='sub'){ this.calDirty=true; this.pitch(); }   // FIX4/FIX10
         else if(d.k==='tune') this.pitch();
         break;
@@ -538,7 +547,7 @@ class Resonator extends AudioWorkletProcessor {
         break;
       }
       case 'hit': this.hitI=d.i; this.hitA=d.a; this.vectors(); break;
-      case 'hush': this.gateTarget=0; this.pendingReset=true; this.bow=0; this.modBase.bow=0;
+      case 'hush': if(this.rv) this.rvClear(); this.gateTarget=0; this.pendingReset=true; this.bow=0; this.modBase.bow=0;
         for(const m of this.mods){ m.e=0; m.st=0; m.y1=0; m.y=0; } this.nHeld=0; this.fIn.fill(0);   // S5
         this.oscOn.fill(0); this.oscEnv.fill(0); if(this.windL) this.windL.fill(0);   // S3
         for(let v=0;v<this.VMAX;v++){ this.vPul[v].length=0; this.vPen[v].length=0; this.vOn[v]=0; }
@@ -1299,6 +1308,7 @@ class Resonator extends AudioWorkletProcessor {
   hardReset(){
     this.vel.fill(0); this.pos.set(this.rest); this.pulses.length=0; this.pending.length=0; this.haveGood=false;
     this.vRest.fill(1); this.vMute.fill(0); this.anyMute=false;   // P1
+    if(this.rv) this.rvClear();   // F: also clear what the Hush fade fed into the reverb
     this.lp=0; this.lpB=0; this.lp2B=0; this.dcx=0; this.dcy=0;
     this.gate=0; this.gateTarget=1;                    // FIX7: ramp back in
   }
@@ -1751,6 +1761,60 @@ class Resonator extends AudioWorkletProcessor {
     this.di=(this.di+1)%M;
     this.fxL=Math.max(-1.2,Math.min(1.2,l)); this.fxR=Math.max(-1.2,Math.min(1.2,r));   // P1
   }
+  // F: plate reverb. Dattorro's figure-of-eight tank, scaled from his 29761 Hz to this engine's rate.
+  // T60 from Reverb time: one trip round the eight is 21589 samples at 29761 Hz with decay applied four
+  // times, so decay = 0.001^(trip / (4 T60)) (low frequencies; the damping filter shortens the highs).
+  rvSet(){
+    const was=this.rvOn; this.rvOn=this.rvMix>0.0005;
+    const trip=21589/29761;
+    // measured T60 runs long by r(T) = 1 + 0.0907 T^-0.29 (f1_verify): solve T_d * r(T_d) = setting
+    const Ts=Math.max(0.6,this.rvTime); let Td=Ts; for(let it=0;it<6;it++) Td=Ts/(1+0.0907*Math.pow(Td,-0.29));
+    this.rvDec=Math.exp(Math.log(0.001)*trip/(4*Td));
+    this.rvDd2=Math.min(0.5,Math.max(0.25,this.rvDec+0.15));          // Dattorro: decay + 0.15, 0.25..0.50
+    this.rvDamp=Math.exp(-2*Math.PI*Math.min(this.rvTone,0.45*sampleRate)/sampleRate);   // one-pole: y=(1-d)x+d*y1
+    this.rvPreN=Math.max(0,Math.round(Math.min(250,this.rvPre)*sampleRate/1000));
+    if(this.rvOn&&!was){ if(!this.rv) this.rvAlloc(); this.rvClear(); }
+  }
+  rvAlloc(){
+    const k=sampleRate/29761, r=n=>Math.max(1,Math.round(n*k)), ex=Math.ceil(16*k)+3;
+    const L=(n,extra)=>({b:new Float64Array(r(n)+(extra||0)+2),p:0,n:r(n)});
+    this.rv={ap1:L(142),ap2:L(107),ap3:L(379),ap4:L(277),m1:L(672,ex),d1:L(4453),a1:L(1800),d2:L(3720),
+      m2:L(908,ex),d3:L(4217),a2:L(2656),d4:L(3163),pre:{b:new Float64Array(Math.ceil(0.26*sampleRate)+2),p:0,n:0},
+      bw:0,lp1:0,lp2:0,lOut:0,rOut:0,ph:0,dph:1/sampleRate,exc:16*k,
+      tL:[r(266),r(2974),r(1913),r(1996),r(1990),r(187),r(1066)],tR:[r(353),r(3627),r(1228),r(2673),r(2111),r(335),r(121)]};
+  }
+  rvClear(){ const R=this.rv; if(!R) return;
+    for(const o of [R.ap1,R.ap2,R.ap3,R.ap4,R.m1,R.d1,R.a1,R.d2,R.m2,R.d3,R.a2,R.d4,R.pre]){ o.b.fill(0); o.p=0; }
+    R.bw=0; R.lp1=0; R.lp2=0; R.lOut=0; R.rOut=0; R.ph=0; this.rvOutL=0; this.rvOutR=0; }
+  rvRd(o,k){ let i=o.p-k; if(i<0) i+=o.b.length; return o.b[i]; }            // input k samples ago
+  rvWr(o,x){ o.b[o.p]=x; if(++o.p>=o.b.length) o.p=0; }
+  rvTap(o,k){ let i=o.p-1-k; if(i<0) i+=o.b.length; return o.b[i]; }        // after this sample's write
+  rvAp(o,x,g){ const d=this.rvRd(o,o.n), w=x+g*d; this.rvWr(o,w); return d-g*w; }   // (-g+z^-N)/(1-g z^-N)
+  rvApm(o,x,g,off){ const dd=o.n+off, i0=Math.floor(dd), f=dd-i0;
+    const a=this.rvRd(o,i0), b=this.rvRd(o,i0+1), d=a+(b-a)*f, w=x+g*d; this.rvWr(o,w); return d-g*w; }
+  reverbSample(xl,xr){
+    const R=this.rv, pre=R.pre;
+    pre.b[pre.p]=(xl+xr)*0.5; let ip=pre.p-this.rvPreN; if(ip<0) ip+=pre.b.length; let x=pre.b[ip]; if(++pre.p>=pre.b.length) pre.p=0;
+    R.bw+=0.9995*(x-R.bw); x=R.bw;                                   // bandwidth 0.9995
+    x=this.rvAp(R.ap1,x,0.75); x=this.rvAp(R.ap2,x,0.75); x=this.rvAp(R.ap3,x,0.625); x=this.rvAp(R.ap4,x,0.625);
+    R.ph+=R.dph; if(R.ph>=1) R.ph-=1;                                 // 1 Hz, quadrature left/right
+    const w=2*Math.PI*R.ph, dec=this.rvDec, dd2=this.rvDd2, dm=this.rvDamp;
+    let l=x+dec*R.rOut, r=x+dec*R.lOut, d;
+    l=this.rvApm(R.m1,l,-0.70,R.exc*Math.sin(w));                      // decay diffusion 1, negative
+    d=this.rvRd(R.d1,R.d1.n); this.rvWr(R.d1,l); l=d;
+    R.lp1=(1-dm)*l+dm*R.lp1; l=R.lp1*dec;
+    l=this.rvAp(R.a1,l,dd2);
+    d=this.rvRd(R.d2,R.d2.n); this.rvWr(R.d2,l); l=d;
+    r=this.rvApm(R.m2,r,-0.70,R.exc*Math.cos(w));
+    d=this.rvRd(R.d3,R.d3.n); this.rvWr(R.d3,r); r=d;
+    R.lp2=(1-dm)*r+dm*R.lp2; r=R.lp2*dec;
+    r=this.rvAp(R.a2,r,dd2);
+    d=this.rvRd(R.d4,R.d4.n); this.rvWr(R.d4,r); r=d;
+    R.lOut=l; R.rOut=r;
+    const tL=R.tL, tR=R.tR;   // Dattorro Table 2: every tap x 0.6
+    this.rvOutL=0.6*(this.rvTap(R.d3,tL[0])+this.rvTap(R.d3,tL[1])-this.rvTap(R.a2,tL[2])+this.rvTap(R.d4,tL[3])-this.rvTap(R.d1,tL[4])-this.rvTap(R.a1,tL[5])-this.rvTap(R.d2,tL[6]));
+    this.rvOutR=0.6*(this.rvTap(R.d1,tR[0])+this.rvTap(R.d1,tR[1])-this.rvTap(R.a1,tR[2])+this.rvTap(R.d2,tR[3])-this.rvTap(R.d3,tR[4])-this.rvTap(R.a2,tR[5])-this.rvTap(R.d4,tR[6]));
+  }
   observe(dtBlock){
     const dec=Math.exp(-dtBlock/3.5);
     this.obsRate*=dec; this.obsVel*=dec;
@@ -2063,6 +2127,7 @@ class Resonator extends AudioWorkletProcessor {
         ll=mid+side; rr=mid-side;
       }
       if(this.lvl!==1){ ll*=this.lvl; rr*=this.lvl; }          // F3: per-shape level calibration
+      if(this.rvOn){ this.reverbSample(ll,rr); const gw=this.rvMix*this.rvK; ll+=gw*this.rvOutL; rr+=gw*this.rvOutR; }   // F: plate reverb
       if(!isFinite(ll)) ll=0; if(!isFinite(rr)) rr=0;
       { // F2: true-peak lookahead limiter, ceiling -1 dBTP. Gain is exactly 1 below the ceiling.
         const B=this.tpL, C=this.tpR, I=this.tpI, D=this.tpD, Cc=this.limC;
@@ -2284,6 +2349,10 @@ const KNOBS={
  m3fa:{label:'Follow attack 3',min:0,max:1,step:0.005,val:0.335,fmt:v=>fmtTime(v),hint:''},
  m3fr:{label:'Follow release 3',min:0,max:1,step:0.005,val:0.425,fmt:v=>fmtTime(v),hint:''},
  m3se:{label:'Sensitivity 3',min:0,max:1,step:0.01,val:0.36,fmt:v=>fmtSens(v),hint:''},
+ rvMix:{label:'Reverb',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.005?'off':Math.round(v*100)+'%',hint:'A plate reverb, after everything else: the sound in a large ringing steel plate (Dattorro, 1997). At 0 it is switched off entirely.'},
+ rvTime:{label:'Reverb time',min:0.6,max:12,step:0.05,val:2.5,fmt:v=>v.toFixed(1)+' s',hint:'How long the tail takes to fall by 60 dB (measured below 1 kHz). A plate this size cannot ring much shorter than 0.6 s.'},
+ rvTone:{label:'Reverb tone',min:1000,max:16000,step:100,val:9000,fmt:v=>(v/1000).toFixed(1)+' kHz',hint:'The plate loses highs above this on every pass, so the tail darkens as it fades.'},
+ rvPre:{label:'Pre-delay',min:0,max:250,step:1,val:20,fmt:v=>Math.round(v)+' ms',hint:'A gap before the reverb answers, like the distance to the first wall.'},
  cab:{label:'Cabinet',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'direct':Math.round(v*100)+'%',hint:'A speaker in a box: nothing below 95 Hz, nothing above 4.2 kHz. This is what stops it sounding like a computer.'}
 };
 // F3: per-shape output calibration to -21 LUFS at default settings (measured, see qa-resonator)
@@ -2306,7 +2375,7 @@ function buildShape(resetPickups){
  if(g.needSub&&val.sub<g.needSub){val.sub=g.needSub;syncKnob('sub');}
  if(resetPickups){const F=state.free,span=Math.max(1,F.length-1),at=i=>{const k=F.indexOf(i);return k<0?0:k/span;};val.mic=at(g.mic);val.hit=at(g.hit);syncKnob('mic');syncKnob('hit');}
  placeMicHit();
- if(node){const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:g.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain'])send(k);
+ if(node){const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:g.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain','rvMix','rvTime','rvTone','rvPre'])send(k);
    node.port.postMessage({t:'pk',v:state.pk||0});
    node.port.postMessage({t:'mode',v:state.mode||0});
    node.port.postMessage({t:'spec',v:state.spec||0});sendLvl();if(state.xm){state.xm.forEach(x=>{x.i=-1;});xmSendAll();syncMicSlots();}}
@@ -2871,6 +2940,7 @@ function restore(o){
   state.shape=o.shape||state.shape; state.n=o.n||state.n;
   state.scale=o.scale||0; state.root=o.root||52; state.axis=o.axis||1;
   state.pk=o.pk||0; state.mode=o.mode||0; state.spec=o.spec||0;
+  for(const k of ['rvMix','rvTime','rvTone','rvPre']) val[k]=KNOBS[k].val;   // F: a preset from before reverb has none
   for(const k in o.val) if(k in val) val[k]=o.val[k];
   state.geo={P:o.P.map(p=>p.slice()),F:Uint8Array.from(o.F),S:o.S.map(s=>s.slice()),
              axis:state.axis,mic:o.micIdx,hit:o.hitIdx,note:'',shape:state.shape,n:state.n};   // S2
@@ -3122,7 +3192,7 @@ const pickEl=document.getElementById('pickups');
  pickEl.appendChild(b);});
 const shapesEl=document.getElementById('shapes');for(const name in SHAPES){const b=document.createElement('button');b.className='chip';b.textContent=name;b.setAttribute('aria-pressed',name===state.shape);b.onclick=()=>{state.shape=name;const S=SHAPES[name];state.n=S.def;val.size=(S.def-S.min)/(S.max-S.min);syncKnob('size');[...shapesEl.children].forEach(c=>c.setAttribute('aria-pressed',c.textContent===name));buildShape(true);};shapesEl.appendChild(b);}
 const axesEl=document.getElementById('axes');['X','Y','Z'].forEach((ax,i)=>{const b=document.createElement('button');b.className='chip';b.textContent='Mic axis '+ax;b.setAttribute('aria-pressed',false);b.onclick=()=>{state.axis=i;[...axesEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===i));placeMicHit();};axesEl.appendChild(b);});
-document.getElementById('scramble').onclick=()=>{const g=state.geo;if(!g||!node)return;geoPush();const F=state.free,add=2+Math.floor(Math.random()*3);for(let q=0;q<add;q++){const a=F[Math.floor(Math.random()*F.length)],b=g.P.map((_,i)=>i)[Math.floor(Math.random()*g.P.length)];if(a!==b&&!g.S.some(s=>(s[0]===a&&s[1]===b)||(s[0]===b&&s[1]===a)))g.S.push([a,b]);}for(const i of F)g.P[i]=g.P[i].map(v=>v+(Math.random()-0.5)*0.03);const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:state.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain'])send(k);
+document.getElementById('scramble').onclick=()=>{const g=state.geo;if(!g||!node)return;geoPush();const F=state.free,add=2+Math.floor(Math.random()*3);for(let q=0;q<add;q++){const a=F[Math.floor(Math.random()*F.length)],b=g.P.map((_,i)=>i)[Math.floor(Math.random()*g.P.length)];if(a!==b&&!g.S.some(s=>(s[0]===a&&s[1]===b)||(s[0]===b&&s[1]===a)))g.S.push([a,b]);}for(const i of F)g.P[i]=g.P[i].map(v=>v+(Math.random()-0.5)*0.03);const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:state.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain','rvMix','rvTime','rvTone','rvPre'])send(k);
    node.port.postMessage({t:'pk',v:state.pk||0});
    node.port.postMessage({t:'mode',v:state.mode||0});
    node.port.postMessage({t:'spec',v:state.spec||0});drawInfo();};
@@ -3339,7 +3409,7 @@ function rebuild(){
   node.port.postMessage({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),
     si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),
     mic:state.micIdx,hit:state.hitIdx,axis:state.axis});
-  for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain'])send(k);
+  for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain','rvMix','rvTime','rvTone','rvPre'])send(k);
   node.port.postMessage({t:'pk',v:state.pk||0});
   node.port.postMessage({t:'mode',v:state.mode||0});
   sendLvl();

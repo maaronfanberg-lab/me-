@@ -58,3 +58,15 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
   share compiled code and distort small timings (a sleep that looked 4× costlier was this).
 - `p1_browser.py [--browser=webkit]` — perf turned on, CPU shown, live reading rises with work,
   governor and its message, voices sleep and wake, Copy report line.
+
+## Stage F, plate reverb (preview)
+- `patch_f1.py` (the reverb: Dattorro 1997, Table 1 coefficients, Table 2 taps; delay lengths
+  cross-checked against the freeverb3 notes) and `patch_f2.py` (calibration from measurement: reverb
+  time, level, Hush).
+- `f1_verify.mjs [baseline.html]` — Reverb 0 bit-identical (174 setups); measured T60 (Schroeder,
+  ISO 3382 T30) within 5% of the setting over 0.6–12 s; tone vs the damping filter's prediction;
+  stereo decorrelation; pre-delay; 12 s stability; level vs dry; true peak; determinism; Hush; a new
+  body keeps the tail. `f1_browser.py [--browser=webkit]` — the FX tab, taps, audible tail, shape
+  change, Hush, presets old and new, double-tap reset.
+- Ratchet: a bit-identity sweep iterates the *baseline's* controls; a control added later is
+  supposed to change the sound (`p1_verify.mjs` swept the new page's knobs and flagged Reverb).

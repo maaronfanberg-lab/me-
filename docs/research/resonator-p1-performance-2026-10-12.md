@@ -13,6 +13,26 @@ workflow "RESONATOR WebKit").
 - Profile: the physics step `advance()` took 57–81% of the time; with effects on, the garbage
   collector took 10%, because the effects returned a new array for every audio sample.
 
+**Research question.** Can the engine stop spending time on silence, and measure its own load on the
+phone, without changing the sound?
+
+**Pre-change baseline.** The "before" column of the cost table in section 10. The page had no load
+reading in AudioWorklet mode.
+
+**Validation criteria (set before the change).**
+- With sleep and governor off, output bit-identical to the previous preview on every setup.
+- With sleep on, the largest difference below −100 dBFS, and voices really asleep.
+- The governor sheds smoothly (no larger sample step than unmuted), respects its limit, and recovers.
+- The CPU estimate within 10% of a precise clock.
+- All earlier stage suites pass, in Chromium and in WebKit.
+
+**Sources (read 2026-10-11/12).**
+- W3C, *Web Audio API 1.0* (Recommendation), "Rendering an Audio Graph" and AudioWorklet: rendering
+  proceeds in 128-frame quanta.
+- IEEE 754-2019 §6.3 (the sign of a sum of zeros): used in the exactness argument.
+- Anukari devlog index (anukari.com/blog/devlog): voice stealing "prefers released notes", 2024-07.
+- WebKit 26.0 via Playwright 1.56 (GitHub Actions, 2026-10-12): measured in this work.
+
 ## 2–5. Evidence and mechanism
 - **Where the time went.** `advance()` simulated every voice on every substep, including voices that
   had never been struck. The engine already marked decayed voices "off" for voice allocation but kept
@@ -60,6 +80,20 @@ workflow "RESONATOR WebKit").
   audio. JavaScriptCore's output is bit-identical to Node's on 8/8 shapes. Tank's freeze is
   25–39 ms on the preview vs 363–435 ms on the live page, and one String voice runs 71× real time
   on Apple silicon.
+
+## Research gate (AGENTS.md, levels 1–10)
+1. **Observed:** a stage 4 measurement and this profile.
+2. **Foundational:** the real-time quantum deadline (W3C).
+3. **Current:** WebKit 26 runs, both engines.
+4. **Natural behaviour:** n/a (not a model of people). The musical practice used is voice stealing
+   under load.
+5. **Mechanism:** skip exact rest (proved); measure, don't guess.
+6. **Competing explanations:** JIT cross-talk and a test artefact, both investigated (section 6).
+7. **Limits:** dense playing gains less; the clock has 1 ms steps.
+8. **Context transfer:** dev-machine and CI numbers are not phone numbers; the Copy report carries the
+   phone's own.
+9. **Mapping:** see below.
+10. **Validation:** see section 10. Post-deployment result pending the phone.
 
 ## 9. Implementation mapping
 - **Engine.**

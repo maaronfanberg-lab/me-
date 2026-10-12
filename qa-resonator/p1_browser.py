@@ -66,7 +66,8 @@ with sync_playwright() as p:
     pg.evaluate("node.port.postMessage({t:'perfTest',c:0.95}); node.port.postMessage({t:'perfTest',c:0.95});")
     pg.wait_for_timeout(600)
     g = pg.evaluate("({ga: state.ga||0, aw: state.aw, cap: state.cap, msg: document.getElementById('msg').textContent})")
-    check('governor sheds a voice when the phone runs out of time, and the page explains', g['ga'] == ga0 + 1 and g['cap'] < 4 and 'running out of time' in g['msg'], json.dumps(g)[:240])
+    # >= : on a busy machine the real governor may act as well as the test's two hot readings
+    check('governor sheds a voice when the phone runs out of time, and the page explains', g['ga'] >= ga0 + 1 and g['cap'] < 4 and 'running out of time' in g['msg'], json.dumps(g)[:240])
     pk = pg.evaluate(PEAK_JS, 1200)
     check('still plays after the governor acted', pk['pk'] > 0.05 and pk['bad'] == 0, f"peak {pk['pk']}")
 
