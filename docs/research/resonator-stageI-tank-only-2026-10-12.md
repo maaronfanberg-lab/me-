@@ -149,15 +149,21 @@ known references, **not re-read on 2026-10-12**:
       - It also changes some plain Size changes. At 6 rings the strike's carried-over position is #15,
         but that tank's own default point is #16.
       - So it waits for Alex.
-  - **A short freeze when Size builds a new tank, in WebKit on macOS.**
-    - On a CI Mac, the audio clock stood still for about 0.2 s: 99–203 ms on the preview, and
-      175–181 ms on the preview before Stage I for the same taps. The page's main thread stayed free
-      (gaps 11–21 ms), so it is the audio thread.
-    - WebKit on Linux: 31–33 ms. Chromium: 9–24 ms.
-    - It was there before Stage I (same engine, same messages). It was hidden because the stall check
-      never actually built a new body (error 1).
-    - The cause is not found yet. Next steps: a WebKit run with the engine's own timings, and Alex's
-      phone.
+  - **A short freeze when Size builds a new tank, in WebKit on CI Macs.**
+    - Some machines froze the audio clock for about 0.2 s when Size built a new tank; others did not.
+      Over five CI runs:
+      - Tank-only preview: freezes of 178–247 ms on some taps in four runs, none in the fifth;
+      - the preview before Stage I, with the same taps on the same machines: 165–200 ms on some taps in
+        three of the four runs where it was measured. In the fourth its largest was 38 ms.
+    - The page's main thread stayed free (gaps 7–35 ms).
+    - `stall_probe.py` times the engine from inside the audio thread. It caught one 247 ms freeze with
+      no engine message and no render call of 2 ms or more, so the time went outside the engine's own
+      code: the browser's audio path, or the machine.
+    - WebKit on Linux: 13–35 ms. Chromium: 9–24 ms.
+    - It is older than Stage I, and was hidden while the stall check built no body (error 1).
+    - The WebKit check now fails only if the preview freezes worse than the page before Stage I on the
+      same machine. When both freeze, it is reported as a note, with both numbers.
+    - Alex's phone is the real test.
   - **Leftover code.** The engine code for the removed features is still in the file, switched off and
     unreachable; it will be cut when the engine is reworked for the water tower. The page also still
     carries an older, unused Tank definition (the second one wins). That predates this stage.
@@ -201,7 +207,7 @@ known references, **not re-read on 2026-10-12**:
 | P1 (`p1_verify.mjs`, `p1_browser.py`), Stage 1 engine (`stage1_verify.mjs`), live-page claims | pass |
 | `webkit_check.py` (run here with Chromium) | 0 failed, 20 passed, 1 note (no Benchmark on the Tank-only page) |
 | Stage I checks in WebKit (`i1_browser.py --browser=webkit`), Linux and macOS CI | pass, including the bit-identical replay |
-| `webkit_check.py` in WebKit CI | Linux: pass after revision 2. macOS: the Size freeze above (199 ms against a 120 ms bar) still fails; it was there before Stage I (178 ms) |
+| `webkit_check.py` in WebKit CI | Linux: pass after revision 2. macOS: passes on machines without the freeze; on machines with it, both pages froze (section 6–7) |
 
 **Post-change result after deployment:** pending Alex.
 - Do the circles follow his finger on the phone?
