@@ -44,12 +44,19 @@ PEAK_JS = """async () => { if (!window._an) { window._an = ctx.createAnalyser();
   return { pk: +pk.toFixed(3), bad }; }"""
 # the audio clock's longest stand-still, and the main thread's longest gap between ticks (if the page
 # itself is blocked, the clock cannot be read either: the two together tell audio stalls from page stalls)
-STALL_JS = """async () => { let last = ctx.currentTime, lastWall = performance.now(), worst = 0, prevTick = performance.now(), gap = 0;
+STALL_JS = """async (act) => { let last = ctx.currentTime, lastWall = performance.now(), worst = 0, prevTick = performance.now(), gap = 0;
   const tick = () => { const now = performance.now(), c = ctx.currentTime; gap = Math.max(gap, now - prevTick); prevTick = now;
     if (c !== last) { last = c; lastWall = now; } else worst = Math.max(worst, now - lastWall); };
   const iv = setInterval(tick, 4); await new Promise(r => setTimeout(r, 150)); gap = 0;
-  document.querySelector('#shapes .chip:nth-child(7)').click();
-  await new Promise(r => setTimeout(r, 2500)); clearInterval(iv); tick(); return [Math.round(worst), Math.round(gap)]; }"""
+  let built = 'Tank chip';
+  if (act === 'tank') document.querySelector('#shapes .chip:nth-child(7)').click();
+  else {   // Tank-only page: a new body by Size. One tap moves Size by 1/32 of its range, which often leaves the
+    // mass count where it was (no new body, nothing to stall on: the first Stage I version measured exactly
+    // that). Tap until the count changes, as a finger would, and report it.
+    const b = document.querySelector('.knob[data-k="size"] .step[data-d="' + act + '"]'), n0 = state.n;
+    for (let q = 0; q < 40 && state.n === n0; q++) { b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); }
+    built = state.n !== n0 ? n0 + '→' + state.n : ''; }
+  await new Promise(r => setTimeout(r, 2500)); clearInterval(iv); tick(); return [Math.round(worst), Math.round(gap), built]; }"""
 # The engine rendered offline inside the browser, with exactly the messages webkit_ref.mjs sends in Node.
 OFFLINE_JS = """async ({ shape, secs, sr }) => {
   const S = SHAPES[shape], g = S.make(S.def), NN = g.P.length;
@@ -137,6 +144,7 @@ with sync_playwright() as p:
         R['env'][label] = env
         check(f'{label}: loads and starts with no script error', not errs and env.get('running') is True,
               f"running={env.get('running')} engine={env.get('audioMode')!r} errors={errs[:3]}")
+        tank_only = pg.evaluate("!document.getElementById('shapes')")   # the preview since Stage I
         if label == 'preview':
             t = env.get('tuner') or {}
             check('preview: background tuner (Worker) runs in WebKit', bool(t.get('on')) and bool(t.get('up')), json.dumps(t)[:200])
@@ -149,20 +157,21 @@ with sync_playwright() as p:
               + ('' if live_ok else ' (no audio device on this machine; live checks not run)'), critical=False)
         if live_ok:
             peaks = []
-            for i, s in enumerate(SHAPES + ['String']):
+            for i, s in enumerate(['Tank'] if tank_only else SHAPES + ['String']):
                 if i: pg.click(f'#shapes .chip:text-is("{s}")')
                 peaks.append((s, pg.evaluate(PEAK_JS))); pg.wait_for_timeout(500)
             R['live'][label]['peaks'] = peaks
-            check(f'{label}: every shape sounds (live)', all(v['pk'] > 0.05 and v['bad'] == 0 for _, v in peaks),
+            check(f'{label}: ' + ('the Tank sounds (live)' if tank_only else 'every shape sounds (live)'), all(v['pk'] > 0.05 and v['bad'] == 0 for _, v in peaks),
                   ' · '.join(f"{s} {v['pk']}" for s, v in peaks))
-            stalls, gaps = [], []
-            for _ in range(3):   # median of three: one sample on a busy CI machine is noise-prone
-                pg.click('#shapes .chip:text-is("String")'); pg.wait_for_timeout(1200)
-                st, gp = pg.evaluate(STALL_JS); stalls.append(st); gaps.append(gp)
+            stalls, gaps, builts = [], [], []
+            for k in range(3):   # median of three: one sample on a busy CI machine is noise-prone
+                if tank_only: act = '1' if k % 2 == 0 else '-1'   # a new body each run: Size up, down, up
+                else: act = 'tank'; pg.click('#shapes .chip:text-is("String")'); pg.wait_for_timeout(1200)
+                st, gp, bt = pg.evaluate(STALL_JS, act); stalls.append(st); gaps.append(gp); builts.append(bt)
             stall = sorted(stalls)[1]
-            R['live'][label]['tank_stall_ms'] = stalls; R['live'][label]['main_thread_gap_ms'] = gaps
-            check(f'{label}: audio clock freeze when choosing Tank (median of 3)', stall < 120 or label == 'live',
-                  f'{stall} ms (runs {stalls}; page main-thread gaps {gaps})', critical=(label == 'preview'))
+            R['live'][label]['tank_stall_ms'] = stalls; R['live'][label]['main_thread_gap_ms'] = gaps; R['live'][label]['bodies_built'] = builts
+            check(f'{label}: audio clock freeze when ' + ('a new body is built (Size)' if tank_only else 'choosing Tank') + ' (median of 3)', (stall < 120 or label == 'live') and all(builts),
+                  f'{stall} ms (runs {stalls}; page main-thread gaps {gaps}; new bodies {builts})', critical=(label == 'preview'))
 
         # ---------- the engine itself, rendered offline inside this browser ----------
         try:
@@ -200,13 +209,42 @@ with sync_playwright() as p:
 
         # ---------- JavaScriptCore speed (this CI CPU, not a phone) ----------
         try:
+            if tank_only: raise RuntimeError('no Benchmark on the Tank-only page (removed in Stage I)')
             R['bench'][label] = {s: round(pg.evaluate(f"benchOne(32000, SHAPES['{s}'].def, 1, '{s}').x"), 1) for s in ['String', 'Tank']}
             check(f'{label}: engine speed in this browser (times real time, 1 voice)', True, json.dumps(R['bench'][label]), critical=False)
         except Exception as e:
             check(f'{label}: engine speed in this browser', False, str(e)[:200], critical=False)
 
         # ---------- tap flows (preview): everything works by finger ----------
-        if label == 'preview':
+        if label == 'preview' and tank_only:
+            def tap(sel):
+                pg.evaluate("s => { const e = document.querySelector(s); if (e) e.scrollIntoView({block:'center'}); }", sel); pg.tap(sel); pg.wait_for_timeout(180)
+            try:
+                m0 = pg.evaluate('state.M.slice()'); tap('#nudge [aria-label=right]')
+                check('tap: turn pad turns the view', pg.evaluate('state.M.slice()') != m0)
+                pg.evaluate('state.spin = false'); pg.wait_for_timeout(250)
+                i0 = pg.evaluate('state.micIdx'); j = pg.evaluate("""(i0) => { let best = -1, bd = -1; for (const i of state.free) { const d = Math.hypot(_px[i] - _px[i0], _py[i] - _py[i0]);
+                  if (_py[i] > 40 && _py[i] < H - 60 && d > bd && d < 200) { bd = d; best = i; } } return best; }""", i0)
+                x0, y0 = pg.evaluate(f"({MASS_XY})({i0})"); pg.touchscreen.tap(x0, y0); pg.wait_for_timeout(250)
+                x1, y1 = pg.evaluate(f"({MASS_XY})({j})"); pg.touchscreen.tap(x1, y1); pg.wait_for_timeout(400)
+                check('tap: tap the mic circle, then a ball: the mic moves there', pg.evaluate('state.micIdx') == j, f'#{i0} → #{pg.evaluate("state.micIdx")} (wanted #{j})')
+                d0 = pg.evaluate('val.decay'); tap('.knob[data-k="decay"] .step[data-d="1"]')
+                check('tap: Sustain + lengthens it', pg.evaluate('val.decay') > d0, f'{d0} → {pg.evaluate("val.decay")} s')
+                tap('.tab[data-page=strike]'); tap('#hush')
+                if live_ok:
+                    after = pg.evaluate(PEAK_JS)
+                    check('still plays after all the taps', after['pk'] > 0.05 and after['bad'] == 0, f"peak {after['pk']}")
+            except Exception as e:
+                check('tap flows ran to the end', False, str(e)[:300])
+            if errs:
+                check('preview: no script errors during the tap flows', False, str(errs[:4]))
+            for tab in ['body', 'strike', 'mic']:
+                try:
+                    pg.tap(f'.tab[data-page={tab}]'); pg.wait_for_timeout(250)
+                    pg.screenshot(path=os.path.join(OUT, f'preview-{tab}.png'))
+                except Exception as e:
+                    check(f'screenshot {tab}', False, str(e)[:120], critical=False)
+        elif label == 'preview':
             def tap(sel):
                 pg.tap(sel); pg.wait_for_timeout(180)
             try:

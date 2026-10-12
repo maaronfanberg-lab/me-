@@ -52,13 +52,16 @@ with sync_playwright() as p:
     r = pg.evaluate("({cpu: state.cpu, max: state.cpuMax, txt: (document.getElementById('cpuinfo')||{}).textContent || ''})")
     check('CPU shown on the page, measured by the engine', r['cpu'] is not None and r['txt'].startswith('CPU ') and r['txt'].endswith('%'), json.dumps(r))
 
-    # live load: idle String vs Tank with 4 voices all ringing
+    # live load: idle vs Tank with 4 voices all ringing. Since Stage I the preview has only the Tank (no shape chips).
+    def shape(name):
+        if pg.evaluate("!!document.getElementById('shapes')"):
+            pg.click(f'#shapes .chip:text-is("{name}")'); pg.wait_for_timeout(1500)
     idle = pg.evaluate("state.cpu")
-    pg.click('#shapes .chip:text-is("Tank")'); pg.wait_for_timeout(1500)
+    shape('Tank')
     pg.evaluate(SET, ['voices', 4]); pg.wait_for_timeout(300)
     pg.evaluate(PLAY_N, 8); pg.wait_for_timeout(1500)
     busy = pg.evaluate("state.cpu")
-    check('live CPU reading rises with work (idle String vs Tank, 4 voices ringing)', live and busy > idle, f'idle {idle:.3f} · Tank 4 voices {busy:.3f}')
+    check('live CPU reading rises with work (idle vs Tank, 4 voices ringing)', live and busy > idle, f'idle {idle:.3f} · Tank 4 voices {busy:.3f}')
 
     # governor: two hot readings (test hook) shed a voice and the page says so
     ga0 = pg.evaluate("state.ga||0")
@@ -72,7 +75,7 @@ with sync_playwright() as p:
     check('still plays after the governor acted', pk['pk'] > 0.05 and pk['bad'] == 0, f"peak {pk['pk']}")
 
     # sleep: short decay, a few notes, then quiet: voices fall asleep
-    pg.click('#shapes .chip:text-is("String")'); pg.wait_for_timeout(1200)
+    shape('String')
     pg.evaluate(SET, ['voices', 4]); pg.evaluate(SET, ['decay', 0.3]); pg.wait_for_timeout(200)
     sl0 = pg.evaluate("state.sl||0")
     pg.evaluate(PLAY_N, 4); pg.wait_for_timeout(2500)

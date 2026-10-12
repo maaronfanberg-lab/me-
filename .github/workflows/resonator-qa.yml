@@ -4,6 +4,9 @@ name: RESONATOR QA
 # an earlier one fails, and each check's full output is pushed to the branch qa-results/qa (the
 # workspace that builds RESONATOR cannot download Actions logs). Pushes made with GITHUB_TOKEN start
 # no other workflow.
+# Since Stage I the preview is the Tank only. The suites for the features it removed (Stages 2-5, F, G,
+# H, the old tap tools, the preview's learning-path claims) are retired from CI; the scripts stay in
+# qa-resonator/ and run against the preview as it was before Stage I (git fe0393fc).
 on:
   push:
     paths:
@@ -40,51 +43,19 @@ jobs:
           python -m pip install --quiet playwright==1.56.0
           python -m playwright install --with-deps chromium
           mkdir -p qa-out
-          git fetch -q --depth=1 origin 4d9404e8d63176c1e1e8ee5e50c494bc4a1fa84f 969aac50dcc8daa40e44c0acc07effb314c09986 || true
+          git fetch -q --depth=1 origin 4d9404e8d63176c1e1e8ee5e50c494bc4a1fa84f fe0393fca33d313f138246fa465ad5cbb659e643 || true
       - name: Learning-path claims — live page
         id: claims_live
         continue-on-error: true
         run: node qa-resonator/learn_claims.mjs 2>&1 | tee qa-out/claims_live.txt
-      - name: Learning-path claims — preview page
-        id: claims_prev
-        continue-on-error: true
-        run: RESONATOR_SRC=apps/resonator-next.html node qa-resonator/learn_claims.mjs 2>&1 | tee qa-out/claims_preview.txt
       - name: Stage 1 engine proofs (bit-identical audio, async tuning, octave trap)
         id: s1v
         continue-on-error: true
         run: node qa-resonator/stage1_verify.mjs 2>&1 | tee qa-out/stage1_verify.txt
-      - name: Stage 1 browser checks (audio-thread stalls, shapes, fallbacks, Copy report)
+      - name: Stage 1 browser checks on the Tank (audio-thread stalls with real new bodies, octave trap by sliding the circles, fallbacks, Copy report)
         id: s1b
         continue-on-error: true
         run: python qa-resonator/stage1_browser.py . 2>&1 | tee qa-out/stage1_browser.txt
-      - name: Stage 2 browser checks (add/delete masses, undo across shape changes, presets, mics)
-        id: s2b
-        continue-on-error: true
-        run: python qa-resonator/stage2_browser.py . 2>&1 | tee qa-out/stage2_browser.txt
-      - name: Stage 3 levels (plectrum, oscillator, wind, mic vs mallet; pitch; onset; no NaN)
-        id: s3m
-        continue-on-error: true
-        run: node qa-resonator/stage3_measure.mjs --check 2>&1 | tee qa-out/stage3_measure.txt
-      - name: Stage 3 browser checks (exciters, hold-to-sustain, wind, Mic in with a fake microphone)
-        id: s3b
-        continue-on-error: true
-        run: python qa-resonator/stage3_browser.py . 2>&1 | tee qa-out/stage3_browser.txt
-      - name: Stage 4 engine proofs (extra mics, pan isolation, worst-case ceiling, level)
-        id: s4v
-        continue-on-error: true
-        run: node qa-resonator/stage4_verify.mjs 2>&1 | tee qa-out/stage4_verify.txt
-      - name: Stage 4 browser checks (Mics 2–4, undo, pin, net-zero edits, presets)
-        id: s4b
-        continue-on-error: true
-        run: python qa-resonator/stage4_browser.py . 2>&1 | tee qa-out/stage4_browser.txt
-      - name: Stage 5 engine proofs (envelopes, followers, Depth 0, LFOs unchanged)
-        id: s5v
-        continue-on-error: true
-        run: node qa-resonator/stage5_verify.mjs 2>&1 | tee qa-out/stage5_verify.txt
-      - name: Stage 5 browser checks (modulator types by taps, meters, fake phone mic, presets)
-        id: s5b
-        continue-on-error: true
-        run: python qa-resonator/stage5_browser.py . 2>&1 | tee qa-out/stage5_browser.txt
       - name: P1 engine proofs (sleep off bit-identical, sleep bound, governor, CPU estimate)
         id: p1v
         continue-on-error: true
@@ -93,42 +64,23 @@ jobs:
         id: p1b
         continue-on-error: true
         run: python qa-resonator/p1_browser.py . 2>&1 | tee qa-out/p1_browser.txt
-      - name: Stage F engine proofs (reverb off bit-identical, measured T60, tone, level, Hush)
-        id: f1v
+      - name: Stage I engine checks on the Tank (Sustain ring times, worst case under the ceiling, deterministic)
+        id: i1e
         continue-on-error: true
-        run: F1_SKIP_COST=1 node qa-resonator/f1_verify.mjs 2>&1 | tee qa-out/f1_verify.txt
-      - name: Stage F browser checks (FX tab, taps, audible tail, shape change, presets)
-        id: f1b
+        run: node qa-resonator/i1_engine.mjs 2>&1 | tee qa-out/i1_engine.txt
+      - name: Stage I browser checks (Tank only, bit-identical to before, Sustain, slide the circles, presets)
+        id: i1b
         continue-on-error: true
-        run: python qa-resonator/f1_browser.py . 2>&1 | tee qa-out/f1_browser.txt
-      - name: Stage G browser checks (video with sound — file streams, sound level, frame, saving)
-        id: g1b
-        continue-on-error: true
-        run: python qa-resonator/g1_browser.py . 2>&1 | tee qa-out/g1_browser.txt
-      - name: Stage H claims (every lesson number and preset description, measured from the page's own messages)
-        id: h1c
-        continue-on-error: true
-        run: node qa-resonator/h1_claims.mjs 2>&1 | tee qa-out/h1_claims.txt
-      - name: Stage H browser checks (Learn tab, factory presets, presets come back as saved)
-        id: h1b
-        continue-on-error: true
-        run: python qa-resonator/h1_browser.py . 2>&1 | tee qa-out/h1_browser.txt
-      - name: Tap controls — preview page
-        id: taps
-        continue-on-error: true
-        run: python qa-resonator/ui_test.py . qa-out/ui-preview.png apps/resonator-next.html 2>&1 | tee qa-out/ui_test.txt
+        run: python qa-resonator/i1_browser.py . 2>&1 | tee qa-out/i1_browser.txt
       - name: Publish results to branch qa-results/qa
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           OUTCOMES: >-
-            claims_live=${{ steps.claims_live.outcome }} claims_prev=${{ steps.claims_prev.outcome }}
-            s1v=${{ steps.s1v.outcome }} s1b=${{ steps.s1b.outcome }} s2b=${{ steps.s2b.outcome }}
-            s3m=${{ steps.s3m.outcome }} s3b=${{ steps.s3b.outcome }} s4v=${{ steps.s4v.outcome }}
-            s4b=${{ steps.s4b.outcome }} s5v=${{ steps.s5v.outcome }} s5b=${{ steps.s5b.outcome }}
-            p1v=${{ steps.p1v.outcome }} p1b=${{ steps.p1b.outcome }} f1v=${{ steps.f1v.outcome }}
-            f1b=${{ steps.f1b.outcome }} g1b=${{ steps.g1b.outcome }} h1c=${{ steps.h1c.outcome }}
-            h1b=${{ steps.h1b.outcome }} taps=${{ steps.taps.outcome }}
+            claims_live=${{ steps.claims_live.outcome }}
+            s1v=${{ steps.s1v.outcome }} s1b=${{ steps.s1b.outcome }}
+            p1v=${{ steps.p1v.outcome }} p1b=${{ steps.p1b.outcome }}
+            i1e=${{ steps.i1e.outcome }} i1b=${{ steps.i1b.outcome }}
         run: |
           mkdir -p qa-out
           echo "${{ github.sha }}" > qa-out/commit.txt

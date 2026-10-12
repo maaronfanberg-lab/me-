@@ -34,20 +34,22 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--ink);color:var(-
 #readout{position:absolute;left:14px;top:12px;font-size:10px;color:var(--dim);
   letter-spacing:.02em;pointer-events:none;text-shadow:0 1px 3px #000}
 #readout b{color:var(--live);font-weight:500}
-#tools{position:absolute;left:10px;right:10px;bottom:8px;display:flex;flex-wrap:wrap;gap:4px}
+#tools{position:absolute;left:10px;bottom:8px;display:flex;gap:4px}
 .tool{appearance:none;border:1px solid rgba(74,88,122,.6);background:rgba(10,17,32,.75);
   color:var(--faint);font-family:var(--mono);font-size:10px;letter-spacing:.06em;
   padding:9px 10px;min-height:36px;border-radius:3px;cursor:pointer;backdrop-filter:blur(8px)}
 .tool[aria-pressed="true"]{border-color:var(--compress);color:var(--live);background:rgba(19,37,56,.9)}
 .tool:disabled{opacity:.3}
 #undo,#redo{font-size:14px;padding:6px 10px}
-#nudge{position:absolute;right:10px;top:52px;display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:3px}
+#nudge{position:absolute;right:10px;bottom:8px;display:flex;gap:4px}
+#nudge .nb{width:38px;height:36px}
+#nudge [aria-label=left]{order:1}#nudge [aria-label=right]{order:2}#nudge [aria-label=up]{order:3}#nudge [aria-label=down]{order:4}
 #nudge[hidden]{display:none}
 #nudge .nb{appearance:none;border:1px solid rgba(74,88,122,.6);background:rgba(10,17,32,.8);color:var(--live);
   font-family:var(--mono);font-size:16px;border-radius:3px;padding:0;cursor:pointer;touch-action:none;backdrop-filter:blur(8px)}
 #nudge .nb:active{border-color:var(--compress)}
-#nudge .nl{grid-column:2;grid-row:2;align-self:center;text-align:center;font-size:9px;color:var(--dim);pointer-events:none}
-#nudgeMsg{position:absolute;right:10px;top:182px;font-size:10px;color:var(--tension);pointer-events:none;text-shadow:0 1px 3px #000}
+#nudge .nl{display:none}
+#nudgeMsg{position:absolute;left:12px;bottom:52px;font-size:11px;color:var(--tension);pointer-events:none;text-shadow:0 1px 3px #000}
 #level{position:absolute;right:14px;top:30px;font-size:10.5px;color:var(--tension);pointer-events:none;text-shadow:0 1px 3px #000}
 #brand{position:absolute;right:14px;top:10px;font-family:var(--display);font-weight:800;
   font-size:12px;letter-spacing:.34em;color:var(--faint);pointer-events:none}
@@ -140,14 +142,6 @@ body.hints .knob{margin-bottom:16px}
 .mmeter i{display:block;height:100%;width:0;background:var(--compress)}
 .mhint{font-size:10.5px;color:var(--faint);margin:-4px 0 14px;line-height:1.45}
 .vrecnote{font-size:11px;color:var(--dim);margin:2px 2px 10px;min-height:1em}.vrecnote.warn{color:var(--tension)}
-.lintro{font-size:12px;color:var(--text);margin:4px 2px 10px;line-height:1.5}
-.lintro i{font-style:normal;color:var(--live)}
-.lesson{border:1px solid var(--rule);border-radius:4px;padding:10px 10px 4px;margin:0 0 10px;background:rgba(20,29,51,.45)}
-.lesson h3{margin:0 0 4px;font-family:var(--display);font-weight:600;font-size:14px;color:var(--live)}
-.lesson .lq{font-size:12px;color:var(--dim);margin:0 0 8px}
-.lesson .lwhy{display:none;font-size:12px;color:var(--text);border-left:2px solid var(--compress);padding:4px 8px;margin:4px 0 8px;line-height:1.5}
-.lesson.heard .lwhy{display:block}
-.lesson .lsteps{font-size:12px;color:var(--text);margin:0 0 8px;padding-left:18px;line-height:1.55}
 </style>
 </head>
 <body>
@@ -156,20 +150,10 @@ body.hints .knob{margin-bottom:16px}
   <div id="stage">
     <canvas id="view"></canvas>
     <div id="readout"></div>
-    <div id="brand">RESONATOR · NEXT</div>
+    <div id="brand">RESONATOR · TANK</div>
     <div id="nudge" hidden aria-label="Nudge"><button class="nb" data-nx="0" data-ny="-1" style="grid-column:2;grid-row:1" aria-label="up">&#9650;</button><button class="nb" data-nx="-1" data-ny="0" style="grid-column:1;grid-row:2" aria-label="left">&#9664;</button><span class="nl" id="nudgeLab">turn</span><button class="nb" data-nx="1" data-ny="0" style="grid-column:3;grid-row:2" aria-label="right">&#9654;</button><button class="nb" data-nx="0" data-ny="1" style="grid-column:2;grid-row:3" aria-label="down">&#9660;</button></div><div id="nudgeMsg"></div>
     <div id="tools">
-      <button class="tool" data-tool="orbit" aria-pressed="true">orbit</button>
-      <button class="tool" data-tool="strike" aria-pressed="false">strike</button>
-      <button class="tool" data-tool="mic" aria-pressed="false">mic</button>
-      <button class="tool" data-tool="move" aria-pressed="false">move</button>
-      <button class="tool" data-tool="link" aria-pressed="false">link</button>
-      <button class="tool" data-tool="pin" aria-pressed="false">pin</button>
-      <button class="tool" data-tool="add" aria-pressed="false">add</button>
-      <button class="tool" data-tool="del" aria-pressed="false">delete</button>
       <button class="tool" id="home">reset view</button>
-      <button class="tool" id="undo" disabled>&#8630;</button>
-      <button class="tool" id="redo" disabled>&#8631;</button>
     </div>
     <div id="level">output silent</div>
   </div>
@@ -178,14 +162,10 @@ body.hints .knob{margin-bottom:16px}
     <button class="tab" data-page="body" aria-selected="true">Body</button>
     <button class="tab" data-page="strike" aria-selected="false">Strike</button>
     <button class="tab" data-page="mic" aria-selected="false">Mic</button>
-    <button class="tab" data-page="amp" aria-selected="false">Amp</button>
-    <button class="tab" data-page="fx" aria-selected="false">FX</button>
-    <button class="tab" data-page="mod" aria-selected="false">Mod</button>
-    <button class="tab" data-page="learn" aria-selected="false">Learn</button>
   </div>
 
   <div id="panel">
-    <div class="row"><button class="chip" id="hints" aria-pressed="false">Show hints</button><button class="chip" id="selftest">Self-test</button><button class="chip" id="bench">Benchmark</button><button class="chip" id="copydiag">Copy report</button></div>
+    <div class="row"><button class="chip" id="hints" aria-pressed="false">Show hints</button><button class="chip" id="copydiag">Copy report</button></div>
     <pre id="diag"></pre>
 
     <section class="page on" id="page-body">
@@ -202,50 +182,23 @@ body.hints .knob{margin-bottom:16px}
       </div>
       <textarea id="pcode" placeholder="preset code appears here — copy it out, or paste one in and press Paste code"></textarea>
       <p id="bodytext"></p>
-      <div class="secttl">Shape</div>
-      <div class="row" id="shapes"></div>
+      <div class="knob" data-k="decay"></div>
       <div class="knob" data-k="size"></div>
       <div class="knob" data-k="ratio"></div>
-      <div class="knob" data-k="decay"></div>
       <div class="knob" data-k="loss"></div>
       <div class="knob" data-k="sub"></div>
       <div class="knob" data-k="voices"></div>
       <div class="knob" data-k="nl"></div>
-      <div class="knob" data-k="coup"></div>
-      <div class="knob" data-k="mem"></div>
-      <div class="knob" data-k="memSpan"></div>
-      <div class="knob" data-k="regime"></div>
-      <div class="knob" data-k="rswitch"></div>
-      <div class="knob" data-k="rphi"></div>
-      <div class="secttl">Specialization</div>
-      <div class="row" id="specs"></div>
-      <div class="knob" data-k="att"></div>
-      <div class="knob" data-k="attC"></div>
-      <div class="knob" data-k="infer"></div>
-      <div class="knob" data-k="spread"></div>
       <div class="knob" data-k="tune"></div>
-      <div class="row">
-        <button class="chip" id="scramble">Scramble the wiring</button>
-      </div>
     </section>
 
     <section class="page" id="page-strike">
-      <div class="secttl">Excitation</div>
-      <div class="row" id="modes"></div>
-      <div class="knob" data-k="splash"></div>
+      <div class="secttl">Mallet</div>
       <div class="knob" data-k="drive"></div>
       <div class="knob" data-k="hard"></div>
-      <div class="secttl">Bow</div>
-      <div class="knob" data-k="bowSpd"></div>
-      <div class="knob" data-k="bowVc"></div>
       <div class="knob" data-k="hit"></div>
       <div class="knob" data-k="angle"></div>
       <div class="knob" data-k="gain"></div>
-      <div class="secttl">Air and microphone</div>
-      <div class="knob" data-k="wind"></div>
-      <div class="knob" data-k="inGain"></div>
-      <div class="row"><button class="chip" id="micin" aria-pressed="false">Mic in</button></div>
-      <div class="hint" style="display:block">Your voice or any sound drives the body. While the mic is on, iPhone plays everything at about half volume (an iOS limitation), and headphones stop feedback.</div>
       <div class="secttl">Scale</div>
       <div class="row">
         <button class="chip" data-scale="0" aria-pressed="true">Pentatonic</button>
@@ -253,111 +206,8 @@ body.hints .knob{margin-bottom:16px}
         <button class="chip" data-scale="2" aria-pressed="false">Chromatic</button>
       </div>
       <div class="row">
-        <button class="chip" id="bow" aria-pressed="false">Bow</button>
         <button class="chip" id="hush">Hush</button>
       </div>
-      <div class="secttl">Recording</div>
-      <div class="row">
-        <button class="chip" id="recbtn" aria-pressed="false">Record</button>
-        <a class="chip rec" id="reclink" href="#">Save</a>
-      </div>
-      <div class="row">
-        <button class="chip" id="vrecbtn" aria-pressed="false">Record video</button>
-        <a class="chip rec" id="vreclink" href="#">Save video</a>
-      </div>
-      <div class="vrecnote" id="vrecnote"></div>
-    </section>
-
-    <section class="page" id="page-fx">
-      <div class="secttl">Space</div>
-      <div class="knob" data-k="spImg"></div>
-      <div class="knob" data-k="spDist"></div>
-      <div class="knob" data-k="spRefl"></div>
-      <div class="knob" data-k="spDop"></div>
-      <div class="knob" data-k="spRot"></div>
-      <div class="knob" data-k="spElev"></div>
-      <div class="secttl">From the attractor</div>
-      <div class="knob" data-k="fxCho"></div>
-      <div class="knob" data-k="fxDly"></div>
-      <div class="knob" data-k="fxFb"></div>
-      <div class="knob" data-k="fxWow"></div>
-      <div class="knob" data-k="fxTrem"></div>
-      <div class="knob" data-k="fxSat"></div>
-      <div class="secttl">Plate reverb</div>
-      <div class="knob" data-k="rvMix"></div>
-      <div class="knob" data-k="rvTime"></div>
-      <div class="knob" data-k="rvTone"></div>
-      <div class="knob" data-k="rvPre"></div>
-    </section>
-
-    <section class="page" id="page-learn">
-      <div class="lintro">Every sound here is an <b>object</b>, <b>struck</b> somewhere and <b>heard</b> from somewhere. Each lesson changes one thing: guess first, then tap A and B and listen. The explanation opens once you have heard both. Lessons borrow your instrument; the button below gives it back.<br><i>Brightness centre</i> is the pitch the sound's energy balances on: higher sounds brighter. Every number was measured on this instrument.</div>
-      <div class="row"><button class="chip" id="lback" disabled>Put my instrument back</button></div>
-      <div id="lessons"></div>
-    </section>
-    <section class="page" id="page-mod">
-      <div class="secttl">Modulator 1</div>
-      <div class="row" data-mty="0"></div>
-      <div class="mrow" data-m="0"></div>
-      <div class="row" data-msrc="0"></div>
-      <div class="mmeter" data-mm="0"><i></i></div>
-      <div class="knob" data-k="m1r"></div>
-      <div class="knob" data-k="m1at"></div>
-      <div class="knob" data-k="m1dc"></div>
-      <div class="knob" data-k="m1su"></div>
-      <div class="knob" data-k="m1rl"></div>
-      <div class="knob" data-k="m1fa"></div>
-      <div class="knob" data-k="m1fr"></div>
-      <div class="knob" data-k="m1se"></div>
-      <div class="knob" data-k="m1a"></div>
-      <div class="row" data-mdir="0"></div>
-      <div class="mhint" data-mhint="0"></div>
-      <div class="secttl">Modulator 2</div>
-      <div class="row" data-mty="1"></div>
-      <div class="mrow" data-m="1"></div>
-      <div class="row" data-msrc="1"></div>
-      <div class="mmeter" data-mm="1"><i></i></div>
-      <div class="knob" data-k="m2r"></div>
-      <div class="knob" data-k="m2at"></div>
-      <div class="knob" data-k="m2dc"></div>
-      <div class="knob" data-k="m2su"></div>
-      <div class="knob" data-k="m2rl"></div>
-      <div class="knob" data-k="m2fa"></div>
-      <div class="knob" data-k="m2fr"></div>
-      <div class="knob" data-k="m2se"></div>
-      <div class="knob" data-k="m2a"></div>
-      <div class="row" data-mdir="1"></div>
-      <div class="mhint" data-mhint="1"></div>
-      <div class="secttl">Modulator 3</div>
-      <div class="row" data-mty="2"></div>
-      <div class="mrow" data-m="2"></div>
-      <div class="row" data-msrc="2"></div>
-      <div class="mmeter" data-mm="2"><i></i></div>
-      <div class="knob" data-k="m3r"></div>
-      <div class="knob" data-k="m3at"></div>
-      <div class="knob" data-k="m3dc"></div>
-      <div class="knob" data-k="m3su"></div>
-      <div class="knob" data-k="m3rl"></div>
-      <div class="knob" data-k="m3fa"></div>
-      <div class="knob" data-k="m3fr"></div>
-      <div class="knob" data-k="m3se"></div>
-      <div class="knob" data-k="m3a"></div>
-      <div class="row" data-mdir="2"></div>
-      <div class="mhint" data-mhint="2"></div>
-    </section>
-
-    <section class="page" id="page-amp">
-      <div class="secttl">Pickup</div>
-      <div class="row" id="pickups"></div>
-      <div class="knob" data-k="pkAp"></div>
-      <div class="knob" data-k="pkSpc"></div>
-      <div class="knob" data-k="pkRes"></div>
-      <div class="knob" data-k="pkQ"></div>
-      <div class="secttl">Amplifier</div>
-      <div class="knob" data-k="amp"></div>
-      <div class="knob" data-k="bass"></div>
-      <div class="knob" data-k="treb"></div>
-      <div class="knob" data-k="cab"></div>
     </section>
 
     <section class="page" id="page-mic">
@@ -366,16 +216,6 @@ body.hints .knob{margin-bottom:16px}
       <div class="knob" data-k="blend"></div>
       <div class="knob" data-k="bite"></div>
       <div class="knob" data-k="tone"></div>
-      <div class="knob" data-k="width"></div>
-      <div class="secttl">More mics</div>
-      <div class="row" id="micslots"></div>
-      <div class="knob" data-k="xLevel"></div>
-      <div class="knob" data-k="xPan"></div>
-      <div class="row"><button class="chip" id="xmremove">Remove this mic</button></div>
-      <div class="hint" id="xmhint" style="display:block"></div>
-      <div class="secttl">Feedback</div>
-      <div class="knob" data-k="fbAmt"></div>
-      <div class="knob" data-k="fbTime"></div>
       <div class="knob" data-k="mag"></div>
     </section>
 
@@ -2288,7 +2128,7 @@ const KNOBS={
  size:{label:'Size',min:0,max:1,step:0.001,val:0.5,fmt:v=>state.n+' masses',hint:'More masses means more modes, and more work for your phone.'},
  mag:{label:'Magnify',min:0.5,max:60,step:0.5,val:6,fmt:v=>'×'+v,hint:'Drawing only. Real displacements are a fraction of a millimetre.'},
  ratio:{label:'Stiffness',min:0.25,max:14,step:0.05,val:6,fmt:v=>v.toFixed(2)+'×',hint:'How much higher the squeeze-modes sit above the sideways ones. Low is soft and woody, high is metal.'},
- decay:{label:'Decay',min:0.08,max:26,step:0.02,val:4,fmt:v=>v.toFixed(1)+' s',hint:'How long the whole body takes to give up its energy.'},
+ decay:{label:'Sustain',min:0.08,max:26,step:0.02,val:4,fmt:v=>'rings '+(1.25*v).toFixed(1)+' s',hint:'How long the tank keeps ringing after a strike, like holding down a piano\'s sustain pedal. The time shown is how long it takes to fade to a hundredth of its strength (40 dB), measured on the Tank; more Damping shortens it a little.'},
  loss:{label:'Damping in the springs',min:0,max:3,step:0.01,val:0.5,fmt:v=>v.toFixed(2),hint:'Eats the high partials first, the way a real material does. This is your dull-to-bright axis.'},
  sub:{label:'Substrate',min:0,max:0.05,step:0.0002,val:0.0006,fmt:v=>v.toFixed(4),hint:'A weak pull back toward rest, everywhere. Adds inharmonicity and keeps free bodies from drifting.'},
  drive:{label:'Drive',min:0.05,max:4,step:0.01,val:1,fmt:v=>v.toFixed(2),hint:'Hit harder and the geometry itself stops being linear — pitch bends upward, then settles.'},
@@ -2385,12 +2225,11 @@ const MLABEL={'':'off',bowSpd:'Bow speed',bowVc:'Bow bite',spImg:'Stereo image',
  width:'Stereo',pkRes:'Coil peak',pkQ:'Coil Q',amp:'Amp drive',bass:'Bass',treb:'Treble',cab:'Cabinet',gain:'Level'};
 const MSHAPE=['sine','triangle','square','ramp','random'];
 const SCALES=[[0,3,5,7,10],[0,2,4,6,8,10],[0,1,2,3,4,5,6,7,8,9,10,11]],NAMES=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
-const state={shape:'String',n:14,scale:0,root:52,micIdx:0,micIdx2:0,hitIdx:0,pk:0,mode:0,spec:0,axis:1,geo:null,free:[],M:null,spin:true,disp:null,spd:null,running:false,audioMode:'',ranOnce:false,peak:0,lite:false,liteUntil:0,_lastUnder:0};
+const state={shape:'Tank',n:7,scale:0,root:52,micIdx:0,micIdx2:0,hitIdx:0,pk:0,mode:0,spec:0,axis:1,geo:null,free:[],M:null,spin:true,disp:null,spd:null,running:false,audioMode:'',ranOnce:false,peak:0,lite:false,liteUntil:0,_lastUnder:0};
 let ctx=null,node=null,master=null; const val={};for(const k in KNOBS)val[k]=KNOBS[k].val;
 window.RESONATOR_DIAG=[];   // FIX2: measurement log, readable from Safari devtools
 
 function buildShape(resetPickups){
- if(state.hist&&state.geo){state.hist.push(geoSnap());if(state.hist.length>40)state.hist.shift();state.redo.length=0;syncUndo();}   // S2: shape/Size changes are undoable
  const S=SHAPES[state.shape],g=S.make(state.n);g.shape=state.shape;g.n=state.n;state.geo=g;state.axis=g.axis;state.free=g.P.map((_,i)=>i).filter(i=>!g.F[i]);
  if(g.needSub&&val.sub<g.needSub){val.sub=g.needSub;syncKnob('sub');}
  if(resetPickups){const F=state.free,span=Math.max(1,F.length-1),at=i=>{const k=F.indexOf(i);return k<0?0:k/span;};val.mic=at(g.mic);val.hit=at(g.hit);syncKnob('mic');syncKnob('hit');}
@@ -2398,7 +2237,7 @@ function buildShape(resetPickups){
  if(node){const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});postStruct({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:g.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain','rvMix','rvTime','rvTone','rvPre'])send(k);
    node.port.postMessage({t:'pk',v:state.pk||0});
    node.port.postMessage({t:'mode',v:state.mode||0});
-   node.port.postMessage({t:'spec',v:state.spec||0});sendLvl();if(state.xm){state.xm.forEach(x=>{x.i=-1;});xmSendAll();syncMicSlots();}}
+   node.port.postMessage({t:'spec',v:state.spec||0});sendLvl();}
  document.getElementById('bodytext').textContent=S.note;state.geo.note=S.note;[...axesEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.axis));state.disp=new Float32Array(g.P.length*3);state.spd=new Float32Array(g.P.length);drawInfo();
 }
 function placeMicHit(){
@@ -2596,15 +2435,6 @@ async function boot(){
      state.peak=d.pk; state.ranOnce=true; drawLevel();
      if(d.cpu!==undefined){ state.cpu=d.cpu; state.cpuMax=d.cpuMax; state.aw=d.aw; state.cap=d.cap; state.sl=d.sl;   // P1
        if(d.ga>(state.ga||0)){ state.ga=d.ga; govNote(); } cpuShow(); }
-     if(d.mv||state.mvShown) modMeters(d.mv||null);   // S5
-   } else if(d.t==='rec'){
-     if(REC.on){
-       REC.L.push(d.L); REC.R.push(d.R); REC.n+=d.L.length;
-       if(REC.n>=REC.max) stopRec();
-       else updateRec();
-     }
-   } else if(d.t==='orbit'){
-     state.orbit=d.P; state.retOrbit=d.P;
    } else if(d.t==='ready'){
      state.info=d;
      window.RESONATOR_DIAG.push({shape:state.shape,n:state.n,...d,rate:ctx.sampleRate,mode:state.audioMode});
@@ -2615,12 +2445,12 @@ async function boot(){
  node.port.postMessage({t:'perf',sleep:1,gov:1});   // P1: sleeping voices and the CPU governor, live play only
  if(state.audioMode==='buffered'){node.port.postMessage({t:'p',k:'osMax',v:10});}
  state.running=true;buildShape(true);
+ say('Press the mic or strike circle and slide it along the tank.');   // I
 }
 // P1: the audio thread's own load, measured on this device
 function cpuShow(){ const el=document.getElementById('cpuinfo'); if(!el||state.cpu===undefined) return;
  const c=Math.round(state.cpu*100); el.textContent='CPU '+c+'%'; el.style.color=c>=85?'var(--tension)':''; }
-function govNote(){ const m=document.getElementById('msg'); if(!m) return; m.className='warn';
- m.textContent='The phone was running out of time, so a quiet older voice was let go to keep the sound clean. Fewer Voices, a smaller Size or a lower engine rate gives more room.'; }
+function govNote(){ say('The phone was running out of time, so a quiet older voice was let go to keep the sound clean. Fewer Voices, a smaller Size or a lower engine rate gives more room.',true); }
 function drawLevel(){
  const el=document.getElementById('level'); if(!el) return;
  if(!state.ranOnce){ el.textContent='engine not running'; el.style.color='var(--tension)'; return; }
@@ -2634,9 +2464,6 @@ function drawInfo(){
  let s=`<b>${g.P.length}</b> masses &nbsp; <b>${g.S.length}</b> springs<br>`;
  s+= i?`reference mode <b>${i.fRef.toFixed(1)} Hz</b><br>${i.os}× · ${(ctx.sampleRate/1000).toFixed(0)} kHz · ${state.audioMode} · <span id="cpuinfo"></span>`:'measuring…';
  if(state.tuning) s+='<br><b>tuning…</b>';   // S1
- if(i&&val.infer>0.02) s+='<br>certainty: <b>'+Math.round((1-(i.dpf||1))*100)+'%</b>';
- if(i&&val.mem>0.02) s+='<br>strain: <b>'+Math.round((i.h||0)*100)+'%</b>';
- if(i&&val.regime>0.02) s+='<br>regime: <b>'+['expansion','rate stress','credit stress','recession'][i.regime||0]+'</b>';
  if(i&&i.capped) s+=`<br><b>Stiffness is at its ceiling</b> — the knob is doing nothing at this pitch.`;
  if(i&&i.trips)  s+=`<br>${i.trips} safety reset${i.trips>1?'s':''}`;
  el.innerHTML=s; cpuShow();
@@ -2654,7 +2481,7 @@ function play(semi,vel){
  if(state.retBuf){try{node.port.postMessage({t:'ret',P:state.retBuf},[state.retBuf.buffer]);}catch(e){}state.retBuf=null;}
  const m=state.root+semi;node.port.postMessage({t:'note',f:440*Math.pow(2,(m-69)/12),v:vel});
 }
-const DIAG={errs:[],down:0,move:0,up:0,cancel:0,tdown:0,tmove:0,taps:0,sets:0,zeroWidth:0,under:0,err:''};
+const DIAG={errs:[],down:0,move:0,up:0,cancel:0,tdown:0,tmove:0,taps:0,sets:0,zeroWidth:0,under:0,err:'',cvdown:0,cvmove:0,ctouch:0,mmoves:0};
 function attachDrag(bar,inp,paint){
  const set=(clientX)=>{
    const r=bar.getBoundingClientRect(); if(!r.width){ DIAG.zeroWidth++; return; } DIAG.sets++;
@@ -2753,76 +2580,22 @@ for(const wrap of document.querySelectorAll('.knob[data-k]')){
      if(nn!==state.n){state.n=nn;buildShape();}
      paint();
    } else if(k==='mic'||k==='hit'){ placeMicHit(); paint(); }
-   else if(/^m[123]([ra]|at|dc|su|rl|fa|fr|se)$/.test(k)) sendMod(+k[1]-1);   // S5: envelope and follower knobs too
    else if(k!=='mag') send(k);
  });
  paint();
 }
 const diagEl=document.getElementById('diag');
 
-// ---- S3: Mic in -------------------------------------------------------------------------
-// The phone's microphone drives the strike point. iOS switches to a play-and-record session while
-// the mic is on (Web Audio plays at about half volume: WebKit bug 236219); switching the session
-// back to playback when the mic goes off restores the volume.
-const MIC={on:false,stream:null,src:null};
-async function micToggle(){
-  const b=document.getElementById('micin');
-  if(MIC.on){
-    try{ if(MIC.src) MIC.src.disconnect(); }catch(e){}
-    try{ if(MIC.stream) MIC.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
-    MIC.on=false; MIC.src=null; MIC.stream=null;
-    if(node) node.port.postMessage({t:'p',k:'micIn',v:0});
-    try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch(e){}
-    b.setAttribute('aria-pressed','false'); b.textContent='Mic in'; return;
-  }
-  if(!node||state.audioMode!=='audio worklet'){ b.textContent='Mic in: needs the low-latency engine'; return; }
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ b.textContent='Mic in: not available here'; return; }
-  b.textContent='Mic in: asking…';
-  try{
-    try{ if(navigator.audioSession) navigator.audioSession.type='play-and-record'; }catch(e){}
-    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:false,autoGainControl:false}});
-    if(ctx.state==='suspended') await ctx.resume();
-    const src=ctx.createMediaStreamSource(stream); src.connect(node);
-    MIC.on=true; MIC.stream=stream; MIC.src=src;
-    node.port.postMessage({t:'p',k:'micIn',v:1});
-    b.setAttribute('aria-pressed','true'); b.textContent='Mic in: on';
-  }catch(e){
-    try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch(_){}
-    b.textContent='Mic in: '+(e&&e.name==='NotAllowedError'?'permission denied':'unavailable');
-  }
-}
-document.getElementById('micin').onclick=micToggle;
-
-// ---- S4: extra mics ---------------------------------------------------------------------
-// Mic 1 is the main pickup (with the Amp tab's pickups, amp and cabinet). Mics 2–4 are clean point
-// pickups placed with the mic tool, each with its own level and pan.
-state.xm=[{i:-1,g:0.7,p:-0.6},{i:-1,g:0.7,p:0.6},{i:-1,g:0.7,p:0}]; state.micSlot=0;
-function xmSend(q){ if(node){ const x=state.xm[q]; node.port.postMessage({t:'xmic',k:q,i:x.i,g:x.g,p:x.p}); } }
-function xmSendAll(){ for(let q=0;q<3;q++) xmSend(q); }
-const micSlotsEl=document.getElementById('micslots');
-function syncMicSlots(){
-  [...micSlotsEl.children].forEach((c,j)=>{ c.setAttribute('aria-pressed',String(j===state.micSlot)); c.textContent='Mic '+(j+1)+(j>0&&state.xm[j-1].i<0?' (off)':''); });
-  const q=state.micSlot-1, hint=document.getElementById('xmhint');
-  if(q>=0){ val.xLevel=state.xm[q].g; val.xPan=state.xm[q].p; syncKnob('xLevel'); syncKnob('xPan'); }
-  hint.textContent=q<0?'Mic 1 is the main pickup: Level and the Amp tab shape it. Pick Mic 2, 3 or 4 to add more mics.'
-    :(state.xm[q].i<0?'Now tap a ball with the mic tool (above the picture) to place Mic '+(q+2)+'.'
-    :'Mic '+(q+2)+' is on ball #'+state.xm[q].i+'. Tap another ball with the mic tool to move it.');
-}
-for(let j=0;j<4;j++){ const b=document.createElement('button'); b.className='chip'; b.onclick=()=>{ state.micSlot=j; syncMicSlots(); }; micSlotsEl.appendChild(b); }
-document.getElementById('xmremove').onclick=()=>{ const q=state.micSlot-1; if(q<0) return; state.xm[q].i=-1; xmSend(q); syncMicSlots(); };
-for(const k of ['xLevel','xPan']){ const w=document.querySelector('.knob[data-k="'+k+'"] input');
-  if(w) w.addEventListener('input',()=>{ const q=state.micSlot-1; if(q<0) return; if(k==='xLevel') state.xm[q].g=val.xLevel; else state.xm[q].p=val.xPan; xmSend(q); }); }
-syncMicSlots();
-
 // S1: one tap copies everything needed to debug on a phone (paste it into the chat)
 document.getElementById('copydiag').onclick=async()=>{
+  renderDiag();   // I: the input counters, always
   const s=TUNER.stats, g=state.geo;
   const txt=['RESONATOR report · '+new Date().toISOString(), navigator.userAgent,
     'engine: '+(state.audioMode||'not started')+(ctx?' · '+ctx.sampleRate+' Hz':''),
     'tuning thread: '+(TUNER.on?'background':'audio')+' · bodies '+s.structs+' · retunes '+s.recals+' · last '+s.lastMs+' ms · slowest '+s.maxMs+' ms'+(s.fails?' · fallbacks '+s.fails+' ('+s.why+')':''),
     'shape: '+state.shape+' · masses '+(g?g.P.length:0)+' · springs '+(g?g.S.length:0),
     'cpu: '+(state.cpu!==undefined?Math.round(state.cpu*100)+'% now · '+Math.round((state.cpuMax||0)*100)+'% highest · voices ringing '+state.aw+' of '+val.voices+' (limit '+state.cap+') · let go '+(state.ga||0)+' · slept '+(state.sl||0):'not measured yet'),   // P1
-    '', (diagEl.textContent||'(tap Self-test or Benchmark first for more detail)'),
+    '', diagEl.textContent,
     '', 'recent: '+JSON.stringify((window.RESONATOR_DIAG||[]).slice(-4))].join('\n');
   let ok=false;
   try{ await navigator.clipboard.writeText(txt); ok=true; }catch(e){}
@@ -2853,17 +2626,11 @@ function renderDiag(){
   '+/- taps         '+DIAG.taps+'\n'+
   'capture error    '+(DIAG.err||'none')+'\n'+
   'script errors    '+(DIAG.errs.length?'\n  '+DIAG.errs.join('\n  '):'none')+'\n'+
+  'body touches     '+DIAG.cvdown+' down · '+DIAG.cvmove+' moves · '+DIAG.ctouch+' as touch · mic/strike moved '+DIAG.mmoves+'\n'+   // I
   'audio underruns  '+DIAG.under+'\n'+
   'audio engine     '+state.audioMode+'\n'+
   'sample rate      '+(ctx?ctx.sampleRate:'-');
 }
-let diagTimer=null;
-document.getElementById('selftest').onclick=()=>{
- if(diagTimer){ clearInterval(diagTimer); diagTimer=null; diagEl.classList.remove('on'); return; }
- diagEl.classList.add('on'); renderDiag();
- diagTimer=setInterval(renderDiag,250);
-};
-
 addEventListener('error',e=>{
   const m=(e.message||'?')+(e.filename?' @'+String(e.filename).slice(-20):'')+
           (e.lineno?':'+e.lineno:'');
@@ -2873,68 +2640,6 @@ addEventListener('unhandledrejection',e=>{
   const m='promise: '+String((e.reason&&e.reason.message)||e.reason);
   if(DIAG.errs.length<8 && DIAG.errs.indexOf(m)<0) DIAG.errs.push(m);
 });
-
-// ---------- modulator routing ----------
-state.mods=[{d:'',sh:0},{d:'',sh:0},{d:'',sh:0}];
-function sendMod(i){
-  if(!node)return;
-  const r=RATE(val[['m1r','m2r','m3r'][i]]), a=val[['m1a','m2a','m3a'][i]], m=state.mods[i];
-  const msg={t:'mod',i,d:m.d,r,a,sh:m.sh};
-  if(m.ty){ const p='m'+(i+1); msg.ty=m.ty; msg.inv=m.dn?1:0; msg.src=m.src||0;   // S5: envelope / follower
-    msg.A=MTIME(val[p+'at']); msg.D=MTIME(val[p+'dc']); msg.S=val[p+'su']; msg.R=MTIME(val[p+'rl']);
-    msg.fa=MTIME(val[p+'fa']); msg.fr=MTIME(val[p+'fr']); msg.sens=Math.pow(64,val[p+'se']); }
-  node.port.postMessage(msg);
-}
-for(const row of document.querySelectorAll('.mrow[data-m]')){
-  const i=+row.dataset.m;
-  const ds=document.createElement('select');
-  MDEST.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=MLABEL[d];ds.appendChild(o);});
-  const ss=document.createElement('select');
-  MSHAPE.forEach((s,j)=>{const o=document.createElement('option');o.value=j;o.textContent=s;ss.appendChild(o);});
-  ds.onchange=()=>{state.mods[i].d=ds.value;sendMod(i);};
-  ss.onchange=()=>{state.mods[i].sh=+ss.value;sendMod(i);};
-  row.appendChild(ds);row.appendChild(ss);
-}
-
-// ---- S5: envelopes and envelope followers ------------------------------------------------
-// Each modulator is an LFO (as before), an envelope (every key starts it; it lets go when the last key
-// comes up) or a follower (how loud a mic is becomes movement). Envelopes and followers push one way.
-const MTYPES=['LFO','Envelope','Follower'], MSRCS=['Mic 1','Mic 2','Mic 3','Mic 4','Phone mic'];
-function MTIME(v){ return 0.001*Math.pow(10000,v); }   // 1 ms … 10 s
-function fmtTime(v){ const t=MTIME(v); return t<1?Math.round(t*1000)+' ms':t.toFixed(t<10?2:1)+' s'; }
-function fmtSens(v){ return '+'+(20*Math.log10(Math.pow(64,v))).toFixed(1)+' dB'; }   // 0 … +36 dB
-function modHint(i){
-  const m=state.mods[i], ty=m.ty||0, h=document.querySelector('[data-mhint="'+i+'"]'); if(!h) return;
-  let t='';
-  if(ty===1) t='Every key starts it; it lets go when the last key comes up.';
-  else if(ty===2){ const sc=m.src||0;
-    if(sc>=1&&sc<=3&&state.xm&&state.xm[sc-1].i<0) t='Mic '+(sc+1)+' is off: place it on the Mic tab (More mics).';
-    else if(sc===4&&!MIC.on) t='Turn on Mic in (Strike tab). With Mic input at 0, your voice steers without driving the body.';
-    else t='How loud '+MSRCS[sc]+' is becomes movement.'; }
-  if(ty&&!m.d) t+=' Pick what it moves above.';
-  h.textContent=t; h.style.display=t?'':'none';
-}
-function modUI(i){
-  const m=state.mods[i], ty=m.ty||0, p='m'+(i+1);
-  const show=(el,on)=>{ if(el) el.style.display=on?'':'none'; }, knob=k=>document.querySelector('.knob[data-k="'+k+'"]');
-  document.querySelectorAll('[data-mty="'+i+'"] .chip').forEach((c,j)=>c.setAttribute('aria-pressed',String(j===ty)));
-  document.querySelectorAll('[data-msrc="'+i+'"] .chip').forEach((c,j)=>c.setAttribute('aria-pressed',String(j===(m.src||0))));
-  document.querySelectorAll('[data-mdir="'+i+'"] .chip').forEach((c,j)=>c.setAttribute('aria-pressed',String(j===(m.dn?1:0))));
-  show(document.querySelectorAll('.mrow[data-m="'+i+'"] select')[1],!ty);   // the LFO wave
-  show(document.querySelector('[data-msrc="'+i+'"]'),ty===2); show(document.querySelector('[data-mdir="'+i+'"]'),!!ty); show(document.querySelector('[data-mm="'+i+'"]'),!!ty);
-  show(knob(p+'r'),!ty); for(const x of ['at','dc','su','rl']) show(knob(p+x),ty===1); for(const x of ['fa','fr','se']) show(knob(p+x),ty===2);
-  modHint(i);
-}
-function modMeters(mv){ for(let i=0;i<3;i++){ const b=document.querySelector('[data-mm="'+i+'"] i'); if(b) b.style.width=(mv?Math.max(0,Math.min(1,mv[i]||0))*100:0)+'%'; } state.mvShown=!!mv; }
-for(let i=0;i<3;i++){
-  const chips=(sel,names,set)=>{ const r=document.querySelector(sel); names.forEach((n,j)=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=n; b.onclick=()=>{ set(j); modUI(i); sendMod(i); }; r.appendChild(b); }); };
-  chips('[data-mty="'+i+'"]',MTYPES,j=>{ state.mods[i].ty=j; });
-  chips('[data-msrc="'+i+'"]',MSRCS,j=>{ state.mods[i].src=j; });
-  chips('[data-mdir="'+i+'"]',['Push up','Push down'],j=>{ state.mods[i].dn=j; });
-  const ds=document.querySelectorAll('.mrow[data-m="'+i+'"] select')[0]; if(ds) ds.addEventListener('change',()=>modHint(i));
-  modUI(i);
-}
-{ const mt=document.querySelector('.tab[data-page=mod]'); if(mt) mt.addEventListener('click',()=>{ for(let i=0;i<3;i++) modHint(i); }); }
 
 // ---------- presets ----------
 const MEM={};
@@ -2951,52 +2656,40 @@ const store={
 function snapshot(){
   const g=state.geo;
   return {v:1,shape:state.shape,n:state.n,scale:state.scale,root:state.root,axis:state.axis,
-    pk:state.pk||0,mode:state.mode||0,spec:state.spec||0,micIdx:state.micIdx,hitIdx:state.hitIdx,
+    pk:0,mode:0,spec:0,micIdx:state.micIdx,hitIdx:state.hitIdx,
     P:g.P.map(p=>p.map(q=>+q.toFixed(4))),F:Array.from(g.F),S:g.S.map(s=>[s[0],s[1]]),
     val:Object.assign({},val),
-    mods:state.mods.map(m=>({d:m.d,sh:m.sh,ty:m.ty||0,dn:m.dn||0,src:m.src||0})),xm:state.xm?state.xm.map(x=>({i:x.i,g:x.g,p:x.p})):null,
+    xm:null,
     ref:state.ref?{h:state.ref.h,m:state.ref.m,a:state.ref.a}:null};   // H: the strike and mic the body was tuned with
 }
+// I: Tank only. The controls that are kept; every other control stays at its old default and is still sent
+// to the engine as before, so the Tank sounds exactly as it did. A preset cannot switch a removed one back on.
+const KEEP=new Set(['decay','size','ratio','loss','sub','voices','nl','tune','drive','hard','hit','angle','gain','mic','blend','bite','tone','mag']);
+const tankPreset=o=>!!(o&&o.P&&(o.shape||'Tank')==='Tank');
 function restore(o){
-  if(!o||!o.P) return false;
-  state.shape=o.shape||state.shape; state.n=o.n||state.n;
+  if(!tankPreset(o)) return false;
+  state.shape='Tank'; state.n=o.n||state.n;
   state.scale=o.scale||0; state.root=o.root||52; state.axis=(o.axis===0||o.axis===1||o.axis===2)?o.axis:1;   // H: X (0) is a real axis
-  state.pk=o.pk||0; state.mode=o.mode||0; state.spec=o.spec||0;
-  for(const k of ['rvMix','rvTime','rvTone','rvPre']) val[k]=KNOBS[k].val;   // F: a preset from before reverb has none
-  for(const k in o.val) if(k in val) val[k]=o.val[k];
+  state.pk=0; state.mode=0; state.spec=0;   // I: one pickup, the mallet, no specialization: the old defaults
+  for(const k in o.val) if(k in val&&KEEP.has(k)) val[k]=o.val[k];
+  for(const k in KNOBS) if(!KEEP.has(k)) val[k]=KNOBS[k].val;   // I
   state.geo={P:o.P.map(p=>p.slice()),F:Uint8Array.from(o.F),S:o.S.map(s=>s.slice()),
              axis:state.axis,mic:o.micIdx,hit:o.hitIdx,note:'',shape:state.shape,n:state.n};   // S2
-  if(state.xm) state.xm=o.xm?o.xm.map(x=>({i:x.i,g:x.g,p:x.p})):[{i:-1,g:0.7,p:-0.6},{i:-1,g:0.7,p:0.6},{i:-1,g:0.7,p:0}];   // S4
   state.free=state.geo.P.map((_,i)=>i).filter(i=>!state.geo.F[i]);
   state.micIdx=o.micIdx; state.hitIdx=o.hitIdx;
-  state.mods=(o.mods||[]).map(m=>({d:m.d||'',sh:m.sh||0,ty:m.ty||0,dn:m.dn||0,src:m.src||0}));   // S5
-  while(state.mods.length<3) state.mods.push({d:'',sh:0});
-  document.querySelectorAll('.mrow[data-m]').forEach(row=>{
-    const i=+row.dataset.m, sels=row.querySelectorAll('select');
-    if(sels[0]) sels[0].value=state.mods[i].d;
-    if(sels[1]) sels[1].value=String(state.mods[i].sh);
-  });
-  for(let i=0;i<3;i++) modUI(i);   // S5
-  [...shapesEl.children].forEach(c=>c.setAttribute('aria-pressed',c.textContent===state.shape));
-  [...pickEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.pk));
-  [...modeEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.mode));
-  [...specEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.spec));
   [...axesEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.axis));   // H
   document.querySelectorAll('[data-scale]').forEach(x=>x.setAttribute('aria-pressed',String(+x.dataset.scale===state.scale)));   // H
   { const S=SHAPES[state.shape], bt=document.getElementById('bodytext'); if(S&&bt) bt.textContent=S.note; }   // H
   for(const k in KNOBS) syncKnob(k);
-  if(state.hist){state.hist.length=0;state.redo.length=0;syncUndo();}
   // H: build with the strike and mic the body was tuned with, then move them to where they were saved.
   // The engine tunes the loudest partial at the build-time strike and mic (S1); building with the saved
-  // ones instead could tune a different partial, an octave away on a string.
+  // ones instead could tune a different partial.
   const NP=state.geo.P.length, okI=i=>Number.isInteger(i)&&i>=0&&i<NP&&!state.geo.F[i];
   const ref=o.ref&&okI(o.ref.h)&&okI(o.ref.m)?o.ref:null, want={m:state.micIdx,h:state.hitIdx,a:state.axis};
   if(ref){ state.micIdx=ref.m; state.hitIdx=ref.h; if(ref.a===0||ref.a===1||ref.a===2) state.axis=ref.a; }
   rebuild();
   state.micIdx=want.m; state.hitIdx=want.h; state.axis=want.a; pickSend();
-  for(let i=0;i<3;i++) sendMod(i);
-  if(node) node.port.postMessage({t:'spec',v:state.spec||0});   // H: the spectrum choice reaches the engine
-  if(o.val&&'bow' in o.val){ val.bow=+o.val.bow||0; const bb=document.getElementById('bow'); if(bb) bb.setAttribute('aria-pressed',String(val.bow>0)); send('bow'); }   // H
+  if(node) node.port.postMessage({t:'spec',v:0});
   buildPads();
   return true;
 }
@@ -3011,141 +2704,16 @@ function pickSend(){ if(!node) return; const F=state.free, n=F.length; if(!n) re
   node.port.postMessage({t:'mic',i:state.micIdx,a:state.axis}); node.port.postMessage({t:'mic2',i:state.micIdx2});
   node.port.postMessage({t:'hit',i:state.hitIdx,a:state.axis}); }
 
-// H: factory presets. Starting points; how they sound is a matter of taste. Each is a fresh template body
-// (never stored geometry), tuned with the shape's own strike and mic, plus a few settings; everything else
-// is at its default. qa-resonator/h1_claims.mjs checks every note below.
-const FACTORY=[
- {name:'Harp',shape:'String',mode:2,val:{hard:0.5,decay:5,voices:6,loss:0.2,rvMix:0.3,rvTime:3,gain:1.6},note:'A string plucked with a plectrum, ringing on in a plate.'},
- {name:'Kalimba',shape:'Tine',val:{hard:0.3,decay:2.2,voices:4,angle:0.2,rvMix:0.2,rvTime:1.8},note:'Tines clamped at one end, struck firmly.'},
- {name:'Glass bar (bowed)',shape:'Chime',bow:true,val:{decay:10,bowSpd:0.9,bowVc:0.5,rvMix:0.35,rvTime:4},note:'A free bar under a bow, sounding with no key. Tap Bow on the Strike tab to stop it.'},
- {name:'Steel tank',shape:'Tank',val:{hard:0.5,decay:14,voices:2,rvMix:0.4,rvTime:6,rvTone:7000},note:'A big steel vessel with a long ring.'},
- {name:'Gong',shape:'Drum',val:{hard:0.6,drive:2.2,nl:4,decay:9,voices:2,rvMix:0.3,rvTime:5},note:'Hit it hard and the head stiffens, so the pitch starts high and sinks as it settles.'},
- {name:'Wind harp',shape:'Web',val:{wind:0.55,decay:8,rvMix:0.45,rvTime:6,gain:0.5},note:'Moving air on every mass, sounding with no key. Wind is on the Strike tab.'},
- {name:'Breathing pad',shape:'String',mods:[{d:'tone',sh:0,ty:1,dn:0,src:0}],val:{hard:0.1,decay:8,voices:6,tone:600,rvMix:0.45,rvTime:5,gain:1.3,m1a:0.8,m1at:0.7,m1dc:0.8,m1su:0.4,m1rl:0.75},note:'Long strings. Hold a key and an envelope opens the tone, then lets it settle.'},
- {name:'Turning bell',shape:'Chime',val:{decay:6,voices:4,spRot:0.6,spImg:0.8,spDop:0.5,rvMix:0.3,rvTime:3,gain:1.2},note:'A bell turning slowly. On headphones it drifts between your ears.'},
- {name:'Pickup twang',shape:'String',pk:1,val:{hard:0.1,decay:3,voices:4,amp:0.5,cab:0.7,bass:0.3,gain:0.4},note:'A humbucker, an amp and a speaker box.'},
- {name:'Sympathetic twins',shape:'Twins',mode:2,val:{hard:0.7,decay:7,rvMix:0.25,rvTime:3.5},note:'You pluck one string; the mic is on the other, which answers.'}
-];
-function presetFrom(f){
-  const S=SHAPES[f.shape], n=f.n||S.def, g=S.make(n), v={};
-  for(const k in KNOBS) v[k]=KNOBS[k].val;
-  const free=g.P.map((_,i)=>i).filter(i=>!g.F[i]), span=Math.max(1,free.length-1);
-  v.mic=Math.max(0,free.indexOf(g.mic))/span; v.hit=Math.max(0,free.indexOf(g.hit))/span;   // the shape's own strike and mic
-  if(g.needSub&&v.sub<g.needSub) v.sub=g.needSub;
-  Object.assign(v,f.val||{}); v.size=S.max>S.min?(n-S.min)/(S.max-S.min):0; v.bow=f.bow?0.16:0;
-  const at=x=>free[Math.min(free.length-1,Math.round(x*(free.length-1)))];
-  const mods=[0,1,2].map(i=>(f.mods&&f.mods[i])||{d:'',sh:0,ty:0,dn:0,src:0});
-  return {v:1,shape:f.shape,n,scale:0,root:52,axis:g.axis,pk:f.pk||0,mode:f.mode||0,spec:0,
-    micIdx:at(v.mic),hitIdx:at(v.hit),P:g.P,F:Array.from(g.F),S:g.S,val:v,mods,xm:null,ref:{h:g.hit,m:g.mic,a:g.axis}};
-}
-
-// H: Learn. Each lesson changes one thing and plays the same key (E4) at the same strength, so A and B
-// differ only in that one thing. Every "why" quotes measurements made on this engine with these exact
-// values; qa-resonator/h1_claims.mjs re-measures them and checks the text.
-const LESSONS=[
- {t:'Hard or soft',q:'Will a soft mallet sound brighter or darker than a hard one?',base:{shape:'String',val:{decay:2.5}},
-  A:['Hard',{hard:0}],B:['Soft',{hard:0.6}],
-  why:'A short, hard contact kicks every partial; a long, soft one only moves the lowest. Measured: the brightness centre falls from about 1030 Hz to 330 Hz, the note itself. The soft one is also about 7 dB quieter: a slow push passes on less energy.'},
- {t:'Pluck or ring',q:'Short Decay, then long. What changes besides the length?',base:{shape:'String'},
-  A:['Short',{decay:0.3}],B:['Long',{decay:2}],
-  why:'Decay sets how fast the whole body gives its energy away, and nothing else. Measured: about 0.5 s to fall 60 dB at the short setting and 1.9 s at the long one, while the attack is the same colour (brightness centre about 520 Hz in both).'},
- {t:'Ringing metal, dull wood',q:'Take the damping out of the springs, then put lots in. Which one sounds like wood, and why?',base:{shape:'String'},
-  A:['No damping',{loss:0}],B:['Damped',{loss:1}],
-  why:'Damping in the springs takes the high partials first; Decay (lesson 2) takes them all alike. Measured: without spring damping the note and its octave ring for the same 4 s before falling 30 dB. With it, the note lasts 0.9 s, the octave 0.3 s, and the partials above that about a tenth of a second: short and dull, like wood beside metal.'},
- {t:'Where you strike',q:'Strike near the end, then dead centre. What disappears?',base:{shape:'String',n:15,val:{decay:3,hard:0}},
-  A:['Near the end',{hit:0.12}],B:['Centre',{hit:0.5}],
-  why:'Every even partial has a still point at the centre, so a strike there cannot move it. Measured: the 2nd partial, an octave above the note, drops from 13 dB below the note to 68 dB below, gone. The odd ones stay. Rounder and purer.'},
- {t:'Where you listen',q:'Move the mic from near the end to the centre. What vanishes?',base:{shape:'String',n:15,val:{decay:3,hard:0,hit:0.12}},
-  A:['Near the end',{mic:0.06}],B:['Centre',{mic:0.5}],
-  why:'The same still points, heard instead of struck: a mic at the centre cannot hear the even partials. Measured: the 2nd partial drops from 11 dB below the note to 99 dB below.'},
- {t:'Pitch or no pitch',q:'Why does the drum have no clear note?',base:{shape:'String'},
-  A:['String',{shape:'String'}],B:['Drum',{shape:'Drum'}],
-  why:'A string\'s partials sit near whole-number steps, 1 : 2 : 3 : 4 (measured here 1 : 1.98 : 2.94 : 3.87), which the ear fuses into one note. A drumhead\'s do not: this one\'s sit at 1 : 1.38 : 1.54 : 1.63 (measured), a real round drum\'s at 1 : 1.59 : 2.14 : 2.30. The ear cannot fuse them into one note.'},
- {t:'Strike or pluck',q:'A mallet kicks the string; a plectrum pulls it aside and lets go. Which is brighter?',base:{shape:'String',val:{hard:0}},
-  A:['Mallet',{mode:0}],B:['Plectrum',{mode:2}],
-  why:'A strike gives every partial the same kick; a pluck starts from a bent shape whose partials fall away faster. Measured: the brightness centre is about 1030 Hz struck and 380 Hz plucked; the plucked upper partials sit 5 to 16 dB lower.'},
- {t:'A room',q:'What does a plate add when the body itself is short?',base:{shape:'Tine',val:{decay:0.8}},
-  A:['Dry',{rvMix:0}],B:['Plate',{rvMix:0.5}],
-  why:'The plate keeps the sound going after the body has stopped. Measured: one second after the strike, the dry tine has fallen 47 dB; with the plate it is only 26 dB down. The body decays exactly as before; the plate carries it on.'},
- {t:'Make it move',q:'An envelope opens the tone while you hold a key, then closes it. Can you hear it breathe?',base:{shape:'String',val:{tone:700,decay:3,hard:0.1}},
-  hold:1.5,env:{a:0.8,at:0.6,dc:0.725,su:0.2,rl:0.675},
-  A:['Still',{env:0}],B:['Envelope on tone',{env:1}],
-  why:'An envelope rises when a key goes down and falls back when it comes up; here it pushes Mic tone. Measured: still, the brightness centre only falls (about 440 Hz to 355 Hz). With the envelope it climbs to about 940 Hz a quarter of a second in, then sinks back.'},
- {t:'Build your own',how:true,q:'Every body here is masses and springs. Make your own.',base:{shape:'String',n:6},
-  steps:['Tap <b>add</b> (in the row of buttons along the bottom of the picture), then tap empty space in the picture: a new mass appears there, wired to its nearest neighbour.',
-         'Tap <b>delete</b>, then a mass, to take it away. <b>&#8630;</b> undoes either.',
-         'Tap <b>link</b>, then two masses: a spring appears between them, or goes if there was one. <b>pin</b> fixes a mass in place; tap it again to free it.',
-         'Tap <b>move</b>, then a mass, then the arrows to push it.',
-         'Play after each change. The body is re-tuned in the background, so its loudest partial lands on the key you press.']}
-];
-const LEARN={saved:null,offT:0};
-function lessonApply(ch,L){
-  for(const [k,v] of Object.entries(ch)){
-    if(k==='shape'){ const c=[...shapesEl.children].find(x=>x.textContent===v); if(c&&state.shape!==v) c.click(); }
-    else if(k==='mode'){ const c=modeEl.children[v]; if(c) c.click(); }
-    else if(k==='env'){ const m=state.mods[0], e=L.env; m.d=v?'tone':''; m.sh=0; m.ty=v?1:0; m.dn=0; m.src=0;
-      val.m1a=v?e.a:0; val.m1at=e.at; val.m1dc=e.dc; val.m1su=e.su; val.m1rl=e.rl;
-      const sels=document.querySelectorAll('.mrow[data-m="0"] select'); if(sels[0]) sels[0].value=m.d; if(sels[1]) sels[1].value='0';
-      for(const kk of ['m1a','m1at','m1dc','m1su','m1rl']) syncKnob(kk); modUI(0); sendMod(0); }
-    else if(k==='hit'||k==='mic'){ val[k]=v; placeMicHit(); syncKnob(k); }
-    else { val[k]=v; syncKnob(k); send(k); }
-  }
-}
-// the same key (E4) at the same strength every time; held for the lesson's hold time
-function lessonRelease(){ if(LEARN.offT){ clearTimeout(LEARN.offT); LEARN.offT=0; stop(12); } }   // never leave a lesson's key held
-function lessonPlay(L){
-  const semi=12, hold=(L&&L.hold)||0.15;
-  lessonRelease(); play(semi,0.8);
-  const pad=padsEl.children[SCALES[state.scale].length]; if(pad){ pad.classList.add('lit'); setTimeout(()=>pad.classList.remove('lit'),Math.max(130,hold*1000)); }
-  LEARN.offT=setTimeout(()=>{ LEARN.offT=0; stop(semi); },hold*1000);
-}
-function lessonSetup(L){
-  lessonRelease();
-  if(!LEARN.saved){ LEARN.saved=snapshot(); document.getElementById('lback').disabled=false; }
-  restore(presetFrom(L.base));
-}
-// a lesson's explanation, once earned, stays open
-function lessonsReset(){ document.querySelectorAll('.lesson').forEach(x=>{ x.dataset.on='';
-  x.querySelectorAll('[data-a=A],[data-a=B]').forEach(b=>b.setAttribute('aria-pressed','false')); }); }
-function buildLessons(){
-  const box=document.getElementById('lessons'); if(!box) return; box.innerHTML='';
-  LESSONS.forEach((L,i)=>{
-    const d=document.createElement('div'); d.className='lesson'; d.dataset.l=i;
-    let h='<h3>'+(i+1)+' · '+L.t+'</h3><div class="lq">'+L.q+'</div>';
-    if(L.how) h+='<ol class="lsteps">'+L.steps.map(x=>'<li>'+x+'</li>').join('')+'</ol><div class="row"><button class="chip" data-a="go">Start from a small string</button></div>';
-    else h+='<div class="row"><button class="chip" data-a="A" aria-pressed="false">A · '+L.A[0]+'</button><button class="chip" data-a="B" aria-pressed="false">B · '+L.B[0]+'</button><button class="chip" data-a="play">Play again</button></div><div class="lwhy">'+L.why+'</div>';
-    d.innerHTML=h; box.appendChild(d);
-    const heard={A:false,B:false};
-    d.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-      if(!state.running||!node){ say('Wake the instrument up first.',true); return; }
-      const a=b.dataset.a;
-      if(a==='go'){ lessonsReset(); lessonSetup(L); const t=document.querySelector('.tool[data-tool=add]'); if(t) t.click(); say('A small string, and the add tool is on: tap empty space on the picture.'); return; }
-      if(a==='play'){ if(d.dataset.on==='1') lessonPlay(L); else say('Tap A or B first.'); return; }
-      if(d.dataset.on!=='1'){ lessonsReset(); lessonSetup(L); d.dataset.on='1'; }
-      lessonApply(a==='A'?L.A[1]:L.B[1],L);
-      d.querySelectorAll('[data-a=A],[data-a=B]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
-      setTimeout(()=>lessonPlay(L),250);
-      heard[a]=true; if(heard.A&&heard.B) d.classList.add('heard');
-    });
-  });
-  const back=document.getElementById('lback');
-  if(back) back.onclick=()=>{ if(!LEARN.saved) return; lessonRelease(); restore(LEARN.saved); LEARN.saved=null; back.disabled=true; lessonsReset();
-    say('Your instrument is back.'); };
-}
-buildLessons();
 function refreshList(sel){
   const l=document.getElementById('plist');
   if(!l) return;
   let all={}; try{ all=store.get()||{}; }catch(e){ all={}; }
   l.innerHTML='';
   const names=Object.keys(all).sort();
-  {const o=document.createElement('option');o.value='';o.textContent='— pick a preset —';l.appendChild(o);}
-  // H: factory presets first, then the ones saved on this phone
-  const fg=document.createElement('optgroup'); fg.label='Factory';
-  FACTORY.forEach(f=>{const o=document.createElement('option');o.value='factory:'+f.name;o.textContent=f.name;fg.appendChild(o);});
-  l.appendChild(fg);
-  const sg=document.createElement('optgroup'); sg.label=names.length?'Saved on this phone':'Saved on this phone (none yet)';
-  names.forEach(nm=>{const o=document.createElement('option');o.value=nm;o.textContent=nm;sg.appendChild(o);}); l.appendChild(sg);
+  // I: only Tank presets are listed; presets of the removed shapes stay in storage for the main Resonator
+  const tanks=names.filter(nm=>tankPreset(all[nm]));
+  {const o=document.createElement('option');o.value='';o.textContent=tanks.length?'— pick a preset —':'(nothing saved yet)';l.appendChild(o);}
+  tanks.forEach(nm=>{const o=document.createElement('option');o.value=nm;o.textContent=nm;l.appendChild(o);});
   if(sel) l.value=sel;
 }
 const codeEl=document.getElementById('pcode');
@@ -3154,269 +2722,36 @@ document.getElementById('psave').onclick=()=>{
   const base=state.shape+' '+(Object.keys(all).length+1);
   let nm=base,i=2; while(all[nm]) nm=base+' ('+(i++)+')';
   all[nm]=snapshot(); const ok=store.set(all); refreshList(nm);
-  const m=document.getElementById('msg');
-  m.className=ok?'':'warn';
-  m.textContent=ok?'Saved as '+nm
-    :'Saved for this session only — this browser blocks storage. Use Copy code to keep it.';
+  say(ok?'Saved as '+nm:'Saved for this session only — this browser blocks storage. Use Copy code to keep it.',!ok);
 };
 document.getElementById('pload').onclick=()=>{
   const nm=document.getElementById('plist').value; if(!nm) return;
-  if(nm.startsWith('factory:')){ const f=FACTORY.find(x=>'factory:'+x.name===nm); if(f){ restore(presetFrom(f)); say('Loaded '+f.name+'. '+f.note); } return; }   // H
   const all=store.get();
   if(restore(all[nm])) say('Loaded '+nm); else say('Could not load '+nm,true);
 };
 document.getElementById('pdel').onclick=()=>{
   const nm=document.getElementById('plist').value; if(!nm) return;
-  if(nm.startsWith('factory:')){ say('Factory presets stay. Load it, change it, then Save to keep your own version.'); return; }   // H
   const all=store.get(); delete all[nm]; store.set(all); refreshList();
-  document.getElementById('msg').textContent='Deleted '+nm;
+  say('Deleted '+nm);
 };
 document.getElementById('pcopy').onclick=()=>{
   codeEl.classList.add('on');
   codeEl.value=JSON.stringify(snapshot());
   codeEl.select();
   try{navigator.clipboard.writeText(codeEl.value);}catch(e){}
-  document.getElementById('msg').textContent='Preset code ready — copy it anywhere';
+  say('Preset code ready — copy it anywhere');
 };
 document.getElementById('ppaste').onclick=()=>{
   if(!codeEl.classList.contains('on')){ codeEl.classList.add('on'); codeEl.focus(); return; }
   let o=null; try{ o=JSON.parse(codeEl.value); }catch(e){}
-  if(o&&restore(o)) say('Loaded from code'); else say('That code could not be read',true);
+  if(o&&o.P&&!tankPreset(o)) say('That code is for the '+o.shape+', which this version does not have.',true);
+  else if(o&&restore(o)) say('Loaded from code'); else say('That code could not be read',true);
 };
 refreshList();
 
-// ---------- benchmark ----------
-function benchOne(rate,masses,os,shape){
-  const S=SHAPES[shape]||SHAPES.String;
-  const n=Math.max(S.min,Math.min(S.max,masses));
-  const g=S.make(n);
-  const p=bareProcessor(rate);
-  const pos=new Float32Array(g.P.length*3);
-  g.P.forEach((q,i)=>{pos[i*3]=q[0];pos[i*3+1]=q[1];pos[i*3+2]=q[2];});
-  p.port.onmessage({data:{t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),
-    si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),
-    mic:g.mic,hit:g.hit,axis:g.axis}});
-  p.port.onmessage({data:{t:'note',f:220,v:0.9}});
-  p.os=os;
-  const L=new Float32Array(128),R=new Float32Array(128);
-  for(let i=0;i<200;i++) p.process([],[[L,R]]);
-  const blocks=Math.round(2*rate/128), runs=[];
-  for(let r=0;r<3;r++){
-    const t0=performance.now();
-    for(let i=0;i<blocks;i++) p.process([],[[L,R]]);
-    runs.push((performance.now()-t0)/2);
-  }
-  runs.sort((a,b)=>a-b);
-  return {masses:g.P.length,springs:g.S.length,os,ms:runs[1],lo:runs[0],hi:runs[2],
-          x:1000/Math.max(0.01,runs[1])};
-}
-function runBench(sustain){
-  const el=document.getElementById('diag'); el.classList.add('on');
-  el.textContent='measuring…';
-  setTimeout(()=>{
-    const rate=(ctx&&ctx.sampleRate)||state.rate||32000;
-    const lines=[];
-    lines.push('RESONATOR benchmark');
-    lines.push(navigator.userAgent);
-    lines.push('rate '+rate+' Hz · engine '+(state.audioMode||'not started')+
-               ' · cores '+(navigator.hardwareConcurrency||'?')+' · dpr '+(devicePixelRatio||1));
-    lines.push('');
-    lines.push('shape    masses springs  os    ms/s   realtime  spread');
-    const plan=[['String',14,3],['String',24,6],['Drum',7,2],['Web',12,4],
-                ['Drum',7,6],['String',24,12],['Drum',7,20]];
-    let worst=99;
-    for(const [sh,n,os] of plan){
-      const r=benchOne(rate,n,os,sh);
-      worst=Math.min(worst,r.x);
-      lines.push(sh.padEnd(8)+String(r.masses).padStart(5)+String(r.springs).padStart(8)+
-        String(os).padStart(4)+r.ms.toFixed(1).padStart(8)+'   '+r.x.toFixed(1)+'x'+
-        '   ('+r.lo.toFixed(0)+'-'+r.hi.toFixed(0)+')'+(r.x<1.6?'  <-- tight':''));
-    }
-    lines.push('');
-    lines.push('voices   ms/s   realtime');
-    for(const V of [1,4,8]){
-      const S=SHAPES.String, g=S.make(24);
-      const p=bareProcessor(rate);
-      const pos=new Float32Array(g.P.length*3);
-      g.P.forEach((q,i)=>{pos[i*3]=q[0];pos[i*3+1]=q[1];pos[i*3+2]=q[2];});
-      p.port.onmessage({data:{t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),
-        si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),
-        mic:g.mic,hit:g.hit,axis:g.axis}});
-      p.port.onmessage({data:{t:'p',k:'voices',v:V}});
-      for(let i=0;i<V;i++) p.port.onmessage({data:{t:'note',f:180+i*70,v:0.9}});
-      const L=new Float32Array(128),R=new Float32Array(128);
-      for(let i=0;i<200;i++) p.process([],[[L,R]]);
-      const blocks=Math.round(2*rate/128), t0=performance.now();
-      for(let i=0;i<blocks;i++) p.process([],[[L,R]]);
-      const ms=(performance.now()-t0)/2;
-      lines.push(String(V).padStart(4)+ms.toFixed(1).padStart(9)+'   '+(1000/Math.max(0.01,ms)).toFixed(1)+'x');
-    }
-    lines.push('');
-    lines.push('headroom on the heaviest case: '+worst.toFixed(2)+'x realtime');
-    lines.push('audio underruns so far: '+DIAG.under);
-    if(sustain){
-      lines.push('');
-      const a=benchOne(rate,24,6,'String').x;
-      const t=performance.now();
-      while(performance.now()-t<20000) benchOne(rate,24,6,'String');
-      const b=benchOne(rate,24,6,'String').x;
-      lines.push('sustained 20 s: start '+a.toFixed(2)+'x, after '+b.toFixed(2)+'x, throttle '+
-        ((1-b/a)*100).toFixed(0)+'%');
-    }
-    el.textContent=lines.join('\n');
-    try{navigator.clipboard.writeText(el.textContent);}catch(e){}
-    document.getElementById('msg').textContent='Benchmark copied to the clipboard';
-  },30);
-}
-document.getElementById('bench').onclick=()=>runBench(false);
-document.getElementById('bench').ondblclick=()=>runBench(true);
-
-// ---------- recording ----------
-const REC={on:false,L:[],R:[],n:0,max:0,url:null};
-function wavBlob(chans,rate){
-  const n=chans[0].length, ch=chans.length, bytes=44+n*ch*2;
-  const b=new ArrayBuffer(bytes), v=new DataView(b);
-  const str=(o,s)=>{for(let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i));};
-  str(0,'RIFF'); v.setUint32(4,bytes-8,true); str(8,'WAVE');
-  str(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
-  v.setUint16(22,ch,true); v.setUint32(24,rate,true);
-  v.setUint32(28,rate*ch*2,true); v.setUint16(32,ch*2,true); v.setUint16(34,16,true);
-  str(36,'data'); v.setUint32(40,n*ch*2,true);
-  let o=44;
-  for(let i=0;i<n;i++) for(let c=0;c<ch;c++){
-    let s=Math.max(-1,Math.min(1,chans[c][i]));
-    v.setInt16(o,s<0?s*0x8000:s*0x7FFF,true); o+=2;
-  }
-  return new Blob([b],{type:'audio/wav'});
-}
-function flat(list,n){const out=new Float32Array(n);let o=0;
-  for(const c of list){const k=Math.min(c.length,n-o);out.set(c.subarray(0,k),o);o+=k;if(o>=n)break;}
-  return out;}
-function updateRec(){
-  const rate=(ctx&&ctx.sampleRate)||48000;
-  document.getElementById('recbtn').textContent='Stop · '+(REC.n/rate).toFixed(1)+'s';
-}
-function startRec(){
-  if(!node) return;
-  const rate=(ctx&&ctx.sampleRate)||48000;
-  REC.on=true; REC.L=[]; REC.R=[]; REC.n=0; REC.max=rate*90;
-  if(REC.url){ try{URL.revokeObjectURL(REC.url);}catch(e){} REC.url=null; }
-  document.getElementById('reclink').classList.remove('on');
-  document.getElementById('recbtn').setAttribute('aria-pressed','true');
-  node.port.postMessage({t:'rec',v:1});
-  updateRec();
-}
-function stopRec(){
-  if(!REC.on) return;
-  REC.on=false;
-  if(node) node.port.postMessage({t:'rec',v:0});
-  const btn=document.getElementById('recbtn');
-  btn.setAttribute('aria-pressed','false'); btn.textContent='Record';
-  const rate=(ctx&&ctx.sampleRate)||48000;
-  if(REC.n<1024){ document.getElementById('msg').textContent='Nothing captured — play something while it records.'; return; }
-  const blob=wavBlob([flat(REC.L,REC.n),flat(REC.R,REC.n)],rate);
-  REC.url=URL.createObjectURL(blob);
-  const a=document.getElementById('reclink');
-  a.href=REC.url;
-  a.download='resonator-'+new Date().toISOString().slice(11,19).replace(/:/g,'')+'.wav';
-  a.textContent='Save '+(REC.n/rate).toFixed(1)+'s · '+(blob.size/1048576).toFixed(1)+' MB';
-  a.classList.add('on');
-  REC.L=[];REC.R=[];
-  document.getElementById('msg').textContent='Recorded — tap Save, or long-press it to share.';
-}
-document.getElementById('recbtn').onclick=()=>{ REC.on?stopRec():startRec(); };
-// G: video with sound. The 3D view (canvas.captureStream) plus everything you hear (a stream tap on
-// the master gain), recorded by MediaRecorder: MP4 (H.264 + AAC) on iPhone, WebM elsewhere.
-const VREC={on:false,rec:null,chunks:[],t0:0,blob:null,dest:null,timer:null,mime:'',done:false,max:60};
-function vrecMime(){ const c=['video/mp4;codecs=avc1,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
-  for(const m of c){ try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){} } return ''; }
-function vrecWhyNot(){ if(typeof MediaRecorder==='undefined') return 'This browser cannot record video (no MediaRecorder).';
-  if(!cv.captureStream) return 'This browser cannot record the 3D view (no canvas capture).';
-  if(!ctx||!ctx.createMediaStreamDestination) return 'This browser cannot record the sound into a video.'; return ''; }
-function vrecNote(t,warn){ const n=document.getElementById('vrecnote'); n.textContent=t; n.className='vrecnote'+(warn?' warn':''); }
-function vrecLabel(){ const s=Math.floor((performance.now()-VREC.t0)/1000);
-  document.getElementById('vrecbtn').textContent='Stop video · '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
-  if(s>=VREC.max) vrecStop(); }
-function vrecStart(){
-  if(!node||!ctx) return; const why=vrecWhyNot(); if(why){ vrecNote(why,true); return; }
-  if(REC.on) stopRec();
-  try{
-    if(!VREC.dest) VREC.dest=ctx.createMediaStreamDestination();
-    master.connect(VREC.dest);
-    const vs=cv.captureStream(30);
-    const stream=new MediaStream([...vs.getVideoTracks(),...VREC.dest.stream.getAudioTracks()]);
-    VREC.mime=vrecMime();
-    const opt={videoBitsPerSecond:2500000,audioBitsPerSecond:192000}; if(VREC.mime) opt.mimeType=VREC.mime;
-    VREC.rec=new MediaRecorder(stream,opt);
-  }catch(e){ try{ master.disconnect(VREC.dest); }catch(_){} vrecNote('Video recording could not start: '+(e.message||e),true); return; }
-  VREC.chunks=[]; VREC.blob=null; VREC.done=false;
-  VREC.rec.ondataavailable=e=>{ if(e.data&&e.data.size) VREC.chunks.push(e.data); };
-  VREC.rec.onstop=()=>vrecFinish();
-  VREC.rec.start(1000);
-  VREC.on=true; VREC.t0=performance.now();
-  document.getElementById('vreclink').classList.remove('on');
-  const b=document.getElementById('vrecbtn'); b.setAttribute('aria-pressed','true'); vrecLabel();
-  VREC.timer=setInterval(vrecLabel,250);
-  vrecNote('Recording the view and the sound (up to '+VREC.max+' s). Play now.');
-}
-function vrecStop(){
-  if(!VREC.on) return; VREC.on=false; clearInterval(VREC.timer);
-  const b=document.getElementById('vrecbtn'); b.setAttribute('aria-pressed','false'); b.textContent='Record video';
-  try{ if(VREC.rec.state!=='inactive'){ VREC.rec.requestData(); VREC.rec.stop(); } }catch(e){}
-  setTimeout(()=>{ if(!VREC.done) vrecFinish(); },2000);   // iOS 15 could fail to fire onstop
-}
-function vrecFinish(){
-  if(VREC.done) return; VREC.done=true;
-  try{ master.disconnect(VREC.dest); }catch(e){}
-  const type=(VREC.rec&&VREC.rec.mimeType)||VREC.mime||'video/mp4';
-  VREC.blob=new Blob(VREC.chunks,{type:type.split(';')[0]});
-  if(VREC.blob.size<2048){ vrecNote('Nothing captured. Play something while it records.',true); return; }
-  const secs=Math.max(1,Math.round((performance.now()-VREC.t0)/1000));
-  const a=document.getElementById('vreclink'); a.textContent='Save video · '+(VREC.blob.size/1048576).toFixed(1)+' MB'; a.classList.add('on');
-  vrecNote('Recorded about '+secs+' s. Tap Save video, then "Save Video" to put it in Photos.');
-}
-async function vrecSave(){
-  if(!VREC.blob) return;
-  const ext=VREC.blob.type.indexOf('mp4')>=0?'mp4':'webm';
-  const name='resonator-'+new Date().toISOString().slice(0,19).replace(/[-:T]/g,'')+'.'+ext;
-  const f=new File([VREC.blob],name,{type:VREC.blob.type});
-  try{ if(navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:'RESONATOR'}); return; } }
-  catch(e){ if(e&&e.name==='AbortError') return; }
-  const u=URL.createObjectURL(f), a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click();
-  setTimeout(()=>{ URL.revokeObjectURL(u); a.remove(); },10000);
-}
-// G: the same gradient as the stage's CSS background (#stage), painted into the canvas while recording
-function vrecBg(){ const gr=g2.createRadialGradient(W*0.5,H*0.34,0,W*0.5,H*0.34,Math.hypot(W,H)*0.65);
- gr.addColorStop(0,'#16233F'); gr.addColorStop(0.55,'#0A1120'); gr.addColorStop(1,'#05080F'); g2.fillStyle=gr; g2.fillRect(0,0,W,H); }
-// drawn on top of the 3D view while recording: it lands in the video, and the red dot shows it is on
-function vrecOverlay(){
-  const s=Math.floor((performance.now()-VREC.t0)/1000);
-  g2.save(); g2.font='600 11px '+getComputedStyle(document.body).getPropertyValue('--mono');
-  g2.fillStyle='rgba(8,13,26,0.55)'; g2.fillRect(8,H-30,Math.min(W-16,250),22);
-  g2.fillStyle='#F0EAD8'; g2.fillText('RESONATOR · '+state.shape+' · '+(state.geo?state.geo.P.length:0)+' masses',14,H-15);
-  g2.fillStyle='#FF5A4E'; g2.beginPath(); g2.arc(W-58,18,5,0,7); g2.fill();
-  g2.fillStyle='#F0EAD8'; g2.fillText(Math.floor(s/60)+':'+String(s%60).padStart(2,'0'),W-48,22);
-  g2.restore();
-}
-document.getElementById('vrecbtn').onclick=()=>{ VREC.on?vrecStop():vrecStart(); };
-document.getElementById('vreclink').onclick=e=>{ e.preventDefault(); vrecSave(); };
 const hintsBtn=document.getElementById('hints');
 hintsBtn.onclick=()=>{const on=document.body.classList.toggle('hints');
  hintsBtn.setAttribute('aria-pressed',String(on));hintsBtn.textContent=on?'Hide hints':'Show hints';};
-const modeEl=document.getElementById('modes');
-['Mallet','Worthington splash','Plectrum','Oscillator'].forEach((nm,i)=>{   // S3: plectrum and oscillator
- const b=document.createElement('button');b.className='chip';b.textContent=nm;
- b.setAttribute('aria-pressed',i===0);
- b.onclick=()=>{state.mode=i;[...modeEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===i));
-   if(node)node.port.postMessage({t:'mode',v:i});};
- modeEl.appendChild(b);});
-const specEl=document.getElementById('specs');
-['Even','Bell','String','Membrane','Machine','Drift'].forEach((nm,i)=>{
- const b=document.createElement('button');b.className='chip';b.textContent=nm;
- b.setAttribute('aria-pressed',i===0);
- b.onclick=()=>{state.spec=i;[...specEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===i));
-   if(node)node.port.postMessage({t:'spec',v:i});};
- specEl.appendChild(b);});
 const rateEl=document.getElementById('rates');
 state.rate=+(function(){try{return localStorage.getItem('resonator.rate');}catch(e){return null;}}()||32000);
 [22050,32000,48000].forEach(r=>{
@@ -3427,28 +2762,11 @@ state.rate=+(function(){try{return localStorage.getItem('resonator.rate');}catch
    if(r===state.rate) return;
    state.rate=r; try{localStorage.setItem('resonator.rate',String(r));}catch(e){}
    [...rateEl.children].forEach(c=>c.setAttribute('aria-pressed',c===b));
-   document.getElementById('msg').className='warn';
-   document.getElementById('msg').textContent='Rate set to '+(r/1000)+' kHz — reload the page to apply it.';
+   say('Rate set to '+(r/1000)+' kHz — reload the page to apply it.',true);
  };
  rateEl.appendChild(b);});
-const pickEl=document.getElementById('pickups');
-['Single coil','Humbucker','Out of phase'].forEach((nm,i)=>{
- const b=document.createElement('button');b.className='chip';b.textContent=nm;
- b.setAttribute('aria-pressed',i===0);
- b.onclick=()=>{state.pk=i;[...pickEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===i));
-   if(node)node.port.postMessage({t:'pk',v:i});};
- pickEl.appendChild(b);});
-const shapesEl=document.getElementById('shapes');for(const name in SHAPES){const b=document.createElement('button');b.className='chip';b.textContent=name;b.setAttribute('aria-pressed',name===state.shape);b.onclick=()=>{state.shape=name;const S=SHAPES[name];state.n=S.def;val.size=(S.def-S.min)/(S.max-S.min);syncKnob('size');[...shapesEl.children].forEach(c=>c.setAttribute('aria-pressed',c.textContent===name));buildShape(true);};shapesEl.appendChild(b);}
 const axesEl=document.getElementById('axes');['X','Y','Z'].forEach((ax,i)=>{const b=document.createElement('button');b.className='chip';b.textContent='Mic axis '+ax;b.setAttribute('aria-pressed',false);b.onclick=()=>{state.axis=i;[...axesEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===i));placeMicHit();};axesEl.appendChild(b);});
-document.getElementById('scramble').onclick=()=>{const g=state.geo;if(!g||!node)return;geoPush();const F=state.free,add=2+Math.floor(Math.random()*3);for(let q=0;q<add;q++){const a=F[Math.floor(Math.random()*F.length)],b=g.P.map((_,i)=>i)[Math.floor(Math.random()*g.P.length)];if(a!==b&&!g.S.some(s=>(s[0]===a&&s[1]===b)||(s[0]===b&&s[1]===a)))g.S.push([a,b]);}for(const i of F)g.P[i]=g.P[i].map(v=>v+(Math.random()-0.5)*0.03);const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});postStruct({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:state.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain','rvMix','rvTime','rvTone','rvPre'])send(k);
-   node.port.postMessage({t:'pk',v:state.pk||0});
-   node.port.postMessage({t:'mode',v:state.mode||0});
-   node.port.postMessage({t:'spec',v:state.spec||0});drawInfo();};
-document.getElementById('hush').onclick=()=>{
- if(node)node.port.postMessage({t:'hush'});
- const bb=document.getElementById('bow');
- if(bb&&bb.getAttribute('aria-pressed')==='true'){ bb.setAttribute('aria-pressed','false'); val.bow=0; }
-};const bowBtn=document.getElementById('bow');bowBtn.onclick=()=>{const on=bowBtn.getAttribute('aria-pressed')!=='true';bowBtn.setAttribute('aria-pressed',on);val.bow=on?0.16:0;send('bow');};
+document.getElementById('hush').onclick=()=>{ if(node)node.port.postMessage({t:'hush'}); };
 for(const t of document.querySelectorAll('.tab'))t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected',x===t));document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id==='page-'+t.dataset.page));};
 const deckEl=document.getElementById('deck'),handleEl=document.getElementById('handle');
 handleEl.onclick=()=>{const shut=deckEl.classList.toggle('shut');
@@ -3456,8 +2774,7 @@ handleEl.onclick=()=>{const shut=deckEl.classList.toggle('shut');
  handleEl.querySelector('b').innerHTML=shut?'&#9652;':'&#9662;';};
 const padsEl=document.getElementById('pads');function buildPads(){padsEl.innerHTML='';const sc=SCALES[state.scale],count=12;for(let i=0;i<count;i++){const semi=sc[i%sc.length]+12*Math.floor(i/sc.length),b=document.createElement('button');b.className='pad';b.textContent=NAMES[(state.root+semi)%12]+(Math.floor((state.root+semi)/12)-1);const fire=e=>{e.preventDefault();if(!state.running)return;play(semi,0.55+0.45*Math.random());b.classList.add('lit');setTimeout(()=>b.classList.remove('lit'),130);};b.addEventListener('pointerdown',fire);const rel=()=>{if(state.running)stop(semi);};b.addEventListener('pointerup',rel);b.addEventListener('pointercancel',rel);b.addEventListener('pointerleave',rel);padsEl.appendChild(b);}}buildPads();
 for(const b of document.querySelectorAll('[data-scale]'))b.onclick=()=>{state.scale=+b.dataset.scale;document.querySelectorAll('[data-scale]').forEach(x=>x.setAttribute('aria-pressed',x===b));buildPads();};
-addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){e.shiftKey?doRedo():doUndo();e.preventDefault();return;}
- if(e.repeat)return;const i='zxcvbnasdfgh'.indexOf(e.key.toLowerCase());if(i<0)return;const sc=SCALES[state.scale];play(sc[i%sc.length]+12*Math.floor(i/sc.length),0.8);});
+addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.repeat)return;const i='zxcvbnasdfgh'.indexOf(e.key.toLowerCase());if(i<0)return;const sc=SCALES[state.scale];play(sc[i%sc.length]+12*Math.floor(i/sc.length),0.8);});
 const cv=document.getElementById('view'),g2=cv.getContext('2d');let W=0,H=0;function resize(){const r=cv.getBoundingClientRect(),d=Math.min(2,devicePixelRatio||1);W=r.width;H=r.height;cv.width=W*d;cv.height=H*d;g2.setTransform(d,0,0,d,0,0);}addEventListener('resize',resize);addEventListener('orientationchange',()=>setTimeout(resize,150));
 state.tool='orbit'; state.sel=-1; state.linkFrom=-1;
 // two fingers: twist to roll, so every orientation is reachable
@@ -3475,157 +2792,27 @@ state.tool='orbit'; state.sel=-1; state.linkFrom=-1;
   },{passive:false});
   cv.addEventListener('touchend',()=>{ a0=null; },{passive:true});
 })();
-state.hist=[]; state.redo=[];
 
-// ---- S2: free building -----------------------------------------------------------------
-// add: tap empty space; the new mass appears under the finger, in the plane of the nearest mass,
-// and is wired to its nearest neighbour so it can vibrate. delete: tap a mass; its springs go with
-// it, and the strike and mic move to the nearest remaining mass if they were on it.
-const MAX_MASSES=100;   // keeps background tuning to seconds on a phone; check "slowest" in Copy report
+// I: a short note shown on the picture (used when a circle is picked up)
 let toolMsgTimer=0;
-function toolMsg(t){ const m=document.getElementById('nudgeMsg'); if(!m) return; m.textContent=t||''; clearTimeout(toolMsgTimer); if(t) toolMsgTimer=setTimeout(()=>{ m.textContent=''; },2600); }
-function addMassAt(cx,cy){
-  const g=state.geo; if(!g) return;
-  if(g.P.length>=MAX_MASSES){ toolMsg('Limit reached: '+MAX_MASSES+' masses'); return; }
-  const r=cv.getBoundingClientRect(), x=cx-r.left, y=cy-r.top;
-  let near=-1, nd=1e9;
-  for(let i=0;i<g.P.length;i++){ const dx=_px[i]-x, dy=_py[i]-y, d=dx*dx+dy*dy; if(d<nd){ nd=d; near=i; } }
-  if(near>=0&&nd<18*18){ toolMsg('tap empty space'); return; }
-  const M=state.M, q=near>=0?g.P[near]:[0,0,0];
-  const Z0=M[6]*q[0]+M[7]*q[1]+M[8]*q[2];
-  const sc=Math.min(W,H)*0.86, f=2.9/(2.9-Z0);
-  const X=(x-W/2)/(sc*f), Y=(y-H*0.46)/(sc*f);
-  const p=[0,1,2].map(k=>+Math.max(-0.6,Math.min(0.6,M[k]*X+M[3+k]*Y+M[6+k]*Z0)).toFixed(4));
-  let link=-1, ld=1e9;
-  for(let i=0;i<g.P.length;i++){ const o=g.P[i], d=(o[0]-p[0])**2+(o[1]-p[1])**2+(o[2]-p[2])**2; if(d<ld){ ld=d; link=i; } }
-  if(link<0||ld<1e-4){ toolMsg('too close to another mass'); return; }
-  geoPush();
-  g.P.push(p); g.F=Uint8Array.from([...g.F,0]); g.S.push([link,g.P.length-1]);
-  state.sel=g.P.length-1; rebuild(); toolMsg('');
-}
-function pieceOf(g,start){   // every mass connected to `start` through springs
-  const seen=new Set([start]), st=[start];
-  while(st.length){ const a=st.pop(); for(const t of g.S){ const o=t[0]===a?t[1]:(t[1]===a?t[0]:-1); if(o>=0&&!seen.has(o)){ seen.add(o); st.push(o); } } }
-  return seen;
-}
-function deleteMass(i){
-  const g=state.geo; if(!g) return;
-  let freeLeft=0; for(let k=0;k<g.P.length;k++) if(k!==i&&!g.F[k]) freeLeft++;
-  if(g.P.length<=3||freeLeft<1){ toolMsg('keep at least 3 masses'); return; }
-  const S2=g.S.filter(t=>t[0]!==i&&t[1]!==i).map(t=>[t[0]>i?t[0]-1:t[0], t[1]>i?t[1]-1:t[1]]);
-  if(!S2.length){ toolMsg('that would leave no springs'); return; }
-  geoPush();
-  const P0=g.P[i];
-  g.P.splice(i,1); g.F=Uint8Array.from(Array.from(g.F).filter((_,k)=>k!==i)); g.S=S2;
-  if(state.xm) state.xm.forEach(x=>{ if(x.i===i) x.i=-1; else if(x.i>i) x.i--; });   // S4: extra mics follow the renumbering
-  const d2=(a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2;
-  const nearestFree=(set)=>{ let best=-1, bd=1e9; g.P.forEach((p,k)=>{ if(g.F[k]||(set&&!set.has(k))) return; const d=d2(p,P0); if(d<bd){ bd=d; best=k; } }); return best; };
-  const shift=idx=>idx>i?idx-1:idx;
-  // a deletion can cut a body in two. A strike or mic that loses its mass moves to the nearest mass
-  // on its partner's piece, so the pair stays connected; pickups you didn't touch stay put.
-  const hitGone=state.hitIdx===i, micGone=state.micIdx===i;
-  if(!hitGone) state.hitIdx=shift(state.hitIdx);
-  if(!micGone) state.micIdx=shift(state.micIdx);
-  const onPiece=(partner)=>{ const set=partner>=0?pieceOf(g,partner):null; const k=set?nearestFree(set):-1; return k>=0?k:nearestFree(); };
-  if(hitGone) state.hitIdx=onPiece(micGone?-1:state.micIdx);
-  if(micGone) state.micIdx=onPiece(state.hitIdx);
-  const piece=pieceOf(g,state.hitIdx);
-  state.sel=-1; rebuild();
-  const sepMsg=piece.has(state.micIdx)?'':'strike and mic are on separate pieces now';
-  // second mic: as far from the first as the struck piece allows (as on load, but never on a silent piece)
-  let far=-1, fd=-1; const pm=g.P[state.micIdx];
-  g.P.forEach((p,k)=>{ if(g.F[k]||k===state.micIdx||!piece.has(k)) return; const d=d2(p,pm); if(d>fd){ fd=d; far=k; } });
-  if(far<0){ const F=state.free, n=F.length; far=n?F[(Math.max(0,F.indexOf(state.micIdx))+Math.max(1,Math.floor(n/2)))%n]:-1; }
-  state.micIdx2=far;
-  if(node) node.port.postMessage({t:'mic2',i:state.micIdx2});
-  syncPickSliders(); toolMsg(sepMsg);
-}
-function geoSnap(){
-  const g=state.geo;
-  return {P:g.P.map(p=>p.slice()),F:Array.from(g.F),S:g.S.map(s=>s.slice()),
-          mic:state.micIdx,hit:state.hitIdx,shape:g.shape||state.shape,n:g.n||state.n,axis:g.axis!=null?g.axis:state.axis,
-          xm:state.xm?state.xm.map(x=>x.i):null};   // S4: where the extra mics sit   // S2: the body's own shape and size
-}
-function geoPush(){
-  if(!state.geo) return;
-  state.hist.push(geoSnap());
-  if(state.hist.length>40) state.hist.shift();
-  state.redo.length=0;
-  syncUndo();
-}
-function geoApply(s){
-  const g=state.geo;
-  g.P=s.P.map(p=>p.slice()); g.F=Uint8Array.from(s.F); g.S=s.S.map(x=>x.slice());
-  state.micIdx=s.mic; state.hitIdx=s.hit;
-  if(s.xm&&state.xm) s.xm.forEach((i,q)=>{ state.xm[q].i=i; });   // S4
-  if(s.shape&&SHAPES[s.shape]&&(s.shape!==state.shape||s.n!==state.n)){   // S2: undo across a shape or Size change
-    const S=SHAPES[s.shape]; state.shape=s.shape; state.n=s.n; state.axis=s.axis!=null?s.axis:state.axis; g.axis=state.axis; g.shape=s.shape; g.n=s.n;
-    val.size=(s.n-S.min)/Math.max(1,S.max-S.min); syncKnob('size');
-    [...shapesEl.children].forEach(c=>c.setAttribute('aria-pressed',c.textContent===s.shape));
-    const bt=document.getElementById('bodytext'); if(bt) bt.textContent=S.note;
-  }
-  rebuild();
-}
-function syncUndo(){
-  const u=document.getElementById('undo'), r=document.getElementById('redo');
-  if(u) u.disabled=!state.hist.length;
-  if(r) r.disabled=!state.redo.length;
-}
-function doUndo(){
-  if(!state.hist.length) return;
-  state.redo.push(geoSnap());
-  geoApply(state.hist.pop());
-  syncUndo();
-  document.getElementById('msg').textContent='Undid the last edit ('+state.hist.length+' left)';
-}
-function doRedo(){
-  if(!state.redo.length) return;
-  state.hist.push(geoSnap());
-  geoApply(state.redo.pop());
-  syncUndo();
-}
+function toolMsg(t){ const m=document.getElementById('nudgeMsg'); if(!m) return; m.textContent=t||''; clearTimeout(toolMsgTimer); if(t) toolMsgTimer=setTimeout(()=>{ m.textContent=''; },4000); }
 document.getElementById('home').onclick=()=>{ camReset(); camRotate(1,0.5); camRotate(0,-0.32); state.spin=(state.tool==='orbit'); };
-document.getElementById('undo').onclick=doUndo;
-document.getElementById('redo').onclick=doRedo;
-for(const tb of document.querySelectorAll('.tool[data-tool]')) tb.onclick=()=>{
-  state.tool=tb.dataset.tool; state.linkFrom=-1; state.sel=-1;
-  document.querySelectorAll('.tool').forEach(t=>t.setAttribute('aria-pressed',String(t===tb)));
-  state.spin = state.tool==='orbit';
-  syncNudge();
-};
 // F4: tap path for the two drag-only tools. Hold to repeat, like the knob steppers.
 const nudgeEl=document.getElementById('nudge'),nudgeMsg=document.getElementById('nudgeMsg');
-function syncNudge(){const on=state.tool==='orbit'||state.tool==='move';nudgeEl.hidden=!on;
- document.getElementById('nudgeLab').textContent=state.tool==='move'?'move':'turn';nudgeMsg.textContent='';}
-let nudgeMoved=false;
-function nudge(nx,ny){
- if(state.tool==='orbit'){state.spin=false;if(nx)camRotate(1,nx*0.12);if(ny)camRotate(0,ny*0.12);return true;}
- if(state.tool!=='move')return false;
- const g=state.geo,i=state.sel;
- if(!g||i<0||i>=g.P.length){nudgeMsg.textContent='tap a mass first';return false;}
- if(!nudgeMoved){geoPush();nudgeMoved=true;}
- const {R,U}=camBasis(),st=0.012,p=g.P[i];
- for(let a=0;a<3;a++)p[a]=Math.max(-0.6,Math.min(0.6,p[a]+(R[a]*nx+U[a]*ny)*st));
- if(node)node.port.postMessage({t:'mv',i,x:p[0],y:p[1],z:p[2]});
- return true;
-}
+function syncNudge(){nudgeEl.hidden=false;document.getElementById('nudgeLab').textContent='turn';}
+function nudge(nx,ny){state.spin=false;if(nx)camRotate(1,nx*0.12);if(ny)camRotate(0,ny*0.12);return true;}
 for(const nb of nudgeEl.querySelectorAll('.nb')){
  const nx=+nb.dataset.nx,ny=+nb.dataset.ny;let timer=null,held=0;
- const stop=()=>{if(timer){clearInterval(timer);timer=null;}held=0;if(nudgeMoved){nudgeMoved=false;drawInfo();}};
+ const stop=()=>{if(timer){clearInterval(timer);timer=null;}held=0;};
  const start=()=>{if(!nudge(nx,ny))return;held=0;timer=setInterval(()=>{held++;const n=held>14?3:held>6?2:1;for(let q=0;q<n;q++)nudge(nx,ny);},90);};
  nb.addEventListener('pointerdown',e=>{e.preventDefault();if(!timer)start();});
  nb.addEventListener('pointerup',stop);nb.addEventListener('pointerleave',stop);nb.addEventListener('pointercancel',stop);
  nb.addEventListener('touchstart',e=>{e.preventDefault();if(!timer)start();},{passive:false});
  nb.addEventListener('touchend',stop,{passive:true});nb.addEventListener('touchcancel',stop,{passive:true});
  nb.addEventListener('click',e=>e.preventDefault());
- nb.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nudge(nx,ny);if(nudgeMoved){nudgeMoved=false;drawInfo();}}});
+ nb.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nudge(nx,ny);}});
 }
 syncNudge();
-// screen-space camera basis, so a drag moves a mass in the plane you are looking at
-function camBasis(){
-  const M=state.M;
-  return {R:[M[0],M[1],M[2]], U:[M[3],M[4],M[5]]};
-}
 function pick(cx,cy2,freeOnly){
   const g=state.geo; if(!g) return -1;
   const r=cv.getBoundingClientRect(); const x=cx-r.left,y=cy2-r.top;
@@ -3661,72 +2848,69 @@ function rebuild(){
   node.port.postMessage({t:'pk',v:state.pk||0});
   node.port.postMessage({t:'mode',v:state.mode||0});
   sendLvl();
-  if(state.xm){ state.xm.forEach(x=>{ if(x.i>=g.P.length||(x.i>=0&&g.F[x.i])) x.i=-1; }); xmSendAll(); syncMicSlots(); }   // S4: page mirrors the engine
   state.disp=new Float32Array(g.P.length*3);state.spd=new Float32Array(g.P.length);
   drawInfo();
 }
+// I: the mic and the strike are the two circles on the body. Press one and slide it along the body, or tap
+// it and then tap where it should go. Anywhere else, a drag turns the view. Nothing to select first.
+// Touch events drive it on a phone (pointer events of type touch are ignored, so a gesture never runs
+// twice); a mouse or pen uses pointer events.
 let drag=null;
-cv.addEventListener('pointerdown',e=>{
-  cv.setPointerCapture(e.pointerId);
-  const g=state.geo;
-  if(state.tool==='orbit'){ drag={x:e.clientX,y:e.clientY}; state.spin=false; return; }
-  if(state.tool==='add'){ addMassAt(e.clientX,e.clientY); return; }   // S2
-  const freeOnly = state.tool==='strike'||state.tool==='mic';
-  const i=pick(e.clientX,e.clientY,freeOnly);
-  if(i<0){ state.sel=-1; return; }
-  if(state.tool==='del'){ deleteMass(i); return; }   // S2
-  if(state.tool==='strike'){
-    state.hitIdx=i; state.sel=i;
-    if(node) node.port.postMessage({t:'hit',i,a:state.axis});
-    syncPickSliders();
-    // audition it, so you hear where you just put the mallet
-    if(state.running){ play(SCALES[state.scale][0], 0.75); setTimeout(()=>stop(SCALES[state.scale][0]),450); }   // S3: auditions release themselves
-    return;
-  }
-  if(state.tool==='mic'){
-    if(state.micSlot>0){ const q=state.micSlot-1; state.xm[q].i=i; state.sel=i; xmSend(q); syncMicSlots(); return; }   // S4: place an extra mic
-    state.micIdx=i; state.sel=i;
+const GRAB=30;   // px: a fingertip's reach around each circle
+function markerAt(x,y){
+  const g=state.geo; if(!g||!_px) return null;
+  const r=cv.getBoundingClientRect(), px=x-r.left, py=y-r.top, N=g.P.length;
+  const d=i=>(i==null||i<0||i>=N)?1e9:Math.hypot(_px[i]-px,_py[i]-py);
+  const ds=d(state.hitIdx), dm=d(state.micIdx), reach=i=>Math.max(GRAB,18*((_pf&&_pf[i])||1));
+  const s=ds<=reach(state.hitIdx), m=dm<=reach(state.micIdx);
+  if(s&&m) return ds<dm-2?'strike':dm<ds-2?'mic':(state.lastKind==='strike'?'mic':'strike');   // stacked: the other one than last time
+  return s?'strike':m?'mic':null;
+}
+function placeMarker(kind,i){
+  const g=state.geo; if(!g||i<0||i>=g.P.length||g.F[i]) return false;
+  if(kind==='strike'){ if(state.hitIdx===i) return false; state.hitIdx=i; if(node) node.port.postMessage({t:'hit',i,a:state.axis}); }
+  else { if(state.micIdx===i) return false; state.micIdx=i;
     if(node){ node.port.postMessage({t:'mic',i,a:state.axis});
-      const F=state.free,nn=F.length;
-      state.micIdx2=F[(Math.max(0,F.indexOf(i))+Math.max(1,Math.floor(nn/2)))%Math.max(1,nn)];
-      node.port.postMessage({t:'mic2',i:state.micIdx2}); }
-    syncPickSliders();
-    return;
+      const F=state.free,nn=F.length; state.micIdx2=F[(Math.max(0,F.indexOf(i))+Math.max(1,Math.floor(nn/2)))%Math.max(1,nn)];
+      node.port.postMessage({t:'mic2',i:state.micIdx2}); } }
+  state.lastKind=kind; syncPickSliders(); DIAG.mmoves++; return true;
+}
+function audition(){ if(!state.running) return; const k=SCALES[state.scale][0]; play(k,0.75); setTimeout(()=>stop(k),450); }   // hear where it went
+function gestureStart(x,y){
+  DIAG.cvdown++; state.spin=false;
+  const k=markerAt(x,y);
+  drag=k?{kind:k,x0:x,y0:y,moved:false,changed:false}:{x,y,x0:x,y0:y,moved:false};
+  state.grab=k||null;
+}
+function gestureMove(x,y){
+  if(!drag) return; DIAG.cvmove++;
+  if(!drag.moved&&Math.hypot(x-drag.x0,y-drag.y0)>8) drag.moved=true;
+  if(drag.kind){ if(drag.moved){ const i=pick(x,y,true); if(i>=0&&placeMarker(drag.kind,i)) drag.changed=true; } return; }
+  camRotate(1,(x-drag.x)*0.008); camRotate(0,(y-drag.y)*0.008); drag.x=x; drag.y=y;
+}
+function gestureEnd(x,y){
+  if(!drag) return; const d=drag; drag=null; state.grab=null;
+  if(d.kind){
+    if(d.moved){ if(d.changed) audition(); state.carry=null; toolMsg(''); return; }
+    if(state.carry===d.kind){ state.carry=null; toolMsg(''); return; }   // tapped again: put it back down
+    state.carry=d.kind; toolMsg('now tap where the '+(d.kind==='mic'?'mic':'strike')+' should go'); return;
   }
-  if(state.tool==='pin'){
-    geoPush();
-    g.F[i]=g.F[i]?0:1; state.sel=i; rebuild(); return;
-  }
-  if(state.tool==='link'){
-    if(state.linkFrom<0){ state.linkFrom=i; state.sel=i; return; }
-    if(state.linkFrom===i){ state.linkFrom=-1; state.sel=-1; return; }
-    const a=state.linkFrom,b=i;
-    geoPush();
-    const at=g.S.findIndex(s=>(s[0]===a&&s[1]===b)||(s[0]===b&&s[1]===a));
-    if(at>=0) g.S.splice(at,1); else g.S.push([a,b]);
-    state.linkFrom=-1; state.sel=-1; rebuild(); return;
-  }
-  if(state.tool==='move'){ geoPush(); state.sel=i; drag={x:e.clientX,y:e.clientY,node:i}; }
-});
-cv.addEventListener('pointermove',e=>{
-  if(!drag) return;
-  if(drag.node===undefined){
-    camRotate(1,(e.clientX-drag.x)*0.008);
-    camRotate(0,(e.clientY-drag.y)*0.008);
-    drag={x:e.clientX,y:e.clientY}; return;
-  }
-  const g=state.geo,i=drag.node,{R,U}=camBasis();
-  const s=Math.min(W,H)*0.86, f=Math.max(0.35,_pf[i]);
-  const k=1/(s*f);
-  const dx=(e.clientX-drag.x)*k, dy=(e.clientY-drag.y)*k;
-  const p=g.P[i];
-  p[0]=Math.max(-0.6,Math.min(0.6,p[0]+R[0]*dx+U[0]*dy));
-  p[1]=Math.max(-0.6,Math.min(0.6,p[1]+R[1]*dx+U[1]*dy));
-  p[2]=Math.max(-0.6,Math.min(0.6,p[2]+R[2]*dx+U[2]*dy));
-  drag.x=e.clientX; drag.y=e.clientY;
-  if(node) node.port.postMessage({t:'mv',i,x:p[0],y:p[1],z:p[2]});
-});
-addEventListener('pointerup',()=>{ if(drag&&drag.node!==undefined) drawInfo(); drag=null; });
+  if(!d.moved&&state.carry){ const i=pick(x,y,true); if(i>=0&&placeMarker(state.carry,i)) audition(); state.carry=null; toolMsg(''); }
+}
+let touchId=null;
+cv.addEventListener('touchstart',e=>{
+  if(e.touches.length!==1){ drag=null; state.grab=null; touchId=null; return; }   // two fingers: the roll gesture below
+  const t=e.changedTouches[0]; touchId=t.identifier; DIAG.ctouch++; gestureStart(t.clientX,t.clientY); e.preventDefault();
+},{passive:false});
+cv.addEventListener('touchmove',e=>{ if(touchId===null) return;
+  for(const t of e.changedTouches) if(t.identifier===touchId){ gestureMove(t.clientX,t.clientY); e.preventDefault(); } },{passive:false});
+cv.addEventListener('touchend',e=>{ if(touchId===null) return;
+  for(const t of e.changedTouches) if(t.identifier===touchId){ touchId=null; gestureEnd(t.clientX,t.clientY); } },{passive:true});
+cv.addEventListener('touchcancel',()=>{ touchId=null; drag=null; state.grab=null; },{passive:true});
+cv.addEventListener('pointerdown',e=>{ if(e.pointerType==='touch') return; try{ cv.setPointerCapture(e.pointerId); }catch(_){} gestureStart(e.clientX,e.clientY); });
+cv.addEventListener('pointermove',e=>{ if(e.pointerType==='touch') return; gestureMove(e.clientX,e.clientY); });
+cv.addEventListener('pointerup',e=>{ if(e.pointerType==='touch') return; gestureEnd(e.clientX,e.clientY); });
+cv.addEventListener('pointercancel',e=>{ if(e.pointerType==='touch') return; drag=null; state.grab=null; });
 // orientation as a 3x3 matrix mapping world -> camera
 function camReset(){ state.M=[1,0,0, 0,1,0, 0,0,1]; }
 if(!state.M){ camReset(); camRotate(1,0.5); camRotate(0,-0.32); }
@@ -3765,7 +2949,7 @@ const mixHex=(a,b,t)=>{const A=[parseInt(a.slice(1,3),16),parseInt(a.slice(3,5),
 // FIX8: scratch buffers hoisted out of the animation loop.
 let _px=null,_py=null,_pf=null,_wx=null,_cap=0;
 function ensureScratch(N){if(N<=_cap)return;_cap=N;_px=new Float32Array(N);_py=new Float32Array(N);_pf=new Float32Array(N);_wx=new Float32Array(N*3);}
-function frame(ts){requestAnimationFrame(frame);if(!W)resize();if(state.tool!=='orbit'&&!drag&&!VREC.on&&ts-(state._lastDraw||0)<100)return;state._lastDraw=ts;g2.clearRect(0,0,W,H);if(VREC.on)vrecBg();
+function frame(ts){requestAnimationFrame(frame);if(!W)resize();if(state.tool!=='orbit'&&!drag&&ts-(state._lastDraw||0)<100)return;state._lastDraw=ts;g2.clearRect(0,0,W,H);
  const g=state.geo;if(!g)return;
  if(state.spin&&!matchMedia('(prefers-reduced-motion: reduce)').matches)camRotate(1,0.0022);
  // Audio wins. If the engine has been falling behind, drop the expensive drawing.
@@ -3849,30 +3033,11 @@ function frame(ts){requestAnimationFrame(frame);if(!W)resize();if(state.tool!=='
    g2.font='9px '+"'JetBrains Mono',ui-monospace,monospace";
    g2.fillText(txt,px[idx]+15*pf[idx],py[idx]+3);
  };
- if(state.orbit&&val.att>0.02){
-   const O=state.orbit, s=Math.min(W,H)*0.16, cx=W-s*2.2, cy=s*1.5;
-   g2.strokeStyle='rgba(78,216,234,0.5)'; g2.lineWidth=1;
-   g2.beginPath();
-   for(let i=0;i<512;i++){
-     const x=cx+O[i*2]*s, y=cy+O[i*2+1]*s;
-     i?g2.lineTo(x,y):g2.moveTo(x,y);
-   }
-   g2.stroke();
-   g2.fillStyle='#4ED8EA';
-   g2.beginPath();g2.arc(cx+O[1022]*s,cy+O[1023]*s,2.5,0,7);g2.fill();
-   g2.fillStyle='var(--faint)';
- }
  mark(state.hitIdx,'#FF9A55','strike');mark(state.micIdx,'#4ED8EA','mic');
- if(state.xm) state.xm.forEach((x,q)=>{ if(x.i>=0) mark(x.i,'#A7F0C8','mic '+(q+2)); });   // S4
- if(state.tool==='strike'||state.tool==='mic'){
-   const col=state.tool==='strike'?'#FF9A55':'#4ED8EA';
-   const idx=state.tool==='strike'?state.hitIdx:state.micIdx;
-   if(idx!=null&&idx<N){
-     g2.strokeStyle=col;g2.globalAlpha=0.55;g2.lineWidth=1;
-     g2.beginPath();g2.arc(px[idx],py[idx],22*pf[idx],0,7);g2.stroke();
-     g2.globalAlpha=1;
-   }
- }
+ { const act=state.grab||state.carry;   // I: the circle in hand, or picked up and waiting for a tap
+   if(act){ const idx=act==='strike'?state.hitIdx:state.micIdx, col=act==='strike'?'#FF9A55':'#4ED8EA';
+     if(idx!=null&&idx<N){ g2.strokeStyle=col;g2.lineWidth=1.6;g2.globalAlpha=state.grab?0.85:0.5+0.35*Math.sin(ts/170);
+       g2.beginPath();g2.arc(px[idx],py[idx],22*pf[idx],0,7);g2.stroke();g2.globalAlpha=1; } } }
  if(state.sel>=0&&state.sel<N){
    g2.strokeStyle='#F0EAD8';g2.lineWidth=1.6;
    g2.beginPath();g2.arc(px[state.sel],py[state.sel],16*pf[state.sel],0,7);g2.stroke();
@@ -3882,7 +3047,6 @@ function frame(ts){requestAnimationFrame(frame);if(!W)resize();if(state.tool!=='
    g2.beginPath();g2.arc(px[state.linkFrom],py[state.linkFrom],20*pf[state.linkFrom],0,7);g2.stroke();
    g2.setLineDash([]);
  }
- if(VREC.on) vrecOverlay();   // G
 }
 requestAnimationFrame(frame);
 document.getElementById('start').onclick=async e=>{e.target.disabled=true;e.target.textContent='waking…';try{await boot();document.getElementById('curtain').style.display='none';}catch(err){console.error(err);e.target.disabled=false;e.target.textContent='try again';document.querySelector('#curtain p').innerHTML='Audio would not start: '+String(err.message||err)+'<br><br>Open this page in Safari. If it is an attachment preview, publish it to an HTTPS address first.';}};

@@ -118,3 +118,50 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
 - Ratchet (Stage 4 test, fixed here): two analysers read one after the other can straddle a render
   quantum, so a mono signal once measured 0.049 different left to right. The difference is now formed
   inside the audio graph and read once.
+
+## Stage I, the Tank only (preview)
+- `patch_i1.py` — page only (the engine is byte-identical): the preview becomes the Tank alone.
+  - **Removed:** OMEF; the other seven shapes; exciters; Mics 2–4 and the space controls (Distance and
+    the rest); modulators; the Amp, FX and Learn tabs; Feedback; plate reverb; WAV and video
+    recording; factory presets; the building tools and undo; Benchmark and self-test.
+  - **Kept:** the Tank, the keys, the mallet, one mic, Sustain (the old Decay, now showing the measured
+    ring time), Damping, Stiffness, Size, Level, and your own presets (Tank presets only).
+  - Removed controls stay at their defaults and are still sent, so the engine hears what it heard
+    before.
+  - **The circles:** press the strike or mic circle and slide it, or tap it, then tap a ball. A drag on
+    empty space turns the view.
+- `i1_browser.py [--browser=webkit]`:
+  - the same taps on the page before Stage I (git `fe0393fc`) and on this one, with every engine message
+    recorded and replayed into one engine by `i1_replay.mjs`: bit-identical;
+  - what is gone and what stays;
+  - Sustain;
+  - the circles: slide by touch (Chromium, through the DevTools protocol) and by mouse, tap-then-tap,
+    cancel, a drag elsewhere turns the view, two circles on one ball;
+  - presets: round trip, Tank-only list, an old preset cannot switch a removed feature back on, other
+    shapes refused;
+  - still plays; touch counters in Copy report.
+- `i1_engine.mjs` — Sustain's measured 40 and 60 dB fall times against its readout; the worst the Tank
+  page's own controls can do stays under the ceiling with no NaN (mutation: limiter off fails it); and
+  determinism.
+- `stage1_browser.py`, `p1_browser.py` and `webkit_check.py` run on the Tank-only page. A new body
+  comes from Size instead of a shape chip.
+- **Retired from CI:** the suites for removed features (Stages 2–5, F, G, H, the old tap tools, the
+  preview's learning-path claims). The scripts stay here and run against git `fe0393fc`.
+- Ratchet: a stall check must show the stressful thing happened. One Size tap is 1/32 of the range and
+  usually keeps the Tank's mass count, so the first Stage I version of the WebKit stall check measured
+  three "freezes" with no new body built. The checks now tap until the count changes and fail if it
+  never does (live page 430–890 ms, preview 9–24 ms on the same taps).
+- Ratchet: on a body with no clear fundamental, compare like with like.
+  - The Tank's "lowest strong partial" changed between two strikes of the same body (58.0 vs
+    54.1 Hz), and without Hush it carried earlier strikes.
+  - The octave-trap check (`stage1_browser.py`) compares the five strongest peaks to 0.6 Hz after Hush,
+    and proves its measure: a +75-cent Trim must move them.
+  - A 15-cent match against every peak called that retune "4 of 6 the same".
+  - Mutation: without Stage 1's fixed tuning reference, sliding the circles plus one Stiffness tap
+    retuned the Tank a fifth up, and the check failed.
+- Ratchet: a preset stores positions to 4 decimals, so the Tank's reference mode comes back 0.02 cents
+  off. The round trip is judged at 0.5 cents.
+- Ratchet: a message set directly can be wiped by another message's timer. Every message goes through
+  `say()`.
+- Ratchet: a readout is a claim. Sustain shows the measured 40 dB fall (1.25 × the setting), and
+  `i1_engine.mjs` keeps it within 15%.
