@@ -16,10 +16,14 @@ def check(name, ok, detail=''):
     global failed
     print(('PASS ' if ok else 'FAIL ') + name + (' — ' + detail if detail else '')); failed += 0 if ok else 1
 
-LR = """async()=>{ if(!window._sp){ window._sp=ctx.createChannelSplitter(2); (master||node).connect(window._sp); window._L=ctx.createAnalyser(); window._R=ctx.createAnalyser(); _L.fftSize=_R.fftSize=2048; _sp.connect(_L,0); _sp.connect(_R,1); }
-  const a=new Float32Array(2048), b=new Float32Array(2048); let pl=0, pr=0, d=0;
+# L − R is formed inside the audio graph (R through a gain of −1 into one analyser), so the difference is
+# read in one call: two analysers read one after the other can straddle a render quantum, which showed a
+# mono signal as 0.049 different (a flaky failure, 2026-10-12)
+LR = """async()=>{ if(!window._sp){ window._sp=ctx.createChannelSplitter(2); (master||node).connect(window._sp); window._L=ctx.createAnalyser(); window._R=ctx.createAnalyser(); window._D=ctx.createAnalyser(); _L.fftSize=_R.fftSize=_D.fftSize=2048;
+    _sp.connect(_L,0); _sp.connect(_R,1); const inv=ctx.createGain(); inv.gain.value=-1; _sp.connect(_D,0); _sp.connect(inv,1); inv.connect(_D); }
+  const a=new Float32Array(2048), b=new Float32Array(2048), c=new Float32Array(2048); let pl=0, pr=0, d=0;
   document.querySelector('#pads .pad').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
-  for(let i=0;i<40;i++){ await new Promise(r=>setTimeout(r,25)); _L.getFloatTimeDomainData(a); _R.getFloatTimeDomainData(b); for(let k=0;k<2048;k++){ pl=Math.max(pl,Math.abs(a[k])); pr=Math.max(pr,Math.abs(b[k])); d=Math.max(d,Math.abs(a[k]-b[k])); } }
+  for(let i=0;i<40;i++){ await new Promise(r=>setTimeout(r,25)); _L.getFloatTimeDomainData(a); _R.getFloatTimeDomainData(b); _D.getFloatTimeDomainData(c); for(let k=0;k<2048;k++){ pl=Math.max(pl,Math.abs(a[k])); pr=Math.max(pr,Math.abs(b[k])); d=Math.max(d,Math.abs(c[k])); } }
   return {L:+pl.toFixed(3), R:+pr.toFixed(3), diff:+d.toFixed(3)}; }"""
 # every struct / xmic message the page sends, as JSON (typed arrays as plain arrays)
 HOOK = """window._msgs=[]; { const r=node.port.postMessage.bind(node.port);

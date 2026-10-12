@@ -55,7 +55,9 @@ with sync_playwright() as p:
         lab = pg.inner_text('#vrecbtn')
         check('Record video starts and shows the time', lab.startswith('Stop video'), lab)
         pg.evaluate(PLAY, 4.0)
-        frame_ok = pg.evaluate("(() => { const d = g2.getImageData(Math.round((W-58)*devicePixelRatio), Math.round(18*devicePixelRatio), 1, 1).data; return d[0] > 180 && d[1] < 140; })()")
+        # the canvas is drawn at min(2, devicePixelRatio) (resize()), so read it at its own scale: on an
+        # iPhone (3x) devicePixelRatio pointed a third too far right and down (WebKit macOS CI, 2026-10-12)
+        frame_ok = pg.evaluate("(() => { const k = cv.width / W, d = g2.getImageData(Math.round((W-58)*k), Math.round(18*k), 1, 1).data; return d[0] > 180 && d[1] < 140; })()")
         check('a red recording dot is drawn on the 3D view (it lands in the video)', frame_ok)
         pg.tap('#vrecbtn'); pg.wait_for_timeout(2600)
         d = pg.evaluate(DECODE)

@@ -83,3 +83,38 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
   explains.
 - `webkit_check.py` now also records the page's main-thread gaps beside the audio-clock freeze, so
   an audio stall can be told from a page stall.
+- Ratchet: a pixel check on the canvas reads it at the canvas's own scale (`cv.width / W`), not at
+  `devicePixelRatio`: the page draws at min(2, devicePixelRatio), so on an emulated iPhone (3×) the
+  recording-dot check looked a third too far right and failed while the dot was there (WebKit macOS
+  CI, 2026-10-12; that run also showed Safari's engine recording MP4 with sound).
+
+## Stage H, factory presets and the Learn tab (preview)
+- `patch_h1.py` — page only (the engine is byte-identical): ten factory presets listed first in
+  Presets, the Learn tab (nine A/B lessons and a building how-to), and presets that come back as saved
+  (the tuning reference, spectrum, bow, Mic axis X, chips, a readable load message).
+- `h1_claims.mjs [page]` — every number the Learn tab teaches, measured with exactly what the page
+  sends (the lessons, presets and `presetFrom()` are read from the page, so the text checked is the
+  text shipped), at 32, 22.05 and 48 kHz (`H1_RATES=32000` for one). Also each factory preset: clean,
+  true peak, loudness near the default instrument's, no near-silent key, and what its description
+  says (the bow and wind sound with no key, the gong's pitch sinks, the pad's tone opens, the bell
+  moves between the ears).
+- `h1_browser.py [--browser=webkit]` — tabs fit at 390 and 375 px; every lesson's A and B set exactly
+  their values, build the body with the shape's own strike and mic, and play E4 at 0.8 once; the
+  explanation opens after both; Play again; Build your own; "Put my instrument back" returns shape,
+  knobs, bow, Mic axis X, spectrum, scale, pickups and tuning; each factory preset loads, says what it
+  is (still readable 2 s later) and plays; Delete refuses factory presets; a saved preset reloads with
+  the same partial tuned; a preset from before this stage still loads.
+- Ratchet: a preset rebuilt with its *saved* strike and mic can tune a different partial than the one
+  it was saved with (the engine ranks modes with the build-time strike and mic, Stage 1). Measured:
+  a 15-mass string with the strike and mic near an end reloaded with its reference mode at 622 Hz
+  instead of 314 Hz, an octave up the mode ladder, so the keys sounded an octave down. Presets now save
+  the build-time strike and mic and rebuild with them; the check keeps the round trip honest.
+- Ratchet: a description is a claim. The first "Feedback organ" was measured before shipping: its
+  self-oscillation landed hundreds of cents from the key and sat at full scale whatever the Level
+  (the output's tanh saturates), so it was replaced.
+- Ratchet: an expectation about the page comes from the page's own rule. The heavy-body note is shown
+  when springs × oversampling > 190; Steel tank is 168 × 1, and the note seen right after loading it
+  was computed with the previous body's oversampling.
+- Ratchet (Stage 4 test, fixed here): two analysers read one after the other can straddle a render
+  quantum, so a mono signal once measured 0.049 different left to right. The difference is now formed
+  inside the audio graph and read once.
