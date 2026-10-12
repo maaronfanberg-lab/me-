@@ -56,21 +56,27 @@ with sync_playwright() as p:
     def shape(name):
         if pg.evaluate("!!document.getElementById('shapes')"):
             pg.click(f'#shapes .chip:text-is("{name}")'); pg.wait_for_timeout(1500)
-    idle = pg.evaluate("state.cpu")
+    idle = pg.evaluate("state.cpu"); ga_idle = pg.evaluate("state.ga||0")
     shape('Tank')
     pg.evaluate(SET, ['voices', 4]); pg.wait_for_timeout(300)
     pg.evaluate(PLAY_N, 8); pg.wait_for_timeout(1500)
     busy = pg.evaluate("state.cpu")
     check('live CPU reading rises with work (idle vs Tank, 4 voices ringing)', live and busy > idle, f'idle {idle:.3f} · Tank 4 voices {busy:.3f}')
 
-    # governor: two hot readings (test hook) shed a voice and the page says so
+    # governor: two hot readings (test hook) shed a voice and the page says so.
+    # On a slow machine the real governor can shed voices during the load above, down to its floor of one,
+    # before the test's readings arrive; then the hook has nothing left to shed (CI, 2026-10-12: the Tank
+    # with 4 voices read 0.90 CPU; let go 3, limit 1, the page explaining). Count from before the load,
+    # and say which one acted. (The governor's own logic is proved offline in p1_verify.mjs.)
     ga0 = pg.evaluate("state.ga||0")
     pg.evaluate(PLAY_N, 4)
     pg.evaluate("node.port.postMessage({t:'perfTest',c:0.95}); node.port.postMessage({t:'perfTest',c:0.95});")
     pg.wait_for_timeout(600)
     g = pg.evaluate("({ga: state.ga||0, aw: state.aw, cap: state.cap, msg: document.getElementById('msg').textContent})")
-    # >= : on a busy machine the real governor may act as well as the test's two hot readings
-    check('governor sheds a voice when the phone runs out of time, and the page explains', g['ga'] >= ga0 + 1 and g['cap'] < 4 and 'running out of time' in g['msg'], json.dumps(g)[:240])
+    who = (f"the test's hot readings let go {g['ga'] - ga0}" if g['ga'] > ga0 else "the test's hot readings found nothing left to let go") + \
+          (f"; the real governor had let go {ga0 - ga_idle} during the load" if ga0 > ga_idle else '')
+    check('governor sheds a voice when the phone runs out of time, and the page explains', g['ga'] >= ga_idle + 1 and g['cap'] < 4 and 'running out of time' in g['msg'],
+          who + ' · ' + json.dumps(g)[:240])
     pk = pg.evaluate(PEAK_JS, 1200)
     check('still plays after the governor acted', pk['pk'] > 0.05 and pk['bad'] == 0, f"peak {pk['pk']}")
 

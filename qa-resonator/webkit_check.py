@@ -130,167 +130,202 @@ with sync_playwright() as p:
     print(f'browser: {BROWSER} {b.version} on {R["platform"]}', flush=True)
 
     for label, path in PAGES:
-        # ---------- start-up: the page must load and start without a script error ----------
-        c, pg, errs = open_page(b, path, device)
         try:
-            pg.tap('#start')
-        except Exception as e:
-            errs.append(f'tap #start: {e}')
-        pg.wait_for_timeout(2500)
-        try:
-            env = pg.evaluate(ENV_JS)
-        except Exception as e:
-            env = {'error': str(e)}
-        R['env'][label] = env
-        check(f'{label}: loads and starts with no script error', not errs and env.get('running') is True,
-              f"running={env.get('running')} engine={env.get('audioMode')!r} errors={errs[:3]}")
-        tank_only = pg.evaluate("!document.getElementById('shapes')")   # the preview since Stage I
-        if label == 'preview':
-            t = env.get('tuner') or {}
-            check('preview: background tuner (Worker) runs in WebKit', bool(t.get('on')) and bool(t.get('up')), json.dumps(t)[:200])
+            # ---------- start-up: the page must load and start without a script error ----------
+            c, pg, errs = open_page(b, path, device)
+            try:
+                pg.tap('#start')
+            except Exception as e:
+                errs.append(f'tap #start: {e}')
+            pg.wait_for_timeout(2500)
+            try:
+                env = pg.evaluate(ENV_JS)
+            except Exception as e:
+                env = {'error': str(e)}
+            R['env'][label] = env
+            check(f'{label}: loads and starts with no script error', not errs and env.get('running') is True,
+                  f"running={env.get('running')} engine={env.get('audioMode')!r} errors={errs[:3]}")
+            tank_only = pg.evaluate("!document.getElementById('shapes')")   # the preview since Stage I
+            if label == 'preview':
+                t = env.get('tuner') or {}
+                check('preview: background tuner (Worker) runs in WebKit', bool(t.get('on')) and bool(t.get('up')), json.dumps(t)[:200])
 
-        # ---------- live audio, when this machine has an audio device ----------
-        clock = pg.evaluate(CLOCK_JS)
-        live_ok = clock['state'] == 'running' and clock['advanced'] > 0.2
-        R['live'][label] = {'clock': clock}
-        check(f'{label}: live audio clock runs', live_ok, f"state={clock['state']}, advanced {clock['advanced']:.3f} s in 0.7 s"
-              + ('' if live_ok else ' (no audio device on this machine; live checks not run)'), critical=False)
-        if live_ok:
-            peaks = []
-            for i, s in enumerate(['Tank'] if tank_only else SHAPES + ['String']):
-                if i: pg.click(f'#shapes .chip:text-is("{s}")')
-                peaks.append((s, pg.evaluate(PEAK_JS))); pg.wait_for_timeout(500)
-            R['live'][label]['peaks'] = peaks
-            check(f'{label}: ' + ('the Tank sounds (live)' if tank_only else 'every shape sounds (live)'), all(v['pk'] > 0.05 and v['bad'] == 0 for _, v in peaks),
-                  ' · '.join(f"{s} {v['pk']}" for s, v in peaks))
+            # ---------- live audio, when this machine has an audio device ----------
+            clock = pg.evaluate(CLOCK_JS)
+            live_ok = clock['state'] == 'running' and clock['advanced'] > 0.2
+            R['live'][label] = {'clock': clock}
+            check(f'{label}: live audio clock runs', live_ok, f"state={clock['state']}, advanced {clock['advanced']:.3f} s in 0.7 s"
+                  + ('' if live_ok else ' (no audio device on this machine; live checks not run)'), critical=False)
+            if live_ok:
+                peaks = []
+                for i, s in enumerate(['Tank'] if tank_only else SHAPES + ['String']):
+                    if i: pg.click(f'#shapes .chip:text-is("{s}")')
+                    peaks.append((s, pg.evaluate(PEAK_JS))); pg.wait_for_timeout(500)
+                R['live'][label]['peaks'] = peaks
+                check(f'{label}: ' + ('the Tank sounds (live)' if tank_only else 'every shape sounds (live)'), all(v['pk'] > 0.05 and v['bad'] == 0 for _, v in peaks),
+                      ' · '.join(f"{s} {v['pk']}" for s, v in peaks))
+                stalls, gaps, builts = [], [], []
+                for k in range(3):   # median of three: one sample on a busy CI machine is noise-prone
+                    if tank_only: act = '1' if k % 2 == 0 else '-1'   # a new body each run: Size up, down, up
+                    else: act = 'tank'; pg.click('#shapes .chip:text-is("String")'); pg.wait_for_timeout(1200)
+                    st, gp, bt = pg.evaluate(STALL_JS, act); stalls.append(st); gaps.append(gp); builts.append(bt)
+                stall = sorted(stalls)[1]
+                R['live'][label]['tank_stall_ms'] = stalls; R['live'][label]['main_thread_gap_ms'] = gaps; R['live'][label]['bodies_built'] = builts
+                check(f'{label}: audio clock freeze when ' + ('a new body is built (Size)' if tank_only else 'choosing Tank') + ' (median of 3)', (stall < 120 or label == 'live') and all(builts),
+                      f'{stall} ms (runs {stalls}; page main-thread gaps {gaps}; new bodies {builts})', critical=(label == 'preview'))
+
+            # ---------- the engine itself, rendered offline inside this browser ----------
+            try:
+                ref = node_reference(path)
+            except Exception as e:
+                ref = None; check(f'{label}: Node reference render', False, str(e)[:300])
+            rows = {}
+            for s in SHAPES:
+                try:
+                    w = pg.evaluate(OFFLINE_JS, {'shape': s, 'secs': 2, 'sr': 32000})
+                except Exception as e:
+                    rows[s] = {'error': str(e)[:300]}; continue
+                row = {'pk': round(w['pk'], 4), 'rms': w['rms'], 'bad': w['bad'], 'onset': w['onset'], 'render_ms': w['ms'],
+                       'build_and_tune_ms': w['readyMs'], 'engine_ready': w['gotReady']}
+                if ref and s in ref:
+                    n = ref[s]
+                    row['vs_node_rms_db'] = round(db(w['rms'], n['rms']), 3)
+                    row['vs_node_pk_db'] = round(db(w['pk'], n['pk']), 3)
+                    hw, hn = w['head'], n['head']; k = min(len(hw), len(hn))
+                    row['head_max_abs_diff'] = max((abs(hw[i] - hn[i]) for i in range(k)), default=None)
+                    row['head_identical'] = k > 0 and all(hw[i] == hn[i] for i in range(k))
+                    row['onset_shift_samples'] = (w['onset'] - n['onset']) if (w['onset'] >= 0 and n['onset'] >= 0) else None
+                rows[s] = row
+            R['offline'][label] = rows
+            errs_off = {s: r['error'] for s, r in rows.items() if 'error' in r}
+            check(f'{label}: engine renders offline in this browser (8 shapes)', not errs_off, json.dumps(errs_off)[:300])
+            good = {s: r for s, r in rows.items() if 'error' not in r}
+            check(f'{label}: engine output finite and audible (offline)', bool(good) and all(r['bad'] == 0 and r['pk'] > 0.01 for r in good.values()),
+                  ' · '.join(f"{s} pk {r['pk']}" for s, r in good.items()))
+            if ref and good:
+                worst = max(abs(r.get('vs_node_rms_db', 0)) for r in good.values())
+                ident = sum(1 for r in good.values() if r.get('head_identical'))
+                check(f'{label}: same sound as the Node engine (level within 0.5 dB)', worst <= 0.5,
+                      f'worst level difference {worst:.3f} dB; first 2048 samples bit-identical on {ident}/{len(good)} shapes')
+
+            # ---------- JavaScriptCore speed (this CI CPU, not a phone) ----------
+            try:
+                if tank_only: raise RuntimeError('no Benchmark on the Tank-only page (removed in Stage I)')
+                R['bench'][label] = {s: round(pg.evaluate(f"benchOne(32000, SHAPES['{s}'].def, 1, '{s}').x"), 1) for s in ['String', 'Tank']}
+                check(f'{label}: engine speed in this browser (times real time, 1 voice)', True, json.dumps(R['bench'][label]), critical=False)
+            except Exception as e:
+                check(f'{label}: engine speed in this browser', False, str(e)[:200], critical=False)
+
+            # ---------- tap flows (preview): everything works by finger ----------
+            if label == 'preview' and tank_only:
+                def tap(sel):
+                    pg.evaluate("s => { const e = document.querySelector(s); if (e) e.scrollIntoView({block:'center'}); }", sel); pg.tap(sel); pg.wait_for_timeout(180)
+                try:
+                    m0 = pg.evaluate('state.M.slice()'); tap('#nudge [aria-label=right]')
+                    check('tap: turn pad turns the view', pg.evaluate('state.M.slice()') != m0)
+                    pg.evaluate('state.spin = false'); pg.wait_for_timeout(250)
+                    i0 = pg.evaluate('state.micIdx'); j = pg.evaluate("""(i0) => { let best = -1, bd = -1; for (const i of state.free) { const d = Math.hypot(_px[i] - _px[i0], _py[i] - _py[i0]);
+                      if (_py[i] > 40 && _py[i] < H - 60 && d > bd && d < 200) { bd = d; best = i; } } return best; }""", i0)
+                    x0, y0 = pg.evaluate(f"({MASS_XY})({i0})"); pg.touchscreen.tap(x0, y0); pg.wait_for_timeout(250)
+                    x1, y1 = pg.evaluate(f"({MASS_XY})({j})"); pg.touchscreen.tap(x1, y1); pg.wait_for_timeout(400)
+                    check('tap: tap the mic circle, then a ball: the mic moves there', pg.evaluate('state.micIdx') == j, f'#{i0} → #{pg.evaluate("state.micIdx")} (wanted #{j})')
+                    d0 = pg.evaluate('val.decay'); tap('.knob[data-k="decay"] .step[data-d="1"]')
+                    check('tap: Sustain + lengthens it', pg.evaluate('val.decay') > d0, f'{d0} → {pg.evaluate("val.decay")} s')
+                    tap('.tab[data-page=strike]'); tap('#hush')
+                    if live_ok:
+                        after = pg.evaluate(PEAK_JS)
+                        check('still plays after all the taps', after['pk'] > 0.05 and after['bad'] == 0, f"peak {after['pk']}")
+                except Exception as e:
+                    check('tap flows ran to the end', False, str(e)[:300])
+                if errs:
+                    check('preview: no script errors during the tap flows', False, str(errs[:4]))
+                for tab in ['body', 'strike', 'mic']:
+                    try:
+                        pg.tap(f'.tab[data-page={tab}]'); pg.wait_for_timeout(250)
+                        pg.screenshot(path=os.path.join(OUT, f'preview-{tab}.png'))
+                    except Exception as e:
+                        check(f'screenshot {tab}', False, str(e)[:120], critical=False)
+            elif label == 'preview':
+                def tap(sel):
+                    pg.tap(sel); pg.wait_for_timeout(180)
+                try:
+                    tap('.tool[data-tool=orbit]')
+                    m0 = pg.evaluate('state.M.slice()'); tap('#nudge [aria-label=right]')
+                    check('tap: turn pad turns the view', pg.evaluate('state.M.slice()') != m0)
+                    n0 = pg.evaluate('state.geo.P.length')
+                    tap('.tool[data-tool=add]'); e = pg.evaluate(EMPTY_JS); pg.touchscreen.tap(e['x'], e['y']); pg.wait_for_timeout(900)
+                    n1 = pg.evaluate('state.geo.P.length')
+                    check('tap: add puts a new mass where the finger lands', n1 == n0 + 1, f'{n0} → {n1} masses')
+                    tap('.tool[data-tool=del]'); xy = pg.evaluate(f"({MASS_XY})(state.geo.P.length - 1)"); pg.touchscreen.tap(xy[0], xy[1]); pg.wait_for_timeout(900)
+                    n2 = pg.evaluate('state.geo.P.length')
+                    check('tap: delete removes the tapped mass', n2 == n1 - 1, f'{n1} → {n2} masses')
+                    tap('#undo'); pg.wait_for_timeout(400)
+                    check('tap: undo brings it back', pg.evaluate('state.geo.P.length') == n1)
+                    tap('.tab[data-page=strike]')
+                    got = {}
+                    for name in ['Plectrum', 'Oscillator', 'Mallet']:
+                        pg.tap(f'#modes .chip:text-is("{name}")'); pg.wait_for_timeout(150)
+                        got[name] = pg.evaluate(f"""document.querySelector('#modes .chip:nth-child({['Mallet','Worthington splash','Plectrum','Oscillator'].index(name)+1})').getAttribute('aria-pressed')""")
+                    check('tap: exciter chips select (Plectrum, Oscillator, Mallet)', all(v == 'true' for v in got.values()), json.dumps(got))
+                    tap('.tab[data-page=mod]'); tap('[data-mty="0"] .chip:nth-child(2)')
+                    ty = pg.evaluate('state.mods[0].ty || 0')
+                    tap('[data-mty="0"] .chip:nth-child(1)')
+                    check('tap: modulator 1 becomes an envelope and back', ty == 1 and (pg.evaluate('state.mods[0].ty || 0') == 0), f'type after tap {ty}')
+                    tap('.tab[data-page=mic]'); tap('#micslots .chip:nth-child(2)')
+                    check('tap: Mic 2 can be picked', pg.evaluate("document.querySelector('#micslots .chip:nth-child(2)').getAttribute('aria-pressed')") == 'true')
+                    tap('#micslots .chip:nth-child(1)')
+                    if live_ok:
+                        tap('.tab[data-page=strike]'); pg.tap('#modes .chip:text-is("Mallet")')
+                        after = pg.evaluate(PEAK_JS)
+                        check('still plays after all the taps', after['pk'] > 0.05 and after['bad'] == 0, f"peak {after['pk']}")
+                except Exception as e:
+                    check('tap flows ran to the end', False, str(e)[:300])
+                if errs:
+                    check('preview: no script errors during the tap flows', False, str(errs[:4]))
+                # screenshots of every tab at iPhone size
+                for tab in ['body', 'strike', 'mic', 'amp', 'fx', 'mod']:
+                    try:
+                        pg.tap(f'.tab[data-page={tab}]'); pg.wait_for_timeout(250)
+                        pg.screenshot(path=os.path.join(OUT, f'preview-{tab}.png'))
+                    except Exception as e:
+                        check(f'screenshot {tab}', False, str(e)[:120], critical=False)
+            else:
+                pg.screenshot(path=os.path.join(OUT, 'live.png'))
+            c.close()
+        except Exception:   # a crash in one page must not lose the whole report (Linux CI 2026-10-12 left no summary)
+            import traceback
+            check(f'{label}: the check ran to the end', False, traceback.format_exc()[-900:])
+            try: c.close()
+            except Exception: pass
+
+    # ---------- was a Size freeze there before Stage I? the same taps on the preview just before it ----------
+    BASE_SHA = 'fe0393fca33d313f138246fa465ad5cbb659e643'
+    base = subprocess.run(['git', '-C', ROOT, 'show', f'{BASE_SHA}:apps/resonator-next.html'], capture_output=True)
+    if base.returncode != 0:
+        check('preview before Stage I: the same Size taps', False, f'{BASE_SHA[:8]} not in this clone; comparison not run', critical=False)
+    elif not R['live'].get('preview', {}).get('tank_stall_ms'):
+        check('preview before Stage I: the same Size taps', False, 'no live audio on this machine; comparison not run', critical=False)
+    else:
+        import tempfile
+        tmp = tempfile.mkdtemp(); open(os.path.join(tmp, 'before.html'), 'wb').write(base.stdout)
+        h2 = functools.partial(http.server.SimpleHTTPRequestHandler, directory=tmp); h2.log_message = lambda *a: None
+        srv2 = http.server.ThreadingHTTPServer(('127.0.0.1', 0), h2); threading.Thread(target=srv2.serve_forever, daemon=True).start()
+        try:
+            c = b.new_context(**device); pg = c.new_page(); pg.route('**/fonts.g*/**', lambda r: r.abort())
+            pg.goto(f'http://127.0.0.1:{srv2.server_address[1]}/before.html'); pg.wait_for_timeout(400)
+            pg.tap('#start'); pg.wait_for_timeout(2500)
+            pg.click('#shapes .chip:text-is("Tank")'); pg.wait_for_timeout(3000)
             stalls, gaps, builts = [], [], []
-            for k in range(3):   # median of three: one sample on a busy CI machine is noise-prone
-                if tank_only: act = '1' if k % 2 == 0 else '-1'   # a new body each run: Size up, down, up
-                else: act = 'tank'; pg.click('#shapes .chip:text-is("String")'); pg.wait_for_timeout(1200)
-                st, gp, bt = pg.evaluate(STALL_JS, act); stalls.append(st); gaps.append(gp); builts.append(bt)
-            stall = sorted(stalls)[1]
-            R['live'][label]['tank_stall_ms'] = stalls; R['live'][label]['main_thread_gap_ms'] = gaps; R['live'][label]['bodies_built'] = builts
-            check(f'{label}: audio clock freeze when ' + ('a new body is built (Size)' if tank_only else 'choosing Tank') + ' (median of 3)', (stall < 120 or label == 'live') and all(builts),
-                  f'{stall} ms (runs {stalls}; page main-thread gaps {gaps}; new bodies {builts})', critical=(label == 'preview'))
-
-        # ---------- the engine itself, rendered offline inside this browser ----------
-        try:
-            ref = node_reference(path)
-        except Exception as e:
-            ref = None; check(f'{label}: Node reference render', False, str(e)[:300])
-        rows = {}
-        for s in SHAPES:
-            try:
-                w = pg.evaluate(OFFLINE_JS, {'shape': s, 'secs': 2, 'sr': 32000})
-            except Exception as e:
-                rows[s] = {'error': str(e)[:300]}; continue
-            row = {'pk': round(w['pk'], 4), 'rms': w['rms'], 'bad': w['bad'], 'onset': w['onset'], 'render_ms': w['ms'],
-                   'build_and_tune_ms': w['readyMs'], 'engine_ready': w['gotReady']}
-            if ref and s in ref:
-                n = ref[s]
-                row['vs_node_rms_db'] = round(db(w['rms'], n['rms']), 3)
-                row['vs_node_pk_db'] = round(db(w['pk'], n['pk']), 3)
-                hw, hn = w['head'], n['head']; k = min(len(hw), len(hn))
-                row['head_max_abs_diff'] = max((abs(hw[i] - hn[i]) for i in range(k)), default=None)
-                row['head_identical'] = k > 0 and all(hw[i] == hn[i] for i in range(k))
-                row['onset_shift_samples'] = (w['onset'] - n['onset']) if (w['onset'] >= 0 and n['onset'] >= 0) else None
-            rows[s] = row
-        R['offline'][label] = rows
-        errs_off = {s: r['error'] for s, r in rows.items() if 'error' in r}
-        check(f'{label}: engine renders offline in this browser (8 shapes)', not errs_off, json.dumps(errs_off)[:300])
-        good = {s: r for s, r in rows.items() if 'error' not in r}
-        check(f'{label}: engine output finite and audible (offline)', bool(good) and all(r['bad'] == 0 and r['pk'] > 0.01 for r in good.values()),
-              ' · '.join(f"{s} pk {r['pk']}" for s, r in good.items()))
-        if ref and good:
-            worst = max(abs(r.get('vs_node_rms_db', 0)) for r in good.values())
-            ident = sum(1 for r in good.values() if r.get('head_identical'))
-            check(f'{label}: same sound as the Node engine (level within 0.5 dB)', worst <= 0.5,
-                  f'worst level difference {worst:.3f} dB; first 2048 samples bit-identical on {ident}/{len(good)} shapes')
-
-        # ---------- JavaScriptCore speed (this CI CPU, not a phone) ----------
-        try:
-            if tank_only: raise RuntimeError('no Benchmark on the Tank-only page (removed in Stage I)')
-            R['bench'][label] = {s: round(pg.evaluate(f"benchOne(32000, SHAPES['{s}'].def, 1, '{s}').x"), 1) for s in ['String', 'Tank']}
-            check(f'{label}: engine speed in this browser (times real time, 1 voice)', True, json.dumps(R['bench'][label]), critical=False)
-        except Exception as e:
-            check(f'{label}: engine speed in this browser', False, str(e)[:200], critical=False)
-
-        # ---------- tap flows (preview): everything works by finger ----------
-        if label == 'preview' and tank_only:
-            def tap(sel):
-                pg.evaluate("s => { const e = document.querySelector(s); if (e) e.scrollIntoView({block:'center'}); }", sel); pg.tap(sel); pg.wait_for_timeout(180)
-            try:
-                m0 = pg.evaluate('state.M.slice()'); tap('#nudge [aria-label=right]')
-                check('tap: turn pad turns the view', pg.evaluate('state.M.slice()') != m0)
-                pg.evaluate('state.spin = false'); pg.wait_for_timeout(250)
-                i0 = pg.evaluate('state.micIdx'); j = pg.evaluate("""(i0) => { let best = -1, bd = -1; for (const i of state.free) { const d = Math.hypot(_px[i] - _px[i0], _py[i] - _py[i0]);
-                  if (_py[i] > 40 && _py[i] < H - 60 && d > bd && d < 200) { bd = d; best = i; } } return best; }""", i0)
-                x0, y0 = pg.evaluate(f"({MASS_XY})({i0})"); pg.touchscreen.tap(x0, y0); pg.wait_for_timeout(250)
-                x1, y1 = pg.evaluate(f"({MASS_XY})({j})"); pg.touchscreen.tap(x1, y1); pg.wait_for_timeout(400)
-                check('tap: tap the mic circle, then a ball: the mic moves there', pg.evaluate('state.micIdx') == j, f'#{i0} → #{pg.evaluate("state.micIdx")} (wanted #{j})')
-                d0 = pg.evaluate('val.decay'); tap('.knob[data-k="decay"] .step[data-d="1"]')
-                check('tap: Sustain + lengthens it', pg.evaluate('val.decay') > d0, f'{d0} → {pg.evaluate("val.decay")} s')
-                tap('.tab[data-page=strike]'); tap('#hush')
-                if live_ok:
-                    after = pg.evaluate(PEAK_JS)
-                    check('still plays after all the taps', after['pk'] > 0.05 and after['bad'] == 0, f"peak {after['pk']}")
-            except Exception as e:
-                check('tap flows ran to the end', False, str(e)[:300])
-            if errs:
-                check('preview: no script errors during the tap flows', False, str(errs[:4]))
-            for tab in ['body', 'strike', 'mic']:
-                try:
-                    pg.tap(f'.tab[data-page={tab}]'); pg.wait_for_timeout(250)
-                    pg.screenshot(path=os.path.join(OUT, f'preview-{tab}.png'))
-                except Exception as e:
-                    check(f'screenshot {tab}', False, str(e)[:120], critical=False)
-        elif label == 'preview':
-            def tap(sel):
-                pg.tap(sel); pg.wait_for_timeout(180)
-            try:
-                tap('.tool[data-tool=orbit]')
-                m0 = pg.evaluate('state.M.slice()'); tap('#nudge [aria-label=right]')
-                check('tap: turn pad turns the view', pg.evaluate('state.M.slice()') != m0)
-                n0 = pg.evaluate('state.geo.P.length')
-                tap('.tool[data-tool=add]'); e = pg.evaluate(EMPTY_JS); pg.touchscreen.tap(e['x'], e['y']); pg.wait_for_timeout(900)
-                n1 = pg.evaluate('state.geo.P.length')
-                check('tap: add puts a new mass where the finger lands', n1 == n0 + 1, f'{n0} → {n1} masses')
-                tap('.tool[data-tool=del]'); xy = pg.evaluate(f"({MASS_XY})(state.geo.P.length - 1)"); pg.touchscreen.tap(xy[0], xy[1]); pg.wait_for_timeout(900)
-                n2 = pg.evaluate('state.geo.P.length')
-                check('tap: delete removes the tapped mass', n2 == n1 - 1, f'{n1} → {n2} masses')
-                tap('#undo'); pg.wait_for_timeout(400)
-                check('tap: undo brings it back', pg.evaluate('state.geo.P.length') == n1)
-                tap('.tab[data-page=strike]')
-                got = {}
-                for name in ['Plectrum', 'Oscillator', 'Mallet']:
-                    pg.tap(f'#modes .chip:text-is("{name}")'); pg.wait_for_timeout(150)
-                    got[name] = pg.evaluate(f"""document.querySelector('#modes .chip:nth-child({['Mallet','Worthington splash','Plectrum','Oscillator'].index(name)+1})').getAttribute('aria-pressed')""")
-                check('tap: exciter chips select (Plectrum, Oscillator, Mallet)', all(v == 'true' for v in got.values()), json.dumps(got))
-                tap('.tab[data-page=mod]'); tap('[data-mty="0"] .chip:nth-child(2)')
-                ty = pg.evaluate('state.mods[0].ty || 0')
-                tap('[data-mty="0"] .chip:nth-child(1)')
-                check('tap: modulator 1 becomes an envelope and back', ty == 1 and (pg.evaluate('state.mods[0].ty || 0') == 0), f'type after tap {ty}')
-                tap('.tab[data-page=mic]'); tap('#micslots .chip:nth-child(2)')
-                check('tap: Mic 2 can be picked', pg.evaluate("document.querySelector('#micslots .chip:nth-child(2)').getAttribute('aria-pressed')") == 'true')
-                tap('#micslots .chip:nth-child(1)')
-                if live_ok:
-                    tap('.tab[data-page=strike]'); pg.tap('#modes .chip:text-is("Mallet")')
-                    after = pg.evaluate(PEAK_JS)
-                    check('still plays after all the taps', after['pk'] > 0.05 and after['bad'] == 0, f"peak {after['pk']}")
-            except Exception as e:
-                check('tap flows ran to the end', False, str(e)[:300])
-            if errs:
-                check('preview: no script errors during the tap flows', False, str(errs[:4]))
-            # screenshots of every tab at iPhone size
-            for tab in ['body', 'strike', 'mic', 'amp', 'fx', 'mod']:
-                try:
-                    pg.tap(f'.tab[data-page={tab}]'); pg.wait_for_timeout(250)
-                    pg.screenshot(path=os.path.join(OUT, f'preview-{tab}.png'))
-                except Exception as e:
-                    check(f'screenshot {tab}', False, str(e)[:120], critical=False)
-        else:
-            pg.screenshot(path=os.path.join(OUT, 'live.png'))
-        c.close()
+            for k in range(3):
+                st, gp, bt = pg.evaluate(STALL_JS, '1' if k % 2 == 0 else '-1'); stalls.append(st); gaps.append(gp); builts.append(bt)
+            R['live']['before_stage_I'] = {'tank_stall_ms': stalls, 'main_thread_gap_ms': gaps, 'bodies_built': builts}
+            check('preview before Stage I (same engine, all features): audio clock freeze for the same Size taps (median of 3, for comparison)', False,
+                  f'{sorted(stalls)[1]} ms (runs {stalls}; page main-thread gaps {gaps}; new bodies {builts})', critical=False)
+            c.close()
+        except Exception:
+            import traceback
+            check('preview before Stage I: the same Size taps', False, traceback.format_exc()[-600:], critical=False)
+        srv2.shutdown()
     b.close()
 srv.shutdown()
 

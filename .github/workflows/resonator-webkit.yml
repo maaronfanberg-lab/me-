@@ -60,7 +60,9 @@ jobs:
       - name: RESONATOR in WebKit (iPhone emulation)
         id: check
         continue-on-error: true
-        run: python qa-resonator/webkit_check.py . webkit-out
+        run: |   # the full output is kept too: a crash before the summary is written left nothing to read (Linux, 2026-10-12)
+          mkdir -p webkit-out
+          python qa-resonator/webkit_check.py . webkit-out 2>&1 | tee webkit-out/check.txt
       - name: P1 checks in WebKit (CPU shown, governor, sleeping voices)
         id: p1
         continue-on-error: true

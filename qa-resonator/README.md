@@ -165,3 +165,12 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
   `say()`.
 - Ratchet: a readout is a claim. Sustain shows the measured 40 dB fall (1.25 × the setting), and
   `i1_engine.mjs` keeps it within 15%.
+- Ratchet: a check's precondition can be used up by the real system. On a slow CI machine the real
+  governor let go of voices down to its floor of one during the load, before the test's hot readings
+  arrived, so the hook had nothing left to shed and `p1_browser.py` failed (Tank, 4 voices, 0.90 CPU).
+  The check now counts from before the load and says which one acted.
+- Ratchet: a crash must not lose the report. On Linux CI, `webkit_check.py` once stopped before
+  writing its summary and nothing could be read. Each page now runs inside its own guard (a crash
+  becomes a FAIL with its traceback), and the workflow keeps the full output (`check.txt`).
+- `webkit_check.py` also runs the same Size taps on the preview just before Stage I (git `fe0393fc`).
+  This is a comparison only: is a freeze new, or was it there before?
