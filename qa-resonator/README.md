@@ -174,3 +174,10 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
   becomes a FAIL with its traceback), and the workflow keeps the full output (`check.txt`).
 - `webkit_check.py` also runs the same Size taps on the preview just before Stage I (git `fe0393fc`).
   This is a comparison only: is a freeze new, or was it there before?
+- `patch_i2.py` (Stage I, revision 2): while a circle is picked up, the next tap always puts it down,
+  even on the other circle. Before, a tap within reach of the other circle picked that one up instead,
+  so tap-then-tap could not reach the balls near it. WebKit CI caught it; `i1_browser.py` now checks it
+  (failed before the change, passes after).
+- Finding, not fixed: in WebKit on macOS, building a new tank by Size freezes the audio clock for
+  about 0.2 s, on the preview and on the preview before Stage I alike. The page's main thread stays
+  free, so it is the audio thread. It went unseen while the stall check built no body.

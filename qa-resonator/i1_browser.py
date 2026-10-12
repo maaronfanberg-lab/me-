@@ -165,6 +165,13 @@ with sync_playwright() as p:
     i0 = pg.evaluate('state.micIdx'); x0, y0 = pg.evaluate(XY, i0)
     pg.touchscreen.tap(x0, y0); pg.wait_for_timeout(200); pg.touchscreen.tap(x0, y0); pg.wait_for_timeout(200)
     check('tapping a picked-up circle again puts it back down', pg.evaluate('state.carry') is None and pg.evaluate('state.micIdx') == i0)
+    # carrying one circle, a tap on the other still puts the carried one there (revision 2: it used to pick
+    # up the other one, so a ball within reach of the other circle could not be reached by tap-then-tap)
+    m0 = pg.evaluate('state.micIdx'); s0 = pg.evaluate('state.hitIdx'); xm, ym = pg.evaluate(XY, m0); xs, ys = pg.evaluate(XY, s0)
+    pg.touchscreen.tap(xm, ym); pg.wait_for_timeout(200); c1 = pg.evaluate('state.carry')
+    pg.touchscreen.tap(xs, ys); pg.wait_for_timeout(300); after = pg.evaluate('[state.micIdx, state.hitIdx, state.carry]')
+    check('carrying the mic, a tap on the strike circle puts the mic there (it does not pick up the strike)', c1 == 'mic' and after == [s0, s0, None],
+          f'picked up {c1}; mic #{m0}→#{after[0]}, strike #{s0}→#{after[1]}, still carrying {after[2]}')
     # a drag on empty space turns the view
     e = pg.evaluate("""(() => { const r = cv.getBoundingClientRect(), g = state.geo; let best = null, bd = -1;
       for (let x = 60; x < W - 60; x += 6) for (let y = 60; y < H - 70; y += 6) { let m = 1e9;

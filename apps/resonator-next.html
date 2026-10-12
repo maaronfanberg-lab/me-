@@ -2893,6 +2893,7 @@ function gestureEnd(x,y){
   if(d.kind){
     if(d.moved){ if(d.changed) audition(); state.carry=null; toolMsg(''); return; }
     if(state.carry===d.kind){ state.carry=null; toolMsg(''); return; }   // tapped again: put it back down
+    if(state.carry){ const i=pick(x,y,true); if(i>=0&&placeMarker(state.carry,i)) audition(); state.carry=null; toolMsg(''); return; }   // I2: carrying one, a tap on the other still puts the carried one there
     state.carry=d.kind; toolMsg('now tap where the '+(d.kind==='mic'?'mic':'strike')+' should go'); return;
   }
   if(!d.moved&&state.carry){ const i=pick(x,y,true); if(i>=0&&placeMarker(state.carry,i)) audition(); state.carry=null; toolMsg(''); }
