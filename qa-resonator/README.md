@@ -181,3 +181,7 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
 - Finding, not fixed: in WebKit on macOS, building a new tank by Size freezes the audio clock for
   about 0.2 s, on the preview and on the preview before Stage I alike. The page's main thread stays
   free, so it is the audio thread. It went unseen while the stall check built no body.
+- `stall_probe.py [--browser=webkit]` is a diagnostic, not a check. It times every engine message and
+  render call from inside the audio thread (in a test copy of each page), with the tank silent and while
+  it rings, on the preview and on the preview before Stage I. It shows whether a freeze is the engine's
+  own work or happens outside it. It runs in WebKit CI, unenforced.

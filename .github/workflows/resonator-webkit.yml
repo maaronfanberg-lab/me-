@@ -73,6 +73,10 @@ jobs:
         id: i1
         continue-on-error: true
         run: python qa-resonator/i1_browser.py . --browser=webkit | tee webkit-out/i1.txt
+      - name: Diagnostic, not enforced — where the Size freeze goes (engine timed from inside, before vs after Stage I)
+        id: probe
+        continue-on-error: true
+        run: python qa-resonator/stall_probe.py . webkit-out --browser=webkit | tee webkit-out/stall_probe.txt
       - name: Publish results to branch qa-results/webkit-<os>
         if: always()
         env:
