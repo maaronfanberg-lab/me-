@@ -1,0 +1,12 @@
+127.0.0.1 - - [13/Oct/2026 23:01:27] "GET /apps/resonator-next.html HTTP/1.1" 200 -
+PASS page turns on sleep and the governor for live play — ['{"t":"perf","sleep":1,"gov":1}']
+PASS CPU shown on the page, measured by the engine — {"cpu": 0.08333333333333333, "max": 0.11904761904761904, "txt": "CPU 8%"}
+PASS live CPU reading rises with work (idle vs Tank, 4 voices ringing) — idle 0.083 · Tank 4 voices 0.857
+PASS governor sheds a voice when the phone runs out of time, and the page explains — the test's hot readings found nothing left to let go; the real governor had let go 3 during the load · {"ga": 3, "aw": 1, "cap": 1, "msg": "The phone was running out of time, so a quiet older voice was let go to keep the sound clean. Fewer Voices, a smaller Size or a lower engine rate gives more room."}
+PASS still plays after the governor acted — peak 0.691
+PASS voices fall asleep once they have died away — {"sl": 2, "aw": 0}
+PASS a sleeping voice wakes on the next key — peak 0.691
+PASS Copy report includes the CPU line — cpu: 48% now · 94% highest · voices ringing 1 of 4 (limit 1) · let go 3 · slept 2
+PASS no script errors — []
+
+all P1 browser checks pass

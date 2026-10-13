@@ -1,0 +1,13 @@
+PASS sleep and governor off: bit-identical to the baseline (47 setups)
+PASS sleep on: largest output difference below -100 dBFS — worst 3.89e-7 (-128 dBFS) over 12 setups
+PASS sleep on: voices really go to sleep — 21 sleeps; String/1:1 String/4:1 String/8:1 Drum/1:4 Drum/4:4 Drum/8:4 Tank/1:1 Tank/4:1 Tank/8:1 Chime/1:1 Chime/4:1 Chime/8:1
+PASS governor: two hot readings mute one older voice and lower the limit — {"awBefore":3,"muted":[0,1,0,0],"cap":2,"acts":1,"ages":[4,2,3,0]}
+PASS governor: the muted voice is asleep within 0.35 s — {"rest":[0,1,0,1],"muted":[0,0,0,0],"aw":2}
+PASS governor: a new note stays within the limit — {"aw":2,"cap":2}
+PASS governor: no click when a voice is let go (largest step vs the same moment unmuted) — 0.0081 vs 0.0091
+PASS governor: output finite
+PASS governor: the limit climbs back after 2 s under 60% — cap 3
+PASS governor consulted only when the page turns it on — {"off":0,"on":4}
+PASS CPU estimate (1 ms clock) matches a precise clock on the same work, within 10% — 22 readings: engine 29.0% vs precise 29.1%
+
+all P1 checks pass
