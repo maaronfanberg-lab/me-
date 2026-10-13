@@ -1,0 +1,24 @@
+PASS the same taps on the page before Stage I and on this one: the engine hears the same, the sound is bit-identical — {"same": true, "maxDiff": 0, "peak": [0.7674000263214111, 0.7674000263214111], "notes": [3, 3], "paramDiffers": ["width: 0 \u2192 undefined", "pkAp: 0.18 \u2192 undefined", "pkSpc: 0.28 \u2192 undefined", "pkRes: 3000 \u2192 undefined", "pkQ: 1.6 \u2192 undefined", "amp: 0 \u2192 undefined", "bass: 0 \u2192 undefined", "treb: 0 \u2192 undefined", "cab: 0 \u2192 undefined", "splash: 0.9 \u2192 undefined", "fbAmt: 0 \u2192 undefined", "fbTime: 24 \u2192 undefined", "coup: 0 \u2192 undefined", "regime: 0 \u2192 undefined", "rswitch: 0.025 \u2192 undefined", "rphi: 1.618 \u2192 undefined", "mem: 0 \u2192 undefined", "memSpan: 1.2 \u2192 undefined", "infer: 0 \u2192 undefined", "spread: 0 \u2192 undefined", "att: 0 \u2192 undefined", "attC: 0.35 \u2192 undefined", "fxCho: 0 \u2192 undefined", "fxDly: 0 \u2192 undefined", "fxFb: 0.35 \u2192 undefined", "fxWow: 0 \u2192 undefined", "fxTrem: 0 \u2192 undefined", "fxSat: 0 \u2192 undefined", "spImg: 0 \u2192 undefined", "spDist: 0.3 \u2192 undefined", "spRefl: 0 \u2192 undefined", "spDop: 0 \u2192 undefined", "spRot: 0 \u2192 undefined", "spElev: 0 \u2192 undefined", "bowSpd: 1 \u2192 undefined", "bowVc: 0.35 \u2192 undefined", "wind: 0 \u2192 undefined", "inGain: 0.5 \u2192 undefined", "rvMix: 0 \u2192 undefined", "rvTime: 2.5 \u2192 undefined", "rvTone: 9000 \u2192 undefined", "rvPre: 20 \u2192 undefined", "pad: undefined \u2192 0", "padRef: undefined \u2192 129"]}
+PASS ...and the only messages the new page no longer sends are for removed features (extra mics, second mic, pickup type, exciter mode, specialization) — before {'asyncCal': 1, 'struct': 1, 'p': 79, 'pk': 1, 'mode': 1, 'spec': 1, 'lvl': 1, 'xmic': 3, 'cal': 4, 'mic': 5, 'mic2': 5, 'hit': 5} · after {'asyncCal': 1, 'struct': 1, 'p': 39, 'lvl': 1, 'cal': 4, 'mic': 5, 'hit': 5}
+PASS three tabs: Body, Strike, Mic — ['Body', 'Strike', 'Mic']
+PASS removed controls are gone from the page — still present: [] · tools ['reset view']
+PASS the kept controls, and only those — 18 knobs: ['decay', 'size', 'ratio', 'loss', 'sub', 'voices', 'nl', 'tune', 'drive', 'hard', 'hit', 'angle', 'gain', 'mic', 'blend', 'bite', 'tone', 'mag']
+PASS the Tank is the instrument; Sustain is the first control on Body — Tank, 58 masses, first control 'Sustain'
+PASS nothing wider than the phone — 390 px in 390 px
+PASS Sustain + lengthens it and the engine is told — 4 → 4.82 s; engine told [4.82]
+PASS press the mic circle and slide it (mouse): it follows the finger along the tank — #29 → #1, engine told, auditioned
+PASS press the strike circle and slide it (mouse): it follows the finger along the tank — #18 → #44, engine told, auditioned
+PASS tap the strike circle, then tap a ball: it moves there — picked up: strike ('now tap where the strike should go'); now on #26, wanted #26
+PASS tapping a picked-up circle again puts it back down
+PASS carrying the mic, a tap on the strike circle puts the mic there (it does not pick up the strike) — picked up mic; mic #1→#26, strike #26→#26, still carrying None
+PASS a drag on empty space turns the view and moves neither circle
+PASS two circles on one ball: the first slide takes one, the next takes the other — strike, then mic
+PASS save, change, load: the Tank comes back as saved — Tank 1: knobs differing []; strike #22→#22, mic #31→#31; reference mode 3049.847→3049.809 Hz (-0.022 cents: a preset stores positions to 4 decimals); message 'Loaded Tank 1'
+PASS the list shows Tank presets only (others stay stored for the main Resonator) — ['', 'Tank 1', 'zz old tank']
+PASS an old preset cannot switch a removed feature back on (reverb, OMEF, wind, feedback, bow, distance, modulators, extra mics, exciters) — none of them is sent or held
+PASS pasting code for another shape is refused, and says why — That code is for the Drum, which this version does not have.
+PASS it still plays — peak 0.691
+PASS Copy report carries the touch counters — ['body touches     11 down · 60 moves · 6 as touch · mic/strike moved 27']
+PASS no script errors — []
+
+all Stage I browser checks pass

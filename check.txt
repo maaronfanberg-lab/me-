@@ -1,0 +1,28 @@
+browser: webkit 26.0 on macOS-26.6.2-arm64-arm-64bit
+127.0.0.1 - - [13/Oct/2026 22:58:01] "GET /apps/resonator.html HTTP/1.1" 200 -
+PASS live: loads and starts with no script error — running=True engine='audio worklet' errors=[]
+PASS live: live audio clock runs — state=running, advanced 0.700 s in 0.7 s
+PASS live: every shape sounds (live) — String 0.489 · Tine 0.43 · Chime 0.587 · Drum 0.593 · Hoop 0.581 · Web 0.606 · Tank 0.691 · Twins 0.691 · String 0.611
+PASS live: audio clock freeze when choosing Tank (median of 3) — 495 ms (runs [484, 501, 495]; page main-thread gaps [16, 32, 15]; new bodies ['Tank chip', 'Tank chip', 'Tank chip'])
+PASS live: engine renders offline in this browser (8 shapes) — {}
+PASS live: engine output finite and audible (offline) — String pk 0.436 · Tine pk 0.6078 · Chime pk 0.7674 · Drum pk 0.7672 · Hoop pk 0.4518 · Web pk 0.7674 · Tank pk 0.2608 · Twins pk 0.5166
+PASS live: same sound as the Node engine (level within 0.5 dB) — worst level difference 0.000 dB; first 2048 samples bit-identical on 8/8 shapes
+PASS live: engine speed in this browser (times real time, 1 voice) — {"String": 58.8, "Tank": 17.4}
+127.0.0.1 - - [13/Oct/2026 22:59:11] "GET /apps/resonator-next.html HTTP/1.1" 200 -
+PASS preview: loads and starts with no script error — running=True engine='audio worklet' errors=[]
+PASS preview: background tuner (Worker) runs in WebKit — {"on": true, "up": true, "stats": {"structs": 1, "recals": 1, "lastMs": 824, "maxMs": 824, "fails": 0, "why": ""}}
+PASS preview: live audio clock runs — state=running, advanced 0.616 s in 0.7 s
+PASS preview: the Tank sounds (live) — Tank 0.691
+PASS preview: engine renders offline in this browser (2 shapes) — {}
+PASS preview: engine output finite and audible (offline) — Tank pk 0.2608 · Tower pk 0.214
+PASS preview: same sound as the Node engine (level within 0.5 dB) — worst level difference 0.000 dB; first 2048 samples bit-identical on 2/2 shapes
+NOTE preview: engine speed in this browser — no Benchmark on the Tank-only page (removed in Stage I)
+PASS tap: turn pad turns the view
+PASS tap: tap the mic circle, then a ball: the mic moves there — #33 → #4 (wanted #4)
+PASS tap: Sustain + lengthens it — 4 → 4.82 s
+PASS still plays after all the taps — peak 0.691
+127.0.0.1 - - [13/Oct/2026 22:59:52] "GET /before.html HTTP/1.1" 200 -
+NOTE preview before Stage I (same engine, all features): audio clock freeze for the same Size taps (5 runs, for comparison) — median 6 ms, worst 194 ms (runs [6, 98, 194, 6, 6]; page main-thread gaps [16, 9, 14, 10, 11]; new bodies ['7→8', '8→7', '7→8', '8→7', '7→8'])
+NOTE preview: audio clock freeze when a new body is built (Size) (median of 3) — the page before Stage I froze too on this machine — 185 ms (runs [181, 194, 185]; page main-thread gaps [21, 15, 12]; new bodies ['7→8', '8→7', '7→8']); before Stage I up to 194 ms (runs [6, 98, 194, 6, 6])
+
+0 FAILED, 19 passed, 3 notes
