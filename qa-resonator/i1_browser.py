@@ -101,7 +101,8 @@ with sync_playwright() as p:
         REMOVED = {'width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','coup','regime','rswitch','rphi','mem','memSpan',
                    'infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain',
                    'rvMix','rvTime','rvTone','rvPre'}
-        odd = [d for d in res.get('paramDiffers') or [] if not (d.split(':')[0] in REMOVED and d.endswith('→ undefined'))]
+        # T1 adds the padded mallet's controls, sent for the Tank as off (pad 0)
+        odd = [d for d in res.get('paramDiffers') or [] if not (d.split(':')[0] in REMOVED and d.endswith('→ undefined')) and d not in ('pad: undefined → 0', 'padRef: undefined → 129')]
         check('the same taps on the page before Stage I and on this one: the engine hears the same, the sound is bit-identical',
               out.returncode == 0 and res.get('same') and not odd,
               json.dumps({k: res.get(k) for k in ['same', 'maxDiff', 'peak', 'notes', 'paramDiffers', 'error'] if k in res}))

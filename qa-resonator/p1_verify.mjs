@@ -49,7 +49,7 @@ const sparse = (n, gap) => Array.from({ length: n }, (_, i) => ({ at: 0.05 + i *
 
 // ---------- 1. bit-identical with sleep and governor off ----------
 const cfgs = [{ name: 'default' }];
-for (const s of Object.keys(N.SHAPES)) cfgs.push({ name: 'shape ' + s, shape: s });
+for (const s of Object.keys(N.SHAPES).filter(s => s in B.SHAPES)) cfgs.push({ name: 'shape ' + s, shape: s });   // T1: the Tower exists only in the preview
 // the baseline's knobs: a control added after P1 (e.g. Reverb) legitimately changes the sound
 // J1: only the controls the preview still has (the others no longer exist in its engine)
 const J1_KEYS = ['ratio', 'decay', 'loss', 'sub', 'drive', 'hard', 'blend', 'gain', 'tune', 'tone', 'bite', 'nl', 'angle', 'voices'];

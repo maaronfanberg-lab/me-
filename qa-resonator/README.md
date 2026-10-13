@@ -206,3 +206,27 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
 - `harness.mjs`: a shape the page no longer has is built from the live page's geometry (checks that compare engines
   on many bodies); `OWN_SHAPES` is the page's own.
 - `stage1_verify` T1 and the `p1_verify` sweep compare only the features the preview still has.
+
+## Stage T1, the water tower (preview)
+- `patch_t1.py` — the Tower body (Superior, WI; near-equilateral shell mesh, bowl clamped at the neck, column its
+  own shell), Body chips, Padding (leather, wool, Styrofoam, rubber) with the contact simulated in the engine,
+  Real size (C3) / Phone size (E4), presets for both bodies. Engine additions are off for the Tank (bit-identical).
+- `tower_fe.py [h_mm]` — independent check: the bowl as a thin shell of revolution by finite elements (one harmonic
+  at a time), benchmarked on the Abaqus sphere. Writes `tower_fe_modes.json` (breathing 129 Hz, lowest two-lobed
+  mode 55 Hz, the cluster's percentiles by lobe count), which `t1_verify.mjs` reads; CI regenerates it and compares.
+- `sphere_check.mjs` — the engine's spring law on a free triangulated sphere against the membrane equation (why
+  the tower runs at Stiffness 14).
+- `tower_proto.mjs` — modal analysis of a tower body with the engine's own matrices (normal share, volume change,
+  lobe count by per-ring Fourier transform).
+- `t1_verify.mjs [old] [new]` — A the Tank bit-identical to before T1; B the tuned mode is the breathing mode,
+  true size 129 Hz, the two-lobed mode and the cluster against the research table and the FE; C the mallet vs
+  `tower_acoustics.py`; D every padding audibly different; E decay at real size; F loudness, worst case,
+  determinism; G cost. `T1_ONLY=BC` runs some sections (mutation tests: probe ignored → B fails; wool law changed
+  → C fails).
+- `t1_browser.py [--browser=webkit]` — everything by taps.
+- Ratchet (FE): a free edge at the pole carried a spurious 52 Hz edge mode; pole conditions by harmonic fixed it,
+  and the sphere check now asks for the lowest mode per order, not the nearest.
+- Ratchet: the body is built before its Stiffness arrives, so a check of the tuned mode must retune first, as the
+  page's next note does (a first version of B1 read the reference from before the retune).
+- Ratchet: a contact time is compared with the same definition (force above 2% of its peak); the hardening wool
+  pad touches 30 ms but pushes for 25.

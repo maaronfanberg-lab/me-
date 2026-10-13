@@ -78,6 +78,20 @@ jobs:
         id: i1b
         continue-on-error: true
         run: python qa-resonator/i1_browser.py . 2>&1 | tee qa-out/i1_browser.txt
+      - name: 'Stage T1 proofs (the water tower — the Tank unchanged, modes vs research and FE, padded mallet, loudness, ceiling, cost)'
+        id: t1v
+        continue-on-error: true
+        run: |
+          python -m pip install --quiet numpy scipy
+          TOWER_FE_OUT=qa-out/tower_fe_modes.json python qa-resonator/tower_fe.py 12 2>&1 | tee qa-out/tower_fe.txt
+          # the committed FE numbers (which t1_verify reads) are what the script gives here, within 0.5%
+          python -c "import json; a=json.load(open('qa-resonator/tower_fe_modes.json'))['12mm']; b=json.load(open('qa-out/tower_fe_modes.json'))['12mm']; bad=[k for k in ('breathing','m2_lowest') if abs(a[k]/b[k]-1)>0.005]+[m for m in a['cluster_by_mmax'] if abs(a['cluster_by_mmax'][m][1]/b['cluster_by_mmax'][m][1]-1)>0.005]; print('FE numbers', 'match' if not bad else 'DIFFER: '+str(bad)); exit(1 if bad else 0)"
+          git fetch -q --depth=1 origin f8e9a3de8c443327589e91c11c6eb9bb8d591b28 || true
+          node qa-resonator/t1_verify.mjs 2>&1 | tee qa-out/t1_verify.txt
+      - name: Stage T1 browser checks (the water tower by taps)
+        id: t1b
+        continue-on-error: true
+        run: python qa-resonator/t1_browser.py . 2>&1 | tee qa-out/t1_browser.txt
       - name: Publish results to branch qa-results/qa
         if: always()
         env:
@@ -87,7 +101,7 @@ jobs:
             s1v=${{ steps.s1v.outcome }} s1b=${{ steps.s1b.outcome }}
             p1v=${{ steps.p1v.outcome }} p1b=${{ steps.p1b.outcome }}
             i1e=${{ steps.i1e.outcome }} i1b=${{ steps.i1b.outcome }}
-            j1v=${{ steps.j1v.outcome }}
+            j1v=${{ steps.j1v.outcome }} t1v=${{ steps.t1v.outcome }} t1b=${{ steps.t1b.outcome }}
         run: |
           mkdir -p qa-out
           echo "${{ github.sha }}" > qa-out/commit.txt

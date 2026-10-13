@@ -50,7 +50,7 @@ export function render({ rate = 48000, secs = 4, shape = 'String', params = {}, 
   g.P.forEach((q, i) => { pos[i * 3] = q[0]; pos[i * 3 + 1] = q[1]; pos[i * 3 + 2] = q[2]; });
   const m = (d) => p.port.onmessage({ data: d });
   m({ t: 'struct', n: g.P.length, pos, fixed: Uint8Array.from(g.F), si: Int32Array.from(g.S.map(s => s[0])),
-      sj: Int32Array.from(g.S.map(s => s[1])), mic: g.mic, hit: g.hit, axis: g.axis });
+      sj: Int32Array.from(g.S.map(s => s[1])), mic: g.mic, hit: g.hit, axis: g.axis, ...(g.probe ? { probe: Float32Array.from(g.probe) } : {}) });   // T1: a body's tuning probe rides with it
   m({ t: 'mode', v: mode }); m({ t: 'pk', v: pk });
   m({ t: 'spec', v: 0 });   // J1 ratchet: both pages send this on every new body (the level trim the Tank always had)
   if (lvl != null) m({ t: 'lvl', v: lvl });

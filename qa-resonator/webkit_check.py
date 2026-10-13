@@ -73,7 +73,7 @@ OFFLINE_JS = """async ({ shape, secs, sr }) => {
   const ready = new Promise(res => { node.port.onmessage = e => { if (e.data && e.data.t === 'ready' && readyAt < 0) { readyAt = performance.now() - t00; res(true); } }; });
   const pos = new Float32Array(NN * 3); g.P.forEach((q, i) => { pos[i * 3] = q[0]; pos[i * 3 + 1] = q[1]; pos[i * 3 + 2] = q[2]; });
   const m = d => node.port.postMessage(d);
-  m({ t: 'struct', n: NN, pos, fixed: Uint8Array.from(g.F), si: Int32Array.from(g.S.map(s => s[0])), sj: Int32Array.from(g.S.map(s => s[1])), mic: g.mic, hit: g.hit, axis: g.axis });
+  m({ t: 'struct', n: NN, pos, fixed: Uint8Array.from(g.F), si: Int32Array.from(g.S.map(s => s[0])), sj: Int32Array.from(g.S.map(s => s[1])), mic: g.mic, hit: g.hit, axis: g.axis, ...(g.probe ? { probe: Float32Array.from(g.probe) } : {}) });
   m({ t: 'mode', v: 0 }); m({ t: 'pk', v: 0 }); m({ t: 'spec', v: 0 });   // J1 ratchet: as the pages send it (and webkit_ref.mjs via the harness)
   const skip = ['size', 'mag', 'hit', 'mic', 'm1r', 'm1a', 'm2r', 'm2a', 'm3r', 'm3a'];
   for (const k in KNOBS) if (!skip.includes(k)) m({ t: 'p', k, v: KNOBS[k].val });

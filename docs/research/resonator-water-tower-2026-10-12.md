@@ -119,7 +119,7 @@ core. The rigid-wall contact is simulated in the script.
 - The tank-reverb figure is a real empty steel water tank.
 - The mallet numbers are model estimates with stated assumptions.
 
-## 9. Proposed implementation (not started; needs Alex's approval)
+## 9. Proposed implementation (built in Stage T1 — see resonator-tower-T1-2026-10-12.md)
 - A tower body for the engine: bowl, column and flared base as one mass-spring shell. Its lowest modes
   and cluster are checked against this table.
 - A big strike pad.
@@ -135,4 +135,11 @@ core. The rigid-wall contact is simulated in the script.
 - Each padding's contact time and bandwidth within 20% of the script.
 - The phone check is Alex's.
 
-**Post-change result:** not started.
+**Post-change result:** built as Stage T1 (`resonator-tower-T1-2026-10-12.md`). Two corrections to this note came out of
+the build:
+- The sphere estimates above understate how far the oblate bowl spreads its modes. A finite-element model of the
+  bowl as it is (an oblate spheroid clamped at the neck, `tower_fe.py`) puts the breathing mode at 129 Hz (inside
+  118–138), the lowest two-lobed mode at 55 Hz (inside 51–60), and hundreds of modes from about 55 to 120 Hz — the
+  cluster is wider than 64–82 Hz once all lobe counts are included.
+- The phone-speaker question (section 9) was settled by keys: Real size plays the 35 m tower (lowest key C3, the
+  breathing mode), Phone size starts at E4 (a 14 m tower). Alex can change this.

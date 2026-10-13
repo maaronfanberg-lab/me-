@@ -15,7 +15,7 @@ const same = (a, b) => { if (a.length !== b.length) return false; for (let i = 0
 // ---------- T1 ----------
 {
   const configs = [];
-  for (const shape of Object.keys(NEXT.SHAPES)) { const S = NEXT.SHAPES[shape];
+  for (const shape of Object.keys(NEXT.SHAPES).filter(s => s in LIVE.SHAPES)) { const S = NEXT.SHAPES[shape];   // T1: the Tower exists only in the preview
     for (const n of [...new Set([S.min, S.def, S.max])]) configs.push({ shape, n }); }
   // J1: the preview no longer has OMEF, the bow, effects, space, Stereo, feedback, the amp, the splash, the
   // pickup types or the modulators, so those configurations are not compared (the live page still has them).
@@ -36,6 +36,7 @@ function scriptFor(H, shape) {
   const S = H.SHAPES[shape], g = S.make(S.def);
   const pos = new Float32Array(g.P.length * 3); g.P.forEach((q, i) => { pos[i * 3] = q[0]; pos[i * 3 + 1] = q[1]; pos[i * 3 + 2] = q[2]; });
   const struct = { t: 'struct', n: g.P.length, pos, fixed: Uint8Array.from(g.F), si: Int32Array.from(g.S.map(s => s[0])), sj: Int32Array.from(g.S.map(s => s[1])), mic: g.mic, hit: g.hit, axis: g.axis };
+  if (g.probe) struct.probe = Float32Array.from(g.probe);   // T1: the tower's tuning probe rides with its body
   const knobs = Object.keys(H.KNOBS).filter(k => !['size', 'mag', 'hit', 'mic', 'm1r', 'm1a', 'm2r', 'm2a', 'm3r', 'm3a'].includes(k)).map(k => ({ t: 'p', k, v: H.KNOBS[k].val }));
   const free = g.P.map((_, i) => i).filter(i => !g.F[i]), mid = free[Math.floor(free.length / 2)];
   const E3 = 440 * Math.pow(2, (52 - 69) / 12), note = (semi, v = 0.9) => ({ t: 'note', f: E3 * Math.pow(2, semi / 12), v });
