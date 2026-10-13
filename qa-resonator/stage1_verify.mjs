@@ -17,10 +17,10 @@ const same = (a, b) => { if (a.length !== b.length) return false; for (let i = 0
   const configs = [];
   for (const shape of Object.keys(NEXT.SHAPES)) { const S = NEXT.SHAPES[shape];
     for (const n of [...new Set([S.min, S.def, S.max])]) configs.push({ shape, n }); }
-  for (const params of [{ att: 0.8 }, { regime: 1 }, { infer: 1, voices: 4, spread: 1 }, { mem: 1 }, { bow: 0.16 },
-    { att: 0.8, fxCho: 0.6, fxDly: 0.6, fxWow: 0.6, fxTrem: 0.6, fxSat: 0.6 }, { voices: 8, nl: 4, drive: 3 },
-    { width: 1, spImg: 1, spRefl: 1, spRot: 1 }, { fbAmt: 0.8, amp: 1, cab: 1 }]) configs.push({ params });
-  configs.push({ mode: 1 }, { pk: 1 }, { pk: 2 }, { mods: [{ d: 'tune', r: 4, a: 1, sh: 4 }] }, { hitF: 0.5, micF: 0.1 });
+  // J1: the preview no longer has OMEF, the bow, effects, space, Stereo, feedback, the amp, the splash, the
+  // pickup types or the modulators, so those configurations are not compared (the live page still has them).
+  for (const params of [{ voices: 8, nl: 4, drive: 3 }]) configs.push({ params });
+  configs.push({ hitF: 0.5, micF: 0.1 });
   let ok = 0; const bad = [];
   for (const c of configs) {
     const a = LIVE.render({ secs: 2, rate: 32000, ...c }), b = NEXT.render({ secs: 2, rate: 32000, ...c });

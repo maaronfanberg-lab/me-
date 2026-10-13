@@ -25,7 +25,7 @@ function render(H, { rate = 32000, secs = 4, shape = 'String', params = {}, mode
   const pos = new Float32Array(NN * 3); g.P.forEach((q, i) => { pos[i * 3] = q[0]; pos[i * 3 + 1] = q[1]; pos[i * 3 + 2] = q[2]; });
   const m = d => p.port.onmessage({ data: d });
   m({ t: 'struct', n: NN, pos, fixed: Uint8Array.from(g.F), si: Int32Array.from(g.S.map(s => s[0])), sj: Int32Array.from(g.S.map(s => s[1])), mic: g.mic, hit: g.hit, axis: g.axis });
-  m({ t: 'mode', v: mode }); m({ t: 'pk', v: pk });
+  m({ t: 'mode', v: mode }); m({ t: 'pk', v: pk }); m({ t: 'spec', v: 0 });   // J1 ratchet: as the pages send it
   for (const k in H.KNOBS) if (!['size', 'mag', 'hit', 'mic', 'm1r', 'm1a', 'm2r', 'm2a', 'm3r', 'm3a'].includes(k)) m({ t: 'p', k, v: k in params ? params[k] : H.KNOBS[k].val });
   for (const k of ['bow']) if (k in params) m({ t: 'p', k, v: params[k] });
   if (mods) mods.forEach((md, i) => m({ t: 'mod', i, ...md }));
@@ -51,17 +51,12 @@ const sparse = (n, gap) => Array.from({ length: n }, (_, i) => ({ at: 0.05 + i *
 const cfgs = [{ name: 'default' }];
 for (const s of Object.keys(N.SHAPES)) cfgs.push({ name: 'shape ' + s, shape: s });
 // the baseline's knobs: a control added after P1 (e.g. Reverb) legitimately changes the sound
-for (const k in B.KNOBS) for (const e of ['min', 'max']) if (!['size', 'mag', 'hit', 'mic'].includes(k)) cfgs.push({ name: `${k} ${e}`, params: { [k]: B.KNOBS[k][e] } });
+// J1: only the controls the preview still has (the others no longer exist in its engine)
+const J1_KEYS = ['ratio', 'decay', 'loss', 'sub', 'drive', 'hard', 'blend', 'gain', 'tune', 'tone', 'bite', 'nl', 'angle', 'voices'];
+for (const k in B.KNOBS) for (const e of ['min', 'max']) if (J1_KEYS.includes(k)) cfgs.push({ name: `${k} ${e}`, params: { [k]: B.KNOBS[k][e] } });
 for (const v of [2, 4, 8]) for (const s of ['String', 'Drum', 'Tank']) cfgs.push({ name: `${s} ${v} voices, sparse`, shape: s, params: { voices: v }, notes: sparse(3, 1.1) });
 cfgs.push({ name: '8 voices dense', params: { voices: 8 } });
-cfgs.push({ name: 'plectrum 4 voices', mode: 2, params: { voices: 4 } });
-cfgs.push({ name: 'oscillator held, 4 voices', mode: 3, params: { voices: 4 }, notes: [{ at: 0.05, semi: 0, v: 0.8 }, { at: 1.2, semi: 7, v: 0.8 }, { at: 2.5, off: true, semi: 0 }] });
-cfgs.push({ name: 'wind, 4 voices', params: { wind: 0.6, voices: 4 }, notes: sparse(2, 1.5) });
-cfgs.push({ name: 'bow, 2 voices', params: { bow: 0.16, voices: 2 }, notes: sparse(2, 1.5) });
-cfgs.push({ name: 'feedback, 4 voices', params: { fbAmt: 0.45, voices: 4 }, notes: sparse(2, 1.5) });
-cfgs.push({ name: 'effects + space', params: { att: 0.8, fxCho: 0.6, fxDly: 0.6, fxWow: 0.5, fxTrem: 0.5, fxSat: 0.5, spImg: 0.8, spRefl: 0.6, spDop: 0.5, spRot: 0.5, spElev: 0.5 } });
-cfgs.push({ name: 'extra mics 2-3, 4 voices', params: { voices: 4 }, notes: sparse(3, 1.1), extra: [(g, idx) => ({ t: 'xmic', k: 0, i: idx(0.3), g: 0.8, p: -0.6 }), (g, idx) => ({ t: 'xmic', k: 1, i: idx(0.8), g: 1.2, p: 0.7 })] });
-cfgs.push({ name: 'envelope on Damping + follower on Level', mods: [{ d: 'loss', r: 1, a: 0.6, sh: 0, ty: 1, A: 0.01, D: 0.3, S: 0.3, R: 0.4 }, { d: 'gain', r: 1, a: 0.5, sh: 0, ty: 2, src: 0, fa: 0.022, fr: 0.05, sens: 4.47, inv: 1 }] });
+// J1: plectrum, oscillator, wind, bow, feedback, effects, space, extra mics and modulators left the preview
 let bad = [];
 for (const c of cfgs) { const { name, ...o } = c; if (!same(render(B, o), render(N, o))) bad.push(name); }
 check(`sleep and governor off: bit-identical to the baseline (${cfgs.length} setups)`, bad.length === 0, bad.length ? 'differ: ' + bad.join(', ') : '');

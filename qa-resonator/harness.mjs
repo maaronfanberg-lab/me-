@@ -8,7 +8,15 @@ const wEnd = html.indexOf('`;', wStart);
 export const WORKLET = html.slice(wStart, wEnd);
 const sStart = html.indexOf('const SHAPES = {');
 const sEnd = html.indexOf('\n};', sStart) + 3;
-export const SHAPES = new Function(html.slice(sStart, sEnd) + '\nreturn SHAPES;')();
+const OWN = new Function(html.slice(sStart, sEnd) + '\nreturn SHAPES;')();
+// J1: the preview keeps only its own bodies. A check that builds another shape (to compare engines on many bodies)
+// takes that shape's geometry from the live page; the engine runs any body it is given.
+const LIVE = new URL('../apps/resonator.html', import.meta.url).pathname;
+let FALLBACK = {};
+if (SRC !== LIVE && fs.existsSync(LIVE)) { const h2 = fs.readFileSync(LIVE, 'utf8'), a = h2.indexOf('const SHAPES = {'), b = h2.indexOf('\n};', a) + 3;
+  FALLBACK = new Function(h2.slice(a, b) + '\nreturn SHAPES;')(); }
+export const SHAPES = Object.assign({}, FALLBACK, OWN);
+export const OWN_SHAPES = OWN;
 const kStart = html.indexOf('const KNOBS={');
 const kEnd = html.indexOf('\n};', kStart) + 3;
 const stateStub = { n: 14, hitIdx: 0, micIdx: 0 };
@@ -44,6 +52,7 @@ export function render({ rate = 48000, secs = 4, shape = 'String', params = {}, 
   m({ t: 'struct', n: g.P.length, pos, fixed: Uint8Array.from(g.F), si: Int32Array.from(g.S.map(s => s[0])),
       sj: Int32Array.from(g.S.map(s => s[1])), mic: g.mic, hit: g.hit, axis: g.axis });
   m({ t: 'mode', v: mode }); m({ t: 'pk', v: pk });
+  m({ t: 'spec', v: 0 });   // J1 ratchet: both pages send this on every new body (the level trim the Tank always had)
   if (lvl != null) m({ t: 'lvl', v: lvl });
   for (const k in KNOBS) if (!['size', 'mag', 'hit', 'mic', 'm1r', 'm1a', 'm2r', 'm2a', 'm3r', 'm3a'].includes(k))
     m({ t: 'p', k, v: k in params ? params[k] : KNOBS[k].val });

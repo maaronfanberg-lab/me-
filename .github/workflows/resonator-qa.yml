@@ -68,6 +68,12 @@ jobs:
         id: i1e
         continue-on-error: true
         run: node qa-resonator/i1_engine.mjs 2>&1 | tee qa-out/i1_engine.txt
+      - name: Stage J1 proof (the stripped engine is the old engine for everything the Tank page can do)
+        id: j1v
+        continue-on-error: true
+        run: |
+          git fetch -q --depth=1 origin e3010d51298f79982a0e2cc1f960cb3824784764 || true
+          node qa-resonator/j1_verify.mjs 2>&1 | tee qa-out/j1_verify.txt
       - name: Stage I browser checks (Tank only, bit-identical to before, Sustain, slide the circles, presets)
         id: i1b
         continue-on-error: true
@@ -81,6 +87,7 @@ jobs:
             s1v=${{ steps.s1v.outcome }} s1b=${{ steps.s1b.outcome }}
             p1v=${{ steps.p1v.outcome }} p1b=${{ steps.p1b.outcome }}
             i1e=${{ steps.i1e.outcome }} i1b=${{ steps.i1b.outcome }}
+            j1v=${{ steps.j1v.outcome }}
         run: |
           mkdir -p qa-out
           echo "${{ github.sha }}" > qa-out/commit.txt

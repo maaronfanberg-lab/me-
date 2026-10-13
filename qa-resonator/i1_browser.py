@@ -96,12 +96,18 @@ with sync_playwright() as p:
             res = json.loads(out.stdout.strip().splitlines()[-1])
         except Exception:
             res = {'same': False, 'error': (out.stdout + out.stderr)[-400:]}
+        # J1: the page no longer sends the removed controls at all (the engine has none of them left); a removed
+        # control may only differ by being absent now. The sound must still be bit-identical.
+        REMOVED = {'width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','coup','regime','rswitch','rphi','mem','memSpan',
+                   'infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain',
+                   'rvMix','rvTime','rvTone','rvPre'}
+        odd = [d for d in res.get('paramDiffers') or [] if not (d.split(':')[0] in REMOVED and d.endswith('→ undefined'))]
         check('the same taps on the page before Stage I and on this one: the engine hears the same, the sound is bit-identical',
-              out.returncode == 0 and res.get('same') and not res.get('paramDiffers'),
+              out.returncode == 0 and res.get('same') and not odd,
               json.dumps({k: res.get(k) for k in ['same', 'maxDiff', 'peak', 'notes', 'paramDiffers', 'error'] if k in res}))
         k0, k1 = res.get('kinds', [{}, {}])
-        check('...and the only messages the new page no longer sends are the extra mics (switched off either way)',
-              {k for k in k0 if k not in k1} <= {'xmic'}, f'before {k0} · after {k1}')
+        check('...and the only messages the new page no longer sends are for removed features (extra mics, second mic, pickup type, exciter mode, specialization)',
+              {k for k in k0 if k not in k1} <= {'xmic', 'mic2', 'pk', 'mode', 'spec'}, f'before {k0} · after {k1}')
     else:
         check('baseline page from git (the preview before Stage I)', False, f'{BASE_SHA[:8]} not in this clone; replay proof not run', critical=False)
 
@@ -216,10 +222,12 @@ with sync_playwright() as p:
     m = pg.evaluate("""() => { const p = {}; for (const x of window.__msgs) if (x.t === 'p') p[x.k] = x.v;
       return { p, kinds: [...new Set(window.__msgs.map(x => x.t))], pk: state.pk, mode: state.mode, spec: state.spec,
                specSent: window.__msgs.filter(x => x.t === 'spec').map(x => x.v), modeSent: window.__msgs.filter(x => x.t === 'mode').map(x => x.v), pkSent: window.__msgs.filter(x => x.t === 'pk').map(x => x.v) }; }""")
-    bad = [f'{k}={m["p"].get(k)}' for k, v in {'rvMix': 0, 'att': 0, 'wind': 0, 'fbAmt': 0, 'spDist': 0.3, 'fxCho': 0, 'width': 0, 'amp': 0}.items() if m['p'].get(k) != v]
-    bad += [x for x in ['mod', 'xmic'] if x in m['kinds']] + (['bow sent'] if 'bow' in m['p'] else [])
-    bad += [] if (m['pk'], m['mode'], m['spec']) == (0, 0, 0) and m['specSent'] and set(m['specSent']) == {0} and set(m['modeSent']) == {0} and set(m['pkSent']) == {0} else [f"pk/mode/spec {m['pk']}/{m['mode']}/{m['spec']} sent {m['pkSent']}/{m['modeSent']}/{m['specSent']}"]
-    check('an old preset cannot switch a removed feature back on (reverb, OMEF, wind, feedback, bow, distance, modulators, extra mics, exciters)', not bad, '; '.join(bad) if bad else 'all at their old defaults')
+    # J1: nothing for a removed feature is sent at all, and the page holds no value for one
+    bad = [f'{k} sent' for k in ['rvMix', 'att', 'wind', 'fbAmt', 'spDist', 'fxCho', 'width', 'amp', 'bow', 'pkType'] if k in m['p']]
+    bad += [f'{x} sent' for x in ['mod', 'xmic', 'mic2', 'pk', 'mode', 'spec'] if x in m['kinds']]
+    held = pg.evaluate("() => ['rvMix','att','wind','fbAmt','spDist','fxCho','width','amp'].filter(k => k in val)")
+    bad += [f'page holds {k}' for k in held]
+    check('an old preset cannot switch a removed feature back on (reverb, OMEF, wind, feedback, bow, distance, modulators, extra mics, exciters)', not bad, '; '.join(bad) if bad else 'none of them is sent or held')
     code = pg.evaluate("JSON.stringify(Object.assign(JSON.parse(JSON.stringify(snapshot())), { shape: 'Drum' }))")
     tap(pg, '#ppaste'); pg.fill('#pcode', code); tap(pg, '#ppaste'); pg.wait_for_timeout(300)
     check('pasting code for another shape is refused, and says why', 'Drum' in pg.evaluate("document.getElementById('msg').textContent") and pg.evaluate('state.shape') == 'Tank',

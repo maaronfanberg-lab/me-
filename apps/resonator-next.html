@@ -248,6 +248,7 @@ body.hints .knob{margin-bottom:16px}
 
 const WORKLET = String.raw`
 const SR_SOFT=24000;   // a soft catch protects for this many samples
+const KEYS=new Set(['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','voices','osMax']);   // J1
 class Resonator extends AudioWorkletProcessor {
   constructor(){
     super();
@@ -260,65 +261,15 @@ class Resonator extends AudioWorkletProcessor {
     this.vPul=[[],[],[],[],[],[],[],[]]; this.vPen=[[],[],[],[],[],[],[],[]];
     this.f0=220; this.fRef=0; this.kRef=1e8; this.kT=0; this.kL=0; this.kTt=0; this.kLt=0; this.snapNext=true;
     this.ratio=6; this.decay=4; this.loss=0.5; this.sub=0.0006; this.drive=1;
-    this.hard=0.3; this.blend=0.12; this.gain=0.85; this.tune=0; this.bow=0;
-    this.bowSpd=1.0; this.bowVc=0.35;
-    this.tone=6000; this.bite=0; this.nl=0; this.angle=0.4; this.width=0;
-    // magnetic pickup + amplifier
-    this.fbAmt=0; this.fbTime=24; this.fbBuf=new Float32Array(16384); this.fbIdx=0; this.fbF=0;
-    this.nlCap=6; this.pkAp=0.18; this.pkRes=3000; this.pkQ=1.6; this.pkType=0; this.pkSpc=0.28;
-    this.amp=0; this.bass=0; this.treb=0; this.cab=0;
-    this.mods=[{d:'',r:1,a:0,s:0,ph:0,sh:0},{d:'',r:1,a:0,s:0,ph:0,sh:0},{d:'',r:1,a:0,s:0,ph:0,sh:0}];
-    // S5: modulator type (0 LFO, 1 envelope, 2 follower), its state, and what followers listen to
-    for(const m of this.mods){ m.ty=0; m.e=0; m.st=0; m.kA=0; m.kD=0; m.kR=0; m.S=0; m.aA=0; m.aR=0; m.y1=0; m.y=0; m.sens=2; m.src=0; m.inv=0; }
-    this.fIn=new Float64Array(5); this.fOn=false; this.held=new Float64Array(16); this.nHeld=0;
-    this.modBase={}; this.modTick=0;
-    this.c1=0; this.c2=0; this.b1=0; this.b2=0; this.t1=0; this.t2=0; this.lp1b=0;
-    this.hp1=0; this.lp1=0;
-    this.micJ=-1; this.lp2=0; this.dcx2=0; this.dcy2=0;
+    this.hard=0.3; this.blend=0.12; this.gain=0.85; this.tune=0;
+    this.tone=6000; this.bite=0; this.nl=0; this.angle=0.4;
+    // the pickup: a coil of fixed aperture over the mic point, then its inductance/cable resonance
+    this.nlCap=6; this.pkAp=0.18; this.pkRes=3000; this.pkQ=1.6;
+    this.c1=0; this.c2=0;
     this.micI=0; this.micA=1; this.hitI=0; this.hitA=1;
-    this.pulses=[]; this.pending=[]; this.splash=0.9; this.mode=0;
-    this.lp=0; this.lpB=0; this.lp2B=0; this.dcx=0; this.dcy=0; this.bn=0; this.tick=0;
-    // Cross-organ coupling. Off by default; at zero nothing below runs at all.
-    this.coup=0; this.coupBase={};
-    // Four hidden regimes, softmax-switched, driven by a golden-ratio cycle pair.
-    // Reciprocal-Fibonacci memory of how hard the instrument has been played.
-    // Weights 1/F_k sum to the reciprocal Fibonacci constant, so h lands in 0..1.
-    // Particle filter: infers which regime you are playing in, from how you play.
-    // ---- OMEF attractor recursion, ten-coordinate organ vector ----
-    // Effects, each driven by whichever attractor quantity already behaves like it.
-    // Specialization = a choice of the reassembly operator R. The orbit is the
-    // same; what the instrument becomes out of it is not.
-    this.spec=0;
-    // Spatialisation from the model's own geometry: the mic has a real position
-    // and a real velocity, so the cues are measured rather than invented.
-    this.spImg=0; this.spDist=0.3; this.spDop=0; this.spRot=0; this.spRefl=0; this.spElev=0;
-    this.sl=new Float32Array(8192); this.sr=new Float32Array(8192); this.si2=0;
-    this.airL=0; this.airR=0; this.dopS=0; this.rotPh=0; this.elL=0; this.elR=0; this.enL=0; this.enR=0;
-    this.fxCho=0; this.fxTrem=0; this.fxWow=0; this.fxDly=0; this.fxSat=0; this.fxFb=0.35;
-    this.dl=new Float32Array(65536); this.dr=new Float32Array(65536); this.di=0;
-    this.choL=0; this.choR=0; this.wowP=0; this.satN=0;
-    this.chA=0; this.chB=0.25;   // chorus phases, rates in golden ratio
-    this.tapT=new Float64Array(6);
-    this.att=0; this.attC=0.35; this.attRho=0.86; this.attK=0.30; this.attEps=0.22;
-    this.U=new Float64Array(10); this.Uh=new Float64Array(10);
-    this.Lin=new Float64Array(10); this.Cv=new Float64Array(10); this.Av=new Float64Array(10);
-    this.Fv=new Float64Array([1,0.6,0.3]); this.alpha=new Float64Array([0.25,0.25,0.25,0.25]);
-    this.Zphi=new Float64Array([1,0]);
-    this.attHist=new Float64Array(512*2); this.attN=0; this.attT=0;
-    for(let i=0;i<10;i++) this.U[i]=(i%3-1)*0.2;
-    this.infer=0; this.spread=0; this.NP=256;
-    this.pf=new Uint8Array(256); for(let i=0;i<256;i++) this.pf[i]=i&3;
-    this.pw=new Float64Array(256).fill(1/256);
-    this.post=new Float64Array([0.25,0.25,0.25,0.25]);
-    this.obsRate=0; this.obsVel=0; this.obsReg=0.5; this.dPF=1; this.lastNoteT=0; this.clock=0;
-    this.mem=0; this.memSpan=1.2; this.memAcc=0; this.memT=0; this.h=0;
-    this.hHist=new Float64Array(12);
-    this.FW=[1,1,1/2,1/3,1/5,1/8,1/13,1/21,1/34,1/55,1/89,1/144];
-    this.PSI=3.359885666243178;
-    this.regime=0; this.rswitch=0.025; this.rphi=1.618; this.rsharp=0.98;
-    this.rL=new Float64Array(4); this.rP=new Float64Array([0.25,0.25,0.25,0.25]);
-    this.rT=0; this.rDom=0;
-    this.rec=0; this.recL=new Float32Array(4096); this.recR=new Float32Array(4096); this.recN=0;
+    this.pulses=[]; this.pending=[];
+    this.lp=0; this.lpB=0; this.dcx=0; this.dcy=0; this.tick=0;
+    this.specTrim=2.6;   // J1: the level trim of the old 'even' specialization, which the Tank always used
     this.gate=1; this.gateTarget=1; this.gateStep=0;  // FIX7: click-free gating
     this.calDirty=false; this.capped=false;           // FIX4 / FIX2
     this.clampHits=0; this.trips=0; this.scan=0; this.badScans=0; this.governed=0; this.load=0;      // FIX1 / D9 telemetry
@@ -327,23 +278,7 @@ class Resonator extends AudioWorkletProcessor {
     this.vRest=new Uint8Array(8).fill(1); this.vMute=new Uint8Array(8); this.anyMute=false;
     this.perfSleep=false; this.perfGov=false; this.vCap=8; this.govHot=0; this.govCool=0; this.govActs=0;
     this.sleeps=0; this.slScan=0; this.cpuAcc=0; this.cpuN=0; this.cpu=0; this.cpuMax=0;
-    this.spL=0; this.spR=0; this.fxL=0; this.fxR=0;
-    // F: plate reverb (Dattorro 1997). Off until Reverb is above 0; buffers made on first use.
-    this.rvMix=0; this.rvTime=2.5; this.rvTone=9000; this.rvPre=20; this.rvOn=false; this.rv=null;
-    this.rvDec=0.5; this.rvDd2=0.5; this.rvDamp=0; this.rvPreN=0; this.rvK=0.736; this.rvOutL=0; this.rvOutR=0;   // rvK: reverb alone at 100% = dry loudness
     this.asyncCal=false; this.refPick=null;
-    // S3: exciters. Calibrated so each lands near the mallet's level at default settings.
-    this.wind=0; this.inGain=0.5; this.micIn=0; this.windL=null; this.windW=null; this.windOn=false;
-    this.exAny=false; this.exLive=false; this.plK=0.022; this.oscK=0.0002; this.windK=0.0014; this.inK=0.07; this.oscNz=4;
-    this.oscOn=new Uint8Array(this.VMAX); this.oscEnv=new Float64Array(this.VMAX); this.oscPh=new Float64Array(this.VMAX);
-    this.oscF=new Float64Array(this.VMAX); this.oscA=new Float64Array(this.VMAX); this.exF=new Float64Array(this.VMAX);
-    this.oscAtk=1-Math.exp(-1/(0.012*sampleRate)); this.oscRel=1-Math.exp(-1/(0.15*sampleRate));
-    this.windA=1-Math.exp(-2*Math.PI*400/sampleRate);
-    // S4: up to three extra point mics (clean room mics), each with its own level and pan
-    this.xmN=0; this.xmI=new Int32Array([-1,-1,-1]); this.xmG=new Float64Array([0.7,0.7,0.7]); this.xmP=new Float64Array(3);
-    this.xmVec=[[0,1,0],[0,1,0],[0,1,0]]; this.xmLp=new Float64Array(24); this.xmLpB=new Float64Array(24); this.xmDx=new Float64Array(3); this.xmDy=new Float64Array(3);
-    this.xmT=new Int32Array(24); this.xmS=new Int32Array(24); this.xmK=new Float64Array(24); this.xmX=new Float64Array(24); this.xmY=new Float64Array(24); this.xmZ=new Float64Array(24);
-    this.xmGL=new Float64Array(3); this.xmGR=new Float64Array(3);           // S1: tuning computed off the audio thread / reference pickups
     // F1: seeded PRNG so the same input always gives the same output
     this.seed0=0x2545F491; this.rs=this.seed0;
     // F2/F3: level calibration and ceiling limiter (gain is exactly 1 below the ceiling)
@@ -364,15 +299,13 @@ class Resonator extends AudioWorkletProcessor {
       case 'seed': this.seed0=(d.v|0)||0x2545F491; this.rs=this.seed0; break;
       case 'lvl': this.lvl=(d.v>0&&d.v<32)?d.v:1; break;
       case 'p':
-        this[d.k]=d.v; this.modBase[d.k]=d.v; this.coupBase[d.k]=d.v;
+        if(!KEYS.has(d.k)) break;   // J1: only the controls the page has; nothing else can be set
+        this[d.k]=d.v;
         if(d.k==='angle'){ this.vectors(); }
         if(d.k==='nl') this.pitch();
-        if(d.k==='coup'||d.k==='regime'||d.k==='att') this.pitch();
         if(d.k==='voices'){ this.voices=Math.max(1,Math.min(this.VMAX,Math.round(d.v)));
           for(let v=1;v<this.VMAX;v++){ this.vOn[v]=0; this.vPul[v].length=0; this.vPen[v].length=0; }
           this.pitch(); }
-        if(d.k==='pkAp'||d.k==='pkSpc'){ this.buildCoils(); }
-        if(d.k==='rvMix'||d.k==='rvTime'||d.k==='rvTone'||d.k==='rvPre') this.rvSet();   // F
         if(d.k==='ratio'||d.k==='sub'){ this.calDirty=true; this.pitch(); }   // FIX4/FIX10
         else if(d.k==='tune') this.pitch();
         break;
@@ -380,46 +313,16 @@ class Resonator extends AudioWorkletProcessor {
         if(this.calDirty&&!this.asyncCal){ this.calibrate(); this.calDirty=false; } // FIX4 (S1: with async tuning the shadow engine retunes)
         this.noteOn(d.f,d.v); break;
       case 'mic': this.micI=d.i; this.micA=d.a; this.vectors(); break;
-      case 'mic2': this.micJ=d.i; this.vectors(); break;
-      case 'pk': this.pkType=d.v; break;
-      case 'rec': this.rec=d.v?1:0; this.recN=0; break;
-      case 'mode': this.mode=d.v; if(d.v!==3) this.oscOn.fill(0); break;   // S3: leaving oscillator mode releases it
-      case 'off': for(let v=0;v<this.VMAX;v++) if(this.oscOn[v]&&this.vf0[v]===d.f) this.oscOn[v]=0; this.envNote(d.f,0); break;   // S3: key released; S5: envelopes
-      case 'spec': this.spec=d.v|0; this.setTrim(); break;
       case 'mv': this.moveMass(d.i,d.x,d.y,d.z); this.vRest.fill(0); break;   // P1: a moved mass may no longer be at rest
       case 'perf': this.perfSleep=!!d.sleep; this.perfGov=!!d.gov; if(!this.perfGov){ this.vCap=this.VMAX; } break;   // P1
       case 'perfTest': if(this.perfGov) this.governCpu(d.c); break;   // P1: lets a test drive the governor
-      case 'mod': {
-        const m=this.mods[d.i]; const was=m.d;
-        m.d=d.d; m.r=d.r; m.a=d.a; m.sh=d.sh;
-        { const ty=(d.ty===1||d.ty===2)?d.ty:0; if(ty!==m.ty){ m.e=0; m.st=0; m.y1=0; m.y=0; } m.ty=ty;   // S5
-          if(ty){ const fs=sampleRate, T=x=>Math.max(0.0005,+x||0.001);
-            m.inv=d.inv?1:0; m.src=Math.max(0,Math.min(4,d.src|0)); m.sens=Math.max(0,+d.sens||0); m.S=Math.max(0,Math.min(1,+d.S||0));
-            // envelope segments are analog-style curves that arrive in the set time: attack aims past 1 (at 1.5),
-            // decay and release aim 0.05 past their goal
-            m.kA=1-Math.exp(-Math.log(3)/(T(d.A)*fs)); m.kD=1-Math.exp(-Math.log((1.05-m.S)/0.05)/(T(d.D)*fs)); m.kR=1-Math.exp(-Math.log(21)/(T(d.R)*fs));
-            m.aA=Math.exp(-1/(T(d.fa)*fs)); m.aR=Math.exp(-1/(T(d.fr)*fs)); }
-          this.fOn=this.mods[0].ty===2||this.mods[1].ty===2||this.mods[2].ty===2; }
-        if(was&&was!==d.d&&this.modBase[was]!==undefined) this[was]=this.modBase[was];
-        if(d.d==='nl'||d.d==='ratio'||was==='nl'||was==='ratio') this.pitch();
-        if(d.d&&this.modBase[d.d]===undefined) this.modBase[d.d]=this[d.d];
-        if(m.d&&!(m.a>0)&&this.modBase[m.d]!==undefined&&this[m.d]!==this.modBase[m.d]){ this[m.d]=this.modBase[m.d]; if(m.d==='tune'||m.d==='nl'||m.d==='ratio') this.pitch(); }   // S5: Depth 0 returns the parameter to its own setting
-        break;
-      }
       case 'hit': this.hitI=d.i; this.hitA=d.a; this.vectors(); break;
-      case 'hush': if(this.rv) this.rvClear(); this.gateTarget=0; this.pendingReset=true; this.bow=0; this.modBase.bow=0;
-        for(const m of this.mods){ m.e=0; m.st=0; m.y1=0; m.y=0; } this.nHeld=0; this.fIn.fill(0);   // S5
-        this.oscOn.fill(0); this.oscEnv.fill(0); if(this.windL) this.windL.fill(0);   // S3
+      case 'hush': this.gateTarget=0; this.pendingReset=true;
         for(let v=0;v<this.VMAX;v++){ this.vPul[v].length=0; this.vPen[v].length=0; this.vOn[v]=0; }
-        this.dl.fill(0); this.dr.fill(0); this.sl.fill(0); this.sr.fill(0); this.airL=0; this.airR=0; this.choL=0; this.choR=0; this.wowP=0;
         this.pulses=this.vPul[0]; this.pending=this.vPen[0]; break; // FIX7
       case 'ret': if(this.pool.length<3) this.pool.push(d.P); break; // FIX8
       case 'cal': if(!this.ok) break; this.applyCal(d.cal); this.calDirty=false; this.pitch(); this.report('ready'); break; // S1
       case 'asyncCal': this.asyncCal=!!d.v; break;
-      case 'xmic': { const q=d.k|0; if(q<0||q>2) break;   // S4: place / move / remove an extra mic
-        this.xmI[q]=(d.i>=0&&d.i<this.N&&!(this.fixed&&this.fixed[d.i]))?d.i:-1;
-        if(d.g!=null) this.xmG[q]=d.g; if(d.p!=null) this.xmP[q]=d.p;
-        this.xmN=(this.xmI[0]>=0)+(this.xmI[1]>=0)+(this.xmI[2]>=0); this.vectors(); break; }                                                                         // S1
     }
   }
   build(d){
@@ -457,9 +360,6 @@ class Resonator extends AudioWorkletProcessor {
     }
     this.shapeTrim=Math.pow(Math.max(1,this.deg/2),0.55)*Math.pow(Math.max(0.02,this.aChar)/0.056,0.30);
     this.micI=d.mic; this.hitI=d.hit; this.micA=d.axis; this.hitA=d.axis; this.axis=d.axis;
-    if(this.micJ>=N||(this.micJ>=0&&this.fixed[this.micJ])) this.micJ=-1;   // S2: second mic re-placed if its mass is gone or pinned
-    for(let q=0;q<3;q++) if(this.xmI[q]>=N||(this.xmI[q]>=0&&this.fixed[this.xmI[q]])) this.xmI[q]=-1;   // S4
-    this.xmN=(this.xmI[0]>=0)+(this.xmI[1]>=0)+(this.xmI[2]>=0); this.xmLp.fill(0); this.xmLpB.fill(0); this.xmDx.fill(0); this.xmDy.fill(0);
     this.pool.length=0; this.clampHits=0; this.trips=0;
     this.vectors();
     this.refPick={hitI:this.hitI,micI:this.micI,hitVec:this.hitVec.slice(),micVec:this.micVec.slice()}; // S1: tuning reference fixed at build
@@ -485,8 +385,6 @@ class Resonator extends AudioWorkletProcessor {
   buildCoils(){
     if(!this.N) return;
     this.coilA=this.coil(this.micI,this.pkAp);
-    const off=Math.max(1,Math.round(this.pkSpc*this.N*0.5));
-    this.coilB=this.coil(Math.min(this.N-1,Math.max(0,this.micI+off)),this.pkAp);
   }
   vectors(){
     if(!this.ax3) return;
@@ -503,21 +401,6 @@ class Resonator extends AudioWorkletProcessor {
     };
     this.hitVec=mk(this.hitI,this.hitA,OBL);
     this.micVec=mk(this.micI,this.micA,AXM);
-    if(this.micJ<0&&this.N>2){
-      // opposite side of the body, so the two pickups hear genuinely different motion
-      let far=this.micI, best=-1;
-      for(let q=0;q<this.N;q++){
-        if(this.fixed[q]) continue;
-        const dx=this.restOne[q*3]-this.restOne[this.micI*3],
-              dy=this.restOne[q*3+1]-this.restOne[this.micI*3+1],
-              dz=this.restOne[q*3+2]-this.restOne[this.micI*3+2];
-        const d=dx*dx+dy*dy+dz*dz;
-        if(d>best){best=d;far=q;}
-      }
-      this.micJ=far;
-    }
-    this.micVec2=mk(this.micJ>=0?this.micJ:this.micI,this.micA,AXM);
-    for(let q=0;q<3;q++) if(this.xmI[q]>=0) this.xmVec[q]=mk(this.xmI[q],this.micA,AXM);   // S4
     this.buildCoils();
   }
   moveMass(n,x,y,z){
@@ -549,7 +432,7 @@ class Resonator extends AudioWorkletProcessor {
   report(tag){
     this.port.postMessage({t:tag, fRef:this.fRef, os:this.os, springs:this.S, masses:this.N,
       kT:this.kT, kL:this.kL, capped:this.capped, deg:this.deg,
-      regime:this.rDom, h:this.h, dpf:this.dPF, resid:this.resid||0, clampHits:this.clampHits, trips:this.trips, governed:this.governed, voices:this.voices});
+      clampHits:this.clampHits, trips:this.trips, governed:this.governed, voices:this.voices});
   }
   // ---- exact modal calibration -------------------------------------------
   // Linearise the spring law about rest. For a spring with rest direction u0,
@@ -770,18 +653,11 @@ class Resonator extends AudioWorkletProcessor {
     for(let i=0;i<n;i++){ let s=0; for(let j=0;j<n;j++) s+=K[i*n+j]*x[j]; num+=x[i]*s; den+=x[i]*x[i]; }
     return den>0?num/den:0;
   }
-  // Nonlinearity raises transverse stiffness by up to 6x at large amplitude, and
-  // modulation can drive it there. The timestep has to be chosen for the WORST
-  // case, not the resting value, or the simulation walks off its stability bound.
   worstNl(){
-    let n=this.modBase.nl!==undefined?this.modBase.nl:this.nl;
-    for(const m of this.mods) if(m.d==='nl'&&m.a>0) n=Math.max(n,n+m.a*this.modSpan('nl'));
-    return Math.min(6,1+Math.max(0,n)*0.62);
+    return Math.min(6,1+Math.max(0,this.nl)*0.62);
   }
   worstRatio(){
-    let r=this.modBase.ratio!==undefined?this.modBase.ratio:this.ratio;
-    for(const m of this.mods) if(m.d==='ratio'&&m.a>0) r=Math.max(r,r+m.a*this.modSpan('ratio'));
-    return Math.max(0.2,r);
+    return Math.max(0.2,this.ratio);
   }
   kLfor(kT){
     // spend the timestep budget on what is playable, not on what is ideal
@@ -892,12 +768,9 @@ class Resonator extends AudioWorkletProcessor {
     return best;
   }
   noteOn(f,vel){
-    this.envNote(f,1);   // S5
     const v=this.pickVoice();
     if(this.vMute[v]) this.vMute[v]=0;   // P1: a new note on a muted voice un-mutes it
     this.vf0[v]=f; this.vAge[v]=++this.ageC; this.vOn[v]=1;
-    this.memAcc+=vel*vel*0.19;
-    this.obsRate+=1; this.obsVel=0.75*this.obsVel+0.5*vel;
     this.f0=f; this.snapNext=true;
     if(this.voices>1){
       // a fresh voice starts from rest; monophonic keeps the ring, as before
@@ -910,10 +783,7 @@ class Resonator extends AudioWorkletProcessor {
   }
   pitchVoice(v){
     if(!this.ok||!this.table) return;
-    let det=0;
-    if(this.spread>0&&this.voices>1)
-      det=this.spread*(0.35+0.65*this.dPF)*95*((v/(this.voices-1))*2-1);
-    const f=this.vf0[v]*Math.pow(2,(this.tune+det)/1200);
+    const f=this.vf0[v]*Math.pow(2,this.tune/1200);
     let kT=this.kTforF(f);
     const nlw=this.worstNl();
     const kTmax=Math.pow(1.1*sampleRate*(this.osMax||20),2)/(2*this.deg*Math.max(1,nlw));
@@ -932,74 +802,14 @@ class Resonator extends AudioWorkletProcessor {
   }
   strikeVoice(vi,vel){
     this.pulses=this.vPul[vi]; this.pending=this.vPen[vi];
-    if(this.mode===3){ this.pulses.length=0; this.pending.length=0; this.oscStart(vi,vel); return; }   // S3
     this.strike(vel);
-  }
-  // S3 oscillator exciter: a force at the strike point at the played pitch, with a short attack and
-  // a release when the key comes up. Mallet sets the tone (hard = brighter, soft = a pure sine).
-  oscStart(v,vel){
-    this.oscF[v]=this.vf0[v]*Math.pow(2,this.tune/1200); this.oscOn[v]=1; this.exLive=true;
-    this.oscA[v]=this.oscK*this.drive*vel*this.aChar/this.compAt(this.vkTt[v]||this.kT);
-  }
-  // S3: oscillator, microphone and wind forces for one audio sample (held across its substeps).
-  // Does nothing at all while every exciter is off, so ordinary sounds are unchanged.
-  exciteSample(inp,k){
-    let any=false; const sr=sampleRate;
-    let xin=0;
-    if(this.micIn&&this.inGain>0&&inp&&inp[0]&&inp[0][0]){ xin=inp[0][0][k]||0; if(!isFinite(xin)) xin=0; }
-    let osc=false;
-    for(let v=0;v<this.voices;v++){
-      let F=0;
-      if(this.oscOn[v]||this.oscEnv[v]>0){
-        osc=true;
-        const tgt=this.oscOn[v]?1:0;
-        this.oscEnv[v]+=(tgt-this.oscEnv[v])*(tgt?this.oscAtk:this.oscRel); if(!tgt&&this.oscEnv[v]<1e-5) this.oscEnv[v]=0;
-        let ph=this.oscPh[v]+this.oscF[v]/sr; ph-=Math.floor(ph); this.oscPh[v]=ph;
-        const bb=1-this.hard, w=2*Math.PI*ph;
-        // the body only rings at its own partials, so harmonics of the drive barely sound; a little
-        // broadband roughness (hard = rough, soft = a pure sine) is what reaches the upper partials
-        const nz=bb>0.02?(this.rnd()*2-1):0;
-        F+=this.oscA[v]*this.oscEnv[v]*(Math.sin(w)+bb*0.5*Math.sin(2*w)+bb*bb*0.3333*Math.sin(3*w)+bb*bb*this.oscNz*nz);
-      }
-      if(xin!==0) F+=this.inK*this.inGain*this.inGain*xin*this.aChar/this.compAt(this.vkT[v]||this.kT);
-      this.exF[v]=F; if(F!==0) any=true;
-    }
-    if(this.wind>0&&this.N){
-      const n3=this.N*3;
-      if(!this.windL||this.windL.length!==n3){ this.windL=new Float64Array(n3); this.windW=new Float64Array(n3); }
-      const W=this.windK*this.wind*this.wind*this.aChar/this.compAt(this.vkT[0]||this.kT), a=this.windA, L=this.windL, Wf=this.windW, fx=this.fixed;
-      for(let q=0;q<this.N;q++){ if(fx[q]) continue; const i=q*3;
-        for(let c=0;c<3;c++){ L[i+c]+=a*((this.rnd()*2-1)-L[i+c]); Wf[i+c]=W*L[i+c]; } }
-      this.windOn=true; any=true;
-    } else if(this.windOn){ this.windW.fill(0); this.windOn=false; }
-    this.exAny=any; this.exLive=osc||this.windOn||(this.micIn&&this.inGain>0);
   }
   strike(v){
     this.pulses.length=0; this.pending.length=0;
-    if(this.mode===2){   // S3 plectrum: pull the strike point aside, then let it slip off
-      const sr=sampleRate, os=this.os, f=Math.max(20,this.f0);
-      const rise=Math.min(0.03,Math.max(0.005,1.2/f+0.004))*sr*os;
-      const slip=Math.max(2,(0.00008+0.004*this.hard*this.hard)*Math.pow(220/f,0.6)*sr*os);
-      this.pulses.push({left:rise+slip,dur:rise+slip,amp:this.plK*this.drive*v*this.aChar/this.compAt(this.kT),rise});
-      return;
-    }
     let secs=(0.00025+0.007*this.hard*this.hard)*Math.pow(220/Math.max(20,this.f0),0.6);
     secs=Math.min(0.02,Math.max(0.00018,secs));
-    const J=1.1*this.drive*v*this.f0*this.aChar*Math.min(1.5,Math.max(0.35,this.specTrim||1));
-    if(!this.mode||this.splash<=0){ this.push(0,secs,J); return; }
-    // Worthington splash. A body enters, a cavity opens and collapses, pinch-off
-    // throws a jet upward, and the jet breaks into droplets that fall back and
-    // strike again. Everything scales with impact velocity: T = R / V.
-    const s=this.splash;
-    const T=0.135*Math.pow(0.35/Math.max(0.08,v),0.6);   // characteristic time
-    this.push(0, secs, J);                                // entry
-    this.push(T, secs*0.5, -1.15*J*s);                    // cavity collapse, pinch-off
-    this.push(T*1.4, 0.075, 0.85*J*s);                    // the jet: a slow push, not a hit
-    let t=T*2.3, a=0.70*J*s;
-    for(let n=0;n<6;n++){                                 // droplets falling back
-      this.push(t, secs*0.7, a);
-      t+=T*(0.55+0.42*n); a*=0.72;                        // decelerating, decaying
-    }
+    const J=1.1*this.drive*v*this.f0*this.aChar*Math.min(1.5,Math.max(0.35,this.specTrim));
+    this.push(0,secs,J);
   }
   advance(dt_scale){
     // A knob turn must not step the force field. Ramp stiffness over ~25 ms so a
@@ -1029,12 +839,11 @@ class Resonator extends AudioWorkletProcessor {
     const dmp=this.decay>0?Math.exp(-(6.91/this.decay)*dt):1;
     // P1: read once per step (same values, same arithmetic as before)
     const nl=this.nl, nlCap=this.nlCap||6, vRest=this.vRest;
-    const gForce=this.windOn||this.fbF!==0||this.bow>0;            // forces that reach every voice
     const mk=this.anyMute?Math.exp(-(6.91/0.015)*dt):1;               // a muted voice loses 60 dB in 15 ms
     for(let v=0;v<this.voices;v++){
       const b=v*st;
       if(vRest[v]){   // P1: exactly at rest and nothing pushing it: zero force, so nothing to compute
-        if(!gForce&&!this.vPul[v].length&&!this.vPen[v].length&&!(this.exAny&&this.exF[v]!==0)) continue;
+        if(!this.vPul[v].length&&!this.vPen[v].length) continue;
         vRest[v]=0;
       }
       const kT=this.vkT[v]||this.kT, kL=this.vkL[v]||this.kL;
@@ -1072,42 +881,10 @@ class Resonator extends AudioWorkletProcessor {
         let A=0, hv=this.hitVec, hb=b+this.hitI*3;
         for(let q=pul.length-1;q>=0;q--){
           const p=pul[q];
-          if(p.rise){   // S3 plectrum: smooth pull, then the string slips off
-            const el=p.dur-p.left;
-            A+=p.amp*(el<p.rise?0.5-0.5*Math.cos(Math.PI*el/p.rise):0.5+0.5*Math.cos(Math.PI*(el-p.rise)/Math.max(1,p.dur-p.rise)));
-          } else {
-            const t=1-p.left/p.dur, w=Math.sin(Math.PI*t);
-            A+=p.amp*w*w;
-          }
+          const t=1-p.left/p.dur, w=Math.sin(Math.PI*t);
+          A+=p.amp*w*w;
           p.left-=dt_scale; if(p.left<=0) pul.splice(q,1);
         }
-        frc[hb]+=A*hv[0]; frc[hb+1]+=A*hv[1]; frc[hb+2]+=A*hv[2];
-      }
-      if(this.exAny){   // S3: oscillator / microphone force at the strike point, wind on every mass
-        const F=this.exF[v];
-        if(F!==0){ const hv=this.hitVec, hb=b+this.hitI*3; frc[hb]+=F*hv[0]; frc[hb+1]+=F*hv[1]; frc[hb+2]+=F*hv[2]; }
-        if(this.windOn){ const Wf=this.windW, n3=N*3; for(let i=0;i<n3;i++) frc[b+i]+=Wf[i]; }
-      }
-      if(this.fbF!==0){
-        const fv=this.micVec, fb=b+this.micI*3;
-        frc[fb]+=this.fbF*fv[0]; frc[fb+1]+=this.fbF*fv[1]; frc[fb+2]+=this.fbF*fv[2];
-      }
-      if(this.bow>0){
-        // Stick-slip friction, the real bowing mechanism. The hair grips the
-        // body and drags it (stick), the restoring force overcomes friction and
-        // it snaps back (slip), then it grips again. Coefficient falls with
-        // sliding speed, which is what makes the oscillation self-sustaining.
-        const hv=this.hitVec, hb=b+this.hitI*3;
-        const vs=vel[hb]*hv[0]+vel[hb+1]*hv[1]+vel[hb+2]*hv[2];   // body speed along the hair
-        const vBow=this.bowSpd*this.aChar*this.f0*0.02;
-        const dv=vBow-vs;                                          // relative sliding speed
-        const vc=Math.max(1e-9,this.bowVc*this.aChar*this.f0*0.02);
-        const mud=0.22, mus=mud+1.25*this.bowVc;
-        const mu=mud+(mus-mud)*Math.exp(-Math.abs(dv)/vc);
-        const FN=this.bow*this.f0*this.f0*this.aChar*0.9;
-        let A=(dv>=0?1:-1)*mu*FN;
-        const lim=FN*mus; if(A>lim) A=lim; else if(A<-lim) A=-lim;
-        if(!isFinite(A)) A=0;
         frc[hb]+=A*hv[0]; frc[hb+1]+=A*hv[1]; frc[hb+2]+=A*hv[2];
       }
       const dmpv=(mk!==1&&this.vMute[v])?dmp*mk:dmp;   // P1: muted voices are damped hard, then sleep
@@ -1126,11 +903,10 @@ class Resonator extends AudioWorkletProcessor {
   // all=false: only voices the governor muted are considered.
   sleepCheck(all){
     const st=this.stride, V=this.voices, ac=this.aChar||1, pos=this.pos, vel=this.vel, rest=this.rest; let mute=false;
-    const gForce=this.windOn||this.fbF!==0||this.bow>0;
     for(let v=0;v<V;v++){
       if(this.vRest[v]) continue;
       if(!all&&!this.vMute[v]) continue;
-      if(gForce||this.vPul[v].length||this.vPen[v].length||(this.exAny&&this.exF[v]!==0)||this.oscOn[v]){ if(this.vMute[v]) mute=true; continue; }
+      if(this.vPul[v].length||this.vPen[v].length){ if(this.vMute[v]) mute=true; continue; }
       const b=v*st, e=b+st; let mv=0, mp=0;
       for(let i=b;i<e;i++){ const a=Math.abs(vel[i]); if(a>mv) mv=a; const d=Math.abs(pos[i]-rest[i]); if(d>mp) mp=d; }
       const f=this.vf0[v]||this.f0||220;
@@ -1157,7 +933,7 @@ class Resonator extends AudioWorkletProcessor {
     if(aw<=1) return;
     const st=this.stride, vel=this.vel; let best=-1, bq=Infinity;
     for(let v=0;v<V;v++){
-      if(this.vRest[v]||this.vMute[v]||v===newest||this.oscOn[v]) continue;   // never the newest note or a held key
+      if(this.vRest[v]||this.vMute[v]||v===newest) continue;   // never the newest note
       let m=0; for(let i=v*st;i<(v+1)*st;i++){ const a=Math.abs(vel[i]); if(a>m) m=a; }
       const q=m/(2*Math.PI*(this.vf0[v]||this.f0||220));
       if(q<bq){ bq=q; best=v; }
@@ -1168,8 +944,7 @@ class Resonator extends AudioWorkletProcessor {
   hardReset(){
     this.vel.fill(0); this.pos.set(this.rest); this.pulses.length=0; this.pending.length=0; this.haveGood=false;
     this.vRest.fill(1); this.vMute.fill(0); this.anyMute=false;   // P1
-    if(this.rv) this.rvClear();   // F: also clear what the Hush fade fed into the reverb
-    this.lp=0; this.lpB=0; this.lp2B=0; this.dcx=0; this.dcy=0;
+    this.lp=0; this.lpB=0; this.dcx=0; this.dcy=0;
     this.gate=0; this.gateTarget=1;                    // FIX7: ramp back in
   }
   // Continuous energy limiter. Rather than waiting for divergence and then
@@ -1203,597 +978,9 @@ class Resonator extends AudioWorkletProcessor {
     }
     return 0;
   }
-  modSpan(k){
-    const S={bowSpd:1.7,bowVc:1.3,spImg:1,spDist:1,spRefl:1,spDop:1,spRot:1,spElev:1,fxCho:1,fxDly:1,fxWow:1,fxTrem:1,fxSat:1,att:1,attC:1,infer:1,spread:1,mem:1,memSpan:3,regime:1,rswitch:0.1,rphi:0.8,coup:1,fbAmt:1,fbTime:120,tune:1200,loss:3,sub:0.05,nl:8,drive:4,hard:1,angle:1,blend:1,bite:2.5,
-             tone:6000,width:1,pkRes:4000,pkQ:9,amp:1,bass:2,treb:2,cab:1,gain:0.8,ratio:7};
-    return S[k]||1;
-  }
-  modShape(sh,ph,m){
-    switch(sh){
-      case 1: return 4*Math.abs(ph-0.5)-1;
-      case 2: return ph<0.5?1:-1;
-      case 3: return 2*ph-1;
-      case 4: { if(ph<m.lastPh){ m.rnd=this.rnd()*2-1; } m.lastPh=ph; return m.rnd||0; }
-      default: return Math.sin(2*Math.PI*ph);
-    }
-  }
-  // S5: one sample of an envelope or a follower. The follower is a smooth decoupled peak detector
-  // (Giannoulis, Massberg and Reiss, JAES 2012): no steps in its output, whatever the input does.
-  modStep(m){
-    if(m.ty===1){
-      if(m.st===1){ m.e+=(1.5-m.e)*m.kA; if(m.e>=1){ m.e=1; m.st=2; } }
-      else if(m.st===2){ if(m.e>m.S){ m.e+=(m.S-0.05-m.e)*m.kD; if(m.e<m.S) m.e=m.S; } else if(m.e<m.S) m.e+=(m.S-m.e)*m.kD; }
-      else if(m.st===3){ m.e+=(-0.05-m.e)*m.kR; if(m.e<=0){ m.e=0; m.st=0; } }
-    } else {
-      const x=this.fIn[m.src]||0, r=m.aR*m.y1+(1-m.aR)*x;
-      m.y1=x>r?x:r; m.y=m.aA*m.y+(1-m.aA)*m.y1;
-      const c=m.y*m.sens; m.e=c<1?c:1;
-    }
-  }
-  envNote(f,on){   // S5: every key starts the envelopes; they let go when the last key comes up
-    const H=this.held; let i=-1; for(let k=0;k<this.nHeld;k++) if(H[k]===f){ i=k; break; }
-    if(on){ if(i<0&&this.nHeld<16) H[this.nHeld++]=f; for(const m of this.mods) if(m.ty===1) m.st=1; return; }
-    if(i>=0) H[i]=H[--this.nHeld];
-    if(!this.nHeld) for(const m of this.mods) if(m.ty===1&&m.st&&m.st<3) m.st=3;
-  }
-  applyMods(perSample){
-    let pitchDirty=false;
-    for(const m of this.mods){
-      if(m.ty&&perSample) this.modStep(m);   // S5: envelopes and followers run even at Depth 0 (the meter shows them)
-      if(!m.d||m.a<=0) continue;
-      let w;
-      if(m.ty) w=m.inv?-m.e:m.e;
-      else { m.ph+=m.r/sampleRate; if(m.ph>=1) m.ph-=Math.floor(m.ph); w=this.modShape(m.sh,m.ph,m); }
-      const base=this.modBase[m.d]!==undefined?this.modBase[m.d]:0;
-      let v=base+m.a*w*this.modSpan(m.d);
-      if(m.d==='tune'){ v=Math.max(-2400,Math.min(2400,v)); if(this[m.d]!==v){this[m.d]=v;pitchDirty=true;} continue; }
-      if(m.d==='loss'||m.d==='sub'||m.d==='nl') v=Math.max(0,v);
-      if(m.d==='drive') v=Math.max(0.02,v);
-      if(m.d==='tone') v=Math.max(120,v);
-      if(m.d==='pkRes') v=Math.max(400,v);
-      if(m.d==='pkQ') v=Math.max(0.4,v);
-      if(m.d==='ratio') v=Math.max(0.2,v);
-      if(m.d==='fbTime') v=Math.max(0.3,Math.min(180,v));
-      if(m.d==='fbAmt') v=Math.max(0,Math.min(1,v));
-      if(m.d==='blend'||m.d==='cab'||m.d==='width'||m.d==='amp'||m.d==='angle'||m.d==='hard')
-        v=Math.max(0,Math.min(1,v));
-      this[m.d]=v;
-    }
-    if(pitchDirty&&!perSample) this.pitch();
-  }
-  // OMEF cross-organ weight matrix, seven organs mapped onto seven parameters.
-  // Offsets are computed from the BASE values only, never from coupled ones, so
-  // the system cannot feed back on itself.
-  // Every organ returns to the user's own setting at the start of each block, so
-  // the coupling and regime layers stack onto a fixed base instead of onto their
-  // own previous output.
-  resetOrgans(){
-    let nL=0;
-    if(this.coup>0) nL++; if(this.regime>0) nL++; if(this.mem>0) nL++; if(this.att>0) nL++;
-    this.layerScale=nL>1?1/Math.sqrt(nL):1;
-    if(!nL) return;
-    const ORG=['ratio','fbAmt','sub','loss','tune','nl','pkQ'];
-    for(const k of ORG){
-      if(this.coupBase[k]===undefined) this.coupBase[k]=this[k];
-      const b=this.modBase[k]!==undefined?this.modBase[k]:this.coupBase[k];
-      this[k]=b;
-    }
-  }
-  couple(){
-    if(!(this.coup>0)) return false;
-    const ORG=['ratio','fbAmt','sub','loss','tune','nl','pkQ'];
-    const DEF={ratio:6,fbAmt:0,sub:0.0006,loss:0.5,tune:0,nl:0,pkQ:1.6};
-    // rows: affected organ. cols: driver. signs follow the macro logic.
-    const Wm=[
-      [ 0,    0,    0,   0,   0.60, 0.30, 0],      // rates <- inflation, stress
-      [-0.50, 0,   -0.30,0,   0,    0,    0],      // liquidity <- rates, debt
-      [ 0,    0.40, 0,  -0.20,0,    0,    0],      // debt <- liquidity, labor
-      [ 0.40, 0,    0,   0,   0,    0.40, 0],      // labor <- rates, stress
-      [ 0,    0.50, 0.20,0,   0,    0,    0],      // inflation <- liquidity, debt
-      [ 0,    0,    0.50,0,   0.40, 0,    0],      // stress <- debt, inflation
-      [ 0,    0,    0.30,0,   0,    0.60, 0]       // hidden strain <- debt, stress
-    ];
-    // Base values are the user's own settings. Offsets are added to THOSE every
-    // block, never to the already-offset value, or coupling would compound.
-    let dev=[];
-    for(let j=0;j<7;j++){
-      const k=ORG[j];
-      if(this.coupBase[k]===undefined) this.coupBase[k]=this[k];
-      const base=this.modBase[k]!==undefined?this.modBase[k]:this.coupBase[k];
-      dev.push((base-DEF[k])/Math.max(1e-9,this.modSpan(k)));
-    }
-    let pitchDirty=false;
-    for(let i=0;i<7;i++){
-      let s=0;
-      for(let j=0;j<7;j++) if(Wm[i][j]) s+=Wm[i][j]*dev[j];
-      if(!s) continue;
-      const k=ORG[i], span=this.modSpan(k);
-      const base=this.modBase[k]!==undefined?this.modBase[k]:this.coupBase[k];
-      let v=base+this.coup*0.55*(this.layerScale||1)*s*span;
-      if(k==='ratio') v=Math.max(0.2,Math.min(14,v));
-      else if(k==='fbAmt') v=Math.max(0,Math.min(1,v));
-      else if(k==='sub') v=Math.max(0,Math.min(0.05,v));
-      else if(k==='loss') v=Math.max(0,Math.min(3,v));
-      else if(k==='tune'){ v=Math.max(-2400,Math.min(2400,v)); if(v!==this.tune) pitchDirty=true; }
-      else if(k==='nl') v=Math.max(0,Math.min(8,v));
-      else if(k==='pkQ') v=Math.max(0.4,Math.min(14,v));
-      if(isFinite(v)) this[k]=v;
-    }
-    return pitchDirty;
-  }
-  // OMEF regime layer. Logits drift under a two-cycle drive whose periods sit in
-  // golden ratio, so the pair never realigns; softmax turns them into a mixture,
-  // and the mixture pulls the organ vector toward four characteristic states.
-  // Strain accumulates from playing and forgets on a Fibonacci curve: it holds on
-  // at first, then lets go faster than an exponential would.
-  // Four observation profiles: [note rate, force, register, accumulated strain].
-  // The filter carries particles over regimes, weights them by how well the
-  // regime explains what it just heard, and resamples when they degenerate.
-  // U_{n+1} = R(C,M,F) + C^phi + h e_h, with every term from the printed recursion.
-  spLive(){
-    return this.spImg>0||this.spDop>0||this.spRot>0||this.spRefl>0||this.spElev>0
-        ||Math.abs(this.spDist-0.3)>0.02;
-  }
-  setTrim(){
-    const T=[2.6,0.82,0.88,1.75,0.75,0.42];
-    this.specTrim=T[this.spec]||1;
-  }
-  fxLive(){
-    return this.fxCho>0||this.fxTrem>0||this.fxWow>0||this.fxDly>0||this.fxSat>0;
-  }
-  attractor(dtBlock){
-    // The recursion has to run whenever anything reads it, not only when it is
-    // routed to the organs — otherwise every effect freezes.
-    if(!(this.att>0)&&!this.fxLive()) return;
-    this.attT+=dtBlock;
-    const step=1/40;                      // the recursion runs at 40 Hz
-    let guard=0;
-    while(this.attT>=step && guard++<8){
-      this.attT-=step;
-      const U=this.U, Uh=this.Uh, L=this.Lin, C=this.Cv, A=this.Av, N=10;
-      // A_n = N(U_n, Theta_n, W^M_n, I_n): cross-organ weights through a bounded map
-      for(let i=0;i<N;i++){
-        let s=0;
-        for(let j=0;j<N;j++){
-          const w=(i===j)?0.92:(0.30*Math.cos(1.7*i-1.1*j)-0.12);
-          s+=w*U[j];
-        }
-        s+=0.22*Math.cos(0.7*i+2.4*this.attT)+0.15*this.h;   // I_n: inputs
-        A[i]=Math.tanh(s);
-      }
-      // Uhat = Pi^M D_Theta A / (1 + c||U||^2)   <- the bounding term
-      let nrm=0; for(let i=0;i<N;i++) nrm+=U[i]*U[i];
-      const den=1+this.attC*nrm;
-      let mean=0; for(let i=0;i<N;i++) mean+=A[i]; mean/=N;
-      for(let i=0;i<N;i++){
-        const D=0.85+0.25*Math.sin(1.3*i);                    // D_Theta
-        Uh[i]=D*(A[i]-mean)/den;                              // Pi^M removes the mean
-      }
-      // Y^A = H(Uhat + eps*Omega_shadow); L = rho L + K(Y - H Uhat) = rho L + K H eps Omega
-      for(let i=0;i<N;i++){
-        const shadow=(this.rnd()+this.rnd()+this.rnd()-1.5)*0.9;
-        L[i]=this.attRho*L[i]+this.attK*this.attEps*shadow;
-      }
-      // C = AccountingProject(Uhat + rho L + G): force the budget identity to close
-      let dot=0, ww=0;
-      for(let i=0;i<N;i++){
-        C[i]=Uh[i]+this.attRho*L[i]+0.05*Math.sin(0.9*i);     // G_n
-        const w=(i<7)?1:-1;
-        dot+=w*C[i]; ww+=1;
-      }
-      const corr=dot/ww;
-      for(let i=0;i<N;i++) C[i]-=((i<7)?1:-1)*corr;
-      this.resid=Math.abs(corr);                              // the accounting residual
-      // Z^phi = R_phi(Z^phi): rotation by the golden angle, never periodic
-      const ang=2*Math.PI/1.618033988749895;
-      const z0=this.Zphi[0], z1=this.Zphi[1];
-      this.Zphi[0]=z0*Math.cos(ang)-z1*Math.sin(ang);
-      this.Zphi[1]=z0*Math.sin(ang)+z1*Math.cos(ang);
-      // alpha = alpha P: Markov step over the four regimes
-      const pS=Math.min(0.4,this.rswitch*2.5), a=this.alpha, na=[0,0,0,0];
-      for(let i=0;i<4;i++) for(let j=0;j<4;j++)
-        na[j]+=a[i]*((i===j)?(1-pS):(pS/3));
-      let as=0; for(let j=0;j<4;j++){ a[j]=na[j]; as+=na[j]; }
-      for(let j=0;j<4;j++) a[j]/=as;
-      // F = Phi F: factor propagation
-      const F=this.Fv, f0=F[0];
-      F[0]=0.97*F[0]+0.06*F[1]; F[1]=0.97*F[1]-0.06*f0; F[2]=0.99*F[2]+0.01*this.h;
-      // reassemble
-      for(let i=0;i<N;i++){
-        const R=0.55+0.35*Math.cos(0.8*i);
-        let v=R*C[i]+0.30*F[i%3];
-        if(i===2) v+=0.45*this.Zphi[0];
-        if(i===5) v+=0.45*this.Zphi[1];
-        if(i===9) v+=0.6*this.h;                              // h e_h
-        U[i]=Math.max(-4,Math.min(4,v));
-      }
-      // ShiftAndUpdate: keep the trajectory for drawing
-      this.attHist[this.attN*2]=U[0]; this.attHist[this.attN*2+1]=U[3];
-      this.attN=(this.attN+1)%512;
-    }
-    // route the organ vector onto the instrument through R
-    if(!(this.att>0)) return;
-    const RSPEC=[
-      [1,1,1,1,1,1,1],                             // even — no specialization
-      [0.2,0.1,1.6,0.5,0.3,0.4,1.5],               // bell: substrate and coil, little tension
-      [2.4,0.6,0.05,0.15,1.8,2.2,0.2],             // string: tension, pitch, nonlinearity
-      [0.1,0.05,1.4,0.55,0.05,0.15,0.2],           // membrane: dark, not strangled
-      [0.9,0.45,0.3,0.4,0.6,1.5,1.2],              // machine: feedback and brittleness
-      [0.5,0.9,1.5,0.2,2.6,0.6,0.9]                // drift: pitch wanders, barely damped
-    ];
-    // R also sets an operating point, not only a gain: a specialization is where
-    // the instrument sits as well as how it moves.
-    const BSPEC=[
-      [0,0,0,0,0,0,0],
-      [-0.25,-0.10, 0.55,-0.15, 0.05,-0.10, 0.45],   // bell
-      [ 0.45, 0.10,-0.05,-0.20, 0.00, 0.40,-0.15],   // string
-      [-0.30,-0.15, 0.22, 0.10,-0.05,-0.25,-0.20],   // membrane
-      [ 0.10, 0.02,-0.10,-0.14, 0.00, 0.35, 0.30],   // machine
-      [-0.15, 0.15, 0.35,-0.20, 0.30,-0.15, 0.00]    // drift
-    ];
-    const RS=RSPEC[this.spec]||RSPEC[0], BS=BSPEC[this.spec]||BSPEC[0];
-    // Loudness compensation, calibrated against a psychoacoustic loudness model
-    // so a specialization changes character rather than volume.
-    this.setTrim();
-    const ORG=['ratio','fbAmt','sub','loss','tune','nl','pkQ'];
-    for(let i=0;i<7;i++){
-      const k=ORG[i], span=this.modSpan(k);
-      const ls=this.layerScale||1;
-      let v=this[k]+this.att*span*ls*(0.42*RS[i]*this.U[i]+0.5*BS[i]);
-      if(k==='ratio') v=Math.max(0.2,Math.min(14,v));
-      else if(k==='fbAmt') v=Math.max(0,Math.min(1,v));
-      else if(k==='sub') v=Math.max(0,Math.min(0.05,v));
-      else if(k==='loss') v=Math.max(0,Math.min(3,v));
-      else if(k==='tune') v=Math.max(-2400,Math.min(2400,v));
-      else if(k==='nl') v=Math.max(0,Math.min(8,v));
-      else if(k==='pkQ') v=Math.max(0.4,Math.min(14,v));
-      if(isFinite(v)) this[k]=v;
-    }
-  }
-  // Z^phi is a pure rotation at the golden angle: two quadrature signals that
-  // never realign -> chorus. F rotates slowly -> tremolo and pan. L is the
-  // innovation memory, i.e. filtered noise -> tape wow. C is the accounting-
-  // projected vector, ten coordinates -> ten delay taps. ||U|| is orbit radius
-  // -> how hard the saturator is driven.
-  // Interaural time and level from the mic's actual azimuth, air absorption and
-  // attenuation from its actual distance, Doppler from its actual radial
-  // velocity, and early reflections from a room scaled to the body.
-  spatial(o, mi){
-    const M=this.sl.length;
-    this.sl[this.si2]=o; this.sr[this.si2]=o;
-    if(this.cenX===undefined){
-      let cx=0,cy=0,cz=0;
-      for(let q=0;q<this.N;q++){cx+=this.restOne[q*3];cy+=this.restOne[q*3+1];cz+=this.restOne[q*3+2];}
-      this.cenX=cx/this.N; this.cenY=cy/this.N; this.cenZ=cz/this.N;
-    }
-    const spread=0.6+2.6*this.spImg;
-    // lateral spread uses whichever body axis the pickup actually varies along,
-    // so a cylinder lying across the view still pans as you move the mic
-    let sx=this.cenX+(this.restOne[mi]-this.cenX)*spread,
-        sy=this.cenY+(this.restOne[mi+1]-this.cenY),
-        sz=this.cenZ+(this.restOne[mi+2]-this.cenZ)*spread;
-    sx+=(this.restOne[mi+2]-this.cenZ)*0.7*spread;   // circumferential position pans too
-    // rotation: driven by the attractor when it is running, otherwise steady
-    if(this.spRot>0){
-      const steer=(this.att>0||this.fxLive())?(0.35+0.65*(0.5+0.5*this.Zphi[0])):1;
-      this.rotPh=(this.rotPh||0)+this.spRot*steer*2.2/sampleRate;
-      if(this.rotPh>1e6) this.rotPh-=1e6;
-      const ang=this.rotPh*2*Math.PI;
-      const c=Math.cos(ang), s=Math.sin(ang);
-      const nx=sx*c-sz*s, nz=sx*s+sz*c; sx=nx; sz=nz;
-    }
-    const L=0.55+2.4*this.spDist;                     // listener distance
-    const dx=sx, dy=sy, dz=sz+L;
-    const dist=Math.max(0.05,Math.sqrt(dx*dx+dy*dy+dz*dz));
-    const az=Math.atan2(dx,dz);                       // -pi/2 .. pi/2 in front
-    // ITD: up to ~0.65 ms of head delay
-    const imgEff=Math.max(this.spImg,0.75*this.spRot);
-    const itd=Math.sin(az)*0.00065*sampleRate*imgEff;
-    const tl=Math.max(1,Math.min(M-4, 3+itd)), tr=Math.max(1,Math.min(M-4, 3-itd));
-    const rd=(t)=>{ const a=this.si2-t, ia=((a%M)+M)%M; const i0=Math.floor(ia),
-      i1=(i0+1)%M, f=ia-i0; return this.sl[i0]*(1-f)+this.sl[i1]*f; };
-    let l=rd(tl), r=rd(tr);
-    // ILD
-    const ild=imgEff*0.92*Math.sin(az);
-    l*=Math.max(0.12,1-Math.max(0,ild)); r*=Math.max(0.12,1-Math.max(0,-ild));
-    // distance: inverse law plus air absorption
-    const g=1/(1+1.1*this.spDist*(dist-0.5));
-    const fc=Math.max(700, 16000-9000*this.spDist*(dist-0.4));
-    const k=1-Math.exp(-2*Math.PI*Math.min(fc,0.45*sampleRate)/sampleRate);
-    this.airL+=k*(l-this.airL); this.airR+=k*(r-this.airR);
-    l=this.airL*g; r=this.airR*g;
-    // Doppler from the mic mass's radial velocity
-    if(this.spDop>0){
-      const vr=(this.vel[mi]*dx+this.vel[mi+1]*dy+this.vel[mi+2]*dz)/dist;
-      this.dopS+=0.01*(vr*this.spDop*0.00035*sampleRate-this.dopS);
-      const t2=Math.max(1,Math.min(M-4,20+this.dopS));
-      const v=rd(t2);
-      l=l*0.4+v*0.6; r=r*0.4+v*0.6;
-    }
-    // early reflections: four walls at distances set by the room
-    if(this.spRefl>0){
-      const room=0.4+2.6*this.spDist;
-      let el=0, er=0;
-      for(let q=0;q<4;q++){
-        const d2=room*(0.7+0.53*q)+dist;
-        const t3=Math.min(M-4, d2*0.0029*sampleRate);
-        const gq=Math.pow(0.66,q+1);
-        const s=rd(t3);
-        if(q%2){ el+=s*gq*0.7; er+=s*gq; } else { el+=s*gq; er+=s*gq*0.7; }
-      }
-      l+=el*this.spRefl*0.5; r+=er*this.spRefl*0.5;
-    }
-    // elevation: a gentle shelf, the pinna cue
-    if(this.spElev>0){
-      const kh=1-Math.exp(-2*Math.PI*1500/sampleRate);
-      this.elL=(this.elL||0)+kh*(l-(this.elL||0));
-      this.elR=(this.elR||0)+kh*(r-(this.elR||0));
-      const hiL=l-this.elL, hiR=r-this.elR;
-      const kn=1-Math.exp(-2*Math.PI*3400/sampleRate);
-      this.enL=(this.enL||0)+kn*(hiL-(this.enL||0));
-      this.enR=(this.enR||0)+kn*(hiR-(this.enR||0));
-      // flat bodies have no height of their own, so the knob supplies the angle
-      const e=this.spElev*Math.max(-1,Math.min(1,0.8+sy*4));
-      // lift: more presence, less low support, and a moving notch
-      l=l*(1-0.35*this.spElev)+hiL*e*3.2-(hiL-this.enL)*this.spElev*2.4;
-      r=r*(1-0.35*this.spElev)+hiR*e*3.2-(hiR-this.enR)*this.spElev*2.4;
-    }
-    this.si2=(this.si2+1)%M;
-    const load=1+0.45*(this.fxCho+this.fxWow+this.fxDly);
-    l/=load; r/=load;
-    if(!isFinite(l)) l=0; if(!isFinite(r)) r=0;
-    this.spL=l; this.spR=r;   // P1: results in fields, no array per sample
-  }
-  fx(o){
-    const M=this.dl.length, U=this.U;
-    const FXW=[
-      [1,1,1,1,1],            // even
-      [1.6,0.7,0.2,0.3,0.2],  // bell: chorus and shimmer
-      [0.3,0.4,1.8,0.2,1.5],  // string: wow and drive
-      [0.1,1.8,0.4,1.6,0.2],  // membrane: taps and tremolo
-      [0.6,1.2,0.5,0.5,1.8],  // machine: delay and saturation
-      [1.5,1.3,1.5,1.2,0.3]   // drift: everything slow and smeared
-    ];
-    const FW=(this.spec>0&&FXW[this.spec])||FXW[0];
-    const mix=w=>0.55+0.45*w;      // 0.3 -> 0.69, 1.8 -> 1.36
-    const wCho=this.fxCho*mix(FW[0]), wDly=this.fxDly*mix(FW[1]), wWow=this.fxWow*mix(FW[2]),
-          wTrem=this.fxTrem*mix(FW[3]), wSat=this.fxSat*mix(FW[4]);
-    let l=o, r=o;
-    if(wSat>0){
-      let nrm=0; for(let i=0;i<10;i++) nrm+=U[i]*U[i];
-      this.satN+=0.02*(Math.sqrt(nrm)-this.satN);
-      const d=1+Math.min(1,wSat)*(2+9*Math.min(1.4,this.satN));
-      const g=1/Math.tanh(d);
-      l=Math.tanh(l*d)*g; r=Math.tanh(r*d)*g;
-    }
-    if(wCho>0){
-      const cw=Math.min(1,wCho);
-      const r0=0.55/sampleRate, r1=r0/1.618033988749895;
-      this.chA+=r0; if(this.chA>=1) this.chA-=1;
-      this.chB+=r1; if(this.chB>=1) this.chB-=1;
-      const s0=Math.sin(2*Math.PI*this.chA), s1=Math.sin(2*Math.PI*this.chB);
-      const base=0.006*sampleRate, dep=0.0045*sampleRate*cw;
-      const t0=base+dep*(0.5+0.5*s0), t1=base+dep*(0.5+0.5*s1);
-      const a=this.di-t0, b=this.di-t1;
-      const ia=((a%M)+M)%M, ib=((b%M)+M)%M;
-      const fa=ia-Math.floor(ia), fb=ib-Math.floor(ib);
-      const i0=Math.floor(ia), i1=(i0+1)%M, j0=Math.floor(ib), j1=(j0+1)%M;
-      const va=this.dl[i0]*(1-fa)+this.dl[i1]*fa;
-      const vb=this.dr[j0]*(1-fb)+this.dr[j1]*fb;
-      l+=va*cw*0.75; r+=vb*cw*0.75;
-    }
-    if(wWow>0){
-      this.wowP+=0.0016*(this.Lin[0]*6-this.wowP);
-      const ww=Math.min(1,wWow); const t=0.02*sampleRate*(1+ww*this.wowP);
-      const a=this.di-Math.max(2,t), ia=((a%M)+M)%M;
-      const i0=Math.floor(ia), i1=(i0+1)%M, f=ia-i0;
-      const v=this.dl[i0]*(1-f)+this.dl[i1]*f;
-      l+=v*ww*0.8; r+=v*ww*0.8;
-    }
-    if(wDly>0){
-      let sl=0, sr=0;
-      for(let k=0;k<6;k++){
-        const c=this.Cv[k+2];
-        const want=(0.05+0.28*(0.5+0.5*c))*sampleRate*(1+k*0.37);
-        if(!this.tapT[k]) this.tapT[k]=want;
-        this.tapT[k]+=(want-this.tapT[k])*0.00004;   // ~0.4 s glide, no clicks
-        const t=this.tapT[k];
-        const a=this.di-Math.min(M-4,Math.max(2,t)), ia=((a%M)+M)%M;
-        const i0=Math.floor(ia), i1=(i0+1)%M, fr=ia-i0;
-        const vl=this.dl[i0]*(1-fr)+this.dl[i1]*fr;
-        const vr=this.dr[i0]*(1-fr)+this.dr[i1]*fr;
-        const g=Math.pow(0.62,k)*(k%2?0.8:1);
-        sl+=vl*g*(k%2?0.5:1); sr+=vr*g*(k%2?1:0.5);
-      }
-      l+=sl*Math.min(1.4,wDly)*0.7; r+=sr*Math.min(1.4,wDly)*0.7;
-    }
-    if(wTrem>0){
-      const a=0.5+0.5*this.Fv[0], b=0.5+0.5*this.Fv[1];
-      const tw=Math.min(1,wTrem); const amp=1-tw*0.9*(1-a);
-      l*=amp*(1-tw*0.5*(1-b)); r*=amp*(1-tw*0.5*b);
-    }
-    const load=1+0.45*(this.fxCho+this.fxWow+this.fxDly);
-    l/=load; r/=load;
-    if(!isFinite(l)) l=0; if(!isFinite(r)) r=0;
-    const fb=Math.min(0.85,this.fxFb);
-    this.dl[this.di]=Math.max(-3,Math.min(3,o+l*fb));
-    this.dr[this.di]=Math.max(-3,Math.min(3,o+r*fb));
-    this.di=(this.di+1)%M;
-    this.fxL=Math.max(-1.2,Math.min(1.2,l)); this.fxR=Math.max(-1.2,Math.min(1.2,r));   // P1
-  }
-  // F: plate reverb. Dattorro's figure-of-eight tank, scaled from his 29761 Hz to this engine's rate.
-  // T60 from Reverb time: one trip round the eight is 21589 samples at 29761 Hz with decay applied four
-  // times, so decay = 0.001^(trip / (4 T60)) (low frequencies; the damping filter shortens the highs).
-  rvSet(){
-    const was=this.rvOn; this.rvOn=this.rvMix>0.0005;
-    const trip=21589/29761;
-    // measured T60 runs long by r(T) = 1 + 0.0907 T^-0.29 (f1_verify): solve T_d * r(T_d) = setting
-    const Ts=Math.max(0.6,this.rvTime); let Td=Ts; for(let it=0;it<6;it++) Td=Ts/(1+0.0907*Math.pow(Td,-0.29));
-    this.rvDec=Math.exp(Math.log(0.001)*trip/(4*Td));
-    this.rvDd2=Math.min(0.5,Math.max(0.25,this.rvDec+0.15));          // Dattorro: decay + 0.15, 0.25..0.50
-    this.rvDamp=Math.exp(-2*Math.PI*Math.min(this.rvTone,0.45*sampleRate)/sampleRate);   // one-pole: y=(1-d)x+d*y1
-    this.rvPreN=Math.max(0,Math.round(Math.min(250,this.rvPre)*sampleRate/1000));
-    if(this.rvOn&&!was){ if(!this.rv) this.rvAlloc(); this.rvClear(); }
-  }
-  rvAlloc(){
-    const k=sampleRate/29761, r=n=>Math.max(1,Math.round(n*k)), ex=Math.ceil(16*k)+3;
-    const L=(n,extra)=>({b:new Float64Array(r(n)+(extra||0)+2),p:0,n:r(n)});
-    this.rv={ap1:L(142),ap2:L(107),ap3:L(379),ap4:L(277),m1:L(672,ex),d1:L(4453),a1:L(1800),d2:L(3720),
-      m2:L(908,ex),d3:L(4217),a2:L(2656),d4:L(3163),pre:{b:new Float64Array(Math.ceil(0.26*sampleRate)+2),p:0,n:0},
-      bw:0,lp1:0,lp2:0,lOut:0,rOut:0,ph:0,dph:1/sampleRate,exc:16*k,
-      tL:[r(266),r(2974),r(1913),r(1996),r(1990),r(187),r(1066)],tR:[r(353),r(3627),r(1228),r(2673),r(2111),r(335),r(121)]};
-  }
-  rvClear(){ const R=this.rv; if(!R) return;
-    for(const o of [R.ap1,R.ap2,R.ap3,R.ap4,R.m1,R.d1,R.a1,R.d2,R.m2,R.d3,R.a2,R.d4,R.pre]){ o.b.fill(0); o.p=0; }
-    R.bw=0; R.lp1=0; R.lp2=0; R.lOut=0; R.rOut=0; R.ph=0; this.rvOutL=0; this.rvOutR=0; }
-  rvRd(o,k){ let i=o.p-k; if(i<0) i+=o.b.length; return o.b[i]; }            // input k samples ago
-  rvWr(o,x){ o.b[o.p]=x; if(++o.p>=o.b.length) o.p=0; }
-  rvTap(o,k){ let i=o.p-1-k; if(i<0) i+=o.b.length; return o.b[i]; }        // after this sample's write
-  rvAp(o,x,g){ const d=this.rvRd(o,o.n), w=x+g*d; this.rvWr(o,w); return d-g*w; }   // (-g+z^-N)/(1-g z^-N)
-  rvApm(o,x,g,off){ const dd=o.n+off, i0=Math.floor(dd), f=dd-i0;
-    const a=this.rvRd(o,i0), b=this.rvRd(o,i0+1), d=a+(b-a)*f, w=x+g*d; this.rvWr(o,w); return d-g*w; }
-  reverbSample(xl,xr){
-    const R=this.rv, pre=R.pre;
-    pre.b[pre.p]=(xl+xr)*0.5; let ip=pre.p-this.rvPreN; if(ip<0) ip+=pre.b.length; let x=pre.b[ip]; if(++pre.p>=pre.b.length) pre.p=0;
-    R.bw+=0.9995*(x-R.bw); x=R.bw;                                   // bandwidth 0.9995
-    x=this.rvAp(R.ap1,x,0.75); x=this.rvAp(R.ap2,x,0.75); x=this.rvAp(R.ap3,x,0.625); x=this.rvAp(R.ap4,x,0.625);
-    R.ph+=R.dph; if(R.ph>=1) R.ph-=1;                                 // 1 Hz, quadrature left/right
-    const w=2*Math.PI*R.ph, dec=this.rvDec, dd2=this.rvDd2, dm=this.rvDamp;
-    let l=x+dec*R.rOut, r=x+dec*R.lOut, d;
-    l=this.rvApm(R.m1,l,-0.70,R.exc*Math.sin(w));                      // decay diffusion 1, negative
-    d=this.rvRd(R.d1,R.d1.n); this.rvWr(R.d1,l); l=d;
-    R.lp1=(1-dm)*l+dm*R.lp1; l=R.lp1*dec;
-    l=this.rvAp(R.a1,l,dd2);
-    d=this.rvRd(R.d2,R.d2.n); this.rvWr(R.d2,l); l=d;
-    r=this.rvApm(R.m2,r,-0.70,R.exc*Math.cos(w));
-    d=this.rvRd(R.d3,R.d3.n); this.rvWr(R.d3,r); r=d;
-    R.lp2=(1-dm)*r+dm*R.lp2; r=R.lp2*dec;
-    r=this.rvAp(R.a2,r,dd2);
-    d=this.rvRd(R.d4,R.d4.n); this.rvWr(R.d4,r); r=d;
-    R.lOut=l; R.rOut=r;
-    const tL=R.tL, tR=R.tR;   // Dattorro Table 2: every tap x 0.6
-    this.rvOutL=0.6*(this.rvTap(R.d3,tL[0])+this.rvTap(R.d3,tL[1])-this.rvTap(R.a2,tL[2])+this.rvTap(R.d4,tL[3])-this.rvTap(R.d1,tL[4])-this.rvTap(R.a1,tL[5])-this.rvTap(R.d2,tL[6]));
-    this.rvOutR=0.6*(this.rvTap(R.d1,tR[0])+this.rvTap(R.d1,tR[1])-this.rvTap(R.a1,tR[2])+this.rvTap(R.d2,tR[3])-this.rvTap(R.d3,tR[4])-this.rvTap(R.a2,tR[5])-this.rvTap(R.d4,tR[6]));
-  }
-  observe(dtBlock){
-    const dec=Math.exp(-dtBlock/3.5);
-    this.obsRate*=dec; this.obsVel*=dec;
-  }
-  filter(dtBlock){
-    if(!(this.infer>0)) { this.dPF=1; return; }
-    const MU=[
-      [0.75,0.70,0.50,0.15],   // expansion
-      [0.50,0.75,0.80,0.45],   // rate stress
-      [0.25,0.80,0.25,0.75],   // credit stress
-      [0.15,0.25,0.30,0.20]    // recession
-    ];
-    const o=[Math.min(1,this.obsRate/6),Math.min(1,this.obsVel),
-             Math.min(1,Math.max(0,Math.log2(Math.max(20,this.f0)/55)/5)),this.h];
-    const N=this.NP, sig2=0.055, pSwitch=Math.min(0.5,this.rswitch*dtBlock*40);
-    let sum=0;
-    for(let i=0;i<N;i++){
-      if(this.rnd()<pSwitch) this.pf[i]=(this.rnd()*4)|0;
-      const m=MU[this.pf[i]];
-      let d=0; for(let k=0;k<4;k++){ const e=o[k]-m[k]; d+=e*e; }
-      const w=Math.exp(-d/(2*sig2));
-      this.pw[i]=w; sum+=w;
-    }
-    if(!(sum>0)){ for(let i=0;i<N;i++) this.pw[i]=1/N; sum=1; }
-    let ess=0;
-    for(let i=0;i<N;i++){ this.pw[i]/=sum; ess+=this.pw[i]*this.pw[i]; }
-    ess=1/Math.max(1e-9,ess);
-    this.post.fill(0);
-    for(let i=0;i<N;i++) this.post[this.pf[i]]+=this.pw[i];
-    // dispersion: 1 when the filter has no idea, 0 when it is certain
-    let H=0; for(let j=0;j<4;j++) if(this.post[j]>1e-9) H-=this.post[j]*Math.log(this.post[j]);
-    this.dPF=Math.min(1,H/Math.log(4));
-    if(ess<N*0.5){   // systematic resample
-      const nf=new Uint8Array(N); let c=this.pw[0], i=0;
-      const step=1/N, u0=this.rnd()*step;
-      for(let m=0;m<N;m++){
-        const u=u0+m*step;
-        while(u>c&&i<N-1){ i++; c+=this.pw[i]; }
-        nf[m]=this.pf[i];
-      }
-      this.pf=nf; this.pw.fill(1/N);
-    }
-  }
-  strain(dtBlock){
-    if(!(this.mem>0)) { this.h=0; return false; }
-    this.memT+=dtBlock;
-    const span=Math.max(0.05,this.memSpan);
-    while(this.memT>=span){
-      this.memT-=span;
-      for(let i=this.hHist.length-1;i>0;i--) this.hHist[i]=this.hHist[i-1];
-      this.hHist[0]=this.memAcc; this.memAcc=0;
-    }
-    let s=0;
-    for(let k=0;k<12;k++) s+=this.FW[k]*this.hHist[k];
-    this.h=Math.max(0,Math.min(1,s/this.PSI));
-    // strain direction: brittle, nasal, lossy, clamped
-    const ORG=['nl','pkQ','loss','sub'], DIR=[0.55,0.45,0.30,0.25];
-    for(let i=0;i<4;i++){
-      const k=ORG[i], span2=this.modSpan(k);
-      let v=this[k]+this.mem*this.h*DIR[i]*(this.layerScale||1)*span2;
-      if(k==='nl') v=Math.max(0,Math.min(8,v));
-      else if(k==='pkQ') v=Math.max(0.4,Math.min(14,v));
-      else if(k==='loss') v=Math.max(0,Math.min(3,v));
-      else if(k==='sub') v=Math.max(0,Math.min(0.05,v));
-      if(isFinite(v)) this[k]=v;
-    }
-    return false;
-  }
-  regimes(dtBlock){
-    if(!(this.regime>0)) return false;
-    const R=[
-      [ 0.10, 0.35,-0.10,-0.30, 0.00, 0.20, 0.00],  // expansion
-      [ 0.50, 0.00, 0.05, 0.15, 0.15, 0.30, 0.10],  // rate stress
-      [ 0.00,-0.20, 0.50, 0.05, 0.00, 0.40, 0.50],  // credit stress
-      [-0.40,-0.40, 0.10, 0.60,-0.05,-0.30, 0.00]   // recession
-    ];
-    const ORG=['ratio','fbAmt','sub','loss','tune','nl','pkQ'];
-    this.rT+=dtBlock;
-    // Switch rate sets the timescale of the whole process: the cycle periods and
-    // the drift speed both follow it, and the noise scales as its square root so
-    // the spread of the logits stays put while the speed changes.
-    const Tl=0.45/Math.max(0.002,this.rswitch), Ts=Tl/Math.max(1.02,this.rphi);
-    const cl=Math.cos(2*Math.PI*this.rT/Tl), cs=Math.cos(2*Math.PI*this.rT/Ts);
-    // humility: the closer the physics runs to its limit, the less the regime
-    // layer is allowed to push. C_conf = exp(-H*), with load standing in for H*.
-    const conf=Math.exp(-2*Math.max(0,(this.load||0)-0.35));
-    const rate=Math.min(0.5,this.rswitch*dtBlock*60);
-    for(let j=0;j<4;j++){
-      const ph=j*Math.PI/2;
-      const drive=Math.cos(2*Math.PI*this.rT/Tl+ph)*0.7+Math.cos(2*Math.PI*this.rT/Ts+ph*1.618)*0.5;
-      this.rL[j]+=rate*(drive-this.rL[j]*0.35)+Math.sqrt(rate)*0.45*(this.rnd()-0.5);
-      if(this.rL[j]>6) this.rL[j]=6; else if(this.rL[j]<-6) this.rL[j]=-6;
-    }
-    let mx=-1e9; for(let j=0;j<4;j++) if(this.rL[j]>mx) mx=this.rL[j];
-    let sum=0; for(let j=0;j<4;j++){ this.rP[j]=Math.exp(this.rsharp*(this.rL[j]-mx)); sum+=this.rP[j]; }
-    for(let j=0;j<4;j++) this.rP[j]/=sum;
-    if(this.infer>0){
-      for(let j=0;j<4;j++) this.rP[j]=(1-this.infer)*this.rP[j]+this.infer*this.post[j];
-    }
-    let dom=0;
-    for(let j=1;j<4;j++) if(this.rP[j]>this.rP[dom]) dom=j;
-    this.rDom=dom;
-    let pitchDirty=false;
-    for(let i=0;i<7;i++){
-      let s=0; for(let j=0;j<4;j++) s+=this.rP[j]*R[j][i];
-      if(!s) continue;
-      const k=ORG[i], span=this.modSpan(k);
-      let v=this[k]+this.regime*conf*0.6*(this.layerScale||1)*s*span;
-      if(k==='ratio') v=Math.max(0.2,Math.min(14,v));
-      else if(k==='fbAmt') v=Math.max(0,Math.min(1,v));
-      else if(k==='sub') v=Math.max(0,Math.min(0.05,v));
-      else if(k==='loss') v=Math.max(0,Math.min(3,v));
-      else if(k==='tune'){ v=Math.max(-2400,Math.min(2400,v)); if(v!==this.tune) pitchDirty=true; }
-      else if(k==='nl') v=Math.max(0,Math.min(8,v));
-      else if(k==='pkQ') v=Math.max(0.4,Math.min(14,v));
-      if(isFinite(v)) this[k]=v;
-    }
-    return pitchDirty;
-  }
+            // input k samples ago
+        // after this sample's write
+   // (-g+z^-N)/(1-g z^-N)
   // P1: how much of real time the audio thread spends here, measured on the device (Date.now has
   // 1 ms steps; summed over 0.25 s of audio). The page shows it; the governor uses it.
   process(inputs, outputs){
@@ -1807,35 +994,11 @@ class Resonator extends AudioWorkletProcessor {
     const out=outputs[0]; if(!this.ok){ for(const ch of out) ch.fill(0); return true; }
     const L=out[0], R=out.length>1?out[1]:null, n=L.length;
     const mi=this.micI*3, mv=this.micVec;
-    const mJ=(this.micJ>=0?this.micJ:this.micI), mj=mJ*3, mv2=this.micVec2||this.micVec;
     const os=this.os, g=1-Math.exp(-2*Math.PI*Math.min(this.tone,0.45*sampleRate*this.os)/(sampleRate*os));
     const dispK=1/this.aChar, vk=1/(2*Math.PI*this.f0*this.aChar), ak=vk/(2*Math.PI*this.f0);
     this.gateStep=1/Math.max(1,0.010*sampleRate);
-    this.applyMods(false);
-    this.resetOrgans();
-    let pd=this.couple();
-    if(this.regimes(n/sampleRate)) pd=true;
-    this.strain(n/sampleRate);
-    this.observe(n/sampleRate); this.filter(n/sampleRate);
-    this.attractor(n/sampleRate);
-    if(pd) this.pitch();
-    // S4: one tap per (extra mic, voice), built once per block (pitches and scale only change between blocks)
-    let nXT=0; const XT=this.xmT, XS=this.xmS, XK=this.xmK, XX=this.xmX, XY=this.xmY, XZ=this.xmZ, XL=this.xmLp, XB=this.xmLpB;
-    if(this.xmN){ const V=this.voices;
-      for(let q=0;q<3;q++){ if(this.xmI[q]<0) continue; const xi=this.xmI[q]*3, xv=this.xmVec[q];
-        const th=(Math.max(-1,Math.min(1,this.xmP[q]))+1)*Math.PI/4;   // constant-power pan, centre = unity
-        this.xmGL[q]=Math.cos(th)*1.4142135623730951; this.xmGR[q]=Math.sin(th)*1.4142135623730951;
-        for(let vv=0;vv<V;vv++){ XT[nXT]=vv*this.stride+xi; XS[nXT]=q*8+vv; XK[nXT]=V>1?1/(2*Math.PI*this.vf0[vv]*this.aChar):vk;
-          XX[nXT]=xv[0]; XY[nXT]=xv[1]; XZ[nXT]=xv[2]; nXT++; } } }
-    const fin=inputs&&inputs[0]&&inputs[0][0];   // S5: the phone mic, for followers
     for(let k=0;k<n;k++){
-      if(this.fOn) this.fIn[4]=fin?Math.abs(fin[k]):0;
-      this.applyMods(true);
-      if(this.exLive||this.micIn||this.wind>0) this.exciteSample(inputs,k);   // S3
       for(let s=0;s<os;s++){ this.advance(1);
-        if(nXT){ const vel=this.vel;   // S4: extra mics hear every voice
-          for(let t=0;t<nXT;t++){ const vb=XT[t], s8=XS[t], rx=(vel[vb]*XX[t]+vel[vb+1]*XY[t]+vel[vb+2]*XZ[t])*XK[t];
-            XL[s8]+=g*(rx-XL[s8]); XB[s8]+=g*(XL[s8]-XB[s8]); } }
         if(this.voices>1){
           for(let vv=0;vv<this.voices;vv++){
             const vb=vv*this.stride+mi;
@@ -1850,19 +1013,11 @@ class Resonator extends AudioWorkletProcessor {
           const A=this.coilA; let a=0;
           for(let c=0;c<A.idx.length;c++){ const q=A.idx[c]*3;
             a+=A.w[c]*(this.vel[q]*mv[0]+this.vel[q+1]*mv[1]+this.vel[q+2]*mv[2]); }
-          if(this.pkType&&this.coilB){
-            const B=this.coilB; let b=0;
-            for(let c=0;c<B.idx.length;c++){ const q=B.idx[c]*3;
-              b+=B.w[c]*(this.vel[q]*mv[0]+this.vel[q+1]*mv[1]+this.vel[q+2]*mv[2]); }
-            a = this.pkType===1 ? 0.5*(a+b) : 0.5*(a-b);   // humbucker / out of phase
-          }
           raw=a*vk;
         } else {
           raw=(this.vel[mi]*mv[0]+this.vel[mi+1]*mv[1]+this.vel[mi+2]*mv[2])*vk;
         }
-        this.lp+=g*(raw-this.lp); this.lpB+=g*(this.lp-this.lpB);
-        if(this.width>0){ const r2=(this.vel[mj]*mv2[0]+this.vel[mj+1]*mv2[1]+this.vel[mj+2]*mv2[2])*vk;
-          this.lp2+=g*(r2-this.lp2); this.lp2B+=g*(this.lp2-this.lp2B); } }
+        this.lp+=g*(raw-this.lp); this.lpB+=g*(this.lp-this.lpB); }
       // FIX3: displacement is normalised by aChar only. The extra *vk made the two
       // blended signals dimensionally incommensurable and drifted the mix with pitch.
       const disp=((this.pos[mi]-this.rest[mi])*mv[0]+(this.pos[mi+1]-this.rest[mi+1])*mv[1]+(this.pos[mi+2]-this.rest[mi+2])*mv[2])*dispK;
@@ -1893,101 +1048,17 @@ class Resonator extends AudioWorkletProcessor {
         const peak=v2+Math.max(0,this.pkQ-1)*3.4*v1;
         x = isFinite(peak) ? peak : (this.c1=0,this.c2=0,0);
       }
-      if(this.amp>0){
-        const gpre=1+this.amp*24;
-        let d=x*gpre;
-        d=Math.tanh(d+0.22*d*d*Math.exp(-Math.abs(d)));   // asymmetric, even harmonics
-        x=d*(0.55/(1+this.amp*0.9));   // makeup, so drive changes tone not level
-      }
-      if(this.bass!==0||this.treb!==0){
-        const gb=Math.tan(Math.PI*250/sampleRate), kb=1.0;
-        let a1=1/(1+gb*(gb+kb)), a2=gb*a1, a3=gb*a2;
-        let v3=x-this.b2, v1=a1*this.b1+a2*v3, v2=this.b2+a2*this.b1+a3*v3;
-        this.b1=2*v1-this.b1; this.b2=2*v2-this.b2;
-        const low=v2;
-        const gt=Math.tan(Math.PI*1100/sampleRate), kt=1.0;
-        a1=1/(1+gt*(gt+kt)); a2=gt*a1; a3=gt*a2;
-        v3=x-this.t2; v1=a1*this.t1+a2*v3; v2=this.t2+a2*this.t1+a3*v3;
-        this.t1=2*v1-this.t1; this.t2=2*v2-this.t2;
-        const high=x-kt*v1-v2;
-        x=x+2.6*this.bass*low+5.5*this.treb*high;
-      }
-      if(this.cab>0){
-        // A speaker in a box: a hard band limit, plus a low-mid hump. The old
-        // version boosted a bandpass sitting exactly on its own corner, which
-        // added back the brightness the lowpass had just removed.
-        const k1=1-Math.exp(-2*Math.PI*95/sampleRate);
-        const k2=1-Math.exp(-2*Math.PI*2600/sampleRate);
-        const k3=1-Math.exp(-2*Math.PI*220/sampleRate);
-        this.hp1+=k1*(x-this.hp1);
-        const hp=x-this.hp1;                       // nothing below 95 Hz
-        this.lp1+=k2*(hp-this.lp1);
-        this.lp1b+=k2*(this.lp1-this.lp1b);
-        this.lp1c+=k2*(this.lp1b-this.lp1c);
-        this.lp1d=(this.lp1d||0)+k2*(this.lp1c-(this.lp1d||0));   // 24 dB/oct
-        this.body=(this.body||0)+k3*(hp-(this.body||0));
-        const hump=this.body-this.hp1;             // broad lift around 150-250 Hz
-        const speaker=this.lp1d*1.0+hump*0.7;
-        x=x*(1-this.cab)+speaker*this.cab;
-      }
-      if(!isFinite(x)){ x=0; this.cl=0;this.cb=0;this.bl=0;this.bb=0;this.tl=0;this.tb=0;this.hp1=0;this.lp1=0;this.lp1b=0;this.lp1c=0;this.lp1d=0;this.body=0; }
-      // Feedback: what the microphone hears, delayed, pushed back into the body at
-      // the pickup. Anukari does this through modulatable delay lines; the same
-      // loop here turns the instrument into something that can sustain itself.
-      if(this.fbAmt>0){
-        const dl=Math.max(1,Math.min(this.fbBuf.length-2,Math.round(this.fbTime*0.001*sampleRate)));
-        let ri=this.fbIdx-dl; if(ri<0) ri+=this.fbBuf.length;
-        const d=this.fbBuf[ri];
-        const w=2*Math.PI*this.f0;
-        let f=d*this.fbAmt*w*w*this.aChar*2.0;
-        const lim=w*w*this.aChar*2.0;
-        if(f>lim) f=lim; else if(f<-lim) f=-lim;
-        this.fbF=isFinite(f)?f:0;
-        this.fbBuf[this.fbIdx]=isFinite(x)?Math.max(-4,Math.min(4,x)):0;
-        this.fbIdx=(this.fbIdx+1)%this.fbBuf.length;
-      } else if(this.fbF!==0){ this.fbF=0; this.fbBuf.fill(0); }
       const y=x-this.dcx+0.9985*this.dcy; this.dcx=x; this.dcy=y;
       // FIX7: gate slew instead of instantaneous mute/unmute.
       if(this.gate<this.gateTarget) this.gate=Math.min(this.gateTarget,this.gate+this.gateStep);
       else if(this.gate>this.gateTarget) this.gate=Math.max(this.gateTarget,this.gate-this.gateStep);
       if(this.pendingReset && this.gate<=1e-4){ this.pendingReset=false; this.hardReset(); }
-      const st=(this.specTrim||1)*(this.shapeTrim||1);
+      const st=this.specTrim*(this.shapeTrim||1);
       let o=Math.tanh(y*this.gain*13*(st/Math.min(1.5,Math.max(0.35,st))))*this.gate;
       if(!isFinite(o)) o=0;
       const ao=o<0?-o:o; if(ao>this.peak) this.peak=ao;
-      if(this.fOn) this.fIn[0]=ao*this.lvl;   // S5: follower source, Mic 1, as loud as it is heard (after the shape trim)
       let ll=o, rr=o;
-      if(R&&this.width>0){
-        const disp2=((this.pos[mj]-this.rest[mj])*mv2[0]+(this.pos[mj+1]-this.rest[mj+1])*mv2[1]+(this.pos[mj+2]-this.rest[mj+2])*mv2[2])*dispK;
-        const acc2=(this.frc[mj]*mv2[0]+this.frc[mj+1]*mv2[1]+this.frc[mj+2]*mv2[2])*ak;
-        let x2=(1-this.blend)*this.lp2B+this.blend*disp2+this.bite*2.6*acc2;
-        if(!isFinite(x2)) x2=0;
-        const y2=x2-this.dcx2+0.9985*this.dcy2; this.dcx2=x2; this.dcy2=y2;
-        let o2=Math.tanh(y2*this.gain*13)*this.gate; if(!isFinite(o2)) o2=0;
-        const w=Math.min(1,this.width), a=0.5+0.5*w, b=0.5-0.5*w;
-        ll=o*a+o2*b; rr=o2*a+o*b;
-      }
-      if(this.fOn){ this.fIn[1]=0; this.fIn[2]=0; this.fIn[3]=0; }   // S5
-      if(this.xmN){   // S4: extra mics, each a clean point pickup with its own level and pan
-        const V=this.voices, nrm=V>1?1/Math.sqrt(V):1;
-        for(let q=0;q<3;q++){ if(this.xmI[q]<0) continue; const xi=this.xmI[q]*3, xv=this.xmVec[q]; let sv=0, sd=0;
-          for(let vv=0;vv<V;vv++){ const vb=vv*this.stride+xi; sv+=this.xmLpB[q*8+vv];
-            sd+=((this.pos[vb]-this.rest[vb])*xv[0]+(this.pos[vb+1]-this.rest[vb+1])*xv[1]+(this.pos[vb+2]-this.rest[vb+2])*xv[2])*dispK; }
-          let x3=((1-this.blend)*sv+this.blend*sd)*nrm; if(!isFinite(x3)) x3=0;
-          const y3=x3-this.xmDx[q]+0.9985*this.xmDy[q]; this.xmDx[q]=x3; this.xmDy[q]=y3;
-          let o3=Math.tanh(y3*this.gain*13)*this.gate*this.xmG[q]; if(!isFinite(o3)) o3=0;
-          if(this.fOn) this.fIn[q+1]=(o3<0?-o3:o3)*this.lvl;   // S5: follower sources, Mics 2-4
-          ll+=o3*this.xmGL[q]; rr+=o3*this.xmGR[q]; }
-      }
-      if(this.fxLive()||this.spLive()){
-        // carry the width through as the side signal instead of discarding it
-        let mid=(ll+rr)*0.5, side=(ll-rr)*0.5;
-        if(this.fxLive()){ this.fx(mid); mid=(this.fxL+this.fxR)*0.5; side+=(this.fxL-this.fxR)*0.5; }
-        if(this.spLive()){ this.spatial(mid, mi); mid=(this.spL+this.spR)*0.5; side+=(this.spL-this.spR)*0.5; }
-        ll=mid+side; rr=mid-side;
-      }
       if(this.lvl!==1){ ll*=this.lvl; rr*=this.lvl; }          // F3: per-shape level calibration
-      if(this.rvOn){ this.reverbSample(ll,rr); const gw=this.rvMix*this.rvK; ll+=gw*this.rvOutL; rr+=gw*this.rvOutR; }   // F: plate reverb
       if(!isFinite(ll)) ll=0; if(!isFinite(rr)) rr=0;
       { // F2: true-peak lookahead limiter, ceiling -1 dBTP. Gain is exactly 1 below the ceiling.
         const B=this.tpL, C=this.tpR, I=this.tpI, D=this.tpD, Cc=this.limC;
@@ -2004,13 +1075,6 @@ class Resonator extends AudioWorkletProcessor {
         this.limG=g; const o=(I-D)&31; let ol=B[o], or=C[o]; if(g<1){ ol*=g; or*=g; }
         this.tpI=(I+1)&31;
         L[k]=ol; if(R) R[k]=or; }
-      if(this.rec){
-        this.recL[this.recN]=L[k]; this.recR[this.recN]=R?R[k]:L[k];
-        if(++this.recN>=4096){
-          this.port.postMessage({t:'rec',L:this.recL,R:this.recR},[this.recL.buffer,this.recR.buffer]);
-          this.recL=new Float32Array(4096); this.recR=new Float32Array(4096); this.recN=0;
-        }
-      }
     }
     // FIX1: periodic full-state scan catches Infinity that tanh would have hidden.
     if(this.voices>1){
@@ -2043,8 +1107,7 @@ class Resonator extends AudioWorkletProcessor {
           for(let i=0;i<lv;i++) this.vel[i]*=0.35;
           this.vRest.fill(0);   // P1: a rewind can put any voice back in motion
           this.lp=0; this.lpB=0; this.dcx=0; this.dcy=0;
-          this.c1=0; this.c2=0; this.b1=0; this.b2=0; this.t1=0; this.t2=0;
-          this.hp1=0; this.lp1=0; this.lp1b=0;
+          this.c1=0; this.c2=0;
         } else this.hardReset();
       }
       else { if(g===1) this.governed++; else { const lv=Math.max(1,this.voices)*this.stride;
@@ -2055,15 +1118,9 @@ class Resonator extends AudioWorkletProcessor {
     if(this.tick>=1400){
       this.tick=0;
       // Meter only: keep audio physics internal and do not ship body motion to the UI.
-      const M=this.mods;   // S5: envelope and follower meters
-      const fr=M[0].ty||M[1].ty||M[2].ty?{t:'frame',pk:this.peak,mv:[M[0].e,M[1].e,M[2].e]}:{t:'frame',pk:this.peak};
+      const fr={t:'frame',pk:this.peak};
       fr.cpu=this.cpu; fr.cpuMax=this.cpuMax; fr.aw=this.awakeCount(); fr.cap=Math.min(this.vCap,this.voices); fr.ga=this.govActs; fr.sl=this.sleeps;   // P1
       this.port.postMessage(fr);
-      if(this.att>0){
-        const O=new Float32Array(512*2);
-        for(let i=0;i<512;i++){ const j=((this.attN+i)%512)*2; O[i*2]=this.attHist[j]; O[i*2+1]=this.attHist[j+1]; }
-        this.port.postMessage({t:'orbit',P:O},[O.buffer]);
-      }
       this.peak*=0.55;
     }
     return true;
@@ -2073,38 +1130,6 @@ registerProcessor('resonator', Resonator);
 `;
 
 const SHAPES = {
-  String:{min:6,max:40,def:14,note:'Both ends clamped. The classic. Mic near an end for guitar, near the middle for a soft flute-ish tone.',make(n){const P=[],F=[],S=[];for(let i=0;i<=n+1;i++){P.push([-0.42+0.84*i/(n+1),0,0]);F.push(i===0||i===n+1?1:0);}for(let i=0;i<=n;i++)S.push([i,i+1]);return{P,F,S,axis:1,mic:Math.max(1,Math.round(n*0.18)),hit:Math.max(1,Math.round(n*0.36))};}},
-  Tine:{min:5,max:34,def:12,note:'Clamped at one end only, free at the other — a music-box tooth. Inharmonic and bell-like, and it likes a long decay.',make(n){const P=[],F=[],S=[];for(let i=0;i<=n+1;i++){P.push([-0.42+0.84*i/(n+1),0,0]);F.push(i<2?1:0);}for(let i=0;i<=n;i++)S.push([i,i+1]);return{P,F,S,axis:1,mic:n,hit:n};}},
-  Chime:{min:5,max:34,def:13,note:'Nothing is clamped. A bar floating in space, held only by the substrate. Struck off-centre it rings like a marimba bar.',make(n){const P=[],F=[],S=[];for(let i=0;i<n;i++){P.push([-0.42+0.84*i/(n-1),0,0]);F.push(0);}for(let i=0;i<n-1;i++)S.push([i,i+1]);return{P,F,S,axis:1,mic:0,hit:n-1,needSub:0.0006};}},
-  Drum:{min:4,max:9,def:5,note:'A square membrane pinned at the rim. Two-dimensional, so its overtones are irrational — that is why drums have no clear pitch.',make(g){const P=[],F=[],S=[],id=(x,y)=>y*g+x;for(let y=0;y<g;y++)for(let x=0;x<g;x++){P.push([(x/(g-1)-0.5)*0.8,(y/(g-1)-0.5)*0.8,0]);F.push(x===0||y===0||x===g-1||y===g-1?1:0);}for(let y=0;y<g;y++)for(let x=0;x<g;x++){if(x<g-1)S.push([id(x,y),id(x+1,y)]);if(y<g-1)S.push([id(x,y),id(x,y+1)]);if(x<g-1&&y<g-1)S.push([id(x,y),id(x+1,y+1)]);}const c=id((g-1)>>1,(g-1)>>1);return{P,F,S,axis:2,mic:c,hit:id(((g-1)>>1)+1,(g-1)>>1)};}},
-  Hoop:{min:6,max:34,def:14,note:'A closed ring with a single anchor. Waves run all the way round and meet themselves, which gives it that hollow, slightly detuned shimmer.',make(n){const P=[],F=[],S=[];for(let i=0;i<n;i++){const a=2*Math.PI*i/n;P.push([0.36*Math.cos(a),0.36*Math.sin(a),0]);F.push(i===0?1:0);}for(let i=0;i<n;i++)S.push([i,(i+1)%n]);return{P,F,S,axis:2,mic:Math.round(n*0.5),hit:Math.round(n*0.3),needSub:0.0006};}},
-  Web:{min:6,max:18,def:9,note:'A fixed rim, an inner ring, and a hub. Energy sloshes between the spokes and the ring — hit the hub and listen to it travel.',make(k){const P=[],F=[],S=[];P.push([0,0,0]);F.push(0);for(let i=0;i<k;i++){const a=2*Math.PI*i/k;P.push([0.17*Math.cos(a),0.17*Math.sin(a),0]);F.push(0);}for(let i=0;i<k;i++){const a=2*Math.PI*i/k;P.push([0.38*Math.cos(a),0.38*Math.sin(a),0]);F.push(1);}for(let i=0;i<k;i++){S.push([0,1+i]);S.push([1+i,1+(i+1)%k]);S.push([1+i,1+k+i]);}return{P,F,S,axis:2,mic:1,hit:0};}},
-  Tank:{min:6,max:12,def:8,note:'A big empty steel gas vessel: hemispherical caps on a cylinder. Its lowest modes are not the breathing mode but high-order lobes flexing the wall, and they come in near-identical pairs that beat slowly against each other. Steel loses almost no energy, so give it a long decay.',make(k){
-    const P=[],F=[],S=[],R=0.30,HL=0.34,RINGS=4,CAP=2;
-    const ring=(x,r,ph)=>{const s=P.length;for(let i=0;i<k;i++){
-      const a=2*Math.PI*i/k+(ph||0);
-      // out-of-round: a fixed, deterministic weld pattern, well under a percent
-      const w=1+0.011*Math.cos(2*a+0.7)+0.006*Math.cos(3*a+2.1)+0.004*Math.cos(5*a);
-      P.push([x+0.004*Math.cos(3*a),r*w*Math.cos(a),r*w*Math.sin(a)]);F.push(0);}
-      return s;};
-    const idx=[];
-    // hemispherical cap, cylinder body, hemispherical cap
-    for(let c=CAP;c>=1;c--){const t=c/(CAP+0.5);idx.push(ring(-HL-R*Math.sin(Math.acos(1-t*0.9)),R*Math.sqrt(Math.max(0.05,1-(1-t*0.9)*(1-t*0.9))),0));}
-    for(let m=0;m<=RINGS;m++) idx.push(ring(-HL+2*HL*m/RINGS,R,0));
-    for(let c=1;c<=CAP;c++){const t=c/(CAP+0.5);idx.push(ring(HL+R*Math.sin(Math.acos(1-t*0.9)),R*Math.sqrt(Math.max(0.05,1-(1-t*0.9)*(1-t*0.9))),0));}
-    const pA=P.length;P.push([-HL-R*0.98,0,0]);F.push(0);
-    const pB=P.length;P.push([ HL+R*0.98,0,0]);F.push(0);
-    // hoops around every ring
-    for(const s of idx) for(let i=0;i<k;i++) S.push([s+i,s+(i+1)%k]);
-    // meridians plus shear bracing, which a shell needs or it folds flat
-    for(let r=0;r<idx.length-1;r++) for(let i=0;i<k;i++){
-      S.push([idx[r]+i, idx[r+1]+i]);
-      S.push([idx[r]+i, idx[r+1]+(i+1)%k]);
-      S.push([idx[r]+(i+1)%k, idx[r+1]+i]);
-    }
-    for(let i=0;i<k;i++){ S.push([pA,idx[0]+i]); S.push([pB,idx[idx.length-1]+i]); }
-    const mid=idx[CAP+Math.floor(RINGS/2)];
-    return {P,F,S,axis:1,mic:mid+Math.floor(k/4),hit:idx[CAP]+0,needSub:0.0004};}},
   Tank:{min:5,max:9,def:7,note:'A large empty steel gas vessel: hemispherical caps on a cylindrical barrel. A shell like this has no clear fundamental — bending stiffness rises with the number of lobes around the circumference while hoop stiffness falls, so the two compete and the lowest modes cluster around three or four lobes. Steel loses almost no energy, so give it a long decay and very little damping.',make(C){
     const P=[],F=[],S=[],R=0.24,H=0.26,A=4,K=2,rings=[];
     const ring=(x,r)=>{const ids=[];for(let j=0;j<C;j++){const th=2*Math.PI*j/C;
@@ -2121,111 +1146,32 @@ const SHAPES = {
       for(let j=0;j<C;j++){link(a[j],b[j]);link(a[j],b[(j+1)%C]);}}
     for(let j=0;j<C;j++){link(poleL,rings[0][j]);link(poleR,rings[rings.length-1][j]);}
     const mid=rings[Math.floor(rings.length/2)];
-    return {P,F,S,axis:1,mic:mid[0],hit:rings[K][Math.floor(C/2)],needSub:0.0004};}},
-  Twins:{min:5,max:24,def:9,note:'Two strings of different length, wired together at one point. Play a note on one and the other answers on its own — sympathetic resonance, for free.',make(n){const P=[],F=[],S=[],m=Math.max(4,Math.round(n*0.68));for(let i=0;i<=n+1;i++){P.push([-0.42+0.84*i/(n+1),-0.09,0]);F.push(i===0||i===n+1?1:0);}const off=n+2;for(let i=0;i<=m+1;i++){P.push([-0.42+0.84*i/(m+1),0.09,0]);F.push(i===0||i===m+1?1:0);}for(let i=0;i<=n;i++)S.push([i,i+1]);for(let i=0;i<=m;i++)S.push([off+i,off+i+1]);S.push([Math.round(n*0.5),off+Math.round(m*0.5)]);return{P,F,S,axis:2,mic:off+Math.round(m*0.4),hit:Math.max(1,Math.round(n*0.3))};}}
+    return {P,F,S,axis:1,mic:mid[0],hit:rings[K][Math.floor(C/2)],needSub:0.0004};}}
 };
 const KNOBS={
  size:{label:'Size',min:0,max:1,step:0.001,val:0.5,fmt:v=>state.n+' masses',hint:'More masses means more modes, and more work for your phone.'},
  mag:{label:'Magnify',min:0.5,max:60,step:0.5,val:6,fmt:v=>'×'+v,hint:'Drawing only. Real displacements are a fraction of a millimetre.'},
  ratio:{label:'Stiffness',min:0.25,max:14,step:0.05,val:6,fmt:v=>v.toFixed(2)+'×',hint:'How much higher the squeeze-modes sit above the sideways ones. Low is soft and woody, high is metal.'},
- decay:{label:'Sustain',min:0.08,max:26,step:0.02,val:4,fmt:v=>'rings '+(1.25*v).toFixed(1)+' s',hint:'How long the tank keeps ringing after a strike, like holding down a piano\'s sustain pedal. The time shown is how long it takes to fade to a hundredth of its strength (40 dB), measured on the Tank; more Damping shortens it a little.'},
+ decay:{label:'Sustain',min:0.08,max:26,step:0.02,val:4,fmt:v=>'rings '+(1.55*v).toFixed(1)+' s',hint:'How long the tank keeps ringing after a strike, like holding down a piano\'s sustain pedal. The time shown is how long it takes to fade to a hundredth of its strength (40 dB), measured on the Tank; more Damping shortens it a little.'},
  loss:{label:'Damping in the springs',min:0,max:3,step:0.01,val:0.5,fmt:v=>v.toFixed(2),hint:'Eats the high partials first, the way a real material does. This is your dull-to-bright axis.'},
  sub:{label:'Substrate',min:0,max:0.05,step:0.0002,val:0.0006,fmt:v=>v.toFixed(4),hint:'A weak pull back toward rest, everywhere. Adds inharmonicity and keeps free bodies from drifting.'},
  drive:{label:'Drive',min:0.05,max:4,step:0.01,val:1,fmt:v=>v.toFixed(2),hint:'Hit harder and the geometry itself stops being linear — pitch bends upward, then settles.'},
- bowSpd:{label:'Bow speed',min:0.45,max:2.2,step:0.01,val:1.0,fmt:v=>v.toFixed(2),hint:'How fast the hair travels. Too slow and it squeals on a higher mode; too fast and the grip breaks into a scrape.'},
- bowVc:{label:'Bow bite',min:0.3,max:1.5,step:0.01,val:0.35,fmt:v=>v.toFixed(2),hint:'How sharply friction falls away as the body starts to slide. Low grips hard and snaps — rosin. High slips smoothly.'},
  hard:{label:'Mallet',min:0,max:1,step:0.005,val:0.3,fmt:v=>v<0.25?'hard':v<0.6?'firm':'soft',hint:'A short contact excites everything; a long one only wakes the low modes.'},
  voices:{label:'Voices',min:1,max:8,step:1,val:1,fmt:v=>v<2?'mono — a new note retunes the body':Math.round(v)+' independent bodies',hint:'Monophonic means one object that gets retuned mid-ring. Above one, each note gets its own copy of the structure, so chords hold.'},
- spImg:{label:'Stereo image',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Interaural time and level differences taken from where the microphone actually sits on the body. Move the mic and the sound moves in the field.'},
- spDist:{label:'Distance',min:0,max:1,step:0.01,val:0.3,fmt:v=>(0.55+2.4*v).toFixed(2)+' m',hint:'How far away you are standing. Attenuation follows the inverse law and the air eats the top end with distance, as it does outdoors.'},
- spRefl:{label:'Reflections',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'anechoic':Math.round(v*100)+'%',hint:'Four early reflections from walls placed by the distance setting.'},
- spDop:{label:'Doppler',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'The mass carrying the microphone is genuinely moving, so its radial velocity shifts the pitch. This is the real effect, not a pitch LFO.'},
- spRot:{label:'Rotation',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'still':Math.round(v*100)+'%',hint:'Spins the object around the listener. With the attractor running, Z^φ steers the spin, so it never comes back to the same place.'},
- spElev:{label:'Elevation',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'flat':Math.round(v*100)+'%',hint:'Height cue from the mic’s vertical position on the body.'},
- fxCho:{label:'Chorus',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Two delay lines swept by the golden-angle rotation Z^φ. Because the rotation never realigns, the sweep never repeats.'},
- fxDly:{label:'Delay taps',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Six taps whose times come from the accounting-projected vector C. As the model moves, the rhythm of the repeats moves with it.'},
- fxFb:{label:'Delay feedback',min:0,max:0.85,step:0.01,val:0.35,fmt:v=>Math.round(v*100)+'%',hint:''},
- fxWow:{label:'Wow',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Delay time jittered by the innovation memory L — the filtered prediction error. Tape wobble with a statistical origin.'},
- fxTrem:{label:'Tremolo',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Amplitude and pan from the rotating factor pair F.'},
- fxSat:{label:'Orbit drive',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Saturation driven by the orbit radius ‖U‖. The further the state wanders, the harder it clips.'},
- att:{label:'Attractor',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'The full OMEF recursion driving the instrument: ten organs through a bounded nonlinear map, an innovation memory, the accounting projection, golden-angle rotation and a Markov regime step. It cannot run away — the state norm divides the map.'},
- attC:{label:'Bounding c',min:0.05,max:1.5,step:0.01,val:0.35,fmt:v=>v.toFixed(2),hint:'The c in 1/(1+c‖U‖²). Small values let the orbit range wide before it is reined in; large values keep it tight.'},
- infer:{label:'Inference',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'A particle filter watches how you play — rate, force, register, accumulated strain — and infers which regime you are in, then moves the instrument toward it.'},
- spread:{label:'Uncertainty spread',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'none':Math.round(v*100)+'%',hint:'When the filter is unsure, the voices detune away from each other. Certainty locks them together. Needs more than one voice.'},
- mem:{label:'Memory',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'The instrument remembers how hard you have been playing, on a reciprocal-Fibonacci forgetting curve, and grows progressively more brittle. Stop for a while and it relaxes.'},
- memSpan:{label:'Memory span',min:0.15,max:6,step:0.05,val:1.2,fmt:v=>(v*12).toFixed(0)+' s reach',hint:'How far back it remembers. Twelve weighted taps at this spacing.'},
- regime:{label:'Regimes',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Four hidden states — expansion, rate stress, credit stress, recession — that the instrument drifts between on its own. It backs off automatically when the physics is running near its limit.'},
- rswitch:{label:'Switch rate',min:0.002,max:0.2,step:0.001,val:0.025,fmt:v=>v.toFixed(3),hint:'How readily it changes its mind.'},
- rphi:{label:'Cycle ratio',min:1.05,max:2.6,step:0.001,val:1.618,fmt:v=>v.toFixed(3)+(Math.abs(v-1.618)<0.004?' φ':''),hint:'Ratio of the two driving periods. At the golden ratio they never realign, so the drift never repeats.'},
- coup:{label:'Coupling',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Cross-organ weights from OMEF. The controls stop being independent — move one and the others follow along their couplings. At zero the engine behaves exactly as before.'},
  tune:{label:'Trim',min:-1200,max:1200,step:1,val:0,fmt:v=>(v>0?'+':'')+v+' ¢',hint:'The pitch is measured, not assumed. Nudge it if a shape lands a shade off.'},
  hit:{label:'Strike point',min:0,max:1,step:0.001,val:0.3,fmt:v=>'#'+state.hitIdx,hint:'A mode with a node exactly here will not be excited at all.'},
  mic:{label:'Mic point',min:0,max:1,step:0.001,val:0.15,fmt:v=>'#'+state.micIdx,hint:'And a mode with a node here will be inaudible even if it is ringing.'},
  blend:{label:'Mic type',min:0,max:1,step:0.01,val:0.12,fmt:v=>v<0.34?'velocity':v<0.7?'mixed':'displacement',hint:'Velocity is bright and close-mic’d. Displacement is rounder and further away.'},
  gain:{label:'Level',min:0,max:1.6,step:0.01,val:0.85,fmt:v=>Math.round(v*62)+'',hint:''},
- wind:{label:'Wind',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'still':Math.round(v*100)+'%',hint:'Turbulent air pushing on every mass at once. Keeps the body singing with no strike at all: breathy, and it never repeats.'},
- xLevel:{label:'Extra mic level',min:0,max:1.5,step:0.01,val:0.7,fmt:v=>Math.round(v*100)+'%',hint:'Level of the mic picked above (Mic 2, 3 or 4).'},
- xPan:{label:'Extra mic pan',min:-1,max:1,step:0.02,val:0,fmt:v=>v<-0.03?'L '+Math.round(-v*100):v>0.03?'R '+Math.round(v*100):'centre',hint:'Where the mic picked above sits between your ears.'},
- inGain:{label:'Mic input',min:0,max:1,step:0.01,val:0.5,fmt:v=>Math.round(v*100)+'%',hint:'How hard the sound from your phone’s microphone pushes the strike point. Turn on Mic in below.'},
  tone:{label:'Mic tone',min:140,max:12000,step:20,val:6000,fmt:v=>v>=1000?(v/1000).toFixed(1)+' kHz':v+' Hz',hint:'Rolls off the top of the pickup. Low settings sound like listening through the body of the instrument.'},
  bite:{label:'Bite',min:0,max:2.5,step:0.01,val:0,fmt:v=>v.toFixed(2),hint:'Adds acceleration to the pickup — what a contact mic hears. Hard, percussive, and it exposes the attack.'},
  nl:{label:'Nonlinearity',min:0,max:8,step:0.05,val:0,fmt:v=>v.toFixed(2)+'×',hint:'Springs stiffen as they stretch. Turn it up and hard notes bend sharp on the attack, then settle.'},
- angle:{label:'Strike angle',min:0,max:1,step:0.01,val:0.4,fmt:v=>v<0.15?'square on':v<0.55?'angled':'glancing',hint:'How obliquely the mallet lands. Glancing blows wake the squeeze modes; square-on blows do not.'},
- width:{label:'Stereo',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'mono':Math.round(v*100)+'%',hint:'Adds a second microphone elsewhere on the body and spreads the two across the field.'},
- fbAmt:{label:'Feedback',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Sends what the mic hears back into the body as a force. Past halfway it stops decaying and starts feeding itself, like a guitar held against an amp.'},
- fbTime:{label:'Feedback delay',min:0.3,max:180,step:0.1,val:24,fmt:v=>v<10?v.toFixed(1)+' ms':Math.round(v)+' ms',hint:'Short delays sing a pitch of their own. Long ones turn into rhythmic regeneration.'},
- pkAp:{label:'Coil aperture',min:0.02,max:0.8,step:0.01,val:0.18,fmt:v=>Math.round(v*100)+'%',hint:'A real pickup senses a stretch of string, not a point. Wide apertures average the top end away.'},
- pkSpc:{label:'Coil spacing',min:0.05,max:0.9,step:0.01,val:0.28,fmt:v=>Math.round(v*100)+'%',hint:'Humbucker and out-of-phase only. Distance between the two coils, which sets where the comb notch lands.'},
- pkRes:{label:'Coil peak',min:500,max:9000,step:25,val:3000,fmt:v=>(v/1000).toFixed(1)+' kHz',hint:'Inductance against cable capacitance. This resonance is most of what makes a pickup sound like that pickup.'},
- pkQ:{label:'Coil Q',min:0.5,max:14,step:0.05,val:1.6,fmt:v=>v.toFixed(2),hint:'How sharp the peak is. High Q is a nasal, vocal honk right before the rolloff.'},
- amp:{label:'Amp drive',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'clean':Math.round(v*100)+'%',hint:'Asymmetric clipping, so it makes even harmonics as well as odd. Past halfway it stops being polite.'},
- bass:{label:'Bass',min:-1,max:2,step:0.02,val:0,fmt:v=>(v>0?'+':'')+v.toFixed(2),hint:''},
- treb:{label:'Treble',min:-1,max:2,step:0.02,val:0,fmt:v=>(v>0?'+':'')+v.toFixed(2),hint:''},
- splash:{label:'Splash',min:0,max:1.6,step:0.01,val:0.9,fmt:v=>v<0.02?'off':Math.round(v*100)+'%',hint:'Worthington splash: entry, cavity collapse, jet, then droplets falling back. Harder hits run the whole sequence faster.'},
- m1r:{label:'Rate 1',min:0,max:1,step:0.005,val:0.32,fmt:v=>fmtRate(v),hint:'From one cycle every hundred seconds up to two kilohertz. Past about thirty hertz it stops being a wobble and becomes timbre.'},
- m1a:{label:'Depth 1',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
- m2r:{label:'Rate 2',min:0,max:1,step:0.005,val:0.5,fmt:v=>fmtRate(v),hint:''},
- m2a:{label:'Depth 2',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
- m3r:{label:'Rate 3',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtRate(v),hint:''},
- m3a:{label:'Depth 3',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
- m1at:{label:'Attack 1',min:0,max:1,step:0.005,val:0.175,fmt:v=>fmtTime(v),hint:'How long the envelope takes to rise when a key goes down.'},
- m1dc:{label:'Decay 1',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:'How long it takes to fall to the sustain level.'},
- m1su:{label:'Sustain 1',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:'Where it rests while keys stay down. At 0% it is a one-shot.'},
- m1rl:{label:'Release 1',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:'How long it takes to fall away after the last key comes up.'},
- m1fa:{label:'Follow attack 1',min:0,max:1,step:0.005,val:0.335,fmt:v=>fmtTime(v),hint:'How fast it rises when the mic gets louder. About 20 ms follows loudness roughly the way ears do.'},
- m1fr:{label:'Follow release 1',min:0,max:1,step:0.005,val:0.425,fmt:v=>fmtTime(v),hint:'How fast it falls when the mic gets quieter.'},
- m1se:{label:'Sensitivity 1',min:0,max:1,step:0.01,val:0.36,fmt:v=>fmtSens(v),hint:'How loud the mic must be to reach full movement. At +13 dB a firm hit reaches most of the way.'},
- m2at:{label:'Attack 2',min:0,max:1,step:0.005,val:0.175,fmt:v=>fmtTime(v),hint:''},
- m2dc:{label:'Decay 2',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:''},
- m2su:{label:'Sustain 2',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
- m2rl:{label:'Release 2',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:''},
- m2fa:{label:'Follow attack 2',min:0,max:1,step:0.005,val:0.335,fmt:v=>fmtTime(v),hint:''},
- m2fr:{label:'Follow release 2',min:0,max:1,step:0.005,val:0.425,fmt:v=>fmtTime(v),hint:''},
- m2se:{label:'Sensitivity 2',min:0,max:1,step:0.01,val:0.36,fmt:v=>fmtSens(v),hint:''},
- m3at:{label:'Attack 3',min:0,max:1,step:0.005,val:0.175,fmt:v=>fmtTime(v),hint:''},
- m3dc:{label:'Decay 3',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:''},
- m3su:{label:'Sustain 3',min:0,max:1,step:0.01,val:0,fmt:v=>Math.round(v*100)+'%',hint:''},
- m3rl:{label:'Release 3',min:0,max:1,step:0.005,val:0.62,fmt:v=>fmtTime(v),hint:''},
- m3fa:{label:'Follow attack 3',min:0,max:1,step:0.005,val:0.335,fmt:v=>fmtTime(v),hint:''},
- m3fr:{label:'Follow release 3',min:0,max:1,step:0.005,val:0.425,fmt:v=>fmtTime(v),hint:''},
- m3se:{label:'Sensitivity 3',min:0,max:1,step:0.01,val:0.36,fmt:v=>fmtSens(v),hint:''},
- rvMix:{label:'Reverb',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.005?'off':Math.round(v*100)+'%',hint:'A plate reverb, after everything else: the sound in a large ringing steel plate (Dattorro, 1997). At 0 it is switched off entirely.'},
- rvTime:{label:'Reverb time',min:0.6,max:12,step:0.05,val:2.5,fmt:v=>v.toFixed(1)+' s',hint:'How long the tail takes to fall by 60 dB (measured below 1 kHz). A plate this size cannot ring much shorter than 0.6 s.'},
- rvTone:{label:'Reverb tone',min:1000,max:16000,step:100,val:9000,fmt:v=>(v/1000).toFixed(1)+' kHz',hint:'The plate loses highs above this on every pass, so the tail darkens as it fades.'},
- rvPre:{label:'Pre-delay',min:0,max:250,step:1,val:20,fmt:v=>Math.round(v)+' ms',hint:'A gap before the reverb answers, like the distance to the first wall.'},
- cab:{label:'Cabinet',min:0,max:1,step:0.01,val:0,fmt:v=>v<0.02?'direct':Math.round(v*100)+'%',hint:'A speaker in a box: nothing below 95 Hz, nothing above 4.2 kHz. This is what stops it sounding like a computer.'}
+ angle:{label:'Strike angle',min:0,max:1,step:0.01,val:0.4,fmt:v=>v<0.15?'square on':v<0.55?'angled':'glancing',hint:'How obliquely the mallet lands. Glancing blows wake the squeeze modes; square-on blows do not.'}
 };
 // F3: per-shape output calibration to -21 LUFS at default settings (measured, see qa-resonator)
-const SHAPE_LVL={String:1.4928,Tine:0.8082,Chime:0.866,Drum:0.9784,Hoop:1.5171,Web:0.7379,Tank:8.8716,Twins:1.8793};
-const RATE=v=>0.01*Math.pow(200000,v);
-const fmtRate=v=>{const r=RATE(v);return r<1?r.toFixed(2)+' Hz':r<1000?r.toFixed(1)+' Hz':(r/1000).toFixed(2)+' kHz';};
-const MDEST=['','bowSpd','bowVc','spImg','spRot','spDist','fxCho','fxDly','fxWow','fxTrem','fxSat','att','infer','mem','regime','coup','fbAmt','fbTime','tune','ratio','loss','sub','nl','drive','hard','angle','blend','bite','tone','width','pkRes','pkQ','amp','bass','treb','cab','gain'];
-const MLABEL={'':'off',bowSpd:'Bow speed',bowVc:'Bow bite',spImg:'Stereo image',spRot:'Rotation',spDist:'Distance',fxCho:'Chorus',fxDly:'Delay taps',fxWow:'Wow',fxTrem:'Tremolo',fxSat:'Orbit drive',att:'Attractor',infer:'Inference',mem:'Memory',regime:'Regimes',coup:'Coupling',fbAmt:'Feedback',fbTime:'Feedback delay',tune:'Pitch',ratio:'Stiffness',loss:'Damping',sub:'Substrate',nl:'Nonlinearity',
- drive:'Drive',hard:'Mallet',angle:'Strike angle',blend:'Mic type',bite:'Bite',tone:'Mic tone',
- width:'Stereo',pkRes:'Coil peak',pkQ:'Coil Q',amp:'Amp drive',bass:'Bass',treb:'Treble',cab:'Cabinet',gain:'Level'};
-const MSHAPE=['sine','triangle','square','ramp','random'];
+const SHAPE_LVL={Tank:8.8716};
 const SCALES=[[0,3,5,7,10],[0,2,4,6,8,10],[0,1,2,3,4,5,6,7,8,9,10,11]],NAMES=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
-const state={shape:'Tank',n:7,scale:0,root:52,micIdx:0,micIdx2:0,hitIdx:0,pk:0,mode:0,spec:0,axis:1,geo:null,free:[],M:null,spin:true,disp:null,spd:null,running:false,audioMode:'',ranOnce:false,peak:0,lite:false,liteUntil:0,_lastUnder:0};
+const state={shape:'Tank',n:7,scale:0,root:52,micIdx:0,hitIdx:0,axis:1,geo:null,free:[],M:null,spin:true,disp:null,spd:null,running:false,audioMode:'',ranOnce:false,peak:0,lite:false,liteUntil:0,_lastUnder:0};
 let ctx=null,node=null,master=null; const val={};for(const k in KNOBS)val[k]=KNOBS[k].val;
 window.RESONATOR_DIAG=[];   // FIX2: measurement log, readable from Safari devtools
 
@@ -2234,10 +1180,8 @@ function buildShape(resetPickups){
  if(g.needSub&&val.sub<g.needSub){val.sub=g.needSub;syncKnob('sub');}
  if(resetPickups){const F=state.free,span=Math.max(1,F.length-1),at=i=>{const k=F.indexOf(i);return k<0?0:k/span;};val.mic=at(g.mic);val.hit=at(g.hit);syncKnob('mic');syncKnob('hit');}
  placeMicHit();
- if(node){const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});postStruct({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:g.axis});for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain','rvMix','rvTime','rvTone','rvPre'])send(k);
-   node.port.postMessage({t:'pk',v:state.pk||0});
-   node.port.postMessage({t:'mode',v:state.mode||0});
-   node.port.postMessage({t:'spec',v:state.spec||0});sendLvl();}
+ if(node){const pos=new Float32Array(g.P.length*3);g.P.forEach((p,i)=>{pos[i*3]=p[0];pos[i*3+1]=p[1];pos[i*3+2]=p[2];});postStruct({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),mic:state.micIdx,hit:state.hitIdx,axis:g.axis});for(const k of SENDS)send(k);
+   sendLvl();}
  document.getElementById('bodytext').textContent=S.note;state.geo.note=S.note;[...axesEl.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===state.axis));state.disp=new Float32Array(g.P.length*3);state.spd=new Float32Array(g.P.length);drawInfo();
 }
 function placeMicHit(){
@@ -2245,15 +1189,13 @@ function placeMicHit(){
  const n=F.length;
  state.micIdx=F[Math.min(n-1,Math.round(val.mic*(n-1)))];
  state.hitIdx=F[Math.min(n-1,Math.round(val.hit*(n-1)))];
- // second pickup sits as far from the first as the body allows
- state.micIdx2=F[(Math.round(val.mic*(n-1))+Math.max(1,Math.floor(n/2)))%n];
  if(node){
    node.port.postMessage({t:'mic',i:state.micIdx,a:state.axis});
-   node.port.postMessage({t:'mic2',i:state.micIdx2});
    node.port.postMessage({t:'hit',i:state.hitIdx,a:state.axis});
  }
 }
 function send(k){if(node)node.port.postMessage({t:'p',k,v:val[k]});}
+const SENDS=['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','voices'];   // J1: every control the engine has
 
 // ---- S1: tuning maths in a background Worker ---------------------------------------------
 // A shadow copy of the engine runs in a Worker and receives every control message the real engine
@@ -2656,23 +1598,21 @@ const store={
 function snapshot(){
   const g=state.geo;
   return {v:1,shape:state.shape,n:state.n,scale:state.scale,root:state.root,axis:state.axis,
-    pk:0,mode:0,spec:0,micIdx:state.micIdx,hitIdx:state.hitIdx,
+    pk:0,mode:0,spec:0,micIdx:state.micIdx,hitIdx:state.hitIdx,   // J1: pk/mode/spec kept so the main Resonator reads these presets as before
     P:g.P.map(p=>p.map(q=>+q.toFixed(4))),F:Array.from(g.F),S:g.S.map(s=>[s[0],s[1]]),
     val:Object.assign({},val),
     xm:null,
     ref:state.ref?{h:state.ref.h,m:state.ref.m,a:state.ref.a}:null};   // H: the strike and mic the body was tuned with
 }
-// I: Tank only. The controls that are kept; every other control stays at its old default and is still sent
-// to the engine as before, so the Tank sounds exactly as it did. A preset cannot switch a removed one back on.
+// I: Tank only. The controls that are kept. J1: the engine has no other controls left, so a preset cannot
+// switch a removed one back on.
 const KEEP=new Set(['decay','size','ratio','loss','sub','voices','nl','tune','drive','hard','hit','angle','gain','mic','blend','bite','tone','mag']);
 const tankPreset=o=>!!(o&&o.P&&(o.shape||'Tank')==='Tank');
 function restore(o){
   if(!tankPreset(o)) return false;
   state.shape='Tank'; state.n=o.n||state.n;
   state.scale=o.scale||0; state.root=o.root||52; state.axis=(o.axis===0||o.axis===1||o.axis===2)?o.axis:1;   // H: X (0) is a real axis
-  state.pk=0; state.mode=0; state.spec=0;   // I: one pickup, the mallet, no specialization: the old defaults
   for(const k in o.val) if(k in val&&KEEP.has(k)) val[k]=o.val[k];
-  for(const k in KNOBS) if(!KEEP.has(k)) val[k]=KNOBS[k].val;   // I
   state.geo={P:o.P.map(p=>p.slice()),F:Uint8Array.from(o.F),S:o.S.map(s=>s.slice()),
              axis:state.axis,mic:o.micIdx,hit:o.hitIdx,note:'',shape:state.shape,n:state.n};   // S2
   state.free=state.geo.P.map((_,i)=>i).filter(i=>!state.geo.F[i]);
@@ -2689,7 +1629,6 @@ function restore(o){
   if(ref){ state.micIdx=ref.m; state.hitIdx=ref.h; if(ref.a===0||ref.a===1||ref.a===2) state.axis=ref.a; }
   rebuild();
   state.micIdx=want.m; state.hitIdx=want.h; state.axis=want.a; pickSend();
-  if(node) node.port.postMessage({t:'spec',v:0});
   buildPads();
   return true;
 }
@@ -2698,10 +1637,9 @@ function say(t,warn){ const m=document.getElementById('msg'); if(!m) return; m.c
   clearTimeout(state.msgT); state.msgT=setTimeout(()=>{ state.msgUntil=0; drawInfo(); },6050); }
 // H: every new body goes through here, so the page knows which strike and mic it was tuned with
 function postStruct(msg){ state.ref={h:msg.hit,m:msg.mic,a:msg.axis}; node.port.postMessage(msg); }
-// H: send the strike and both mics where the page has them (the second mic as the mic tool places it)
-function pickSend(){ if(!node) return; const F=state.free, n=F.length; if(!n) return;
-  const k=Math.max(0,F.indexOf(state.micIdx)); state.micIdx2=F[(k+Math.max(1,Math.floor(n/2)))%n];
-  node.port.postMessage({t:'mic',i:state.micIdx,a:state.axis}); node.port.postMessage({t:'mic2',i:state.micIdx2});
+// H: send the strike and the mic where the page has them
+function pickSend(){ if(!node) return; if(!state.free.length) return;
+  node.port.postMessage({t:'mic',i:state.micIdx,a:state.axis});
   node.port.postMessage({t:'hit',i:state.hitIdx,a:state.axis}); }
 
 function refreshList(sel){
@@ -2844,9 +1782,7 @@ function rebuild(){
   postStruct({t:'struct',n:g.P.length,pos,fixed:Uint8Array.from(g.F),
     si:Int32Array.from(g.S.map(s=>s[0])),sj:Int32Array.from(g.S.map(s=>s[1])),
     mic:state.micIdx,hit:state.hitIdx,axis:state.axis});
-  for(const k of ['ratio','decay','loss','sub','drive','hard','blend','gain','tune','tone','bite','nl','angle','width','pkAp','pkSpc','pkRes','pkQ','amp','bass','treb','cab','splash','fbAmt','fbTime','voices','coup','regime','rswitch','rphi','mem','memSpan','infer','spread','att','attC','fxCho','fxDly','fxFb','fxWow','fxTrem','fxSat','spImg','spDist','spRefl','spDop','spRot','spElev','bowSpd','bowVc','wind','inGain','rvMix','rvTime','rvTone','rvPre'])send(k);
-  node.port.postMessage({t:'pk',v:state.pk||0});
-  node.port.postMessage({t:'mode',v:state.mode||0});
+  for(const k of SENDS)send(k);
   sendLvl();
   state.disp=new Float32Array(g.P.length*3);state.spd=new Float32Array(g.P.length);
   drawInfo();
@@ -2870,9 +1806,7 @@ function placeMarker(kind,i){
   const g=state.geo; if(!g||i<0||i>=g.P.length||g.F[i]) return false;
   if(kind==='strike'){ if(state.hitIdx===i) return false; state.hitIdx=i; if(node) node.port.postMessage({t:'hit',i,a:state.axis}); }
   else { if(state.micIdx===i) return false; state.micIdx=i;
-    if(node){ node.port.postMessage({t:'mic',i,a:state.axis});
-      const F=state.free,nn=F.length; state.micIdx2=F[(Math.max(0,F.indexOf(i))+Math.max(1,Math.floor(nn/2)))%Math.max(1,nn)];
-      node.port.postMessage({t:'mic2',i:state.micIdx2}); } }
+    if(node) node.port.postMessage({t:'mic',i,a:state.axis}); }
   state.lastKind=kind; syncPickSliders(); DIAG.mmoves++; return true;
 }
 function audition(){ if(!state.running) return; const k=SCALES[state.scale][0]; play(k,0.75); setTimeout(()=>stop(k),450); }   // hear where it went

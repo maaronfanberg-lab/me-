@@ -193,3 +193,16 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
   - `webkit_check.py` therefore also taps the page before Stage I five times on the same machine.
   - A preview freeze counts as a FAIL only if that page never froze there. Otherwise it is a NOTE, with
     both sets of numbers. With no comparison possible, it is a FAIL.
+
+## Stage J1, finish the strip (preview)
+- `patch_j1.py` — the engine loses every feature Stage I took off the page; it accepts only the controls the page
+  has. The page stops sending the removed controls. The unused first Tank definition and the other seven shapes go.
+- `j1_verify.mjs [old.html] [new.html]` — old engine (git `e3010d51`, the preview before J1) with the old page's messages vs the new engine with the new page's messages:
+  54 setups at 32 and 48 kHz, every sample identical; also the new engine fed the old messages. `J1_QUICK=1` runs
+  three setups (for mutation tests).
+- Ratchet: the harness must send what the page sends. `render()` left out the `spec` message every page sends with a
+  new body, so the Sustain readout was calibrated on a Tank without its level trim (1.25 ×; as played it is 1.55 ×).
+  The harness, `p1_verify.mjs` and `webkit_check.py` now send it; `i1_engine.mjs` checks 1.55 ×.
+- `harness.mjs`: a shape the page no longer has is built from the live page's geometry (checks that compare engines
+  on many bodies); `OWN_SHAPES` is the page's own.
+- `stage1_verify` T1 and the `p1_verify` sweep compare only the features the preview still has.

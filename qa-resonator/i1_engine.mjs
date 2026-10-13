@@ -25,11 +25,13 @@ for (const s of [0.3, 1, 2, 4, 8, 16]) {
 for (const r of rows) console.log(`Sustain ${String(r.s).padStart(4)} s: falls 40 dB in ${r.t40.toFixed(2)} s, 60 dB in ${r.t60.toFixed(2)} s`);
 check('each longer Sustain rings clearly longer (60 dB time up by over 30% at every step)',
   rows.every((r, i) => i === 0 || r.t60 > rows[i - 1].t60 * 1.3), rows.map(r => r.t60.toFixed(2) + ' s').join(' → '));
-// the knob shows 1.25 x the setting as the time to fade 40 dB (measured: 1.10-1.37 x across Size, Stiffness,
-// Damping, mallet and key at Sustain 4)
-check('from 1 s up, the time the knob shows (1.25 x the setting) is the measured time to fade 40 dB, within 15%',
-  rows.filter(r => r.s >= 1).every(r => Math.abs(r.t40 / (1.25 * r.s) - 1) < 0.15),
-  rows.filter(r => r.s >= 1).map(r => `shows ${(1.25 * r.s).toFixed(1)} s, measured ${r.t40.toFixed(2)} s`).join('; '));
+// the knob shows 1.55 x the setting as the time to fade 40 dB (measured: 1.32-1.73 x across Size, Stiffness,
+// Damping, mallet, key, strength and Level at Sustain 4). J1: was 1.25, measured through a harness that left out
+// the level trim every page sends with a new body; the engine now has that trim built in.
+const K = 1.55;
+check(`from 1 s up, the time the knob shows (${K} x the setting) is the measured time to fade 40 dB, within 15%`,
+  rows.filter(r => r.s >= 1).every(r => Math.abs(r.t40 / (K * r.s) - 1) < 0.15),
+  rows.filter(r => r.s >= 1).map(r => `shows ${(K * r.s).toFixed(1)} s, measured ${r.t40.toFixed(2)} s`).join('; '));
 
 // ---------- 2. worst case and determinism ----------
 // Every control the Tank page still has, pushed to its loud or unstable end: 8 voices, Drive and Nonlinearity
