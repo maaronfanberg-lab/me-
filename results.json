@@ -1,0 +1,454 @@
+{
+ "browser": "webkit",
+ "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+ "checks": [
+  {
+   "name": "live: loads and starts with no script error",
+   "status": "PASS",
+   "detail": "running=True engine='audio worklet' errors=[]"
+  },
+  {
+   "name": "live: live audio clock runs",
+   "status": "PASS",
+   "detail": "state=running, advanced 0.700 s in 0.7 s"
+  },
+  {
+   "name": "live: every shape sounds (live)",
+   "status": "PASS",
+   "detail": "String 0.409 \u00b7 Tine 0.467 \u00b7 Chime 0.559 \u00b7 Drum 0.611 \u00b7 Hoop 0.396 \u00b7 Web 0.565 \u00b7 Tank 0.691 \u00b7 Twins 0.627 \u00b7 String 0.64"
+  },
+  {
+   "name": "live: audio clock freeze when choosing Tank (median of 3)",
+   "status": "PASS",
+   "detail": "286 ms (runs [285, 286, 286]; page main-thread gaps [11, 10, 10]; new bodies ['Tank chip', 'Tank chip', 'Tank chip'])"
+  },
+  {
+   "name": "live: engine renders offline in this browser (8 shapes)",
+   "status": "PASS",
+   "detail": "{}"
+  },
+  {
+   "name": "live: engine output finite and audible (offline)",
+   "status": "PASS",
+   "detail": "String pk 0.436 \u00b7 Tine pk 0.6078 \u00b7 Chime pk 0.7674 \u00b7 Drum pk 0.7672 \u00b7 Hoop pk 0.4518 \u00b7 Web pk 0.7674 \u00b7 Tank pk 0.2608 \u00b7 Twins pk 0.5166"
+  },
+  {
+   "name": "live: same sound as the Node engine (level within 0.5 dB)",
+   "status": "PASS",
+   "detail": "worst level difference 0.000 dB; first 2048 samples bit-identical on 8/8 shapes"
+  },
+  {
+   "name": "live: engine speed in this browser (times real time, 1 voice)",
+   "status": "PASS",
+   "detail": "{\"String\": 62.5, \"Tank\": 12.7}"
+  },
+  {
+   "name": "preview: loads and starts with no script error",
+   "status": "PASS",
+   "detail": "running=True engine='audio worklet' errors=[]"
+  },
+  {
+   "name": "preview: background tuner (Worker) runs in WebKit",
+   "status": "PASS",
+   "detail": "{\"on\": true, \"up\": true, \"stats\": {\"structs\": 1, \"recals\": 1, \"lastMs\": 490, \"maxMs\": 490, \"fails\": 0, \"why\": \"\"}}"
+  },
+  {
+   "name": "preview: live audio clock runs",
+   "status": "PASS",
+   "detail": "state=running, advanced 0.676 s in 0.7 s"
+  },
+  {
+   "name": "preview: the Tank sounds (live)",
+   "status": "PASS",
+   "detail": "Tank 0.691"
+  },
+  {
+   "name": "preview: audio clock freeze when a new body is built (Size) (median of 3)",
+   "status": "PASS",
+   "detail": "27 ms (runs [29, 27, 26]; page main-thread gaps [12, 11, 11]; new bodies ['7\u21928', '8\u21927', '7\u21928'])"
+  },
+  {
+   "name": "preview: engine renders offline in this browser (2 shapes)",
+   "status": "PASS",
+   "detail": "{}"
+  },
+  {
+   "name": "preview: engine output finite and audible (offline)",
+   "status": "PASS",
+   "detail": "Tank pk 0.2608 \u00b7 Tower pk 0.214"
+  },
+  {
+   "name": "preview: same sound as the Node engine (level within 0.5 dB)",
+   "status": "PASS",
+   "detail": "worst level difference 0.000 dB; first 2048 samples bit-identical on 2/2 shapes"
+  },
+  {
+   "name": "preview: engine speed in this browser",
+   "status": "NOTE",
+   "detail": "no Benchmark on the Tank-only page (removed in Stage I)"
+  },
+  {
+   "name": "tap: turn pad turns the view",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "name": "tap: tap the mic circle, then a ball: the mic moves there",
+   "status": "PASS",
+   "detail": "#33 \u2192 #45 (wanted #45)"
+  },
+  {
+   "name": "tap: Sustain + lengthens it",
+   "status": "PASS",
+   "detail": "4 \u2192 4.82 s"
+  },
+  {
+   "name": "still plays after all the taps",
+   "status": "PASS",
+   "detail": "peak 0.691"
+  },
+  {
+   "name": "preview before Stage I (same engine, all features): audio clock freeze for the same Size taps (5 runs, for comparison)",
+   "status": "NOTE",
+   "detail": "median 27 ms, worst 32 ms (runs [27, 28, 27, 27, 32]; page main-thread gaps [14, 10, 10, 10, 11]; new bodies ['7\u21928', '8\u21927', '7\u21928', '8\u21927', '7\u21928'])"
+  }
+ ],
+ "env": {
+  "live": {
+   "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+   "audioWorkletNode": true,
+   "offline": true,
+   "worker": true,
+   "audioSession": "none",
+   "running": true,
+   "audioMode": "audio worklet",
+   "ctxState": "running",
+   "rate": 32000,
+   "readout": "16 masses \u00a0 15 springsreference mode 335.0 Hz3\u00d7 \u00b7 32 kHz \u00b7 audio worklet",
+   "tuner": null
+  },
+  "preview": {
+   "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+   "audioWorkletNode": true,
+   "offline": true,
+   "worker": true,
+   "audioSession": "none",
+   "running": true,
+   "audioMode": "audio worklet",
+   "ctxState": "running",
+   "rate": 32000,
+   "readout": "58 masses \u00a0 168 springsreference mode 3049.8 Hz1\u00d7 \u00b7 32 kHz \u00b7 audio worklet \u00b7 CPU 1%",
+   "tuner": {
+    "on": true,
+    "up": true,
+    "stats": {
+     "structs": 1,
+     "recals": 1,
+     "lastMs": 490,
+     "maxMs": 490,
+     "fails": 0,
+     "why": ""
+    }
+   }
+  }
+ },
+ "offline": {
+  "live": {
+   "String": {
+    "pk": 0.436,
+    "rms": 0.05820668311692669,
+    "bad": 0,
+    "onset": 18,
+    "render_ms": 138,
+    "build_and_tune_ms": 42,
+    "engine_ready": true,
+    "vs_node_rms_db": -0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Tine": {
+    "pk": 0.6078,
+    "rms": 0.11898317024489657,
+    "bad": 0,
+    "onset": 17,
+    "render_ms": 149,
+    "build_and_tune_ms": 26,
+    "engine_ready": true,
+    "vs_node_rms_db": -0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Chime": {
+    "pk": 0.7674,
+    "rms": 0.19571376557135778,
+    "bad": 0,
+    "onset": 28,
+    "render_ms": 135,
+    "build_and_tune_ms": 25,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Drum": {
+    "pk": 0.7672,
+    "rms": 0.11008879261095918,
+    "bad": 0,
+    "onset": 17,
+    "render_ms": 154,
+    "build_and_tune_ms": 19,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Hoop": {
+    "pk": 0.4518,
+    "rms": 0.08647572889200206,
+    "bad": 0,
+    "onset": 18,
+    "render_ms": 160,
+    "build_and_tune_ms": 54,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Web": {
+    "pk": 0.7674,
+    "rms": 0.1499775902176776,
+    "bad": 0,
+    "onset": 17,
+    "render_ms": 120,
+    "build_and_tune_ms": 21,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Tank": {
+    "pk": 0.2608,
+    "rms": 0.07642066096903781,
+    "bad": 0,
+    "onset": 18,
+    "render_ms": 304,
+    "build_and_tune_ms": 430,
+    "engine_ready": true,
+    "vs_node_rms_db": -0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Twins": {
+    "pk": 0.5166,
+    "rms": 0.06864678315283775,
+    "bad": 0,
+    "onset": 25,
+    "render_ms": 176,
+    "build_and_tune_ms": 65,
+    "engine_ready": true,
+    "vs_node_rms_db": -0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   }
+  },
+  "preview": {
+   "Tank": {
+    "pk": 0.2608,
+    "rms": 0.07642066096903781,
+    "bad": 0,
+    "onset": 18,
+    "render_ms": 267,
+    "build_and_tune_ms": 545,
+    "engine_ready": true,
+    "vs_node_rms_db": -0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Tower": {
+    "pk": 0.214,
+    "rms": 0.03138002891234258,
+    "bad": 0,
+    "onset": 19,
+    "render_ms": 340,
+    "build_and_tune_ms": 770,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   }
+  }
+ },
+ "live": {
+  "live": {
+   "clock": {
+    "state": "running",
+    "advanced": 0.7000000000000002
+   },
+   "peaks": [
+    [
+     "String",
+     {
+      "pk": 0.409,
+      "bad": 0
+     }
+    ],
+    [
+     "Tine",
+     {
+      "pk": 0.467,
+      "bad": 0
+     }
+    ],
+    [
+     "Chime",
+     {
+      "pk": 0.559,
+      "bad": 0
+     }
+    ],
+    [
+     "Drum",
+     {
+      "pk": 0.611,
+      "bad": 0
+     }
+    ],
+    [
+     "Hoop",
+     {
+      "pk": 0.396,
+      "bad": 0
+     }
+    ],
+    [
+     "Web",
+     {
+      "pk": 0.565,
+      "bad": 0
+     }
+    ],
+    [
+     "Tank",
+     {
+      "pk": 0.691,
+      "bad": 0
+     }
+    ],
+    [
+     "Twins",
+     {
+      "pk": 0.627,
+      "bad": 0
+     }
+    ],
+    [
+     "String",
+     {
+      "pk": 0.64,
+      "bad": 0
+     }
+    ]
+   ],
+   "tank_stall_ms": [
+    285,
+    286,
+    286
+   ],
+   "main_thread_gap_ms": [
+    11,
+    10,
+    10
+   ],
+   "bodies_built": [
+    "Tank chip",
+    "Tank chip",
+    "Tank chip"
+   ]
+  },
+  "preview": {
+   "clock": {
+    "state": "running",
+    "advanced": 0.6760000000000002
+   },
+   "peaks": [
+    [
+     "Tank",
+     {
+      "pk": 0.691,
+      "bad": 0
+     }
+    ]
+   ],
+   "tank_stall_ms": [
+    29,
+    27,
+    26
+   ],
+   "main_thread_gap_ms": [
+    12,
+    11,
+    11
+   ],
+   "bodies_built": [
+    "7\u21928",
+    "8\u21927",
+    "7\u21928"
+   ]
+  },
+  "before_stage_I": {
+   "tank_stall_ms": [
+    27,
+    28,
+    27,
+    27,
+    32
+   ],
+   "main_thread_gap_ms": [
+    14,
+    10,
+    10,
+    10,
+    11
+   ],
+   "bodies_built": [
+    "7\u21928",
+    "8\u21927",
+    "7\u21928",
+    "8\u21927",
+    "7\u21928"
+   ]
+  }
+ },
+ "bench": {
+  "live": {
+   "String": 62.5,
+   "Tank": 12.7
+  }
+ },
+ "browser_version": "26.0",
+ "summary": {
+  "pass": 20,
+  "fail": 0,
+  "note": 2
+ }
+}
