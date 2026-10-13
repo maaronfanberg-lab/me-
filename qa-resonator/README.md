@@ -230,3 +230,12 @@ Checks added by the ratchet (an error a check missed becomes a permanent check):
   page's next note does (a first version of B1 read the reference from before the retune).
 - Ratchet: a contact time is compared with the same definition (force above 2% of its peak); the hardening wool
   pad touches 30 ms but pushes for 25.
+
+## Stage U1, scrolling (preview)
+- `patch_u1.py` — a touch on a control is undecided until it moves 10 px or lifts: sideways = drag, otherwise =
+  scroll (ignored); a tap still sets / steps; holding ± repeats; the label's double-tap reset counts real taps only.
+- `u1_browser.py [--browser=webkit]` — 108 vertical swipes starting on every bar, − and + on every tab: no value moves
+  and the panel scrolls; then drag, tap, hold, reset, mouse. Run on the page before U1 it fails (values moved, 0/81
+  scrolled), so the check sees the bug.
+- Ratchet: a scroll check only counts swipes that had room to scroll (the first version called 21 swipes at the
+  bottom of the Body tab failures).

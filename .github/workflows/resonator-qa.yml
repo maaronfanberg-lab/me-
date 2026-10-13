@@ -92,6 +92,10 @@ jobs:
         id: t1b
         continue-on-error: true
         run: python qa-resonator/t1_browser.py . 2>&1 | tee qa-out/t1_browser.txt
+      - name: Stage U1 browser checks (scrolling over the controls moves nothing; drag, tap, hold, reset still work)
+        id: u1b
+        continue-on-error: true
+        run: python qa-resonator/u1_browser.py . 2>&1 | tee qa-out/u1_browser.txt
       - name: Publish results to branch qa-results/qa
         if: always()
         env:
@@ -101,7 +105,7 @@ jobs:
             s1v=${{ steps.s1v.outcome }} s1b=${{ steps.s1b.outcome }}
             p1v=${{ steps.p1v.outcome }} p1b=${{ steps.p1b.outcome }}
             i1e=${{ steps.i1e.outcome }} i1b=${{ steps.i1b.outcome }}
-            j1v=${{ steps.j1v.outcome }} t1v=${{ steps.t1v.outcome }} t1b=${{ steps.t1b.outcome }}
+            j1v=${{ steps.j1v.outcome }} t1v=${{ steps.t1v.outcome }} t1b=${{ steps.t1b.outcome }} u1b=${{ steps.u1b.outcome }}
         run: |
           mkdir -p qa-out
           echo "${{ github.sha }}" > qa-out/commit.txt
