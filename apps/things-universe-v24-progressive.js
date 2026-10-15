@@ -139,3 +139,58 @@ reset=function(){
   v24ProgressWatches.clear();
   return v24OriginalReset()
 };
+
+
+/*
+ * Responsive graph recovery: atlas-backed concepts become visible immediately
+ * while external sources keep enriching the same territory asynchronously.
+ * A failed or slow API cannot hold the Add or Auto-grow controls hostage.
+ * The original network orchestrator and source validation are preserved.
+ */
+const v24NetworkConcepts=concepts;
+const v24QuickPending=new Map();
+function v24ImmediateAtlas(term){
+  const k=key(term),m=new Map();
+  for(const c of localCommon(k))add(m,c);
+  for(const c of G.get(k)||[])add(m,{...c,from:term});
+  return [...m.values()].filter(c=>c.k!==k).sort((a,b)=>b.score-a.score)
+}
+concepts=async function(term){
+  const k=key(term);
+  if(!k)return [];
+  if(cache.has(k))return cache.get(k);
+  const local=v24ImmediateAtlas(term);
+  // Queries without verified built-in relations still use the ordinary search,
+  // rather than pretending an unknown relation is known.
+  if(!local.length)return v24NetworkConcepts(term);
+  const epoch=v24ProgressEpoch;
+  // Begin before populating cache: the full source orchestrator must not
+  // short-circuit on the fast local result.
+  const remote=v24NetworkConcepts(term);
+  cache.set(k,local);
+  v24QuickPending.set(k,remote);
+  remote.then(rows=>{
+    if(epoch!==v24ProgressEpoch)return;
+    const parent=byK(k);
+    if(!parent)return;
+    const owningSeeds=[...parent.owners].map(seedById).filter(Boolean);
+    const visibleKeys=new Set(local.map(c=>c.k));
+    const fresh=(rows||[]).filter(c=>!visibleKeys.has(c.k)).slice(0,12);
+    let changed=false;
+    for(const c of fresh){
+      for(const seed of owningSeeds){
+        const existed=!!byK(c.k),q=node(c.l,seed,parent),linked=hasEdge(parent,q);
+        if(!existed)placeChild(q,parent);
+        edge(parent,q,c.r,seed.id,c.src);
+        if(!existed||!linked)changed=true;
+      }
+    }
+    if(changed)render();
+    // The slower Falcon pass may only start after the initial source queries
+    // finish. Attach subscribers when it actually exists.
+    for(const seed of owningSeeds)v24WatchProgress(parent,seed);
+  }).catch(()=>{}).finally(()=>{
+    if(v24QuickPending.get(k)===remote)v24QuickPending.delete(k);
+  });
+  return local
+};
