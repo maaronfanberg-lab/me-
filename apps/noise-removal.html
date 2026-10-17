@@ -85,7 +85,8 @@ small{font-size:12px}
 <h2>3. Remove noise</h2>
 <label for="reduction">Reduction: <b id="reductionValue">24 dB</b></label>
 <input id="reduction" type="range" min="0" max="36" value="24" step="1">
-<button id="process" class="primary" type="button" disabled>Remove noise</button><p class="muted">Default settings are tuned for persistent mechanical hiss and buzzing. If the result sounds hollow, lower Reduction or Sensitivity under Fine-tune.</p>
+<label class="radio" style="margin:0 0 12px"><input type="checkbox" id="engineFocus" checked> Keep engine tones, suppress hiss</label>
+<button id="process" class="primary" type="button" disabled>Remove noise</button><p class="muted">With Engine Focus checked, the filter emphasizes the revving tones and suppresses much of the surrounding hiss. If the engine sounds thin, uncheck it or lower Reduction.</p>
 <div id="progress" class="bar hidden"><div id="barFill"></div></div>
 <div class="status" id="processingStatus">Add a recording and a noise sample first.</div>
 <details>
@@ -119,7 +120,7 @@ small{font-size:12px}
 </details>
 </footer>
 </main>
-<script src="noise-removal-audacity-dsp.js?v=20261016c"></script>
+<script src="noise-removal-audacity-dsp.js?v=20261016engine2"></script>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id),status=(id,s,kind='')=>{const el=$(id);el.textContent=s;el.className='status '+kind};
@@ -145,7 +146,7 @@ $('process').disabled=true;$('result').classList.add('hidden');$('progress').cla
 status('processingStatus','Reducing noise…');
 try{
  if(!window.AudacityNoiseDSP)throw Error('Noise reduction engine did not load. Refresh this page in Safari.');
- const options={reductionDb:Number($('reduction').value),sensitivity:Number($('sensitivity').value),smoothing:Number($('smoothing').value),residue:document.querySelector('input[name="output"]:checked').value==='residue'};
+ const options={reductionDb:Number($('reduction').value),sensitivity:Number($('sensitivity').value),smoothing:Number($('smoothing').value),residue:document.querySelector('input[name="output"]:checked').value==='residue',engineFocus:$('engineFocus').checked};
  await new Promise(r=>setTimeout(r,12));
  const data=await window.AudacityNoiseDSP.reduce(src,noiseStats,options,v=>{$('barFill').style.width=Math.round(100*v)+'%';status('processingStatus','Processing… '+Math.round(100*v)+'%')});
  const buf=audioContext().createBuffer(data.channels.length,data.length,data.sampleRate);
