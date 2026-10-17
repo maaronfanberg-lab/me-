@@ -181,7 +181,10 @@
       for(let k=0;k<K;k++)prefix[k+1]=prefix[k]+Math.log(Math.max(1e-10,g[k]));
       for(let k=0;k<K;k++){
         const lo=Math.max(0,k-radius),hi=Math.min(K-1,k+radius);
-        g[k]=Math.exp((prefix[hi+1]-prefix[lo])/(hi-lo+1));
+        // Smooth suppression in neighboring bins, but don't erase a strong
+        // isolated signal component just because nearby bins were noise.
+        const smoothed=Math.exp((prefix[hi+1]-prefix[lo])/(hi-lo+1));
+        g[k]=Math.max(g[k],smoothed);
       }
     }
     const output=new Float32Array(segment.length),weight=new Float32Array(segment.length);
