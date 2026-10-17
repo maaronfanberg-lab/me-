@@ -83,12 +83,12 @@ small{font-size:12px}
 </section>
 <section>
 <h2>3. Remove noise</h2>
-<label for="reduction">Reduction: <b id="reductionValue">24 dB</b></label>
+<label for="reduction">Reduction (normal mode): <b id="reductionValue">24 dB</b></label>
 <input id="reduction" type="range" min="0" max="36" value="24" step="1">
-<label class="radio" style="margin:0 0 12px"><input type="checkbox" id="engineFocus" checked> Keep engine tones, suppress hiss</label>
-<button id="process" class="primary" type="button" disabled>Remove noise</button><p class="muted">With Engine Focus checked, the filter emphasizes the revving tones and suppresses much of the surrounding hiss. If the engine sounds thin, uncheck it or lower Reduction.</p>
+<label class="radio" style="margin:0 0 12px"><input type="checkbox" id="engineFocus" checked> Engine only (quiet gaps between revs)</label>
+<button id="process" class="primary" type="button" disabled>Remove noise</button><p class="muted">Engine only uses smooth filtering, not the chirping spectral filter. A noise sample is optional in this mode. Turn it off for ordinary Audacity-style Noise Reduction.</p>
 <div id="progress" class="bar hidden"><div id="barFill"></div></div>
-<div class="status" id="processingStatus">Add a recording and a noise sample first.</div>
+<div class="status" id="processingStatus">Choose a recording to begin.</div>
 <details>
 <summary>Fine-tune</summary>
 <label for="sensitivity">Sensitivity: <b id="sensitivityValue">9</b></label>
@@ -113,7 +113,7 @@ small{font-size:12px}
 </div>
 </section>
 <footer>
-<p>The noise sample is analyzed on your device, not uploaded. Keep a copy of your original recording.</p>
+<p>Audio stays on this device. Keep the original recording.</p>
 <details>
 <summary>Source and license</summary>
 <p>Noise reduction adapted from <a href="https://github.com/audacity/audacity/blob/audacity3/libraries/lib-builtin-effects/NoiseReductionBase.cpp">Audacity Noise Reduction</a>. Independent browser adaptation under GPLv3. <a href="noise-removal-audacity-dsp.js">Source code</a> · <a href="noise-removal-GPL-3.0.txt">License</a>.</p>
@@ -121,6 +121,7 @@ small{font-size:12px}
 </footer>
 </main>
 <script src="noise-removal-audacity-dsp.js?v=20261016engine2"></script>
+<script src="noise-removal-engine-mode.js?v=20261016s3"></script>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id),status=(id,s,kind='')=>{const el=$(id);el.textContent=s;el.className='status '+kind};
@@ -130,7 +131,7 @@ async function decode(f){const c=audioContext();if(c.state==="suspended")await c
 function wav(b){const n=b.length,ch=b.numberOfChannels,rate=b.sampleRate,ab=new ArrayBuffer(44+n*ch*2),v=new DataView(ab);function ascii(o,s){for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))}ascii(0,'RIFF');v.setUint32(4,36+n*ch*2,true);ascii(8,'WAVE');ascii(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,ch,true);v.setUint32(24,rate,true);v.setUint32(28,rate*ch*2,true);v.setUint16(32,ch*2,true);v.setUint16(34,16,true);ascii(36,'data');v.setUint32(40,n*ch*2,true);let ix=44;for(let i=0;i<n;i++)for(let c=0;c<ch;c++){let x=b.getChannelData(c)[i];v.setInt16(ix,Math.max(-32768,Math.min(32767,Math.round(x*32767))),true);ix+=2}return new Blob([ab],{type:'audio/wav'})}
 function source(b,url,name){src=b;if(srcUrl)URL.revokeObjectURL(srcUrl);srcUrl=url;$('originalName').textContent=name+' · '+b.duration.toFixed(1)+' sec';$('originalAudio').src=url;$('before').src=url;$('originalView').classList.remove('hidden');$('hearClip').disabled=false;$('learnClip').disabled=false;$('end').value=Math.min(3,Number(b.duration.toFixed(1)));status('fileStatus','Recording ready.','good');$('result').classList.add('hidden');ready()}
 function reference(b,url,name){const stats=window.AudacityNoiseDSP.noiseProfile(b);ref=b;noiseStats=stats;if(refUrl)URL.revokeObjectURL(refUrl);refUrl=url;$('noiseAudio').src=url;$('noiseView').classList.remove('hidden');status('noiseStatus','Noise sample learned from the quieter, steady portions ('+b.duration.toFixed(1)+' seconds).','good');$('result').classList.add('hidden');ready()}
-function ready(){$('process').disabled=!(src&&noiseStats);if(src&&noiseStats)status('processingStatus','Ready to remove noise.','good')}
+function ready(){const engineOnly=$('engineFocus').checked;const ok=!!src&&(engineOnly||!!noiseStats);$('process').disabled=!ok;$('reduction').disabled=engineOnly;$('sensitivity').disabled=engineOnly;$('smoothing').disabled=engineOnly;status('processingStatus',ok?'Ready to process.':engineOnly?'Choose a recording.':'Choose a recording and a noise sample.',ok?'good':'');}
 $('file').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;status('fileStatus','Opening audio…');try{if(f.size>35*1024*1024)throw Error('This file is too large for phone processing (35 MB limit).');const b=await decode(f);if(b.duration>180)throw Error('Please choose a clip under 3 minutes for this version.');source(b,URL.createObjectURL(f),f.name)}catch(err){status('fileStatus',err.message+' Try WAV, M4A or MP3.','error')}});
 $('refFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;status('noiseStatus','Opening noise sample…');try{if(f.size>20*1024*1024)throw Error('Noise file is too large.');const b=await decode(f);if(b.duration<.15)throw Error('A longer noise sample is needed.');reference(b,URL.createObjectURL(f),f.name)}catch(err){status('noiseStatus',err.message,'error')}});
 function makeClip(){if(!src)throw Error('Load the main audio first.');const a=+$('start').value,b=+$('end').value;if(!Number.isFinite(a)||!Number.isFinite(b)||a<0||b<=a||b>src.duration+.005||b-a<.2)throw Error('Select a valid noise-only segment within the recording.');const x=Math.max(0,Math.floor(a*src.sampleRate)),y=Math.min(src.length,Math.floor(b*src.sampleRate)),buf=audioContext().createBuffer(src.numberOfChannels,y-x,src.sampleRate);for(let k=0;k<buf.numberOfChannels;k++)buf.getChannelData(k).set(src.getChannelData(k).subarray(x,y));return buf}
@@ -141,14 +142,18 @@ $('stop').onclick=()=>{if(rec?.state==='recording')rec.stop()};
 for(const [id,display,suffix] of [['reduction','reductionValue',' dB'],['sensitivity','sensitivityValue',''],['smoothing','smoothingValue',' bands']])$(id).oninput=()=>{$(display).textContent=$(id).value+suffix};
 $('markStart').onclick=()=>{if(!src)return;$('start').value=$('originalAudio').currentTime.toFixed(1);status('noiseStatus','Start marked at '+$('start').value+' seconds.');};
 $('markEnd').onclick=()=>{if(!src)return;$('end').value=$('originalAudio').currentTime.toFixed(1);status('noiseStatus','End marked at '+$('end').value+' seconds.');};
-$('process').onclick=async()=>{if(!src||!noiseStats)return;
+$('engineFocus').onchange=()=>{ $('result').classList.add('hidden');ready() };
+$('process').onclick=async()=>{if(!src||(!$('engineFocus').checked&&!noiseStats))return;
 $('process').disabled=true;$('result').classList.add('hidden');$('progress').classList.remove('hidden');$('barFill').style.width='1%';
 status('processingStatus','Reducing noise…');
 try{
- if(!window.AudacityNoiseDSP)throw Error('Noise reduction engine did not load. Refresh this page in Safari.');
+ if(!$('engineFocus').checked&&!window.AudacityNoiseDSP)throw Error('Noise reduction engine did not load. Refresh this page in Safari.');
+ if($('engineFocus').checked&&!window.EngineGateDSP)throw Error('Engine filter did not load. Refresh this page in Safari.');
  const options={reductionDb:Number($('reduction').value),sensitivity:Number($('sensitivity').value),smoothing:Number($('smoothing').value),residue:document.querySelector('input[name="output"]:checked').value==='residue',engineFocus:$('engineFocus').checked};
  await new Promise(r=>setTimeout(r,12));
- const data=await window.AudacityNoiseDSP.reduce(src,noiseStats,options,v=>{$('barFill').style.width=Math.round(100*v)+'%';status('processingStatus','Processing… '+Math.round(100*v)+'%')});
+ const engineOnly=$('engineFocus').checked;
+ const processor=engineOnly?window.EngineGateDSP:window.AudacityNoiseDSP;
+ const data=await processor.process?.(src,options,v=>{$('barFill').style.width=Math.round(100*v)+'%';status('processingStatus','Processing… '+Math.round(100*v)+'%')}) || await processor.reduce(src,noiseStats,{...options,engineFocus:false},v=>{$('barFill').style.width=Math.round(100*v)+'%';status('processingStatus','Processing… '+Math.round(100*v)+'%')});
  const buf=audioContext().createBuffer(data.channels.length,data.length,data.sampleRate);
  for(let c=0;c<data.channels.length;c++)buf.copyToChannel(data.channels[c],c);
  const out=wav(buf);lastExport=out;
@@ -157,7 +162,7 @@ try{
  $('download').download=options.residue?'Noise-Removal-noise-only.wav':'Noise-Removal-clean.wav';
  $('afterLabel').textContent=options.residue?'NOISE ONLY · WHAT WAS REMOVED':'AFTER · REDUCED NOISE';
  $('result').classList.remove('hidden');$('barFill').style.width='100%';
- status('processingStatus',options.residue?'Noise-only preview ready.':'Cleaned recording ready.','good');
+ status('processingStatus',options.residue?'Removed sound preview ready.':'Cleaned recording ready.','good');
 }catch(err){status('processingStatus','Could not process recording: '+err.message,'error')}
 finally{$('process').disabled=false;setTimeout(()=>$('progress').classList.add('hidden'),700)}
 };
