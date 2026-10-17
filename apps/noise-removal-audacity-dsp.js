@@ -15,10 +15,12 @@
  * unmodified C++ processing engine. UI, FFT, chunking and browser plumbing differ.
  *
  * Audacity-derived elements:
- * - first pass: average Hann-windowed FFT *power* per frequency band
+ * - first pass: robust frequency statistics from quiet reference windows
+ *   and per-bin medians to reduce contamination by incidental speech
  * - second pass: discard highest outlier, classify using second-highest of
  *   5 neighboring windows and sensitivity * ln(10) * mean noise power
  * - attenuate noise bins by 10^(-reductionDb / 20)
+ * - additional conservative Wiener-style mask for overlapping steady noise
  * - 20 ms attack (backward), 100 ms release (forward)
  * - frequency smoothing of log gains, overlap-add resynthesis
  * - 'Residue / Noise Only' preview of the rejected signal
@@ -64,23 +66,42 @@
     return p;
   }
   function noiseProfile(buffer) {
-    if(!buffer||buffer.length<2048)throw Error('Please select at least 0.05 seconds of noise without voices or music.');
+    if(!buffer||buffer.length<2048)throw Error('Select at least a short section of noise.');
     const rate=buffer.sampleRate,nChannels=buffer.numberOfChannels;
     const total=Math.max(1,Math.floor((buffer.length-N)/H)+1);
-    const stride=Math.max(1,Math.floor(total/160));
-    const sums=new Float64Array(K),re=new Float32Array(N),im=new Float32Array(N);
-    let count=0;
+    const stride=Math.max(1,Math.ceil(total/190));
+    const re=new Float32Array(N),im=new Float32Array(N),windows=[];
+    const bandLo=Math.max(1,Math.round(300*N/rate));
+    const bandHi=Math.min(K-1,Math.round(6000*N/rate));
     for(let c=0;c<nChannels;c++){
       const samples=buffer.getChannelData(c);
       for(let i=0;i<total;i+=stride){
         frame(samples,i*H,re,im);
-        for(let k=0;k<K;k++)sums[k]+=re[k]*re[k]+im[k]*im[k];
-        count++;
+        const p=spectrumPower(re,im);
+        let broadEnergy=0;
+        for(let k=bandLo;k<=bandHi;k++)broadEnergy+=p[k];
+        windows.push({energy:broadEnergy,powers:p});
       }
     }
-    const means=new Float32Array(K);
-    for(let k=0;k<K;k++)means[k]=sums[k]/Math.max(1,count);
-    return {sampleRate:rate,meanPower:means,windowSize:N,stepSize:H,frames:count};
+    // In a reference that also contains incidental speech, speech usually
+    // increases energy in short-time windows. Avoid the loudest windows, then
+    // obtain a per-frequency median to reject brief voice and other outliers.
+    // The sample itself is not uploaded or stored by this app.
+    windows.sort((a,b)=>a.energy-b.energy);
+    const keep=(windows.length>=16)?Math.max(8,Math.floor(windows.length*.62)):windows.length;
+    const means=new Float32Array(K),values=new Float32Array(keep);
+    for(let k=0;k<K;k++){
+      for(let j=0;j<keep;j++)values[j]=windows[j].powers[k];
+      const sorted=values.sort();
+      const mid=Math.floor(keep/2);
+      // Under stationary Gaussian noise, FFT power is exponentially
+      // distributed and median power equals ln(2) times mean power.
+      // Approximate that correction, with allowance for the quiet-frame cut.
+      const median=keep%2?sorted[mid]:(sorted[mid-1]+sorted[mid])*.5;
+      means[k]=Math.max(1e-14,median*1.8);
+    }
+    return {sampleRate:rate,meanPower:means,windowSize:N,stepSize:H,
+      frames:keep,totalFrames:windows.length,robust:true};
   }
   function profileAtRate(profile,sampleRate) {
     const q=new Float32Array(K),p=profile.meanPower;
@@ -128,7 +149,14 @@
           if(p>=highest){second=highest;highest=p}
           else if(p>second)second=p;
         }
-        row[k]=(second<=powerThreshold[k]*thresholdMult)?floor:1;
+        const classifiedNoise=second<=powerThreshold[k]*thresholdMult;
+        // Audacity's classifier is the backbone. Blend in a continuous
+        // spectral estimate so steady hiss remains suppressed even when a
+        // wanted sound shares some of the same FFT band.
+        const observed=Math.max(1e-12,powers[t][k]);
+        const wiener=Math.sqrt(Math.max(floor*floor,
+          1-1.25*powerThreshold[k]/observed));
+        row[k]=classifiedNoise?floor:Math.max(floor,Math.min(1,wiener));
       }
       gains[t]=row;
     }
