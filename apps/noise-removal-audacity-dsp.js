@@ -262,25 +262,94 @@
     }
     return cleaned;
   }
+  // Engine isolation, second stage. A spectral mask alone leaves tiny
+  // whistles and background chirps between revs. Detect sustained
+  // rev activity in the *cleaned* signal and fade nearly to silence in
+  // the gaps. Analyze the whole recording to avoid chunk-boundary gating.
+  function gaussianSmooth(values,sigma) {
+    const radius=Math.ceil(sigma*4),kernel=new Float64Array(radius*2+1);
+    let total=0;for(let j=-radius;j<=radius;j++){const v=Math.exp(-.5*(j/sigma)**2);kernel[j+radius]=v;total+=v}
+    const result=new Float64Array(values.length);
+    for(let i=0;i<values.length;i++){
+      let sum=0;for(let j=-radius;j<=radius;j++){
+        const idx=Math.max(0,Math.min(values.length-1,i+j));
+        sum+=values[idx]*kernel[j+radius];
+      }
+      result[i]=sum/total;
+    }
+    return result;
+  }
+  function binaryFilter(values,radius,dilate) {
+    const n=values.length,result=new Uint8Array(n);
+    const sums=new Uint32Array(n+1);
+    for(let i=0;i<n;i++)sums[i+1]=sums[i]+(values[i]?1:0);
+    for(let i=0;i<n;i++){
+      const lo=Math.max(0,i-radius),hi=Math.min(n-1,i+radius),count=sums[hi+1]-sums[lo];
+      result[i]=dilate?(count>0?1:0):(count===hi-lo+1?1:0);
+    }
+    return result;
+  }
+  function closeEngineGaps(out,rate) {
+    if(!out.length||!out[0].length)return;
+    const n=out[0].length,hop=Math.max(128,Math.round(rate*.01));
+    const frames=Math.ceil(n/hop),pwr=new Float64Array(frames);
+    for(let t=0;t<frames;t++){
+      const lo=t*hop,hi=Math.min(n,lo+hop);
+      let sum=0;
+      for(let c=0;c<out.length;c++){
+        const a=out[c];for(let i=lo;i<hi;i++)sum+=a[i]*a[i];
+      }
+      pwr[t]=sum/Math.max(1,(hi-lo)*out.length);
+    }
+    const smoothed=gaussianSmooth(pwr,3);
+    const env=Float64Array.from(smoothed,p=>Math.sqrt(Math.max(0,p)));
+    const sorted=Array.from(env).sort((a,b)=>a-b);
+    const p95=sorted[Math.min(sorted.length-1,Math.floor(sorted.length*.95))];
+    const threshold=Math.max(1e-7,.07*p95);
+    const active=Uint8Array.from(env,e=>e>threshold?1:0);
+    const filled=binaryFilter(binaryFilter(active,10,true),10,false);
+    const held=binaryFilter(filled,9,true);
+    const fades=gaussianSmooth(held,5.5);
+    const floor=.002;  // approx -54dB; practically silent between revs
+    for(let c=0;c<out.length;c++){
+      const channel=out[c];
+      for(let i=0;i<n;i++){
+        const t=i/hop,j=Math.min(frames-1,Math.floor(t));
+        const g0=fades[j],g1=fades[Math.min(frames-1,j+1)];
+        const g=Math.max(0,Math.min(1,g0+(g1-g0)*(t-j)));
+        channel[i]*=floor+(1-floor)*g;
+      }
+    }
+  }
   async function reduce(buffer,profile,settings,progress){
     if(!buffer||!profile)throw Error('Load a recording and get a noise profile first.');
     const options=validateSettings(settings||{});
     const rate=buffer.sampleRate,threshold=profileAtRate(profile,rate);
     const n=buffer.length,nChannels=buffer.numberOfChannels;
     const out=new Array(nChannels);
-    // Max ~8s spectral working set, instead of holding all spectrograms in memory.
+    const channelSettings=options.engineFocus?{...options,residue:false}:options;
+    // Limit spectral working-set size for iPhone memory.
     const chunkSamples=Math.max(8192,secondsToSamples(6,rate));
     const chunks=Math.ceil(n/chunkSamples);
     for(let c=0;c<nChannels;c++){
       const src=buffer.getChannelData(c),dst=new Float32Array(n);
       for(let ci=0;ci<chunks;ci++){
         const begin=ci*chunkSamples,end=Math.min(n,begin+chunkSamples);
-        dst.set(processChunk(src,begin,end,rate,threshold,options),begin);
-        if(progress)progress((c+(ci+1)/chunks)/nChannels);
+        dst.set(processChunk(src,begin,end,rate,threshold,channelSettings),begin);
+        if(progress)progress(.95*(c+(ci+1)/chunks)/nChannels);
         await new Promise(resolve=>setTimeout(resolve,0));
       }
       out[c]=dst;
     }
+    if(options.engineFocus){
+      closeEngineGaps(out,rate);
+      // Noise Only is the complement of the complete two-stage filter.
+      if(options.residue)for(let c=0;c<nChannels;c++){
+        const src=buffer.getChannelData(c),dst=out[c];
+        for(let i=0;i<n;i++)dst[i]=src[i]-dst[i];
+      }
+    }
+    if(progress)progress(1);
     return {channels:out,sampleRate:rate,length:n};
   }
   global.AudacityNoiseDSP={noiseProfile,reduce,algorithm:'Audacity Noise Reduction (JS adaptation)',license:'GPL-3.0-or-later'};
