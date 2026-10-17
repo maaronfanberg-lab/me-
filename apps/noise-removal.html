@@ -83,17 +83,17 @@ small{font-size:12px}
 </section>
 <section>
 <h2>3. Remove noise</h2>
-<label for="reduction">Reduction: <b id="reductionValue">12 dB</b></label>
-<input id="reduction" type="range" min="0" max="36" value="12" step="1">
-<button id="process" class="primary" type="button" disabled>Remove noise</button>
+<label for="reduction">Reduction: <b id="reductionValue">24 dB</b></label>
+<input id="reduction" type="range" min="0" max="36" value="24" step="1">
+<button id="process" class="primary" type="button" disabled>Remove noise</button><p class="muted">Default settings are tuned for persistent mechanical hiss and buzzing. If the result sounds hollow, lower Reduction or Sensitivity under Fine-tune.</p>
 <div id="progress" class="bar hidden"><div id="barFill"></div></div>
 <div class="status" id="processingStatus">Add a recording and a noise sample first.</div>
 <details>
-<summary>Advanced settings</summary>
-<label for="sensitivity">Sensitivity: <b id="sensitivityValue">6</b></label>
-<input id="sensitivity" type="range" min=".5" max="24" value="6" step=".5">
-<label for="smoothing">Frequency smoothing: <b id="smoothingValue">3 bands</b></label>
-<input id="smoothing" type="range" min="0" max="12" value="3" step="1">
+<summary>Fine-tune</summary>
+<label for="sensitivity">Sensitivity: <b id="sensitivityValue">9</b></label>
+<input id="sensitivity" type="range" min=".5" max="24" value="9" step=".5">
+<label for="smoothing">Frequency smoothing: <b id="smoothingValue">2 bands</b></label>
+<input id="smoothing" type="range" min="0" max="12" value="2" step="1">
 <div class="radio">
 <label><input type="radio" name="output" value="clean" checked> Cleaned audio</label>
 <label><input type="radio" name="output" value="residue"> Only the removed noise</label>
@@ -112,14 +112,14 @@ small{font-size:12px}
 </div>
 </section>
 <footer>
-<p>Processing happens on this device. Keep a copy of your original recording.</p>
+<p>The noise sample is analyzed on your device, not uploaded. Keep a copy of your original recording.</p>
 <details>
 <summary>Source and license</summary>
 <p>Noise reduction adapted from <a href="https://github.com/audacity/audacity/blob/audacity3/libraries/lib-builtin-effects/NoiseReductionBase.cpp">Audacity Noise Reduction</a>. Independent browser adaptation under GPLv3. <a href="noise-removal-audacity-dsp.js">Source code</a> · <a href="noise-removal-GPL-3.0.txt">License</a>.</p>
 </details>
 </footer>
 </main>
-<script src="noise-removal-audacity-dsp.js?v=20261015a"></script>
+<script src="noise-removal-audacity-dsp.js?v=20261016b"></script>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id),status=(id,s,kind='')=>{const el=$(id);el.textContent=s;el.className='status '+kind};
@@ -128,7 +128,7 @@ function audioContext(){return ctx||(ctx=new(window.AudioContext||window.webkitA
 async function decode(f){const c=audioContext();if(c.state==="suspended")await c.resume();return c.decodeAudioData(await f.arrayBuffer())}
 function wav(b){const n=b.length,ch=b.numberOfChannels,rate=b.sampleRate,ab=new ArrayBuffer(44+n*ch*2),v=new DataView(ab);function ascii(o,s){for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))}ascii(0,'RIFF');v.setUint32(4,36+n*ch*2,true);ascii(8,'WAVE');ascii(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,ch,true);v.setUint32(24,rate,true);v.setUint32(28,rate*ch*2,true);v.setUint16(32,ch*2,true);v.setUint16(34,16,true);ascii(36,'data');v.setUint32(40,n*ch*2,true);let ix=44;for(let i=0;i<n;i++)for(let c=0;c<ch;c++){let x=b.getChannelData(c)[i];v.setInt16(ix,Math.max(-32768,Math.min(32767,Math.round(x*32767))),true);ix+=2}return new Blob([ab],{type:'audio/wav'})}
 function source(b,url,name){src=b;if(srcUrl)URL.revokeObjectURL(srcUrl);srcUrl=url;$('originalName').textContent=name+' · '+b.duration.toFixed(1)+' sec';$('originalAudio').src=url;$('before').src=url;$('originalView').classList.remove('hidden');$('hearClip').disabled=false;$('learnClip').disabled=false;$('end').value=Math.min(3,Number(b.duration.toFixed(1)));status('fileStatus','Recording ready.','good');$('result').classList.add('hidden');ready()}
-function reference(b,url,name){const stats=window.AudacityNoiseDSP.noiseProfile(b);ref=b;noiseStats=stats;if(refUrl)URL.revokeObjectURL(refUrl);refUrl=url;$('noiseAudio').src=url;$('noiseView').classList.remove('hidden');status('noiseStatus','Noise sample ready: '+name+' ('+b.duration.toFixed(1)+' seconds).','good');$('result').classList.add('hidden');ready()}
+function reference(b,url,name){const stats=window.AudacityNoiseDSP.noiseProfile(b);ref=b;noiseStats=stats;if(refUrl)URL.revokeObjectURL(refUrl);refUrl=url;$('noiseAudio').src=url;$('noiseView').classList.remove('hidden');status('noiseStatus','Noise sample learned from the quieter, steady portions ('+b.duration.toFixed(1)+' seconds).','good');$('result').classList.add('hidden');ready()}
 function ready(){$('process').disabled=!(src&&noiseStats);if(src&&noiseStats)status('processingStatus','Ready to remove noise.','good')}
 $('file').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;status('fileStatus','Opening audio…');try{if(f.size>35*1024*1024)throw Error('This file is too large for phone processing (35 MB limit).');const b=await decode(f);if(b.duration>180)throw Error('Please choose a clip under 3 minutes for this version.');source(b,URL.createObjectURL(f),f.name)}catch(err){status('fileStatus',err.message+' Try WAV, M4A or MP3.','error')}});
 $('refFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;status('noiseStatus','Opening noise sample…');try{if(f.size>20*1024*1024)throw Error('Noise file is too large.');const b=await decode(f);if(b.duration<.15)throw Error('A longer noise sample is needed.');reference(b,URL.createObjectURL(f),f.name)}catch(err){status('noiseStatus',err.message,'error')}});
