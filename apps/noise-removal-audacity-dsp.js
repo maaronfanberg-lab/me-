@@ -24,6 +24,7 @@
  * - 20 ms attack (backward), 100 ms release (forward)
  * - frequency smoothing of log gains, overlap-add resynthesis
  * - 'Residue / Noise Only' preview of the rejected signal
+ * - optional engine-focused tonal prominence filter and quiet-gap expander
  *
  * Audio is processed entirely on the device; no network APIs are used here.
  */
@@ -118,7 +119,8 @@
       reductionDb:Math.min(48,Math.max(0,Number(settings.reductionDb)||0)),
       sensitivity:Math.min(24,Math.max(.01,Number(settings.sensitivity)||.01)),
       smoothing:Math.min(12,Math.max(0,Math.round(Number(settings.smoothing)||0))),
-      residue:!!settings.residue
+      residue:!!settings.residue,
+      engineFocus:!!settings.engineFocus
     };
   }
   function secondsToSamples(seconds,rate){return Math.round(seconds*rate)}
@@ -185,6 +187,53 @@
         // isolated signal component just because nearby bins were noise.
         const smoothed=Math.exp((prefix[hi+1]-prefix[lo])/(hi-lo+1));
         g[k]=Math.max(g[k],smoothed);
+      }
+    }
+    if(options.engineFocus){
+      // Engine-focus mode: narrow persistent ridges (revving tones) survive,
+      // while broadband static, chirps and the upper hiss band are attenuated.
+      // This does not try to classify speech; it is a tonal-vs-noise filter.
+      const profiles=new Array(frameCount),activity=new Float32Array(frameCount);
+      const lo=Math.max(1,Math.floor(120*N/rate)),hi=Math.min(K-1,Math.floor(1700*N/rate));
+      const amps=new Float32Array(K),prefixAmp=new Float64Array(K+1);
+      for(let t=0;t<frameCount;t++){
+        const p=powers[t],tonal=new Float32Array(K);
+        prefixAmp[0]=0;
+        for(let k=0;k<K;k++){amps[k]=Math.sqrt(p[k]);prefixAmp[k+1]=prefixAmp[k]+amps[k]}
+        let energy=0;
+        for(let k=0;k<K;k++){
+          const start=Math.max(0,k-7),end=Math.min(K-1,k+7);
+          const avg=(prefixAmp[end+1]-prefixAmp[start])/(end-start+1);
+          const contrast=amps[k]/(avg+1e-10);
+          // For a flat hiss spectrum contrast is approximately 1;
+          // harmonics are sharper peaks against their neighbors.
+          const prominence=Math.max(0,Math.min(1,(contrast-1.05)/2.5));
+          tonal[k]=prominence;
+          if(k>=lo&&k<=hi)energy+=p[k]*prominence*prominence;
+        }
+        profiles[t]=tonal;
+        activity[t]=Math.sqrt(energy);
+      }
+      // Use engine-band activity for a gentle expander that quiets
+      // between-rev gaps. Disable it for uniformly active recordings.
+      const levels=Array.from(activity).sort((a,b)=>a-b);
+      const at=q=>levels[Math.min(levels.length-1,Math.floor(q*(levels.length-1)))];
+      const low=at(.15),high=at(.85);
+      const shouldGate=high>low*1.7&&high>1e-8;
+      let previousGate=1;
+      for(let t=0;t<frameCount;t++){
+        const g=gains[t],thisTone=profiles[t],past=profiles[Math.max(0,t-2)],future=profiles[Math.min(frameCount-1,t+2)];
+        const gateRaw=shouldGate?(.07+.93*Math.pow(Math.max(0,Math.min(1,(activity[t]-low)/Math.max(1e-8,.42*(high-low)))),.6)):1;
+        const gate=previousGate*.55+gateRaw*.45;
+        previousGate=gate;
+        for(let k=0;k<K;k++){
+          const prominence=.6*thisTone[k]+.2*past[k]+.2*future[k];
+          const tonalGain=.07+.93*prominence;
+          const hz=k*rate/N;
+          // Broadband hiss above engine harmonics has little value.
+          const upperCut=hz<=2600?1:hz>=7600?.045:Math.exp(Math.log(.045)*(hz-2600)/5000);
+          g[k]*=tonalGain*upperCut*gate;
+        }
       }
     }
     const output=new Float32Array(segment.length),weight=new Float32Array(segment.length);
