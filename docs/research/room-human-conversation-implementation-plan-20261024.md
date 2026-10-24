@@ -1,6 +1,6 @@
 # The Room human-conversation architecture: reviewed implementation plan
-**Date:** 2026-10-24. **Canonical version:** synthesis v6, after five verified adversarial Claude reviews; final convergence review pending.
-**Status:** planning only; no changes to production Room behavior. Draft PR #313 is unmerged. Original v1 remains retrievable in git commit de527812b1a03f36823d4537052b1576ff29bf54.
+**Date:** 2026-10-24. **Canonical version:** synthesis v6.1, after SIX verified adversarial Claude reviews. Rounds 5 and 6 independently identified zero remaining high/critical architecture-spec blockers. Ready for **offline implementation and adversarial fault-injection only**, not production.
+**Status:** reviewed implementation plan only; no changes to production Room behavior. Draft PR #313 is unmerged. No claim of a bug-free implementation. Original v1 remains retrievable in git commit de527812b1a03f36823d4537052b1576ff29bf54.
 
 ## Design objective and non-negotiable rules
 Sarah, Mara, Jules and Owen should respond to one another through **socially meaningful action**: who is addressed, what is left unresolved, what the participants understood or contested, what each remembers, and whether a participant wants to speak. Neither lexical diversity nor fewer repeated phrases is a success criterion. Repetition for repair, reference, emphasis, rhythm, intimacy, teasing, or remembered commitments is legitimate. No canned social scripts, mandatory novelty, arbitrary topic changes, fixed floor quotas, or global proscription on short speech. Preserve character individuality, intentional silence and appropriate consecutive turns.
@@ -149,6 +149,13 @@ Initial *test limits*, subject to capacity measurement: mirror batches of ≤50 
 | R1 | looped reflection propagates unsupported belief | each inference linked to raw source IDs |
 | N1 | high false positives from natural repeat checks | legal echo/refusal/repair and negative gibberish in same fixture |
 
+## Convergence after Claude antithesis round 6
+**Verified:** bridge/outbox/room-human-conversation-dialectic-r6-20261024.json, Claude Sonnet 5.5, \`ok: true\`, \`verified_model_family: claude\`. **Verdict:** "v6 is ready to START OFFLINE, isolated implementation and adversarial fault-injection"; **0 new high/critical specification blockers**. This follows round 5's zero-blocker verdict. Claude worked from the supplied summary, with no code inspection or executed tests; our source inspections of the GitHub Room and Worker are recorded above.
+
+**Remaining pinned tests before any promotion:** old cursor after rollback epoch, rebase renumbering with unchanged decision ID and bytes, consumer dedupe keyed by decision ID rather than mutable generation ordinal, actual Worker output history and source-ID status, time-boundaries for 1000-event and 24h soft pause, GitHub API unreachable during auth resync, OIDC token clock skew, 500-event catch-up and 50/call page windows, fault-inject every commit/ACK/delivery seam, per-arm resource isolation and blind human action-sequence scoring.
+
+**Review endpoint:** stop further architecture-only argument in the absence of an observed defect; the next thesis/antithesis/synthesis cycle should be driven by **actual offline test failures** and reproducible traces, not a pursuit of a logically impossible universal "bug-free" claim. Runtime code has not been written/deployed by this review series.
+
 ## Explicit assessment of Claude antithesis round 5
 **Verified:** bridge/outbox/room-human-conversation-dialectic-r5-20261024.json, Claude Sonnet 5.5, ok=true. Verdict: **go for offline implementation, zero unmitigated high/critical design blockers**, with 4 spec precision requirements. No code or fault tests were run by Claude. Accepted refinements: a receipt-status explanation during mirror outages; journal entries include incoming Allen messages and generation/epoch; current-main SHA verification and conflict rules for authenticated resync; bounded historical mirror event pages, capacity/backpressure; typed stage attestations. These are pinned above in C2.
 **Independent qualifications:** the proposed UI receipt status is **not currently implemented** and is optional if source-ID backlog recovery and honest queue semantics are otherwise validated. An archived Git message is durable but **not necessarily viewer-visible**; tests must independently establish accessible history. Generator 1B model capability remains unproven, and dialogue-quality improvement remains an experiment rather than a design guarantee.
@@ -190,4 +197,6 @@ Initial *test limits*, subject to capacity measurement: mirror batches of ≤50 
 - Antithesis r4: verified Claude consulted 2026-10-24; 3 structural high gaps confirmed, especially actual Worker backlog and cross-boot stale feed.
 - Synthesis v5 at commit 1b107ba04f6c79d4fe1ddddacf00c72f1683505a.
 - Antithesis r5: verified Claude consulted 2026-10-24; zero unmitigated high/critical spec blockers, four precision issues resolved in C2.
-- Synthesis v6: this document. Final convergence review pending; offline implementation still must pass comprehensive fault-injection and human-dialogue evaluation.
+- Synthesis v6 at commit 4a312e15aed9f10e44353594b1fe4e8446a70211.
+- Antithesis r6: verified Claude 2026-10-24, zero NEW high/critical plan blockers, offline implementation allowed; tests and caveats remain.
+- Synthesis v6.1: this document; two consecutive plan-review verdicts with zero blocking specification defects, review converged. Software not implemented or tested, live Room unchanged.
