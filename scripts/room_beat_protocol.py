@@ -117,62 +117,113 @@ def advance_health(
     fail_alert_count: int = 5,
     fail_alert_ratio: float = 0.5,
     silence_review_streak: int = 50,
+    min_transition_gap_seconds: int = 60,
 ) -> tuple[dict, bool]:
-    """Pure health reducer and explicit commit/heartbeat recommendation.
+    """Reduce one beat tentatively; durable confirmation is a separate step.
 
-    The enclosing runner must durably publish any real input or public speech
-    independent of this recommendation. A failure is NEVER hidden behind a
-    healthy silence. A long healthy silence calls for review, not forced speech.
+    Any public expression or Allen input must be committed independently of
+    heartbeat batching. After a Git failure, pass the returned tentative state
+    back on retry WITHOUT calling mark_durable.
     """
-    if now_seconds < 0 or heartbeat_seconds < 1 or fail_window < 1:
-        raise ValueError("invalid clock or retention settings")
-    if heartbeat_seconds >= DEFAULT_WATCHDOG_SECONDS:
-        raise ValueError("heartbeat cannot be as slow as the watchdog")
-    if not 0 < fail_alert_ratio <= 1 or not 1 <= fail_alert_count <= fail_window:
-        raise ValueError("invalid failure alert settings")
+    if type(now_seconds) is not int or now_seconds < 0:
+        raise ValueError("clock must be nonnegative integer")
+    if type(heartbeat_seconds) is not int or not 1 <= heartbeat_seconds < DEFAULT_WATCHDOG_SECONDS:
+        raise ValueError("heartbeat cannot be as slow as watchdog")
+    if type(fail_window) is not int or type(fail_alert_count) is not int or not 1 <= fail_alert_count <= fail_window:
+        raise ValueError("invalid failure alert window")
+    if not isinstance(fail_alert_ratio, (int, float)) or not 0 < fail_alert_ratio <= 1:
+        raise ValueError("invalid failure ratio")
+    if type(min_transition_gap_seconds) is not int or min_transition_gap_seconds < 0:
+        raise ValueError("invalid transition gap")
+    if type(silence_review_streak) is not int or silence_review_streak < 1:
+        raise ValueError("invalid silence review threshold")
     previous = dict(previous or {})
     last_now = previous.get("last_evaluated_at")
     if last_now is not None and now_seconds < int(last_now):
-        raise ValueError("clock moved backwards: do not acknowledge as healthy")
-    window = (list(previous.get("recent_outcomes", ())) + [outcome.kind])[-fail_window:]
-    failures = sum(v in UNHEALTHY for v in window)
+        raise ValueError("clock moved backwards")
+    old_window = list(previous.get("recent_outcomes", ()))
+    if any(kind not in ALL_OUTCOMES for kind in old_window):
+        raise ValueError("corrupt health history")
+    window = (old_window + [outcome.kind])[-fail_window:]
+    failures = sum(x in UNHEALTHY for x in window)
     degraded = failures >= fail_alert_count and failures / len(window) >= fail_alert_ratio
-    last_durable = previous.get("last_durable_health_at")
-    silence_streak = int(previous.get("silence_streak", 0)) + 1 if outcome.kind == "chosen_silence" else 0
-    changed_class = outcome.healthy != previous.get("last_outcome_healthy", outcome.healthy)
-    due = last_durable is None or now_seconds - int(last_durable) >= heartbeat_seconds
-    # Failures must not remain invisible while silent beats update the clock.
+    last_write = previous.get("last_durable_write_at")
+    elapsed = now_seconds - int(last_write) if last_write is not None else None
+    due = elapsed is None or elapsed >= heartbeat_seconds
+    flip_degraded = degraded != bool(previous.get("last_durable_degraded", False))
+    kind_changed = previous.get("last_durable_outcome") != outcome.kind
+    significant_transition = kind_changed and (elapsed is None or elapsed >= min_transition_gap_seconds)
+    # Failed attempts remain pending for a future attempt, regardless of gap.
     persist = bool(
-        not outcome.healthy or changed_class or degraded != bool(previous.get("degraded", False))
-        or outcome.kind == "spoken" or due
+        previous.get("pending_durable", False) or due or flip_degraded
+        or significant_transition or outcome.kind == "spoken"
     )
-    state = {
-        "last_evaluated_at": int(now_seconds),
+    silence_streak = (
+        int(previous.get("silence_streak", 0)) + 1
+        if outcome.kind == "chosen_silence" else 0
+    )
+    state = dict(previous)
+    state.update({
+        "version": 2,
+        "last_evaluated_at": now_seconds,
         "last_healthy_beat_at": (
-            int(now_seconds) if outcome.healthy
-            else previous.get("last_healthy_beat_at")
+            now_seconds if outcome.healthy else previous.get("last_healthy_beat_at")
         ),
         "last_public_message_at": (
-            int(now_seconds) if outcome.kind == "spoken"
-            else previous.get("last_public_message_at")
+            now_seconds if outcome.kind == "spoken" else previous.get("last_public_message_at")
         ),
-        "last_durable_health_at": int(now_seconds) if persist else last_durable,
-        "last_outcome_healthy": outcome.healthy,
         "last_outcome": outcome.kind,
+        "last_outcome_healthy": outcome.healthy,
         "recent_outcomes": window,
         "failure_count_window": failures,
+        "consecutive_failures": (
+            0 if outcome.healthy else int(previous.get("consecutive_failures", 0)) + 1
+        ),
         "degraded": degraded,
         "silence_streak": silence_streak,
         "silence_review": silence_streak >= silence_review_streak,
-        "version": 1,
-    }
+        "pending_durable": persist,
+    })
     return state, persist
 
 
-def watchdog_status(state: Mapping, now_seconds: int, *, stale_after: int = DEFAULT_WATCHDOG_SECONDS) -> str:
-    if bool(state.get("degraded", False)):
+def mark_durable(state: Mapping, committed_at_seconds: int) -> dict:
+    """Call only AFTER an authoritative full Git push is confirmed."""
+    if type(committed_at_seconds) is not int or committed_at_seconds < 0:
+        raise ValueError("invalid durable confirmation time")
+    if state.get("pending_durable") is not True:
+        raise ValueError("no pending durable publication")
+    if committed_at_seconds < int(state.get("last_evaluated_at", committed_at_seconds)):
+        raise ValueError("commit confirmation precedes decision")
+    out = dict(state)
+    out["pending_durable"] = False
+    out["last_durable_write_at"] = committed_at_seconds
+    out["last_durable_outcome"] = state["last_outcome"]
+    out["last_durable_degraded"] = bool(state["degraded"])
+    if state["last_outcome_healthy"]:
+        out["last_durable_healthy_at"] = committed_at_seconds
+    else:
+        out["last_durable_failure_at"] = committed_at_seconds
+    return out
+
+
+def watchdog_status(
+    state: Mapping,
+    now_seconds: int,
+    *,
+    stale_after: int = DEFAULT_WATCHDOG_SECONDS,
+    consecutive_failure_alert: int = 3,
+) -> str:
+    """An unsuccessful expression cannot refresh healthy liveness."""
+    if type(now_seconds) is not int or now_seconds < 0:
+        raise ValueError("invalid watchdog time")
+    if (
+        bool(state.get("degraded", False))
+        or state.get("last_outcome_healthy") is False
+        or int(state.get("consecutive_failures", 0)) >= consecutive_failure_alert
+    ):
         return "unhealthy"
-    last = state.get("last_durable_health_at")
+    last = state.get("last_durable_healthy_at")
     if last is None or now_seconds < int(last):
         return "unknown"
     return "stale" if now_seconds - int(last) >= stale_after else "healthy"
