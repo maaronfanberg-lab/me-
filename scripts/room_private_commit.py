@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import copy
+import json
+import os
 import re
+from pathlib import Path
 from datetime import datetime, timezone
 
 import room_engine_v5 as c
@@ -12,6 +15,7 @@ import room_topic_bounded as _bounded_topic
 import room_private_self_state as _private_self_state
 import room_research_architecture as _research
 import room_group_dynamics as _group
+import room_conversational_floor as _floor
 
 for _topic_name in (
     "topic_template",
@@ -235,7 +239,18 @@ def private_commit(parts: list[dict], key: str):
         topic = clean_topic(c.update_topic(topic, V[-24:], cycle))
 
     q = prev if c.isq(prev) and topic.get("root") else None
-    order, E = c.order4(parts, prev, cycle)
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        floor_path = c.ROOT / "room_work" / "floor.json"
+        floor = json.loads(floor_path.read_text(encoding="utf-8"))
+        selected = _floor.checked_floor(floor, awake=AWAKE_ORDER, required=True)
+        E = {part["entity"]: part for part in parts
+             if part.get("role") == "expression" and part.get("entity") == selected
+             and (part.get("private") or {}).get("intent")}
+        if set(E) != {selected}:
+            raise RuntimeError("selected Room expression was not generated; failed beat")
+        order = [selected]
+    else:
+        order, E = c.order4(parts, prev, cycle)
     awake_order = [entity for entity in order if entity in AWAKE_ORDER]
     beat = f"beat-{c.BOOT}-{cycle:06d}"
 
@@ -255,6 +270,8 @@ def private_commit(parts: list[dict], key: str):
         expressions[entity] = expr
 
     if not expressions:
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            raise RuntimeError("selected conversational expression absent; no valid beat")
         print("All Room expressions quarantined before publication; skipping beat without state mutation")
         return
 
@@ -302,9 +319,11 @@ def private_commit(parts: list[dict], key: str):
         staged.append((entity, move, target, text, terms))
 
     if not staged:
-        print("All Room expressions quarantined at final publication gate; skipping beat without state mutation")
         if quarantined:
             print("Room quarantine:", " | ".join(quarantined))
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            raise RuntimeError("selected conversational expression failed integrity gates")
+        print("All Room expressions quarantined at final publication gate; skipping beat without state mutation")
         return
 
     spoken: list[dict] = []
@@ -339,9 +358,9 @@ def private_commit(parts: list[dict], key: str):
     if not topic.get("root") or bad_term(topic.get("root")):
         topic = seed_topic(expressions, valid_order, cycle, topic)
 
-    if context_scope_migration:
+    if context_scope_migration and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1":
         topic = context_scope_reset(topic, key, cycle)
-    elif c.should_shift_topic(topic):
+    elif os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1" and c.should_shift_topic(topic):
         forced_breakout = bool(topic.get("bridge_pending"))
         if forced_breakout:
             candidate_terms = [c.breakout_subject(key)]
@@ -391,6 +410,7 @@ def private_commit(parts: list[dict], key: str):
     V = V[-1000:]
     stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     S.update({
+        "conversational_floor": "opportunity_v1" if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1" else "legacy_four_voice",
         "version": c.VERSION,
         "boot_id": c.BOOT,
         "cycle": cycle,
