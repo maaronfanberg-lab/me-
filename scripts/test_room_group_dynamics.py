@@ -71,6 +71,8 @@ context = group.model_context(minds, "jules", "owen", [invitation], awake, cfg)
 assert context["activities"][0]["responses"]["mara"] == "declined"
 assert "owen" in context["activities"][0]["offered_work"]
 assert context["relationships"]["owen"]["reciprocity"] > context["relationships"]["mara"]["reciprocity"]
+assert context["interaction"]["evidence"] == "provisional_inference_from_observed_public_turns"
+assert context["interaction"]["last_action"]["source"] == "work"
 payload = {"entity": "jules", "profile": commit.c.P["jules"], "partner": "owen",
            "context": [invitation], "event": invitation, "group_context": context}
 compact = autonomy._impl._legacy._autonomy_compact(payload, "expression", "jules")

@@ -8,6 +8,7 @@ calls, invented memories, initial alliances, or history replay on waking.
 """
 
 import re
+import room_interaction_sequence as sequence
 import room_research_architecture as research
 import room_social_v5 as social
 
@@ -263,7 +264,8 @@ def model_context(minds: dict, entity: str, partner: str | None,
                    "offered_work": {p: r["text"][:100] for p, r in a["contributions"].items()}}
                   for a in data.get("activities", []) if a["status"] in {"proposed", "active"}
                   and last_cycle - a["last_cycle"] <= 48][-2:]
-    out = {"relationships": peers, "encounters": selected, "activities": activities}
+    out = {"relationships": peers, "encounters": selected, "activities": activities,
+           "interaction": sequence.interaction_frame(data.get("encounters", []), entity, awake)}
     if entity == "jules" and not activities:
         available = [other for other in awake if other != entity]
         if len(available) >= 2:
