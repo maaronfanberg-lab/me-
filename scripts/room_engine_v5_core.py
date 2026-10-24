@@ -813,7 +813,17 @@ def main():
         save(WORK / "bus-recurrent.json", bus2(first_bus, parts, key))
     elif args.cmd == "commit":
         parts = [load(path, {}) for path in sorted(PARTS.glob("recurrent-*.json"))]
-        if {part["node"] for part in parts} != set(range(12)):
+        nodes = {part["node"] for part in parts}
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            from room_conversational_floor import checked_floor
+            floor = load(WORK / "floor.json", {})
+            awake = [e for e in ORDER if e not in set(CFG.get("sleeping_entities", []))]
+            selected = checked_floor(floor, awake=awake, required=True)
+            expected = {n for n in range(12) if n % 3 != 2}
+            expected.add(A["entities"][selected][2])
+            if nodes != expected:
+                raise RuntimeError("selected Room turn requires eight cognitive nodes plus one expression")
+        elif nodes != set(range(12)):
             raise RuntimeError("commit requires all 12 recurrent nodes")
         commit(parts, key)
     else:
