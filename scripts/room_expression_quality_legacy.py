@@ -229,9 +229,10 @@ def repair_expression(utterance: object, self_entity: str | None = None) -> str:
         return text
     text = _repair_pronoun_fragments(text)
     text = _drop_self_address(text, self_entity)
-    text = _dedupe_sentences(text)
-    text = _dedupe_local_phrase(text)
-    text = _truncate_before_repeated_ngram(text)
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1":
+        text = _dedupe_sentences(text)
+        text = _dedupe_local_phrase(text)
+        text = _truncate_before_repeated_ngram(text)
     text = _cap_complete(text)
     text = _drop_incomplete_tail(text)
     if _TRAILING_FRAGMENT.search(text):
@@ -475,7 +476,9 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
         return "structured_debris"
     if re.search(r"\b([A-Za-z]{3,})-\1\b", text, re.I):
         return "local_word_duplication"
-    if len(words) < 3 and not re.search(r"\b(?:no|nope|wrong|fuck|shit|bullshit|idiot|moron|damn|hell)\b", text, re.I):
+    if (os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1"
+            and len(words) < 3
+            and not re.search(r"\b(?:no|nope|wrong|fuck|shit|bullshit|idiot|moron|damn|hell)\b", text, re.I)):
         return "empty_fragment"
     if len(words) > 48:
         return "wordy_expression"
@@ -491,6 +494,10 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
         return "trailing_fragment"
     if _terminal_incomplete(text):
         return "trailing_fragment"
+    # In the opportunity-based path, successful reference/repair may reuse
+    # words or entire phrases. Hygiene remains enforced above.
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        return None
     if _lexical_degeneracy(text):
         _escape_stale_context(compact, self_entity)
         return "lexical_degeneracy"
