@@ -18,6 +18,8 @@ on:
       - 'scripts/test_room_experiment_guard.py'
       - 'scripts/room_offline_replay.py'
       - 'scripts/test_room_offline_replay.py'
+      - 'scripts/room_offline_transport.py'
+      - 'scripts/test_room_offline_transport.py'
       - 'scripts/test_room_interaction_sequence.py'
       - 'scripts/room_private_model_autonomy.py'
       - 'scripts/room_private_model_autonomy/__init__.py'
@@ -45,6 +47,8 @@ jobs:
         run: python3 scripts/test_room_delivery_protocol.py
       - name: Verify experimental credential isolation
         run: python3 scripts/test_room_experiment_guard.py
+      - name: Verify in-memory Git and Worker crash/race simulation
+        run: python3 scripts/test_room_offline_transport.py
       - name: Verify read-only corpus and observer-scope sampler
         run: python3 scripts/test_room_offline_replay.py
       - name: Verify conversation action sequences
