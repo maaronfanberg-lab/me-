@@ -143,6 +143,25 @@ def mirror_backlog(
     )
 
 
+def recovery_pages(
+    published: Iterable[DurableBeat],
+    mirrored_event_ids: Iterable[str],
+    *,
+    verified_main_commits: Iterable[str],
+    max_page_size: int = 50,
+) -> tuple[tuple[PublicEvent, ...], ...]:
+    """Build ordered bounded catch-up pages from durable source events."""
+    if type(max_page_size) is not int or not 1 <= max_page_size <= 50:
+        raise ValueError("page size must be between one and fifty")
+    remaining = mirror_backlog(
+        published, mirrored_event_ids, verified_main_commits=verified_main_commits
+    )
+    return tuple(
+        remaining[i:i + max_page_size]
+        for i in range(0, len(remaining), max_page_size)
+    )
+
+
 def mirror_result_confirmed(
     status: int,
     body: Mapping | None,
