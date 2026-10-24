@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/room-human-conversation-dialectic-r3-20261024.json",
+  "request_sha256": "7dfd1bdb7965cddefc78526e5cdc78fe64e94b4fe3bfc5a8d69f94b846d37c1e",
+  "request_nonce": "room-human-conversation-dialectic-r3-20261024",
+  "completed_at": "2026-10-24T16:09:49.411181Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "**Scope:** This is a design review of the summary only. I read no code and ran no tests, so nothing here is executed proof.\n\n**Verdict:** I find no critical blockers in B1–B5. I find 4 high-severity residual defects, all fixable in the spec. They are H1 (stable ID after a git race), H2 (ACK semantics), H3 (fault-counter wiring) and H4 (shadow isolation). Because H1 and H2 touch the ACK and ID invariants that trigger a production stop, I recommend a narrow Round 4 on those two items only.\n\n**H1 (B1): stable ID after a non-fast-forward race is under-specified.**\n- Trace:\n  1. Agent A stages text T for `committed_sequence` N with decision ID D1, and the push is rejected as non-fast-forward.\n  2. A fetches and finds that B's commit already took N, or that Allen's inbound message is new.\n  3. The protocol says to replan with a new ID D2. It does not say what happens to D1.\n  4. If the mirror outbox or pending-ACK record was keyed on D1 before the push succeeded, the relay may hold a pending item for a decision that never became public. Retrying it on \"stable source-ID\" would deliver the abandoned utterance. That is the stale-utterance bug the protocol claims to prevent.\n  5. A second hazard: D1 and D2 are both derived from `floor_decision_id` and state. If a replan lands on identical durable state, such as a fetch that brought in only non-conflicting metadata commits, then D2 may equal D1 or may differ with the same text. That breaks \"byte-equal for same durable decision\" or creates a duplicate.\n- Minimal fix:\n  - Enqueue to the mirror outbox only after the push is confirmed, never before.\n  - Record D1 as `superseded` locally and never retry it.\n  - Define the ID as `H(parent_commit_sha, committed_sequence, floor_decision_id, inbound_ids)`, so a changed parent always yields a new ID.\n  - If the parent is unchanged, reuse D1 and the staged text.\n- Test: inject a rejected push with a concurrent commit between stage and push, and assert four things:\n  - The relay never sees D1.\n  - The public log has exactly one event for N.\n  - Replaying the same parent twice yields the same ID and bytes.\n  - A crash between push-success and outbox-enqueue recovers by scanning Git, so the event is not lost from the mirror.\n\n**H2 (B1): the user ACK is ambiguous when the mirror is down.**\n- The plan ACKs Allen once the Git commit is durable, but Allen's contract is a user-facing relay.\n- If the relay is down, Allen sees \"ACK\" while the public view, which is the mirror, does not show his message. He may reasonably read ACK as \"visible to the room\" and resend. Dedup on inbound ID handles the duplicate, but the user sees nothing and cannot tell whether the message is accepted, lost, or merely pending.\n- If the ACK itself travels via the relay, it cannot reach him at all during an outage. The plan says \"relay failure remains pending and visible\" but does not define the wording or the channel.\n- Fix: split the ACK into two typed states, `accepted_durable` (Git) and `mirrored_visible` (relay confirmed). The user-facing text for the first must say \"saved, not yet shown in the mirror\". Retries of the ACK must reuse the same ack ID.\n- Test: take the relay down, send an inbound message, and assert three things:\n  - Only `accepted_durable` is emitted.\n  - A resend produces no second public event.\n  - After the relay recovers, `mirrored_visible` fires exactly once.\n\n**H3 (B2): the fault counter has no consumer semantics.**\n- The summary says the watchdog \"reads health and faults\", but gives no rule. A persistent `model_unavailable` state with zero healthy beats stops `last_healthy_beat_at` from advancing, and the watchdog fires at 900s. But a mix of 1 healthy `chosen_silence` and 9 `validation_failed` beats per window advances health on every healthy beat, so nothing fires.\n- Also, `no_eligible_participant` advances health. A bug that makes every participant ineligible would then look healthy forever.\n- Fix:\n  - Alert on a fault ratio over a sliding window, as well as on staleness.\n  - Alert on `no_eligible_participant` or `chosen_silence` streaks above a preregistered length.\n  - Count a silence as healthy only if the model call itself succeeded and validated.\n- Test: run a fault-injection matrix of 90% validation failure, all-ineligible, and a silence-only streak. Each must raise an alert within a bounded time.\n\n**H4 (B4): isolation of shadow state is only partly covered by the hash check.**\n- \"Control state hash unchanged with shadow ON/OFF\" proves no writes to control state. It does not catch shared reads: shadow reads the production clock, the shared model rate limit or quota, or a shared cache. Shadow load can then change control timing, and the hash may not capture that.\n- Fix: add a per-arm quota and a separate API key. Also run a differential test with shadow ON, a saturated shadow quota, and injected shadow failure, and assert that control outputs and latency stay within bounds.\n\n**B3 (heartbeat storms):** I find no new blocker. One residual: coalescing at T=300s must be per-agent-keyed and jittered, or four agents will commit in lockstep and trigger the non-fast-forward path in H1. This is a medium issue. Add jitter and test it.\n\n**B5 (numeric gates):** I find no new blocker.\n- The gates are acknowledged as preregistered candidates.\n- One medium issue: κ≥0.60 with 300 items is feasible, but \"action 2 ≥80%\" has no baseline. Require the power calculation before P0 closes.\n- The \"multiple seeds\" A/B needs a stated unit of analysis, which should be the example and not the seed. Otherwise the CI is falsely tight.\n\n**Phase ordering:**\n- The order is mostly sound: baseline, then safety and state, then behavior changes.\n- One problem is that P1 (publication and ACK state) comes after P0B, but the H1 and H2 fixes are prerequisites for any shadow or canary run. Make sure P0B does not publish to the real room.\n- P2 removes forced novelty before P4 adds the floor. Between those two phases, silence and repetition can degrade. Gate P2 behind shadow only.\n- P3 (inference) and P4 (floor) interact because the recipient classifier feeds the floor. Evaluate the classifier's gates before P4 consumes it.\n\n**Round 4:** Yes, but narrow: H1 and H2 only, plus H3 as a spec patch. H4 is a test addition and needs no new review. After those, I would consider the design sufficiently challenged for implementation planning. The remaining risk is in execution, and only tests will show it.",
+  "session_id": "a5d0b295-57a4-4401-af46-88a491b6e7d8",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1911,
+    "cache_read_input_tokens": 2604,
+    "output_tokens": 2334,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 1911,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2334,
+        "cache_read_input_tokens": 2604,
+        "cache_creation_input_tokens": 1911,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1911
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.031248400000000003,
+  "num_turns": 1
+}
