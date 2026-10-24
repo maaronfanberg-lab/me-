@@ -85,7 +85,9 @@ def interaction_frame(encounters, entity, awake):
         }
     pending, uptake = [], []
     for index, event in enumerate(observed):
-        if _project(event) != "question":
+        if "?" not in event["utterance"]:
+            continue
+        if _project(event) not in {"question", "repair"}:
             continue
         replies = [(j, other) for j, other in enumerate(observed[index + 1:], index + 1)
                    if _reply_to(other, event)]
