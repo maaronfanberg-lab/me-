@@ -32,15 +32,20 @@ class BeatOutcome:
     detail: str = ""
 
     def __post_init__(self):
-        if self.kind not in ALL_OUTCOMES:
-            raise ValueError("unrecognized outcome: " + self.kind)
-        if not self.decision_id:
-            raise ValueError("decision ID required")
-        if self.kind == "chosen_silence":
-            if self.selected_speaker is not None or self.published_message_ids:
-                raise ValueError("chosen silence cannot publish autonomous speech")
+        if self.kind not in ALL_OUTCOMES or not isinstance(self.decision_id, str) or not self.decision_id:
+            raise ValueError("unknown beat result or missing decision ID")
+        if type(self.published_message_ids) is not tuple or any(
+            not isinstance(x, str) or not x for x in self.published_message_ids
+        ) or len(set(self.published_message_ids)) != len(self.published_message_ids):
+            raise ValueError("published message IDs must be unique nonempty strings")
+        if self.selected_speaker is not None and (
+            not isinstance(self.selected_speaker, str) or not self.selected_speaker.strip()
+        ):
+            raise ValueError("invalid selected speaker")
+        if self.kind == "chosen_silence" and (self.selected_speaker is not None or self.published_message_ids):
+            raise ValueError("chosen silence cannot publish speech")
         if self.kind == "spoken" and (self.selected_speaker is None or not self.published_message_ids):
-            raise ValueError("spoken requires selected speaker and published message")
+            raise ValueError("spoken requires selected speaker and message")
         if self.kind in UNHEALTHY and self.published_message_ids:
             raise ValueError("failed generation cannot publish autonomous speech")
 
@@ -53,17 +58,31 @@ def classify_beat(
     decision_id: str,
     *,
     completed_stages: Mapping[str, bool],
+    eligible_speakers: tuple[str, ...],
     selected_speaker: str | None,
+    silence_chosen: bool,
     expression_attempted: bool,
     expression_valid: bool | None = None,
     published_message_ids: tuple[str, ...] = (),
     failure: str | None = None,
 ) -> BeatOutcome:
-    """Turn explicit evidence into one outcome; no inference from quiet text.
+    """Silence requires positive evidence of choice; a missing model is a fault.
 
-    Input-publishing (e.g. Allen) has its *own* durable path. The
-    published_message_ids argument concerns generated autonomous speech only.
+    Eligible means awake/available, not willing to speak. Allen inbound input
+    can be committed independently of an autonomous chosen-silence outcome.
     """
+    if not isinstance(completed_stages, Mapping) or type(eligible_speakers) is not tuple:
+        raise ValueError("stages/eligible speakers must be structured")
+    if any(not isinstance(x, str) or not x for x in eligible_speakers):
+        raise ValueError("invalid eligible speaker")
+    if type(silence_chosen) is not bool or type(expression_attempted) is not bool:
+        raise ValueError("explicit boolean decisions required")
+    if expression_valid is not None and type(expression_valid) is not bool:
+        raise ValueError("expression_valid must be boolean")
+    if type(published_message_ids) is not tuple:
+        raise ValueError("published IDs must be tuple, not string or list")
+    if failure is not None and published_message_ids:
+        return BeatOutcome("infrastructure_failure", decision_id, detail="conflicting_failure_and_publication")
     missing = tuple(stage for stage in REQUIRED_STAGES if completed_stages.get(stage) is not True)
     if missing:
         return BeatOutcome("stage_failed", decision_id, detail="incomplete:" + ",".join(missing))
@@ -71,17 +90,21 @@ def classify_beat(
         if failure not in UNHEALTHY:
             raise ValueError("unknown failure code: " + str(failure))
         return BeatOutcome(failure, decision_id, detail=failure)
+    if not eligible_speakers:
+        return BeatOutcome("invalid_no_eligible_person", decision_id)
     if selected_speaker is None:
-        if expression_attempted or expression_valid is not None or published_message_ids:
-            return BeatOutcome("infrastructure_failure", decision_id, detail="generation_without_selection")
+        if not silence_chosen or expression_attempted or expression_valid is not None or published_message_ids:
+            return BeatOutcome("infrastructure_failure", decision_id, detail="selection_absent_or_conflicted")
         return BeatOutcome("chosen_silence", decision_id)
+    if selected_speaker not in eligible_speakers or silence_chosen:
+        return BeatOutcome("infrastructure_failure", decision_id, detail="selection_conflict")
     if not expression_attempted:
         return BeatOutcome("generation_failed", decision_id, detail="selected_but_not_attempted")
     if not expression_valid:
         return BeatOutcome("validation_failed", decision_id, detail="selected_output_invalid")
     if not published_message_ids:
         return BeatOutcome("infrastructure_failure", decision_id, detail="validated_but_not_published")
-    return BeatOutcome("spoken", decision_id, selected_speaker, tuple(published_message_ids))
+    return BeatOutcome("spoken", decision_id, selected_speaker, published_message_ids)
 
 
 def advance_health(
