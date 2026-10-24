@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/room-human-conversation-dialectic-r5-20261024.json",
+  "request_sha256": "1573af098cdf09a698343900acaa44f899762f14df728936e1490617b9d0c85b",
+  "request_nonce": "room-human-conversation-dialectic-r5-20261024",
+  "completed_at": "2026-10-24T16:19:08.783662Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "# Fifth review: go for offline implementation, 0 unmitigated high/critical blockers\n\nI found no concrete trace that breaks the v5 design. The three earlier blockers are closed on paper:\n\n- **20-item window deadlock:** the ACK now depends only on Git durability, so the oldest 20 drain even when the relay is down.\n- **Unresolvable stale 200:** a separate authenticated resync path replaces reliance on boot and timestamp ordering.\n- **Regeneration after crash or push:** restart reconciles the Git-published `mirror_pending` journal before any new autonomous beat.\n\nBelow are four residual gaps. They are spec-precision items, not blockers. Each needs a pinned rule before coding, and each has a deterministic test.\n\n## 1. Early Git ACK while the mirror is down\n\n**Safe parts**\n- **Crash between push and ACK:** `processed_inbound_ids` plus the deterministic input ID make the replay a no-op followed by an ACK.\n- **Crash before push:** the queue item remains, and the same ID produces the same input.\n\n**Gap (visibility, not loss).** The Worker queue is the only place the viewer's \"queued\" state comes from. After the ACK, the item is in neither the queue nor the relay feed until the mirror catches up.\n\nTrace:\n1. Allen posts and gets a 202.\n2. The runner pushes to Git and ACKs.\n3. The relay stays down for 2 hours.\n4. The viewer shows nothing for Allen's message. It looks dropped, and Allen may resend.\n\n**Correction.** The journal must carry the inbound-message event, with its source ID, as a first-class entry. It must not carry only the output utterance. Also decide whether the Worker keeps an \"acknowledged, awaiting mirror\" tombstone, with a TTL, so the viewer can show \"received\". If you add the tombstone, define the ACK response so it writes it atomically.\n\n**Test.**\n1. Fake the relay as down.\n2. Inject 45 queued messages.\n3. Run three cycles.\n4. Assert the Worker queue is empty and Git holds 45 inbound events in the journal.\n5. Bring the relay up.\n6. Assert all 45 appear in generation order, exactly once.\n7. Repeat with a crash injected at every step boundary: stage, commit, push, ACK, mirror send.\n\n## 2. Journal reconstruction\n\n**Gap: generation assignment under push conflict.** The design says a metadata-only conflict reuses the bytes and ID. `committed_generation` must also be globally monotonic. If generation is allocated when the commit is staged, a rebase onto a heartbeat or metadata commit makes two commits claim the same generation, or leaves a gap. If generation is rewritten after the rebase, the \"same bytes\" claim no longer holds for the journal entry.\n\n**Correction.**\n- Define generation as `parent_generation + 1`, computed at the final rebased commit. It is metadata, excluded from the utterance bytes and from `decision_id`.\n- Define the mirror idempotency key as the utterance ID alone.\n- Make an ingest with the same ID and a different generation either an idempotent no-op or a rejection. Pick one rule.\n- Heartbeat commits must either bump generation or be explicitly exempt. Pick one.\n- Add an explicit rule for what an operator-initiated rollback does. Use an `(epoch, n)` pair, with epoch bumps allowed only through the protected path. Otherwise a legitimate revert is indistinguishable from an attack.\n\n**Test.** Run two writers racing with forced conflicts (metadata-only, then conversation-changing). Assert that:\n- generations are strictly increasing and contiguous along the Git first-parent chain;\n- no utterance ID appears twice;\n- an abandoned D1 never reaches the mirror.\n\nProperty-test random crash points against a model.\n\n## 3. Resync authentication\n\n**Safe parts.**\n- OIDC claims should pin the repo, `ref=refs/heads/main`, the workflow, and the environment.\n- A monotonic generation blocks replay of an old valid token's snapshot.\n- The experimental branch holds no token.\n\n**Gaps.**\n- **Re-run of an old workflow.** A re-run on main at an old SHA gets a valid OIDC token. The Worker must reject it, either because the snapshot's generation is below the current one or because the SHA is not the current main head. Specify which. Having the Worker query the GitHub API for the head adds a dependency, and an outage there could freeze resync. Decide the fail-closed behavior.\n- **Equal-generation, different-content snapshot.** Reject it, or compare digests.\n- **Resync semantics.** Does resync replace the feed or merge it? It must not erase journal entries the Worker has already accepted but not yet superseded.\n\n**Test.** Matrix of:\n- forged, expired, wrong-ref, wrong-repo, and wrong-audience tokens;\n- a replayed old snapshot;\n- an equal generation with a different digest;\n- a lower generation;\n- an epoch bump with and without authorization;\n- clock skew of ±10 minutes with no effect on the outcome, since nothing should depend on the clock.\n\nAssert that ordinary ingest still returns 200 stale and that the mirror monitor counts it as a failure, not a success.\n\n## 4. Old messages falling out of the viewer window\n\n**Gaps.**\n- **Storage limits.** The Durable Object currently holds a single latest feed. Event history must respect storage and row-size limits, so use SQLite-backed DO storage with per-event rows and pagination cursors keyed by generation or sequence, not by timestamp.\n- **Catch-up capacity.** The \"capacity exceeded\" rule needs a number. Example: if journal lag exceeds N events or M minutes, the runner stops autonomous beats, and Allen input keeps the 429 behavior only when the queue is full.\n- **Backpressure and \"never lose accepted input\".** The two interact. Journal backlog must not make the runner stop ACKing, because that would re-create the 20-item stall. Backpressure should pause autonomous speech only.\n\n**Test.** Generate 500 events with the relay down. Bring it up with a catch-up cap of 50 per call. Assert that:\n- order is preserved;\n- a viewer paginating from the oldest cursor sees no gaps or duplicates;\n- retention eviction at the limit is deterministic and audited;\n- unauthenticated backfill is rejected.\n\n## Code and test work still required\n\n- Journal schema: inbound events plus outputs, `utterance_id`, `generation`, and `epoch`.\n- A recovery state machine: stage → commit → push → ACK → mirror, with a fault-injection hook at every edge.\n- A fake Worker that mimics the real quirks: 20-item pending, idempotent ACK, 50 max queue, 202/200/429.\n- A fake Git remote that can force conflicts and revert history.\n- A Worker event-history and resync endpoint, plus a viewer pagination client.\n- Typed beat-health classification and failure-ratio alerts.\n- Heartbeat coalescing with a single orchestration writer. Test that two concurrent runs cannot both write.\n- Experimental-arm isolation tests: no prod token or endpoint reachable, with separate cache and quota.\n- A golden-corpus regression run before any canary.\n\n## Verdict\n\nGo for offline implementation and fault injection, with zero unmitigated high/critical blockers. This is a judgment on the spec only. I have not verified any implementation, and I did not read the repository. Fix the four precision items above in the plan document before writing code.",
+  "session_id": "83965b96-cb1c-4e47-b663-d8065b6c69a1",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1924,
+    "cache_read_input_tokens": 2604,
+    "output_tokens": 3750,
+    "output_tokens_details": {
+      "thinking_tokens": 1210
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 1924,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3750,
+        "cache_read_input_tokens": 2604,
+        "cache_creation_input_tokens": 1924,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1924
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.0454604,
+  "num_turns": 1
+}
