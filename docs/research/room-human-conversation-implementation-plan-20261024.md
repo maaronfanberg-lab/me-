@@ -1,5 +1,5 @@
 # The Room human-conversation architecture: reviewed implementation plan
-**Date:** 2026-10-24. **Canonical version:** synthesis v2, following adversarial Claude review 1.
+**Date:** 2026-10-24. **Canonical version:** synthesis v3, after verified adversarial Claude reviews 1 and 2.
 **Status:** planning only; no changes to production Room behavior. Draft PR #313 is unmerged. Original v1 remains retrievable in git commit de527812b1a03f36823d4537052b1576ff29bf54.
 
 ## Design objective and non-negotiable rules
@@ -22,6 +22,42 @@ See the adjacent implementation precedents and conversation-analysis notes. Main
 
 All new fields versioned and behind a **default-off** feature gate \`ROOM_ACTION_FLOOR_V1\`. No new external dependencies unless reviewed for license/size and justified against the existing ~1B model.
 
+## Synthesis v3: typed outcomes, durable delivery, isolated evaluation and falsifiable gates
+
+### A. Typed beat health: silence is not failure
+A **valid decision of no speech** is \`chosen_silence\` and may advance the healthy-clock watermark. No selected speaker owing to genuine voluntary disinterest is also healthy, provided the floor itself completed. By contrast \`generation_failed\`, \`validation_failed\`, \`model_unavailable\`, missing expected model output, and \`infrastructure_failure\` are **unhealthy** and must raise fault counters; they never refresh the healthy-beat signal. An all-invalid set is a failure, not a social decision. The watchdog must inspect the persistent healthy timestamp **and** failure counters, not the public-message timestamp. Repeated failures or stale health trigger alert/restart using existing safe recovery; healthy silence does neither. Each observed outcome includes source, attempt and reason codes with no private prompts.
+
+Because a Git commit per silent millisecond would itself be a bug, batch **non-public health/ledger updates** and persist no more frequently than a configured heartbeat interval (initial trial T=300 seconds, strictly below the 900-second watchdog threshold, with jitter/failure margin verified). Important change in outcome or a durable inbound event can flush sooner. On 1000 no-speech iterations, public transcript remains unchanged and Git commit count stays bounded by elapsed-time windows plus meaningful transitions. Archival beat diagnostics may be compacted with cumulative counters and source hashes. **Never coalesce or defer public speech/accepted user input merely to reduce heartbeat commits.**
+
+### B. Publication and delivery state machine
+**GitHub main is the authoritative transcript/state; Cloudflare relay is a recoverable mirror.** Verify this assumption against current consumer behavior and amend if the UI uses relay as sole recoverable source. An Allen input receipt ID, floor-decision ID and a stable committed sequence (derived from prior durable state, not \`GITHUB_RUN_ID\`) identify a beat. Define two separate idempotency domains: input consumption by Allen event ID and output publication by committed sequence + decision ID. Do **not** deduplicate all future replies that reference the same Allen utterance.
+
+\`\`\`text
+OBSERVED_INPUT -> PREPARED_DECISION -> STAGED_RESULT
+    -> GIT_COMMITTED -> GIT_PUSH_CONFIRMED
+    -> RELAY_PENDING -> RELAY_DELIVERED
+    -> ACK_PENDING -> ACKED
+\`\`\`
+
+- Stage the selected **utterance bytes**, message IDs, exact observed input IDs and updated observer-state in local temporary files, then validate *all* files, rename/prepare the Git index, commit and push a complete snapshot. No remote publication until the full coherent Git commit exists. The job's local process may crash between file writes, but \`main\` must never publish the torn snapshot. Validate complete state before \`git add\`.
+- On non-fast-forward push, check whether the stable decision is already present upstream. If yes, it is a no-op; if upstream state changed incompatibly, **discard the stale prepared result and replay once from newest durable state**. Do not rebase a stale utterance onto a new conversational state or regenerate differently under the *same* committed decision ID.
+- Persist a relay-pending journal/outbox as part of the Git-published transaction. Relay delivery requires a real success acknowledgment and retry with a stable source-id dedupe; an unacknowledged mirror POST remains pending. Do not silently swallow relay 500s.
+- Allen receipt ACK becomes eligible **after confirmed authoritative Git publication**, with \`processed_inbound_ids\` already persisted; ACK retries are safe and must not generate duplicate answers. A failed relay does not undo durable acceptance or invent a new answer, but it remains a visible delivery failure until healed. If end-user acknowledgment contract requires viewer delivery, explicitly alter the ACK gate; do not silently assume.
+- Relay may be at-least-once; stable event IDs + merge/dedupe make the consumer effectively once-per-event. No claim of transactional exactly-once across GitHub and Cloudflare without real distributed transaction support.
+- Byte-identical utterance across a resumed *same durable decision* is mandatory. Across intentionally invalidated/recomputed decisions after conflicting upstream events, changed speech is allowable **with a new decision ID**. Semantic state idempotence excludes timestamps, SHA and transport attempt metadata.
+
+### C. Shadow and canary isolation
+Experimental replay, shadow and A/B arms use **separate immutable fork roots**, private writable directories, separate state stores, separate logical event streams, and no production GitHub-write token, live relay URL, or Allen ACK endpoint. Shadow may read a *snapshot* but never mark a real participant as having witnessed a turn; shadow inference and metrics are stored only in its own namespace. A hash guard checks production state/config/feed before and after shadow; any difference fails the experiment. A production canary, if eventually approved, must use explicit separate namespace/relay and staged data migration; its outputs must not be simultaneously published as authentic Room speech.
+
+### D. Measurable acceptance rubric, fixed before running models
+- **Action appropriateness:** two independent blinded annotators score each emitted turn 0=inappropriate/unrelated, 1=partially relevant/uncertain, 2=appropriate to prior action (including principled refusal, repair, acknowledgment, or deliberate silence as applicable). Candidate criterion: ≥80% score 2 on 300 pinned-model outputs across ≥3 seeds; measure Wilson 95% lower bound and report by action/character (threshold calibrated and pre-registered from baseline before engineering promotion). Reviewer Cohen κ target ≥0.60 on categorical labels; disagreements adjudicated, not erased.
+- **Recipient inference:** on held-out *unambiguous directed* instances, report correct-target precision **and coverage**. Initial gate: ≥90% point precision, ≥80% coverage, and Wilson 95% lower confidence bound on precision ≥0.85, with minimum n=100 actually predicted. On ambiguous turns, measure appropriate uncertainty/abstention separately and targeted false-certainty rate (suggested ≤10%).
+- **Response, repair, continuity:** paired A/B with ≥100 directed response opportunities and ≥100 repair/refusal/unsolicited examples spanning ≥3 seeds and different topics. Require primary action-relevance improvement target ≥10 percentage points, confidence interval reported (if inconclusive, **do not deploy**). No >5 percentage point deterioration in independent blind ratings of continuity/grounding or intentional repetition allowance, and no rise in unsupported-fact attribution beyond control; uncertainty intervals must be included.
+- **Integrity:** zero known privacy leakage, duplicate durable public IDs, lost accepted Allen receipts, successful full-pipeline phantom speech during \`chosen_silence\`, cross-arm writes, or sleeping-observer knowledge leaks in fault injection.
+- **Reliability:** zero false watchdog restarts in a simulated >900-second chosen-silence scenario; simulated model-outage/invalid result is detectable as unhealthy within configured failure limits; 1000 silent iterations bounded Git commits by T; 5+ fault points through Git push/relay/ACK validated. Pin generator model per utterance and A/B arm: a fallback changes model condition and **invalidates** that sample for pinned analysis, it never silently counts.
+- **Canary stop criteria:** immediately stop on a single confirmed identity/privacy leak, incorrect ACK/lost accepted message, duplicate public ID, cross-arm contamination or unrecoverable state migration; pause on repeated unhealthy outcomes above configured baseline or blinded-action quality deterioration more than 5 points. Monitoring of consecutive identical lines alerts review **without banning or automatically editing those lines**. Review whether they are genuine interactional repetitions.
+- **Fail closed:** if the 1B model cannot pass the evidence-grounded action-realization gate, DO NOT activate speaker arbitration in live production. Test a better model, simpler evidence packet or reduce scope in a separate study. Do not mask weakness with canned text.
+
 ## Canonical phased implementation and gates
 
 ### Phase 0A: non-mutating baseline and safe research harness
@@ -37,13 +73,12 @@ All new fields versioned and behind a **default-off** feature gate \`ROOM_ACTION
 3. Offline counterfactual for circularity: derive topic terms only from speaker-authored text, versus scaffold-carried labels, and observe influence on subsequent prompt/generation. Do not delete legitimate shared topic words or force new subjects.
 **Gate B:** capacity findings recorded. If model fails, prioritize bounded action-conditioned inputs, evidence simplification, or separately evaluated alternate model; **do not substitute canned phrases**. Pre-register an achievable minimum (candidate ≥80% action appropriateness on held-out unambiguous turns, with uncertainty intervals) and test cost envelope before heavier work.
 
-### Phase 1: silent-beat safety, publication integrity, migrations (before voluntary silence)
-1. Design an explicit distinction between an **empty but healthy conversational beat** and an infrastructure crash. \`last_healthy_beat_at\` and \`last_public_message_at\` are separate; Room Pulse and supervisor must use the correct signal. A silent beat advances private, healthy clock state, not the public transcript or conversation topic as if speech happened.
-2. Ledger each completed beat with source IDs, reason codes, explicit awake/observed scope, and idempotency by stable beat ID on retry. Semantically equivalent idempotent replay (exclude run timestamp and SHA differences), not unrealistic byte-identical timestamps.
-3. Commit transcript, state, topic and per-observer memory together as one **Git commit** after in-process staging. Audit multi-file write/rename boundaries before invoking git. A successful git push precedes relay/ACK; on failed push discard local unpublished state. Relay is at-least-once and must use dedupe IDs; Allen input is acknowledged only after durable acceptance and not lost when relay fails. Explicitly audit existing \`publish_relay\` best-effort and \`ack_allen_turns\` ordering.
-4. Backwards-compatible versioned migration from existing \`room/state.json\`, \`room/cognitive_state.json\` and group-dynamics. Nothing erases history, personality, source identity, legitimate words, or partner-specific memory.
-5. Stop silent-loop watchdog churn without requiring a character to speak. Keep external events / self-initiation possible but no forced speech. Avoid heartbeat-only Git write storms with a bounded healthy-state cadence compatible with actual watchdog tolerance.
-**Gate C:** faults injected before/after each local write, before/after push, around relay and ACK, non-fast-forward push, duplicate beat ID, Allen input, model timeout, prolonged 100% silence past 900s, sleeping return. No duplicate public IDs, no lost Allen messages, no fabricated turn, no extra restart on healthy silence, no corrupted relationships or wrong retroactive knowledge.
+### Phase 1: silent-beat safety, publication/delivery integrity, migrations (before voluntary silence)
+1. Implement the **typed beat outcome** health machine from section A, distinguishing voluntary \`chosen_silence\` from \`validation_failed\` or \`model_unavailable\`. Adjust both Room Pulse and Room supervisor to inspect health and failure semantics. Coalesce heartbeat-only writes to a tested cadence, not a Git commit on every quiet cycle.
+2. Implement section B's **stable decision-ID and delivery state machine**: staged files and complete Git publication, rebase conflict conflict-check then replan if stale, \`processed_inbound_ids\`, relay-pending retry, source-ID dedupe, explicit Allen ACK after durable acceptance. Audit current mirror semantics before treating GitHub as authoritative for the user.
+3. Version state migrations without losing identity, relationships, witnessed source IDs or legitimate history. Both old and new read paths tolerate unknown fields; no partial propagation to the control branch. Ensure \`ROOM_ACTION_FLOOR_V1\` off reproduces old public dialogue exactly in deterministic replay.
+4. Fault-inject each local write, publish, Git race, relay 500 and crash before/after ACK. Test \`chosen_silence\` for 1000 cycles with simulated >900s elapsed and bounded commits; test all-invalid-model separately goes unhealthy; test sleep/wake and input ACK replay.
+**Gate C:** typed liveness never masks a failed model, no false watchdog restarts during healthy silence, no split public/private state, no loss or duplication of accepted inbound events, no unacknowledged failed relay counted as delivered. Fail if production/control state changes during shadow.
 
 ### Phase 2: action-aware validation and prompt decoupling in shadow (still fixed production behavior)
 1. In experimental path remove \`mandatory_speech\`, random "Distinct contribution" role lottery, retry instructions demanding new *wording*, and deterministic topic breakout, **but only after P1 heartbeat and safe no-speech results exist**. Do not remove privacy, content-integrity, source-provenance, malformed-output or structural guards.
@@ -63,7 +98,7 @@ All new fields versioned and behind a **default-off** feature gate \`ROOM_ACTION
 2. In experimental engine/orchestrator, keep existing perception and private processes as needed, run **one selected expression node** *after arbitration* and before publication; avoid paying for all four generations and then dropping three. Unselected minds may update on observed published events only. Commit can handle exactly one or no speech; silent beat path from P1.
 3. No hard "never two consecutive turns"; no forced question response; no fairness quota disguised as human rule. Monitor starvation and disproportionate silence, investigate misattributed floor opportunities.
 4. Shadow compare floor choices against real human annotations *before* routing actual generation.
-**Gate F:** 50+ counterfactuals, no incorrect addressee forced, proper handling of overlap/group address, direct refusal, a quiet beat, self continuation, interrupting with a socially relevant objection, and unseen sleeping-agent non-selection. Reliable runtime with no 900s stall during 20+ seeds with periods of silence.
+**Gate F:** 50+ counterfactuals, no incorrect addressee forced, proper handling of overlap/group address, direct refusal, a quiet beat, self continuation, interrupting with a socially relevant objection, and unseen sleeping-agent non-selection. Keep unanswered questions in a linked open/contested/withdrawn state: lower *retrieval priority* after disengagement, never declare them answered from silence alone. Reliable runtime with no 900s stall during 20+ seeds with periods of silence.
 
 ### Phase 5: grounding, repair, mutual understanding and relationships
 1. A reply is **candidate uptake**. One participant's acknowledgement or continued successful reference gives provisional person-specific common ground, not globally verified truth. Update per-person \`what_I_believe\`, \`what_I_think_other_believes\` and source-linked partner pacts separately.
@@ -96,6 +131,9 @@ All new fields versioned and behind a **default-off** feature gate \`ROOM_ACTION
 | R1 | looped reflection propagates unsupported belief | each inference linked to raw source IDs |
 | N1 | high false positives from natural repeat checks | legal echo/refusal/repair and negative gibberish in same fixture |
 
+## Explicit assessment of Claude antithesis round 2
+**Verified response:** bridge/outbox/room-human-conversation-dialectic-r2-20261024.json, Claude Sonnet 5.5, ok=true. Identified critical new risks: distributed publish/relay/ACK transition semantics, healthy heartbeat masking actual model failure, heartbeat write storms, shadow/control contamination and indefensible numeric gates. Adopted all five as design corrections in sections A–D; also adopted observed-repeat monitoring without censorship and open-question persistence without forced speech. Qualified its 'permanent loss after relay failure' example: authoritative Git commit means source isn't lost, but mirror delivery may lag indefinitely unless persisted retry exists. Qualified all-silent commits: bound batching by health T, do not suppress durable input. Rejected introducing arbitrary topic-age expiry as 'solving' open questions; lower salience without asserting closure. Claude's B5 gates are candidates that must be calibrated and power-tested, not evidence of achieved reliability. **No code/tests yet run for these changes.**
+
 ## Explicit assessment of Claude antithesis round 1
 **Verified response:** bridge/outbox/room-human-conversation-dialectic-r1-20261024.json, Claude Sonnet 5.5, ok=true.
 **Accepted:** silent-beat watchdog contradiction, multiple expression vetoes, brittle action interpretation, weak low-capacity model and topic contamination, need to move liveness/recovery before voluntary silence. Accepted addition of rollback, fault-injection and source-linked observer state.
@@ -106,4 +144,6 @@ All new fields versioned and behind a **default-off** feature gate \`ROOM_ACTION
 ## Thesis / antithesis / synthesis log
 - Thesis v1 at commit de527812b1a03f36823d4537052b1576ff29bf54.
 - Antithesis r1: verified Claude consulted 2026-10-24, identified five blocking failure modes.
-- Synthesis v2: this document. **Claude second review pending.** Continue until two consecutive focused reviews yield no *new* credible blocking defect, or document unresolved blockers honestly; do not claim infinite proof.
+- Synthesis v2 at commit a33b0e249b581ec85ed91d462d8758c819b44566.
+- Antithesis r2: verified Claude consulted 2026-10-24; found additional delivery, heartbeat, shadow and evaluation blockers.
+- Synthesis v3: this document; narrow round 3 pending on sections A–D. Continue until no new credible **blocking architecture flaw** is discovered in consecutive focused reviews or document limitations; review is not a proof of bug-free runtime.
