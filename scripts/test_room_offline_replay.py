@@ -78,6 +78,24 @@ class ReplayTests(unittest.TestCase):
             self.assertIn(w["anchor_id"], [e["source_id"] for e in w["public_context"]])
             self.assertIsNone(w["human_action_label"])
 
+    def test_real_repository_feed_is_read_only_and_sampleable(self):
+        # Regression against the repository's actual (already-public) feed,
+        # not just the hand-constructed conversational fixture.
+        repo_feed = Path(__file__).resolve().parents[1] / "room" / "feed.json"
+        if not repo_feed.exists():
+            self.skipTest("feed is absent from the checkout")
+        before = repo_feed.read_bytes()
+        events = read_public_feed(repo_feed)
+        self.assertGreaterEqual(len(events), 1)
+        windows = review_windows(events, sample_count=min(20, len(events)), seed="real-feed-v1")
+        self.assertEqual(len(windows), min(20, len(events)))
+        ids = {x["source_id"] for x in events}
+        self.assertTrue(all(w["anchor_id"] in ids for w in windows))
+        self.assertEqual(repo_feed.read_bytes(), before)
+        # The presence of published dialogue does not prove that any
+        # particular sleeping character heard it.
+        self.assertEqual(observer_view(events, {}, "jules"), ())
+
     def test_invalid_sampling_requests_rejected(self):
         events = public_events(corpus())
         for sample, seed in ((-1, "valid"), (2, "")):
