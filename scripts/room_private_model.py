@@ -438,10 +438,11 @@ def _grounded(utterance: str, terms: list[str]) -> bool:
 def _sanitize_expression(obj: dict, compact: dict, self_entity: str | None = None) -> dict:
     terms: list[str] = []
     discussion = compact.get("discussion") if isinstance(compact.get("discussion"), dict) else {}
-    for value in (discussion.get("subject"), discussion.get("focus")):
-        text = _norm(value)
-        if not _bad_term(text) and text not in terms:
-            terms.append(text)
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1":
+        for value in (discussion.get("subject"), discussion.get("focus")):
+            text = _norm(value)
+            if not _bad_term(text) and text not in terms:
+                terms.append(text)
     for value in obj.get("semantic_terms", []) if isinstance(obj.get("semantic_terms"), list) else []:
         text = _norm(value)
         if _bad_term(text) or text in terms:
@@ -449,7 +450,11 @@ def _sanitize_expression(obj: dict, compact: dict, self_entity: str | None = Non
         terms.append(text)
     obj["semantic_terms"] = terms[:4]
     if not obj["semantic_terms"]:
-        obj["semantic_terms"] = [_seed_concept()]
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            words = re.findall(r"[a-z][a-z'-]{2,}", _norm(obj.get("utterance")))
+            obj["semantic_terms"] = words[:2] or ["speech"]
+        else:
+            obj["semantic_terms"] = [_seed_concept()]
     return obj
 
 
