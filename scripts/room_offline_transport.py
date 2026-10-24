@@ -115,31 +115,55 @@ class FakeWorker:
         self.queue = [item for item in self.queue if item["id"] not in ids]
         return before - len(self.queue)
 
+    @staticmethod
+    def event_checksum(event: PublicEvent) -> str:
+        return digest(event.text + "|" + event.speaker + "|" + event.source_id)
+
     def ingest(self, events: tuple[PublicEvent, ...], generation: int) -> tuple[int, dict]:
         if self.mirror_down:
             return 500, {"error": "mirror-unreachable"}
         if self.stale_reject or generation < self.latest_generation:
             return 200, {"accepted": False, "reason": "stale-feed"}
+        # Preflight the WHOLE batch before mutating the Durable Object.
+        # A poisoned last event cannot leave the first ones half committed.
+        checksums = []
         for event in events:
+            checksum = self.event_checksum(event)
             existing = self.visible_digests.get(event.event_id)
-            checksum = digest(event.text + "|" + event.speaker + "|" + event.source_id)
             if existing is not None and existing != checksum:
-                raise ValueError("mirror already has changed bytes for same event")
-            if existing is None:
+                raise ValueError("mirror has changed bytes for same event")
+            checksums.append((event, checksum))
+        for event, checksum in checksums:
+            if event.event_id not in self.visible_digests:
                 self.visible_digests[event.event_id] = checksum
                 self.history.append(event)
         self.latest_generation = generation
         return 202, {"accepted": True}
 
     def resync(self, events, generation: int, *, authorized: bool, current_git_head: bool):
-        """Models an extension that DOES NOT exist in the real Worker yet."""
+        """Hypothetical authenticated authoritative replace, NOT real Worker API.
+
+        This accepts fake Boolean proof only in the offline harness. Real
+        implementation MUST validate main-head OIDC and an event manifest.
+        """
         if not authorized or not current_git_head:
             raise PermissionError("invalid authenticated Git-authoritative resync")
         if self.mirror_down:
             raise ConnectionError("mirror-unreachable")
+        candidate = tuple(events)
+        checksums = {}
+        for event in candidate:
+            checksum = self.event_checksum(event)
+            if event.event_id in checksums and checksums[event.event_id] != checksum:
+                raise ValueError("conflicting authoritative event ID")
+            checksums[event.event_id] = checksum
+        # Explicitly reconcile phantom/stale mirror history against full Git
+        # history, unlike the ordinary append-only ingestion path.
+        self.visible_digests = checksums
+        self.history = list(candidate)
+        self.latest_generation = generation
         self.stale_reject = False
-        # Exact event/history reconciliation, not a blind deletion.
-        return self.ingest(tuple(events), max(self.latest_generation, generation))
+        return 202, {"accepted": True}
 
 
 @dataclass
