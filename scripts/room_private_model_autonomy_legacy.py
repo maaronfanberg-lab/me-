@@ -329,7 +329,7 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
         retry_guard = ""
         if attempt:
             retry_guard = (
-                "\nTRY_AGAIN\n"
+                "\nTRY_AGAIN\n" +
                 ("Recheck the actual source utterance and the action it makes relevant. "
                  "Keep your own voice, stance and uncertainty.\n" if social_floor
                  else "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n")
