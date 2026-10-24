@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 from room_delivery_protocol import (
     DurableBeat, PublicEvent, decision_id, durable_inbound_ack_ids,
-    mirror_backlog, recovery_pages,
+    mirror_backlog, mirror_result_confirmed, recovery_pages,
 )
 
 
@@ -187,14 +187,24 @@ class OfflineHarness:
 
     def process_pending(self, *, crash_at: str | None = None,
                         race: str | None = None) -> int:
-        """Push one oldest-20 batch, ACK only durably published input.
+        """Push first20; never ACK content that differs from a published source.
 
-        A previously pushed Allen message is ACKed again after a crash
-        without creating a second message or re-running any language model.
+        A prior Git push is recovered without a second public message. A
+        competing writer that already consumed the input wins the race.
         """
         selected = self.worker.pending()
         if not selected:
             return 0
+        published_sources = {
+            e.source_id: e
+            for b in self.git.beats
+            if b.git_commit in self.git.verified_commits
+            for e in b.events if e.kind == "inbound"
+        }
+        for item in selected:
+            previous = published_sources.get(item["id"])
+            if previous is not None and previous.text != item["text"]:
+                raise ValueError("queue source ID reused with different content")
         published = durable_inbound_ack_ids(
             (item["id"] for item in selected),
             self.git.beats,
@@ -213,8 +223,7 @@ class OfflineHarness:
         )
         self.last_prepared_decision = candidate_id
         draft = DurableBeat(
-            candidate_id, original_parent, self.git.generation + 1,
-            events,
+            candidate_id, original_parent, self.git.generation + 1, events,
         )
         if crash_at == "before_push":
             raise Crash("before_push")
@@ -222,20 +231,36 @@ class OfflineHarness:
             self.git.bump_metadata()
         elif race == "conversation":
             self.git.bump_conversation()
+        elif race == "competing_same_input":
+            # Another worker publishes the exact selected input first.
+            self.git.publish(draft)
         elif race is not None:
             raise ValueError("unknown Git race")
         try:
             pushed = self.git.publish(draft)
         except GitConflict:
             self.abandoned_decisions.append(candidate_id)
+            already = {e.source_id: e for b in self.git.beats
+                       for e in b.events if e.kind == "inbound"}
+            committed_elsewhere = []
+            for event in events:
+                prior = already.get(event.source_id)
+                if prior is not None:
+                    if prior.text != event.text:
+                        raise ValueError("competing publisher changed inbound source bytes")
+                    committed_elsewhere.append(event.source_id)
+            if committed_elsewhere:
+                self.worker.ack(committed_elsewhere)
+            events = tuple(e for e in events if e.source_id not in set(committed_elsewhere))
+            if not events:
+                self.last_pushed_decision = self.git.beats[-1].decision_id
+                return len(published) + len(committed_elsewhere)
             current_parent = self.git.parent
             new_id = decision_id(
                 current_parent, self.git.generation + 1, speaker=None,
-                action="observe_input", source_ids=(event.source_id for event in events),
+                action="observe_input", source_ids=(e.source_id for e in events),
             )
-            draft = DurableBeat(
-                new_id, current_parent, self.git.generation + 1, events,
-            )
+            draft = DurableBeat(new_id, current_parent, self.git.generation + 1, events)
             pushed = self.git.publish(draft)
         self.last_pushed_decision = pushed.decision_id
         if crash_at == "after_push":
@@ -245,9 +270,19 @@ class OfflineHarness:
             raise Crash("after_ack")
         return len(events) + len(published)
 
+
     def deliver_mirror(self, *, crash_at: str | None = None,
                        page_size: int = 50) -> int:
-        """Replay Git-published journal events, never unpushed drafts."""
+        """Audit mirror bytes, then replay only canonical Git-published events."""
+        authoritative = mirror_backlog(
+            self.git.beats, (), verified_main_commits=self.git.verified_commits
+        )
+        expected = {e.event_id: self.worker.event_checksum(e) for e in authoritative}
+        for event_id, mirror_digest in self.worker.visible_digests.items():
+            if event_id not in expected:
+                raise ValueError("mirror contains phantom event not in Git")
+            if expected[event_id] != mirror_digest:
+                raise ValueError("mirror has same ID with different content")
         pages = recovery_pages(
             self.git.beats, self.worker.visible_digests,
             verified_main_commits=self.git.verified_commits,
@@ -256,7 +291,11 @@ class OfflineHarness:
         count = 0
         for page in pages:
             code, body = self.worker.ingest(page, self.git.generation)
-            if code != 202 or body.get("accepted") is not True:
+            page_digests = {e.event_id: self.worker.event_checksum(e) for e in page}
+            if not mirror_result_confirmed(
+                code, body, expected_event_digests=page_digests,
+                verified_visible_event_digests=self.worker.visible_digests,
+            ):
                 return count
             count += len(page)
             if crash_at == "after_mirror":
