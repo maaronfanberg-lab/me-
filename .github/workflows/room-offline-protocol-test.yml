@@ -1,0 +1,39 @@
+name: Room offline protocol and fault injection
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/room_beat_protocol.py'
+      - 'scripts/room_delivery_protocol.py'
+      - 'scripts/room_experiment_guard.py'
+      - 'scripts/room_offline_replay.py'
+      - 'scripts/room_offline_transport.py'
+      - 'scripts/test_room_beat_protocol.py'
+      - 'scripts/test_room_delivery_protocol.py'
+      - 'scripts/test_room_experiment_guard.py'
+      - 'scripts/test_room_offline_replay.py'
+      - 'scripts/test_room_offline_transport.py'
+      - '.github/workflows/room-offline-protocol-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compile isolated Room protocols
+        run: python3 -m py_compile scripts/room_beat_protocol.py scripts/room_delivery_protocol.py scripts/room_experiment_guard.py scripts/room_offline_replay.py scripts/room_offline_transport.py
+      - name: Beat health and intentional silence
+        run: python3 -u scripts/test_room_beat_protocol.py
+      - name: Delivery-journal invariants
+        run: python3 -u scripts/test_room_delivery_protocol.py
+      - name: Credential and Git worktree exclusion
+        run: python3 -u scripts/test_room_experiment_guard.py
+      - name: Read-only public corpus replay
+        run: python3 -u scripts/test_room_offline_replay.py
+      - name: In-memory Git/Worker fault matrix
+        run: python3 -u scripts/test_room_offline_transport.py
