@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 import unittest
+from collections import Counter
 
 from room_offline_transport import Crash, FakeWorker, OfflineHarness
 
@@ -128,6 +129,84 @@ class OfflineTransportTests(unittest.TestCase):
         self.assertNotIn(h.worker.history[0], h.worker.history[-160:])
         self.assertEqual(h.deliver_mirror(), 0)
 
+    def test_same_source_id_with_different_bytes_is_not_acknowledged(self):
+        h = OfflineHarness()
+        h.worker.enqueue("Original answer")
+        h.process_pending()
+        h.worker.next_id = 0  # Artificial UUID collision / corrupted reset.
+        status, reused = h.worker.enqueue("Different answer")
+        self.assertEqual((status, reused), (202, "allen-queue-0"))
+        with self.assertRaisesRegex(ValueError, "reused with different content"):
+            h.process_pending()
+        self.assertEqual(len(h.worker.queue), 1)
+        self.assertEqual(len(h.git.beats), 1)
+
+    def test_second_writer_cannot_publish_same_input_twice(self):
+        h = OfflineHarness()
+        send_n(h, 1)
+        h.process_pending(race="competing_same_input")
+        self.assertEqual(len(h.git.beats), 1)
+        self.assertEqual(len(h.worker.queue), 0)
+        occurrences = Counter(e.source_id for b in h.git.beats for e in b.events)
+        self.assertEqual(occurrences["allen-queue-0"], 1)
+        h.deliver_mirror()
+        self.assertEqual(len(h.worker.history), 1)
+
+    def test_untrusted_git_commit_cannot_mirror(self):
+        h = OfflineHarness()
+        send_n(h, 1)
+        h.process_pending()
+        # Deliberately tamper with the local journal, not the independent
+        # fake main-branch membership oracle.
+        h.git.remote.main_commits.clear()
+        with self.assertRaisesRegex(ValueError, "not independently verified"):
+            h.deliver_mirror()
+
+    def test_same_event_id_wrong_bytes_or_phantom_mirror_is_rejected(self):
+        h = OfflineHarness()
+        send_n(h, 1)
+        h.process_pending()
+        h.deliver_mirror()
+        public_id = h.worker.history[0].event_id
+        original = h.worker.visible_digests[public_id]
+        h.worker.visible_digests[public_id] = "corrupt"
+        with self.assertRaisesRegex(ValueError, "different content"):
+            h.deliver_mirror()
+        h.worker.visible_digests[public_id] = original
+        h.worker.visible_digests["phantom-id"] = "unverified"
+        with self.assertRaisesRegex(ValueError, "phantom"):
+            h.deliver_mirror()
+        full_git_history = tuple(e for b in h.git.beats for e in b.events)
+        h.worker.resync(full_git_history, h.git.generation,
+                        authorized=True, current_git_head=True)
+        self.assertNotIn("phantom-id", h.worker.visible_digests)
+
+    def test_persistently_ahead_mirror_generation_resyncs_exactly(self):
+        h = OfflineHarness()
+        send_n(h, 1)
+        h.process_pending()
+        h.worker.latest_generation = 99
+        self.assertEqual(h.deliver_mirror(), 0)
+        full_git_history = tuple(e for b in h.git.beats for e in b.events)
+        h.worker.resync(full_git_history, h.git.generation,
+                        authorized=True, current_git_head=True)
+        self.assertEqual(h.worker.latest_generation, h.git.generation)
+        send_n(h, 1)
+        h.process_pending()
+        self.assertEqual(h.deliver_mirror(), 1)
+        self.assertEqual(len(h.worker.history), 2)
+
+    def test_mirror_ingest_preflights_entire_batch(self):
+        h = OfflineHarness()
+        send_n(h, 2)
+        h.process_pending()
+        all_events = tuple(e for b in h.git.beats for e in b.events)
+        h.worker.visible_digests[all_events[-1].event_id] = "wrong"
+        with self.assertRaisesRegex(ValueError, "changed bytes"):
+            h.worker.ingest(all_events, h.git.generation)
+        self.assertNotIn(all_events[0].event_id, h.worker.visible_digests)
+        self.assertEqual(len(h.worker.history), 0)
+
     def test_fuzz_crashes_outage_races_and_repeated_speech(self):
         for seed in range(20):
             r = random.Random(seed)
@@ -150,6 +229,10 @@ class OfflineTransportTests(unittest.TestCase):
             h.worker.mirror_down = False
             h.deliver_mirror()
             self.assertEqual(set(accepted), h.git.processed_inputs)
+            self.assertEqual(
+                Counter(e.source_id for b in h.git.beats for e in b.events),
+                Counter({source_id: 1 for source_id in accepted}),
+            )
             self.assertEqual(len(h.worker.history), len(accepted))
             self.assertEqual(
                 {e.source_id for e in h.worker.history}, set(accepted)
