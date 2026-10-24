@@ -92,8 +92,19 @@ def review_windows(
         cue = bool("?" in m["utterance"] or m.get("reported_target"))
         digest = sha256(f"{seed}:{m['source_id']}".encode()).hexdigest()
         ranked.append((not cue, digest, i))
-    # First a mixed prioritization of action candidates, never lexical novelty.
-    chosen = sorted(ranked)[:sample_count]
+    # Stratify by candidate cue to preserve negative controls, not just easy
+    # question-shaped examples. This is sampling, never a diagnosis of actions.
+    cued = sorted((row for row in ranked if row[0] is False), key=lambda x: x[1])
+    controls = sorted((row for row in ranked if row[0] is True), key=lambda x: x[1])
+    limit = min(sample_count, len(ordered))
+    control_budget = max(1, limit // 3) if cued and controls and limit >= 2 else 0
+    chosen = [*cued[:limit - control_budget], *controls[:control_budget]]
+    selected_ids = {row[2] for row in chosen}
+    remainder = sorted(
+        (row for row in [*cued, *controls] if row[2] not in selected_ids),
+        key=lambda x: x[1],
+    )
+    chosen.extend(remainder[:limit - len(chosen)])
     windows = []
     for _, _, i in sorted(chosen, key=lambda item: item[-1]):
         turn = ordered[i]
