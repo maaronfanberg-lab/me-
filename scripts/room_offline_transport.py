@@ -30,16 +30,30 @@ class GitConflict(Exception):
 
 
 @dataclass
+class FakeRemote:
+    """Independent simulated main-branch commit membership oracle."""
+    main_commits: set[str] = field(default_factory=set)
+    head: str | None = None
+
+    def confirm(self, commit_sha: str):
+        self.main_commits.add(commit_sha)
+        self.head = commit_sha
+
+
+@dataclass
 class FakeGit:
     parent: str = "room-initial-parent"
     generation: int = 0
     beats: list[DurableBeat] = field(default_factory=list)
     processed_inputs: set[str] = field(default_factory=set)
     metadata_commits: int = 0
+    remote: FakeRemote = field(default_factory=FakeRemote)
 
     @property
     def verified_commits(self) -> set[str]:
-        return {beat.git_commit for beat in self.beats if beat.git_commit}
+        # Separate from the local event journal: tampering with that list
+        # must not silently grant a fake push authoritative status.
+        return set(self.remote.main_commits)
 
     def bump_metadata(self):
         """A README change is not a Room state change."""
@@ -53,10 +67,14 @@ class FakeGit:
             raise GitConflict("relevant Room parent changed")
         if draft.git_commit is not None:
             raise ValueError("draft was already pushed")
+        incoming = {e.source_id for e in draft.events if e.kind == "inbound"}
+        if incoming & self.processed_inputs:
+            raise GitConflict("inbound queue sources were already consumed upstream")
         committed = replace(
             draft, generation=self.generation + 1,
             git_commit=f"verified-main-commit-{self.generation + 1}",
         )
+        self.remote.confirm(committed.git_commit)
         self.beats.append(committed)
         self.generation += 1
         self.parent = digest(self.parent + "|" + committed.decision_id)
