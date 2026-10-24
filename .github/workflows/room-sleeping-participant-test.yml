@@ -10,6 +10,12 @@ on:
       - 'scripts/test_room_sleeping_entity.py'
       - 'scripts/room_group_dynamics.py'
       - 'scripts/room_interaction_sequence.py'
+      - 'scripts/room_beat_protocol.py'
+      - 'scripts/test_room_beat_protocol.py'
+      - 'scripts/room_delivery_protocol.py'
+      - 'scripts/test_room_delivery_protocol.py'
+      - 'scripts/room_experiment_guard.py'
+      - 'scripts/test_room_experiment_guard.py'
       - 'scripts/test_room_interaction_sequence.py'
       - 'scripts/room_private_model_autonomy.py'
       - 'scripts/room_private_model_autonomy/__init__.py'
@@ -29,6 +35,14 @@ jobs:
         run: python3 -m py_compile scripts/room_engine_v5.py scripts/room_private_commit.py scripts/build_room_feed.py scripts/test_room_sleeping_entity.py
       - name: Verify sleeping participant
         run: python3 scripts/test_room_sleeping_entity.py
+      - name: Compile offline protocol modules
+        run: python3 -m py_compile scripts/room_beat_protocol.py scripts/room_delivery_protocol.py scripts/room_experiment_guard.py scripts/test_room_beat_protocol.py scripts/test_room_delivery_protocol.py scripts/test_room_experiment_guard.py
+      - name: Verify typed beat outcomes and watchdog safety
+        run: python3 scripts/test_room_beat_protocol.py
+      - name: Verify durable delivery and replay semantics
+        run: python3 scripts/test_room_delivery_protocol.py
+      - name: Verify experimental credential isolation
+        run: python3 scripts/test_room_experiment_guard.py
       - name: Verify conversation action sequences
         run: python3 scripts/test_room_interaction_sequence.py
       - name: Verify Jules return and group consequences
