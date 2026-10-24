@@ -411,8 +411,9 @@ def recurrent(node, key, bus_data):
         perception = rp(bus_data, entity, "comprehension")["private"].get("social_observation")
         thought = (bus_data.get("recurrent", {}).get(entity, {}) or {}).get("thought", {})
         deliberation = (thought.get("private") or {}).get("deliberation")
-        job = conversation_job(entity, key)
-        collapsed = context_collapsed(base.get("context"))
+        social_floor = os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+        job = None if social_floor else conversation_job(entity, key)
+        collapsed = False if social_floor else context_collapsed(base.get("context"))
         prior_turns = prior_expression_messages(node)
         expression_context = ([] if collapsed else list(base.get("context") or [])[-5:]) + prior_turns
         expression_topic = dict(base.get("topic") or {})
@@ -436,8 +437,12 @@ def recurrent(node, key, bus_data):
                 deliberation["action"] = "BRIDGE"
                 deliberation["focus"] = fresh_subject
                 original_goal = ""
-            deliberation["new_information_goal"] = (original_goal + " " if original_goal else "") + "Distinct contribution: " + job
-            deliberation["conversation_job"] = job
+            if not social_floor:
+                deliberation["new_information_goal"] = (original_goal + " " if original_goal else "") + "Distinct contribution: " + job
+                deliberation["conversation_job"] = job
+            else:
+                deliberation["new_information_goal"] = original_goal
+                deliberation.pop("conversation_job", None)
         expression = model_run("expression", {
             "entity": entity,
             "profile": P[entity],
@@ -450,7 +455,7 @@ def recurrent(node, key, bus_data):
             "partner": base.get("partner"),
             "relationship": base.get("relationship"),
             "private_self_state": base.get("private_self_state"),
-            "mandatory_speech": True,
+            "mandatory_speech": not social_floor,
         })
         ready = float(source["public"].get("readiness", 0.5))
         generation_rank = int(os.environ.get("ROOM_EXPRESSION_RANK", str(ORDER.index(entity))))
@@ -458,7 +463,7 @@ def recurrent(node, key, bus_data):
             "readiness": ready,
             "latency": round(max(0.05, 1.35 - 0.9 * ready + 0.25 * trait(entity, "inhibition") + rr("latency", key, entity).uniform(0, 0.12)), 4),
             "generation_rank": generation_rank,
-            "mandatory_speech": True,
+            "mandatory_speech": not social_floor,
         }
     private = {"source": base, "intent": intent, "deliberation": deliberation, "expression": expression}
     return {
@@ -545,7 +550,7 @@ def emit(entity, move, target_entity, parent, derived, text, beat, index, topic,
         "topic_root": topic.get("root"),
         "topic_facet": topic.get("current_facet"),
         "topic_terms": terms,
-        "mandatory_speech": True,
+        "mandatory_speech": os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1",
     }
     message = {
         "id": message_id,
