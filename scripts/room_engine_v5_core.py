@@ -432,6 +432,17 @@ def recurrent(node, key, bus_data):
             fresh_subject = None
         if isinstance(deliberation, dict):
             deliberation = dict(deliberation)
+            if social_floor:
+                event = base.get("event") or {}
+                speaker = str(event.get("speaker") or "").lower()
+                direct = str((event.get("cognition") or {}).get("target") or "").lower() == entity
+                if direct and speaker in (*ORDER, "allen") and speaker != entity:
+                    deliberation["preferred_partner"] = speaker
+                    deliberation["action"] = "ANSWER" if str(event.get("text") or "").strip().endswith("?") else "DEEPEN"
+                    deliberation["new_information_goal"] = (
+                        "Address the interlocutor's specific contribution. "
+                        "An answer can disagree, express uncertainty, clarify, or refuse."
+                    )
             original_goal = str(deliberation.get("new_information_goal") or "").strip()
             if collapsed:
                 deliberation["action"] = "BRIDGE"
