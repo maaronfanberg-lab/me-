@@ -433,15 +433,19 @@ def recurrent(node, key, bus_data):
         if isinstance(deliberation, dict):
             deliberation = dict(deliberation)
             if social_floor:
+                from room_conversational_floor import is_directed
                 event = base.get("event") or {}
                 speaker = str(event.get("speaker") or "").lower()
-                direct = str((event.get("cognition") or {}).get("target") or "").lower() == entity
-                if direct and speaker in (*ORDER, "allen") and speaker != entity:
+                if is_directed(event, entity) and speaker in (*ORDER, "allen"):
                     deliberation["preferred_partner"] = speaker
-                    deliberation["action"] = "ANSWER" if str(event.get("text") or "").strip().endswith("?") else "DEEPEN"
+                    # Keep the individual's own deliberated action. Directed
+                    # turns project a *response opportunity*, not enforced
+                    # agreement or a keyword-based action override.
                     deliberation["new_information_goal"] = (
-                        "Address the interlocutor's specific contribution. "
-                        "An answer can disagree, express uncertainty, clarify, or refuse."
+                        "Consider the particular contribution addressed to you. "
+                        "Respond according to your own stance, including uncertainty, "
+                        "clarification or disagreement when appropriate. "
+                        + str(deliberation.get("new_information_goal") or "")[:120]
                     )
             original_goal = str(deliberation.get("new_information_goal") or "").strip()
             if collapsed:
@@ -466,7 +470,7 @@ def recurrent(node, key, bus_data):
             "partner": base.get("partner"),
             "relationship": base.get("relationship"),
             "private_self_state": base.get("private_self_state"),
-            "mandatory_speech": not social_floor,
+            "mandatory_speech": True,
         })
         ready = float(source["public"].get("readiness", 0.5))
         generation_rank = int(os.environ.get("ROOM_EXPRESSION_RANK", str(ORDER.index(entity))))
@@ -474,7 +478,7 @@ def recurrent(node, key, bus_data):
             "readiness": ready,
             "latency": round(max(0.05, 1.35 - 0.9 * ready + 0.25 * trait(entity, "inhibition") + rr("latency", key, entity).uniform(0, 0.12)), 4),
             "generation_rank": generation_rank,
-            "mandatory_speech": not social_floor,
+            "mandatory_speech": True,
         }
     private = {"source": base, "intent": intent, "deliberation": deliberation, "expression": expression}
     return {
