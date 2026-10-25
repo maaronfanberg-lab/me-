@@ -63,7 +63,7 @@ for node in node_ids:
         }
     core.save(parts_root / f"recurrent-{node:02d}.json", part)
 core.save(core.WORK / "floor.json", {
-    "speaker": "sarah", "node": 2, "reason": "voluntary_relevance",
+    "speaker": "sarah", "node": 2, "reason": "open_floor_relevance",
     "source_id": None, "source_speaker": "",
 })
 
