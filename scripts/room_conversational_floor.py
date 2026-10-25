@@ -72,8 +72,11 @@ def _score(entity, last, thought, profile, relationships):
              - 0.20 * float(traits.get("inhibition", .5)))
     if speaker and speaker != entity and partner == speaker:
         score += .48
-    if speaker == entity and _norm(delib.get("unresolved_thread")):
-        score += .08  # genuine continuation of a stated unfinished concern
+    if speaker == entity:
+        if _norm(delib.get("unresolved_thread")):
+            score += .08  # an unfinished contribution can continue
+        else:
+            score -= .24  # completed turns make others' responses relevant
     if action in {"answer", "repair"} and partner == speaker and speaker != entity:
         score += .19
     if action in {"disagree", "disclose"}:
@@ -108,6 +111,12 @@ def choose_next(history, bus, config, minds, *, rank=0):
     state = minds.get("entities") if isinstance(minds.get("entities"), dict) else {}
     recurrent = bus.get("recurrent") if isinstance(bus.get("recurrent"), dict) else {}
     relationships = {e: (state.get(e) or {}).get("people") for e in awake}
+    if addressed is None and not any(
+        isinstance((((recurrent.get(e) or {}).get("thought") or {}).get("private") or {}).get("deliberation"), dict)
+        and _norm(((((recurrent.get(e) or {}).get("thought") or {}).get("private") or {}).get("deliberation") or {}).get("action"))
+        for e in awake
+    ):
+        raise RuntimeError("no credible deliberated reason for anyone to take the floor")
     ranked = []
     for entity in awake:
         thought = (((recurrent.get(entity) or {}).get("thought") or {}).get("private") or {}).get("deliberation") or {}
