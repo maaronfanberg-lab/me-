@@ -452,7 +452,15 @@ def _sanitize_expression(obj: dict, compact: dict, self_entity: str | None = Non
     if not obj["semantic_terms"]:
         if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
             words = re.findall(r"[a-z][a-z'-]{2,}", _norm(obj.get("utterance")))
-            obj["semantic_terms"] = words[:2] or ["speech"]
+            # Fallback metadata describes words actually spoken, not a topic
+            # or duplicated function words injected by the system.
+            stop = {"the", "and", "you", "your", "that", "this", "there",
+                    "what", "about", "would", "could", "think", "really"}
+            distinct = []
+            for word in words:
+                if word not in stop and word not in distinct:
+                    distinct.append(word)
+            obj["semantic_terms"] = distinct[:2] or ["speech"]
         else:
             obj["semantic_terms"] = [_seed_concept()]
     return obj
