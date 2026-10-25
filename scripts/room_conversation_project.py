@@ -52,6 +52,22 @@ def response_project(latest: Mapping | None, entity: str) -> bool:
     return False
 
 
+def invitation_project(latest: Mapping | None) -> bool:
+    """An audible offer invites acceptance, refusal, clarification or negotiation.
+
+    An invitation is *not* evidence that its recipient already agreed, was
+    criticized or has committed to any collaboration.
+    """
+    if not isinstance(latest, Mapping):
+        return False
+    utterance = str(latest.get("text") or "")
+    return bool(re.search(
+        r"\b(?:collaborat(?:e|ion)|work together|join me|"
+        r"would you like to|shall we|let's|we could work|could we explore)\b",
+        utterance, re.I,
+    ))
+
+
 def _authored_resources(profile: Mapping | None) -> dict:
     """Actual established character resources, not invented biographical facts."""
     profile = profile if isinstance(profile, Mapping) else {}
@@ -87,15 +103,21 @@ def expression_project(
     event = dict(latest) if isinstance(latest, Mapping) else None
     source_id = event.get("id") if event else None
     if response_project(event, entity):
+        proposal = invitation_project(event)
         return {
             "event": event,
             "context": list(context[-3:]),
             "private_self_state": private_self_state,
             "interaction_project": {
-                "kind": "respond_or_repair",
+                "kind": "respond_to_proposal" if proposal else "respond_or_repair",
                 "observed_source_id": source_id,
                 "prior_speaker": event.get("speaker"),
                 "evidence": "public_utterance",
+                "proposal_status": "unanswered" if proposal else None,
+                "reply_opportunities": (
+                    ["accept", "decline", "clarify", "counteroffer"]
+                    if proposal else None
+                ),
             },
         }
 
