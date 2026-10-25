@@ -430,6 +430,17 @@ def recurrent(node, key, bus_data):
         collapsed = False if social_floor else context_collapsed(base.get("context"))
         prior_turns = [] if social_floor else prior_expression_messages(node)
         expression_context = ([] if collapsed else list(base.get("context") or [])[-5:]) + prior_turns
+        # A completed statement without an addressed question or a genuine
+        # interpersonal action leaves an OPEN FLOOR. Unlike a response owed
+        # to a question, the earlier subject is not a pending commitment.
+        # The speaker can initiate from personal motives/relationships
+        # without receiving repeated words as the default next topic.
+        self_initiated = False
+        if social_floor:
+            from room_conversational_floor import requires_uptake
+            self_initiated = not requires_uptake(base.get("event"), entity, deliberation)
+            if self_initiated:
+                expression_context = []
         expression_topic = dict(base.get("topic") or {})
         if collapsed:
             fresh_subject = breakout_subject(key)
@@ -478,8 +489,9 @@ def recurrent(node, key, bus_data):
             "social_observation": perception,
             "deliberation": deliberation,
             "conversation_job": None if social_floor else job,
-            "event": expression_context[-1] if expression_context else (None if collapsed else base.get("event")),
+            "event": expression_context[-1] if expression_context else (None if collapsed or self_initiated else base.get("event")),
             "context": expression_context,
+            "self_initiated": self_initiated,
             "topic": expression_topic,
             "partner": base.get("partner"),
             "relationship": base.get("relationship"),
