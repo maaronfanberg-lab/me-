@@ -28,10 +28,11 @@ checks = (
     'expr_nodes=(2 5 8 11)',
     'export ROOM_CONVERSATIONAL_FLOOR=0',
     'git diff --quiet HEAD^ origin/main',
-    'pending_floor_failure_stage',
+    'pending_floor_failure_stages',
+    'scripts/room_floor_health.py --stages',
     'room/floor-health.json',
-    'FLOOR_FAILURE_STAGE="$pending_floor_failure_stage"',
     'floor_failure_stage="candidate_preflight"',
+    'git add room society/live.json',
 )
 for snippet in checks:
     if snippet not in script:
