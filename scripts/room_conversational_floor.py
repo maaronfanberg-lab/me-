@@ -48,6 +48,17 @@ def is_directed(event, recipient):
     return bool(re.search(r"\b" + re.escape(target) + r"\b\s*[,?!:]", spoken, re.I))
 
 
+def last_participant_turn(history):
+    """Match the same evidence projection in selection and publication."""
+    return next((event for event in reversed(history)
+                 if isinstance(event, dict)
+                 and _norm(event.get("speaker")) in (*ORDER, "allen")), None)
+
+
+def last_participant_source_id(history):
+    return (last_participant_turn(history) or {}).get("id")
+
+
 def _score(entity, last, thought, profile, relationships):
     """Importance to this character, not novelty or speaker rotation."""
     delib = thought if isinstance(thought, dict) else {}
@@ -88,8 +99,7 @@ def choose_next(history, bus, config, minds, *, rank=0):
         raise RuntimeError("no awake character, cannot select a speaker")
     if type(rank) is not int or not 0 <= rank < len(awake):
         raise ValueError("requested candidate is outside the awake group")
-    last = next((event for event in reversed(history)
-                 if isinstance(event, dict) and _norm(event.get("speaker")) in (*ORDER, "allen")), None)
+    last = last_participant_turn(history)
     author = _norm((last or {}).get("speaker"))
     target = _target(last)
     addressed = (target if target in awake and author != target
