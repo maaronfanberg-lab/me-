@@ -83,6 +83,7 @@ valid_part = core.load(parts_root / "recurrent-02.json", {})
 assert validate_candidate(valid_part, "sarah", [], {}) == valid_part["private"]["expression"]["utterance"]
 bad_part = json.loads(json.dumps(valid_part))
 bad_part["private"]["expression"]["utterance"] = "I think " * 20
+bad_part["private"]["expression"]["semantic_terms"] = ["think"]
 try:
     validate_candidate(bad_part, "sarah", [], {})
 except RuntimeError as exc:
