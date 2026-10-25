@@ -49,20 +49,37 @@ def is_directed(event, recipient):
     # Actual vocatives, including Allen messages that have no hidden target.
     # Quoted name mentions without a conversational invitation are not enough.
     name = re.escape(target)
+    # Distinguish a *vocative* from a third-person mention. In
+    # "Mara, why did you disagree with Sarah?" only Mara is addressed;
+    # "Sarah?" in the question is NOT a second addressed speaker.
     return bool(
-        re.search(r"\b" + name + r"\b\s*[,?!:]", spoken, re.I)
+        re.search(r"^\s*" + name + r"\b\s*[,?!:]", spoken, re.I)
         or re.search(r"^\s*@" + name + r"\b", spoken, re.I)
-        or re.search(r"\b" + name + r"\s+(?:can|could|would|will|what|why|how|are|do|did|is|have|tell|please)\b", spoken, re.I)
+        or re.search(r"^\s*" + name + r"\s+(?:can|could|would|will|what|why|how|are|do|did|is|have|tell|please)\b", spoken, re.I)
+        or re.search(r",\s*" + name + r"\s*[?!\.]?\s*$", spoken, re.I)
     )
+
+
+def public_participant_turns(history):
+    """One source-of-truth for the public turns each awake mind may observe.
+
+    The Room's system status and private cognition are never conversational
+    utterances. An accepted Allen turn is, regardless of its runtime tag.
+    Source ID and spoken text must be available for all consuming stages.
+    """
+    return [
+        item for item in history
+        if isinstance(item, dict)
+        and _norm(item.get("speaker")) in (*ORDER, "allen")
+        and str(item.get("id") or "").strip()
+        and str(item.get("text") or "").strip()
+    ]
 
 
 def last_participant_turn(history):
     """Match the same evidence projection in selection and publication."""
-    return next((event for event in reversed(history)
-                 if isinstance(event, dict)
-                 and _norm(event.get("speaker")) in (*ORDER, "allen")
-                 and str(event.get("id") or "").strip()
-                 and str(event.get("text") or "").strip()), None)
+    public = public_participant_turns(history)
+    return public[-1] if public else None
 
 
 def last_participant_source_id(history):
