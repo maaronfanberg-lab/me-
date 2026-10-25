@@ -150,7 +150,10 @@ def appraise(entity: str, profile: dict, event: dict | None, context: list[dict]
     if "topic_bid" in labels:
         lenses.append(str(profile.get("topic_mobility", "")))
     if "novel_or_odd_detail" in labels or "new_information" in labels:
-        lenses.append(str(profile.get("novelty_response", "")))
+        # Current Room minds express novelty through an individual graduate
+        # cognitive style, not the obsolete novelty_response profile key.
+        # Keep the old key as a backwards-compatible fallback for old fixtures.
+        lenses.append(str(profile.get("cognitive_style") or profile.get("novelty_response") or ""))
     if "evidence_request" in labels:
         lenses.append(str(profile.get("evidence_style", "")))
     if social_targeting.get("praise_or_alignment"):

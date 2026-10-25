@@ -127,7 +127,10 @@ def main():
         "I would rather talk about why the trial changes Scout's understanding of the adults around her.",
         payload(previous),
     )
-    assert previous not in copy_prompts[1], "retry still carries the stale AI loop context"
+    # The prior contribution is evidence, not a forbidden-word list.
+    # The repair path may reconsider it while making a substantively different
+    # move. The require_retry above checks the actual corrected answer.
+    assert previous in copy_prompts[1], "retry discarded what was actually said"
 
     # Persistent mechanical corruption is salvaged on the first model result, so
     # it can no longer consume all five attempts and kill the beat.

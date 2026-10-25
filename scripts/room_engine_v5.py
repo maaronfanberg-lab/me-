@@ -302,7 +302,8 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
             elif request_role == "expression":
                 prompt = _mask_expression_transcript(prompt)
             rejected = [str(item or "").strip() for item in getattr(autonomy, "_production_rejected_wordings", []) if str(item or "").strip()]
-            if request_role == "expression" and attempt > 0 and rejected:
+            if (os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1"
+                    and request_role == "expression" and attempt > 0 and rejected):
                 prompt += ("\nREJECTED_WORDING\nPrevious attempts copied recent speech too closely. Rewrite from scratch while preserving "
                            "the same internal intent. Do not repeat, lightly edit, or closely paraphrase any rejected sentence below. "
                            "Use a different sentence structure and different phrasing.\n" +
@@ -313,6 +314,8 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     if not hasattr(autonomy, "_production_original_context_echo"):
         autonomy._production_original_context_echo = autonomy._has_context_echo
         def _production_context_echo(utterance, compact, n=5):
+            if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+                return False
             matched = autonomy._production_original_context_echo(utterance, compact, n=max(8, int(n)))
             if matched:
                 _remember_rejected(autonomy, utterance)
@@ -322,6 +325,8 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     if not hasattr(autonomy.base, "_production_original_too_similar"):
         autonomy.base._production_original_too_similar = autonomy.base._too_similar_to_context
         def _production_too_similar(utterance, compact):
+            if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+                return False
             matched = autonomy.base._production_original_too_similar(utterance, compact)
             if matched:
                 _remember_rejected(autonomy, utterance)
@@ -341,7 +346,9 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
 
 def _coherent_recurrent(node, key, bus_data):
     entity, _local, role, _tasks = _legacy._core.ni(node)
-    if role != "expression":
+    if role != "expression" or os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        # Respect the selected speaker's private intention rather than using
+        # old metadata-only recipient overrides.
         return _LLAMA_ORIGINAL_RECURRENT(node, key, bus_data)
     routed = copy.deepcopy(bus_data)
     source_part = _legacy._core.rp(routed, entity, role)

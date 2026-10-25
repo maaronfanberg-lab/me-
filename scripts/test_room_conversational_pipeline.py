@@ -91,6 +91,72 @@ except RuntimeError as exc:
 else:
     raise AssertionError("extreme generator collapse was accepted")
 
+# The model must not receive the old system-indexed topic three times.
+# A local topic record may still be used for storage, but cognition receives
+# only actual public contributions and each character's own dispositions.
+import room_private_model as base_model
+original_msgs, original_conv, original_state, original_model_run = core.msgs, core.conv, core.state, core.model_run
+repeat_feed = [
+    {"id": "r1", "speaker": "mara", "text": "Category classification trees."},
+    {"id": "r2", "speaker": "owen", "text": "Category classification trees again."},
+    {"id": "r3", "speaker": "jules", "text": "The classification experiment."},
+    {"id": "r4", "speaker": "sarah", "text": "I wonder why this is interesting."},
+    {"id": "a5", "speaker": "allen", "text": "Sarah, can you explain what's happening?"},
+]
+core.msgs = lambda: repeat_feed[:-1]
+core.conv = lambda: repeat_feed
+core.state = lambda: {"cycle": 13, "topic_episode": {
+    "root": "category classification experiment", "current_facet": "classification trees",
+    "shared_references": ["trees"], "status": "active"
+}}
+core.model_run = lambda role, payload: None
+try:
+    sensed = core.sense(0, "evidence-v1")
+    private = sensed["private"]
+    assert private["event"]["id"] == "a5"
+    assert private["event"]["speaker"] == "allen"
+    assert len(private["context"]) == 3
+    assert private["keywords"] == []
+    assert private["topic"] == {}
+    compact = base_model._compact_payload({
+        "event": private["event"], "context": private["context"],
+        "topic": private["topic"], "keywords": private["keywords"],
+    }, "thought", "sarah")
+    assert compact["discussion"]["subject"] is None, compact
+    assert compact["event"]["text"] == repeat_feed[-1]["text"]
+    assert "classification experiment" not in json.dumps(compact.get("discussion"))
+finally:
+    core.msgs, core.conv, core.state, core.model_run = original_msgs, original_conv, original_state, original_model_run
+
+# All four minds must witness the same durably accepted Allen message, but
+# NOT an orchestration/status message or an older topic index.
+turns = [
+    {"id": "s100", "speaker": "sarah", "text": "The tree looks familiar."},
+    {"id": "heartbeat", "speaker": "system", "text": "Runner active."},
+    {"id": "allen-101", "speaker": "allen",
+     "text": "Mara, can you tell me why you think that?", "runtime": "allen-public"},
+]
+original_conv, original_state, original_model_run = core.conv, core.state, core.model_run
+core.conv = lambda: turns
+core.state = lambda: {"cycle": 24, "topic_episode": {
+    "root": "category classification experiment", "current_facet": "classification trees",
+}}
+core.model_run = lambda role, payload: {"participation": "PARTICIPANT", "bids": []}
+try:
+    for node in (0, 1, 3, 4, 6, 7, 9, 10):
+        sensed = core.sense(node, "allen-public-source")
+        data = sensed["private"]
+        assert data["event"]["id"] == "allen-101", (node, data.get("event"))
+        assert data["event"]["text"] == turns[-1]["text"]
+        assert data["partner"] == "allen", (node, data.get("partner"))
+        assert data["topic"] == {}
+        assert [m["id"] for m in data["context"]] == ["s100", "allen-101"]
+    turns.append({"id": "mara-102", "speaker": "mara", "text": "Because I saw it."})
+    following = core.sense(0, "post-allen")
+    assert following["private"]["event"]["id"] == "mara-102"
+finally:
+    core.conv, core.state, core.model_run = original_conv, original_state, original_model_run
+
 # An authentic expression run must not sneak a synthetic contribution job
 # into the model payload, even if the recent vocabulary repeats.
 captured = []
@@ -132,6 +198,43 @@ assert payload["conversation_job"] is None
 assert payload["deliberation"]["action"] == "DISCLOSE"
 assert "Distinct contribution" not in payload["deliberation"]["new_information_goal"]
 assert payload["topic"]["root"] == "old oak"
+
+# Prior expression parts are not allowed to override the latest Allen turn
+# on the selected model path. The original API ordering used to append them.
+captured.clear()
+old_prior = core.prior_expression_messages
+core.prior_expression_messages = lambda _node: [
+    {"speaker": "jules", "text": "Stale category trees.", "cognition": {"target": "sarah"}}
+]
+core.model_run = lambda role, payload: (captured.append((role, payload)) or {
+    "decision": "SPEAK", "target": "allen", "move": "answer",
+    "utterance": "Allen, I can explain what I meant.", "semantic_terms": ["explain"]
+})
+try:
+    last_allen = {"speaker": "allen", "id": "allen-latest",
+                  "text": "Sarah, what did you mean?", "cognition": {}}
+    source_part["private"]["event"] = last_allen
+    source_part["private"]["context"] = [last, last_allen]
+    core.recurrent(2, "fixture-allen-context", bus_fixture)
+finally:
+    core.model_run = original_model_run
+    core.prior_expression_messages = old_prior
+assert len(captured) == 1
+assert captured[0][1]["event"]["id"] == "allen-latest"
+assert captured[0][1]["context"][-1]["speaker"] == "allen"
+
+
+# Cooperative short answers do not have to invent a novel topic term.
+# Preflight and final publication now both use clean_terms without grafting
+# the system's discussion subject onto an utterance of just "No".
+short = json.loads(json.dumps(valid_part))
+short["private"]["expression"].update({
+    "utterance": "No.", "semantic_terms": ["no"], "move": "answer"
+})
+assert validate_candidate(short, "sarah", [], {"root": "oak"}) == "No."
+short_msg, _ = core.emit("sarah", "answer", "mara", None, None,
+                         "No.", "short-beat", 0, {"id": "existing", "root": "oak"}, [])
+assert short_msg["cognition"]["topic_terms"] == []
 
 # The core's public commit CLI requires the nine-node contract.
 assert len(node_ids) == 9

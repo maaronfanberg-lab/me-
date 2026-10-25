@@ -1,0 +1,45 @@
+name: Room conversational floor tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/room_conversational_floor.py'
+      - 'scripts/room_conversational_candidate.py'
+      - 'scripts/test_room_conversational_workflow.py'
+      - 'scripts/test_room_conversational_wrapper_intent.py'
+      - 'scripts/room_engine_v5_legacy.py'
+      - 'scripts/test_room_conversational_floor.py'
+      - 'scripts/test_room_conversational_pipeline.py'
+      - 'scripts/room_engine_v5_core.py'
+      - 'scripts/room_engine_v5.py'
+      - 'scripts/room_private_commit.py'
+      - 'scripts/room_expression_quality_legacy.py'
+      - 'scripts/room_private_model.py'
+      - 'scripts/room_private_model_autonomy_legacy.py'
+      - '.github/workflows/sarah-society.yml'
+      - '.github/workflows/room-conversation-floor-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compile real conversational opportunity path
+        run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_conversational_candidate.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
+      - name: Preserve character intent through model wrappers
+        run: python3 scripts/test_room_conversational_wrapper_intent.py
+      - name: Validate both real workflow shell routes
+        run: python3 scripts/test_room_conversational_workflow.py
+      - name: Test directed responses, sleeping participants, voluntary readiness
+        run: python3 scripts/test_room_conversational_floor.py
+      - name: Test actual selected-expression commit in sandbox
+        run: python3 scripts/test_room_conversational_pipeline.py
+      - name: Existing sleeping participant regression
+        run: python3 scripts/test_room_sleeping_entity.py
+      - name: Existing group and personal-history regression
+        run: python3 scripts/test_room_group_dynamics.py

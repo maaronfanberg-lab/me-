@@ -304,23 +304,44 @@ def rp(bus_data, entity, role):
 
 def sense(node, key):
     entity, local, role, tasks = ni(node)
-    context = msgs()[-8:]
-    last = context[-1] if context else None
+    social_floor = os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+    # The topic index is archival bookkeeping, not evidence that the group
+    # owes its next turn to a system-generated subject. In selected-floor
+    # mode do not flood tiny models with eight copies of one stale topic.
+    # Allen's accepted public turns use the same evidence channel as the
+    # autonomous speakers. Never mix them with control/status messages.
+    if social_floor:
+        from room_conversational_floor import ORDER as AUTONOMOUS, last_participant_turn
+        public = [
+            item for item in conv()
+            if isinstance(item, dict)
+            and str(item.get("speaker") or "").strip().lower() in (*AUTONOMOUS, "allen")
+            and str(item.get("text") or "").strip()
+            and str(item.get("id") or "").strip()
+        ]
+        context = public[-3:]
+        last = last_participant_turn(public)
+    else:
+        context = msgs()[-8:]
+        last = context[-1] if context else None
     mind = minds()
     current_state = state()
     topic = current_state.get("topic_episode") or {}
     partner = (last or {}).get("speaker")
-    if partner not in ORDER or partner == entity:
+    if ((partner not in ORDER and not (social_floor and partner == "allen"))
+            or partner == entity):
         partner = choose_partner(entity, mind, topic, int(current_state.get("cycle", 0)))
-    rel = mind["entities"][entity]["people"][partner]
+    rel = mind["entities"][entity]["people"].get(partner) or {}
     private_self_state = _private_self_state.model_slice(
         mind["entities"][entity].get("private_self_state"), P[entity], entity, ORDER
     )
     base = {
         "event": last,
         "context": context,
-        "keywords": toks(" ".join(str(item.get("text", "")) for item in context))[:16],
-        "topic": {k: topic.get(k) for k in ("id", "root", "current_facet", "facets", "visited_facets", "status", "shared_references", "unresolved")},
+        # The actual spoken turns remain available. Do not duplicate their
+        # recurrent vocabulary as both keywords and system topic labels.
+        "keywords": [] if social_floor else toks(" ".join(str(item.get("text", "")) for item in context))[:16],
+        "topic": {} if social_floor else {k: topic.get(k) for k in ("id", "root", "current_facet", "facets", "visited_facets", "status", "shared_references", "unresolved")},
         "partner": partner,
         "relationship": {k: rel.get(k) for k in ("exposure", "direct_familiarity", "trust", "predictability", "reciprocity", "warmth", "respect", "disclosure_depth", "tension")},
         "private_self_state": private_self_state,
@@ -411,9 +432,10 @@ def recurrent(node, key, bus_data):
         perception = rp(bus_data, entity, "comprehension")["private"].get("social_observation")
         thought = (bus_data.get("recurrent", {}).get(entity, {}) or {}).get("thought", {})
         deliberation = (thought.get("private") or {}).get("deliberation")
-        job = conversation_job(entity, key)
-        collapsed = context_collapsed(base.get("context"))
-        prior_turns = prior_expression_messages(node)
+        social_floor = os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+        job = None if social_floor else conversation_job(entity, key)
+        collapsed = False if social_floor else context_collapsed(base.get("context"))
+        prior_turns = [] if social_floor else prior_expression_messages(node)
         expression_context = ([] if collapsed else list(base.get("context") or [])[-5:]) + prior_turns
         expression_topic = dict(base.get("topic") or {})
         if collapsed:
@@ -431,19 +453,38 @@ def recurrent(node, key, bus_data):
             fresh_subject = None
         if isinstance(deliberation, dict):
             deliberation = dict(deliberation)
+            if social_floor:
+                from room_conversational_floor import is_directed
+                event = base.get("event") or {}
+                speaker = str(event.get("speaker") or "").lower()
+                if is_directed(event, entity) and speaker in (*ORDER, "allen"):
+                    deliberation["preferred_partner"] = speaker
+                    # Keep the individual's own deliberated action. Directed
+                    # turns project a *response opportunity*, not enforced
+                    # agreement or a keyword-based action override.
+                    deliberation["new_information_goal"] = (
+                        "Consider the particular contribution addressed to you. "
+                        "Respond according to your own stance, including uncertainty, "
+                        "clarification or disagreement when appropriate. "
+                        + str(deliberation.get("new_information_goal") or "")[:120]
+                    )
             original_goal = str(deliberation.get("new_information_goal") or "").strip()
             if collapsed:
                 deliberation["action"] = "BRIDGE"
                 deliberation["focus"] = fresh_subject
                 original_goal = ""
-            deliberation["new_information_goal"] = (original_goal + " " if original_goal else "") + "Distinct contribution: " + job
-            deliberation["conversation_job"] = job
+            if not social_floor:
+                deliberation["new_information_goal"] = (original_goal + " " if original_goal else "") + "Distinct contribution: " + job
+                deliberation["conversation_job"] = job
+            else:
+                deliberation["new_information_goal"] = original_goal
+                deliberation.pop("conversation_job", None)
         expression = model_run("expression", {
             "entity": entity,
             "profile": P[entity],
             "social_observation": perception,
             "deliberation": deliberation,
-            "conversation_job": job,
+            "conversation_job": None if social_floor else job,
             "event": expression_context[-1] if expression_context else (None if collapsed else base.get("event")),
             "context": expression_context,
             "topic": expression_topic,
@@ -532,7 +573,8 @@ def emit(entity, move, target_entity, parent, derived, text, beat, index, topic,
     now = datetime.now(timezone.utc)
     message_id = f"{now.strftime('%Y%m%dT%H%M%S%f')[:-3]}-{entity}-v5"
     discourse_id = "d-" + message_id
-    terms = declared_terms or [topic.get("root"), topic.get("current_facet")]
+    terms = ([topic.get("root"), topic.get("current_facet")]
+             if declared_terms is None else declared_terms)
     terms = [str(value).strip().lower() for value in terms if str(value or "").strip()]
     cognition = {
         "move_type": move,
@@ -545,7 +587,7 @@ def emit(entity, move, target_entity, parent, derived, text, beat, index, topic,
         "topic_root": topic.get("root"),
         "topic_facet": topic.get("current_facet"),
         "topic_terms": terms,
-        "mandatory_speech": True,
+        "mandatory_speech": os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1",
     }
     message = {
         "id": message_id,
@@ -797,7 +839,22 @@ def main():
         save(WORK / "bus-recurrent.json", bus2(first_bus, parts, key))
     elif args.cmd == "commit":
         parts = [load(path, {}) for path in sorted(PARTS.glob("recurrent-*.json"))]
-        if {part["node"] for part in parts} != set(range(12)):
+        nodes = {part["node"] for part in parts}
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            from room_conversational_floor import NODE, checked_floor
+            floor = load(WORK / "floor.json", {})
+            awake = [e for e in ORDER if e not in set(CFG.get("sleeping_entities", []))]
+            selected = checked_floor(floor, awake=awake, required=True)
+            expected = {n for n in range(12) if n % 3 != 2}
+            expected.add(NODE[selected])
+            if nodes != expected or len(parts) != len(expected):
+                raise RuntimeError("selected Room turn requires eight cognitive nodes plus one expression")
+            for part in parts:
+                node = part["node"]
+                entity, _local, role, _tasks = ni(node)
+                if part.get("entity") != entity or part.get("role") != role:
+                    raise RuntimeError("Room recurrent part has wrong entity or role")
+        elif nodes != set(range(12)):
             raise RuntimeError("commit requires all 12 recurrent nodes")
         commit(parts, key)
     else:

@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
+import os
 import re
+from pathlib import Path
 from datetime import datetime, timezone
 
 import room_engine_v5 as c
@@ -12,6 +16,7 @@ import room_topic_bounded as _bounded_topic
 import room_private_self_state as _private_self_state
 import room_research_architecture as _research
 import room_group_dynamics as _group
+import room_conversational_floor as _floor
 
 for _topic_name in (
     "topic_template",
@@ -184,6 +189,11 @@ def _publication_degenerate(text: str) -> str | None:
         return "structured_debris"
     if (raw.startswith("{") and raw.endswith("}")) or (raw.startswith("[") and raw.endswith("]")):
         return "structured_debris"
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        tokens = re.findall(r"[a-z0-9']+", low)
+        if len(tokens) >= 24 and len(set(tokens)) <= 3:
+            return "sampler_collapse"
+        return None
     if re.search(r"\b([a-z][a-z']{2,})(?:\s+\1){2,}\b", low, re.I):
         return "token_loop"
     words = re.findall(r"[a-z0-9']+", low)
@@ -227,7 +237,9 @@ def private_commit(parts: list[dict], key: str):
     T = c.tree()
     V = c.conv()
     _group.sanitize_persisted(M, S, V, T)
-    prev = c.event()
+    prev = (_floor.last_participant_turn(V)
+            if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+            else c.event())
     cycle = int(S.get("cycle", 0)) + 1
     context_scope_migration = int(S.get("context_scope_version", 0) or 0) < CONTEXT_SCOPE_VERSION
     topic = clean_topic(S.get("topic_episode") or {})
@@ -235,7 +247,25 @@ def private_commit(parts: list[dict], key: str):
         topic = clean_topic(c.update_topic(topic, V[-24:], cycle))
 
     q = prev if c.isq(prev) and topic.get("root") else None
-    order, E = c.order4(parts, prev, cycle)
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        floor_path = c.ROOT / "room_work" / "floor.json"
+        floor = json.loads(floor_path.read_text(encoding="utf-8"))
+        selected = _floor.checked_floor(floor, awake=AWAKE_ORDER, required=True)
+        observed_id = _floor.last_participant_source_id(V)
+        bus_path = c.ROOT / "room_work" / "bus-recurrent.json"
+        bus_hash = hashlib.sha256(bus_path.read_bytes()).hexdigest()
+        if (floor.get("source_id") != observed_id
+                or floor.get("cycle_key") != key
+                or floor.get("bus_sha256") != bus_hash):
+            raise RuntimeError("stale conversational floor: observed source, cycle or bus changed")
+        E = {part["entity"]: part for part in parts
+             if part.get("role") == "expression" and part.get("entity") == selected
+             and (part.get("private") or {}).get("intent")}
+        if set(E) != {selected}:
+            raise RuntimeError("selected Room expression was not generated; failed beat")
+        order = [selected]
+    else:
+        order, E = c.order4(parts, prev, cycle)
     awake_order = [entity for entity in order if entity in AWAKE_ORDER]
     beat = f"beat-{c.BOOT}-{cycle:06d}"
 
@@ -244,7 +274,7 @@ def private_commit(parts: list[dict], key: str):
     # independently valid peers to publish.
     expressions: dict[str, dict] = {}
     quarantined: list[str] = []
-    for entity in AWAKE_ORDER:
+    for entity in awake_order:
         expr = (E[entity].get("private") or {}).get("expression")
         if not isinstance(expr, dict):
             quarantined.append(f"{entity}:missing_expression")
@@ -255,6 +285,8 @@ def private_commit(parts: list[dict], key: str):
         expressions[entity] = expr
 
     if not expressions:
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            raise RuntimeError("selected conversational expression absent; no valid beat")
         print("All Room expressions quarantined before publication; skipping beat without state mutation")
         return
 
@@ -276,10 +308,12 @@ def private_commit(parts: list[dict], key: str):
             continue
 
         terms = clean_terms(expr, topic, text)
-        if not terms:
-            terms = [norm(value) for value in c.toks(text)[:2] if not bad_term(value)]
-        if not terms:
-            terms = [norm(topic.get("root")) or "conversation"]
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1":
+            if not terms:
+                terms = [norm(value) for value in c.toks(text)[:2] if not bad_term(value)]
+            if not terms:
+                terms = [norm(topic.get("root")) or "conversation"]
+        # A brief agreement or repair need not create a new topic label.
         validation_context = list(V[-8:]) + [
             {"speaker": speaker, "text": staged_text, "cognition": {"target": target}}
             for speaker, _move, target, staged_text, _terms in staged
@@ -295,16 +329,21 @@ def private_commit(parts: list[dict], key: str):
         if move not in ALLOWED_MOVES:
             move = planned["action"] if planned["action"] in ALLOWED_MOVES else "deepen"
         target = norm(expr.get("target") or planned["target"])
-        if target not in AWAKE_ORDER or target == entity:
+        available_partners = set(AWAKE_ORDER)
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            available_partners.add("allen")
+        if target not in available_partners or target == entity:
             target = planned["target"]
-        if target not in AWAKE_ORDER or target == entity:
+        if target not in available_partners or target == entity:
             target = next(other for other in AWAKE_ORDER if other != entity)
         staged.append((entity, move, target, text, terms))
 
     if not staged:
-        print("All Room expressions quarantined at final publication gate; skipping beat without state mutation")
         if quarantined:
             print("Room quarantine:", " | ".join(quarantined))
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            raise RuntimeError("selected conversational expression failed integrity gates")
+        print("All Room expressions quarantined at final publication gate; skipping beat without state mutation")
         return
 
     spoken: list[dict] = []
@@ -339,9 +378,9 @@ def private_commit(parts: list[dict], key: str):
     if not topic.get("root") or bad_term(topic.get("root")):
         topic = seed_topic(expressions, valid_order, cycle, topic)
 
-    if context_scope_migration:
+    if context_scope_migration and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1":
         topic = context_scope_reset(topic, key, cycle)
-    elif c.should_shift_topic(topic):
+    elif os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1" and c.should_shift_topic(topic):
         forced_breakout = bool(topic.get("bridge_pending"))
         if forced_breakout:
             candidate_terms = [c.breakout_subject(key)]
@@ -391,6 +430,7 @@ def private_commit(parts: list[dict], key: str):
     V = V[-1000:]
     stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     S.update({
+        "conversational_floor": "opportunity_v1" if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1" else "legacy_four_voice",
         "version": c.VERSION,
         "boot_id": c.BOOT,
         "cycle": cycle,

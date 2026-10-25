@@ -10,10 +10,11 @@ PEOPLE = ("sarah", "mara", "owen", "jules")
 PROFILE_KEYS = {
     "core_identity", "values", "motives", "agency_style", "communion_style",
     "attention_magnets", "attention_blindspots", "reciprocity_style",
-    "topic_mobility", "novelty_response", "evidence_style", "disagreement_style",
+    "topic_mobility", "evidence_style", "disagreement_style",
     "affiliation_style", "status_sensitivity", "praise_response",
     "criticism_response", "schema_vulnerabilities", "coping_patterns",
-    "repair_recovery",
+    "repair_recovery", "private_self", "education", "cognitive_style",
+    "humor_style", "flirtation_style",
 }
 
 
@@ -33,7 +34,7 @@ profiles = {}
 for person in PEOPLE:
     profile = (CFG["p"][person] or {}).get("psychology_v2")
     assert isinstance(profile, dict), f"RED baseline: {person} has no fixed psychology_v2 profile"
-    assert set(profile) == PROFILE_KEYS, f"{person}: profile shape mismatch"
+    assert set(profile) == PROFILE_KEYS, f"{person}: current psychology_v2 profile shape mismatch; missing={sorted(PROFILE_KEYS - set(profile))}; extra={sorted(set(profile) - PROFILE_KEYS)}"
     assert no_numbers(profile), f"{person}: psychology_v2 contains slider-like numeric data"
     profiles[person] = profile
 
@@ -74,21 +75,26 @@ for person in PEOPLE:
 # Same situation, four coherent lenses instead of four rewordings of one persona.
 odd_lenses = {person: tuple(results[(person, "odd")]["personality_lens"]) for person in PEOPLE}
 assert len(set(odd_lenses.values())) == 4, odd_lenses
-assert "strange detail" in " ".join(odd_lenses["jules"]).lower()
-assert any(word in " ".join(odd_lenses["owen"]).lower() for word in ("test", "causal"))
-assert any(word in " ".join(odd_lenses["sarah"]).lower() for word in ("explain", "understanding"))
+# The contemporary 23-field profiles put novelty responses inside distinct
+# cognitive styles, not the retired novelty_response field.
+assert "unusual" in " ".join(odd_lenses["jules"]).lower()
+assert "test" in " ".join(odd_lenses["owen"]).lower()
+assert "hypotheses" in " ".join(odd_lenses["sarah"]).lower()
 assert "people" in " ".join(odd_lenses["mara"]).lower()
 
-# Schema-like vulnerabilities activate selectively from a generic event classifier.
-assert any("abandonment" in str(item.get("schema", "")).lower() for item in results[("mara", "exclude_mara")]["schema_activation"])
-assert not any("abandonment" in str(item.get("schema", "")).lower() for item in results[("owen", "exclude_mara")]["schema_activation"])
-assert any("mistrust" in str(item.get("schema", "")).lower() for item in results[("owen", "critique_owen")]["schema_activation"])
-assert any("recognition" in str(item.get("schema", "")).lower() for item in results[("jules", "exclude_jules")]["schema_activation"])
-
-# Social schema triggers must belong to the person actually targeted, not every named observer.
-assert not any("recognition" in str(item.get("schema", "")).lower() for item in results[("jules", "exclude_mara")]["schema_activation"]), results[("jules", "exclude_mara")]
-assert not any("emotional-inhibition" in str(item.get("schema", "")).lower() for item in results[("sarah", "exclude_mara")]["schema_activation"]), results[("sarah", "exclude_mara")]
-assert not any("abandonment" in str(item.get("schema", "")).lower() for item in results[("mara", "exclude_jules")]["schema_activation"]), results[("mara", "exclude_jules")]
+# Current character profiles have no declared schema vulnerabilities.
+# The appraiser must identify the *social target* without fabricating clinical
+# schema labels or transforming observations into psychodynamic certainty.
+for person in PEOPLE:
+    for scenario in ("exclude_mara", "exclude_jules", "critique_owen"):
+        assert results[(person, scenario)]["schema_activation"] == [], (
+            person, scenario, "unconfigured psychological vulnerability invented"
+        )
+assert results[("mara", "exclude_mara")]["social_targeting"].get("exclusion") is True
+assert results[("jules", "exclude_jules")]["social_targeting"].get("exclusion") is True
+assert not results[("owen", "exclude_mara")]["social_targeting"].get("exclusion")
+assert not results[("mara", "exclude_jules")]["social_targeting"].get("exclusion")
+assert results[("owen", "critique_owen")]["social_targeting"].get("criticism_or_rejection") is True
 
 # Repair is generic, but recovery style remains person-specific.
 for person in PEOPLE:
@@ -115,7 +121,8 @@ current = pctx.get("current") or {}
 assert current.get("latest_words") == "Let's talk about the platypus"
 assert "platypus" in (current.get("grounding_terms") or [])
 assert current.get("salience") == "ground_latest_turn"
-assert any("vivid new object" in str(item).lower() for item in current.get("personality_lens") or [])
+assert any("tangent" in str(item).lower() or "new topics" in str(item).lower()
+           for item in current.get("personality_lens") or [])
 assert pctx.get("identity") == profiles["jules"]["core_identity"]
 
 # Clinical/schema labels are internal mechanics, never language-model vocabulary.
@@ -130,10 +137,10 @@ mara_payload = {
 }
 mara_compact = private_model._compact_payload(mara_payload, "expression", "mara")
 mara_current = ((mara_compact.get("personality_context") or {}).get("current") or {})
-assert mara_current.get("activated_sensitivities"), "targeted vulnerability should still shape appraisal"
+assert mara_current.get("activated_sensitivities") == [], "no clinical vulnerability is configured for Mara"
 serialized = json.dumps(mara_compact.get("personality_context") or {}, ensure_ascii=False).lower()
 for forbidden in ("schema", "abandonment", "mistrust", "unrelenting", "insufficient-self-control"):
     assert forbidden not in serialized, f"clinical/internal label leaked into private-model payload: {forbidden}"
-assert "pushed out" in serialized or "reassurance" in serialized
+assert "social systems" in serialized and "people" in serialized, "Mara's actual interpretive lens must survive"
 
-print("PASS personality-v2: 19 fixed layers, no sliders, grounded bids, divergent appraisal, selective schema activation, target precision, label isolation, production bridge")
+print("PASS personality-v2: 23 current layers, no sliders, grounded bids, distinct cognitive styles, no ungrounded clinical activations, precise social targeting and private bridge")

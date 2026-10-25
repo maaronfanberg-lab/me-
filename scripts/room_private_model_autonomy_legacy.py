@@ -310,13 +310,17 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
     compact = _autonomy_compact(payload, role, self_entity)
     compact_intent = compact.get("intent") if role == "expression" and isinstance(compact.get("intent"), dict) else None
 
+    social_floor = os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
     base_guard = ""
     if role == "expression":
         base_guard = (
             "\nAUTONOMY_RULE\n"
             "Respond naturally to the current conversation. Keep the chosen move, focus, and intended partner while choosing your own words. "
             "Use only details supported by what was actually said. Do not invent unsupported conflict, jealousy, secrets, threats, shared memories, "
-            "or dramatic incidents. Treat reported claims as reports unless independent evidence is present. Avoid copying recent speech. Stay inside the conversation.\n"
+            "or dramatic incidents. Treat reported claims as reports unless independent evidence is present. " +
+            ("Shared wording can be reused to answer, clarify, acknowledge, or emphasize a point. "
+             "Prioritize the relevant conversational action over novelty.\n" if social_floor
+             else "Avoid copying recent speech. Stay inside the conversation.\n")
         )
 
     attempts = 3 if role == "expression" else 2
@@ -325,8 +329,10 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
         retry_guard = ""
         if attempt:
             retry_guard = (
-                "\nTRY_AGAIN\n"
-                "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n"
+                "\nTRY_AGAIN\n" +
+                ("Recheck the actual source utterance and the action it makes relevant. "
+                 "Keep your own voice, stance and uncertainty.\n" if social_floor
+                 else "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n")
             )
 
         combined = (
@@ -379,13 +385,16 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                 ):
                     last_reason = "bare_move_label"
                     continue
-                if len(utterance.split()) < max(1, int(min_words)):
+                if not social_floor and len(utterance.split()) < max(1, int(min_words)):
                     last_reason = "utterance_too_short"
                     continue
+                # In selected-floor mode "No.", "Really?" and "I agree."
+                # are legitimate first-position responses. Structural and
+                # hygiene checks still run; an absent model is not silence.
                 if _public_meta_language(utterance, compact):
                     last_reason = "meta_language"
                     continue
-                if base._too_similar_to_context(utterance, compact) or _has_context_echo(utterance, compact):
+                if not social_floor and (base._too_similar_to_context(utterance, compact) or _has_context_echo(utterance, compact)):
                     last_reason = "duplicate_context"
                     continue
             return obj
