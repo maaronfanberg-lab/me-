@@ -308,17 +308,30 @@ def sense(node, key):
     # The topic index is archival bookkeeping, not evidence that the group
     # owes its next turn to a system-generated subject. In selected-floor
     # mode do not flood tiny models with eight copies of one stale topic.
-    # In the new path, Allen's durably accepted public turns are peers in
-    # conversation, even though they are not autonomous engine messages.
-    context = conv()[-3:] if social_floor else msgs()[-8:]
-    last = context[-1] if context else None
+    # Allen's accepted public turns use the same evidence channel as the
+    # autonomous speakers. Never mix them with control/status messages.
+    if social_floor:
+        from room_conversational_floor import ORDER as AUTONOMOUS, last_participant_turn
+        public = [
+            item for item in conv()
+            if isinstance(item, dict)
+            and str(item.get("speaker") or "").strip().lower() in (*AUTONOMOUS, "allen")
+            and str(item.get("text") or "").strip()
+            and str(item.get("id") or "").strip()
+        ]
+        context = public[-3:]
+        last = last_participant_turn(public)
+    else:
+        context = msgs()[-8:]
+        last = context[-1] if context else None
     mind = minds()
     current_state = state()
     topic = current_state.get("topic_episode") or {}
     partner = (last or {}).get("speaker")
-    if partner not in ORDER or partner == entity:
+    if ((partner not in ORDER and not (social_floor and partner == "allen"))
+            or partner == entity):
         partner = choose_partner(entity, mind, topic, int(current_state.get("cycle", 0)))
-    rel = mind["entities"][entity]["people"][partner]
+    rel = mind["entities"][entity]["people"].get(partner) or {}
     private_self_state = _private_self_state.model_slice(
         mind["entities"][entity].get("private_self_state"), P[entity], entity, ORDER
     )
