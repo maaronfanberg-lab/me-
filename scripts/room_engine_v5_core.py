@@ -308,7 +308,9 @@ def sense(node, key):
     # The topic index is archival bookkeeping, not evidence that the group
     # owes its next turn to a system-generated subject. In selected-floor
     # mode do not flood tiny models with eight copies of one stale topic.
-    context = msgs()[-3:] if social_floor else msgs()[-8:]
+    # In the new path, Allen's durably accepted public turns are peers in
+    # conversation, even though they are not autonomous engine messages.
+    context = conv()[-3:] if social_floor else msgs()[-8:]
     last = context[-1] if context else None
     mind = minds()
     current_state = state()
@@ -420,7 +422,7 @@ def recurrent(node, key, bus_data):
         social_floor = os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
         job = None if social_floor else conversation_job(entity, key)
         collapsed = False if social_floor else context_collapsed(base.get("context"))
-        prior_turns = prior_expression_messages(node)
+        prior_turns = [] if social_floor else prior_expression_messages(node)
         expression_context = ([] if collapsed else list(base.get("context") or [])[-5:]) + prior_turns
         expression_topic = dict(base.get("topic") or {})
         if collapsed:
