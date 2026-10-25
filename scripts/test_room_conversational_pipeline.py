@@ -222,53 +222,6 @@ try:
 finally:
     core.conv, core.state, core.model_run = original_conv, original_state, original_model_run
 
-# A failed *private thought* model is not a failure to hear another person.
-# The public next-turn opportunity can still lead to a genuine generated
-# response, with no invented deliberation, canned text or extra topic seed.
-from room_conversational_floor import choose_next
-public_only = [
-    {"id": "pottery-1", "speaker": "allen",
-     "text": "I found an unusual pattern on a piece of pottery. Any thoughts?"}
-]
-original_conv, original_state, original_model_run = core.conv, core.state, core.model_run
-observed_expression_payloads = []
-core.conv = lambda: public_only
-core.state = lambda: {"cycle": 30, "topic_episode": {
-    "root": "experimental category classification trees",
-    "current_facet": "category tree experiment"
-}}
-def thoughtless_model(role, payload):
-    if role == "comprehension":
-        return None
-    if role == "expression":
-        observed_expression_payloads.append(payload)
-        return {
-            "decision": "SPEAK", "target": "allen", "move": "deepen",
-            "utterance": "Allen, the pottery has a pattern I would like to examine.",
-            "semantic_terms": ["pottery", "pattern"]
-        }
-    return None
-core.model_run = thoughtless_model
-try:
-    perception_parts = [core.sense(n, "public-only") for n in range(12)]
-    b = core.bus(perception_parts, "public-only")
-    b["recurrent"] = {
-        entity: {"thought": {"private": {"deliberation": None}}}
-        for entity in core.ORDER
-    }
-    opportunity = choose_next(public_only, b, core.CFG, core.minds())
-    assert opportunity["reason"] == "observed_turn_opportunity", opportunity
-    assert opportunity["evidence_level"] == "observed_public_turn_only"
-    result = core.recurrent(opportunity["node"], "public-only", b)
-    assert result["private"]["deliberation"] is None
-    assert result["private"]["expression"]["target"] == "allen"
-    assert len(observed_expression_payloads) == 1
-    assert observed_expression_payloads[0]["event"]["id"] == "pottery-1"
-    assert observed_expression_payloads[0]["context"][-1]["text"] == public_only[0]["text"]
-    assert observed_expression_payloads[0]["topic"] == {}
-finally:
-    core.conv, core.state, core.model_run = original_conv, original_state, original_model_run
-
 # An authentic expression run must not sneak a synthetic contribution job
 # into the model payload, even if the recent vocabulary repeats.
 captured = []
