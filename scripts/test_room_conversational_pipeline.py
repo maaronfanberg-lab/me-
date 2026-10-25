@@ -91,6 +91,48 @@ except RuntimeError as exc:
 else:
     raise AssertionError("extreme generator collapse was accepted")
 
+# An authentic expression run must not sneak a synthetic contribution job
+# into the model payload, even if the recent vocabulary repeats.
+captured = []
+original_model_run = core.model_run
+core.model_run = lambda role, payload: (
+    captured.append((role, payload)) or {
+        "decision": "SPEAK", "target": "mara", "move": "disclose",
+        "utterance": "I keep coming back to the oak because it matters.",
+        "semantic_terms": ["oak"],
+    })
+try:
+    last = {"id": "source", "speaker": "jules",
+            "text": "I saw the old oak again.", "cognition": {"target": "mara"}}
+    repeated_context = [last] * 8
+    source_part = {
+        "entity": "sarah", "role": "expression", "private": {
+            "event": last, "context": repeated_context,
+            "topic": {"root": "old oak", "current_facet": "old oak"},
+            "partner": "mara", "relationship": {},
+        }, "public": {"readiness": .6},
+    }
+    observe_part = {"entity": "sarah", "role": "comprehension",
+                    "private": {"social_observation": {}}}
+    bus_fixture = {
+        "private": {"sarah": [source_part, observe_part]},
+        "recurrent": {"sarah": {"thought": {"private": {"deliberation": {
+            "action": "DISCLOSE", "focus": "personal memory",
+            "new_information_goal": "Discuss what I experienced",
+            "preferred_partner": "mara",
+        }}}}},
+    }
+    core.recurrent(2, "fixture-no-novelty", bus_fixture)
+finally:
+    core.model_run = original_model_run
+assert len(captured) == 1
+assert captured[0][0] == "expression"
+payload = captured[0][1]
+assert payload["conversation_job"] is None
+assert payload["deliberation"]["action"] == "DISCLOSE"
+assert "Distinct contribution" not in payload["deliberation"]["new_information_goal"]
+assert payload["topic"]["root"] == "old oak"
+
 # The core's public commit CLI requires the nine-node contract.
 assert len(node_ids) == 9
 sys.argv = ["room_private_commit.py", "commit"]
