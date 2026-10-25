@@ -476,6 +476,17 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
         return "structured_debris"
     if re.search(r"\b([A-Za-z]{3,})-\1\b", text, re.I):
         return "local_word_duplication"
+    # Minimal turns are human and often sufficient ("No.", "Really?").
+    # A bare demonstrative or connective ("This", "Because") leaves an
+    # unfinished grammatical projection: it does not answer or repair anyone.
+    # This is a within-turn completeness check, never a repeated-word ban.
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1" and len(words) == 1:
+        if words[0] in {
+            "this", "that", "these", "those", "it", "they", "them",
+            "and", "but", "because", "however", "although", "the",
+            "a", "an", "our", "their", "my", "your", "is", "are",
+        }:
+            return "unfinished_deictic_or_connective"
     if (os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1"
             and len(words) < 3
             and not re.search(r"\b(?:no|nope|wrong|fuck|shit|bullshit|idiot|moron|damn|hell)\b", text, re.I)):
