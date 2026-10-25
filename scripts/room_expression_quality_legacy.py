@@ -494,9 +494,12 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
         return "trailing_fragment"
     if _terminal_incomplete(text):
         return "trailing_fragment"
-    # In the opportunity-based path, successful reference/repair may reuse
-    # words or entire phrases. Hygiene remains enforced above.
+    # Exact quotations and conceptual pacts are allowed; a runaway sampler
+    # producing 24+ words from at most three tokens is not an interactional
+    # accomplishment. Do not require lexical novelty between participants.
     if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        if len(words) >= 24 and len(set(words)) <= 3:
+            return "sampler_collapse"
         return None
     if _lexical_degeneracy(text):
         _escape_stale_context(compact, self_entity)
