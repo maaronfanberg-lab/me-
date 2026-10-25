@@ -38,6 +38,10 @@ checks = (
 for snippet in checks:
     if snippet not in script:
         raise AssertionError("missing Room selection or rollback path: " + snippet)
-if "vars.ROOM_CONVERSATIONAL_FLOOR" not in workflow:
-    raise AssertionError("Room feature flag not adjustable")
+# Live conversational floor starts enabled; the independently named
+# emergency switch explicitly disables new runs without code changes.
+if "vars.ROOM_CONVERSATIONAL_FLOOR_DISABLE == '1' && '0' || '1'" not in workflow:
+    raise AssertionError("conversational activation/disable expression changed")
+if 'ROOM_FLOOR_DESIRED="${ROOM_CONVERSATIONAL_FLOOR:-0}"' not in script:
+    raise AssertionError("runtime retry must recognize desired live mode")
 print("PASS: Room workflow shell syntax and both selected/legacy routes")
