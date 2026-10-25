@@ -236,6 +236,32 @@ try:
 finally:
     core.conv, core.state, core.model_run = original_conv, original_state, original_model_run
 
+# Live character motivation must survive the *last* compact-model stage.
+# A person with no independent intention would otherwise have only the
+# already-repeated public claims to echo. This is their existing self-model,
+# not a forced novel topic or a generated motivational script.
+import room_private_model_autonomy_legacy as autonomy_legacy
+sarah = core.P["sarah"]
+jules = core.P["jules"]
+fixture = {
+    "entity": "sarah", "profile": sarah,
+    "event": {"id": "latest", "speaker": "mara",
+              "text": "Experimental category trees may be better."},
+    "context": [{"id": "latest", "speaker": "mara",
+                 "text": "Experimental category trees may be better."}],
+    "topic": {}, "relationship": {}, "deliberation": None,
+}
+rendered = autonomy_legacy._autonomy_compact(fixture, "expression", "sarah")
+assert rendered["discussion"]["subject"] is None
+assert rendered["self"]["motives"] == sarah["psychology_v2"]["motives"][:2]
+assert rendered["self"]["cognitive_style"] == sarah["psychology_v2"]["cognitive_style"]
+assert rendered["self"]["topic_mobility"] == sarah["psychology_v2"]["topic_mobility"]
+assert "category" not in " ".join(rendered["self"]["motives"]).lower()
+other = autonomy_legacy._autonomy_compact(dict(fixture, entity="jules", profile=jules),
+                                         "expression", "jules")
+assert rendered["self"]["motives"] != other["self"]["motives"]
+assert rendered["event"]["text"] == fixture["event"]["text"]
+
 # An authentic expression run must not sneak a synthetic contribution job
 # into the model payload, even if the recent vocabulary repeats.
 captured = []
