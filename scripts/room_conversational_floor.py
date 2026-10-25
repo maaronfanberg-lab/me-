@@ -49,10 +49,14 @@ def is_directed(event, recipient):
     # Actual vocatives, including Allen messages that have no hidden target.
     # Quoted name mentions without a conversational invitation are not enough.
     name = re.escape(target)
+    # Distinguish a *vocative* from a third-person mention. In
+    # "Mara, why did you disagree with Sarah?" only Mara is addressed;
+    # "Sarah?" in the question is NOT a second addressed speaker.
     return bool(
-        re.search(r"\b" + name + r"\b\s*[,?!:]", spoken, re.I)
+        re.search(r"^\s*" + name + r"\b\s*[,?!:]", spoken, re.I)
         or re.search(r"^\s*@" + name + r"\b", spoken, re.I)
-        or re.search(r"\b" + name + r"\s+(?:can|could|would|will|what|why|how|are|do|did|is|have|tell|please)\b", spoken, re.I)
+        or re.search(r"^\s*" + name + r"\s+(?:can|could|would|will|what|why|how|are|do|did|is|have|tell|please)\b", spoken, re.I)
+        or re.search(r",\s*" + name + r"\s*[?!\.]?\s*$", spoken, re.I)
     )
 
 
