@@ -157,6 +157,71 @@ try:
 finally:
     core.conv, core.state, core.model_run = original_conv, original_state, original_model_run
 
+# Full selected-floor action path: public Allen input -> all 12 perceptions
+# -> four distinct private deliberations -> addressed floor -> expression.
+# This catches the old failure where the selector saw Allen but the language
+# model was shown only autonomous messages and a persisted topic attractor.
+from room_conversational_floor import choose_next, public_participant_turns, last_participant_source_id
+grounded_feed = [
+    {"id": "old-1", "speaker": "jules", "text": "Classification trees again."},
+    {"id": "sys-2", "speaker": "system", "text": "Internal heartbeat."},
+    {"id": "old-3", "speaker": "sarah", "text": "I saw category trees yesterday."},
+    {"id": "allen-4", "speaker": "allen",
+     "text": "Mara, why did you disagree with Sarah?", "runtime": "public-inbound"},
+]
+assert [turn["id"] for turn in public_participant_turns(grounded_feed)] == [
+    "old-1", "old-3", "allen-4"
+]
+perceived, expressed = [], []
+original_conv, original_state, original_model_run = core.conv, core.state, core.model_run
+core.conv = lambda: grounded_feed
+core.state = lambda: {"cycle": 16, "topic_episode": {
+    "root": "experimental category classification trees", "current_facet": "trees"
+}}
+def ground_truth_model(role, payload):
+    if role == "comprehension":
+        perceived.append((payload["entity"], payload["event"]["id"]))
+        return {"participation": "PARTICIPANT", "grounding": "ambiguous"}
+    if role == "thought":
+        assert payload["event"]["id"] == "allen-4", payload
+        return {
+            "action": "REPAIR" if payload["entity"] == "mara" else "DEEPEN",
+            "preferred_partner": "allen", "focus": "Mara's disagreement",
+            "new_information_goal": "Clarify Mara's reason",
+            "unresolved_thread": "What led to the disagreement?",
+        }
+    if role == "expression":
+        expressed.append(payload)
+        return {
+            "decision": "SPEAK", "target": "allen", "move": "repair",
+            "utterance": "Allen, I disagreed because I interpreted her example differently.",
+            "semantic_terms": ["disagreed", "interpreted"]
+        }
+    raise AssertionError(role)
+core.model_run = ground_truth_model
+try:
+    senses = [core.sense(n, "allen-grounded") for n in range(12)]
+    private_bus = core.bus(senses, "allen-grounded")
+    thoughts = [core.recurrent(n, "allen-grounded", private_bus) for n in (1, 4, 7, 10)]
+    recurrent_bus = core.bus2(private_bus, thoughts, "allen-grounded")
+    chosen = choose_next(grounded_feed, recurrent_bus, core.CFG, core.minds())
+    assert chosen["speaker"] == "mara", chosen
+    assert chosen["reason"] == "addressed_recipient", chosen
+    assert chosen["source_id"] == "allen-4"
+    assert last_participant_source_id(grounded_feed) == "allen-4"
+    output = core.recurrent(chosen["node"], "allen-grounded", recurrent_bus)
+    assert output["entity"] == "mara"
+    assert output["private"]["expression"]["target"] == "allen"
+    assert len(expressed) == 1
+    assert expressed[0]["event"]["id"] == "allen-4"
+    assert expressed[0]["event"]["text"] == grounded_feed[-1]["text"]
+    assert expressed[0]["context"][-1]["id"] == "allen-4"
+    assert expressed[0]["topic"] == {}, expressed[0]["topic"]
+    assert expressed[0]["deliberation"]["action"] == "REPAIR"
+    assert sorted(perceived) == sorted((e, "allen-4") for e in core.ORDER)
+finally:
+    core.conv, core.state, core.model_run = original_conv, original_state, original_model_run
+
 # An authentic expression run must not sneak a synthetic contribution job
 # into the model payload, even if the recent vocabulary repeats.
 captured = []
