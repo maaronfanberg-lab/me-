@@ -261,7 +261,7 @@ def private_commit(parts: list[dict], key: str):
     # independently valid peers to publish.
     expressions: dict[str, dict] = {}
     quarantined: list[str] = []
-    for entity in AWAKE_ORDER:
+    for entity in awake_order:
         expr = (E[entity].get("private") or {}).get("expression")
         if not isinstance(expr, dict):
             quarantined.append(f"{entity}:missing_expression")
