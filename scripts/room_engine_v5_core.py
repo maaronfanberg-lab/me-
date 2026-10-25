@@ -819,14 +819,19 @@ def main():
         parts = [load(path, {}) for path in sorted(PARTS.glob("recurrent-*.json"))]
         nodes = {part["node"] for part in parts}
         if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
-            from room_conversational_floor import checked_floor
+            from room_conversational_floor import NODE, checked_floor
             floor = load(WORK / "floor.json", {})
             awake = [e for e in ORDER if e not in set(CFG.get("sleeping_entities", []))]
             selected = checked_floor(floor, awake=awake, required=True)
             expected = {n for n in range(12) if n % 3 != 2}
-            expected.add(A["entities"][selected][2])
-            if nodes != expected:
+            expected.add(NODE[selected])
+            if nodes != expected or len(parts) != len(expected):
                 raise RuntimeError("selected Room turn requires eight cognitive nodes plus one expression")
+            for part in parts:
+                node = part["node"]
+                entity, _local, role, _tasks = ni(node)
+                if part.get("entity") != entity or part.get("role") != role:
+                    raise RuntimeError("Room recurrent part has wrong entity or role")
         elif nodes != set(range(12)):
             raise RuntimeError("commit requires all 12 recurrent nodes")
         commit(parts, key)
