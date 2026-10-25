@@ -82,16 +82,19 @@ assert "test" in " ".join(odd_lenses["owen"]).lower()
 assert "hypotheses" in " ".join(odd_lenses["sarah"]).lower()
 assert "people" in " ".join(odd_lenses["mara"]).lower()
 
-# Schema-like vulnerabilities activate selectively from a generic event classifier.
-assert any("abandonment" in str(item.get("schema", "")).lower() for item in results[("mara", "exclude_mara")]["schema_activation"])
-assert not any("abandonment" in str(item.get("schema", "")).lower() for item in results[("owen", "exclude_mara")]["schema_activation"])
-assert any("mistrust" in str(item.get("schema", "")).lower() for item in results[("owen", "critique_owen")]["schema_activation"])
-assert any("recognition" in str(item.get("schema", "")).lower() for item in results[("jules", "exclude_jules")]["schema_activation"])
-
-# Social schema triggers must belong to the person actually targeted, not every named observer.
-assert not any("recognition" in str(item.get("schema", "")).lower() for item in results[("jules", "exclude_mara")]["schema_activation"]), results[("jules", "exclude_mara")]
-assert not any("emotional-inhibition" in str(item.get("schema", "")).lower() for item in results[("sarah", "exclude_mara")]["schema_activation"]), results[("sarah", "exclude_mara")]
-assert not any("abandonment" in str(item.get("schema", "")).lower() for item in results[("mara", "exclude_jules")]["schema_activation"]), results[("mara", "exclude_jules")]
+# Current character profiles have no declared schema vulnerabilities.
+# The appraiser must identify the *social target* without fabricating clinical
+# schema labels or transforming observations into psychodynamic certainty.
+for person in PEOPLE:
+    for scenario in ("exclude_mara", "exclude_jules", "critique_owen"):
+        assert results[(person, scenario)]["schema_activation"] == [], (
+            person, scenario, "unconfigured psychological vulnerability invented"
+        )
+assert results[("mara", "exclude_mara")]["social_targeting"].get("exclusion") is True
+assert results[("jules", "exclude_jules")]["social_targeting"].get("exclusion") is True
+assert not results[("owen", "exclude_mara")]["social_targeting"].get("exclusion")
+assert not results[("mara", "exclude_jules")]["social_targeting"].get("exclusion")
+assert results[("owen", "critique_owen")]["social_targeting"].get("criticism_or_rejection") is True
 
 # Repair is generic, but recovery style remains person-specific.
 for person in PEOPLE:
