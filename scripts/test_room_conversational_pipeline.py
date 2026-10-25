@@ -2,6 +2,7 @@
 """Isolated Room full pipeline and lexical-repair tests; never mutate live state."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -62,10 +63,18 @@ for node in node_ids:
                            "semantic_terms": ["oak", "moths"]},
         }
     core.save(parts_root / f"recurrent-{node:02d}.json", part)
-core.save(core.WORK / "floor.json", {
-    "speaker": "sarah", "node": 2, "reason": "open_floor_relevance",
-    "source_id": None, "source_speaker": "",
-})
+def write_floor(key, source=None):
+    os.environ["ROOM_CYCLE_KEY"] = key
+    core.save(core.WORK / "bus-recurrent.json", {"key": key})
+    digest = hashlib.sha256((core.WORK / "bus-recurrent.json").read_bytes()).hexdigest()
+    core.save(core.WORK / "floor.json", {
+        "speaker": "sarah", "node": 2, "reason": "open_floor_relevance",
+        "source_id": source, "source_speaker": "",
+        "cycle_key": key, "bus_sha256": digest,
+    })
+
+
+write_floor("fixture-beat-1")
 
 # The core's public commit CLI requires the nine-node contract.
 assert len(node_ids) == 9
@@ -101,6 +110,7 @@ reply_part["private"]["expression"] = {
     "semantic_terms": ["moths", "oak"],
 }
 core.save(parts_root / "recurrent-02.json", reply_part)
+write_floor("fixture-beat-2", conversation[-1]["id"])
 core.main()
 conversation = json.loads((core.ROOM / "conversation.json").read_text())
 assert len(conversation) == 2
