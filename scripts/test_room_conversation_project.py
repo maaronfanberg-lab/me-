@@ -84,7 +84,8 @@ class Projects(unittest.TestCase):
         self.assertTrue(project.response_project(old, "jules"))
         packed = autonomy._autonomy_compact(self.input(old), "expression", "jules")
         self.assertEqual(packed["interaction_project"]["kind"], "respond_or_repair")
-        self.assertEqual(packed["event"]["id"], "m2")
+        self.assertEqual(packed["event"]["text"], old["text"])
+        self.assertEqual(packed["interaction_project"]["observed_source_id"], "m2")
 
     def test_personal_attention_without_canned_subject_rotation(self):
         old = event("mara", "Nothing else needed.", "m3")
