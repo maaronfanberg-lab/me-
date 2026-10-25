@@ -6,6 +6,8 @@ on:
       - 'scripts/room_conversational_floor.py'
       - 'scripts/room_conversational_candidate.py'
       - 'scripts/test_room_conversational_workflow.py'
+      - 'scripts/room_floor_health.py'
+      - 'scripts/test_room_floor_health.py'
       - 'scripts/test_room_conversational_wrapper_intent.py'
       - 'scripts/room_engine_v5_legacy.py'
       - 'scripts/test_room_conversational_floor.py'
@@ -33,6 +35,8 @@ jobs:
         run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_conversational_candidate.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
       - name: Preserve character intent through model wrappers
         run: python3 scripts/test_room_conversational_wrapper_intent.py
+      - name: Validate fallback diagnostic privacy and atomicity
+        run: python3 scripts/test_room_floor_health.py
       - name: Validate both real workflow shell routes
         run: python3 scripts/test_room_conversational_workflow.py
       - name: Test directed responses, sleeping participants, voluntary readiness
