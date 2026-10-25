@@ -17,6 +17,8 @@ on:
       - 'scripts/room_engine_v5_core.py'
       - 'scripts/room_engine_v5.py'
       - 'scripts/test_room_transcript_preservation.py'
+      - 'scripts/test_room_character_initiative.py'
+      - 'scripts/room_private_model_autonomy_legacy.py'
       - 'scripts/room_private_commit.py'
       - 'scripts/room_expression_quality_legacy.py'
       - 'scripts/room_private_model.py'
@@ -40,6 +42,8 @@ jobs:
         run: python3 scripts/test_room_allen_source_provenance.py
       - name: Preserve character intent through model wrappers
         run: python3 scripts/test_room_conversational_wrapper_intent.py
+      - name: Verify personal motives and conversational response obligations
+        run: python3 scripts/test_room_character_initiative.py
       - name: Verify public questions survive model-context preparation
         run: python3 scripts/test_room_transcript_preservation.py
       - name: Validate both real workflow shell routes
