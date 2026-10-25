@@ -463,7 +463,7 @@ def recurrent(node, key, bus_data):
             "profile": P[entity],
             "social_observation": perception,
             "deliberation": deliberation,
-            "conversation_job": job,
+            "conversation_job": None if social_floor else job,
             "event": expression_context[-1] if expression_context else (None if collapsed else base.get("event")),
             "context": expression_context,
             "topic": expression_topic,
