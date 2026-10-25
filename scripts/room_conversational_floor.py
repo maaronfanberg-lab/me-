@@ -115,9 +115,11 @@ def choose_next(history, bus, config, minds, *, rank=0):
         raise ValueError("requested candidate is outside the awake group")
     last = last_participant_turn(history)
     author = _norm((last or {}).get("speaker"))
-    target = _target(last)
-    addressed = (target if target in awake and author != target
-                 and is_directed(last, target) else None)
+    # A person's spoken vocative is evidence even when Allen's turn lacks
+    # internal target metadata. Multiple audible addressees leave the floor
+    # open rather than inventing one exclusive recipient.
+    audible = [e for e in awake if author != e and is_directed(last, e)]
+    addressed = audible[0] if len(audible) == 1 else None
     profile = config.get("p") if isinstance(config.get("p"), dict) else {}
     state = minds.get("entities") if isinstance(minds.get("entities"), dict) else {}
     recurrent = bus.get("recurrent") if isinstance(bus.get("recurrent"), dict) else {}
