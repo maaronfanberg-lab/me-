@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 ORDER = ("sarah", "mara", "owen", "jules")
@@ -72,9 +73,12 @@ def choose_next(history, bus, config, minds):
                  if isinstance(event, dict) and _norm(event.get("speaker")) in (*ORDER, "allen")), None)
     author = _norm((last or {}).get("speaker"))
     target = _target(last)
-    # A first action directed to a named person makes that person relevant
-    # next, but never makes their *agreement* or a particular wording mandatory.
-    if target in awake and author != target and author in (*ORDER, "allen"):
+    # 'cognition.target' is a generated intention, not proof of audible
+    # address. An explicit name in what was actually spoken provides stronger
+    # recipient evidence; a hidden JSON target alone cannot capture the floor.
+    utterance = str((last or {}).get("text") or "")
+    named = bool(target and re.search(r"\b" + re.escape(target) + r"\b\s*[,?!:]", utterance, re.I))
+    if target in awake and author != target and author in (*ORDER, "allen") and named:
         return {"speaker": target, "node": NODE[target], "reason": "addressed_recipient",
                 "source_id": (last or {}).get("id"),
                 "source_speaker": author}
@@ -91,7 +95,7 @@ def choose_next(history, bus, config, minds):
         tie = int(hashlib.sha256(seed.encode()).hexdigest()[:8], 16) / (16 ** 8)
         ranked.append((score, tie, entity))
     chosen = max(ranked)[2]
-    return {"speaker": chosen, "node": NODE[chosen], "reason": "voluntary_relevance",
+    return {"speaker": chosen, "node": NODE[chosen], "reason": "open_floor_relevance",
             "source_id": (last or {}).get("id"), "source_speaker": author}
 
 
@@ -102,7 +106,7 @@ def checked_floor(selection, *, awake, required=False):
     allowed = {e for e in awake if e in ORDER}
     if speaker not in allowed or selection.get("node") != NODE[speaker]:
         raise ValueError("invalid or sleeping selected character")
-    if required and selection.get("reason") not in {"addressed_recipient", "voluntary_relevance"}:
+    if required and selection.get("reason") not in {"addressed_recipient", "open_floor_relevance"}:
         raise ValueError("unrecognized floor choice")
     return speaker
 
