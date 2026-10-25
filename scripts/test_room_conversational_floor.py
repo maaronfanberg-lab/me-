@@ -81,6 +81,19 @@ class FloorTests(unittest.TestCase):
         self.assertNotIn("new_topic", one)
         self.assertNotIn("repetition_score", one)
 
+    def test_direct_natural_language_address_without_hidden_metadata(self):
+        for text in ("Mara, can you explain?", "Mara what do you think?",
+                     "@Mara please weigh in.", "Can you explain, Mara?"):
+            event = msg("allen", text, target="", id="a-1")
+            chosen = choose_next([event], bus(), config(), {})
+            self.assertEqual(chosen["speaker"], "mara", text)
+            self.assertEqual(chosen["reason"], "addressed_recipient", text)
+
+    def test_contradictory_hidden_target_never_reassigns_audible_address(self):
+        event = msg("sarah", "Mara, could you help me?", target="owen", id="s1")
+        result = choose_next([event], bus({"mara": {"action": "REPAIR"}}), config(), {})
+        self.assertNotEqual(result["reason"], "addressed_recipient")
+
     def test_system_metadata_at_end_does_not_change_last_public_contribution(self):
         public = msg("mara", "Sarah, are you listening?", "sarah", id="mara-22")
         metadata = {"id": "system-23", "speaker": "system",
