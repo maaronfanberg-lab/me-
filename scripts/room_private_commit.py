@@ -314,9 +314,12 @@ def private_commit(parts: list[dict], key: str):
         if move not in ALLOWED_MOVES:
             move = planned["action"] if planned["action"] in ALLOWED_MOVES else "deepen"
         target = norm(expr.get("target") or planned["target"])
-        if target not in AWAKE_ORDER or target == entity:
+        available_partners = set(AWAKE_ORDER)
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            available_partners.add("allen")
+        if target not in available_partners or target == entity:
             target = planned["target"]
-        if target not in AWAKE_ORDER or target == entity:
+        if target not in available_partners or target == entity:
             target = next(other for other in AWAKE_ORDER if other != entity)
         staged.append((entity, move, target, text, terms))
 
