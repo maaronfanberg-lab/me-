@@ -60,7 +60,9 @@ def last_participant_turn(history):
     """Match the same evidence projection in selection and publication."""
     return next((event for event in reversed(history)
                  if isinstance(event, dict)
-                 and _norm(event.get("speaker")) in (*ORDER, "allen")), None)
+                 and _norm(event.get("speaker")) in (*ORDER, "allen")
+                 and str(event.get("id") or "").strip()
+                 and str(event.get("text") or "").strip()), None)
 
 
 def last_participant_source_id(history):
