@@ -249,7 +249,7 @@ def private_commit(parts: list[dict], key: str):
         floor_path = c.ROOT / "room_work" / "floor.json"
         floor = json.loads(floor_path.read_text(encoding="utf-8"))
         selected = _floor.checked_floor(floor, awake=AWAKE_ORDER, required=True)
-        observed_id = (V[-1] if V else {}).get("id")
+        observed_id = _floor.last_participant_source_id(V)
         bus_path = c.ROOT / "room_work" / "bus-recurrent.json"
         bus_hash = hashlib.sha256(bus_path.read_bytes()).hexdigest()
         if (floor.get("source_id") != observed_id
