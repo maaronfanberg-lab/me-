@@ -9,6 +9,8 @@ on:
       - 'scripts/build_room_feed.py'
       - 'scripts/test_room_sleeping_entity.py'
       - 'scripts/room_group_dynamics.py'
+      - 'scripts/room_interaction_sequence.py'
+      - 'scripts/test_room_interaction_sequence.py'
       - 'scripts/room_private_model_autonomy.py'
       - 'scripts/room_private_model_autonomy/__init__.py'
       - 'scripts/test_room_group_dynamics.py'
@@ -27,5 +29,7 @@ jobs:
         run: python3 -m py_compile scripts/room_engine_v5.py scripts/room_private_commit.py scripts/build_room_feed.py scripts/test_room_sleeping_entity.py
       - name: Verify sleeping participant
         run: python3 scripts/test_room_sleeping_entity.py
+      - name: Verify conversation action sequences
+        run: python3 scripts/test_room_interaction_sequence.py
       - name: Verify Jules return and group consequences
         run: python3 scripts/test_room_group_dynamics.py

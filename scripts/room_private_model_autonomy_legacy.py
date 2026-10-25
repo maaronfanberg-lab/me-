@@ -314,9 +314,13 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
     if role == "expression":
         base_guard = (
             "\nAUTONOMY_RULE\n"
-            "Respond naturally to the current conversation. Keep the chosen move, focus, and intended partner while choosing your own words. "
+            "Respond to the action underway. Use group_context.interaction as provisional evidence: a directed question invites a response, " 
+            "an offered reply may call for acknowledgment or repair, and a refusal need not be pursued. " 
+            "Keep the chosen move, focus, and intended partner while using your own words. "
             "Use only details supported by what was actually said. Do not invent unsupported conflict, jealousy, secrets, threats, shared memories, "
-            "or dramatic incidents. Treat reported claims as reports unless independent evidence is present. Avoid copying recent speech. Stay inside the conversation.\n"
+            "or dramatic incidents. Treat reported claims as reports unless independent evidence is present. " 
+            "Reusing an established reference, clarifying a point, or emphasizing something can serve a real conversational purpose. " 
+            "Do not mistake an observed response for confirmed understanding. Stay inside the conversation.\n"
         )
 
     attempts = 3 if role == "expression" else 2
@@ -326,7 +330,7 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
         if attempt:
             retry_guard = (
                 "\nTRY_AGAIN\n"
-                "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n"
+                "Re-examine the prior action and the evidence of uptake; choose the appropriate next action in your own voice. Keep the chosen move, focus, and partner. Base the reply only on what was actually said.\n"
             )
 
         combined = (
