@@ -276,7 +276,10 @@ payload = captured[0][1]
 assert payload["conversation_job"] is None
 assert payload["deliberation"]["action"] == "DISCLOSE"
 assert "Distinct contribution" not in payload["deliberation"]["new_information_goal"]
-assert payload["topic"]["root"] == "old oak"
+assert payload["topic"] == {}, "open-floor initiative must not inherit archived topic nouns"
+assert payload["event"] is None, "a completed statement is not an obligatory subject"
+assert payload["context"] == [], "do not pass the old discussion as the content of self-initiative"
+assert payload["self_initiated"] is True
 
 # Prior expression parts are not allowed to override the latest Allen turn
 # on the selected model path. The original API ordering used to append them.
@@ -301,6 +304,7 @@ finally:
 assert len(captured) == 1
 assert captured[0][1]["event"]["id"] == "allen-latest"
 assert captured[0][1]["context"][-1]["speaker"] == "allen"
+assert captured[0][1]["self_initiated"] is False
 
 
 # Cooperative short answers do not have to invent a novel topic term.
