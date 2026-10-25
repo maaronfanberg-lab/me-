@@ -237,7 +237,9 @@ def private_commit(parts: list[dict], key: str):
     T = c.tree()
     V = c.conv()
     _group.sanitize_persisted(M, S, V, T)
-    prev = c.event()
+    prev = (_floor.last_participant_turn(V)
+            if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+            else c.event())
     cycle = int(S.get("cycle", 0)) + 1
     context_scope_migration = int(S.get("context_scope_version", 0) or 0) < CONTEXT_SCOPE_VERSION
     topic = clean_topic(S.get("topic_episode") or {})
