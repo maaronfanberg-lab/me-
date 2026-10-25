@@ -143,12 +143,20 @@ def choose_next(history, bus, config, minds, *, rank=0):
     state = minds.get("entities") if isinstance(minds.get("entities"), dict) else {}
     recurrent = bus.get("recurrent") if isinstance(bus.get("recurrent"), dict) else {}
     relationships = {e: (state.get(e) or {}).get("people") for e in awake}
-    if addressed is None and not any(
+    has_deliberated_bid = any(
         isinstance((((recurrent.get(e) or {}).get("thought") or {}).get("private") or {}).get("deliberation"), dict)
         and _norm(((((recurrent.get(e) or {}).get("thought") or {}).get("private") or {}).get("deliberation") or {}).get("action"))
         for e in awake
-    ):
-        raise RuntimeError("no credible deliberated reason for anyone to take the floor")
+    )
+    if addressed is None and not has_deliberated_bid and last is None:
+        # No intention, no witnessed utterance, and no addressed invitation:
+        # no evidence that anybody has a particular conversational business.
+        raise RuntimeError("no credible interactional reason for anyone to take the floor")
+    # With an actual public contribution the others can legitimately
+    # self-select a response opportunity even if a tiny language model's
+    # *private thought* API failed. This is NOT pretending a model made a
+    # decision: the evidence level is explicit, and expression still goes
+    # through the normal generation, grounding and publication checks.
     ranked = []
     for entity in awake:
         thought = (((recurrent.get(entity) or {}).get("thought") or {}).get("private") or {}).get("deliberation") or {}
@@ -163,10 +171,13 @@ def choose_next(history, bus, config, minds, *, rank=0):
     chosen = ordered[rank]
     reason = ("addressed_recipient" if rank == 0 and addressed == chosen
               else "technical_fallback_opportunity" if rank > 0
+              else "observed_turn_opportunity" if not has_deliberated_bid
               else "open_floor_relevance")
     return {"speaker": chosen, "node": NODE[chosen], "reason": reason,
             "candidate_rank": rank, "candidate_speakers": ordered,
-            "source_id": (last or {}).get("id"), "source_speaker": author}
+            "source_id": (last or {}).get("id"), "source_speaker": author,
+            "evidence_level": ("private_deliberation" if has_deliberated_bid
+                               else "observed_public_turn_only")}
 
 
 def checked_floor(selection, *, awake, required=False):
@@ -176,7 +187,7 @@ def checked_floor(selection, *, awake, required=False):
     allowed = {e for e in awake if e in ORDER}
     if speaker not in allowed or selection.get("node") != NODE[speaker]:
         raise ValueError("invalid or sleeping selected character")
-    if required and selection.get("reason") not in {"addressed_recipient", "open_floor_relevance", "technical_fallback_opportunity"}:
+    if required and selection.get("reason") not in {"addressed_recipient", "open_floor_relevance", "technical_fallback_opportunity", "observed_turn_opportunity"}:
         raise ValueError("unrecognized floor choice")
     return speaker
 
