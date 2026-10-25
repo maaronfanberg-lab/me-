@@ -122,7 +122,7 @@ class FloorTests(unittest.TestCase):
                              msg("owen", "I heard her.", id="owen-24")]), "owen-24")
 
     def test_missing_thoughts_not_speech_fabrication(self):
-        with self.assertRaisesRegex(RuntimeError, "no credible deliberated reason"):
+        with self.assertRaisesRegex(RuntimeError, "no observed utterance or deliberated social bid"):
             choose_next([], {"recurrent": {}}, config(), {})
         # A directly addressed recipient can still recognize the social bid
         # without inventing a private action or claiming understanding.
@@ -147,6 +147,26 @@ class FloorTests(unittest.TestCase):
         # This is a status-of-the-current-turn decision, not an across-beats
         # quota or a lexical repetition score.
         self.assertNotIn("quota", after_jules)
+
+    def test_single_pass_model_without_thought_objects_can_select_real_uptake(self):
+        # Actual production autonomy intentionally returns None for all
+        # separate thought roles. This was the exact live failure condition
+        # on 2026-10-25, not an artificial prompt-quality problem.
+        history = [
+            msg("jules", "Could somebody explain what happened?", id="j1"),
+            msg("mara", "I saw it differently.", id="m2"),
+        ]
+        selected = choose_next(history, bus(), config(), {})
+        self.assertEqual(selected["speaker"], "jules")
+        self.assertEqual(selected["reason"], "open_floor_uptake")
+        self.assertEqual(selected["source_id"], "m2")
+        self.assertNotIn("invented_intent", selected)
+        self.assertNotIn("topic_reset", selected)
+
+    def test_monolithic_autonomy_explicitly_skips_thought_generation(self):
+        import room_private_model_autonomy as one_pass
+        self.assertIsNone(one_pass.run("thought", {"entity": "mara"}))
+        self.assertIsNone(one_pass.run("comprehension", {"entity": "mara"}))
 
     def test_technical_fallback_selects_second_distinct_opportunity(self):
         latest = msg("mara", "Sarah, what happened to the moths?", "sarah")
