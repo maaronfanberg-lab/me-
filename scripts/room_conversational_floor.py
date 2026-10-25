@@ -45,7 +45,7 @@ def is_directed(event, recipient):
     if _target(event) != target:
         return False
     spoken = str(event.get("text") or "")
-    return bool(re.search(r"\\b" + re.escape(target) + r"\\b\\s*[,?!:]", spoken, re.I))
+    return bool(re.search(r"\b" + re.escape(target) + r"\b\s*[,?!:]", spoken, re.I))
 
 
 def _score(entity, last, thought, profile, relationships):
