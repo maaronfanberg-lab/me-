@@ -89,8 +89,11 @@ jobs:
           open('room/allen-social-sim-diagnostic.json','w').write(json.dumps(payload,indent=2)+'\n')
           print(json.dumps(payload,indent=2))
           PY
-      - name: Record diagnostic on tested branch
-        if: always()
+      - name: Record diagnostic on authoritative main only
+        # Never let a simulator push generated snapshots into pull-request
+        # branches. Such pushes changed the PR head mid-review and broke
+        # evidence that a specific checked SHA was the one being merged.
+        if: ${{ always() && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           set -euo pipefail
