@@ -180,7 +180,8 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
                           else "open_floor_response_or_initiative",
             "question_visible": last_text.endswith("?"),
             "prior_speaker": event.get("speaker"),
-            "source_id": event.get("id"),
+            "source_id": (clean_payload.get("event") or {}).get("id")
+                         if isinstance(clean_payload.get("event"), dict) else None,
         }
 
     if role == "expression":
