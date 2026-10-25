@@ -103,6 +103,15 @@ def _profile_lens(profile: object, role: str) -> dict:
             "agency_style": psychology.get("agency_style"),
             "communion_style": psychology.get("communion_style"),
             "reciprocity_style": psychology.get("reciprocity_style"),
+            # These are the individual's enduring reasons to initiate,
+            # question or conclude a sequence. Without them, the one-pass
+            # local model often has only the last echoed utterance to use.
+            # Keep the lens short enough for 1B parameter models.
+            "motives": _clip_list(psychology.get("motives"), 2),
+            "values": _clip_list(psychology.get("values"), 2),
+            "attention_magnets": _clip_list(psychology.get("attention_magnets"), 2),
+            "cognitive_style": psychology.get("cognitive_style"),
+            "topic_mobility": psychology.get("topic_mobility"),
             "disagreement_style": psychology.get("disagreement_style"),
             "affiliation_style": psychology.get("affiliation_style"),
             "novelty_response": psychology.get("novelty_response"),
