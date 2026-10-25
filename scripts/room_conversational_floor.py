@@ -36,6 +36,18 @@ def _target(event):
     return _norm(cognition.get("target") or event.get("target"))
 
 
+def is_directed(event, recipient):
+    """Require an *audible* vocative, not the generator's hidden target alone."""
+    speaker = _norm((event or {}).get("speaker"))
+    target = _norm(recipient)
+    if not isinstance(event, dict) or target not in ORDER or speaker == target:
+        return False
+    if _target(event) != target:
+        return False
+    spoken = str(event.get("text") or "")
+    return bool(re.search(r"\\b" + re.escape(target) + r"\\b\\s*[,?!:]", spoken, re.I))
+
+
 def _score(entity, last, thought, profile, relationships):
     """Importance to this character, not novelty or speaker rotation."""
     delib = thought if isinstance(thought, dict) else {}
@@ -49,8 +61,8 @@ def _score(entity, last, thought, profile, relationships):
              - 0.20 * float(traits.get("inhibition", .5)))
     if speaker and speaker != entity and partner == speaker:
         score += .48
-    if speaker == entity:
-        score += .08  # a person may continue their own point
+    if speaker == entity and _norm(delib.get("unresolved_thread")):
+        score += .08  # genuine continuation of a stated unfinished concern
     if action in {"answer", "repair"} and partner == speaker and speaker != entity:
         score += .19
     if action in {"disagree", "disclose"}:
@@ -73,12 +85,8 @@ def choose_next(history, bus, config, minds):
                  if isinstance(event, dict) and _norm(event.get("speaker")) in (*ORDER, "allen")), None)
     author = _norm((last or {}).get("speaker"))
     target = _target(last)
-    # 'cognition.target' is a generated intention, not proof of audible
-    # address. An explicit name in what was actually spoken provides stronger
-    # recipient evidence; a hidden JSON target alone cannot capture the floor.
-    utterance = str((last or {}).get("text") or "")
-    named = bool(target and re.search(r"\b" + re.escape(target) + r"\b\s*[,?!:]", utterance, re.I))
-    if target in awake and author != target and author in (*ORDER, "allen") and named:
+    # Hidden target metadata alone never makes an address.
+    if target in awake and author != target and author in (*ORDER, "allen") and is_directed(last, target):
         return {"speaker": target, "node": NODE[target], "reason": "addressed_recipient",
                 "source_id": (last or {}).get("id"),
                 "source_speaker": author}
