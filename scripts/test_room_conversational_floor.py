@@ -42,7 +42,7 @@ class FloorTests(unittest.TestCase):
         last = msg("owen", "Jules, are you awake?", "jules")
         selected = choose_next([last], bus(), config(["jules"]), {})
         self.assertNotEqual(selected["speaker"], "jules")
-        self.assertEqual(selected["reason"], "voluntary_relevance")
+        self.assertEqual(selected["reason"], "open_floor_relevance")
         with self.assertRaises(ValueError):
             checked_floor({"speaker": "jules", "node": 11},
                           awake=["sarah", "mara", "owen"])
@@ -54,6 +54,18 @@ class FloorTests(unittest.TestCase):
         two = choose_next([msg("allen", "Can anybody hear me?", "unknown")],
                           bus(), config(), {})
         self.assertEqual(two["reason"], "voluntary_relevance")
+
+    def test_hidden_generated_target_is_not_evidence_of_audible_address(self):
+        # Live expression JSON always supplies a target, including for
+        # statements that never address that person in public speech.
+        last = msg("mara", "Category trees are curious.", "sarah")
+        initiative = bus({"owen": {
+            "preferred_partner": "mara", "action": "REPAIR",
+            "unresolved_thread": "Did Mara mean the oak?"
+        }})
+        picked = choose_next([last], initiative, config(), {})
+        self.assertEqual(picked["reason"], "open_floor_relevance")
+        self.assertEqual(picked["speaker"], "owen")
 
     def test_self_initiative_matters_without_rotation_or_topic_change(self):
         personal = bus({"owen": {
