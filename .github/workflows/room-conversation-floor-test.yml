@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'scripts/room_conversational_floor.py'
+      - 'scripts/room_conversational_candidate.py'
+      - 'scripts/test_room_conversational_workflow.py'
       - 'scripts/test_room_conversational_floor.py'
       - 'scripts/test_room_conversational_pipeline.py'
       - 'scripts/room_engine_v5_core.py'
@@ -26,7 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Compile real conversational opportunity path
-        run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
+        run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_conversational_candidate.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
+      - name: Validate both real workflow shell routes
+        run: python3 scripts/test_room_conversational_workflow.py
       - name: Test directed responses, sleeping participants, voluntary readiness
         run: python3 scripts/test_room_conversational_floor.py
       - name: Test actual selected-expression commit in sandbox
