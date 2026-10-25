@@ -43,11 +43,14 @@ AUTONOMY_PROMPTS = {
         "Choose another Room participant as the intended partner. Choose for yourself what matters next."
     ),
     "expression": (
-        "Speak as this participant in the ongoing conversation. "
-        "Realize the internally generated intent supplied in the situation: keep its move, focus, and intended partner. "
-        "Choose the actual wording yourself from the conversation and this participant's speaking identity. "
-        "Use evidence_context to distinguish what was observed from what was merely claimed. "
-        "Use only details supported by the conversation and choose your own wording."
+        "Speak as this participant in an actual ongoing conversation. "
+        "Where an internally generated intent exists, keep the participant's independently chosen action and partner. "
+        "A personally addressed turn makes an answer, clarification, disagreement or refusal relevant. "
+        "An open floor need not preserve the previous subject: the participant can respond, "
+        "offer an initiative connected to their own genuine motives or relationships, "
+        "or pursue a useful connection that interests them. These are opportunities, not commands. "
+        "Choose the actual words yourself, without inventing group agreement or unsupported events. "
+        "Use evidence_context to distinguish what was said from what was established."
     ),
 }
 
@@ -106,6 +109,14 @@ def _profile_lens(profile: object, role: str) -> dict:
             "disagreement_style": psychology.get("disagreement_style"),
             "affiliation_style": psychology.get("affiliation_style"),
             "novelty_response": psychology.get("novelty_response"),
+            # Conversation initiation needs individual motives, not simply the
+            # lexical content of whatever topic was most recently mentioned.
+            # These are existing user-authored character properties, never
+            # a fabricated topic or an instruction to avoid particular words.
+            "motives": _clip_list(psychology.get("motives"), 3),
+            "values": _clip_list(psychology.get("values"), 3),
+            "attention_magnets": _clip_list(psychology.get("attention_magnets"), 3),
+            "cognitive_style": psychology.get("cognitive_style"),
             "traits": {key: traits.get(key) for key in (
                 "extraversion", "self_disclosure", "social_sensitivity",
                 "novelty_seeking", "inhibition", "humor"
@@ -155,6 +166,23 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
     evidence = _research.evidence_context(clean_payload, self_entity, limit=6)
     if evidence:
         compact["evidence_context"] = evidence
+
+    if role == "expression" and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        # Infer only an opportunity to act, never agreement or a shared fact.
+        # Publicly audible vocatives are better evidence than hidden target
+        # metadata. Questions without named recipients remain open-floor bids.
+        from room_conversational_floor import is_directed
+        event = compact.get("event") if isinstance(compact.get("event"), dict) else {}
+        directly_addressed = bool(self_entity and is_directed(event, self_entity))
+        last_text = str(event.get("text") or "").strip()
+        compact["social_opportunity"] = {
+            "action_due": "directed_response_or_repair" if directly_addressed
+                          else "open_floor_response_or_initiative",
+            "question_visible": last_text.endswith("?"),
+            "prior_speaker": event.get("speaker"),
+            "source_id": (clean_payload.get("event") or {}).get("id")
+                         if isinstance(clean_payload.get("event"), dict) else None,
+        }
 
     if role == "expression":
         compact.pop("angle", None)
