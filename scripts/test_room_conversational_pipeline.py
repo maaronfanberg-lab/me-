@@ -81,6 +81,32 @@ assert state["cycle"] == 1
 assert state["beat_message_count"] == 1
 assert state["conversational_floor"] == "opportunity_v1"
 
+# The old four-voice path must STILL reject the nine-node input.
+os.environ.pop("ROOM_CONVERSATIONAL_FLOOR", None)
+try:
+    core.main()
+except RuntimeError as exc:
+    assert "all 12 recurrent nodes" in str(exc)
+else:
+    raise AssertionError("legacy path accepted a partial beat")
+os.environ["ROOM_CONVERSATIONAL_FLOOR"] = "1"
+
+# Allen is an actual interlocutor, not an entity to redirect to another AI.
+# The first version of the selected-only commit mistakenly discarded Allen
+# as the expression target; this is a publication regression fixture.
+reply_part = core.load(parts_root / "recurrent-02.json", {})
+reply_part["private"]["expression"] = {
+    "decision": "SPEAK", "target": "allen", "move": "answer",
+    "utterance": "Allen, I think those moths really do gather under the oak tree.",
+    "semantic_terms": ["moths", "oak"],
+}
+core.save(parts_root / "recurrent-02.json", reply_part)
+core.main()
+conversation = json.loads((core.ROOM / "conversation.json").read_text())
+assert len(conversation) == 2
+assert conversation[-1]["cognition"]["target"] == "allen"
+assert json.loads((core.ROOM / "state.json").read_text())["cycle"] == 2
+
 # Structural safety must fail if a second expression is incorrectly inserted.
 extra = {"node": 5, "entity": "mara", "role": "expression", "private": {
     "intent": {"generation_rank": 1},
