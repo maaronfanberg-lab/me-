@@ -122,11 +122,22 @@ def main():
     assert len(prompts) == 1, "specific same-topic contribution was over-rejected"
     assert accepted.get("utterance") == fresh
 
-    # Similarity to older conversation is continuity, not a same-beat echo.
+    # Isolate historical topic continuity from a DIFFERENT independent
+    # issue: the expression length cap. The earlier fixture used a 60+ word
+    # paragraph, triggering wordy_expression, so it never actually tested
+    # the alleged same-beat/historical distinction.
     historical = source([("mara", mara)], same_beat=False)
-    accepted, prompts = run([expression(owen_echo)], historical)
+    historical_reply = (
+        "I understand how challenging it can be to care for others. "
+        "It matters to me too, and sometimes caring is difficult to express."
+    )
+    assert len(historical_reply.split()) <= 48
+    accepted, prompts = run([expression(historical_reply)], historical)
     assert len(prompts) == 1, "historical topic continuity was incorrectly treated as same-beat copying"
-    assert accepted.get("utterance") == owen_echo
+    assert accepted.get("utterance") == historical_reply
+    # The original oversized sample still belongs to the separate
+    # word-length quality test, not this context-continuity assertion.
+    assert len(owen_echo.split()) > 48
 
     participant_words = "Why do platypuses have bills?"
     participant_source = source([("allen", participant_words)], same_beat=False)
