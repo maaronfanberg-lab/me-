@@ -87,6 +87,18 @@ class FloorTests(unittest.TestCase):
         self.assertEqual(out["reason"], "voluntary_relevance")
         self.assertNotIn("utterance", out)
 
+    def test_technical_fallback_selects_second_distinct_opportunity(self):
+        latest = msg("mara", "Sarah, what happened to the moths?", "sarah")
+        first = choose_next([latest], bus(), config(), {}, rank=0)
+        second = choose_next([latest], bus(), config(), {}, rank=1)
+        self.assertEqual(first["speaker"], "sarah")
+        self.assertNotEqual(first["speaker"], second["speaker"])
+        self.assertEqual(second["reason"], "technical_fallback_opportunity")
+        self.assertEqual(first["candidate_speakers"], second["candidate_speakers"])
+        self.assertEqual(second["source_id"], latest["id"])
+        with self.assertRaises(ValueError):
+            choose_next([latest], bus(), config(), {}, rank=5)
+
     def test_invalid_decision_and_nobody_awake_are_fatal(self):
         with self.assertRaises(RuntimeError):
             choose_next([], bus(), config(ORDER), {})
