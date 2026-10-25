@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import room_private_commit as commit
+from room_sequence_uptake import validate_uptake
 
 
 def validate_candidate(part: dict, entity: str, history: list[dict], topic: dict):
@@ -33,6 +34,8 @@ def validate_candidate(part: dict, entity: str, history: list[dict], topic: dict
     # Publication applies the same clean_terms and quality gate; it must not
     # synthesize topic vocabulary just to satisfy preflight.
     commit.validate_public_expression(entity, text, terms, history[-8:])
+    validate_uptake(history=history, speaker=entity, utterance=text,
+                    move=str(expr.get("move") or ""))
     return text
 
 
