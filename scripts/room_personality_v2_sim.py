@@ -10,10 +10,11 @@ PEOPLE = ("sarah", "mara", "owen", "jules")
 PROFILE_KEYS = {
     "core_identity", "values", "motives", "agency_style", "communion_style",
     "attention_magnets", "attention_blindspots", "reciprocity_style",
-    "topic_mobility", "novelty_response", "evidence_style", "disagreement_style",
+    "topic_mobility", "evidence_style", "disagreement_style",
     "affiliation_style", "status_sensitivity", "praise_response",
     "criticism_response", "schema_vulnerabilities", "coping_patterns",
-    "repair_recovery",
+    "repair_recovery", "private_self", "education", "cognitive_style",
+    "humor_style", "flirtation_style",
 }
 
 
@@ -33,7 +34,7 @@ profiles = {}
 for person in PEOPLE:
     profile = (CFG["p"][person] or {}).get("psychology_v2")
     assert isinstance(profile, dict), f"RED baseline: {person} has no fixed psychology_v2 profile"
-    assert set(profile) == PROFILE_KEYS, f"{person}: profile shape mismatch"
+    assert set(profile) == PROFILE_KEYS, f"{person}: current psychology_v2 profile shape mismatch; missing={sorted(PROFILE_KEYS - set(profile))}; extra={sorted(set(profile) - PROFILE_KEYS)}"
     assert no_numbers(profile), f"{person}: psychology_v2 contains slider-like numeric data"
     profiles[person] = profile
 
