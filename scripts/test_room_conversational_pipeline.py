@@ -91,6 +91,40 @@ except RuntimeError as exc:
 else:
     raise AssertionError("extreme generator collapse was accepted")
 
+# The model must not receive the old system-indexed topic three times.
+# A local topic record may still be used for storage, but cognition receives
+# only actual public contributions and each character's own dispositions.
+import room_private_model as base_model
+original_msgs, original_state, original_model_run = core.msgs, core.state, core.model_run
+repeat_feed = [
+    {"id": "r1", "speaker": "mara", "text": "Category classification trees."},
+    {"id": "r2", "speaker": "owen", "text": "Category classification trees again."},
+    {"id": "r3", "speaker": "jules", "text": "The classification experiment."},
+    {"id": "r4", "speaker": "sarah", "text": "I wonder why this is interesting."},
+]
+core.msgs = lambda: repeat_feed
+core.state = lambda: {"cycle": 13, "topic_episode": {
+    "root": "category classification experiment", "current_facet": "classification trees",
+    "shared_references": ["trees"], "status": "active"
+}}
+core.model_run = lambda role, payload: None
+try:
+    sensed = core.sense(0, "evidence-v1")
+    private = sensed["private"]
+    assert private["event"]["id"] == "r4"
+    assert len(private["context"]) == 3
+    assert private["keywords"] == []
+    assert private["topic"] == {}
+    compact = base_model._compact_payload({
+        "event": private["event"], "context": private["context"],
+        "topic": private["topic"], "keywords": private["keywords"],
+    }, "thought", "sarah")
+    assert compact["discussion"]["subject"] is None, compact
+    assert compact["event"]["text"] == repeat_feed[-1]["text"]
+    assert "classification experiment" not in json.dumps(compact.get("discussion"))
+finally:
+    core.msgs, core.state, core.model_run = original_msgs, original_state, original_model_run
+
 # An authentic expression run must not sneak a synthetic contribution job
 # into the model payload, even if the recent vocabulary repeats.
 captured = []
