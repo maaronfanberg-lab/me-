@@ -304,7 +304,11 @@ def rp(bus_data, entity, role):
 
 def sense(node, key):
     entity, local, role, tasks = ni(node)
-    context = msgs()[-8:]
+    social_floor = os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+    # The topic index is archival bookkeeping, not evidence that the group
+    # owes its next turn to a system-generated subject. In selected-floor
+    # mode do not flood tiny models with eight copies of one stale topic.
+    context = msgs()[-3:] if social_floor else msgs()[-8:]
     last = context[-1] if context else None
     mind = minds()
     current_state = state()
@@ -319,8 +323,10 @@ def sense(node, key):
     base = {
         "event": last,
         "context": context,
-        "keywords": toks(" ".join(str(item.get("text", "")) for item in context))[:16],
-        "topic": {k: topic.get(k) for k in ("id", "root", "current_facet", "facets", "visited_facets", "status", "shared_references", "unresolved")},
+        # The actual spoken turns remain available. Do not duplicate their
+        # recurrent vocabulary as both keywords and system topic labels.
+        "keywords": [] if social_floor else toks(" ".join(str(item.get("text", "")) for item in context))[:16],
+        "topic": {} if social_floor else {k: topic.get(k) for k in ("id", "root", "current_facet", "facets", "visited_facets", "status", "shared_references", "unresolved")},
         "partner": partner,
         "relationship": {k: rel.get(k) for k in ("exposure", "direct_familiarity", "trust", "predictability", "reciprocity", "warmth", "respect", "disclosure_depth", "tension")},
         "private_self_state": private_self_state,
