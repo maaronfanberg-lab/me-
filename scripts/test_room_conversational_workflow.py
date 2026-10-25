@@ -44,4 +44,12 @@ if "vars.ROOM_CONVERSATIONAL_FLOOR_DISABLE == '1' && '0' || '1'" not in workflow
     raise AssertionError("conversational activation/disable expression changed")
 if 'ROOM_FLOOR_DESIRED="${ROOM_CONVERSATIONAL_FLOOR:-0}"' not in script:
     raise AssertionError("runtime retry must recognize desired live mode")
+# A failed social action may not be reintroduced through the old generator.
+# The original technical-outage fallback remains available.
+if "floor_action_integrity_pending=1" not in script:
+    raise AssertionError("missing semantic-action integrity evidence")
+if 'runner_exit_reason="unrealized_conversational_action"' not in script:
+    raise AssertionError("semantic-action failure incorrectly reaches legacy fallback")
+if "floor_action_integrity_pending=0" not in script:
+    raise AssertionError("semantic-action failure must reset on valid publication")
 print("PASS: Room workflow shell syntax and both selected/legacy routes")
