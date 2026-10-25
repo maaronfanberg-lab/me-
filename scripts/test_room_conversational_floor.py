@@ -25,6 +25,15 @@ def bus(choices=None):
 
 
 class FloorTests(unittest.TestCase):
+    def test_hey_mara_invitation_has_one_audible_addressee(self):
+        history = [msg("jules",
+            "Hey Mara, could we collaborate on a project together?",
+            target="", id="jules-offer-1")]
+        decision = choose_next(history, bus(), config(), {})
+        self.assertEqual(decision["speaker"], "mara")
+        self.assertEqual(decision["reason"], "addressed_recipient")
+        self.assertEqual(decision["source_id"], "jules-offer-1")
+
     def test_direct_question_selects_recipient_not_everyone(self):
         last = msg("mara", "Sarah, where did the moths go?", "sarah")
         selected = choose_next([last], bus(), config(), {})
