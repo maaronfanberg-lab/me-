@@ -154,8 +154,19 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
             private_self_state=supplied.get("private_self_state"),
         )
         supplied.update(project)
-        # A social opportunity comes from observed action, not the topic
-        # metadata recorded for indexing or a demand for novel words.
+        if project["interaction_project"]["kind"] == "self_initiated_contribution":
+            # Group memories are valuable for genuine replies and ongoing
+            # projects. An unrequested initiative needs relationship knowledge,
+            # not the three most recent quotations of a completed topic.
+            # These quotations remain durably available to perception and
+            # response projects, and are not deleted or forbidden.
+            group = supplied.get("group_context")
+            if isinstance(group, dict):
+                supplied["group_context"] = {
+                    key: group[key] for key in ("relationships", "possible_collaborators")
+                    if key in group
+                }
+        # The durable topic index does not create a conversational debt.
         supplied["topic"] = {}
         supplied["keywords"] = []
     clean_payload = _research.select_context(supplied, role, limit=6)
