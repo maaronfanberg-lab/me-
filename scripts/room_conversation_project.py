@@ -16,6 +16,7 @@ import re
 from typing import Any, Mapping
 
 from room_conversational_floor import is_directed
+from room_sequence_uptake import question_sequence
 
 AUTONOMOUS = ("sarah", "mara", "owen", "jules")
 
@@ -104,11 +105,15 @@ def expression_project(
     source_id = event.get("id") if event else None
     if response_project(event, entity):
         proposal = invitation_project(event)
+        sequence = question_sequence(context, event)
         return {
             "event": event,
             "context": list(context[-3:]),
             "private_self_state": private_self_state,
             "interaction_project": {
+                # Evidence about a live action sequence, not an instruction
+                # to change words or to pretend the prior speaker agreed.
+                "sequence": sequence,
                 "kind": "respond_to_proposal" if proposal else "respond_or_repair",
                 "observed_source_id": source_id,
                 "prior_speaker": event.get("speaker"),

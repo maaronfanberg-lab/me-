@@ -17,6 +17,7 @@ import room_private_self_state as _private_self_state
 import room_research_architecture as _research
 import room_group_dynamics as _group
 import room_conversational_floor as _floor
+from room_sequence_uptake import validate_uptake
 
 for _topic_name in (
     "topic_template",
@@ -320,7 +321,10 @@ def private_commit(parts: list[dict], key: str):
         ]
         try:
             validate_public_expression(entity, text, terms, validation_context)
-        except RuntimeError as exc:
+            if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+                validate_uptake(history=V, speaker=entity, utterance=text,
+                                move=str(expr.get("move") or ""))
+        except (RuntimeError, ValueError) as exc:
             quarantined.append(f"{entity}:{str(exc)[:100]}")
             continue
 
