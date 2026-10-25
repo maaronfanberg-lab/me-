@@ -189,6 +189,9 @@ def _publication_degenerate(text: str) -> str | None:
     if (raw.startswith("{") and raw.endswith("}")) or (raw.startswith("[") and raw.endswith("]")):
         return "structured_debris"
     if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        tokens = re.findall(r"[a-z0-9']+", low)
+        if len(tokens) >= 24 and len(set(tokens)) <= 3:
+            return "sampler_collapse"
         return None
     if re.search(r"\b([a-z][a-z']{2,})(?:\s+\1){2,}\b", low, re.I):
         return "token_loop"
