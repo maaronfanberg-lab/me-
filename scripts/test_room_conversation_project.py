@@ -107,6 +107,28 @@ class Projects(unittest.TestCase):
         self.assertEqual(packed["event"]["text"], old["text"])
         self.assertEqual(packed["interaction_project"]["observed_source_id"], "m2")
 
+    def test_jules_collaboration_invitation_does_not_imply_criticism(self):
+        invitation = event("jules",
+            "Hey Mara, I was thinking that maybe we could collaborate on a project "
+            "and explore some new territory together.", "jules-invite-1")
+        self.assertTrue(project.response_project(invitation, "mara"))
+        self.assertTrue(project.invitation_project(invitation))
+        pack = project.expression_project(entity="mara", latest=invitation,
+            context=[invitation], profile=PROFILE, private_self_state=MOTIVATION)
+        self.assertEqual(pack["interaction_project"]["kind"], "respond_to_proposal")
+        self.assertEqual(pack["interaction_project"]["proposal_status"], "unanswered")
+        self.assertEqual(pack["interaction_project"]["reply_opportunities"],
+                         ["accept", "decline", "clarify", "counteroffer"])
+        self.assertEqual(pack["event"]["text"], invitation["text"])
+        reply_input = self.input(invitation)
+        reply_input["entity"] = "mara"
+        compact = autonomy._autonomy_compact(reply_input, "expression", "mara")
+        self.assertEqual(compact["social_opportunity"]["action_due"],
+                         "respond_to_proposal")
+        self.assertEqual(compact["interaction_project"]["observed_source_id"],
+                         "jules-invite-1")
+        self.assertIn("collaborate", compact["event"]["text"])
+
     def test_personal_attention_without_canned_subject_rotation(self):
         old = event("mara", "Nothing else needed.", "m3")
         a = project.expression_project(entity="jules", latest=old, context=[old],

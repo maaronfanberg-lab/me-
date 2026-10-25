@@ -53,7 +53,8 @@ def is_directed(event, recipient):
     # "Mara, why did you disagree with Sarah?" only Mara is addressed;
     # "Sarah?" in the question is NOT a second addressed speaker.
     return bool(
-        re.search(r"^\s*" + name + r"\b\s*[,?!:]", spoken, re.I)
+        re.search(r"^\s*(?:hey|hi|hello|listen|okay|ok)\s+" + name + r"\b\s*[,?!:]", spoken, re.I)
+        or re.search(r"^\s*" + name + r"\b\s*[,?!:]", spoken, re.I)
         or re.search(r"^\s*@" + name + r"\b", spoken, re.I)
         or re.search(r"^\s*" + name + r"\s+(?:can|could|would|will|what|why|how|are|do|did|is|have|tell|please)\b", spoken, re.I)
         or re.search(r",\s*" + name + r"\s*[?!\.]?\s*$", spoken, re.I)
