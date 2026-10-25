@@ -74,36 +74,47 @@ def _score(entity, last, thought, profile, relationships):
     return score
 
 
-def choose_next(history, bus, config, minds):
+def choose_next(history, bus, config, minds, *, rank=0):
+    """Return the rank-th *independently plausible* speaker opportunity.
+
+    Rank 1 is a liveness fallback only after rank 0 had a technical failure.
+    It is not a novelty quota or a demand that a reluctant person speak.
+    """
     if not isinstance(history, list) or not isinstance(bus, dict):
         raise ValueError("conversation and recurrent bus must be readable")
     sleeping = {_norm(e) for e in config.get("sleeping_entities", ())}
     awake = [e for e in ORDER if e not in sleeping]
     if not awake:
         raise RuntimeError("no awake character, cannot select a speaker")
+    if type(rank) is not int or not 0 <= rank < len(awake):
+        raise ValueError("requested candidate is outside the awake group")
     last = next((event for event in reversed(history)
                  if isinstance(event, dict) and _norm(event.get("speaker")) in (*ORDER, "allen")), None)
     author = _norm((last or {}).get("speaker"))
     target = _target(last)
-    # Hidden target metadata alone never makes an address.
-    if target in awake and author != target and author in (*ORDER, "allen") and is_directed(last, target):
-        return {"speaker": target, "node": NODE[target], "reason": "addressed_recipient",
-                "source_id": (last or {}).get("id"),
-                "source_speaker": author}
+    addressed = (target if target in awake and author != target
+                 and is_directed(last, target) else None)
     profile = config.get("p") if isinstance(config.get("p"), dict) else {}
     state = minds.get("entities") if isinstance(minds.get("entities"), dict) else {}
     recurrent = bus.get("recurrent") if isinstance(bus.get("recurrent"), dict) else {}
+    relationships = {e: (state.get(e) or {}).get("people") for e in awake}
     ranked = []
     for entity in awake:
         thought = (((recurrent.get(entity) or {}).get("thought") or {}).get("private") or {}).get("deliberation") or {}
-        relationships = {e: (state.get(e) or {}).get("people") for e in awake}
         score = _score(entity, last, thought, profile.get(entity) or {}, relationships)
-        # Stable, tiny tie break, independent of cycle/modulo/fairness quotas.
         seed = f"{(last or {}).get('id', '')}|{entity}|{_norm(thought.get('action'))}"
         tie = int(hashlib.sha256(seed.encode()).hexdigest()[:8], 16) / (16 ** 8)
         ranked.append((score, tie, entity))
-    chosen = max(ranked)[2]
-    return {"speaker": chosen, "node": NODE[chosen], "reason": "open_floor_relevance",
+    ordered = [item[2] for item in sorted(ranked, reverse=True)]
+    if addressed:
+        ordered.remove(addressed)
+        ordered.insert(0, addressed)
+    chosen = ordered[rank]
+    reason = ("addressed_recipient" if rank == 0 and addressed == chosen
+              else "technical_fallback_opportunity" if rank > 0
+              else "open_floor_relevance")
+    return {"speaker": chosen, "node": NODE[chosen], "reason": reason,
+            "candidate_rank": rank, "candidate_speakers": ordered,
             "source_id": (last or {}).get("id"), "source_speaker": author}
 
 
@@ -114,7 +125,7 @@ def checked_floor(selection, *, awake, required=False):
     allowed = {e for e in awake if e in ORDER}
     if speaker not in allowed or selection.get("node") != NODE[speaker]:
         raise ValueError("invalid or sleeping selected character")
-    if required and selection.get("reason") not in {"addressed_recipient", "open_floor_relevance"}:
+    if required and selection.get("reason") not in {"addressed_recipient", "open_floor_relevance", "technical_fallback_opportunity"}:
         raise ValueError("unrecognized floor choice")
     return speaker
 
@@ -123,13 +134,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bus", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--rank", type=int, default=0)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     config = json.loads((root / "room/config.json").read_text(encoding="utf-8"))
     history = json.loads((root / "room/conversation.json").read_text(encoding="utf-8"))
     minds = json.loads((root / "room/cognitive_state.json").read_text(encoding="utf-8"))
     bus = json.loads(Path(args.bus).read_text(encoding="utf-8"))
-    decision = choose_next(history, bus, config, minds)
+    decision = choose_next(history, bus, config, minds, rank=args.rank)
+    decision["cycle_key"] = str(bus.get("key") or "")
+    decision["bus_sha256"] = hashlib.sha256(Path(args.bus).read_bytes()).hexdigest()
     checked_floor(decision, awake=[e for e in ORDER if e not in config.get("sleeping_entities", [])], required=True)
     dest = Path(args.out)
     dest.parent.mkdir(parents=True, exist_ok=True)
