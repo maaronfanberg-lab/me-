@@ -30,12 +30,13 @@ if "--fixture" not in sys.argv:
 import room_engine_v5_core as core
 import room_expression_quality as quality
 import room_private_commit as commit
+from room_conversational_candidate import validate_candidate
 
 # The new path must preserve a deliberate echo, even if it might also be
 # used for a repair: prohibiting repeated words is not a conversation model.
 repeated = "Trees? Trees?"
 assert quality.repair_expression(repeated, "sarah") == repeated
-assert quality.quality_issue("Right.", {"context": []}, "sarah", core._sim) is None
+assert quality.quality_issue("No, no, no!", {"context": []}, "sarah", core._sim) is None
 assert quality.quality_issue("Can you clarify?", {"context": []}, "sarah", core._sim) is None
 assert quality.quality_issue("Right.", {"context": []}, "sarah", core._sim) is None
 
@@ -76,6 +77,19 @@ def write_floor(key, source=None):
 
 write_floor("fixture-beat-1")
 
+# The model's broken output is rejected, not published, while a legitimate
+# short repair or quote can pass the same structural/epistemic gates.
+valid_part = core.load(parts_root / "recurrent-02.json", {})
+assert validate_candidate(valid_part, "sarah", [], {}) == valid_part["private"]["expression"]["utterance"]
+bad_part = json.loads(json.dumps(valid_part))
+bad_part["private"]["expression"]["utterance"] = "I think " * 20
+try:
+    validate_candidate(bad_part, "sarah", [], {})
+except RuntimeError as exc:
+    assert "sampler_collapse" in str(exc)
+else:
+    raise AssertionError("extreme generator collapse was accepted")
+
 # The core's public commit CLI requires the nine-node contract.
 assert len(node_ids) == 9
 sys.argv = ["room_private_commit.py", "commit"]
@@ -115,6 +129,15 @@ core.main()
 conversation = json.loads((core.ROOM / "conversation.json").read_text())
 assert len(conversation) == 2
 assert conversation[-1]["cognition"]["target"] == "allen"
+assert json.loads((core.ROOM / "state.json").read_text())["cycle"] == 2
+
+# Reusing the old floor after the public tail changed must not publish.
+try:
+    core.main()
+except RuntimeError as exc:
+    assert "stale conversational floor" in str(exc)
+else:
+    raise AssertionError("out-of-date conversational floor was silently published")
 assert json.loads((core.ROOM / "state.json").read_text())["cycle"] == 2
 
 # Structural safety must fail if a second expression is incorrectly inserted.
