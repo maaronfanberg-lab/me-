@@ -311,16 +311,9 @@ def sense(node, key):
     # Allen's accepted public turns use the same evidence channel as the
     # autonomous speakers. Never mix them with control/status messages.
     if social_floor:
-        from room_conversational_floor import ORDER as AUTONOMOUS, last_participant_turn
-        public = [
-            item for item in conv()
-            if isinstance(item, dict)
-            and str(item.get("speaker") or "").strip().lower() in (*AUTONOMOUS, "allen")
-            and str(item.get("text") or "").strip()
-            and str(item.get("id") or "").strip()
-        ]
-        context = public[-3:]
-        last = last_participant_turn(public)
+        from room_conversational_floor import public_participant_turns
+        context = public_participant_turns(conv())[-3:]
+        last = context[-1] if context else None
     else:
         context = msgs()[-8:]
         last = context[-1] if context else None
