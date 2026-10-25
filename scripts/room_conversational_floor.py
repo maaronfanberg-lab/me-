@@ -86,6 +86,26 @@ def last_participant_source_id(history):
     return (last_participant_turn(history) or {}).get("id")
 
 
+def requires_uptake(event, recipient: str, deliberation: dict | None = None) -> bool:
+    """Does the previous public action create a plausible reply obligation?
+
+    Conversation-analysis inspired: an Allen contribution, an audible addressed
+    turn or a public question offers a recognizable next action. A character's
+    own explicit decision to respond or repair is also respected. Otherwise,
+    the previous *subject* is not an instruction to keep elaborating it.
+    """
+    if not isinstance(event, dict):
+        return False
+    speaker = _norm(event.get("speaker"))
+    text = str(event.get("text") or "").strip()
+    if speaker == "allen" or is_directed(event, recipient) or text.endswith("?"):
+        return True
+    intent = deliberation if isinstance(deliberation, dict) else {}
+    action = _norm(intent.get("action"))
+    partner = _norm(intent.get("preferred_partner"))
+    return partner == speaker and action in {"answer", "repair", "disagree", "support", "callback"}
+
+
 def _score(entity, last, thought, profile, relationships):
     """Importance to this character, not novelty or speaker rotation."""
     delib = thought if isinstance(thought, dict) else {}
