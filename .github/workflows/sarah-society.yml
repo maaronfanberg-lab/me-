@@ -181,6 +181,14 @@ jobs:
           ack_allen_turns() { [ -s room_work/allen-ack.json ] || return 0; ack_count=$(python3 -c 'import json; print(len(json.load(open("room_work/allen-ack.json")).get("ids", [])))' 2>/dev/null || echo 0); [ "$ack_count" -gt 0 ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room_work/allen-ack.json "${ROOM_RELAY_URL%/}/api/participant/ack" >/dev/null || true; }
           wait_batch() { failed=0; for pid in "$@"; do wait "$pid" || failed=1; done; [ "$failed" -eq 0 ]; }
 
+          # Desired behavior is separate from the temporary technical
+          # fallback. A single bad model period must not condemn a whole
+          # multi-hour Room session to the old repetitive engine.
+          ROOM_FLOOR_DESIRED="${ROOM_CONVERSATIONAL_FLOOR:-0}"
+          floor_recovery_after_seq=0
+          floor_rollback_count=0
+          ROOM_FLOOR_FALLBACK_REASON=""
+          export ROOM_FLOOR_DESIRED ROOM_FLOOR_FALLBACK_REASON
           run_beat() {
             beat_seq=$((beat_seq + 1)); export ROOM_CYCLE_KEY="${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${beat_seq}"; rm -rf room_parts room_work; mkdir -p room_parts room_work
             fetch_allen_turns
@@ -192,26 +200,29 @@ jobs:
             for pair in "1 4" "7 10"; do pids=(); for n in $pair; do (timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_DELIBERATION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1; done
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_engine_v5.py bus2 --bus room_work/bus-sense.json || return 1
             if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ]; then
+              ROOM_FLOOR_LAST_FAILURE="pre_expression"
               committed=0
               for candidate_rank in 0 1; do
-                python3 scripts/room_conversational_floor.py --bus room_work/bus-recurrent.json --out room_work/floor.json --rank "$candidate_rank" || return 1
+                python3 scripts/room_conversational_floor.py --bus room_work/bus-recurrent.json --out room_work/floor.json --rank "$candidate_rank" || { ROOM_FLOOR_LAST_FAILURE="floor_selection"; return 1; }
                 selected_node=$(python3 -c 'import json; print(json.load(open("room_work/floor.json"))["node"])') || return 1
                 selected_speaker=$(python3 -c 'import json; print(json.load(open("room_work/floor.json"))["speaker"])') || return 1
                 selected_part=$(printf 'room_parts/recurrent-%02d.json' "$selected_node")
                 rm -f room_parts/recurrent-02.json room_parts/recurrent-05.json room_parts/recurrent-08.json room_parts/recurrent-11.json
                 if ! timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_EXPRESSION:-}" ROOM_NODE_ID="$selected_node" ROOM_EXPRESSION_RANK="0" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json; then
+                  ROOM_FLOOR_LAST_FAILURE="model_generation"
                   echo "Selected model failed for $selected_speaker; offering next opportunity"
                   continue
                 fi
                 if ! python3 scripts/room_conversational_candidate.py --part "$selected_part" --speaker "$selected_speaker"; then
+                  ROOM_FLOOR_LAST_FAILURE="candidate_preflight"
                   echo "Unusable candidate from $selected_speaker; offering next opportunity"
                   continue
                 fi
-                timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_private_commit.py commit || return 1
+                timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_private_commit.py commit || { ROOM_FLOOR_LAST_FAILURE="commit_integrity"; return 1; }
                 committed=1
                 break
               done
-              [ "$committed" -eq 1 ] || return 1
+              [ "$committed" -eq 1 ] || { ROOM_FLOOR_LAST_FAILURE="${ROOM_FLOOR_LAST_FAILURE:-all_candidates_unusable}"; return 1; }
             else
               expr_nodes=(2 5 8 11); shift=$((beat_seq % 4)); for rank in 0 1 2 3; do idx=$(((rank + shift) % 4)); n=${expr_nodes[$idx]}; timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_EXPRESSION:-}" ROOM_NODE_ID="$n" ROOM_EXPRESSION_RANK="$rank" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json || return 1; done
               timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_private_commit.py commit || return 1
@@ -220,11 +231,25 @@ jobs:
           }
 
           while [ "$SECONDS" -lt "$stop_at" ]; do
+            if [ "$ROOM_FLOOR_DESIRED" = "1" ] && [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" != "1" ] && [ "$beat_seq" -ge "$floor_recovery_after_seq" ]; then
+              echo "Room selected-floor re-probe after temporary technical fallback"
+              export ROOM_CONVERSATIONAL_FLOOR=1
+              ROOM_FLOOR_FALLBACK_REASON=""
+              export ROOM_FLOOR_FALLBACK_REASON
+            fi
             if ! run_beat; then
               consecutive_failures=$((consecutive_failures + 1))
               echo "A Room beat failed internally (${consecutive_failures}/${ROOM_BEAT_FAILURE_LIMIT})"
               if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ] && [ "$consecutive_failures" -ge 2 ]; then
-                echo "Selected-turn path failed twice; reverting to proven four-voice path for this runner"
+                floor_rollback_count=$((floor_rollback_count + 1))
+                # Increase technical retry spacing after repeated model
+                # failures; this is never a speaker quota or topic schedule.
+                recovery_gap=$((4 * floor_rollback_count))
+                if [ "$recovery_gap" -gt 24 ]; then recovery_gap=24; fi
+                floor_recovery_after_seq=$((beat_seq + recovery_gap))
+                ROOM_FLOOR_FALLBACK_REASON="${ROOM_FLOOR_LAST_FAILURE:-unknown_failure}"
+                export ROOM_FLOOR_FALLBACK_REASON ROOM_FLOOR_RECOVERY_ATTEMPTS="$floor_rollback_count"
+                echo "Selected-floor failed twice; temporary legacy recovery ($ROOM_FLOOR_FALLBACK_REASON), re-probe after $recovery_gap committed beats"
                 export ROOM_CONVERSATIONAL_FLOOR=0
                 consecutive_failures=0
               elif [ "$consecutive_failures" -ge "$ROOM_BEAT_FAILURE_LIMIT" ]; then runner_exit_reason="repeated_beat_failure"; break; fi

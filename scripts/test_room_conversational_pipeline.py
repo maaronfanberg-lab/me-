@@ -20,6 +20,8 @@ if "--fixture" not in sys.argv:
         shutil.copy2(original / "room" / "config.json", work / "room" / "config.json")
         environment = dict(os.environ)
         environment["ROOM_CONVERSATIONAL_FLOOR"] = "1"
+        environment["ROOM_FLOOR_DESIRED"] = "1"
+        environment["ROOM_FLOOR_FALLBACK_REASON"] = ""
         environment.pop("GITHUB_TOKEN", None)
         environment.pop("GH_TOKEN", None)
         subprocess.run([sys.executable, str(work / "scripts" / Path(__file__).name), "--fixture"],
@@ -314,6 +316,9 @@ assert conversation[0]["text"].startswith("That oak tree")
 assert state["cycle"] == 1
 assert state["beat_message_count"] == 1
 assert state["conversational_floor"] == "opportunity_v1"
+assert state["conversational_floor_health"]["active"] is True
+assert state["conversational_floor_health"]["fallback_reason"] is None
+assert state["conversational_floor_health"]["diagnostic_only"] is True
 
 # The old four-voice path must STILL reject the nine-node input.
 os.environ.pop("ROOM_CONVERSATIONAL_FLOOR", None)

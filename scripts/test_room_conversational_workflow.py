@@ -27,6 +27,12 @@ checks = (
     'scripts/room_conversational_candidate.py',
     'expr_nodes=(2 5 8 11)',
     'export ROOM_CONVERSATIONAL_FLOOR=0',
+    'ROOM_FLOOR_DESIRED=',
+    'floor_recovery_after_seq=',
+    'Room selected-floor re-probe after temporary technical fallback',
+    'ROOM_FLOOR_LAST_FAILURE="model_generation"',
+    'ROOM_FLOOR_LAST_FAILURE="candidate_preflight"',
+    'ROOM_FLOOR_FALLBACK_REASON=',
     'git diff --quiet HEAD^ origin/main',
 )
 for snippet in checks:

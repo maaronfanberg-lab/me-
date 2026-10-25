@@ -143,16 +143,38 @@ def choose_next(history, bus, config, minds, *, rank=0):
     state = minds.get("entities") if isinstance(minds.get("entities"), dict) else {}
     recurrent = bus.get("recurrent") if isinstance(bus.get("recurrent"), dict) else {}
     relationships = {e: (state.get(e) or {}).get("people") for e in awake}
-    if addressed is None and not any(
+    # The current Room autonomy engine is deliberately SINGLE PASS:
+    # comprehension/thought nodes return None, and the transformer plans
+    # inside its one speech generation. Requiring a separate thought action
+    # here made every undirected live beat fail and switched the runner back
+    # to the repetitive four-voice engine. Do not invent a private thought.
+    has_deliberated_bid = any(
         isinstance((((recurrent.get(e) or {}).get("thought") or {}).get("private") or {}).get("deliberation"), dict)
         and _norm(((((recurrent.get(e) or {}).get("thought") or {}).get("private") or {}).get("deliberation") or {}).get("action"))
         for e in awake
-    ):
-        raise RuntimeError("no credible deliberated reason for anyone to take the floor")
+    )
+    if addressed is None and not has_deliberated_bid and last is None:
+        raise RuntimeError("no observed utterance or deliberated social bid for the floor")
+    # An actual public utterance creates a possible response/third-position
+    # opportunity even when no independent model deliberation was scheduled.
+    # This is not evidence of willingness, agreement, or comprehension.
+    public_uptake = addressed is None and not has_deliberated_bid
     ranked = []
     for entity in awake:
         thought = (((recurrent.get(entity) or {}).get("thought") or {}).get("private") or {}).get("deliberation") or {}
         score = _score(entity, last, thought, profile.get(entity) or {}, relationships)
+        if public_uptake and last:
+            # A mentioned interlocutor or the originator of an earlier
+            # unanswered/answered question has genuine local relevance.
+            # Mentions are NOT compulsory direct addresses.
+            latest_text = str(last.get("text") or "")
+            if re.search(r"\b" + re.escape(entity) + r"\b", latest_text, re.I):
+                score += .16
+            prior = public_participant_turns(history)[-4:-1]
+            if any(_norm(p.get("speaker")) == entity
+                   and str(p.get("text") or "").rstrip().endswith("?")
+                   for p in prior):
+                score += .20
         seed = f"{(last or {}).get('id', '')}|{entity}|{_norm(thought.get('action'))}"
         tie = int(hashlib.sha256(seed.encode()).hexdigest()[:8], 16) / (16 ** 8)
         ranked.append((score, tie, entity))
@@ -163,6 +185,7 @@ def choose_next(history, bus, config, minds, *, rank=0):
     chosen = ordered[rank]
     reason = ("addressed_recipient" if rank == 0 and addressed == chosen
               else "technical_fallback_opportunity" if rank > 0
+              else "open_floor_uptake" if public_uptake
               else "open_floor_relevance")
     return {"speaker": chosen, "node": NODE[chosen], "reason": reason,
             "candidate_rank": rank, "candidate_speakers": ordered,
@@ -176,7 +199,7 @@ def checked_floor(selection, *, awake, required=False):
     allowed = {e for e in awake if e in ORDER}
     if speaker not in allowed or selection.get("node") != NODE[speaker]:
         raise ValueError("invalid or sleeping selected character")
-    if required and selection.get("reason") not in {"addressed_recipient", "open_floor_relevance", "technical_fallback_opportunity"}:
+    if required and selection.get("reason") not in {"addressed_recipient", "open_floor_relevance", "open_floor_uptake", "technical_fallback_opportunity"}:
         raise ValueError("unrecognized floor choice")
     return speaker
 

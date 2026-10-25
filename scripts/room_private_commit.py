@@ -446,6 +446,24 @@ def private_commit(parts: list[dict], key: str):
         "note": "research-informed v5: selective agent context; provenance-tagged memory; guarded private beliefs; per-agent quality+privacy quarantine",
     })
 
+    # Operational evidence, never used as conversational subject matter.
+    # The values are a small fixed allowlist so model text, tokens and private
+    # prompts cannot leak into the public Room state or feeds.
+    if os.environ.get("ROOM_FLOOR_DESIRED") == "1":
+        _reason = str(os.environ.get("ROOM_FLOOR_FALLBACK_REASON") or "")
+        _allowed = {"", "pre_expression", "floor_selection", "model_generation",
+                    "candidate_preflight", "commit_integrity", "all_candidates_unusable",
+                    "unknown_failure"}
+        if _reason not in _allowed:
+            _reason = "unknown_failure"
+        S["conversational_floor_health"] = {
+            "desired": "opportunity_v1",
+            "active": os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1",
+            "fallback_reason": _reason or None,
+            "fallback_count": max(0, min(10000, int(os.environ.get("ROOM_FLOOR_RECOVERY_ATTEMPTS") or 0))),
+            "diagnostic_only": True,
+        }
+
     c.audit_invariants(M, topic)
     _restore_sleeping_minds(M, sleeping_snapshots)
     c.save(c.ROOM / "conversation.json", V)
