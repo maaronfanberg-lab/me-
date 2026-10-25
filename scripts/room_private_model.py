@@ -332,15 +332,24 @@ def _compact_payload(payload: dict, role: str, self_entity: str | None = None) -
         related = _safe_semantic_list(internal.get("facets"), 8)
         shared = _safe_semantic_list(internal.get("shared_references"), 6)
         open_questions = _safe_semantic_list(internal.get("unresolved"), 5)
-    if not subject:
+    if not subject and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1":
         subject = _seed_concept()
-    out["discussion"] = {
-        "subject": subject,
-        "focus": focus,
-        "related": related,
-        "shared": shared,
-        "open_questions": open_questions,
-    }
+    # A subjectless open floor is legitimate. It is NOT a command to
+    # fabricate a new topic, nor an invitation to reseed the prior attractor.
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        out["discussion"] = {
+            "subject": subject, "focus": focus,
+            "related": related, "shared": shared,
+            "open_questions": open_questions,
+        }
+    else:
+        out["discussion"] = {
+            "subject": subject,
+            "focus": focus,
+            "related": related,
+            "shared": shared,
+            "open_questions": open_questions,
+        }
 
     if isinstance(out.get("keywords"), list):
         out["keywords"] = _safe_semantic_list(out["keywords"], 8 if role == "comprehension" else 12)
