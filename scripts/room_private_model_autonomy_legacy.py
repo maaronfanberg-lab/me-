@@ -138,7 +138,22 @@ def _relationship_context(value: object) -> dict:
 def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) -> dict:
     # Smallville/AutoGen lesson: retrieval happens before prompt construction.
     # Each mind receives a bounded, scored subset rather than the same broadcast window.
-    clean_payload = _research.select_context(dict(payload or {}), role, limit=6)
+    supplied = dict(payload or {})
+    if role == "expression" and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        from room_conversation_project import expression_project
+        project = expression_project(
+            entity=str(supplied.get("entity") or ""),
+            latest=supplied.get("event"),
+            context=list(supplied.get("context") or []),
+            profile=supplied.get("profile"),
+            private_self_state=supplied.get("private_self_state"),
+        )
+        supplied.update(project)
+        # A social opportunity comes from observed action, not the topic
+        # metadata recorded for indexing or a demand for novel words.
+        supplied["topic"] = {}
+        supplied["keywords"] = []
+    clean_payload = _research.select_context(supplied, role, limit=6)
     clean_payload.pop("conversation_job", None)
     deliberation = clean_payload.get("deliberation")
     if isinstance(deliberation, dict):
