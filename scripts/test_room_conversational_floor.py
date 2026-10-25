@@ -50,10 +50,10 @@ class FloorTests(unittest.TestCase):
     def test_out_of_room_or_self_target_does_not_make_obligation(self):
         one = choose_next([msg("jules", "The moon looks strange.", "jules")],
                           bus(), config(), {})
-        self.assertEqual(one["reason"], "voluntary_relevance")
+        self.assertEqual(one["reason"], "open_floor_relevance")
         two = choose_next([msg("allen", "Can anybody hear me?", "unknown")],
                           bus(), config(), {})
-        self.assertEqual(two["reason"], "voluntary_relevance")
+        self.assertEqual(two["reason"], "open_floor_relevance")
 
     def test_hidden_generated_target_is_not_evidence_of_audible_address(self):
         # Live expression JSON always supplies a target, including for
@@ -84,7 +84,7 @@ class FloorTests(unittest.TestCase):
     def test_missing_thoughts_not_speech_fabrication(self):
         out = choose_next([], {"recurrent": {}}, config(), {})
         self.assertIn(out["speaker"], ORDER)
-        self.assertEqual(out["reason"], "voluntary_relevance")
+        self.assertEqual(out["reason"], "open_floor_relevance")
         self.assertNotIn("utterance", out)
 
     def test_technical_fallback_selects_second_distinct_opportunity(self):
