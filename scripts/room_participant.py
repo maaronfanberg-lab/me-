@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -77,7 +78,10 @@ def clean_terms(text: str, topic: dict):
         terms.append(value)
         if len(terms) >= 4:
             break
-    if not terms:
+    if not terms and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1":
+        # Legacy-compatible archival subject fallback. A short Allen reply
+        # in selected-floor mode must never inherit a stale topic as though
+        # Allen had actually uttered it.
         for value in (topic.get("current_facet"), topic.get("root")):
             value = str(value or "").strip().lower()
             if value and value not in terms:
@@ -98,10 +102,13 @@ def inject(item: dict, history: list, discourse: dict, state: dict):
         return source_id
 
     topic = state.get("topic_episode") or {}
+    # Storage may retain the historical topic. Never attribute its vocabulary
+    # or factual content to Allen when he did not mention it.
+    spoken_topic = ({} if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1" else topic)
     cycle = int(state.get("cycle", 0)) + 1
     beat = f"beat-{c.BOOT}-{cycle:06d}"
     target = infer_target(text)
-    terms = clean_terms(text, topic)
+    terms = clean_terms(text, spoken_topic)
     parent = history[-1].get("discourse_id") if history else None
     move = "follow_up" if text.rstrip().endswith("?") else "deepen"
     discourse_id = "d-" + message_id
@@ -115,8 +122,8 @@ def inject(item: dict, history: list, discourse: dict, state: dict):
         "beat_id": beat,
         "beat_index": -1,
         "topic_episode": topic.get("id"),
-        "topic_root": topic.get("root"),
-        "topic_facet": topic.get("current_facet"),
+        "topic_root": spoken_topic.get("root"),
+        "topic_facet": spoken_topic.get("current_facet"),
         "topic_terms": terms,
         "mandatory_speech": True,
         # Epistemic metadata describes what listeners actually know.
@@ -156,7 +163,7 @@ def inject(item: dict, history: list, discourse: dict, state: dict):
         "beat_id": beat,
         "beat_index": -1,
         "topic_episode": topic.get("id"),
-        "topic_facet": topic.get("current_facet"),
+        "topic_facet": spoken_topic.get("current_facet"),
         "topic_terms": terms,
         "source_type": "heard_allen_claim",
         "proposition_status": "unverified_report",
