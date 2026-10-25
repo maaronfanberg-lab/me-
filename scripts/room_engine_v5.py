@@ -297,11 +297,18 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     if role == "expression":
         payload = dict(payload or {})
         payload["room_presence"] = _room_presence()
-        payload["group_context"] = _group.model_context(
-            _legacy._core.minds(), entity, payload.get("partner"),
-            list(payload.get("context") or []), tuple(sorted(_AWAKE_AUTONOMOUS)),
-            _legacy._core.CFG,
-        )
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1" and payload.get("self_initiated"):
+            # Retrieved episodes dominated by the same old subject can
+            # accidentally turn a free conversational opportunity back into
+            # another obligatory reply. Relationships remain in the already
+            # supplied relationship/profile fields; the memory is not erased.
+            payload["group_context"] = {}
+        else:
+            payload["group_context"] = _group.model_context(
+                _legacy._core.minds(), entity, payload.get("partner"),
+                list(payload.get("context") or []), tuple(sorted(_AWAKE_AUTONOMOUS)),
+                _legacy._core.CFG,
+            )
     if entity in _SLEEPING_ENTITIES:
         return None
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():
