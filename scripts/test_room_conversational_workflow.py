@@ -38,6 +38,11 @@ checks = (
 for snippet in checks:
     if snippet not in script:
         raise AssertionError("missing Room selection or rollback path: " + snippet)
-if "vars.ROOM_CONVERSATIONAL_FLOOR" not in workflow:
-    raise AssertionError("Room feature flag not adjustable")
+# An older repository variable can explicitly hold the Room on the
+# legacy engine even when the tested code is deployed. The pilot uses a
+# separate emergency disable switch so its initial state is unambiguous.
+if "vars.ROOM_CONVERSATIONAL_FLOOR_DISABLE == '1' && '0' || '1'" not in workflow:
+    raise AssertionError("live pilot must be enabled by default with reversible disable switch")
+if 'ROOM_FLOOR_DESIRED="${ROOM_CONVERSATIONAL_FLOOR:-0}"' not in script:
+    raise AssertionError("selected-turn recovery must observe the activated flag")
 print("PASS: Room workflow shell syntax and both selected/legacy routes")
