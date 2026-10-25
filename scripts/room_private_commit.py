@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import re
@@ -248,6 +249,13 @@ def private_commit(parts: list[dict], key: str):
         floor_path = c.ROOT / "room_work" / "floor.json"
         floor = json.loads(floor_path.read_text(encoding="utf-8"))
         selected = _floor.checked_floor(floor, awake=AWAKE_ORDER, required=True)
+        observed_id = (V[-1] if V else {}).get("id")
+        bus_path = c.ROOT / "room_work" / "bus-recurrent.json"
+        bus_hash = hashlib.sha256(bus_path.read_bytes()).hexdigest()
+        if (floor.get("source_id") != observed_id
+                or floor.get("cycle_key") != key
+                or floor.get("bus_sha256") != bus_hash):
+            raise RuntimeError("stale conversational floor: observed source, cycle or bus changed")
         E = {part["entity"]: part for part in parts
              if part.get("role") == "expression" and part.get("entity") == selected
              and (part.get("private") or {}).get("intent")}
