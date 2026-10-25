@@ -198,6 +198,8 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         current_project = compact.get("interaction_project")
         current_project = current_project if isinstance(current_project, dict) else {}
         initiative = current_project.get("kind") == "self_initiated_contribution"
+        if initiative:
+            compact["event"] = None
         compact["social_opportunity"] = {
             "action_due": ("self_initiated_contribution" if initiative
                            else "directed_response_or_repair" if directly_addressed
