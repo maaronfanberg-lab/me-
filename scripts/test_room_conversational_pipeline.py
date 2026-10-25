@@ -128,6 +128,35 @@ try:
 finally:
     core.msgs, core.conv, core.state, core.model_run = original_msgs, original_conv, original_state, original_model_run
 
+# All four minds must witness the same durably accepted Allen message, but
+# NOT an orchestration/status message or an older topic index.
+turns = [
+    {"id": "s100", "speaker": "sarah", "text": "The tree looks familiar."},
+    {"id": "heartbeat", "speaker": "system", "text": "Runner active."},
+    {"id": "allen-101", "speaker": "allen",
+     "text": "Mara, can you tell me why you think that?", "runtime": "allen-public"},
+]
+original_conv, original_state, original_model_run = core.conv, core.state, core.model_run
+core.conv = lambda: turns
+core.state = lambda: {"cycle": 24, "topic_episode": {
+    "root": "category classification experiment", "current_facet": "classification trees",
+}}
+core.model_run = lambda role, payload: {"participation": "PARTICIPANT", "bids": []}
+try:
+    for node in (0, 1, 3, 4, 6, 7, 9, 10):
+        sensed = core.sense(node, "allen-public-source")
+        data = sensed["private"]
+        assert data["event"]["id"] == "allen-101", (node, data.get("event"))
+        assert data["event"]["text"] == turns[-1]["text"]
+        assert data["partner"] == "allen", (node, data.get("partner"))
+        assert data["topic"] == {}
+        assert [m["id"] for m in data["context"]] == ["s100", "allen-101"]
+    turns.append({"id": "mara-102", "speaker": "mara", "text": "Because I saw it."})
+    following = core.sense(0, "post-allen")
+    assert following["private"]["event"]["id"] == "mara-102"
+finally:
+    core.conv, core.state, core.model_run = original_conv, original_state, original_model_run
+
 # An authentic expression run must not sneak a synthetic contribution job
 # into the model payload, even if the recent vocabulary repeats.
 captured = []
