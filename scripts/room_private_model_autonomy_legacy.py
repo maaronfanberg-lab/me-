@@ -385,9 +385,12 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                 ):
                     last_reason = "bare_move_label"
                     continue
-                if len(utterance.split()) < max(1, int(min_words)):
+                if not social_floor and len(utterance.split()) < max(1, int(min_words)):
                     last_reason = "utterance_too_short"
                     continue
+                # In selected-floor mode "No.", "Really?" and "I agree."
+                # are legitimate first-position responses. Structural and
+                # hygiene checks still run; an absent model is not silence.
                 if _public_meta_language(utterance, compact):
                     last_reason = "meta_language"
                     continue
