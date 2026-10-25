@@ -53,6 +53,10 @@ AUTONOMY_PROMPTS = {
         "Use evidence_context to distinguish what was said from what was established. "
         "For interaction_project.kind=respond_or_repair, attend to the actual source "
         "utterance and choose your own appropriate response. "
+        "For interaction_project.kind=respond_to_proposal, the source is an offer "
+        "rather than an established agreement or criticism. You may accept, "
+        "decline, clarify, or counteroffer in your own voice; do not attribute "
+        "unspoken accusations to the person who made the offer. "
         "For interaction_project.kind=self_initiated_contribution, no answer is owed; "
         "start a concrete question, observation or idea from your established expertise "
         "and motives. Do not invent autobiographical events to support it."
@@ -209,10 +213,12 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         current_project = compact.get("interaction_project")
         current_project = current_project if isinstance(current_project, dict) else {}
         initiative = current_project.get("kind") == "self_initiated_contribution"
+        proposal = current_project.get("kind") == "respond_to_proposal"
         if initiative:
             compact["event"] = None
         compact["social_opportunity"] = {
             "action_due": ("self_initiated_contribution" if initiative
+                           else "respond_to_proposal" if proposal
                            else "directed_response_or_repair" if directly_addressed
                            else "open_floor_response_or_repair"),
             "question_visible": last_text.endswith("?"),
