@@ -241,6 +241,23 @@ def _mask_expression_transcript(prompt: str) -> str:
     return _rewrite_prompt_data(prompt, transform)
 
 
+def _prepare_conversation_prompt(prompt: str, role: str) -> str:
+    """Preserve public *actions* as utterances in the selected-floor mode.
+
+    Conversation analysis depends on full adjacency turns: "Mara, why?" is a
+    directed question, not an unordered list of topic nouns. The privacy-
+    sanitized compact transcript is already capped at three public messages
+    upstream. The legacy route retains its established cue masking.
+    """
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        return prompt
+    if role in {"comprehension", "thought"}:
+        return _mask_private_context(prompt)
+    if role == "expression":
+        return _mask_expression_transcript(prompt)
+    return prompt
+
+
 def _remember_rejected(autonomy, utterance: object) -> None:
     text = str(utterance or "").strip()
     rejected = getattr(autonomy, "_production_rejected_wordings", [])
@@ -297,10 +314,7 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
         autonomy._production_original_request_autonomy = autonomy._request_autonomy
         def _production_request_autonomy(model_url, prompt, request_role, temperature, request_timeout,
                                          self_entity=None, attempt=0, intent=None):
-            if request_role in {"comprehension", "thought"}:
-                prompt = _mask_private_context(prompt)
-            elif request_role == "expression":
-                prompt = _mask_expression_transcript(prompt)
+            prompt = _prepare_conversation_prompt(prompt, request_role)
             rejected = [str(item or "").strip() for item in getattr(autonomy, "_production_rejected_wordings", []) if str(item or "").strip()]
             if (os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1"
                     and request_role == "expression" and attempt > 0 and rejected):
