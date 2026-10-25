@@ -81,6 +81,21 @@ class FloorTests(unittest.TestCase):
         self.assertNotIn("new_topic", one)
         self.assertNotIn("repetition_score", one)
 
+    def test_vocative_is_not_confused_with_a_person_being_discussed(self):
+        from room_conversational_floor import is_directed
+        question = msg("allen", "Mara, why did you disagree with Sarah?",
+                       target="", id="allen-question")
+        self.assertTrue(is_directed(question, "mara"))
+        self.assertFalse(is_directed(question, "sarah"))
+        decision = choose_next([question], bus(), config(), {})
+        self.assertEqual(decision["speaker"], "mara")
+        self.assertEqual(decision["reason"], "addressed_recipient")
+        self.assertEqual(decision["source_id"], "allen-question")
+        # Mentioned third parties do not acquire a compulsory turn.
+        about = msg("allen", "What did Mara say about Sarah?", id="allen-about")
+        self.assertFalse(is_directed(about, "mara"))
+        self.assertFalse(is_directed(about, "sarah"))
+
     def test_direct_natural_language_address_without_hidden_metadata(self):
         for text in ("Mara, can you explain?", "Mara what do you think?",
                      "@Mara please weigh in.", "Can you explain, Mara?"):
