@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from room_conversational_floor import choose_next, checked_floor, last_participant_source_id, ORDER, NODE
+from room_conversational_floor import requires_uptake, choose_next, checked_floor, last_participant_source_id, ORDER, NODE
 
 
 def msg(speaker, text, target="", id="m1", move="deepen"):
@@ -25,6 +25,19 @@ def bus(choices=None):
 
 
 class FloorTests(unittest.TestCase):
+    def test_response_opportunity_without_topic_rules(self):
+        m = msg("jules", "An observation.", id="b")
+        self.assertFalse(requires_uptake(m, "mara"))
+        m["text"] = "Mara, could you explain?"
+        self.assertTrue(requires_uptake(m, "mara"))
+        m["text"] = "Can anybody explain?"
+        self.assertTrue(requires_uptake(m, "mara"))
+        m["text"] = "An observation."
+        self.assertTrue(requires_uptake(m, "mara",
+                        {"action": "REPAIR", "preferred_partner": "jules"}))
+        m["speaker"] = "allen"
+        self.assertTrue(requires_uptake(m, "mara"))
+
     def test_direct_question_selects_recipient_not_everyone(self):
         last = msg("mara", "Sarah, where did the moths go?", "sarah")
         selected = choose_next([last], bus(), config(), {})
