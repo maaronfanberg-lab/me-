@@ -50,7 +50,12 @@ AUTONOMY_PROMPTS = {
         "offer an initiative connected to their own genuine motives or relationships, "
         "or pursue a useful connection that interests them. These are opportunities, not commands. "
         "Choose the actual words yourself, without inventing group agreement or unsupported events. "
-        "Use evidence_context to distinguish what was said from what was established."
+        "Use evidence_context to distinguish what was said from what was established. "
+        "For interaction_project.kind=respond_or_repair, attend to the actual source "
+        "utterance and choose your own appropriate response. "
+        "For interaction_project.kind=self_initiated_contribution, no answer is owed; "
+        "start a concrete question, observation or idea from your established expertise "
+        "and motives. Do not invent autobiographical events to support it."
     ),
 }
 
@@ -138,7 +143,22 @@ def _relationship_context(value: object) -> dict:
 def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) -> dict:
     # Smallville/AutoGen lesson: retrieval happens before prompt construction.
     # Each mind receives a bounded, scored subset rather than the same broadcast window.
-    clean_payload = _research.select_context(dict(payload or {}), role, limit=6)
+    supplied = dict(payload or {})
+    if role == "expression" and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        from room_conversation_project import expression_project
+        project = expression_project(
+            entity=str(supplied.get("entity") or ""),
+            latest=supplied.get("event"),
+            context=list(supplied.get("context") or []),
+            profile=supplied.get("profile"),
+            private_self_state=supplied.get("private_self_state"),
+        )
+        supplied.update(project)
+        # A social opportunity comes from observed action, not the topic
+        # metadata recorded for indexing or a demand for novel words.
+        supplied["topic"] = {}
+        supplied["keywords"] = []
+    clean_payload = _research.select_context(supplied, role, limit=6)
     clean_payload.pop("conversation_job", None)
     deliberation = clean_payload.get("deliberation")
     if isinstance(deliberation, dict):
@@ -175,12 +195,19 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         event = compact.get("event") if isinstance(compact.get("event"), dict) else {}
         directly_addressed = bool(self_entity and is_directed(event, self_entity))
         last_text = str(event.get("text") or "").strip()
+        current_project = compact.get("interaction_project")
+        current_project = current_project if isinstance(current_project, dict) else {}
+        initiative = current_project.get("kind") == "self_initiated_contribution"
+        if initiative:
+            compact["event"] = None
         compact["social_opportunity"] = {
-            "action_due": "directed_response_or_repair" if directly_addressed
-                          else "open_floor_response_or_initiative",
+            "action_due": ("self_initiated_contribution" if initiative
+                           else "directed_response_or_repair" if directly_addressed
+                           else "open_floor_response_or_repair"),
             "question_visible": last_text.endswith("?"),
-            "prior_speaker": event.get("speaker"),
-            "source_id": (clean_payload.get("event") or {}).get("id")
+            "prior_speaker": current_project.get("prior_speaker") if initiative else event.get("speaker"),
+            "source_id": current_project.get("observed_source_id") if initiative
+                         else (clean_payload.get("event") or {}).get("id")
                          if isinstance(clean_payload.get("event"), dict) else None,
         }
 

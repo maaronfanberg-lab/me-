@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'scripts/room_conversational_floor.py'
+      - 'scripts/room_conversation_project.py'
+      - 'scripts/test_room_conversation_project.py'
       - 'scripts/room_participant.py'
       - 'scripts/test_room_allen_source_provenance.py'
       - 'scripts/room_private_commit.py'
@@ -37,7 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Compile real conversational opportunity path
-        run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_conversational_candidate.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
+        run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_conversation_project.py scripts/room_conversational_candidate.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
+      - name: Verify source-linked response and personal initiative
+        run: python3 scripts/test_room_conversation_project.py
       - name: Verify Allen's words survive without invented historical topics
         run: python3 scripts/test_room_allen_source_provenance.py
       - name: Preserve character intent through model wrappers

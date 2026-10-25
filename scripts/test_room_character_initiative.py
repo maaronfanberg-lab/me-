@@ -44,11 +44,11 @@ def test_open_floor_motives_are_accessible():
         assert own["values"] == ["recognition", "dignity"]
         assert own["cognitive_style"] == "Observe people before theorizing."
         social = payload["social_opportunity"]
-        assert social["action_due"] == "open_floor_response_or_initiative"
+        assert social["action_due"] == "self_initiated_contribution"
         assert social["source_id"] == "public-12"
         assert social["prior_speaker"] == "jules"
         assert not social["question_visible"]
-        assert payload["event"]["text"] == "I wonder whether that story makes any sense."
+        assert payload["event"] is None
         assert payload["discussion"]["subject"] is None
         assert "change the subject" not in str(payload).lower()
     finally:
