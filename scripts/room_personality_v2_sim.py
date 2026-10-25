@@ -75,9 +75,11 @@ for person in PEOPLE:
 # Same situation, four coherent lenses instead of four rewordings of one persona.
 odd_lenses = {person: tuple(results[(person, "odd")]["personality_lens"]) for person in PEOPLE}
 assert len(set(odd_lenses.values())) == 4, odd_lenses
-assert "strange detail" in " ".join(odd_lenses["jules"]).lower()
-assert any(word in " ".join(odd_lenses["owen"]).lower() for word in ("test", "causal"))
-assert any(word in " ".join(odd_lenses["sarah"]).lower() for word in ("explain", "understanding"))
+# The contemporary 23-field profiles put novelty responses inside distinct
+# cognitive styles, not the retired novelty_response field.
+assert "unusual" in " ".join(odd_lenses["jules"]).lower()
+assert "test" in " ".join(odd_lenses["owen"]).lower()
+assert "hypotheses" in " ".join(odd_lenses["sarah"]).lower()
 assert "people" in " ".join(odd_lenses["mara"]).lower()
 
 # Schema-like vulnerabilities activate selectively from a generic event classifier.
