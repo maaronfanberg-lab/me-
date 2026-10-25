@@ -44,7 +44,10 @@ def main() -> None:
     quality = engine._expression_quality
     wrapped_request = engine._private_model._request
     assert getattr(wrapped_request, "_room_retry_boundary", False), "production retry boundary is not installed"
-    original_underlying = quality._original_request
+    # room_expression_quality re-exports the legacy wrapper's names, but
+    # its _quality_request function still resolves module globals in the
+    # ORIGINAL legacy module. Patch that origin, not the re-exported alias.
+    original_underlying = quality._legacy._original_request
     old_prompt = os.environ.get("ROOM_NODE_PROMPT")
     old_url = os.environ.get("ROOM_MODEL_URL")
 
@@ -56,13 +59,13 @@ def main() -> None:
             return expression(allen_words)
         return expression("Allen, their bills contain electroreceptors that help them locate prey underwater.")
 
-    quality._original_request = fake_request
+    quality._legacy._original_request = fake_request
     os.environ["ROOM_NODE_PROMPT"] = "enabled-for-simulator"
     os.environ["ROOM_MODEL_URL"] = "http://simulator.invalid"
     try:
         result = engine._private_run("expression", payload, timeout=1)
     finally:
-        quality._original_request = original_underlying
+        quality._legacy._original_request = original_underlying
         if old_prompt is None:
             os.environ.pop("ROOM_NODE_PROMPT", None)
         else:
