@@ -182,7 +182,7 @@ jobs:
           wait_batch() { failed=0; for pid in "$@"; do wait "$pid" || failed=1; done; [ "$failed" -eq 0 ]; }
 
           run_beat() {
-            beat_seq=$((beat_seq + 1)); export ROOM_CYCLE_KEY="${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${beat_seq}"; rm -rf room_parts room_work; mkdir -p room_parts room_work
+            beat_seq=$((beat_seq + 1)); export ROOM_CYCLE_KEY="${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${beat_seq}"; rm -rf room_parts room_work; mkdir -p room_parts room_work; floor_failure_stage="before_floor"
             fetch_allen_turns
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" python3 scripts/room_participant.py room_work/allen-inbox.json room_work/allen-ack.json || return 1
             pids=(); for n in 1 2 4 5 7 8 10 11; do (timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase sense) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1
@@ -194,19 +194,23 @@ jobs:
             if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ]; then
               committed=0
               for candidate_rank in 0 1; do
+                floor_failure_stage="floor_selection"
                 python3 scripts/room_conversational_floor.py --bus room_work/bus-recurrent.json --out room_work/floor.json --rank "$candidate_rank" || return 1
                 selected_node=$(python3 -c 'import json; print(json.load(open("room_work/floor.json"))["node"])') || return 1
                 selected_speaker=$(python3 -c 'import json; print(json.load(open("room_work/floor.json"))["speaker"])') || return 1
                 selected_part=$(printf 'room_parts/recurrent-%02d.json' "$selected_node")
                 rm -f room_parts/recurrent-02.json room_parts/recurrent-05.json room_parts/recurrent-08.json room_parts/recurrent-11.json
+                floor_failure_stage="expression_generation"
                 if ! timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_EXPRESSION:-}" ROOM_NODE_ID="$selected_node" ROOM_EXPRESSION_RANK="0" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json; then
                   echo "Selected model failed for $selected_speaker; offering next opportunity"
                   continue
                 fi
+                floor_failure_stage="candidate_preflight"
                 if ! python3 scripts/room_conversational_candidate.py --part "$selected_part" --speaker "$selected_speaker"; then
                   echo "Unusable candidate from $selected_speaker; offering next opportunity"
                   continue
                 fi
+                floor_failure_stage="validated_publication"
                 timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_private_commit.py commit || return 1
                 committed=1
                 break
@@ -224,13 +228,39 @@ jobs:
               consecutive_failures=$((consecutive_failures + 1))
               echo "A Room beat failed internally (${consecutive_failures}/${ROOM_BEAT_FAILURE_LIMIT})"
               if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ] && [ "$consecutive_failures" -ge 2 ]; then
-                echo "Selected-turn path failed twice; reverting to proven four-voice path for this runner"
+                echo "Selected-turn path failed twice at ${floor_failure_stage:-unknown}; reverting to proven four-voice path for this runner"
+                # Preserve only the failure stage and workflow run ID, never
+                # private thoughts, model prompts, credentials or user speech.
+                # This diagnostic is written after the hard reset below and
+                # durably published with the next successful Room beat.
+                pending_floor_failure_stage="${floor_failure_stage:-unknown}"
                 export ROOM_CONVERSATIONAL_FLOOR=0
                 consecutive_failures=0
               elif [ "$consecutive_failures" -ge "$ROOM_BEAT_FAILURE_LIMIT" ]; then runner_exit_reason="repeated_beat_failure"; break; fi
               echo "Resync after internal beat failure before retrying"
               git fetch origin main || true
               git reset --hard origin/main || true
+              if [ -n "${pending_floor_failure_stage:-}" ]; then
+                mkdir -p room
+                FLOOR_FAILURE_STAGE="$pending_floor_failure_stage" python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          allowed = {"before_floor", "floor_selection", "expression_generation",
+                     "candidate_preflight", "validated_publication", "unknown"}
+          stage = os.environ.get("FLOOR_FAILURE_STAGE", "unknown")
+          if stage not in allowed:
+              stage = "unknown"
+          note = {
+              "schema": 1, "outcome": "runner_fell_back_to_legacy",
+              "failure_stage": stage,
+              "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "recorded_at": datetime.now(timezone.utc).isoformat(),
+          }
+          Path("room/floor-health.json").write_text(json.dumps(note, indent=2) + "\n")
+          PY
+                unset pending_floor_failure_stage
+              fi
               sleep 3
               continue
             fi
