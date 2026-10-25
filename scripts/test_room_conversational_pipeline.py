@@ -41,6 +41,9 @@ assert quality.repair_expression(repeated, "sarah") == repeated
 assert quality.quality_issue("No, no, no!", {"context": []}, "sarah", core._sim) is None
 assert quality.quality_issue("Can you clarify?", {"context": []}, "sarah", core._sim) is None
 assert quality.quality_issue("Right.", {"context": []}, "sarah", core._sim) is None
+assert quality.quality_issue("Yes.", {"context": []}, "sarah", core._sim) is None
+for fragment in ("This", "That.", "Because", "The", "However."):
+    assert quality.quality_issue(fragment, {"context": []}, "sarah", core._sim) == "unfinished_deictic_or_connective", fragment
 
 # We also require the original validation path to remain available.
 os.environ.pop("ROOM_CONVERSATIONAL_FLOOR", None)
@@ -83,6 +86,15 @@ write_floor("fixture-beat-1")
 # short repair or quote can pass the same structural/epistemic gates.
 valid_part = core.load(parts_root / "recurrent-02.json", {})
 assert validate_candidate(valid_part, "sarah", [], {}) == valid_part["private"]["expression"]["utterance"]
+dangling = json.loads(json.dumps(valid_part))
+dangling["private"]["expression"]["utterance"] = "This"
+dangling["private"]["expression"]["semantic_terms"] = ["this"]
+try:
+    validate_candidate(dangling, "sarah", [], {})
+except RuntimeError as exc:
+    assert "unfinished_deictic_or_connective" in str(exc)
+else:
+    raise AssertionError("live publisher would allow a dangling one-word utterance")
 bad_part = json.loads(json.dumps(valid_part))
 bad_part["private"]["expression"]["utterance"] = "I think " * 20
 bad_part["private"]["expression"]["semantic_terms"] = ["think"]
