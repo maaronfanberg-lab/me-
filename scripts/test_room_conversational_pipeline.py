@@ -253,7 +253,10 @@ fixture = {
 }
 rendered = autonomy_legacy._autonomy_compact(fixture, "expression", "sarah")
 assert rendered["discussion"]["subject"] is None
-assert rendered["self"]["motives"] == sarah["psychology_v2"]["motives"][:2]
+assert rendered["self"]["motives"] == sarah["psychology_v2"]["motives"][:2], (
+    "actual=" + repr(rendered["self"]["motives"]) +
+    " expected=" + repr(sarah["psychology_v2"]["motives"][:2])
+)
 assert rendered["self"]["cognitive_style"] == sarah["psychology_v2"]["cognitive_style"]
 assert rendered["self"]["topic_mobility"] == sarah["psychology_v2"]["topic_mobility"]
 assert "category" not in " ".join(rendered["self"]["motives"]).lower()
