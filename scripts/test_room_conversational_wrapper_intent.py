@@ -14,7 +14,7 @@ def test_bypass():
     evidence = {
         "private": {"sarah": [{"role": "expression", "private": {"event": {
             "speaker": "mara", "text": "Mara's unrelated thought.",
-            "cognition": {"target": "sarah"}}}]},
+            "cognition": {"target": "sarah"}}}}]},
         "recurrent": {"sarah": {"thought": {"private": {"deliberation": {
             "action": "DISAGREE",
             "preferred_partner": "owen",
