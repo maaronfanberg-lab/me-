@@ -121,7 +121,8 @@ current = pctx.get("current") or {}
 assert current.get("latest_words") == "Let's talk about the platypus"
 assert "platypus" in (current.get("grounding_terms") or [])
 assert current.get("salience") == "ground_latest_turn"
-assert any("vivid new object" in str(item).lower() for item in current.get("personality_lens") or [])
+assert any("tangent" in str(item).lower() or "new topics" in str(item).lower()
+           for item in current.get("personality_lens") or [])
 assert pctx.get("identity") == profiles["jules"]["core_identity"]
 
 # Clinical/schema labels are internal mechanics, never language-model vocabulary.
@@ -136,10 +137,10 @@ mara_payload = {
 }
 mara_compact = private_model._compact_payload(mara_payload, "expression", "mara")
 mara_current = ((mara_compact.get("personality_context") or {}).get("current") or {})
-assert mara_current.get("activated_sensitivities"), "targeted vulnerability should still shape appraisal"
+assert mara_current.get("activated_sensitivities") == [], "no clinical vulnerability is configured for Mara"
 serialized = json.dumps(mara_compact.get("personality_context") or {}, ensure_ascii=False).lower()
 for forbidden in ("schema", "abandonment", "mistrust", "unrelenting", "insufficient-self-control"):
     assert forbidden not in serialized, f"clinical/internal label leaked into private-model payload: {forbidden}"
-assert "pushed out" in serialized or "reassurance" in serialized
+assert "social systems" in serialized and "people" in serialized, "Mara's actual interpretive lens must survive"
 
-print("PASS personality-v2: 19 fixed layers, no sliders, grounded bids, divergent appraisal, selective schema activation, target precision, label isolation, production bridge")
+print("PASS personality-v2: 23 current layers, no sliders, grounded bids, distinct cognitive styles, no ungrounded clinical activations, precise social targeting and private bridge")
