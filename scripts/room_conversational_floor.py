@@ -56,13 +56,26 @@ def is_directed(event, recipient):
     )
 
 
+def public_participant_turns(history):
+    """One source-of-truth for the public turns each awake mind may observe.
+
+    The Room's system status and private cognition are never conversational
+    utterances. An accepted Allen turn is, regardless of its runtime tag.
+    Source ID and spoken text must be available for all consuming stages.
+    """
+    return [
+        item for item in history
+        if isinstance(item, dict)
+        and _norm(item.get("speaker")) in (*ORDER, "allen")
+        and str(item.get("id") or "").strip()
+        and str(item.get("text") or "").strip()
+    ]
+
+
 def last_participant_turn(history):
     """Match the same evidence projection in selection and publication."""
-    return next((event for event in reversed(history)
-                 if isinstance(event, dict)
-                 and _norm(event.get("speaker")) in (*ORDER, "allen")
-                 and str(event.get("id") or "").strip()
-                 and str(event.get("text") or "").strip()), None)
+    public = public_participant_turns(history)
+    return public[-1] if public else None
 
 
 def last_participant_source_id(history):
