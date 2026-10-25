@@ -441,7 +441,7 @@ def recurrent(node, key, bus_data):
             self_initiated = not requires_uptake(base.get("event"), entity, deliberation)
             if self_initiated:
                 expression_context = []
-        expression_topic = dict(base.get("topic") or {})
+        expression_topic = {} if self_initiated else dict(base.get("topic") or {})
         if collapsed:
             fresh_subject = breakout_subject(key)
             expression_topic.update({
