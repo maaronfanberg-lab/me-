@@ -568,6 +568,11 @@ _original_recurrent = _core.recurrent
 
 
 def _participant_recurrent(node, key, bus_data):
+    if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+        # In selected-floor mode the opportunity has already been allocated
+        # from public evidence. Do not force the rank-zero Allen answer or
+        # overwrite any character's deliberated social action.
+        return _original_recurrent(node, key, bus_data)
     try:
         entity, _local, role, _tasks = _core.ni(node)
         rank = int(os.environ.get("ROOM_EXPRESSION_RANK", str(ORDER.index(entity))))
