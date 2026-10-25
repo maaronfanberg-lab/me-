@@ -133,6 +133,18 @@ assert payload["deliberation"]["action"] == "DISCLOSE"
 assert "Distinct contribution" not in payload["deliberation"]["new_information_goal"]
 assert payload["topic"]["root"] == "old oak"
 
+# Cooperative short answers do not have to invent a novel topic term.
+# Preflight and final publication now both use clean_terms without grafting
+# the system's discussion subject onto an utterance of just "No".
+short = json.loads(json.dumps(valid_part))
+short["private"]["expression"].update({
+    "utterance": "No.", "semantic_terms": ["no"], "move": "answer"
+})
+assert validate_candidate(short, "sarah", [], {"root": "oak"}) == "No."
+short_msg, _ = core.emit("sarah", "answer", "mara", None, None,
+                         "No.", "short-beat", 0, {"id": "existing", "root": "oak"}, [])
+assert short_msg["cognition"]["topic_terms"] == []
+
 # The core's public commit CLI requires the nine-node contract.
 assert len(node_ids) == 9
 sys.argv = ["room_private_commit.py", "commit"]
