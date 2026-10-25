@@ -1,0 +1,39 @@
+name: Room floor activation diagnostic
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/room-floor-activation-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      ROOM_CONFIGURED: ${{ vars.ROOM_CONVERSATIONAL_FLOOR }}
+      ROOM_DEFAULTED: ${{ vars.ROOM_CONVERSATIONAL_FLOOR || '1' }}
+    steps:
+      - name: Check the actual repository floor variable without secrets
+        shell: bash
+        run: |
+          if [ -z "${ROOM_CONFIGURED}" ]; then
+            echo 'ROOM_CONVERSATIONAL_FLOOR repository variable: UNSET'
+          elif [ "${ROOM_CONFIGURED}" = '0' ]; then
+            echo 'ROOM_CONVERSATIONAL_FLOOR repository variable: EXPLICITLY DISABLED (0)'
+          elif [ "${ROOM_CONFIGURED}" = '1' ]; then
+            echo 'ROOM_CONVERSATIONAL_FLOOR repository variable: EXPLICITLY ENABLED (1)'
+          else
+            echo 'ROOM_CONVERSATIONAL_FLOOR repository variable: UNRECOGNIZED (not 0 or 1)'
+            exit 1
+          fi
+          if [ "${ROOM_DEFAULTED}" = '1' ]; then
+            echo 'Effective selected-speaker setting for newly started Room jobs: 1'
+          elif [ "${ROOM_DEFAULTED}" = '0' ]; then
+            echo 'Effective selected-speaker setting for newly started Room jobs: 0'
+          else
+            echo 'Invalid effective setting'
+            exit 1
+          fi
