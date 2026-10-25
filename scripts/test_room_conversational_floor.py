@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from room_conversational_floor import choose_next, checked_floor, ORDER, NODE
+from room_conversational_floor import choose_next, checked_floor, last_participant_source_id, ORDER, NODE
 
 
 def msg(speaker, text, target="", id="m1", move="deepen"):
@@ -80,6 +80,18 @@ class FloorTests(unittest.TestCase):
         self.assertEqual(one, two)
         self.assertNotIn("new_topic", one)
         self.assertNotIn("repetition_score", one)
+
+    def test_system_metadata_at_end_does_not_change_last_public_contribution(self):
+        public = msg("mara", "Sarah, are you listening?", "sarah", id="mara-22")
+        metadata = {"id": "system-23", "speaker": "system",
+                    "text": "runner heartbeat", "cognition": {"target": "sarah"}}
+        self.assertEqual(last_participant_source_id([public, metadata]), "mara-22")
+        selected = choose_next([public, metadata], bus(), config(), {})
+        self.assertEqual(selected["speaker"], "sarah")
+        self.assertEqual(selected["source_id"], "mara-22")
+        # Once another public participant speaks, that source is obsolete.
+        self.assertEqual(last_participant_source_id([public, metadata,
+                             msg("owen", "I heard her.", id="owen-24")]), "owen-24")
 
     def test_missing_thoughts_not_speech_fabrication(self):
         with self.assertRaisesRegex(RuntimeError, "no credible deliberated reason"):
