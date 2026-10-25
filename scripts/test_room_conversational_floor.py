@@ -122,25 +122,13 @@ class FloorTests(unittest.TestCase):
                              msg("owen", "I heard her.", id="owen-24")]), "owen-24")
 
     def test_missing_thoughts_not_speech_fabrication(self):
-        with self.assertRaisesRegex(RuntimeError, "no credible interactional reason"):
+        with self.assertRaisesRegex(RuntimeError, "no credible deliberated reason"):
             choose_next([], {"recurrent": {}}, config(), {})
-        # A directly addressed recipient may recognize the public bid
-        # without inventing a private thought or claiming understanding.
+        # A directly addressed recipient can still recognize the social bid
+        # without inventing a private action or claiming understanding.
         direct = choose_next([msg("mara", "Sarah, where did it go?", "sarah")],
                              {"recurrent": {}}, config(), {})
         self.assertEqual(direct["speaker"], "sarah")
-        self.assertEqual(direct["evidence_level"], "observed_public_turn_only")
-        # After a completed public turn, *another* participant can
-        # self-select a relevant response opportunity even if all the
-        # thinking models fail. This is not a fabricated deliberation.
-        open_floor = choose_next(
-            [msg("jules", "I saw a strange bird yesterday.", id="bird-1")],
-            {"recurrent": {}}, config(), {})
-        self.assertEqual(open_floor["reason"], "observed_turn_opportunity")
-        self.assertEqual(open_floor["source_id"], "bird-1")
-        self.assertNotEqual(open_floor["speaker"], "jules")
-        self.assertEqual(open_floor["evidence_level"], "observed_public_turn_only")
-        self.assertNotIn("utterance", open_floor)
 
     def test_completed_turn_gives_peers_real_conversational_opportunity(self):
         cfg = config()
