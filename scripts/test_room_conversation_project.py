@@ -68,6 +68,19 @@ class Projects(unittest.TestCase):
         self.assertIsNone(compact["discussion"]["subject"])
         self.assertNotIn("Category classification tree", str(compact))
         self.assertIn("animal behavior", str(compact["interaction_project"]))
+        with_history = self.input(old)
+        with_history["group_context"] = {
+            "relationships": {"mara": {"trust": 0.65}},
+            "encounters": [{"speaker": "mara",
+                            "text": "Category classification trees are everything."}],
+            "activities": [{"proposal": "Experimental classification tree project"}],
+            "possible_collaborators": ["sarah", "mara"],
+        }
+        reduced = autonomy._autonomy_compact(with_history, "expression", "jules")
+        self.assertEqual(reduced["group_context"]["relationships"]["mara"]["trust"], 0.65)
+        self.assertEqual(reduced["group_context"]["possible_collaborators"], ["sarah", "mara"])
+        self.assertNotIn("encounters", reduced["group_context"])
+        self.assertNotIn("activities", reduced["group_context"])
 
     def test_accepted_allen_turn_keeps_full_verbatim_evidence(self):
         old = event("allen", "Jules, why do octopuses camouflage?", "allen-queue-88")
@@ -78,6 +91,13 @@ class Projects(unittest.TestCase):
         self.assertEqual(compact["social_opportunity"]["source_id"], old["id"])
         self.assertEqual(compact["social_opportunity"]["action_due"], "directed_response_or_repair")
         self.assertTrue(any(x["speaker"] == "allen" for x in compact["context"]))
+        with_history = self.input(old)
+        with_history["group_context"] = {
+            "relationships": {"mara": {"trust": 0.65}},
+            "encounters": [{"speaker": "allen", "text": "Why octopuses?"}],
+        }
+        responsive = autonomy._autonomy_compact(with_history, "expression", "jules")
+        self.assertEqual(responsive["group_context"]["encounters"][0]["speaker"], "allen")
 
     def test_unaddressed_question_is_open_response_opportunity(self):
         old = event("mara", "Why do people keep their favorite objects?", "m2")
