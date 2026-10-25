@@ -40,7 +40,7 @@ class FloorTests(unittest.TestCase):
 
     def test_addressed_sleeping_participant_does_not_speak(self):
         last = msg("owen", "Jules, are you awake?", "jules")
-        selected = choose_next([last], bus(), config(["jules"]), {})
+        selected = choose_next([last], bus({"owen": {"action": "DEEPEN", "preferred_partner": "sarah"}}), config(["jules"]), {})
         self.assertNotEqual(selected["speaker"], "jules")
         self.assertEqual(selected["reason"], "open_floor_relevance")
         with self.assertRaises(ValueError):
@@ -49,10 +49,10 @@ class FloorTests(unittest.TestCase):
 
     def test_out_of_room_or_self_target_does_not_make_obligation(self):
         one = choose_next([msg("jules", "The moon looks strange.", "jules")],
-                          bus(), config(), {})
+                          bus({"sarah": {"action": "DEEPEN"}}), config(), {})
         self.assertEqual(one["reason"], "open_floor_relevance")
         two = choose_next([msg("allen", "Can anybody hear me?", "unknown")],
-                          bus(), config(), {})
+                          bus({"mara": {"action": "DEEPEN"}}), config(), {})
         self.assertEqual(two["reason"], "open_floor_relevance")
 
     def test_hidden_generated_target_is_not_evidence_of_audible_address(self):
@@ -82,10 +82,31 @@ class FloorTests(unittest.TestCase):
         self.assertNotIn("repetition_score", one)
 
     def test_missing_thoughts_not_speech_fabrication(self):
-        out = choose_next([], {"recurrent": {}}, config(), {})
-        self.assertIn(out["speaker"], ORDER)
-        self.assertEqual(out["reason"], "open_floor_relevance")
-        self.assertNotIn("utterance", out)
+        with self.assertRaisesRegex(RuntimeError, "no credible deliberated reason"):
+            choose_next([], {"recurrent": {}}, config(), {})
+        # A directly addressed recipient can still recognize the social bid
+        # without inventing a private action or claiming understanding.
+        direct = choose_next([msg("mara", "Sarah, where did it go?", "sarah")],
+                             {"recurrent": {}}, config(), {})
+        self.assertEqual(direct["speaker"], "sarah")
+
+    def test_completed_turn_gives_peers_real_conversational_opportunity(self):
+        cfg = config()
+        cfg["p"]["jules"]["traits"] = {
+            "curiosity": .99, "extraversion": .91, "inhibition": .06}
+        cfg["p"]["mara"]["traits"] = {
+            "curiosity": .90, "extraversion": .96, "inhibition": .15}
+        cfg["p"]["sarah"]["traits"] = {
+            "curiosity": .99, "extraversion": .72, "inhibition": .30}
+        cfg["p"]["owen"]["traits"] = {
+            "curiosity": .93, "extraversion": .62, "inhibition": .38}
+        deliberations = bus({e: {"action": "DEEPEN", "preferred_partner": "allen"} for e in ORDER})
+        after_jules = choose_next([msg("jules", "I finished what I meant.", id="j")],
+                                  deliberations, cfg, {})
+        self.assertNotEqual(after_jules["speaker"], "jules")
+        # This is a status-of-the-current-turn decision, not an across-beats
+        # quota or a lexical repetition score.
+        self.assertNotIn("quota", after_jules)
 
     def test_technical_fallback_selects_second_distinct_opportunity(self):
         latest = msg("mara", "Sarah, what happened to the moths?", "sarah")
@@ -110,7 +131,9 @@ class FloorTests(unittest.TestCase):
     def test_allows_consecutive_speaker_and_productive_repetition(self):
         cfg = config(("mara", "owen", "jules"))
         same = msg("sarah", "Trees? That oak tree?", "mara")
-        selected = choose_next([same], bus(), cfg, {})
+        selected = choose_next([same], bus({"sarah": {
+            "action": "REPAIR", "unresolved_thread": "which particular oak?"
+        }}), cfg, {})
         self.assertEqual(selected["speaker"], "sarah")
         self.assertNotIn("prohibit_repeating", selected)
         self.assertNotIn("forbidden_words", selected)
