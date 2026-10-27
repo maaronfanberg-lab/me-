@@ -16,7 +16,7 @@ so N is the rate at which that layer's clock runs. A layer with N → 0 sits beh
 learning, whatever the optimiser is doing. A steady exponential profile N ∝ e^{κℓ} gives the depth spacetime
 constant curvature R = −2κ².
 
-This repository is a small library (numpy only), a verified test suite, three experiments that test claims about
+This repository is a small library (numpy only), a verified test suite, five experiments that test claims about
 this geometry, a sonification, and a [corrections ledger](CORRECTIONS.md) of every claim that turned out wrong.
 
 ## Definitions
@@ -152,6 +152,32 @@ lapse is an octave and a flat network is a unison. Nothing else is added.
 
 ![what settling.wav plays](figures/sound_settling.png)
 
+### 5. What sets the total tilt? A pre-registered test, with a mixed answer
+
+Experiment 1 found the trained tilt depends on the task, not the depth. Experiment 4 tested four candidate causes,
+changing one at a time, with predictions and a pass rule written before any run
+([`experiments/E4_PREREGISTRATION.md`](experiments/E4_PREREGISTRATION.md)). A condition "moves" the tilt if its
+change exceeds twice the combined seed spread. 60 runs; full tables in
+[`results/e4_analysis.md`](results/e4_analysis.md).
+
+| candidate cause | test | residual tanh, 24 layers | plain tanh, 12 layers | verdict |
+|---|---|---|---|---|
+| input dimension | circle spread across 64 inputs | −0.28, does not move | −0.42, does not move | not supported; the two other tests (62 noise inputs; digits cut to 2 inputs) could not be scored because those networks never learned |
+| input scale | circle inputs standardised to spread 1 | −0.15, does not move | −0.36, does not move | not supported |
+| number of classes | digits relabelled to 2 classes | **+1.06, moves** (predicted ≈ +0.9) | +0.25, does not move | supported for the residual network only |
+| label noise | circle with clean or noisier labels; digits with 20% wrong labels | clean **+0.89**, noisier **−0.74**, digits-noisy **+0.75**: all move | clean **+0.78** moves; the others do not | the prediction failed: noise moved the tilt in *opposite* directions on the two tasks |
+
+**An exploratory follow-up, done after seeing these results.** Every lapse is measured relative to the output
+layer, and the output layer's size is the number of classes, so the class effect might have lived entirely in
+that last step. Splitting the tilt into the part inside the hidden layers and the final step to the output
+([`results/e4_exploratory.md`](results/e4_exploratory.md), parts checked to sum to the total within 4e−16):
+for the residual network, going from 10 classes to 2 raises the internal part by +0.61 and the output step by
++0.45. So most of the effect is inside the network, not an artifact of the reference. The circle's label-noise
+effect is almost entirely internal, and cleaner training fits give steeper tilts.
+
+So the "task constant" from experiment 1 is not a single property of the task. Class count and label noise both
+move it, input size and scale do not, and the direction of the noise effect depends on the task. Why remains open.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
@@ -191,7 +217,8 @@ Each log lasts 0.12 s of audio.
 ```
 lapse/            the library: core.py (measurements), nets.py (numpy networks), sound.py, data.py
 tests/            test_lapse.py (24 checks), test_sound.py (8 checks)
-experiments/      run.py (one training run), tiny_lm.py, sonify.py, analyze.py
+experiments/      run.py (one training run), tiny_lm.py, sonify.py, analyze.py,
+                  e4.py + E4_PREREGISTRATION.md + e4_analyze.py, e5_alignment.py
 results/          raw JSON for every run, and analysis.md (all tables)
 figures/          plots made by analyze.py
 audio/            the three sound pieces, with the lapse data each one was rendered from
