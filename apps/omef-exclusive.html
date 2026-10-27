@@ -4,10 +4,25 @@ body.dark{--bg:#0d0d0d;--panel:#1c1c1c;--text:#eee;--muted:#aaa;--line:#333;--ca
 body.color{--bg:#07121b;--panel:#101d2a;--text:#eaf4ff;--muted:#a8bdce;--line:#294057;--accent:#36b7ff;--canvas:#06101a;--ink:120,210,255}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}.app{max-width:980px;margin:auto;padding-bottom:40px}header{background:var(--panel);border-bottom:1px solid var(--line);padding:13px 14px}h1{margin:0;font-size:27px;letter-spacing:.03em}.sub{font-size:12px;color:var(--muted);margin-top:4px}.stage{position:relative;background:var(--canvas);min-height:390px;border-bottom:1px solid var(--line);overflow:hidden}canvas{display:block;width:100%;height:auto;background:var(--canvas)}.badge{position:absolute;top:10px;left:10px;background:#000;color:#fff;font:16px Menlo,Consolas,monospace;padding:5px 8px}.status{position:absolute;top:48px;left:10px;background:rgba(0,0,0,.72);color:#fff;border-radius:20px;padding:7px 11px;font-size:12px}.panel{margin:0;background:var(--panel)}section{padding:14px;border-bottom:1px solid var(--line)}h2{margin:0 0 10px;font-size:22px}.hint{color:var(--muted);font-size:12px;line-height:1.4;margin:-4px 0 10px}.row{display:grid;grid-template-columns:120px 1fr 64px;gap:8px;align-items:center;margin:8px 0}.row label{color:var(--muted);font-size:13px}.value{background:#555;color:#fff;text-align:center;border-radius:7px;padding:5px 2px;font-size:12px;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:var(--accent)}button{width:100%;font:inherit;border-radius:9px;border:0;padding:10px;background:var(--accent);color:#fff;font-weight:750}.secondary{background:#555}.danger{background:#8c3b3b}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.theme button{background:transparent;color:var(--accent);border:1px solid var(--line)}.theme button.active{background:var(--accent);color:#fff}.group{border:1px solid var(--line);border-radius:12px;margin:9px 0;overflow:hidden}.group summary{padding:10px 12px;font-weight:800;background:rgba(127,127,127,.08);cursor:pointer}.group>div{padding:4px 11px 9px}.toggle{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted);margin:8px 0}.toggle input{width:24px;height:24px}.pure{border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12px;color:var(--muted);background:rgba(16,155,145,.06);margin-bottom:10px}
 @media(max-width:719px){header{padding:8px 10px}h1{font-size:20px}.sub{display:none}.stage{position:sticky;top:0;z-index:20;height:46svh;min-height:320px}.stage canvas{width:100%;height:100%;object-fit:contain}section{padding:10px 9px}h2{font-size:18px}.row{grid-template-columns:92px 1fr 50px;gap:5px;margin:6px 0}.row label{font-size:11px}.value{font-size:10px;padding:4px 1px}.hint,.pure{font-size:10px}}
-</style></head><body class="dark"><div class="app"><header><h1>OMEF EXCLUSIVE</h1><div class="sub">One attractor only: autonomous OMEF-A with its own delayed self-feedback. No Clifford, De Jong, Hopalong, species, miner, or wildcard formula.</div></header><div class="stage"><canvas id="omefCanvas" width="1000" height="760"></canvas><div class="badge" id="count">Total drawn points: 0</div><div class="status" id="status">booting</div></div><div class="panel">
+.engbtn.active{background:var(--accent);color:#fff}.engbtn:not(.active){background:#555;color:#fff}.eqmath{font:12px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--muted)}.eqmath p{margin:8px 0}.eqmath strong{color:var(--text)}#equationUI[hidden],#omefUI[hidden]{display:none!important}
+</style></head><body class="dark"><div class="app"><header><h1>OMEF EXCLUSIVE</h1><div class="sub">Explore the original autonomous OMEF-A engine or a geometric equation-driven flow, with the same dense point rendering and live controls.</div></header><div class="stage"><canvas id="omefCanvas" width="1000" height="760"></canvas><div class="badge" id="count">Total drawn points: 0</div><div class="status" id="status">booting</div></div><div class="panel">
+<section id="engineControls"><h2>Drawing engine</h2><div class="hint">Two genuine mathematical systems, one dense drawing instrument. Your original OMEF engine remains unchanged.</div><div class="grid2"><button id="engineOmef" class="engbtn active" aria-pressed="true">Original OMEF</button><button id="engineEquation" class="engbtn secondary" aria-pressed="false">Reworked equation</button></div></section>
+<div id="omefUI">
 <section><h2>OMEF genome</h2><div class="pure">These nine macros control the major OMEF-A subsystems. Continuous controls use the same signed-log response curve so small finger movements have useful mathematical effect without hidden per-slider boost tables.</div><div id="macro"></div><div class="grid2"><button id="random">Random visible</button><button id="mutate">Mutate slightly</button><button id="preset" class="secondary">Reset preset</button><button id="render" class="secondary">Render again</button></div></section>
 <section><h2>OMEF self-feedback</h2><div class="hint">Only the attractor's own delayed output is fed back into Pair, Regime, and Projection. There is no external attractor formula mixed in.</div><div id="feedback"></div></section>
 <section><h2>Deep OMEF controls</h2><div class="hint">Direct controls for pair, triad, delayed market memory, shadow memory, regimes, golden cycles, Fibonacci memory, retention, and both OMEF projection systems.</div><div id="deep"></div></section>
+</div>
+<section id="equationUI" hidden><h2>Equation dynamics</h2>
+<div class="pure">A two-dimensional, numerically integrated realization of your equation. The connection curves the motion; damping removes energy; PID feedback uses the gradient of L; a moving sieve potential supplies sustained excitation. This is not the original OMEF formula.</div>
+<div id="eqSliders"></div>
+<div class="grid2"><button id="eqRandom">Explore parameters</button><button id="eqMutate">Mutate slightly</button><button id="eqReset" class="secondary">Reset equation</button><button id="eqExplain" class="secondary" aria-expanded="false">Model details</button></div>
+<details id="eqModelDetails" class="group"><summary>Full model and assumptions</summary><div class="eqmath">
+<p><strong>Original structure:</strong> m(u″ + Γ(u′,u′)) + γu′ = −g⁻¹ PID(∇L) − λg⁻¹∇V, with dt/dτ = 1/(1−L*/L).</p>
+<p>u=(x,y), m=λ=1, g<sub>ij</sub>=exp(2ψ)δ<sub>ij</sub>, ψ=(κ/2)sin(qx)sin(qy), L=√(1.3²+x²+y²).</p>
+<p>V(x,y,t)=½[x²+r²y²]+εcos(qx+0.67t)cos(qy−1.11t)−F[x cos(0.91t)+y sin(0.91rt)].</p>
+<p>PID(∇L)=Kp ∇L + Ki ∫∇L dτ + Kd d(∇L)/dτ. The integral starts at zero; the spatial connection is the Levi-Civita connection of the stated metric. RK4 advances the 7-state model at Δτ=0.036.</p>
+<p>The time-dependent potential is an explicit modeling choice to sustain complex trajectories against damping. It is allowed by the supplied equation but not uniquely determined by it. L* is restricted below 1.3 to avoid the time singularity. This is mathematical art, not a claim about actual relativistic mechanics.</p></div></details>
+</section>
 <section><h2>Rendering</h2><div class="toggle"><input id="livePreview" type="checkbox" checked><label for="livePreview">Live preview while dragging sliders</label></div><div id="renderControls"></div><div class="grid3 theme"><button data-theme="dark" class="active">Dark</button><button data-theme="light">Light</button><button data-theme="color">Color</button></div><div class="grid2" style="margin-top:8px"><button id="download">Save PNG</button><button id="stop" class="danger">Stop</button></div></section>
 </div></div><script>(function(){const macros=[['a','Pair coupling',-3,3,.01,1.15],['b','Triad coupling',-3,3,.01,1.45],['c','Market memory',-3,3,.01,.72],['d','Shadow feedback',-3,3,.01,1.10],['e','Regime fluidity',-3,3,.01,1.20],['f','Golden cycles',-3,3,.01,.85],['g','Fibonacci memory',-3,3,.01,1.10],['h','Spectral edge',-3,3,.01,.65],['i','Projection mix',-3,3,.01,.35]],feedback=[['fbPair','Feedback pair',0,.8,.01,.18],['fbRegime','Feedback regime',0,.6,.01,.12],['fbProjection','Feedback projection',0,.8,.01,.22],['fbLag','Feedback lag',1,32,1,8],['fbMix','Feedback mix',0,1,.01,.55],['fbDamping','Feedback damping',.70,.995,.005,.92]],groups=[['Pair field',[['pairFreqA','Pair sin freq',.2,3,.01,1.70],['pairFreqB','Pair cos freq',.2,3,.01,1.31],['pairCosAmp','Pair cos amp',0,1.5,.01,.72],['pairPhaseA','Pair phase A',0,1,.01,.37],['pairPhaseB','Pair phase B',0,1,.01,.23]]],['Triad geometry',[['triScale','Triad scale',0,2,.01,1],['triCross','Triad cross',0,2,.01,1]]],['Market delays',[['marketW1','Lag 13→21',0,2,.01,1],['marketW2','Lag 8→34',0,1.5,.01,.55],['lagA','Delay A',1,21,1,13],['lagB','Delay B',2,34,1,21],['lagC','Delay C',1,13,1,8]]],['Shadow memory',[['shadowSelf','Shadow self',0,2,.01,1],['shadowCross','Shadow cross',0,1.5,.01,.65],['shadowLag','Shadow lag',1,34,1,13]]],['Regime field',[['r0u8','R0 U8',0,2,.01,1.15],['r0u6','R0 U6',-1.5,0,.01,-.52],['r1u6','R1 U6',0,2,.01,.92],['r1u4sq','R1 U4²',0,1,.01,.28],['r2u2','R2 U2',-1.5,0,.01,-.88],['r2u7','R2 U7',0,1.5,.01,.58],['r3u8','R3 U8',-1.5,0,.01,-.95],['r3u0','R3 U0',-1.5,0,.01,-.42],['regimeForce','Regime force',0,.5,.005,.17]]],['Golden phases',[['phaseSpeed','Phase speed',.005,.09,.001,.029],['phaseRatio','Golden ratio',1.2,2.2,.001,1.618],['phaseMod1','Phase mod U0',0,.5,.01,.18],['phaseMod2','Phase mod U6',0,.5,.01,.16],['goldCos','Golden cos amp',0,1.5,.01,.72]]],['Fibonacci memory',[['fib1','Fib lag 1',0,.8,.01,.43],['fib3','Fib lag 3',0,.8,.01,.27],['fib8','Fib lag 8',0,.8,.01,.18],['fib13','Fib lag 13',0,.8,.01,.12],['fibSelf','Fib self subtract',0,2,.01,1]]],['Core retention',[['edgeBase','Retention base',.3,1.2,.005,.78],['edgeSpan','Retention span',0,.5,.005,.16],['squash','Tanh squash',.3,2,.01,1]]],['Projection A',[['xA0','xA U0-U3',0,2.5,.01,1.25],['xA7','xA U7-U2',0,2,.01,.85],['xAdelay','xA delay',0,1,.01,.35],['yA6','yA U6-U8',0,2.5,.01,1.18],['yA5','yA U5+U1',0,2,.01,.78],['yAdelay','yA delay',0,1,.01,.32]]],['Projection B',[['projReg','Regime projection',0,3,.01,2.05],['projCross','Cross product',0,2,.01,.88],['projPhase','Phase projection',0,1.5,.01,.55]]]];const row=(d,p)=>{let r=document.createElement('div');r.className='row';r.innerHTML=`<label>${d[1]}</label><input id="${d[0]}" type="range" min="${d[2]}" max="${d[3]}" step="${d[4]}" value="${d[5]}"><div id="${d[0]}v" class="value">${d[5]}</div>`;p.appendChild(r)};macros.forEach(d=>row(d,document.getElementById('macro')));feedback.forEach(d=>row(d,document.getElementById('feedback')));groups.forEach((g,i)=>{let det=document.createElement('details');det.className='group';if(i<2)det.open=true;det.innerHTML=`<summary>${g[0]}</summary><div></div>`;g[1].forEach(d=>row(d,det.querySelector('div')));document.getElementById('deep').appendChild(det)});[['points','Points',25000,1000000,25000,250000],['ink','Ink',1,100,1,42],['size','Size',1,8,1,2]].forEach(d=>row(d,document.getElementById('renderControls')));})();</script><script>(function(){'use strict';
 const $=id=>document.getElementById(id),cv=$('omefCanvas'),ctx=cv.getContext('2d'),count=$('count'),status=$('status');
@@ -17,6 +32,146 @@ const macros=[['a','Pair coupling',-3,3,.01,1.15],['b','Triad coupling',-3,3,.01
 const feedbackDefs=[['fbPair','Feedback pair',0,.8,.01,.18],['fbRegime','Feedback regime',0,.6,.01,.12],['fbProjection','Feedback projection',0,.8,.01,.22],['fbLag','Feedback lag',1,32,1,8],['fbMix','Feedback mix',0,1,.01,.55],['fbDamping','Feedback damping',.70,.995,.005,.92]];
 const groups=[['Pair field',[['pairFreqA','Pair sin freq',.2,3,.01,1.70],['pairFreqB','Pair cos freq',.2,3,.01,1.31],['pairCosAmp','Pair cos amp',0,1.5,.01,.72],['pairPhaseA','Pair phase A',0,1,.01,.37],['pairPhaseB','Pair phase B',0,1,.01,.23]]],['Triad geometry',[['triScale','Triad scale',0,2,.01,1.0],['triCross','Triad cross',0,2,.01,1.0]]],['Market delays',[['marketW1','Lag 13→21',0,2,.01,1.0],['marketW2','Lag 8→34',0,1.5,.01,.55],['lagA','Delay A',1,21,1,13],['lagB','Delay B',2,34,1,21],['lagC','Delay C',1,13,1,8]]],['Shadow memory',[['shadowSelf','Shadow self',0,2,.01,1.0],['shadowCross','Shadow cross',0,1.5,.01,.65],['shadowLag','Shadow lag',1,34,1,13]]],['Regime field',[['r0u8','R0 U8',0,2,.01,1.15],['r0u6','R0 U6',-1.5,0,.01,-.52],['r1u6','R1 U6',0,2,.01,.92],['r1u4sq','R1 U4²',0,1,.01,.28],['r2u2','R2 U2',-1.5,0,.01,-.88],['r2u7','R2 U7',0,1.5,.01,.58],['r3u8','R3 U8',-1.5,0,.01,-.95],['r3u0','R3 U0',-1.5,0,.01,-.42],['regimeForce','Regime force',0,.5,.005,.17]]],['Golden phases',[['phaseSpeed','Phase speed',.005,.09,.001,.029],['phaseRatio','Golden ratio',1.2,2.2,.001,1.618],['phaseMod1','Phase mod U0',0,.5,.01,.18],['phaseMod2','Phase mod U6',0,.5,.01,.16],['goldCos','Golden cos amp',0,1.5,.01,.72]]],['Fibonacci memory',[['fib1','Fib lag 1',0,.8,.01,.43],['fib3','Fib lag 3',0,.8,.01,.27],['fib8','Fib lag 8',0,.8,.01,.18],['fib13','Fib lag 13',0,.8,.01,.12],['fibSelf','Fib self subtract',0,2,.01,1.0]]],['Core retention',[['edgeBase','Retention base',.3,1.2,.005,.78],['edgeSpan','Retention span',0,.5,.005,.16],['squash','Tanh squash',.3,2,.01,1.0]]],['Projection A',[['xA0','xA U0-U3',0,2.5,.01,1.25],['xA7','xA U7-U2',0,2,.01,.85],['xAdelay','xA delay',0,1,.01,.35],['yA6','yA U6-U8',0,2.5,.01,1.18],['yA5','yA U5+U1',0,2,.01,.78],['yAdelay','yA delay',0,1,.01,.32]]],['Projection B',[['projReg','Regime projection',0,3,.01,2.05],['projCross','Cross product',0,2,.01,.88],['projPhase','Phase projection',0,1.5,.01,.55]]]];
 const allDefs=macros.concat(feedbackDefs,...groups.map(g=>g[1]));
+let activeEngine='omef';
+const eqDefs=[
+ ['eqRatio','Y / X well frequency',.75,2.25,.005,1.41],
+ ['eqGamma','Damping γ',.001,.075,.001,.014],
+ ['eqCurv','Curvature κ',0,.65,.005,.28],
+ ['eqSieve','Sieve strength ε',0,.8,.005,.38],
+ ['eqDrive','Potential drive F',0,1,.005,.52],
+ ['eqWave','Sieve spatial frequency q',.75,6,.025,2.9],
+ ['eqKp','Proportional gain Kp',0,.8,.005,.17],
+ ['eqKi','Integral gain Ki',0,.06,.001,.01],
+ ['eqKd','Derivative gain Kd',0,.12,.002,.027],
+ ['eqLstar','Clock threshold L*',0,1.2,.01,.65]
+];
+const eqDefault=Object.fromEntries(eqDefs.map(d=>[d[0],d[5]]));
+function eqRaw(){return Object.fromEntries(eqDefs.map(d=>[d[0],+$(d[0]).value]));}
+function eqApply(values){eqDefs.forEach(d=>{const v=values[d[0]];if(Number.isFinite(v))$(d[0]).value=clamp(v,d[2],d[3]);});eqLabels();}
+function eqLabels(){eqDefs.forEach(d=>{const id=d[0],v=+$(id).value;$(id+'v').textContent=v.toFixed(d[4]>=1?0: d[4]<.005?3:2);});}
+function eqMode(){return activeEngine==='equation';}
+function equationStepper(raw){
+ const p={r:raw.eqRatio,gamma:raw.eqGamma,k:raw.eqCurv,e:raw.eqSieve,drive:raw.eqDrive,q:raw.eqWave,kp:raw.eqKp,ki:raw.eqKi,kd:raw.eqKd,star:raw.eqLstar};
+ const dt=.036,base=1.3;
+ let s=[1.2,-.27,.15,1.05,0,0,0], tTau=0;
+ function derivative(w){
+  const x=w[0],y=w[1],vx=w[2],vy=w[3],ix=w[4],iy=w[5],t=w[6];
+  const L=Math.hypot(base,x,y),lx=x/L,ly=y/L,proj=(x*vx+y*vy)/(L*L);
+  const dlx=vx/L-lx*proj,dly=vy/L-ly*proj;
+  const a=p.q*x,b=p.q*y,psi=.5*p.k*Math.sin(a)*Math.sin(b);
+  const px=.5*p.k*p.q*Math.cos(a)*Math.sin(b),py=.5*p.k*p.q*Math.sin(a)*Math.cos(b);
+  const dv=px*vx+py*vy,speed2=vx*vx+vy*vy;
+  const cx=2*vx*dv-speed2*px,cy=2*vy*dv-speed2*py;
+  const sx=a+.67*t,sy=b-1.11*t;
+  const vxPotential=x-p.e*p.q*Math.sin(sx)*Math.cos(sy)-p.drive*Math.cos(.91*t);
+  const vyPotential=p.r*p.r*y-p.e*p.q*Math.cos(sx)*Math.sin(sy)-p.drive*Math.sin(.91*p.r*t);
+  const inv=Math.exp(-2*psi);
+  return [vx,vy,
+   -cx-p.gamma*vx-inv*(p.kp*lx+p.ki*ix+p.kd*dlx+vxPotential),
+   -cy-p.gamma*vy-inv*(p.kp*ly+p.ki*iy+p.kd*dly+vyPotential),
+   lx,ly,1/(1-p.star/L)];
+ }
+ return function(){
+  const k1=derivative(s),
+    k2=derivative(s.map((v,i)=>v+dt*.5*k1[i])),
+    k3=derivative(s.map((v,i)=>v+dt*.5*k2[i])),
+    k4=derivative(s.map((v,i)=>v+dt*k3[i]));
+  s=s.map((v,i)=>v+dt*(k1[i]+2*k2[i]+2*k3[i]+k4[i])/6);
+  tTau+=dt;
+  if(!Number.isFinite(s[0])||!Number.isFinite(s[1])||Math.max(Math.abs(s[0]),Math.abs(s[1]))>150)return [NaN,NaN];
+  return [s[0],s[1]];
+ };
+}
+function equationBounds(raw,n){
+ const next=equationStepper(raw),burn=160;let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity,valid=0;
+ for(let i=0;i<n;i++){const xy=next(),x=xy[0],y=xy[1];
+  if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+  if(i<burn)continue;
+  xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);ymin=Math.min(ymin,y);ymax=Math.max(ymax,y);valid++;
+ }
+ const w=xmax-xmin,h=ymax-ymin;
+ if(valid<500||w<.07||h<.07||w>100||h>100)return null;
+ return {minX:xmin,maxX:xmax,minY:ymin,maxY:ymax,w,h};
+}
+function equationRender(preview){
+ token++;const my=token;stopped=false;eqLabels();updateValues();clearCanvas();
+ count.textContent='Total drawn points: 0';
+ const raw=eqRaw(),full=+$('points').value,total=preview?Math.min(full,30000):full;
+ const alphaInk=clamp(.015+(+$('ink').value)/650,.015,.17),dot=(+$('size').value)/2;
+ status.textContent=preview?'preview · equation':'testing · equation';
+ setTimeout(()=>{
+  if(my!==token)return;
+  const b=equationBounds(raw,preview?4500:10000);
+  if(!b){status.textContent='unstable or collapsed · adjust equation';return;}
+  const pad=55,scale=Math.min((cv.width-2*pad)/b.w,(cv.height-2*pad)/b.h);
+  const ox=cv.width/2-scale*(b.minX+b.maxX)/2,oy=cv.height/2+scale*(b.minY+b.maxY)/2;
+  const next=equationStepper(raw),rgb=getComputedStyle(document.body).getPropertyValue('--ink');let drawn=0,plotted=0,invalid=0;
+  ctx.fillStyle='rgba('+rgb+','+alphaInk+')';
+  status.textContent=(preview?'preview':'rendering')+' · equation';
+  function batch(){
+   if(my!==token||stopped)return;
+   const start=performance.now();ctx.beginPath();
+   while(drawn<total&&performance.now()-start<(preview?4:7)){
+    const xy=next(),x=xy[0],y=xy[1];
+    if(!Number.isFinite(x)||!Number.isFinite(y)){invalid++;break;}
+    const px=ox+x*scale,py=oy-y*scale;
+    if(px>=0&&px<cv.width&&py>=0&&py<cv.height){ctx.rect(px,py,dot,dot);plotted++;}
+    drawn++;
+   }
+   ctx.fill();count.textContent='Total drawn points: '+drawn.toLocaleString();
+   if(invalid){status.textContent='integration unstable · adjust parameters';return;}
+   if(drawn<total)setTimeout(batch,0);
+   else status.textContent=(preview?'preview ready':'done')+' · equation · '+plotted.toLocaleString()+' visible';
+  }
+  batch();
+ },preview?5:20);
+}
+function buildEquationUI(){
+ const controls=$('eqSliders');
+ for(const d of eqDefs){
+  const row=document.createElement('div');row.className='row';
+  const label=document.createElement('label');label.textContent=d[1];label.htmlFor=d[0];
+  const slider=document.createElement('input');slider.id=d[0];slider.type='range';slider.min=d[2];slider.max=d[3];slider.step=d[4];slider.value=d[5];slider.setAttribute('aria-label',d[1]);
+  const out=document.createElement('div');out.className='value';out.id=d[0]+'v';
+  row.append(label,slider,out);controls.appendChild(row);
+  slider.addEventListener('input',()=>{eqLabels();requestPreview();});
+  slider.addEventListener('change',()=>{cancelPreview();render(false);});
+ }
+ eqLabels();
+ function mode(m){
+  if(m===activeEngine)return;
+  activeEngine=m;const eq=eqMode();
+  $('omefUI').hidden=eq;$('equationUI').hidden=!eq;
+  $('engineOmef').classList.toggle('active',!eq);$('engineEquation').classList.toggle('active',eq);
+  $('engineOmef').setAttribute('aria-pressed',String(!eq));$('engineEquation').setAttribute('aria-pressed',String(eq));
+  token++;cancelPreview();render(false);
+ }
+ $('engineOmef').onclick=()=>mode('omef');
+ $('engineEquation').onclick=()=>mode('equation');
+ $('eqReset').onclick=()=>{eqApply(eqDefault);render(false);};
+ $('eqMutate').onclick=()=>{
+  const raw=eqRaw(),next={};
+  for(const d of eqDefs){const range=d[3]-d[2];next[d[0]]=clamp(raw[d[0]]+(Math.random()-.5)*range*.08,d[2],d[3]);}
+  eqApply(next);render(false);
+ };
+ $('eqRandom').onclick=()=>{
+  status.textContent='exploring equation parameters';
+  let best=null,bestScore=-Infinity;
+  for(let i=0;i<12;i++){
+   const test={eqRatio:rand(.82,2),eqGamma:rand(.008,.04),eqCurv:rand(.07,.48),
+    eqSieve:rand(.1,.66),eqDrive:rand(.2,.7),eqWave:rand(1.5,4.6),
+    eqKp:rand(.04,.38),eqKi:rand(0,.03),eqKd:rand(0,.06),eqLstar:rand(.25,1.13)};
+   const b=equationBounds(test,3000);
+   if(b){const aspect=Math.max(b.w,b.h)/Math.max(.01,Math.min(b.w,b.h)),score=Math.min(200,b.w*b.h)/(1+.2*Math.max(0,aspect-5));
+    if(score>bestScore){best=test;bestScore=score;}
+    if(score>12&&aspect<7)break;
+   }
+  }
+  if(best)eqApply(best);render(false);
+ };
+ $('eqExplain').onclick=()=>{const el=$('eqModelDetails');el.open=!el.open;$('eqExplain').setAttribute('aria-expanded',String(el.open));};
+}
+
 const defMap=Object.fromEntries(allDefs.map(d=>[d[0],d]));
 const discreteIds=new Set(['fbLag','lagA','lagB','lagC','shadowLag']);
 const LOG_STRENGTH=8;
@@ -26,12 +181,12 @@ function updateValues(){const raw=rawValues(),effective=logMap(raw);allDefs.forE
 function makeStepper(raw){const pp=logMap(raw),U=Float64Array.from([.11,-.07,.19,-.13,.08,.04,.15,-.09,.12,.03]),hist=Array.from({length:34},()=>Float64Array.from(U)),alpha=Float64Array.from([.36,.24,.21,.19]),OUT=64,outX=new Float64Array(OUT),outY=new Float64Array(OUT);let head=0,phase1=.2,phase2=1.1,outHead=0,smoothX=0,smoothY=0;const pair=.22+.18*Math.tanh(pp.a),tri=.09+.12*Math.tanh(pp.b),market=.04+.11*Math.tanh(pp.c),shadow=.03+.10*Math.tanh(pp.d),reg=.018+.06*(Math.tanh(pp.e)+1)/2,gold=.035+.095*(Math.tanh(pp.f)+1)/2,fib=.025+.10*(Math.tanh(pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2,proj=(Math.tanh(pp.i)+1)/2;const H=(lag,i)=>{lag=Math.max(1,Math.min(34,Math.round(lag)));return hist[(head-lag+34)%34][i]};return function(){const lag=Math.max(1,Math.min(32,Math.round(pp.fbLag))),oi=(outHead-lag+OUT)%OUT,dx=outX[oi],dy=outY[oi];smoothX=pp.fbDamping*smoothX+(1-pp.fbDamping)*dx;smoothY=pp.fbDamping*smoothY+(1-pp.fbDamping)*dy;const fbx=pp.fbMix*dx+(1-pp.fbMix)*smoothX,fby=pp.fbMix*dy+(1-pp.fbMix)*smoothY,fb1=Math.tanh(fbx),fb2=Math.tanh(fby),fb3=Math.tanh(.7*fbx-.7*fby);phase1+=pp.phaseSpeed*(1+pp.phaseMod1*Math.sin(U[0]));phase2+=pp.phaseSpeed/pp.phaseRatio*(1+pp.phaseMod2*Math.sin(U[6]));let s0=pp.r0u8*U[8]+pp.r0u6*U[6]+pp.fbRegime*fb1,s1=pp.r1u6*U[6]+pp.r1u4sq*U[4]*U[4]+pp.fbRegime*fb2,s2=pp.r2u2*U[2]+pp.r2u7*U[7]+pp.fbRegime*fb3,s3=pp.r3u8*U[8]+pp.r3u0*U[0]-pp.fbRegime*(.6*fb1+.4*fb2),m=Math.max(s0,s1,s2,s3),v=[Math.exp(s0-m),Math.exp(s1-m),Math.exp(s2-m),Math.exp(s3-m)],sum=v[0]+v[1]+v[2]+v[3];for(let r=0;r<4;r++)alpha[r]=(1-reg)*alpha[r]+reg*v[r]/sum;const N=new Float64Array(10);for(let i=0;i<10;i++){const j=(i+3)%10,k=(i+7)%10,l=(i+5)%10;let pairTerm=Math.sin(U[j]*pp.pairFreqA+i*pp.pairPhaseA)-pp.pairCosAmp*Math.cos(U[k]*pp.pairFreqB-i*pp.pairPhaseB);pairTerm+=pp.fbPair*(fb1*Math.sin(U[j]+i*.17)+.6*fb2*Math.cos(U[k]-i*.11));const triTerm=pp.triScale*U[j]*U[k]-pp.triCross*U[l]*U[(i+1)%10],marketTerm=pp.marketW1*(H(pp.lagA,j)-H(pp.lagB,k))+pp.marketW2*(H(pp.lagC,i)-H(34,l)),shadowTerm=pp.shadowSelf*(U[i]-H(pp.shadowLag,i))-pp.shadowCross*(H(21,j)-H(34,k)),regimeTerm=(alpha[0]-alpha[3])*Math.sin(.7+i*.43)+(alpha[1]-alpha[2])*Math.cos(.3+i*.29),goldenTerm=Math.sin(phase1+i*.61)+pp.goldCos*Math.cos(phase2+i*.41),fibTerm=pp.fib1*H(1,i)+pp.fib3*H(3,j)+pp.fib8*H(8,k)+pp.fib13*H(13,l)-pp.fibSelf*U[i],rawN=edge*U[i]+pair*pairTerm+tri*triTerm+market*marketTerm+shadow*shadowTerm+pp.regimeForce*regimeTerm+gold*goldenTerm+fib*fibTerm;N[i]=Math.tanh(pp.squash*rawN)}hist[head].set(N);head=(head+1)%34;U.set(N);let xA=pp.xA0*(U[0]-U[3])+pp.xA7*(U[7]-U[2])+pp.xAdelay*(H(8,9)-H(21,4)),yA=pp.yA6*(U[6]-U[8])+pp.yA5*(U[5]+U[1])+pp.yAdelay*(H(13,0)-H(3,7)),xB=pp.projReg*(alpha[0]-alpha[3])+pp.projCross*(U[2]*U[7]-U[1]*U[8])+pp.projPhase*Math.sin(phase1),yB=pp.projReg*(alpha[1]-alpha[2])+pp.projCross*(U[0]*U[6]-U[3]*U[5])+pp.projPhase*Math.sin(phase2);xA+=pp.fbProjection*fb2;yA+=pp.fbProjection*fb1;xB+=pp.fbProjection*fb3;yB-=pp.fbProjection*fb2;const ox=xA*(1-proj)+xB*proj,oy=yA*(1-proj)+yB*proj;outX[outHead]=clamp(ox,-12,12);outY[outHead]=clamp(oy,-12,12);outHead=(outHead+1)%OUT;return[ox,oy]}}
 function bounds(raw,n){const st=makeStepper(raw);let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,valid=0;for(let i=0;i<n;i++){const q=st();if(i<140)continue;const x=q[0],y=q[1];if(Number.isFinite(x)&&Number.isFinite(y)&&Math.abs(x)<1e5&&Math.abs(y)<1e5){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);valid++}}if(valid<500||maxX-minX<.01||maxY-minY<.01)return null;return{minX,maxX,minY,maxY,w:maxX-minX,h:maxY-minY}}
 function clearCanvas(){ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--canvas');ctx.fillRect(0,0,cv.width,cv.height)}
-function render(preview=false){token++;const my=token;stopped=false;updateValues();clearCanvas();count.textContent='Total drawn points: 0';const raw=rawValues(),full=+$('points').value,total=preview?Math.min(30000,full):full,alphaInk=clamp(.015+(+$('ink').value)/650,.015,.17),dot=(+$('size').value)/2;status.textContent=(preview?'preview':'testing')+' · OMEF-A';setTimeout(()=>{if(my!==token)return;const b=bounds(raw,preview?3200:8000);if(!b){status.textContent='collapsed · lower feedback or Random visible';return}const pad=55,scale=Math.min((cv.width-pad*2)/b.w,(cv.height-pad*2)/b.h),ox=cv.width/2-scale*(b.minX+b.maxX)/2,oy=cv.height/2+scale*(b.minY+b.maxY)/2,st=makeStepper(raw),rgb=getComputedStyle(document.body).getPropertyValue('--ink');let drawn=0;ctx.fillStyle='rgba('+rgb+','+alphaInk+')';status.textContent=(preview?'live preview':'rendering')+' · OMEF-A';function batch(){if(my!==token||stopped)return;const start=performance.now();ctx.beginPath();while(drawn<total&&performance.now()-start<(preview?4:7)){const q=st(),px=ox+q[0]*scale,py=oy-q[1]*scale;if(Number.isFinite(px)&&Number.isFinite(py)&&px>=0&&px<cv.width&&py>=0&&py<cv.height)ctx.rect(px,py,dot,dot);drawn++}ctx.fill();count.textContent='Total drawn points: '+drawn.toLocaleString();if(drawn<total)setTimeout(batch,0);else status.textContent=(preview?'preview ready':'done')+' · OMEF-A'}batch()},preview?5:20)}
+function render(preview=false){if(eqMode())return equationRender(preview);token++;const my=token;stopped=false;updateValues();clearCanvas();count.textContent='Total drawn points: 0';const raw=rawValues(),full=+$('points').value,total=preview?Math.min(30000,full):full,alphaInk=clamp(.015+(+$('ink').value)/650,.015,.17),dot=(+$('size').value)/2;status.textContent=(preview?'preview':'testing')+' · OMEF-A';setTimeout(()=>{if(my!==token)return;const b=bounds(raw,preview?3200:8000);if(!b){status.textContent='collapsed · lower feedback or Random visible';return}const pad=55,scale=Math.min((cv.width-pad*2)/b.w,(cv.height-pad*2)/b.h),ox=cv.width/2-scale*(b.minX+b.maxX)/2,oy=cv.height/2+scale*(b.minY+b.maxY)/2,st=makeStepper(raw),rgb=getComputedStyle(document.body).getPropertyValue('--ink');let drawn=0;ctx.fillStyle='rgba('+rgb+','+alphaInk+')';status.textContent=(preview?'live preview':'rendering')+' · OMEF-A';function batch(){if(my!==token||stopped)return;const start=performance.now();ctx.beginPath();while(drawn<total&&performance.now()-start<(preview?4:7)){const q=st(),px=ox+q[0]*scale,py=oy-q[1]*scale;if(Number.isFinite(px)&&Number.isFinite(py)&&px>=0&&px<cv.width&&py>=0&&py<cv.height)ctx.rect(px,py,dot,dot);drawn++}ctx.fill();count.textContent='Total drawn points: '+drawn.toLocaleString();if(drawn<total)setTimeout(batch,0);else status.textContent=(preview?'preview ready':'done')+' · OMEF-A'}batch()},preview?5:20)}
 function requestPreview(){if(!$('livePreview').checked||previewPending)return;previewPending=true;previewTimer=setTimeout(()=>{previewPending=false;previewTimer=null;render(true)},120)}function cancelPreview(){if(previewTimer){clearTimeout(previewTimer);previewTimer=null}previewPending=false}
 function apply(o){allDefs.forEach(d=>{if(o[d[0]]!==undefined)$(d[0]).value=o[d[0]]});updateValues()}
 function reset(){allDefs.forEach(d=>$(d[0]).value=d[5]);updateValues();render(false)}
 function mutate(){const o={};allDefs.forEach(d=>{const span=d[3]-d[2],amt=d[4]>=1?Math.max(1,Math.round(span*.03)):span*.025;o[d[0]]=clamp(+$(d[0]).value+rand(-amt,amt),d[2],d[3])});apply(o);render(false)}
 function randomVisible(){status.textContent='hunting · OMEF-A';const base=rawValues();let best=null,bestArea=-1;for(let tries=0;tries<70;tries++){const o={...base};macros.forEach(d=>o[d[0]]=rand(d[2],d[3]));['pairFreqA','pairFreqB','pairCosAmp','triScale','triCross','marketW1','marketW2','shadowSelf','shadowCross','regimeForce','phaseSpeed','goldCos','fib1','fib3','fib8','fib13','edgeBase','edgeSpan','squash','projReg','projCross','projPhase'].forEach(k=>{const d=defMap[k];o[k]=rand(d[2],d[3])});o.fbPair=rand(.04,.42);o.fbRegime=rand(.02,.30);o.fbProjection=rand(.05,.48);o.fbLag=Math.round(rand(2,22));o.fbMix=rand(.25,.85);o.fbDamping=rand(.82,.975);const b=bounds(o,5000);if(b){const ar=Math.max(b.w,b.h)/Math.max(.001,Math.min(b.w,b.h)),area=b.w*b.h/(1+.2*Math.max(0,ar-7));if(area>bestArea){best={o,b};bestArea=area}if(area>.16&&ar<9){apply(o);render(false);return}}}if(best){apply(best.o);render(false)}else render(false)}
 function wire(){allDefs.forEach(d=>{const e=$(d[0]);e.addEventListener('input',()=>{updateValues();requestPreview()});e.addEventListener('change',()=>{cancelPreview();render(false)})});['points','ink','size'].forEach(k=>{$(k).addEventListener('input',()=>{updateValues();requestPreview()});$(k).addEventListener('change',()=>{cancelPreview();render(false)})});$('random').onclick=randomVisible;$('mutate').onclick=mutate;$('preset').onclick=reset;$('render').onclick=()=>render(false);$('stop').onclick=()=>{stopped=true;token++;status.textContent='stopped'};$('download').onclick=()=>{const a=document.createElement('a');a.download='omef-exclusive.png';a.href=cv.toDataURL('image/png');a.click()};document.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-theme]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.body.className=b.dataset.theme==='light'?'':b.dataset.theme;render(false)})}
-window.OMEFExclusive={makeStepper,bounds,logMap,allDefs,LOG_STRENGTH};wire();updateValues();render(false);
+window.OMEFExclusive={makeStepper,bounds,logMap,allDefs,LOG_STRENGTH,equationStepper,equationBounds,eqDefs,engine:()=>activeEngine};buildEquationUI();wire();updateValues();render(false);
 })();</script></body></html>
