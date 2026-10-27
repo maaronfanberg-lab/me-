@@ -93,21 +93,27 @@ law would have made the 96-layer value eight times the 12-layer value. Three see
 
 ### 2. The lapse is a learning clock, but only when activity is uniform
 
-Under SGD, a layer's weight change per step is lr·‖δᵀh‖/‖W‖. It depends on the error the layer hears (the
-lapse) *and* on the activity flowing into it.
+Under SGD, a layer's weight change per step is exactly lr·‖δᵀh‖/‖W‖. That factors as
+lapse × input activity × *alignment* (how well the error and the activity line up), divided by ‖W‖. All numbers
+below are averages over the same 200 training steps and the same batches (`experiments/e5_alignment.py`).
 
-| network (24 layers, digits, SGD) | lapse spread across layers | input-activity spread | measured weight-motion spread | log-log slope, motion vs lapse |
-|---|---|---|---|---|
-| residual tanh | ×8 | ×1.7 | ×7.8 | **0.94** (r = 0.95) |
-| plain tanh, σ_w = 1.0 | ×3 | ×8 | ×3 | 0.68 (r = 0.80) |
-| plain tanh, σ_w = 0.8 | ×230–360 | ×360–510 (the opposite way) | ×2.3–3.8 | 0.08 |
+| network (24 layers, digits, SGD) | lapse spread across layers | input-activity spread | alignment spread | measured weight-motion spread | log-log slope, motion vs lapse |
+|---|---|---|---|---|---|
+| residual tanh | ×7.9–8.3 | ×1.6 | ×1.07 | ×7.6–8.0 | **0.94** (r = 0.95) |
+| plain tanh, σ_w = 1.0 | ×3.0 | ×3.2–3.3 (same direction) | ×1.2–1.3 | ×2.9–3.2 | 0.68 (r = 0.80) |
+| plain tanh, σ_w = 0.8 | ×234–363 | ×105–139 (the opposite way) | ×1.7–2.1 | ×2.3–3.8 | 0.08 |
 
-In residual networks the activity is nearly uniform, so the lapse alone is the clock. In the plain σ_w = 0.8
-network, the error fades toward the input by ×230–360 while the activity fades toward the output by ×360–510, and the
-two cancel: every layer learns at about the same speed despite a 300-fold difference in lapse. Under Adam,
-which rescales each gradient, the link disappears (slope ≈ 0.05 in every network), as predicted.
-One mismatch is unexplained: in the plain σ_w = 1.0 network, lapse × activity predicts a ×15–19 spread in motion
-and the measured spread is ×3.
+In residual networks the activity and the alignment are nearly uniform, so the lapse alone is the clock. In the
+plain σ_w = 0.8 network the error fades toward the input by ×234–363 while the activity fades toward the output by
+×105–139; together they shrink a 300-fold difference in lapse to a 4–7-fold one, and alignment, which also
+varies by layer here, accounts for most of what is left. So every layer learns at nearly the same speed despite
+the 300-fold difference in lapse. Under Adam, which rescales each gradient, the link disappears (slope ≈ 0.05 in
+every network), as predicted. The exact gradient reproduces the measured motion to about 1e−15, a check that
+the measurement itself is consistent.
+
+An earlier version of this table mixed time windows (lapse averaged over 200 steps, activity at step 0), which
+produced wrong activity spreads and an apparent ×15–19 mismatch for the σ_w = 1.0 network. Measured on one time
+base, the mismatch disappears. See CORRECTIONS entries 10 and 11.
 
 ### 3. A tiny language model: the plain one grows a horizon while it trains
 
