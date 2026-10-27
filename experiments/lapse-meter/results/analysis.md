@@ -67,19 +67,7 @@ Per run: slope and correlation of log(relative weight motion per step) against l
 | res-tanh | adam | 0.06 ± 0.01 | 0.85 | ×17.5 |
 | res-tanh | sgd | 0.94 ± 0.01 | 0.95 | ×7.95 |
 
-Ranges across layers (max/min), SGD runs. Motion under SGD is lr·‖δᵀh‖/‖W‖, so it should follow lapse × input activity; it follows the lapse alone only when activity is uniform.
-
-| network | seed | lapse | input activity (at init) | lapse × activity / ‖W‖ | measured weight motion |
-|---|---|---|---|---|---|
-| plain-tanh-0.8 | 0 | ×361 | ×509.0 | ×1.4 | ×3.8 |
-| plain-tanh-0.8 | 1 | ×269 | ×362.4 | ×1.6 | ×2.5 |
-| plain-tanh-0.8 | 2 | ×231 | ×495.3 | ×2.2 | ×2.3 |
-| plain-tanh-1.0 | 0 | ×3 | ×8.5 | ×16.3 | ×3.2 |
-| plain-tanh-1.0 | 1 | ×3 | ×7.0 | ×14.7 | ×2.9 |
-| plain-tanh-1.0 | 2 | ×3 | ×8.6 | ×18.9 | ×3.2 |
-| res-tanh | 0 | ×8 | ×1.7 | ×10.6 | ×7.8 |
-| res-tanh | 1 | ×8 | ×1.6 | ×10.4 | ×7.6 |
-| res-tanh | 2 | ×8 | ×1.7 | ×10.7 | ×8.0 |
+Per-layer spreads of lapse, activity, alignment and motion: see results/e5_alignment.md (the earlier version of this table mixed time windows; CORRECTIONS entries 10 and 11).
 
 ## Experiment 3: tiny character-level language model
 

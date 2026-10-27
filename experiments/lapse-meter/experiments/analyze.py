@@ -128,26 +128,11 @@ def e1_corrected(rows):
 
 
 def e2_ranges():
-    from lapse.nets import MLP
-    from lapse import data as D
-    cfgs = {"plain-tanh-0.8": dict(act="tanh", sigma_w=0.8, residual=False),
-            "plain-tanh-1.0": dict(act="tanh", sigma_w=1.0, residual=False),
-            "res-tanh": dict(act="tanh", sigma_w=1.0, residual=True)}
-    print("\nRanges across layers (max/min), SGD runs. Motion under SGD is lr·‖δᵀh‖/‖W‖, so it should follow"
-          " lapse × input activity; it follows the lapse alone only when activity is uniform.\n")
-    print("| network | seed | lapse | input activity (at init) | lapse × activity / ‖W‖ | measured weight motion |")
-    print("|---|---|---|---|---|---|")
-    for name, c in cfgs.items():
-        for s in range(3):
-            f = os.path.join(R, "e2", f"{name}_sgd_s{s}.json")
-            if not os.path.exists(f): continue
-            d = json.load(open(f)); X, y, _, _ = D.digits(s)
-            net = MLP(64, 64, 24, 10, seed=s, **c); h, _ = net.forward(X[:256])
-            N = np.array(d["clock"]["lapse"]); k = len(N); m = np.array(d["clock"]["motion"])[:k]
-            act = np.array([np.sqrt((h[i] ** 2).sum(1).mean()) for i in range(k)])
-            Wn = np.array([np.linalg.norm(w) for w in net.W[:k]])
-            rg = lambda v: v.max() / v.min()
-            print(f"| {name} | {s} | ×{rg(N):.0f} | ×{rg(act):.1f} | ×{rg(N*act/Wn):.1f} | ×{rg(m):.1f} |")
+    # Superseded. This table used to multiply lapse averaged over 200 steps by activity measured at step 0,
+    # which mixes time windows (CORRECTIONS entries 10 and 11). The one-time-base version is
+    # experiments/e5_alignment.py, written to results/e5_alignment.md.
+    print("\nPer-layer spreads of lapse, activity, alignment and motion: see results/e5_alignment.md "
+          "(the earlier version of this table mixed time windows; CORRECTIONS entries 10 and 11).")
 
 
 def e2():

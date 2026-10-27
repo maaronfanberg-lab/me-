@@ -42,3 +42,16 @@ model is a tiny character-level model trained on ~100k characters of licence tex
 - Experiment 2: a literal clock predicts a log-log slope near 1 between weight motion and lapse under SGD;
   Adam, which rescales each gradient, predicts a slope near 0.
 - Sonification: measured pitch must equal the stated mapping to 0.1%; a flat network must be a unison.
+
+## Addendum, 2026-10-27: experiments 4 and 5
+
+**Experiment 5** (`experiments/e5_alignment.py`) re-measured the clock comparison on a single time base and
+showed that an apparent mismatch (CORRECTIONS 10) and two wrong activity spreads in the README (CORRECTIONS 11)
+came from my analysis mixing time windows. README section 2 was corrected.
+
+**Experiment 4** was pre-registered in `experiments/E4_PREREGISTRATION.md` before any run; one condition
+(input scale) was added to that file after a data check and before running, and the file says so. Outcome
+against the fixed validation rule: input dimension and scale not supported; class count supported for residual
+networks only; the label-noise prediction failed. An exploratory, post-hoc decomposition is reported separately
+and labelled as such. Post-change validation: the library's 24 checks and the sound module's 8 checks pass after
+these changes.

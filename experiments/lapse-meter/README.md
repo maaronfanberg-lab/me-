@@ -16,7 +16,7 @@ so N is the rate at which that layer's clock runs. A layer with N → 0 sits beh
 learning, whatever the optimiser is doing. A steady exponential profile N ∝ e^{κℓ} gives the depth spacetime
 constant curvature R = −2κ².
 
-This repository is a small library (numpy only), a verified test suite, three experiments that test claims about
+This repository is a small library (numpy only), a verified test suite, five experiments that test claims about
 this geometry, a sonification, and a [corrections ledger](CORRECTIONS.md) of every claim that turned out wrong.
 
 ## Definitions
@@ -93,21 +93,27 @@ law would have made the 96-layer value eight times the 12-layer value. Three see
 
 ### 2. The lapse is a learning clock, but only when activity is uniform
 
-Under SGD, a layer's weight change per step is lr·‖δᵀh‖/‖W‖. It depends on the error the layer hears (the
-lapse) *and* on the activity flowing into it.
+Under SGD, a layer's weight change per step is exactly lr·‖δᵀh‖/‖W‖. That factors as
+lapse × input activity × *alignment* (how well the error and the activity line up), divided by ‖W‖. All numbers
+below are averages over the same 200 training steps and the same batches (`experiments/e5_alignment.py`).
 
-| network (24 layers, digits, SGD) | lapse spread across layers | input-activity spread | measured weight-motion spread | log-log slope, motion vs lapse |
-|---|---|---|---|---|
-| residual tanh | ×8 | ×1.7 | ×7.8 | **0.94** (r = 0.95) |
-| plain tanh, σ_w = 1.0 | ×3 | ×8 | ×3 | 0.68 (r = 0.80) |
-| plain tanh, σ_w = 0.8 | ×230–360 | ×360–510 (the opposite way) | ×2.3–3.8 | 0.08 |
+| network (24 layers, digits, SGD) | lapse spread across layers | input-activity spread | alignment spread | measured weight-motion spread | log-log slope, motion vs lapse |
+|---|---|---|---|---|---|
+| residual tanh | ×7.9–8.3 | ×1.6 | ×1.07 | ×7.6–8.0 | **0.94** (r = 0.95) |
+| plain tanh, σ_w = 1.0 | ×3.0 | ×3.2–3.3 (same direction) | ×1.2–1.3 | ×2.9–3.2 | 0.68 (r = 0.80) |
+| plain tanh, σ_w = 0.8 | ×234–363 | ×105–139 (the opposite way) | ×1.7–2.1 | ×2.3–3.8 | 0.08 |
 
-In residual networks the activity is nearly uniform, so the lapse alone is the clock. In the plain σ_w = 0.8
-network, the error fades toward the input by ×230–360 while the activity fades toward the output by ×360–510, and the
-two cancel: every layer learns at about the same speed despite a 300-fold difference in lapse. Under Adam,
-which rescales each gradient, the link disappears (slope ≈ 0.05 in every network), as predicted.
-One mismatch is unexplained: in the plain σ_w = 1.0 network, lapse × activity predicts a ×15–19 spread in motion
-and the measured spread is ×3.
+In residual networks the activity and the alignment are nearly uniform, so the lapse alone is the clock. In the
+plain σ_w = 0.8 network the error fades toward the input by ×234–363 while the activity fades toward the output by
+×105–139; together they shrink a 300-fold difference in lapse to a 4–7-fold one, and alignment, which also
+varies by layer here, accounts for most of what is left. So every layer learns at nearly the same speed despite
+the 300-fold difference in lapse. Under Adam, which rescales each gradient, the link disappears (slope ≈ 0.05 in
+every network), as predicted. The exact gradient reproduces the measured motion to about 1e−15, a check that
+the measurement itself is consistent.
+
+An earlier version of this table mixed time windows (lapse averaged over 200 steps, activity at step 0), which
+produced wrong activity spreads and an apparent ×15–19 mismatch for the σ_w = 1.0 network. Measured on one time
+base, the mismatch disappears. See CORRECTIONS entries 10 and 11.
 
 ### 3. A tiny language model: the plain one grows a horizon while it trains
 
@@ -145,6 +151,32 @@ lapse is an octave and a flat network is a unison. Nothing else is added.
 | `horizon.wav` | 12-layer plain sigmoid | Only the top layers sound. The deep layers sit near 1.6 Hz, far below hearing, for the whole piece, and the network never learns (accuracy 12% → 11%). |
 
 ![what settling.wav plays](figures/sound_settling.png)
+
+### 5. What sets the total tilt? A pre-registered test, with a mixed answer
+
+Experiment 1 found the trained tilt depends on the task, not the depth. Experiment 4 tested four candidate causes,
+changing one at a time, with predictions and a pass rule written before any run
+([`experiments/E4_PREREGISTRATION.md`](experiments/E4_PREREGISTRATION.md)). A condition "moves" the tilt if its
+change exceeds twice the combined seed spread. 60 runs; full tables in
+[`results/e4_analysis.md`](results/e4_analysis.md).
+
+| candidate cause | test | residual tanh, 24 layers | plain tanh, 12 layers | verdict |
+|---|---|---|---|---|
+| input dimension | circle spread across 64 inputs | −0.28, does not move | −0.42, does not move | not supported; the two other tests (62 noise inputs; digits cut to 2 inputs) could not be scored because those networks never learned |
+| input scale | circle inputs standardised to spread 1 | −0.15, does not move | −0.36, does not move | not supported |
+| number of classes | digits relabelled to 2 classes | **+1.06, moves** (predicted ≈ +0.9) | +0.25, does not move | supported for the residual network only |
+| label noise | circle with clean or noisier labels; digits with 20% wrong labels | clean **+0.89**, noisier **−0.74**, digits-noisy **+0.75**: all move | clean **+0.78** moves; the others do not | the prediction failed: noise moved the tilt in *opposite* directions on the two tasks |
+
+**An exploratory follow-up, done after seeing these results.** Every lapse is measured relative to the output
+layer, and the output layer's size is the number of classes, so the class effect might have lived entirely in
+that last step. Splitting the tilt into the part inside the hidden layers and the final step to the output
+([`results/e4_exploratory.md`](results/e4_exploratory.md), parts checked to sum to the total within 4e−16):
+for the residual network, going from 10 classes to 2 raises the internal part by +0.61 and the output step by
++0.45. So most of the effect is inside the network, not an artifact of the reference. The circle's label-noise
+effect is almost entirely internal, and cleaner training fits give steeper tilts.
+
+So the "task constant" from experiment 1 is not a single property of the task. Class count and label noise both
+move it, input size and scale do not, and the direction of the noise effect depends on the task. Why remains open.
 
 ## Honest limits
 
@@ -185,7 +217,8 @@ Each log lasts 0.12 s of audio.
 ```
 lapse/            the library: core.py (measurements), nets.py (numpy networks), sound.py, data.py
 tests/            test_lapse.py (24 checks), test_sound.py (8 checks)
-experiments/      run.py (one training run), tiny_lm.py, sonify.py, analyze.py
+experiments/      run.py (one training run), tiny_lm.py, sonify.py, analyze.py,
+                  e4.py + E4_PREREGISTRATION.md + e4_analyze.py, e5_alignment.py
 results/          raw JSON for every run, and analysis.md (all tables)
 figures/          plots made by analyze.py
 audio/            the three sound pieces, with the lapse data each one was rendered from
