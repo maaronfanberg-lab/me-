@@ -1,15 +1,144 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#1B1E24"><title>Loading Harmonograph…</title><style>html,body{margin:0;background:#1B1E24;color:#D8D4CA;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.load{height:100vh;display:grid;place-items:center}</style></head><body><div class="load">Loading Harmonograph…</div><script>
-(async()=>{
- try{
-  const r=await fetch('harmonograph.html?v=20260807b',{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status);
-  let h=await r.text();
-  h=h.replace("input[type=range]{-webkit-appearance:none;","input[type=range]{touch-action:pan-y;-webkit-appearance:none;");
-  const old="s.addEventListener('input',()=>{P[c.k]=parseFloat(s.value);v.textContent=c.fmt(P[c.k]);if(c.k==='speed'||c.k==='hold')return;if(c.light)repaint();else ghost()});";
-  const neu="s.addEventListener('input',()=>{P[c.k]=parseFloat(s.value);v.textContent=c.fmt(P[c.k]);if(c.k==='speed'||c.k==='hold')return;clearTimeout(s._previewTimer);s._previewTimer=setTimeout(()=>{if(c.light)repaint();else ghost()},45)});";
-  if(!h.includes(old)) throw new Error('compatibility patch target not found');
-  h=h.replace(old,neu);
-  h=h.replace('</body>',"<script>\n(function(){\nconst FIRST=10643015521,STEP=36954915,SCALE=1e10,COUNT=41;\nconst TAU2=Math.PI*2;\nfunction latticeMeasures(value){const s=String(value);let repeats=0;for(let i=0;i<s.length-1;i++)if(s[i]===s[i+1])repeats++;return{digits:s,digitSum:[...s].reduce((a,c)=>a+ +c,0),repeats,distinct:new Set(s).size,retrograde:Number([...s].reverse().join('')),mod9:value%9,mod11:value%11};}\nfunction octaveReduce(v){while(v>=2)v/=2;while(v<1)v*=2;return v;}\nfunction nearestRatio(x,maxQ=60){let n=Math.round(x*SCALE),d=SCALE;let p0=0,q0=1,p1=1,q1=0;while(true){const a=Math.floor(n/d),q2=q0+a*q1;if(q2>maxQ)break;[p0,q0,p1,q1]=[p1,q1,p0+a*p1,q2];[n,d]=[d,n-a*d];if(d===0)break;}const k=Math.floor((maxQ-q0)/q1),A=[p0+k*p1,q0+k*q1],B=[p1,q1],err=c=>Math.abs(x-c[0]/c[1]),best=err(A)<=err(B)?A:B;return{p:best[0],q:best[1],value:best[0]/best[1]};}\nfunction latticePreset(n){const value=FIRST+n*STEP,m=latticeMeasures(value),f2=value/SCALE,f4=octaveReduce(m.retrograde/SCALE),near=nearestRatio(f2),decay=.0008+.0009*m.repeats;return{n,name:'Row '+String(n).padStart(2,'0')+' · '+near.p+':'+near.q,f1:1,f2,f3:1,f4,p1:0,p2:TAU2*(((m.digitSum-16)/45)%1),p3:TAU2*(m.mod9/9),p4:TAU2*(m.mod11/11),a1:1,a2:.3+.6*((m.distinct-2)/6),a3:1,a4:.3+.6*(m.repeats/4),d1:.0016,d2:decay,d3:.0016,d4:decay,meta:{near:near.p+':'+near.q,lobes:near.q}};}\nconst LATTICE_PRESETS=Array.from({length:COUNT},(_,n)=>latticePreset(n));\nconst originalPointAt=pointAt;P.latticeActive=false;P.latticeRow=0;P.latticeDecayScale=12;\npointAt=function(t,p,out){if(!p.latticeActive||!p.latticePreset)return originalPointAt(t,p,out);const L=p.latticePreset,ds=p.latticeDecayScale||12;const x=(L.a1*Math.exp(-L.d1*ds*t)*Math.sin(TAU*L.f1*t+L.p1)+L.a2*Math.exp(-L.d2*ds*t)*Math.sin(TAU*L.f2*t+L.p2))/(L.a1+L.a2);let y=(L.a3*Math.exp(-L.d3*ds*t)*Math.sin(TAU*L.f3*t+L.p3)+L.a4*Math.exp(-L.d4*ds*t)*Math.sin(TAU*L.f4*t+L.p4))/(L.a3+L.a4);y*=p.flat;out[0]=x+p.tilt*y;out[1]=y;};\nfunction updateLatticeUI(){const s=document.getElementById('latticeRow'),v=document.getElementById('latticeValue'),b=document.getElementById('latticeToggle');if(s)s.value=P.latticeRow||0;if(v){const L=LATTICE_PRESETS[P.latticeRow||0];v.textContent=String(P.latticeRow||0).padStart(2,'0')+' · '+L.meta.near;}if(b){b.textContent=P.latticeActive?'Lattice on':'Lattice off';b.setAttribute('aria-pressed',P.latticeActive?'true':'false');}}\nfunction applyLattice(n,draw){n=Math.max(0,Math.min(40,Math.round(n)));const L=LATTICE_PRESETS[n];P.latticeActive=true;P.latticeRow=n;P.latticePreset=L;P.ratio=L.f2;P.comp=L.f4/L.f2;const tag=document.getElementById('ratioTag');if(tag)tag.textContent='LATTICE '+String(n).padStart(2,'0')+' · '+L.meta.near+' · 4 PENDULUM';if(draw)startDraw();else ghost();updateLatticeUI();}\nfunction leaveLattice(){P.latticeActive=false;P.latticePreset=null;ghost();updateLatticeUI();}\nconst panel=document.getElementById('panel');if(panel){const g=document.createElement('div');g.className='group';g.innerHTML='<div class=\"glabel\">FEHHROS-UT lattice · 4 independent pendulums</div><div class=\"ctl\"><div class=\"crow\"><span class=\"cname\">Lattice row</span><span class=\"cval\" id=\"latticeValue\">00</span></div><input id=\"latticeRow\" type=\"range\" min=\"0\" max=\"40\" step=\"1\" value=\"0\"><div class=\"chint\">41 derived near-ratio drawings. Forward and retrograde decimal readings drive independent frequencies; digit structure drives phase, amplitude and damping.</div></div><div class=\"chips\"><button class=\"chip\" id=\"latticeToggle\" aria-pressed=\"false\">Lattice off</button><button class=\"chip\" id=\"latticeNext\">Next row</button></div>';panel.insertBefore(g,panel.firstChild);const s=g.querySelector('#latticeRow');let tm;s.addEventListener('input',()=>{clearTimeout(tm);tm=setTimeout(()=>applyLattice(+s.value,false),45)});s.addEventListener('change',()=>applyLattice(+s.value,true));g.querySelector('#latticeToggle').addEventListener('click',()=>P.latticeActive?leaveLattice():applyLattice(P.latticeRow||0,true));g.querySelector('#latticeNext').addEventListener('click',()=>applyLattice(((P.latticeRow||0)+1)%41,true));updateLatticeUI();}\nwindow.__harmonographLattice={presets:LATTICE_PRESETS,apply:applyLattice,off:leaveLattice};\n})();\n<\/script>\n"+'</body>');
-  document.open(); document.write(h); document.close();
- }catch(e){document.body.innerHTML='<div class="load">Harmonograph could not load: '+String(e.message||e)+'</div>';}
-})();
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1017"><title>Equation Harmonograph · Alex + Sarah Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1017;--surface:#101822;--line:#304050;--text:#e8e8dc;--soft:#aab5c0;--blue:#86d5dc;--gold:#e6bc81}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 355px;max-width:1580px;min-height:100vh;margin:auto}
+.main{padding:26px 30px}.control{border-left:1px solid var(--line);background:var(--surface);padding:30px 25px;overflow:auto}
+.eyebrow{letter-spacing:.2em;text-transform:uppercase;color:var(--blue);font-size:10px;font-weight:700}
+h1{font:normal clamp(30px,3.6vw,48px) Georgia,serif;margin:10px 0 5px}
+.subtitle{font-size:13px;color:var(--soft);line-height:1.55;max-width:640px}
+.canvasBox{position:relative;border:1px solid var(--line);background:#080d16;margin-top:22px;border-radius:14px;overflow:hidden;aspect-ratio:1;max-height:calc(100vh - 205px);min-height:310px}
+canvas{display:block;width:100%;height:100%;touch-action:pan-y}
+.canvasLabel{position:absolute;left:16px;bottom:15px;font:11px ui-monospace,monospace;color:#aab8c3;pointer-events:none}
+.actions{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap;align-items:center}
+button{font:inherit;cursor:pointer;color:var(--text);background:#1d2b39;border:1px solid #43556a;padding:11px 13px;border-radius:7px;min-height:42px}
+button:active{background:#34536a}button.primary{background:#244b56;color:#d3f7f6;border-color:#3d8391}
+.sectionTitle{font:normal 26px Georgia,serif;margin:5px 0 8px}
+.intro{font-size:13px;color:var(--soft);line-height:1.6}
+.parameter{margin:18px 0 22px}.parameter .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px}
+.parameter label{font-size:12px;font-weight:650}.parameter output{font:12px ui-monospace,monospace;color:var(--gold)}
+input[type=range]{width:100%;accent-color:#8bccd3;touch-action:pan-y;min-height:28px}
+.description{color:#91a0ae;font-size:11px;line-height:1.45;margin-top:6px}
+.math{font:14px/1.75 Georgia,serif;background:#0b121c;border:1px solid #354252;border-radius:8px;padding:13px 15px;color:#c2dce1;margin-top:16px}
+.foot{font-size:11px;line-height:1.6;color:var(--soft);margin-top:13px}.status{font:11px ui-monospace,monospace;color:#a9c3cc}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.main{padding:20px 14px}.control{border-left:0;border-top:1px solid var(--line);padding:22px 18px}.canvasBox{max-height:none;min-height:unset}.actions{gap:8px}button{flex:1 1 auto}}
+</style></head><body>
+<div class="layout"><main class="main">
+<div class="eyebrow">ALEX + SARAH LAB · MATHEMATICAL DRAWING</div>
+<h1>Equation Harmonograph</h1>
+<div class="subtitle">The pen follows a numerically integrated trajectory governed by curvature, damping, PID feedback, the sieve potential, and transformed time. No named designs or presets.</div>
+<div class="canvasBox"><canvas id="art" width="1200" height="1200" aria-label="Mathematical harmonograph drawing"></canvas><div class="canvasLabel" id="clocklabel">τ = 0.0 · t = 0.0</div></div>
+<div class="actions"><button id="play" class="primary">▶ Draw path</button><button id="complete">Complete drawing</button><button id="svg">Export SVG</button><button id="png">Export PNG</button><span class="status" id="status" role="status">READY</span></div>
+</main><aside class="control"><div class="eyebrow">INSTRUMENT PANEL</div><h2 class="sectionTitle">Equation parameters</h2>
+<p class="intro">Each slider changes a term in the model and recalculates the pen's path u(τ) = (x, y).</p>
+<div id="sliders"></div>
+<div class="eyebrow">MODEL DEFINITION</div>
+<div class="math"><div>u = (x, y), &nbsp; L = √(1.2² + x² + y²)</div>
+<div>g<sub>ij</sub> = exp(2ψ)δ<sub>ij</sub></div><div>ψ = (c/2) sin(qx) sin(qy)</div>
+<div>V<sub>sieve</sub> = ½(x² + r²y²) + ε cos(qx) cos(qy)</div>
+<div>PID(∇L) = K<sub>p</sub>∇L + K<sub>i</sub>∫∇L dτ + K<sub>d</sub>d(∇L)/dτ</div>
+<div>dt/dτ = 1/(1 − L*/L)</div></div>
+<p class="foot">A concrete two-dimensional realization of the supplied equation, not a uniquely implied physical model. Here m = λ = 1, q = 2.8, and the inverse metric and Christoffel connection are calculated from g. The dynamics are integrated with RK4. K<sub>i</sub> = 0.013 K<sub>p</sub>; K<sub>d</sub> = 0.18 K<sub>p</sub>.</p>
+<p class="foot">The L* control changes the pen's timing, not its geometric path. L* stays below 1.2 so the transformation remains nonsingular.</p>
+</aside></div>
+<script>
+'use strict';
+const settings=[
+ {id:'ratio',label:'Y / X frequency ratio',min:1.05,max:2.45,step:.001,def:1.432,desc:'Relative frequencies of the two restoring wells.'},
+ {id:'gamma',label:'Damping γ',min:.001,max:.042,step:.001,def:.011,desc:'Higher damping makes the pen spiral inward faster.'},
+ {id:'curvature',label:'Geometric curvature c',min:0,max:.65,step:.01,def:.21,desc:'Connection terms couple the x and y velocities.'},
+ {id:'sieve',label:'Sieve potential ε',min:0,max:.55,step:.01,def:.13,desc:'Strength of the spatially periodic potential.'},
+ {id:'kp',label:'PID feedback Kp',min:0,max:.8,step:.01,def:.12,desc:'Feedback proportional to the gradient of L.'},
+ {id:'lstar',label:'Clock threshold L*',min:.1,max:1.16,step:.02,def:.72,desc:'Time transformation, with the singularity excluded.'},
+ {id:'duration',label:'Integration duration τ',min:50,max:300,step:10,def:170,desc:'How long the simulated trajectory is traced.'}
+];
+const params={}; const sliderHost=document.getElementById('sliders');
+settings.forEach(function(d){params[d.id]=d.def;
+ const wrap=document.createElement('div');wrap.className='parameter';
+ const top=document.createElement('div');top.className='top';
+ const label=document.createElement('label');label.htmlFor=d.id;label.textContent=d.label;
+ const output=document.createElement('output');output.id='out-'+d.id;
+ const slider=document.createElement('input');slider.type='range';slider.id=d.id;slider.min=d.min;slider.max=d.max;slider.step=d.step;slider.value=d.def;
+ const note=document.createElement('div');note.className='description';note.textContent=d.desc;
+ top.append(label,output);wrap.append(top,slider,note);sliderHost.append(wrap);
+ slider.addEventListener('input',function(){params[d.id]=Number(slider.value);labels();scheduleRecompute();});
+});
+function labels(){settings.forEach(function(d){document.getElementById('out-'+d.id).textContent=d.id==='duration'?params[d.id].toFixed(0):params[d.id].toFixed(d.id==='ratio'?3:3);});}
+const canvas=document.getElementById('art'),ctx=canvas.getContext('2d');
+const W=1200,H=1200,q=2.8,ell0=1.2;
+const palette=['#8fd9e0','#a79ef3','#edb3cb','#f2d49f','#89c8be'];
+let pts=[],elapsed=[],bounds={mx:0,my:0,scale:1},playing=false,playT=0,lastFrame=0,animId=0,recomputeTimer=0;
+function derivative(s){
+ const x=s[0],y=s[1],vx=s[2],vy=s[3],ix=s[4],iy=s[5],r=params.ratio,c=params.curvature,eps=params.sieve,kp=params.kp;
+ const L=Math.hypot(ell0,x,y),ex=x/L,ey=y/L,dot=x*vx+y*vy;
+ const dex=(vx-x*dot/(L*L))/L,dey=(vy-y*dot/(L*L))/L;
+ const psi=.5*c*Math.sin(q*x)*Math.sin(q*y),px=.5*c*q*Math.cos(q*x)*Math.sin(q*y),py=.5*c*q*Math.sin(q*x)*Math.cos(q*y);
+ const pvel=px*vx+py*vy,vsq=vx*vx+vy*vy;
+ const cx=2*vx*pvel-vsq*px,cy=2*vy*pvel-vsq*py;
+ const Vx=x-eps*q*Math.sin(q*x)*Math.cos(q*y),Vy=r*r*y-eps*q*Math.cos(q*x)*Math.sin(q*y);
+ const invg=Math.exp(-2*psi),ki=.013*kp,kd=.18*kp;
+ return [vx,vy,-cx-params.gamma*vx-invg*(kp*ex+ki*ix+kd*dex+Vx),-cy-params.gamma*vy-invg*(kp*ey+ki*iy+kd*dey+Vy),ex,ey];
+}
+function rk4(s,h){const a=derivative(s),b=derivative(s.map((v,i)=>v+h*a[i]/2)),c=derivative(s.map((v,i)=>v+h*b[i]/2)),d=derivative(s.map((v,i)=>v+h*c[i]));return s.map((v,i)=>v+h*(a[i]+2*b[i]+2*c[i]+d[i])/6);}
+function scheduleRecompute(){clearTimeout(recomputeTimer);recomputeTimer=setTimeout(recompute,60);}
+function recompute(){
+ playing=false;cancelAnimationFrame(animId);document.getElementById('play').textContent='▶ Draw path';
+ const status=document.getElementById('status');status.textContent='CALCULATING';
+ const h=.025,n=Math.ceil(params.duration/h);let s=[1.32,-.18,.05,1.05,0,0],clock=0;
+ let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
+ pts=[];elapsed=[];
+ for(let i=0;i<=n;i++){
+  const x=s[0],y=s[1],L=Math.hypot(ell0,x,y);
+  if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(s[2])||!Number.isFinite(s[3])){status.textContent='UNSTABLE PARAMETERS';break;}
+  pts.push([x,y]);elapsed.push(clock);xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);ymin=Math.min(ymin,y);ymax=Math.max(ymax,y);
+  clock+=h/(1-params.lstar/L);s=rk4(s,h);
+ }
+ if(!pts.length){background();return;}
+ bounds={mx:(xmin+xmax)/2,my:(ymin+ymax)/2,scale:990/Math.max(xmax-xmin,ymax-ymin,.01)};
+ playT=elapsed[elapsed.length-1];paint(pts.length-1);
+ if(status.textContent==='CALCULATING')status.textContent=pts.length.toLocaleString()+' steps';
+}
+function project(p){return [600+(p[0]-bounds.mx)*bounds.scale,600-(p[1]-bounds.my)*bounds.scale];}
+function background(){
+ ctx.fillStyle='#080d16';ctx.fillRect(0,0,W,H);
+ const grad=ctx.createRadialGradient(600,600,100,600,600,680);grad.addColorStop(0,'#192537');grad.addColorStop(1,'#080d16');ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+ ctx.save();ctx.strokeStyle='rgba(140,185,190,.055)';ctx.lineWidth=1;
+ for(let z=0;z<=1200;z+=60){ctx.beginPath();ctx.moveTo(z,0);ctx.lineTo(z,1200);ctx.moveTo(0,z);ctx.lineTo(1200,z);ctx.stroke();}
+ ctx.restore();
+}
+function paint(upTo){
+ background();if(!pts.length)return;upTo=Math.max(0,Math.min(pts.length-1,upTo));
+ ctx.save();ctx.lineWidth=1.15;ctx.lineJoin='round';ctx.lineCap='round';ctx.globalAlpha=.76;
+ const chunk=90;
+ for(let i=1;i<=upTo;i+=chunk){ctx.strokeStyle=palette[Math.floor((i-1)/chunk)%palette.length];ctx.beginPath();const start=project(pts[i-1]);ctx.moveTo(start[0],start[1]);
+  for(let j=i;j<=Math.min(upTo,i+chunk-1);j++){const p=project(pts[j]);ctx.lineTo(p[0],p[1]);}ctx.stroke();}
+ ctx.restore();
+ if(upTo<pts.length-1){const p=project(pts[upTo]);ctx.save();ctx.fillStyle='#e3f8fb';ctx.shadowColor='#a7f5fa';ctx.shadowBlur=18;ctx.beginPath();ctx.arc(p[0],p[1],4,0,Math.PI*2);ctx.fill();ctx.restore();}
+ document.getElementById('clocklabel').textContent='τ = '+(upTo*.025).toFixed(1)+' · t = '+elapsed[upTo].toFixed(1);
+}
+function frame(stamp){
+ if(!playing)return;
+ const delta=Math.min(.08,(stamp-lastFrame)/1000||0);lastFrame=stamp;playT+=delta*12;
+ if(playT>=elapsed[elapsed.length-1]){playT=elapsed[elapsed.length-1];playing=false;document.getElementById('play').textContent='↺ Replay path';}
+ let lo=0,hi=elapsed.length-1;while(lo<hi){const mid=(lo+hi)>>1;if(elapsed[mid]<playT)lo=mid+1;else hi=mid;}
+ paint(lo);if(playing)animId=requestAnimationFrame(frame);
+}
+document.getElementById('play').addEventListener('click',function(){
+ if(playing){playing=false;cancelAnimationFrame(animId);this.textContent='▶ Resume path';return;}
+ if(!elapsed.length)return;
+ if(playT>=elapsed[elapsed.length-1])playT=0;
+ playing=true;lastFrame=performance.now();this.textContent='Ⅱ Pause';animId=requestAnimationFrame(frame);
+});
+document.getElementById('complete').addEventListener('click',function(){playing=false;cancelAnimationFrame(animId);if(!pts.length)return;playT=elapsed[elapsed.length-1];paint(pts.length-1);document.getElementById('play').textContent='↺ Replay path';});
+function saveBlob(blob,name){if(!blob)return;const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(url);},3000);}
+document.getElementById('png').addEventListener('click',function(){if(!pts.length)return;paint(pts.length-1);canvas.toBlob(function(blob){saveBlob(blob,'equation-harmonograph.png');},'image/png');});
+document.getElementById('svg').addEventListener('click',function(){
+ if(!pts.length)return;
+ let svg='<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200"><rect width="1200" height="1200" fill="#080d16"/>';
+ const chunk=90;for(let i=1;i<pts.length;i+=chunk){const color=palette[Math.floor((i-1)/chunk)%palette.length];const a=pts.slice(i-1,Math.min(pts.length,i+chunk));const coords=a.map(p=>project(p).map(n=>n.toFixed(2)).join(',')).join(' ');svg+='<polyline fill="none" stroke="'+color+'" stroke-width="1.15" stroke-opacity=".76" points="'+coords+'"/>';}
+ svg+='</svg>';saveBlob(new Blob([svg],{type:'image/svg+xml;charset=utf-8'}),'equation-harmonograph.svg');
+});
+labels();recompute();
 </script></body></html>
