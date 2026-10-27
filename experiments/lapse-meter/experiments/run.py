@@ -55,6 +55,7 @@ def run(cfg):
 
 if __name__ == "__main__":
     cfg = json.loads(sys.argv[1]); t0 = time.time()
+    os.makedirs(os.path.dirname(os.path.abspath(sys.argv[2])), exist_ok=True)  # fail early, not after training
     res = run(cfg); res["seconds"] = time.time() - t0
     json.dump(res, open(sys.argv[2], "w"))
     last = res["log"][-1]

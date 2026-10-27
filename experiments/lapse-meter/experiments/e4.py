@@ -40,6 +40,7 @@ def make(condition, seed):
 
 
 def main(condition, arch, seed, path):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)  # fail early, not after training
     X, y, Xt, yt = make(condition, seed)
     ncls = int(max(y.max(), yt.max()) + 1)
     residual, depth = (True, 24) if arch == "res24" else (False, 12)

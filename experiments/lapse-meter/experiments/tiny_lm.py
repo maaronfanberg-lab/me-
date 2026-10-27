@@ -50,6 +50,7 @@ def sample(net, ids, chars, seed, n=240):
 
 
 def main(residual, opt_name, seed, path):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)  # fail early, not after training
     txt, chars = corpus(); ids = encode(txt, chars); V = len(chars)
     split = int(0.9 * len(ids))
     tr, te = ids[:split], ids[split:]

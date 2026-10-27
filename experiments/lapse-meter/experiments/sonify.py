@@ -17,6 +17,7 @@ PIECES = {
 
 
 def main(piece, path):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)  # fail early, not after training
     c = PIECES[piece]
     X, y, Xt, yt = D.digits(0)
     net = MLP(64, 64, c["depth"], 10, act=c["act"], sigma_w=c["sigma_w"], residual=c["residual"], seed=0)

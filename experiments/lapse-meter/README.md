@@ -2,6 +2,9 @@
 
 **Measure where the learning signal reaches inside a neural network, and listen to it.**
 
+A readable summary of the findings, with interactive charts drawn from the same result files, is the
+*Lapse Atlas* page (shared from Alex's Claude account; ask for access).
+
 Backpropagation delivers an error signal to every layer, and each layer's weights learn from exactly that signal.
 lapse-meter measures how loudly each layer hears it. That one number per layer, the *lapse*, tells you where a
 network's learning is alive, where it is drowning in noise, and where it has gone silent behind a horizon.
@@ -16,7 +19,7 @@ so N is the rate at which that layer's clock runs. A layer with N → 0 sits beh
 learning, whatever the optimiser is doing. A steady exponential profile N ∝ e^{κℓ} gives the depth spacetime
 constant curvature R = −2κ².
 
-This repository is a small library (numpy only), a verified test suite, five experiments that test claims about
+This repository is a small library (numpy only), a verified test suite, six experiments that test claims about
 this geometry, a sonification, and a [corrections ledger](CORRECTIONS.md) of every claim that turned out wrong.
 
 ## Definitions
@@ -178,6 +181,31 @@ effect is almost entirely internal, and cleaner training fits give steeper tilts
 So the "task constant" from experiment 1 is not a single property of the task. Class count and label noise both
 move it, input size and scale do not, and the direction of the noise effect depends on the task. Why remains open.
 
+### 6. The tilt tracks how far training has gone, and class count still matters at equal progress
+
+Experiment 4 left a suspicion: the conditions that steepened the tilt were also the ones fit almost perfectly.
+Experiment 6 logs the tilt and the training loss every 100 steps and compares tasks **at the same training loss**
+instead of after the same number of steps. Predictions, the pass rule and the analysis script were committed to
+GitHub before any run ([`experiments/E6_PREREGISTRATION.md`](experiments/E6_PREREGISTRATION.md)). 24 runs, residual
+tanh, 24 layers; full tables in [`results/e6_analysis.md`](results/e6_analysis.md).
+
+![tilt against training loss](figures/e6_tilt_vs_loss.png)
+
+| pre-registered test | result | verdict |
+|---|---|---|
+| Within each run, the tilt rises as loss falls (pass: 20 of 24 runs) | 18 of 24. Every run on a task the network can fit tracks almost perfectly (Spearman −0.99 to −1.00); the six exceptions are the two noisy circle tasks, which never fit and wander | **fails narrowly** |
+| At matched loss, task differences vanish (fails if 2 or more of 4 persist) | 1 of 4 persists. The clean-vs-noisy circle difference from experiment 4 (+0.89) disappears at matched loss (−0.08 at 0.3, −0.28 at 0.1). But digits with 20% wrong labels stays steeper by about +1.0 at every loss level | **holds by the rule, with one strong exception** |
+| At matched loss, fewer classes give a steeper tilt (2 > 3 > 5 > 10) | Monotone at loss 0.1, 0.03 and 0.01, e.g. +1.87, +1.66, +1.45, +1.11 at 0.01; the 2-vs-10 gap persists at those three levels; no difference early, at 0.3 | **holds at 3 of 4 levels** |
+
+Read together: the tilt is a running quantity, not an endpoint. It climbs steadily as the network fits its
+training data, roughly linearly in log loss. At equal progress, fewer output classes give a steeper tilt, and
+memorising wrong labels steepens it by about one unit beyond what the loss alone predicts. The circle label-noise
+effect from experiment 4 was a fit effect. Why fewer classes, and memorised noise, steepen the tilt is still open.
+
+This also qualifies experiment 1. Its depth-independent values were read at 4,000 steps, when networks of
+different depths had reached different losses, so "the tilt is constant across depth" holds at a fixed number of
+steps; comparing depths at matched loss has not been done.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
@@ -216,9 +244,12 @@ Each log lasts 0.12 s of audio.
 
 ```
 lapse/            the library: core.py (measurements), nets.py (numpy networks), sound.py, data.py
-tests/            test_lapse.py (24 checks), test_sound.py (8 checks)
+tests/            test_lapse.py (24 checks), test_sound.py (8 checks), test_regressions.py (6 checks,
+                  one per error no earlier check caught), test_readme_numbers.py (15 README figures
+                  recomputed from the raw results)
 experiments/      run.py (one training run), tiny_lm.py, sonify.py, analyze.py,
-                  e4.py + E4_PREREGISTRATION.md + e4_analyze.py, e5_alignment.py
+                  e4.py + E4_PREREGISTRATION.md + e4_analyze.py, e5_alignment.py,
+                  e6.py + E6_PREREGISTRATION.md + e6_analyze.py
 results/          raw JSON for every run, and analysis.md (all tables)
 figures/          plots made by analyze.py
 audio/            the three sound pieces, with the lapse data each one was rendered from
@@ -231,6 +262,7 @@ RESEARCH_RECORD.md  the repository's research-gate record for this addition
 ```bash
 pip install numpy scikit-learn matplotlib   # scikit-learn only for the bundled digits dataset
 python tests/test_lapse.py && python tests/test_sound.py
+python tests/test_regressions.py && python tests/test_readme_numbers.py
 python experiments/run.py '{"task":"digits","depth":24,"act":"tanh","sigma_w":1.0,"residual":true,"lr":0.05,"steps":4000,"seed":0}' out.json
 python experiments/tiny_lm.py 1 adam 0 lm.json
 python experiments/sonify.py settling settling.wav

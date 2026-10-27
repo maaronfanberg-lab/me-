@@ -55,3 +55,16 @@ against the fixed validation rule: input dimension and scale not supported; clas
 networks only; the label-noise prediction failed. An exploratory, post-hoc decomposition is reported separately
 and labelled as such. Post-change validation: the library's 24 checks and the sound module's 8 checks pass after
 these changes.
+
+## Addendum, 2026-10-27: experiment 6
+
+**Observed problem.** Experiment 4's tilt changes coincided with how completely each task was fit.
+**Pre-change baseline and criteria.** Pre-registered in `experiments/E6_PREREGISTRATION.md`; that file and the
+analysis script `experiments/e6_analyze.py` were pushed to GitHub before any run. One later change to `e6.py`
+(creating its output folder before training) touches file handling only.
+**Post-change result.** Within-run test: 18 of 24 (pass bar 20), fails narrowly. Matched-loss task comparisons:
+1 of 4 persist (pass), the exception being memorised wrong labels. Class count: holds at 3 of 4 loss levels.
+Library checks and sonification checks pass after the change.
+**Limits.** One architecture (residual tanh, 24 layers), three seeds, two base tasks; matched-loss comparisons for
+the noisy circle tasks exist only at high loss, where seed spread is large.
+
