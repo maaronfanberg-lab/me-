@@ -20,6 +20,7 @@ def make(condition, seed):
 
 
 def main(condition, seed, path):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)  # fail early, not after training
     X, y, Xt, yt = make(condition, seed)
     ncls = int(max(y.max(), yt.max()) + 1)
     net = MLP(X.shape[1], 64, 24, ncls, act="tanh", sigma_w=1.0, residual=True, seed=seed)
