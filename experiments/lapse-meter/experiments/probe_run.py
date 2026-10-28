@@ -8,7 +8,7 @@ of +1; see lapse/nets.py), warmup_parts ("all", "out" = output layer only, "bloc
 block ("one" = h + alpha*act(Wh), the default; "two" = h + alpha*V act(Wh), lapse/nets2.py; "ln" = one-matrix
 blocks with LayerNorm placed by `ln`: none | final | pre | pre_final | post, lapse/nets_ln.py),
 out_lr_mult (learning-rate multiplier on the readout; SGD only; permanent unless out_lr_mult_until = k, experiment 30, limits it to steps 0 .. k-1), input_scale (inputs multiplied by it),
-detach (experiment 33: None, "mean" or "random"; see lapse.nets.MLP.detach; logged diagnostics always use the true gradient), block_lr_mult (experiment 32: learning-rate multiplier on the residual blocks 1..L-2, SGD; permanent unless block_lr_mult_until = k limits it to steps 0 .. k-1), zloss (coefficient of an auxiliary z-loss, gradient only; logged loss stays cross-entropy), kick_cap_until (experiment 27: the cap applies only to steps 0 .. kick_cap_until-1), kick_cap (SGD only: at each step the readout's update is scaled down, if needed, so the RMS change it makes to the
+block_nomean (experiment 35: each block's update is projected so it cannot move the minibatch-mean pre-activation), detach (experiment 33: None, "mean" or "random"; see lapse.nets.MLP.detach; logged diagnostics always use the true gradient), block_lr_mult (experiment 32: learning-rate multiplier on the residual blocks 1..L-2, SGD; permanent unless block_lr_mult_until = k limits it to steps 0 .. k-1), zloss (coefficient of an auxiliary z-loss, gradient only; logged loss stays cross-entropy), kick_cap_until (experiment 27: the cap applies only to steps 0 .. kick_cap_until-1), kick_cap (SGD only: at each step the readout's update is scaled down, if needed, so the RMS change it makes to the
 minibatch's logits is at most this; the blocks' updates are untouched; capped_steps lists the steps it bound).
 freeze: list of parts held at their initial values: "out" (output layer), "blocks" (all residual blocks).
 """
@@ -23,7 +23,7 @@ from lapse.nets2 import MLP2
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None, block_lr_mult=1.0, block_lr_mult_until=None, detach=None)
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None, block_lr_mult=1.0, block_lr_mult_until=None, detach=None, block_nomean=False)
 
 
 def run(cfg, path=None, hook=None):
@@ -86,6 +86,12 @@ def run(cfg, path=None, hook=None):
                 capped.append(s)
         if c["out_lr_mult"] != 1.0 and (c["out_lr_mult_until"] is None or s < c["out_lr_mult_until"]):  # experiment 23 (permanent); 30 (steps 0 .. until-1)
             gW[L - 1] = gW[L - 1] * c["out_lr_mult"]; gb[L - 1] = gb[L - 1] * c["out_lr_mult"]
+        if c["block_nomean"]:  # experiment 35: no block update may shift its batch-mean pre-activation (dW hbar = 0, db = 0)
+            assert c["block"] == "one" and c["opt"] == "sgd"
+            hs = net.forward(X[idx])[0]
+            for i in range(1, L - 1):
+                hb_ = hs[i].mean(0); u = hb_ / np.linalg.norm(hb_)
+                gW[i] = gW[i] - np.outer(gW[i] @ u, u); gb[i] = np.zeros_like(gb[i])
         if c["block_lr_mult"] != 1.0 and (c["block_lr_mult_until"] is None or s < c["block_lr_mult_until"]):  # experiment 32
             assert c["opt"] == "sgd" and c["block"] != "two"
             for i in range(1, L - 1): gW[i] = gW[i] * c["block_lr_mult"]; gb[i] = gb[i] * c["block_lr_mult"]

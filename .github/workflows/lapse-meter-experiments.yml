@@ -115,7 +115,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add experiments/lapse-meter/results
           git commit -q -m "lapse-meter CI: ${LABEL} results (run ${{ github.run_id }})" || { echo "nothing to commit"; exit 0; }
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            git pull -q --rebase origin main && git push -q origin HEAD:main && break
-            sleep $((i * 3))
-          done
+          # each run's results go to their own branch (main is pushed to by other automation every minute)
+          B="lapse-results/${LABEL}-${{ github.run_id }}-${{ github.run_attempt }}"
+          for i in 1 2 3 4 5; do git push -q origin "HEAD:refs/heads/$B" && { echo "pushed to $B"; exit 0; }; sleep $((i * 3)); done
+          echo "PUSH FAILED"; exit 1
