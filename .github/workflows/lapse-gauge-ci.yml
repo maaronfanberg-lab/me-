@@ -1,0 +1,48 @@
+name: Lapse gauge research CI
+
+on:
+  pull_request:
+    paths:
+      - "experiments/lapse-meter/**"
+      - ".github/workflows/lapse-gauge-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gauge-repro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install minimal scientific dependencies
+        run: python -m pip install "numpy>=1.26,<3" "scikit-learn>=1.4,<2"
+      - name: Synthetic correctness, negative controls, and regression tests
+        working-directory: experiments/lapse-meter
+        run: |
+          python tests/test_g1_gauge.py
+          python tests/test_g2_gauge_invariants.py
+          python tests/test_g4_trajectory.py
+          python tests/test_g5_frame.py
+      - name: Frozen-code held-out G4 and G5 confirmation
+        working-directory: experiments/lapse-meter
+        run: |
+          python experiments/g4_trajectory.py results/g4/ci_holdout.json 8 9
+          python experiments/g5_frame.py results/g5/ci_holdout.json 10 11
+      - name: Preserve complete confirmation data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lapse-gauge-heldout
+          path: |
+            experiments/lapse-meter/results/g4/ci_holdout.json
+            experiments/lapse-meter/results/g5/ci_holdout.json
+          if-no-files-found: warn
