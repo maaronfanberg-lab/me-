@@ -60,10 +60,10 @@ jobs:
       - name: Save publicly sourced comparison on research branch
         if: always()
         run: |
-          test -s docs/research/room-floor-quick-model-20261028.json
+          test -s docs/research/room-floor-quick-model-v2-20261028.json
           git config user.name 'room-quick-probe'
           git config user.email 'actions@users.noreply.github.com'
-          git add docs/research/room-floor-quick-model-20261028.json
+          git add docs/research/room-floor-quick-model-v2-20261028.json
           git diff --cached --quiet && exit 0
           git commit -m 'Record short production 1B wrapper A/B'
           for i in 1 2 3 4 5; do
