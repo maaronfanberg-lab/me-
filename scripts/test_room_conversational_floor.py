@@ -51,6 +51,19 @@ class FloorTests(unittest.TestCase):
         self.assertFalse(is_directed(source, "mara"))
         self.assertFalse(is_directed(source, "sarah"))
 
+    def test_audible_addressee_controls_public_target(self):
+        from room_conversational_floor import audible_addressee
+        self.assertEqual(audible_addressee("jules",
+            "Hey Sarah, can you explain your proposal?"), "sarah")
+        self.assertIsNone(audible_addressee("jules",
+            "I think Sarah made an interesting point about Mara."))
+        self.assertIsNone(audible_addressee("sarah",
+            "Hey Sarah, can you explain?"))
+        self.assertIsNone(audible_addressee("jules",
+            "Hey Sarah, can you explain?", ("mara", "owen")))
+        self.assertEqual(audible_addressee("jules",
+            "Mara, I am interested in your example."), "mara")
+
     def test_direct_question_selects_recipient_not_everyone(self):
         last = msg("mara", "Sarah, where did the moths go?", "sarah")
         selected = choose_next([last], bus(), config(), {})
