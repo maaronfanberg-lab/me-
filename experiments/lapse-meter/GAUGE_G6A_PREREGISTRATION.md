@@ -1,0 +1,24 @@
+# G6A, first adversarial optimizer benchmark: fixed budget, unfamiliar tasks
+
+**Frozen protocol, 2026-10-28.** Committed before any G6A experimental optimizer training. This is an incremental, reproducible benchmark, **not** a claim of state-of-the-art performance. Existing G1–G5 PR #332 remains untouched. This branch builds on it.
+
+## Question
+Does the gauge-equivariant clipped activation-frame optimizer G5 outperform standard SGD and Adam beyond the previously used handwritten digits / 150-step G4 comparison, when each method receives equal *search attempts* and when evaluated on untouched random seeds? Also test whether G5 gauge equivariance survives 200 updates on new tasks.
+
+## Locked study
+- Network code: existing `lapse.nets.MLP` from the same G5 branch, plain ReLU depth 8 and residual ReLU depth 24; width 64; cross entropy; float64; batch 64 sampled with replacement, same RNG/minibatch sequence for optimizer comparisons.
+- **Tasks:** sklearn bundled digits (10 classes), sklearn bundled wine (3 classes; a small-data problem), and newly generated concentric circle binary classification (independent coordinates, radius decision boundary). No external downloads. All use deterministic stratified 60% train / 20% validation / 20% test splits per seed, train-only StandardScaler; test partition NEVER used for LR selection. Wine test sets are small and conclusions tentative.
+- **Tuning seeds:** 20,21. **Untouched evaluation seeds:** 30,31,32,33,34. Each method gets exactly **three** learning rates (total 3 x 2 x 2 x 3 = 36 tuner configurations, each evaluated on two tuning seeds). SGD {0.01,0.05,0.1}, Adam {0.0003,0.001,0.003}, G5 {0.01,0.03,0.05} with the original G5 global frame-gradient cap=1.0; no further tuning based on evaluation outcomes.
+- 200 updates per run; initializations and mini-batches matched within task/seed/architecture; no early stopping or test-based selection. LR selected for each task x architecture x optimizer by **mean validation cross entropy** after 200 steps over seeds 20,21. Failed/nonfinite runs score infinite validation loss; tie choose smaller LR. Independent evaluation then trains *new* seeds 30–34 for the same 200 steps and reports final holdout-test cross-entropy, accuracy, train loss, runtime and failure count.
+- One additional **neuronwise positive gauge** (range 1/8 to 8, deterministic permutation; shared along residual skips) is evaluated on every held-out seed for all methods; initializes function-equivalent networks. Same minibatches. Logits on the full test set compared at training steps {0,1,50,100,200}. All failures must stay in results.
+- H1 (confirmatory gauge check): For G5 only, every heldout model/gauge pair remains functionally equivalent (max absolute logit difference below 1e-7, finite losses, same accuracy) at each checkpoint. 3 tasks x 2 architectures x 5 seeds = **30 pairs**. Standard SGD/Adam are negative controls and their gauge gaps are reported, not subject to a pass threshold.
+- H2 (directional, confirmatory): G5 has lower or equal mean heldout **test cross entropy** than the better of SGD/Adam in **at least 4 of 6** task x architecture cells. This can fail; do not change the pass rule. Accuracy and standard deviation are secondary.
+- H3 (descriptive): report median CPU runtime per 200-step training run, and ratio G5/Adam, without hiding its extra forward/backward calls.
+- Evaluations use no post-hoc dropping, no thresholding on achieved accuracy. Log per-seed results and chosen tuning rates. If a scientific run fails (nonfinite gradient, nonpositive gauge frame, overflow), record it as failed. Ranking treats failures as infinite cross entropy and uses failure count as first tie-breaker.
+- Holdout results are not used to adjust the method or rerun tuning. Any bug discovered after holding out must be explicitly declared, with before/after versions, and a genuinely new evaluation seed set if material.
+
+## Limitations and scope
+- This is a fixed-update / equal-grid-size screening benchmark, **not matched wall-time/FLOP benchmarking**; a separate time-budget and GPU benchmark would be needed.
+- We do **not** claim to implement PathCond/Path-SGD in this phase; doing so correctly for residual DAGs and bias parameters requires a separately verified implementation. The strongest built-in standard baselines (SGD and Adam) are the first screen.
+- sklearn wine is tiny, synthetic circles are limited, no Fashion-MNIST or CIFAR-10 is included here. No broad optimizer superiority claim from six small cells.
+- Prior art: Path-SGD (Neyshabur et al. NeurIPS 2015), path-conditioned training (Lebeurrier et al. ICML 2026). https://proceedings.neurips.cc/paper_files/paper/2015/hash/eaa32c96f620053cf442ad32258076b9-Abstract.html ; https://proceedings.mlr.press/v306/lebeurrier26a.html .
