@@ -24,6 +24,9 @@ if proc.returncode:
 checks = (
     'if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ]; then',
     'ROOM_EXPRESSION_RANK="0"',
+    'ROOM_FLOOR_REASON="$selected_floor_reason"',
+    'ROOM_FLOOR_SOURCE_ID="$selected_floor_source_id"',
+    'ROOM_FLOOR_SPEAKER="$selected_speaker"',
     'scripts/room_conversational_candidate.py',
     'expr_nodes=(2 5 8 11)',
     'export ROOM_CONVERSATIONAL_FLOOR=0',
