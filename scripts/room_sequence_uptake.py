@@ -95,7 +95,11 @@ def validate_uptake(
     # A short echo can be a valid emphasis or other-initiation of repair;
     # first-position full-question repairs retain the existing exception below.
     source_words = _utterance_key(text).split()
-    if (not text.endswith("?") and len(source_words) >= 12
+    # Complete long, multi-sentence question echoes are not genuine
+    # clarification just because the model labels them "repair". Short
+    # first other-initiated question repair remains explicitly available.
+    min_echo_words = 20 if text.endswith("?") else 12
+    if (len(source_words) >= min_echo_words
             and _utterance_key(candidate) == _utterance_key(text)):
         raise ValueError("unchanged_full_turn_echo")
     if not (text.endswith("?") and candidate.endswith("?")):
