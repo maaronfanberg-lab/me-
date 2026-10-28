@@ -34,6 +34,23 @@ class FloorTests(unittest.TestCase):
         self.assertEqual(decision["reason"], "addressed_recipient")
         self.assertEqual(decision["source_id"], "jules-offer-1")
 
+    def test_live_vocative_overrides_hidden_partner(self):
+        from room_conversational_floor import is_directed
+        source = msg("jules",
+                     "Hey Sarah, can you tell me about the new exercise idea you want to explore?",
+                     "mara", id="20261028T120004873-jules-v5")
+        self.assertTrue(is_directed(source, "sarah"))
+        self.assertFalse(is_directed(source, "mara"))
+        selected = choose_next([source], bus(), config(), {})
+        self.assertEqual(selected["speaker"], "sarah")
+        self.assertEqual(selected["reason"], "addressed_recipient")
+
+    def test_hidden_partner_is_not_an_audible_invitation(self):
+        from room_conversational_floor import is_directed
+        source = msg("jules", "An owl flew past the window.", "mara")
+        self.assertFalse(is_directed(source, "mara"))
+        self.assertFalse(is_directed(source, "sarah"))
+
     def test_direct_question_selects_recipient_not_everyone(self):
         last = msg("mara", "Sarah, where did the moths go?", "sarah")
         selected = choose_next([last], bus(), config(), {})
