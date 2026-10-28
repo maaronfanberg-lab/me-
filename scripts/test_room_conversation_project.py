@@ -129,6 +129,18 @@ class Projects(unittest.TestCase):
                          "jules-invite-1")
         self.assertIn("collaborate", compact["event"]["text"])
 
+    def test_addressed_question_requires_the_named_recipient(self):
+        q = event("jules", "Hey Mara, what did you discover?", "source-q")
+        self.assertTrue(project.response_project(q, "mara"))
+        self.assertFalse(project.response_project(q, "sarah"))
+        self.assertFalse(project.response_project(q, "owen"))
+        response = project.expression_project(entity="mara", latest=q,
+            context=[q], profile=PROFILE, private_self_state=MOTIVATION)
+        self.assertEqual(response["interaction_project"]["kind"], "respond_or_repair")
+        bystander = project.expression_project(entity="sarah", latest=q,
+            context=[q], profile=PROFILE, private_self_state=MOTIVATION)
+        self.assertEqual(bystander["interaction_project"]["kind"], "self_initiated_contribution")
+
     def test_personal_attention_without_canned_subject_rotation(self):
         old = event("mara", "Nothing else needed.", "m3")
         a = project.expression_project(entity="jules", latest=old, context=[old],
