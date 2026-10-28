@@ -19,7 +19,7 @@ so N is the rate at which that layer's clock runs. A layer with N → 0 sits beh
 learning, whatever the optimiser is doing. A steady exponential profile N ∝ e^{κℓ} gives the depth spacetime
 constant curvature R = −2κ².
 
-This repository is a small library (numpy only), a verified test suite, twenty experiments that test claims about
+This repository is a small library (numpy only), a verified test suite, twenty-one experiments that test claims about
 this geometry, a sonification, and a [corrections ledger](CORRECTIONS.md) of every claim that turned out wrong.
 
 ## Definitions
@@ -144,7 +144,7 @@ What the residual model writes after 6,000 steps (seed 1, sampled):
 
 ### 4. What it sounds like
 
-Three 18-second pieces in [`audio/`](audio). One voice per layer, pitch 330 Hz × 2^(log₁₀ N), so a decade of
+Three 18-second pieces and two 12-second ones in [`audio/`](audio). One voice per layer, pitch 330 Hz × 2^(log₁₀ N), so a decade of
 lapse is an octave and a flat network is a unison. Nothing else is added.
 
 | piece | network | what you hear |
@@ -152,6 +152,8 @@ lapse is an octave and a flat network is a unison. Nothing else is added.
 | `settling.wav` | 24-layer plain tanh, σ_w = 0.8 | The deep layers start far below hearing (first layer ≈ 49 Hz and falling away). Around 6 seconds in, about step 350, the horizon dissolves and the low voices climb into the chord. The first layer ends near 559 Hz, while accuracy goes from 6% to 97%. |
 | `residual.wav` | 24-layer residual tanh | Close to a unison from the start, tightening as it trains (first layer 212 → 306 Hz). |
 | `horizon.wav` | 12-layer plain sigmoid | Only the top layers sound. The deep layers sit near 1.6 Hz, far below hearing, for the whole piece, and the network never learns (accuracy 12% → 11%). |
+| `shock.wav` (12 s) | 96-layer residual ReLU, first 300 steps (section 9) | A wide chord (281–607 Hz) that collapses within half a second and then flutters: each 0.08 s some voice typically jumps about 2.75 semitones. |
+| `shock_warmup.wav` (12 s) | the same network with a 50-step warm-up | The same opening chord narrows smoothly, with typical jumps of 0.31 semitones, and the first block's voice then climbs steadily from 336 to 401 Hz as the backward signal builds. |
 
 ![what settling.wav plays](figures/sound_settling.png)
 
@@ -363,6 +365,29 @@ final log training loss at −0.64 and with test accuracy at +0.55 (Spearman). O
 These are correlations across conditions that differ in more than transport, so they don't show that transport
 causes better learning. They do show the break is not harmless.
 
+### 11. What Adam changes: its step normalization, not its momentum (on one task)
+
+Experiment 21 ([`E21_PREREGISTRATION.md`](E21_PREREGISTRATION.md), 30 runs,
+[`results/e21_analysis.md`](results/e21_analysis.md)) separates Adam's two ingredients in residual tanh networks
+at 24 layers, transport at loss 0.03.
+
+| optimizer | digits | circle |
+|---|---|---|
+| SGD, lr 0.05 (reference) | +0.76 | +1.45 |
+| Adam (normalization + momentum) | +1.22 | +1.36 |
+| RMSprop (normalization only) | +1.23 | +1.57 |
+| momentum SGD (momentum only) | +0.76 | +1.43 |
+| SGD, lr 0.02 / 0.1 (exploratory) | +0.76 / +0.76 | +1.47 / +1.43 |
+
+- **On digits the split is clean.** Normalizing each parameter's step raises transport by about +0.46, with or
+  without momentum. Momentum changes nothing.
+- **On the circle no optimizer differs at this depth.** So P21a and P21b fail there, and by the rule fixed in
+  advance the hypothesis is **mixed**. Experiment 18's circle gap came from 96-layer networks; at 24 layers it is
+  not there.
+- **An unplanned regularity:** compared at the same training loss, plain SGD's transport does not move at all
+  across a fivefold range of learning rate, or with momentum (+0.76 for all four on digits). Within an optimizer
+  family, step size changes how fast the network gets somewhere, not where it ends up on this measure.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
@@ -398,6 +423,12 @@ projection, then 24 hidden layers of width 128 (residual or plain, tanh), then a
 Corpus: the eight plain-text software licences in `/usr/share/common-licenses`, about 104,000 characters
 (90% train, 10% test). 6,000 steps, batch 64. The lapse is measured on 512 held-out positions.
 
+**Sound, the shock.** `experiments/sonify_shock.py` renders the first 300 steps of a 96-layer residual ReLU network
+on digits, plain (`audio/shock.wav`) and with a 50-step warm-up (`audio/shock_warmup.wav`). It uses the same
+mapping, one voice per block, logged every 2 steps, 0.08 s per log. Measured from the data: the largest
+pitch jump of any voice between logs has a median of 2.75 semitones in the plain piece (a flutter) and 0.31 in the
+warm-up piece (a glide).
+
 **Sound.** Three digit-classifier runs logged every 10 or 20 steps and rendered with `lapse.sound.render`:
 one voice per layer, pitch = 330 Hz × 2^(log₁₀ N), equal amplitudes, depth sets the stereo position.
 Each log lasts 0.12 s of audio.
@@ -416,11 +447,12 @@ experiments/      run.py (one training run), tiny_lm.py, sonify.py, analyze.py,
                   e6.py + E6_PREREGISTRATION.md + e6_analyze.py,
                   e7.py + E7_PREREGISTRATION.md + e7_analyze.py,
                   probe_run.py (one configurable run, experiments 8-19) + run_jobs.sh + *_jobs.txt,
-                  e8_analyze.py, e9_12_analyze.py, e13_16_analyze.py, e17_20_analyze.py
-PROGRAM_E8.md, E9_12_, E13_16_, E17_20_PREREGISTRATION.md   plans pushed before each block of runs
+                  e8_analyze.py, e9_12_analyze.py, e13_16_analyze.py, e17_20_analyze.py, e21_analyze.py,
+                  sonify_shock.py (the two shock pieces)
+PROGRAM_E8.md, E9_12_, E13_16_, E17_20_, E21_PREREGISTRATION.md   plans pushed before each block of runs
 results/          raw JSON for every run, and analysis.md (all tables)
 figures/          plots made by analyze.py
-audio/            the three sound pieces, with the lapse data each one was rendered from
+audio/            the five sound pieces, with the lapse data each one was rendered from
 CORRECTIONS.md    every claim, its test, and whether it held
 RESEARCH_RECORD.md  the repository's research-gate record for this addition
 ```

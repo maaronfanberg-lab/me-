@@ -126,3 +126,17 @@ All test suites pass after the changes.
 - Two tasks, three seeds per cell.
 - One learning rate per optimizer.
 - The one-matrix block is not what production networks use (experiment 17).
+
+## Addendum, 2026-10-28: experiment 21 and the shock pieces
+
+**Baseline and criteria.** `E21_PREREGISTRATION.md`, the jobs and `e21_analyze.py` were pushed before any run
+(commit ccd4d55 as pushed). Added code: a `Momentum` optimizer and an RMSprop setting (Adam with β₁ = 0). Momentum
+with μ = 0 is checked to equal SGD bit for bit, and `probe_run.py` still reproduces experiment 7 exactly.
+
+**Post-change result.** Mixed. Normalization, not momentum, raises transport on digits; no optimizer differs on
+the circle at 24 layers. SGD's transport at matched loss does not depend on learning rate (exploratory).
+
+**Sound.** `audio/shock.wav` and `audio/shock_warmup.wav` are driven only by the measured lapse; a new check in
+`tests/test_sound.py` confirms the per-voice values equal `geometry().lapse`.
+
+All suites pass.

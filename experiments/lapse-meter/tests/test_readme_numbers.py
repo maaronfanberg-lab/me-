@@ -115,5 +115,14 @@ claim("E20 digits plain final loss and accuracy", f"final training loss of {np.m
 an = open(os.path.join(R, "e17_20_analysis.md")).read()
 m = re.search(r"digits: across (\d+) runs, Spearman correlation of transport with log final training loss ([+-]\d\.\d\d), with test accuracy ([+-]\d\.\d\d)", an)
 claim("E20 digits correlations", f"Across {m.group(1)} digits runs, transport correlates with\nfinal log training loss at {m.group(2).replace('-', '−')} and with test accuracy at {m.group(3)}")
+# Experiment 21 (README section 11)
+for label, exp, pat in (("SGD, lr 0.05 (reference)", "e8", "tanh_d24"), ("Adam (normalization + momentum)", "e21", "adam"),
+                        ("RMSprop (normalization only)", "e21", "rmsprop"), ("momentum SGD (momentum only)", "e21", "momentum")):
+    d, c = tr(exp, pat)
+    claim(f"E21 {label}", f"{label} | {d} | {c} |")
+# shock pieces: median of the per-log largest jump, in semitones
+for name, val in (("shock", "2.75"), ("shock_warmup", "0.31")):
+    H = np.log10(np.array(json.load(open(os.path.join(ROOT, "audio", name + ".wav.json")))["lapse"]))
+    claim(f"sound {name} median jump", f"{np.median(np.abs(np.diff(H, axis=0)).max(1) * 12):.2f}")
 print(f"{sum(RESULTS)}/{len(RESULTS)} README numbers match the raw results")
 sys.exit(0 if all(RESULTS) else 1)

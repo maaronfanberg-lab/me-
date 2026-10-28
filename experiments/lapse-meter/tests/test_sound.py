@@ -35,4 +35,17 @@ H = np.vstack([np.ones((5, 1)), np.full((5, 1), 0.01)])
 a = render(H, seconds_per_log=0.1, fs=fs)[:, 0]
 jump = np.max(np.abs(np.diff(a))); bound = 2 * np.pi * 330 / fs * np.max(np.abs(a)) * 1.01
 check("pitch glide has no discontinuity", jump <= bound, f"max step {jump:.5f} <= sine bound {bound:.5f}")
+# experiments/sonify_shock.py drives each voice with exp(stream_grad + gate) from lapse/probe.py; that must be the
+# library's own lapse exactly, so the shock pieces sound the measured lapse and nothing else
+import sys as _s, os as _o
+_s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), ".."))
+from lapse import geometry
+from lapse.nets import MLP
+from lapse.probe import diagnose
+_r = np.random.default_rng(3); _X = _r.standard_normal((40, 8)); _y = _r.integers(0, 3, 40)
+_net = MLP(8, 16, 12, 3, act="relu", residual=True, seed=5)
+_dg, _ = diagnose(_net, _X, _y)
+_N = np.exp(np.array(_dg["stream_grad"]) + np.array(_dg["gate"]))
+_ref = geometry(_net.geometry_deltas(_net.backward(_X, _y)[3], remove_alpha=True)).lapse
+check("shock pieces' per-voice lapse equals geometry().lapse", np.max(np.abs(_N / _ref - 1)) < 1e-12, f"max rel diff {np.max(np.abs(_N / _ref - 1)):.1e}")
 print(f"{sum(ok_all)}/{len(ok_all)} sound checks passed")
