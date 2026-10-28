@@ -8,6 +8,9 @@ Blocks are the one-matrix kind used in experiments 8-24, f = act (optionally wit
   ln = "post"       h_l = LN(h_{l-1} + a f(W_l h_{l-1} + b_l));            logits = W_out h_L + b_out (Post-LN)
   ln = "center"     as "none", but logits = W_out (h_L - m0) + b_out, m0 a fixed vector (set_center; experiment 29)
   ln = "center_random"  the same with a random fixed vector of m0's norm (the control)
+  ln = "offset"     as "none", but logits = W_out (h_L + m_relu) + b_out, m_relu the mean last stream of the plain
+                    ReLU network with the same seed (set_offset; experiment 30): a pile-up-sized shared readout input
+                    on a network whose stream need not pile up (used with branch_sign=True)
 LN(x) = (x - mean(x)) / sqrt(var(x) + 1e-5) per example, without a learned gain or bias (a simplification: real
 transformers learn both). The input layer h_0 = act(W_0 x + b_0) is shared by all variants, a = 1/sqrt(depth).
 backward returns (loss, gW, gb, deltas, g) with deltas[i] = dL/dz_i and g[i] = dL/dh_i (the stream after block i,
@@ -34,7 +37,7 @@ class MLPLN:
     residual = True
 
     def __init__(self, din, width, depth, dout, act="relu", sigma_w=1.0, alpha=None, seed=0, ln="final", branch_sign=False):
-        assert ln in ("none", "final", "pre", "pre_final", "post", "center", "center_random")
+        assert ln in ("none", "final", "pre", "pre_final", "post", "center", "center_random", "offset")
         self.center = None  # experiment 29: a fixed vector subtracted from the readout's input (see set_center)
         self.act, self.ln = act, ln
         self.alpha = 1.0 / np.sqrt(depth) if alpha is None else alpha
@@ -68,7 +71,7 @@ class MLPLN:
         top = h[-1]
         if self.ln in ("final", "pre_final"):
             top, self._c["final"] = ln_fwd(top)
-        elif self.ln in ("center", "center_random"):
+        elif self.ln in ("center", "center_random", "offset"):
             top = top - self.center
         self._top = top
         zo = top @ self.W[-1].T + self.b[-1]; z.append(zo)
@@ -106,14 +109,24 @@ class MLPLN:
 
     def set_center(self, X, seed=0):
         """Experiment 29. "center": subtract m0, the mean of the last stream over X at the current weights, held fixed.
-        "center_random": subtract a random vector with the same norm as m0 (the control). The readout's gradient into the
-        stream is unchanged by a constant offset; only what the readout sees, and so its own update, changes."""
+        "center_random": subtract a random vector with the same norm as m0 (the control). The stream itself is unchanged.
+        What the readout sees changes, so its update changes, and so do the initial logits (by -W_out m0) and through
+        them the backward pass's starting error. (Corrected: an earlier version said the gradient into the stream was
+        unchanged; it is not, because the logits move. CORRECTIONS 48.)"""
         saved = self.ln; self.ln = "none"; self.forward(X); m0 = self._top.mean(0); self.ln = saved
         if self.ln == "center":
             self.center = m0
         else:
             r = np.random.default_rng(seed + 4_242_424).standard_normal(m0.shape)
             self.center = r / np.linalg.norm(r) * np.linalg.norm(m0)
+
+    def set_offset(self, X, width, depth, sigma_w=1.0, alpha=None, seed=0):
+        """Experiment 30. "offset": add to the readout's input the mean last stream m_relu of the plain residual ReLU
+        network built from the same seed (no branch signs, no LayerNorm), held fixed. The stream itself is unchanged.
+        The readout's input changes, so its update changes, and so do the initial logits (by W_out m_relu), and through
+        them the error the backward pass starts from. The plain ReLU network has that same logit offset."""
+        twin = MLPLN(X.shape[1], width, depth, self.W[-1].shape[0], act="relu", sigma_w=sigma_w, alpha=alpha, seed=seed, ln="none")
+        twin.forward(X); self.center = -twin._top.mean(0)
 
     def readout_input(self, X):
         self.forward(X); return self._top

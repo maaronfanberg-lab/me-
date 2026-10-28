@@ -7,7 +7,7 @@ branch_sign (fixed random +-1 sign on each block's output units; True = even odd
 of +1; see lapse/nets.py), warmup_parts ("all", "out" = output layer only, "blocks" = residual blocks only),
 block ("one" = h + alpha*act(Wh), the default; "two" = h + alpha*V act(Wh), lapse/nets2.py; "ln" = one-matrix
 blocks with LayerNorm placed by `ln`: none | final | pre | pre_final | post, lapse/nets_ln.py),
-out_lr_mult (permanent learning-rate multiplier on the readout; SGD only), input_scale (inputs multiplied by it),
+out_lr_mult (learning-rate multiplier on the readout; SGD only; permanent unless out_lr_mult_until = k, experiment 30, limits it to steps 0 .. k-1), input_scale (inputs multiplied by it),
 zloss (coefficient of an auxiliary z-loss, gradient only; logged loss stays cross-entropy), kick_cap_until (experiment 27: the cap applies only to steps 0 .. kick_cap_until-1), kick_cap (SGD only: at each step the readout's update is scaled down, if needed, so the RMS change it makes to the
 minibatch's logits is at most this; the blocks' updates are untouched; capped_steps lists the steps it bound).
 freeze: list of parts held at their initial values: "out" (output layer), "blocks" (all residual blocks).
@@ -23,7 +23,7 @@ from lapse.nets2 import MLP2
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none")
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None)
 
 
 def run(cfg, path=None):
@@ -37,6 +37,7 @@ def run(cfg, path=None):
         net = MLPLN(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"],
                     seed=c["seed"], ln=c["ln"], branch_sign=c["branch_sign"])
         if c["ln"].startswith("center"): net.set_center(X, seed=c["seed"])
+        if c["ln"] == "offset": net.set_offset(X, c["width"], c["depth"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"])  # experiment 30
     elif c["block"] == "two":
         assert not c["branch_sign"] and c["opt"] == "sgd", "two-matrix blocks: SGD, no branch signs"
         net = MLP2(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"])
@@ -78,7 +79,7 @@ def run(cfg, path=None):
             if kb > c["kick_cap"]:
                 f_ = c["kick_cap"] / kb; gW[L - 1] = gW[L - 1] * f_; gb[L - 1] = gb[L - 1] * f_
                 capped.append(s)
-        if c["out_lr_mult"] != 1.0:  # experiment 23: a permanent learning-rate multiplier on the readout alone
+        if c["out_lr_mult"] != 1.0 and (c["out_lr_mult_until"] is None or s < c["out_lr_mult_until"]):  # experiment 23 (permanent); 30 (steps 0 .. until-1)
             gW[L - 1] = gW[L - 1] * c["out_lr_mult"]; gb[L - 1] = gb[L - 1] * c["out_lr_mult"]
         opt.step(net, gW, gb)
         if c["block"] == "two":  # the blocks' second matrices, same SGD step (warm-up included via opt.lr)

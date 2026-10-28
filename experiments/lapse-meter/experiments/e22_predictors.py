@@ -35,6 +35,7 @@ def build(cfg):
         net = MLPLN(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"],
                     ln=c["ln"], branch_sign=c["branch_sign"])
         if c["ln"].startswith("center"): net.set_center(X, seed=c["seed"])
+        if c["ln"] == "offset": net.set_offset(X, c["width"], c["depth"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"])  # experiment 30
     elif c["block"] == "two":
         net = MLP2(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"])
     else:

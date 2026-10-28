@@ -11,4 +11,11 @@ for task, act, depth in (("digits", "relu", 12), ("circle-clean", "tanh", 12)):
     same = [a["Tstar"] for a in r["log"]] == [b["Tstar"] for b in ref["log"]] and \
            [a["train_loss"] for a in r["log"]] == [b["train_loss"] for b in ref["log"]] and r["test_acc"] == ref["test_acc"]
     ok_all &= same; print(("PASS " if same else "FAIL ") + f"{task} {act} d{depth}: probe_run log bit-identical to experiment 7")
-print("2/2 reproduction checks passed" if ok_all else "reproduction FAILED"); sys.exit(0 if ok_all else 1)
+# experiment 30: a readout multiplier limited to step 0 equals a 1-step run with the permanent multiplier, then plain steps
+import numpy as np
+a = run(dict(task="digits", depth=6, steps=3, log_every=1, out_lr_mult=7.0, out_lr_mult_until=1))
+b1 = run(dict(task="digits", depth=6, steps=1, log_every=1, out_lr_mult=7.0))
+c = run(dict(task="digits", depth=6, steps=3, log_every=1, out_lr_mult=7.0))
+same = a["log"][1]["train_loss"] == b1["log"][1]["train_loss"] and a["log"][3]["train_loss"] != c["log"][3]["train_loss"]
+ok_all &= same; print(("PASS " if same else "FAIL ") + "out_lr_mult_until=1: the multiplier applies at step 0 only")
+print("3/3 reproduction checks passed" if ok_all else "reproduction FAILED"); sys.exit(0 if ok_all else 1)
