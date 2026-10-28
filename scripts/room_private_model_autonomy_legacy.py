@@ -239,7 +239,18 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         if isinstance(intent, dict):
             intent = dict(intent)
             intent.pop("aim", None)
-            if isinstance(deliberation, dict):
+            # If a public speaker addresses me directly, reply to that
+            # speaker rather than a contradictory private preferred partner.
+            witnessed = clean_payload.get("event")
+            directed = False
+            if isinstance(witnessed, dict) and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+                from room_conversational_floor import is_directed
+                directed = is_directed(witnessed, self_entity)
+            if directed:
+                partner = base._norm(witnessed.get("speaker"))
+                if partner in PEOPLE and partner != self_entity:
+                    intent["partner"] = partner
+            elif isinstance(deliberation, dict):
                 partner = base._norm(deliberation.get("preferred_partner"))
                 if partner in PEOPLE and partner != self_entity:
                     intent["partner"] = partner
