@@ -9,7 +9,21 @@ from lapse.nets import MLP, SGD
 from lapse import data as D
 
 
+def lm_data():
+    """Experiment 28: next-character prediction from the previous 16 characters, one-hot (tiny_lm.py's corpus and
+    encoding). 8,000 fixed training windows from the first 90% of the text, 1,000 test windows from the last 10%;
+    the same windows for every seed."""
+    import tiny_lm as T
+    txt, chars = T.corpus(); ids = T.encode(txt, chars); V = len(chars); split = int(0.9 * len(ids))
+    tr = np.random.default_rng(2028).integers(0, split - T.CONTEXT - 1, 8000)
+    te = split + np.random.default_rng(2029).integers(0, len(ids) - split - T.CONTEXT - 1, 1000)
+    X, y = T.batch(ids, tr, V); Xt, yt = T.batch(ids, te, V)
+    return X, y, Xt, yt
+
+
 def make(condition, seed):
+    if condition == "lm":
+        return lm_data()
     r = np.random.default_rng(1000 + seed)
     if condition.startswith("circle"):
         noise = {"circle-clean": 0.0, "circle-noisier": 0.30}.get(condition, 0.15)

@@ -8,7 +8,7 @@ of +1; see lapse/nets.py), warmup_parts ("all", "out" = output layer only, "bloc
 block ("one" = h + alpha*act(Wh), the default; "two" = h + alpha*V act(Wh), lapse/nets2.py; "ln" = one-matrix
 blocks with LayerNorm placed by `ln`: none | final | pre | pre_final | post, lapse/nets_ln.py),
 out_lr_mult (permanent learning-rate multiplier on the readout; SGD only), input_scale (inputs multiplied by it),
-zloss (coefficient of an auxiliary z-loss, gradient only; logged loss stays cross-entropy), kick_cap (SGD only: at each step the readout's update is scaled down, if needed, so the RMS change it makes to the
+zloss (coefficient of an auxiliary z-loss, gradient only; logged loss stays cross-entropy), kick_cap_until (experiment 27: the cap applies only to steps 0 .. kick_cap_until-1), kick_cap (SGD only: at each step the readout's update is scaled down, if needed, so the RMS change it makes to the
 minibatch's logits is at most this; the blocks' updates are untouched; capped_steps lists the steps it bound).
 freeze: list of parts held at their initial values: "out" (output layer), "blocks" (all residual blocks).
 """
@@ -23,7 +23,7 @@ from lapse.nets2 import MLP2
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, zloss=0.0, ln="none")
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none")
 
 
 def run(cfg, path=None):
@@ -69,7 +69,7 @@ def run(cfg, path=None):
             k = min(1.0, (s + 1) / c["warmup"])
             for i in ([L - 1] if c["warmup_parts"] == "out" else range(1, L - 1)):
                 gW[i] = gW[i] * k; gb[i] = gb[i] * k
-        if c["kick_cap"] is not None:  # experiment 24: cap the readout's logit kick on this minibatch
+        if c["kick_cap"] is not None and (c["kick_cap_until"] is None or s < c["kick_cap_until"]):  # experiments 24, 27
             assert c["opt"] == "sgd" and not c["warmup"] and c["out_lr_mult"] == 1.0
             hb = net.readout_input(X[idx]) if c["block"] == "ln" else net.forward(X[idx])[0][-2]
             dzb = hb @ (-opt.lr * gW[L - 1]).T - opt.lr * gb[L - 1]
@@ -83,7 +83,7 @@ def run(cfg, path=None):
         if c["block"] == "two":  # the blocks' second matrices, same SGD step (warm-up included via opt.lr)
             k = min(1.0, (s + 1) / c["warmup"]) if (c["warmup"] and c["warmup_parts"] == "blocks") else 1.0
             for i in range(1, L - 1): net.V[i] -= opt.lr * k * bw[4][i]
-    res = dict(config=c, test_acc=net.accuracy(Xt, yt), log=log, capped_steps=capped)
+    res = dict(config=c, test_acc=net.accuracy(Xt, yt), test_loss=net.loss(Xt, yt), log=log, capped_steps=capped)
     if path: json.dump(res, open(path, "w"))
     return res
 
