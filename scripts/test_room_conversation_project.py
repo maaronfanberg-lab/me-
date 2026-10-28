@@ -153,6 +153,26 @@ class Projects(unittest.TestCase):
                                           intent=packed["intent"])
         self.assertEqual(schema["properties"]["target"]["enum"], ["jules"])
 
+    def test_one_hundred_named_address_scenarios(self):
+        voices = ("sarah", "mara", "owen", "jules")
+        templates = ("Hey {who}, what is your view?",
+                     "{who}, can you show me?",
+                     "Hi {who}: I have a question.",
+                     "@{who} would you join us?",
+                     "Hello {who}, let's talk.")
+        for i in range(100):
+            speaker = (*voices, "allen")[i % 5]
+            recipient = voices[(i // 5) % 4]
+            if speaker == recipient:
+                recipient = voices[(voices.index(recipient) + 1) % 4]
+            utterance = templates[(i // 20) % 5].format(who=recipient.capitalize())
+            source = event(speaker, utterance, "named-%03d" % i)
+            with self.subTest(i=i, speaker=speaker, recipient=recipient):
+                self.assertTrue(project.response_project(source, recipient))
+                for observer in voices:
+                    if observer != recipient:
+                        self.assertFalse(project.response_project(source, observer))
+
     def test_personal_attention_without_canned_subject_rotation(self):
         old = event("mara", "Nothing else needed.", "m3")
         a = project.expression_project(entity="jules", latest=old, context=[old],
