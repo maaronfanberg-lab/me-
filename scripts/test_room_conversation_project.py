@@ -94,7 +94,7 @@ class Projects(unittest.TestCase):
                       profile=PROFILE, private_self_state=MOTIVATION)
         for floor in (
             None,
-            {"reason": "open_floor_relevance", "source_id": "creek-2",
+            {"reason": "technical_fallback_opportunity", "source_id": "creek-2",
              "speaker": "jules"},
             {"reason": "open_floor_uptake", "source_id": "other-episode",
              "speaker": "jules"},
@@ -106,6 +106,20 @@ class Projects(unittest.TestCase):
                 self.assertIsNone(output["event"])
                 self.assertEqual(output["context"], [])
                 self.assertFalse(output["interaction_project"].get("optional_uptake", False))
+
+    def test_deliberated_open_floor_relevance_retains_optional_public_anchor(self):
+        source = event("owen", "I measured the changing patterns of bird calls.", "birds-1")
+        floor = {"reason": "open_floor_relevance", "source_id": "birds-1",
+                 "speaker": "mara"}
+        result = project.expression_project(
+            entity="mara", latest=source, context=[source],
+            profile=PROFILE, private_self_state=MOTIVATION, floor=floor)
+        self.assertEqual(result["event"]["id"], "birds-1")
+        self.assertTrue(result["interaction_project"]["optional_uptake"])
+        self.assertEqual(result["interaction_project"]["kind"],
+                         "self_initiated_contribution")
+        # An independently deliberated initiative may hear the last speaker
+        # without mandatory agreement, topic quotas or canned replies.
 
     def test_optional_anchor_never_treats_directed_or_self_speech_as_own(self):
         examples = (
