@@ -1,0 +1,25 @@
+PASS gradcheck plain tanh  worst rel err 1.9e-08
+PASS gradcheck plain relu  worst rel err 1.5e-08
+PASS gradcheck plain sigmoid  worst rel err 1.2e-06
+PASS gradcheck plain linear  worst rel err 1.2e-08
+PASS gradcheck residual tanh  worst rel err 3.2e-08
+PASS gradcheck residual relu  worst rel err 6.2e-09
+PASS gradcheck residual sigmoid  worst rel err 7.2e-09
+PASS gradcheck residual linear  worst rel err 1.6e-08
+PASS orthogonal linear s=0.8: N_l/N_l+1 = s  max err 1.1e-16
+PASS orthogonal linear s=0.8: kappa = -ln s  kappa +0.223144 vs +0.223144
+PASS orthogonal linear s=1.0: N_l/N_l+1 = s  max err 2.2e-16
+PASS orthogonal linear s=1.0: kappa = -ln s  kappa +0.000000 vs -0.000000
+PASS orthogonal linear s=1.3: N_l/N_l+1 = s  max err 2.2e-16
+PASS orthogonal linear s=1.3: kappa = -ln s  kappa -0.262364 vs -0.262364
+PASS constructed profile exact  [0.0625 0.125  0.25   0.5   ]
+PASS tilt = ln N_first  -2.772589
+PASS horizon flags layer 0 only  [0]
+PASS slope None under 3 layers
+n/a  independent reimplementation unavailable: No module named 'net'
+PASS remove_alpha depth 4: tilt shifts by -ln(alpha), slope unchanged  shift +0.693147 vs +0.693147
+PASS remove_alpha depth 16: tilt shifts by -ln(alpha), slope unchanged  shift +1.386294 vs +1.386294
+PASS remove_alpha depth 64: tilt shifts by -ln(alpha), slope unchanged  shift +2.079442 vs +2.079442
+PASS remove_alpha is a no-op for plain nets
+PASS seeded init bit-identical
+23/23 checks passed
