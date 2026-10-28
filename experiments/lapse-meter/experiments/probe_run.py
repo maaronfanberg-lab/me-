@@ -6,7 +6,9 @@ warmup (steps of linear learning-rate warm-up; 0 = none), zero_out (start the ou
 branch_sign (fixed random +-1 sign on each block's output units; True = even odds, a number q = probability
 of +1; see lapse/nets.py), warmup_parts ("all", "out" = output layer only, "blocks" = residual blocks only),
 block ("one" = h + alpha*act(Wh), the default; "two" = h + alpha*V act(Wh), lapse/nets2.py),
-out_lr_mult (permanent learning-rate multiplier on the readout; SGD only), input_scale (inputs multiplied by it).
+out_lr_mult (permanent learning-rate multiplier on the readout; SGD only), input_scale (inputs multiplied by it),
+zloss (coefficient of an auxiliary z-loss, gradient only; logged loss stays cross-entropy), kick_cap (SGD only: at each step the readout's update is scaled down, if needed, so the RMS change it makes to the
+minibatch's logits is at most this; the blocks' updates are untouched; capped_steps lists the steps it bound).
 freeze: list of parts held at their initial values: "out" (output layer), "blocks" (all residual blocks).
 """
 import sys, os, json
@@ -19,7 +21,7 @@ from lapse.nets2 import MLP2
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0)
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, zloss=0.0)
 
 
 def run(cfg, path=None):
@@ -34,6 +36,7 @@ def run(cfg, path=None):
     else:
         net = MLP(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], residual=True,
                   alpha=c["alpha"], seed=c["seed"], branch_sign=c["branch_sign"])
+    if c["zloss"]: net.zloss = c["zloss"]
     diag = diagnose2 if c["block"] == "two" else diagnose
     if c["zero_out"]: net.W[-1][:] = 0.0  # output layer starts at zero: initial logits are all zero
     opt = {"sgd": lambda: SGD(c["lr"]), "adam": lambda: Adam(c["lr"]), "rmsprop": lambda: Adam(c["lr"], b1=0.0),
@@ -42,7 +45,7 @@ def run(cfg, path=None):
     L = len(net.W); frozen = set()
     if "out" in c["freeze"]: frozen.add(L - 1)
     if "blocks" in c["freeze"]: frozen.update(range(1, L - 1))
-    log = []
+    log = []; capped = []
     for s in range(c["steps"] + 1):
         if s % c["log_every"] == 0:
             dg, _ = diag(net, X[:256], y[:256])
@@ -60,13 +63,21 @@ def run(cfg, path=None):
             k = min(1.0, (s + 1) / c["warmup"])
             for i in ([L - 1] if c["warmup_parts"] == "out" else range(1, L - 1)):
                 gW[i] = gW[i] * k; gb[i] = gb[i] * k
+        if c["kick_cap"] is not None:  # experiment 24: cap the readout's logit kick on this minibatch
+            assert c["opt"] == "sgd" and not c["warmup"] and c["out_lr_mult"] == 1.0
+            hb = net.forward(X[idx])[0][-2]
+            dzb = hb @ (-opt.lr * gW[L - 1]).T - opt.lr * gb[L - 1]
+            kb = float(np.sqrt(np.mean(np.sum(dzb * dzb, 1))))
+            if kb > c["kick_cap"]:
+                f_ = c["kick_cap"] / kb; gW[L - 1] = gW[L - 1] * f_; gb[L - 1] = gb[L - 1] * f_
+                capped.append(s)
         if c["out_lr_mult"] != 1.0:  # experiment 23: a permanent learning-rate multiplier on the readout alone
             gW[L - 1] = gW[L - 1] * c["out_lr_mult"]; gb[L - 1] = gb[L - 1] * c["out_lr_mult"]
         opt.step(net, gW, gb)
         if c["block"] == "two":  # the blocks' second matrices, same SGD step (warm-up included via opt.lr)
             k = min(1.0, (s + 1) / c["warmup"]) if (c["warmup"] and c["warmup_parts"] == "blocks") else 1.0
             for i in range(1, L - 1): net.V[i] -= opt.lr * k * bw[4][i]
-    res = dict(config=c, test_acc=net.accuracy(Xt, yt), log=log)
+    res = dict(config=c, test_acc=net.accuracy(Xt, yt), log=log, capped_steps=capped)
     if path: json.dump(res, open(path, "w"))
     return res
 

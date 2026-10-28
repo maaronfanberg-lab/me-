@@ -47,3 +47,16 @@ for _ in range(5):
     _, g1, h1, _ = a.backward(X, y); oa.step(a, g1, h1); _, g2, h2, _ = b.backward(X, y); ob.step(b, g2, h2)
 check("Momentum with mu = 0 is SGD bit for bit", all(np.array_equal(u, v) for u, v in zip(a.W, b.W)))
 print(f"{sum(R)}/{len(R)} probe checks passed (all, with optimizers)")
+# z-loss gradient (experiment 24) must match finite differences of CE + zloss * mean(logZ^2)
+zn = MLP(12, 16, 6, 4, act="relu", residual=True, seed=9); zn.zloss = 0.05
+def total(net):
+    out = net.forward(X)[1][-1]; m = out.max(1, keepdims=True); lz = np.log(np.exp(out - m).sum(1)) + m[:, 0]
+    return net.loss(X, y) + net.zloss * np.mean(lz ** 2)
+_, gzW, _, _ = zn.backward(X, y); worst = 0.0
+for i in range(len(zn.W)):
+    j, k = 0, 1; o = zn.W[i][j, k]
+    zn.W[i][j, k] = o + 1e-6; lp = total(zn); zn.W[i][j, k] = o - 1e-6; lm = total(zn); zn.W[i][j, k] = o
+    fd = (lp - lm) / 2e-6; worst = max(worst, abs(fd - gzW[i][j, k]) / max(1e-9, abs(fd) + abs(gzW[i][j, k])))
+check("z-loss gradient matches finite differences", worst < 1e-5, f"worst relative error {worst:.1e}")
+check("z-loss off by default", MLP(12, 16, 6, 4, act="relu", residual=True, seed=9).zloss == 0.0)
+print(f"{sum(R)}/{len(R)} probe checks passed (all, with z-loss)")

@@ -36,6 +36,7 @@ def build(cfg):
         net = MLP(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], residual=True,
                   alpha=c["alpha"], seed=c["seed"], branch_sign=c["branch_sign"])
     if c["zero_out"]: net.W[-1][:] = 0.0
+    if c.get("zloss"): net.zloss = c["zloss"]
     return c, net, X[:256], y[:256]
 
 

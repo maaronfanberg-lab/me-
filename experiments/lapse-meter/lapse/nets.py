@@ -35,6 +35,8 @@ ACTS.update({
 
 
 class MLP:
+    zloss = 0.0  # coefficient of an auxiliary z-loss on the gradient; 0 = off (experiments before 24 are unchanged)
+
     def __init__(self, din, width, depth, dout, act="tanh", sigma_w=1.0, residual=False, alpha=None,
                  seed=0, orthogonal=False, branch_sign=False):
         self.act, self.residual = act, residual
@@ -97,6 +99,9 @@ class MLP:
         p = np.exp(out); p /= p.sum(1, keepdims=True)
         loss = float(-np.log(p[np.arange(n), y] + 1e-300).mean())
         d = p.copy(); d[np.arange(n), y] -= 1.0; d /= n
+        if self.zloss:  # experiment 24: gradient of zloss * mean(logZ^2) added (Wortsman et al. 2023); `loss` stays plain CE
+            logZ = np.log(np.exp(out).sum(1)) + z[-1].max(1)
+            d = d + 2.0 * self.zloss * logZ[:, None] * p / n
         deltas = [None] * L
         deltas[-1] = d
         gh = d @ self.W[-1]                      # dL/dh_{L-1}
