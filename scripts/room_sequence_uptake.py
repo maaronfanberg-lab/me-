@@ -33,7 +33,7 @@ def _final_question_action(value: object) -> str:
     spoken = str(value or "").strip()
     if not spoken.endswith("?"):
         return ""
-    final = re.split(r"(?<=[.!?])\\s+", spoken)[-1]
+    final = re.split(r"(?<=[.!?])\s+", spoken)[-1]
     return _utterance_key(final)
 
 
