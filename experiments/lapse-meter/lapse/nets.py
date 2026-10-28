@@ -158,3 +158,17 @@ class Adam:
             mh = self.m[i] / (1 - self.b1 ** self.t)
             vh = self.v[i] / (1 - self.b2 ** self.t)
             pi -= self.lr * mh / (np.sqrt(vh) + self.eps)
+
+
+class Momentum:
+    """SGD with heavy-ball momentum (experiment 21): v <- mu*v + g; w <- w - lr*v."""
+    def __init__(self, lr, mu=0.9):
+        self.lr, self.mu, self.v = lr, mu, None
+
+    def step(self, net, gW, gb):
+        g = gW + gb; p = net.W + net.b
+        if self.v is None:
+            self.v = [np.zeros_like(x) for x in p]
+        for i, (pi, gi) in enumerate(zip(p, g)):
+            self.v[i] = self.mu * self.v[i] + gi
+            pi -= self.lr * self.v[i]

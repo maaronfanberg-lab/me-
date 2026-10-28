@@ -39,3 +39,11 @@ a = MLP(12, 16, 10, 4, act="relu", residual=True, seed=4, branch_sign=1.0); b = 
 ra, rb = a.backward(X, y), b.backward(X, y)
 check("branch_sign = 1.0 is plain ReLU bit for bit", ra[0] == rb[0] and all(np.array_equal(u, v) for u, v in zip(ra[3], rb[3])))
 print(f"{sum(R)}/{len(R)} probe checks passed (all)")
+# Momentum with mu = 0 must be plain SGD exactly (experiment 21)
+from lapse.nets import Momentum, SGD
+a = MLP(12, 16, 6, 4, act="tanh", residual=True, seed=1); b = MLP(12, 16, 6, 4, act="tanh", residual=True, seed=1)
+oa, ob = Momentum(0.05, mu=0.0), SGD(0.05)
+for _ in range(5):
+    _, g1, h1, _ = a.backward(X, y); oa.step(a, g1, h1); _, g2, h2, _ = b.backward(X, y); ob.step(b, g2, h2)
+check("Momentum with mu = 0 is SGD bit for bit", all(np.array_equal(u, v) for u, v in zip(a.W, b.W)))
+print(f"{sum(R)}/{len(R)} probe checks passed (all, with optimizers)")

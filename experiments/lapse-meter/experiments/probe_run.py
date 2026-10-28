@@ -12,7 +12,7 @@ import sys, os, json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 import numpy as np
-from lapse.nets import MLP, SGD, Adam
+from lapse.nets import MLP, SGD, Adam, Momentum
 from lapse.probe import diagnose, diagnose2
 from lapse.nets2 import MLP2
 import e4
@@ -34,7 +34,8 @@ def run(cfg, path=None):
                   alpha=c["alpha"], seed=c["seed"], branch_sign=c["branch_sign"])
     diag = diagnose2 if c["block"] == "two" else diagnose
     if c["zero_out"]: net.W[-1][:] = 0.0  # output layer starts at zero: initial logits are all zero
-    opt = SGD(c["lr"]) if c["opt"] == "sgd" else Adam(c["lr"])
+    opt = {"sgd": lambda: SGD(c["lr"]), "adam": lambda: Adam(c["lr"]), "rmsprop": lambda: Adam(c["lr"], b1=0.0),
+           "momentum": lambda: Momentum(c["lr"])}[c["opt"]]()  # rmsprop = Adam without momentum (experiment 21)
     rng = np.random.default_rng(10_000 + c["seed"])
     L = len(net.W); frozen = set()
     if "out" in c["freeze"]: frozen.add(L - 1)
