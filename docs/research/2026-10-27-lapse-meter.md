@@ -140,3 +140,36 @@ the circle at 24 layers. SGD's transport at matched loss does not depend on lear
 `tests/test_sound.py` confirms the per-voice values equal `geometry().lapse`.
 
 All suites pass.
+
+## Addendum, 2026-10-28: prior art, independent replication, experiments 22–23
+
+**Observed problem.** Experiments 8–21 were designed before the literature was read.
+
+**Research.** Twelve machine-learning papers were read and quoted (`PRIOR_ART.md`): Brock 2021, Clevert 2016,
+De & Smith 2020, Zhang 2019, Goyal 2017, Gotmare 2019, Xiong 2020, Cohen 2021, Gilmer 2022, Kalra & Barkeshli 2024,
+Kosson 2024 and Yang 2022. Mean shift and the output-layer location of the warm-up effect were known.
+
+**Baseline and criteria.** Each part was pushed before its runs: the independent replication's predictions (its
+script header, commit 1c75f63 as pushed), and experiment 23's per-run predictions with
+`E22_23_PREREGISTRATION.md` (commit c51d13f as pushed). Experiment 22 is exploratory and labelled so.
+
+**Validation of new methods.**
+
+- The sharpness measurement agrees with explicit Hessians in 12 checks (`tests/test_e22_predictors.py`), after
+  three method faults were found and fixed before use (CORRECTIONS 35).
+- The independent implementation passes its own gradient check (worst relative error 1.8 × 10⁻⁶).
+
+**Post-change result.**
+
+- **Replication:** 7 of 8 predictions held. The failure (digits) pointed to the readout kick.
+- **Experiment 22:** kick ranks outcomes best (AUC 0.99 and 0.94).
+- **Experiment 23:** all four predictions held. Kick predicted 18 of 18 runs, sharpness 15 of 18, the pile-up
+  ratio 0 of 18.
+- **Sound:** a 12-voice version does not make layers separable (measured; CORRECTIONS 39).
+- All suites pass, including 49 README numbers recomputed from raw results.
+
+**Limits.**
+
+- Kick and sharpness cutoffs were set on the earlier runs.
+- Input scaling changes more than the kick.
+- Small networks, two toy tasks, three seeds.

@@ -19,7 +19,7 @@ so N is the rate at which that layer's clock runs. A layer with N → 0 sits beh
 learning, whatever the optimiser is doing. A steady exponential profile N ∝ e^{κℓ} gives the depth spacetime
 constant curvature R = −2κ².
 
-This repository is a small library (numpy only), a verified test suite, twenty-one experiments that test claims about
+This repository is a small library (numpy only), a verified test suite, twenty-three experiments and an independent replication that test claims about
 this geometry, a sonification, and a [corrections ledger](CORRECTIONS.md) of every claim that turned out wrong.
 
 ## Definitions
@@ -387,6 +387,52 @@ at 24 layers, transport at loss 0.03.
 - **An unplanned regularity:** compared at the same training loss, plain SGD's transport does not move at all
   across a fivefold range of learning rate, or with momentum (+0.76 for all four on digits). Within an optimizer
   family, step size changes how fast the network gets somewhere, not where it ends up on this measure.
+
+### 12. What actually decides the collapse: the readout kick (experiments 22–23, and an independent replication)
+
+After experiment 21 I read the literature (`PRIOR_ART.md`). Several earlier findings turned out to be known:
+the pile-up is Brock et al.'s (2021) mean shift, and warm-up protecting the layers next to the output is Gotmare et
+al. (2019). The open question was which early quantity decides the collapse.
+
+**Independent replication** ([`independent/`](independent), predictions in the script's header). The code shares
+nothing with the library: different data preparation, a new circle dataset, seeds 100–102. Of 8 predictions, 7
+held. The one that failed was informative. Plain ReLU did not collapse on digits, although its pile-up was the
+same 37×: its smaller inputs gave a readout kick of only 90–150.
+
+**Experiment 22 (exploratory, 180 runs).** Four candidates from the literature were measured at initialization
+(`experiments/e22_predictors.py`; the sharpness method is validated against explicit Hessians in
+`tests/test_e22_predictors.py`). AUC for broken runs:
+
+| candidate | digits | circle |
+|---|---|---|
+| readout kick (logit change from one SGD step on the readout; μP's argument) | 0.99 | 0.94 |
+| preconditioned sharpness (Gilmer 2022; Kalra & Barkeshli 2024) | 0.91 | 0.85 |
+| pile-up ratio | 0.83 | 0.80 |
+| readout-gradient coherence (Kosson 2024) | 0.68 | 0.80 |
+| blocks' relative first step (Kosson 2024) | 0.71 | 0.74 |
+
+**Experiment 23 (pre-registered, [`E22_23_PREREGISTRATION.md`](E22_23_PREREGISTRATION.md)).** Eighteen new runs
+were chosen so that kick and the pile-up ratio disagree, and every run's prediction was recorded before it ran:
+
+- **Kept healthy:** 96-layer ReLU with the full 37× pile-up, given a smaller readout learning rate or smaller inputs.
+- **Made to collapse:** 24-layer ReLU with a 5× pile-up, given large inputs.
+
+Per-run predictions were right for kick in 18 of 18 runs, for sharpness in 15 of 18, and for the pile-up ratio in
+0 of 18 ([`results/e23_analysis.md`](results/e23_analysis.md)). So mean shift breaks this network only by making the
+readout's first steps too large.
+
+Caveats:
+
+- The cutoffs were set on the earlier runs.
+- Scaling the inputs changes more than the kick, so the readout-learning-rate condition is the cleanest evidence.
+- Kick works as a risk measure with a band. Below 100, none of 144 runs lost transport; between 100 and 500, 13 of
+  27 did; above 500, 24 of 27.
+
+**Sound.** Playing fewer layers does not make the voices separable. The layers' values are clustered, so almost
+no voice is ever more than one auditory-filter width from its neighbours
+(`experiments/sound_separability.py`).
+
+A full write-up is in the project's document "Why Deep ReLU Networks Lose Their Backward Signal".
 
 ## Honest limits
 

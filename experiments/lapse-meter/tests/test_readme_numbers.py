@@ -124,5 +124,31 @@ for label, exp, pat in (("SGD, lr 0.05 (reference)", "e8", "tanh_d24"), ("Adam (
 for name, val in (("shock", "2.75"), ("shock_warmup", "0.31")):
     H = np.log10(np.array(json.load(open(os.path.join(ROOT, "audio", name + ".wav.json")))["lapse"]))
     claim(f"sound {name} median jump", f"{np.median(np.abs(np.diff(H, axis=0)).max(1) * 12):.2f}")
+# Experiments 22-23 (README section 12)
+from sklearn.metrics import roc_auc_score
+P22 = json.load(open(os.path.join(R, "e22_predictors.json")))
+for key, label in (("kick", "readout kick (logit change from one SGD step on the readout; μP's argument)"), ("sharp", "preconditioned sharpness (Gilmer 2022; Kalra & Barkeshli 2024)"), ("stream_growth", "pile-up ratio")):
+    aucs = []
+    for task in ("digits", "circle-clean"):
+        rs = [r for r in P22.values() if r["config"]["task"] == task]
+        yb = [int(r["transport"] is None or r["failed"] or r["transport"] < 0.3) for r in rs]
+        aucs.append(f"{roc_auc_score(yb, [r[key] for r in rs]):.2f}")
+    claim(f"E22 AUC {key}", f"| {label} | {aucs[0]} | {aucs[1]} |")
+e23 = open(os.path.join(R, "e23_analysis.md")).read()
+m = re.search(r"kick (\d+) of (\d+), sharpness (\d+) of \d+, pile-up ratio (\d+) of", e23)
+claim("E23 kick score", f"for kick in {m.group(1)} of {m.group(2)} runs, for sharpness in {m.group(3)} of {m.group(2)}, and for the pile-up ratio in\n{m.group(4)} of {m.group(2)}")
+ind = open(os.path.join(ROOT, "independent", "results.md")).read()
+claim("independent replication 7 of 8", "Of 8 predictions, 7\nheld") if ind.count("**holds**") == 7 and ind.count("**fails**") == 1 else claim("independent replication count", "MISMATCH")
+# kick bands over all 198 runs (180 earlier + 18 from experiment 23)
+from e8_analyze import at_loss_key as _alk
+pts = [(r["kick"], r["transport"] is None or r["failed"] or r["transport"] < 0.3) for r in P22.values()]
+for p in json.load(open(os.path.join(ROOT, "experiments", "e23_predictions.json"))):
+    rr = json.load(open(os.path.join(ROOT, p["run"]))); K = 10 if p["task"] == "digits" else 2
+    lv = next((L for L in (0.03, 0.1, 0.3) if _alk(rr["log"], L, "ln_transport") is not None), None)
+    tt = _alk(rr["log"], lv, "ln_transport") if lv else None
+    pts.append((p["kick"], rr["log"][-1]["train_loss"] > 0.5 * np.log(K) or tt is None or tt < 0.3))
+band = lambda lo, hi: (sum(1 for k, b in pts if lo <= k < hi), sum(1 for k, b in pts if lo <= k < hi and b))
+(n1, b1), (n2, b2), (n3, b3) = band(0, 100), band(100, 500), band(500, 1e12)
+claim("kick bands", f"Below 100, none of {n1} runs lost transport; between 100 and 500, {b2} of\n  {n2} did; above 500, {b3} of {n3}." if b1 == 0 else "MISMATCH")
 print(f"{sum(RESULTS)}/{len(RESULTS)} README numbers match the raw results")
 sys.exit(0 if all(RESULTS) else 1)
