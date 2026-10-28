@@ -26,3 +26,6 @@ commutes exactly with positive diagonal ReLU gauges at the level of real-number 
 - Independent test of one-step equivariance and zero gradient controls.
 - Reproduce using the already verified MLP implementation in lapse.nets and G2's reparameterize/scales helpers.
 - Save the complete JSON for all 8 model-gauge pairs, with time-series checks and every failure visible.
+
+## Timing audit and frozen-code independent confirmation (2026-10-28)
+The initial seeds 6/7 were used in **local development testing after this protocol was committed but before the G4 executable was committed**. Treat those eight comparisons as development evidence, **not fully code-preregistered confirmation**. The final executable source was committed as a117678 and synthetic checks as f2748bf. Before running any further models, we designate **seeds 8 and 9** as a held-out, frozen-code confirmation, with all original choices unchanged (architectures, gauges, step schedule, eta=2.0 and thresholds); only the seed IDs change. The G4 CLI accepts explicit seed IDs so that the independent confirmation is reproducible. Report all 8 held-out comparisons and retain the 8 development comparisons separately. No conditions may be dropped based on training accuracy.
