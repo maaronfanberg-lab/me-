@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-consult-20261028-context-loss-34681-02.json",
+  "request_sha256": "ddbdf86703ef84c60b18ed8ce5de7367f5afe65bfca6d565392bd24482efaca4",
+  "request_nonce": "claude-consult-20261028-context-loss-34681-02",
+  "completed_at": "2026-10-28T23:26:53.815690Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "**Scope:** I didn't inspect the repository. This review rests only on the evidence you supplied, and the code paths are unverified.\n\n## Diagnosis\n\n**Observation (from your description):** `expression_project` returns `event=None` for undirected statements, and `_autonomy_compact` keeps it `None`. Meanwhile `choose_next` picks a speaker because of that same statement.\n\n**Inference:** The selector says \"respond to this,\" and the projector then withholds \"this.\" The responder gets a turn but no adjacency anchor. Conversation analysis treats the next turn as displaying its understanding of the prior one (Sacks, Schegloff & Jefferson 1974; Schegloff 2007 on sequence organization). Without that anchor, the model falls back on generic \"what's next?\" turns, which are minimal and formulaic and don't build on anything.\n\n**Likelihood:** This is plausibly a significant contributor. It is not proven to be the sole cause. I'd call it a likely cause, not a confirmed one, for these reasons:\n- The loop symptoms (six identical adjacent messages, 15 messages of three words or fewer, \"Hey what's next?\" variants) fit a context-starved responder.\n- They also fit other causes: a prompt that rewards continuation, sampling, a shared persona, or old-context contamination.\n- \"Off-topic\" is not the same as \"generic.\" Your sample shows generic and repetitive turns, not necessarily topic drift.\n\nA grounding view (Clark & Brennan 1991) says each turn needs evidence of uptake. A model that can't see the prior turn can't give that evidence. Repair (Schegloff, Jefferson & Sacks 1977) is also hard without the trouble source in view. Repeated \"what's next?\" is effectively an unrepaired, ungrounded loop.\n\n## Minimum safe change\n\nKeep `interaction_project.kind='self_initiated_contribution'`, but retain a narrow context slice for it:\n- Keep `event` as the latest public statement. It should be tagged as `uptake_candidate` and carry its speaker and turn id.\n- Keep only that one turn, plus at most the immediately prior public turn.\n- Leave `context` otherwise unchanged. Do not add history, summaries, or topic hints.\n- Gate it on `choose_next` having selected the speaker because of open-floor uptake. Pass a flag or reason from the selector, so retention applies only when the selector's reason and the projector's inputs agree.\n- Make the change one-way: the responder may acknowledge, develop, or ignore the turn. Do not require it to reference the turn, because that would amount to a canned rule.\n\nThis doesn't ban vocabulary, add quotas, supply scripted lines, or force novelty.\n\n## Topic attractors\n\nDon't suppress them with word lists. Treat the problem structurally:\n- Measure repetition as a diagnostic only: n-gram or embedding similarity of adjacent turns, and the share of short turns.\n- Let the retained anchor create the sequential pull toward the actual last speaker, which competes with the attractor.\n- If a loop is detected, prefer a repair-style move such as \"I think we're repeating.\" That would be a prompt-level option and not a script. Evaluate it separately and don't ship it in this change.\n\n## Counterexamples\n\n- **Deliberate new topic:** The agent may legitimately start something new. Retention must not force continuation. Test that a topic shift is allowed and that it is not penalized.\n- **Privacy:** The latest statement may come from a private or directed channel. Retain only if the statement is public and visible to this agent. Never include a private model's content or a statement addressed to someone else.\n- **Old contamination:** A stale statement could be retained after a long gap or after a room reset. Add a freshness bound (turn count and time) and require the same room and session.\n- **Self-echo:** If the latest statement was the agent's own, don't retain it as an uptake candidate.\n- **Existing intent:** `event=None` may be deliberate, to prevent pile-on and parroting. Check git history before changing it.\n\n## 12 exact tests\n\n1. An undirected public statement from agent A, with B selected via open-floor uptake. Expect `event` to be non-None and to equal that statement.\n2. A question or invitation. Expect behavior unchanged.\n3. Selection not caused by uptake. Expect `event` to remain `None`.\n4. A private or directed-to-other statement. Expect it not to be retained.\n5. The latest statement is the agent's own. Expect `None`.\n6. The statement is stale beyond the freshness bound, or from a prior session. Expect `None`.\n7. The context list stays within the cap of two turns. Verify no extra history is added.\n8. `_autonomy_compact` preserves the retained event and keeps `kind` unchanged.\n9. A four-agent replay with a fixed seed. Compare the share of replies of three words or fewer, before and after.\n10. A replay seeded with \"Hey what's next?\" Verify that adjacent-identical runs of three or more don't increase.\n11. A deliberate new-topic fixture. Verify the agent is not blocked from shifting topic.\n12. No banned-term lists, speaker caps, or template strings appear in the diff. Check this with a static check.\n\nTests 9 and 10 are the ones that could falsify the diagnosis. If short and repeated replies don't fall, the cause lies elsewhere.\n\n## Rollout conditions\n\n- Make no production change until tests 1–8 and 11–12 pass offline.\n- Run a shadow comparison on recorded rooms first. Use the same transcripts, with and without retention.\n- Ship behind a flag and enable it for one room at a time.\n- Stop if the adjacent-duplicate rate, the short-turn share, or leakage incidents rise. Leakage means any privacy violation, which warrants an immediate rollback.\n- Review a human-rated sample for off-topic replies. Don't rely on the automatic metrics alone.",
+  "session_id": "2519cc98-4a53-4583-81ff-d137ce3093c7",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 999,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 1967,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 999,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1967,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 999,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 999
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.0239475,
+  "num_turns": 1
+}
