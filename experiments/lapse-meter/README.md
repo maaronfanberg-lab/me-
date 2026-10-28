@@ -461,7 +461,8 @@ held).
   readout's input, and so the kick (0.8–0.9), not by removing the pile-up.
 - Pre-LN with no final LayerNorm is healthy even at 192 layers, with 96–98% of the stream one shared vector.
 - With a final LayerNorm, ReLU ends with *more* transport than its twin (digits +0.75 against +0.54). Experiment 31
-  asks why.
+  (exploratory) found that the extra is example-specific signal, not the shared direction carried backward; why it
+  arises is unexplained.
 
 **Experiment 25 (exploratory, signatures fixed in [`E25_PLAN.md`](E25_PLAN.md)).** The first 200 steps were traced
 step by step.
@@ -503,6 +504,35 @@ Three things the predictions did not cover:
 Every run overfits badly: test loss is 3.2–8.8 nats with 8,000 training windows. So these are results about how
 training proceeds, not about modelling language.
 
+### 15. Looking for the mechanism: five tests, mostly failed predictions (experiments 27, 29, 30, 33 and two estimates)
+
+Experiments 22–28 establish *that* the kick decides. These asked *how*. Each was pre-registered, and most of my
+predictions failed. The failures are as informative as the passes, so all of them are listed here and in
+[`THEORY_KICK.md`](THEORY_KICK.md).
+
+| test | what I predicted | what happened |
+|---|---|---|
+| Experiment 27: cap the kick for the first k steps only | k = 2 is enough | **Failed.** The shortest window that rescued every run was 3 steps on digits and 5 on the circle |
+| Experiment 29: center the readout's input (remove the shared part) | rescues; a random offset of the same size does not | **Mixed, and the test was flawed.** A fixed center is only a center at step 0. Once the stream moves, it injects a new shared input, and three digits runs diverged |
+| Experiment 30: give a healthy signed network ReLU's huge shared readout input | breaks (my bet: the kick's size decides) | **Held,** but every break was a divergence within 50 steps, not the slow loss of transport. Capping the kick rescued all 6 |
+| Experiment 33: cut the backward channel along the shared direction | rescues ("bias channel" account) | **Refuted.** All 6 runs diverged, and the random-direction cut changed nothing |
+| Threshold estimate: slowing the blocks raises the critical kick | would rescue | **Already refuted** by experiment 14's data, which I had not checked first |
+| Escape estimate: post-shock stream ∝ η^(−1/2), readout at the edge of stability | ratio 1.7–2.9; η·λ between 1 and 4 | **Refuted** on both tasks (ratios 1.56 and 21; η·λ 0.31 and about 0) |
+
+What the traces show, as observations rather than an explanation
+([`results/e29_followup.md`](results/e29_followup.md), CORRECTIONS 53 and 57):
+
+- **Plain ReLU tears down its own pile-up within two steps of the shock.** The fraction of gates open per example
+  halves (0.50 → 0.26), and the last stream shrinks from 234 to 20, then 11. Transport then decays over about 100
+  steps.
+- **That teardown is driven by the gradient along the shared direction.** Cut that gradient and the stream *grows*
+  instead (234 → 4.6 million in 5 steps), and the run diverges. A network that cannot shrink its shared readout
+  input (experiment 30's fixed offset) diverges too.
+- **So the collapse looks like the price of not diverging.** I could not make that quantitative: the escape
+  estimate failed both of its predictions.
+- **The readout is not "too sharp" at initialization.** Its exact Hessian has almost zero curvature, because the
+  huge initial logits saturate every softmax. Sharpness-threshold explanations do not apply at the start here.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
@@ -516,6 +546,10 @@ training proceeds, not about modelling language.
 - Comparing conditions at a fixed training loss drops runs that never reach it. Twice (CORRECTIONS 23 and 28)
   that dropped the worst run and biased a verdict. From experiment 13 on, every table also counts runs that
   failed to train.
+- The same reading has the opposite problem when a run fits almost at once. In 8 of 125 conditions (experiment 26's
+  circle Pre-LN placements and experiment 29's circle runs), loss 0.03 is reached within 50 steps, so the reading
+  describes a network a few steps old (CORRECTIONS 52). From experiment 30 on, analyses report the step of each
+  reading.
 
 ## How the experiments were run
 

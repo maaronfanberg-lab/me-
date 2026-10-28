@@ -173,3 +173,50 @@ script header, commit 1c75f63 as pushed), and experiment 23's per-run prediction
 - Kick and sharpness cutoffs were set on the earlier runs.
 - Input scaling changes more than the kick.
 - Small networks, two toy tasks, three seeds.
+
+## Addendum, 2026-10-28 (evening): experiments 24–33 and two estimates
+
+**Observed problem.** Experiments 22–23 showed the readout kick *predicts* the collapse. They did not show that it
+causes it, or how.
+
+**Research.** Five more papers bear on the question: Lewkowycz 2020 (catapult), Liu 2020 (Post-LN amplification),
+Wortsman 2023 (z-loss), Jastrzębski 2020 (break-even point) and Gur-Ari 2018 (tiny subspace). Two more on
+centering: Raiko, Valpola & LeCun 2012 (quotes checked), and LeCun et al. 1998 (paraphrased only, primary text not
+reachable). All are in `PRIOR_ART.md`.
+
+**Baseline and criteria.** Every confirmatory experiment's predictions, design and analysis script were pushed
+before its first run: E24, E26–E30 and E33. E25 and E31 are exploratory, with their signatures fixed in advance.
+The two estimates in `THEORY_KICK.md` were committed before the runs that test them.
+
+**Validation of new methods.**
+
+- New network variants are checked by finite differences: LayerNorm placements, centering, offset (23 checks).
+- The gradient cut has 5 checks, and the readout's explicit Hessian is checked against finite differences
+  (5.4 × 10⁻¹¹).
+- Every new runner option is shown additive: default runs stay bit-identical to experiment 7.
+- Experiment 31's twelve reruns reproduce experiment 26 bit for bit.
+
+**Post-change result.**
+
+- **Causal tests held.**
+  - Capping the kick rescues (E24: caps ≤ 30, 18 of 18).
+  - Normalization protects by bounding the kick, not by removing the pile-up (E26, all four placements).
+  - The account carries over to next-character prediction (E28, all four predictions).
+  - A large kick breaks even a network without pile-up (E30), but by divergence.
+- **Mechanism tests mostly failed.**
+  - Two-step window (E27): failed. The window is 3–5 steps.
+  - Shared-part account (E29): mixed, and the design was flawed.
+  - Bias-channel account (E33): refuted.
+  - Two estimates: refuted.
+- **Observed (post hoc).** The shared-direction gradient tears down the pile-up within two steps. That teardown is
+  the collapse. Without it the network diverges.
+- **Ledger.** CORRECTIONS now has 59 entries.
+- **Tests.** All suites pass, including 59 README numbers recomputed from raw results.
+
+**Limits.**
+
+- Three seeds per cell.
+- The mechanism traces are mostly one seed on one task.
+- The loss-0.03 reading is uninformative for runs that fit within 50 steps (8 of 125 conditions).
+- Fixed centering is not a clean manipulation.
+- No account of *why* the teardown happens has survived its own predictions.

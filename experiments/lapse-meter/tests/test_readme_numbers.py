@@ -173,5 +173,18 @@ for key, label in (("P28a", "ReLU, inputs ×1"), ("P28c", "ReLU ×10, kick cappe
     a, b, (fa, fb) = e28row(key)
     fmt2 = lambda v: f"{v:.3f}" if v < 0.1 else f"{v:.2f}"
     claim(f"E28 {key}", f"| {a} / {b} | {fmt2(fa)} / {fmt2(fb)} |")
+# Section 15, from the analysis files and the escape check
+esc = open(os.path.join(R, "escape_check.md")).read()
+rat = {t: float(re.search(rf"- {t}: E-i stream ratio lr 0.02 / 0.1 = ([\d.]+)", esc).group(1)) for t in ("digits", "circle-clean")}
+med = {t: float(re.search(rf"- {t}: .*?median η·λ_out at lr 0.05 = ([\d.]+)", esc).group(1)) for t in ("digits", "circle-clean")}
+claim("escape ratios and sharpness", f"(ratios {rat['digits']:.2f} and {rat['circle-clean']:.0f}; η·λ {med['digits']:.2f} and about 0)" if med["circle-clean"] < 0.05 else "MISMATCH")
+e27 = open(os.path.join(R, "e27_analysis.md")).read()
+def first_full(task):
+    for k in (1, 2, 3, 5, 10):
+        rows = [l for l in e27.splitlines() if l.startswith(f"| {task} | {k} |")]
+        if rows and all("**healthy**" in l for l in rows): return k
+claim("E27 shortest full window", f"{first_full('digits')} steps on digits and {first_full('circle-clean')} on the circle")
+e33 = open(os.path.join(R, "e33_analysis.md")).read()
+claim("E33 all detach-mean broken", "All 6 runs diverged" if sum(1 for l in e33.splitlines() if "detach_mean" in l and "**broken**" in l) == 6 else "MISMATCH")
 print(f"{sum(RESULTS)}/{len(RESULTS)} README numbers match the raw results")
 sys.exit(0 if all(RESULTS) else 1)
