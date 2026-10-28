@@ -21,6 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, os.path.jo
 import numpy as np
 from lapse.nets import MLP
 from lapse.nets2 import MLP2
+from lapse.nets_ln import MLPLN
 from probe_run import DEFAULTS
 import e4
 
@@ -30,7 +31,10 @@ def build(cfg):
     X, y, Xt, yt = e4.make(c["task"], c["seed"])
     if c["input_scale"] != 1.0: X = X * c["input_scale"]
     ncls = int(max(y.max(), yt.max()) + 1)  # exactly as probe_run.py
-    if c["block"] == "two":
+    if c["block"] == "ln":
+        net = MLPLN(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"],
+                    ln=c["ln"], branch_sign=c["branch_sign"])
+    elif c["block"] == "two":
         net = MLP2(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"])
     else:
         net = MLP(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], residual=True,
@@ -75,7 +79,7 @@ def predictors(cfg):
     eta = {k: step1_lr(c, net, k) for k in P}
     G = grads(net, X, y)
     # readout kick
-    h, z = net.forward(X); hL = h[-2]
+    h, z = net.forward(X); hL = net.readout_input(X) if isinstance(net, MLPLN) else h[-2]
     dW = -eta[("W", L - 1)] * G["W"][L - 1]; db = -eta[("b", L - 1)] * G["b"][L - 1]
     dz = hL @ dW.T + db
     kick = float(np.sqrt(np.mean(np.sum(dz * dz, 1))))

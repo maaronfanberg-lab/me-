@@ -5,7 +5,8 @@ Config keys (defaults in DEFAULTS): task, act, depth, seed, width, lr, steps, al
 warmup (steps of linear learning-rate warm-up; 0 = none), zero_out (start the output layer at zero),
 branch_sign (fixed random +-1 sign on each block's output units; True = even odds, a number q = probability
 of +1; see lapse/nets.py), warmup_parts ("all", "out" = output layer only, "blocks" = residual blocks only),
-block ("one" = h + alpha*act(Wh), the default; "two" = h + alpha*V act(Wh), lapse/nets2.py),
+block ("one" = h + alpha*act(Wh), the default; "two" = h + alpha*V act(Wh), lapse/nets2.py; "ln" = one-matrix
+blocks with LayerNorm placed by `ln`: none | final | pre | pre_final | post, lapse/nets_ln.py),
 out_lr_mult (permanent learning-rate multiplier on the readout; SGD only), input_scale (inputs multiplied by it),
 zloss (coefficient of an auxiliary z-loss, gradient only; logged loss stays cross-entropy), kick_cap (SGD only: at each step the readout's update is scaled down, if needed, so the RMS change it makes to the
 minibatch's logits is at most this; the blocks' updates are untouched; capped_steps lists the steps it bound).
@@ -16,12 +17,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 import numpy as np
 from lapse.nets import MLP, SGD, Adam, Momentum
-from lapse.probe import diagnose, diagnose2
+from lapse.probe import diagnose, diagnose2, diagnose_ln
+from lapse.nets_ln import MLPLN
 from lapse.nets2 import MLP2
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, zloss=0.0)
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, zloss=0.0, ln="none")
 
 
 def run(cfg, path=None):
@@ -30,14 +32,18 @@ def run(cfg, path=None):
     X, y, Xt, yt = e4.make(c["task"], c["seed"])
     if c["input_scale"] != 1.0: X, Xt = X * c["input_scale"], Xt * c["input_scale"]  # experiment 23
     ncls = int(max(y.max(), yt.max()) + 1)
-    if c["block"] == "two":
+    if c["block"] == "ln":
+        assert c["opt"] == "sgd" and not c["zloss"]
+        net = MLPLN(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"],
+                    seed=c["seed"], ln=c["ln"], branch_sign=c["branch_sign"])
+    elif c["block"] == "two":
         assert not c["branch_sign"] and c["opt"] == "sgd", "two-matrix blocks: SGD, no branch signs"
         net = MLP2(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"])
     else:
         net = MLP(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], residual=True,
                   alpha=c["alpha"], seed=c["seed"], branch_sign=c["branch_sign"])
     if c["zloss"]: net.zloss = c["zloss"]
-    diag = diagnose2 if c["block"] == "two" else diagnose
+    diag = {"two": diagnose2, "ln": diagnose_ln}.get(c["block"], diagnose)
     if c["zero_out"]: net.W[-1][:] = 0.0  # output layer starts at zero: initial logits are all zero
     opt = {"sgd": lambda: SGD(c["lr"]), "adam": lambda: Adam(c["lr"]), "rmsprop": lambda: Adam(c["lr"], b1=0.0),
            "momentum": lambda: Momentum(c["lr"])}[c["opt"]]()  # rmsprop = Adam without momentum (experiment 21)
@@ -65,7 +71,7 @@ def run(cfg, path=None):
                 gW[i] = gW[i] * k; gb[i] = gb[i] * k
         if c["kick_cap"] is not None:  # experiment 24: cap the readout's logit kick on this minibatch
             assert c["opt"] == "sgd" and not c["warmup"] and c["out_lr_mult"] == 1.0
-            hb = net.forward(X[idx])[0][-2]
+            hb = net.readout_input(X[idx]) if c["block"] == "ln" else net.forward(X[idx])[0][-2]
             dzb = hb @ (-opt.lr * gW[L - 1]).T - opt.lr * gb[L - 1]
             kb = float(np.sqrt(np.mean(np.sum(dzb * dzb, 1))))
             if kb > c["kick_cap"]:

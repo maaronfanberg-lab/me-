@@ -75,3 +75,24 @@ def diagnose2(net, X, y):
         dead=[float(np.mean(np.all(z[i] <= 0, axis=0))) for i in blocks] if net.act == "relu" else None,
         Wout=float(np.linalg.norm(net.W[-1])),
     ), deltas
+
+
+def diagnose_ln(net, X, y):
+    """The same three-part split for lapse.nets_ln.MLPLN (any LayerNorm placement). The parts still telescope to T*
+    exactly; with LayerNorm on the stream, transport and gate include the LayerNorm Jacobians they pass through."""
+    f, _ = ACTS[net.act]
+    loss, gW, gb, deltas, g = net.backward(X, y)
+    h, z = net.forward(X)
+    L = len(net.W); blocks = range(1, L - 1); r_out = rms(deltas[-1])
+    return dict(
+        Tstar=_lr(rms(deltas[1] / net.alpha), r_out),
+        ln_out=_lr(rms(g[L - 2]), r_out), ln_transport=_lr(rms(g[1]), rms(g[L - 2])),
+        ln_gate=_lr(rms(deltas[1] / net.alpha), rms(g[1])),
+        stream_grad=[_lr(rms(g[i]), r_out) for i in blocks],
+        gate=[_lr(rms(deltas[i] / net.alpha), rms(g[i])) for i in blocks],
+        stream_norm=[float(rms(h[i + 1])) for i in blocks],
+        branch_ratio=[float("nan") for i in blocks],
+        density=[float(np.mean(z[i] > 0)) if net.act == "relu" else float("nan") for i in blocks],
+        dead=[float(np.mean(np.all(z[i] <= 0, axis=0))) for i in blocks] if net.act == "relu" else None,
+        Wout=float(np.linalg.norm(net.W[-1])),
+    ), deltas
