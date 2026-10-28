@@ -54,3 +54,24 @@ def diagnose(net, X, y):
         density=dens, dead=dead,
         Wout=float(np.linalg.norm(net.W[-1])),
     ), deltas
+
+
+def diagnose2(net, X, y):
+    """The same split for two-matrix blocks (lapse.nets2.MLP2). The block delta is alpha * (g_l V_l) * f'(z_l),
+    so the gate part here also includes the block's second matrix V_1."""
+    f, _ = ACTS[net.act]
+    loss, gW, gb, deltas, gV, g = net.backward(X, y, return_stream=True)
+    h, z = net.forward(X)
+    L = len(net.W); blocks = range(1, L - 1); r_out = rms(deltas[-1])
+    return dict(
+        Tstar=_lr(rms(deltas[1] / net.alpha), r_out),
+        ln_out=_lr(rms(g[L - 2]), r_out), ln_transport=_lr(rms(g[1]), rms(g[L - 2])),
+        ln_gate=_lr(rms(deltas[1] / net.alpha), rms(g[1])),
+        stream_grad=[_lr(rms(g[i]), r_out) for i in blocks],
+        gate=[_lr(rms(deltas[i] / net.alpha), rms(g[i])) for i in blocks],
+        stream_norm=[float(rms(h[i + 1])) for i in blocks],
+        branch_ratio=[float(rms(h[i + 1] - h[i]) / rms(h[i])) if rms(h[i]) > 0 else float("nan") for i in blocks],
+        density=[float(np.mean(z[i] > 0)) if net.act == "relu" else float("nan") for i in blocks],
+        dead=[float(np.mean(np.all(z[i] <= 0, axis=0))) for i in blocks] if net.act == "relu" else None,
+        Wout=float(np.linalg.norm(net.W[-1])),
+    ), deltas
