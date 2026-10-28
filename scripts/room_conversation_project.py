@@ -37,11 +37,18 @@ def response_project(latest: Mapping | None, entity: str) -> bool:
     text = str(latest.get("text") or "").strip()
     if not text or speaker == _lower(entity):
         return False
-    if speaker == "allen":
-        return True
-    if speaker not in AUTONOMOUS:
+    if speaker not in (*AUTONOMOUS, "allen"):
         return False
-    if is_directed(dict(latest), entity):
+    # A vocative establishes *whose* response is relevant. The other
+    # characters may still offer their own initiatives, but the fact that
+    # a directed question ends with "?" does not make it their question.
+    audible = tuple(
+        person for person in AUTONOMOUS
+        if person != speaker and is_directed(dict(latest), person)
+    )
+    if audible:
+        return _lower(entity) in audible
+    if speaker == "allen":
         return True
     if text.endswith("?"):
         return True  # An unaddressed question opens a group response opportunity.
