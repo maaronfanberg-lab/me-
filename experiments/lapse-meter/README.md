@@ -19,7 +19,7 @@ so N is the rate at which that layer's clock runs. A layer with N → 0 sits beh
 learning, whatever the optimiser is doing. A steady exponential profile N ∝ e^{κℓ} gives the depth spacetime
 constant curvature R = −2κ².
 
-This repository is a small library (numpy only), a verified test suite, six experiments that test claims about
+This repository is a small library (numpy only), a verified test suite, seven experiments that test claims about
 this geometry, a sonification, and a [corrections ledger](CORRECTIONS.md) of every claim that turned out wrong.
 
 ## Definitions
@@ -202,9 +202,39 @@ training data, roughly linearly in log loss. At equal progress, fewer output cla
 memorising wrong labels steepens it by about one unit beyond what the loss alone predicts. The circle label-noise
 effect from experiment 4 was a fit effect. Why fewer classes, and memorised noise, steepen the tilt is still open.
 
-This also qualifies experiment 1. Its depth-independent values were read at 4,000 steps, when networks of
-different depths had reached different losses, so "the tilt is constant across depth" holds at a fixed number of
-steps; comparing depths at matched loss has not been done.
+This raised a question about experiment 1, whose depth-independent values were read after 4,000 steps, when
+networks of different depths had reached different losses. Experiment 7 answers it.
+
+### 7. Depth at matched training loss: nearly independent, with a small upward lean
+
+Experiment 7 compares depths at the same training loss rather than after the same number of steps. Predictions,
+the run script and the analysis script were pushed to GitHub before any run
+([`experiments/E7_PREREGISTRATION.md`](experiments/E7_PREREGISTRATION.md)). Residual networks at 6, 12, 24, 48
+and 96 layers, tanh and ReLU, on digits and the clean circle; 60 runs; tables in
+[`results/e7_analysis.md`](results/e7_analysis.md).
+
+![tilt against training loss at five depths](figures/e7_depth_at_matched_loss.png)
+
+**Tanh, the pre-registered test: holds on both tasks.** No pair of depths from 12 to 96 differs by more than
+twice the combined seed spread at any loss level. At training loss 0.01:
+
+| residual tanh, loss 0.01 | 12 layers | 24 | 48 | 96 |
+|---|---|---|---|---|
+| digits | +1.07 | +1.11 | +1.13 | +1.17 |
+| circle (clean) | +2.31 | +2.45 | +2.49 | +2.52 |
+
+The secondary measure, also fixed in advance, shows what the pass rule hides: the slope of the tilt against
+depth is positive at all four loss levels on both tasks, about +0.03 per doubling of depth on digits and +0.07
+on the circle. From 12 to 96 layers that adds up to roughly +0.1 and +0.2. One circle gap came within 0.01 of
+its threshold. So the depth-independence from experiment 1 survives at matched loss, as an approximation with
+a small, consistent upward lean, and 6-layer networks sit clearly lower.
+
+**ReLU, exploratory: 96 layers is different.** From 12 to 48 layers residual ReLU behaves much like tanh. At 96
+layers it does not, in two different ways. On the circle its tilt sits steadily far below the shallower
+networks (about −1.4 against +1.4 at loss 0.03). On digits its tilt is erratic: it changes by about 0.13 every
+50 steps, against 0.004–0.017 for every other network, while the training loss itself falls smoothly. The ReLU
+drift seen in experiment 1 is therefore not an artifact of comparing at different losses. Why the deepest ReLU
+networks behave this way is open.
 
 ## Honest limits
 
@@ -249,7 +279,8 @@ tests/            test_lapse.py (24 checks), test_sound.py (8 checks), test_regr
                   recomputed from the raw results)
 experiments/      run.py (one training run), tiny_lm.py, sonify.py, analyze.py,
                   e4.py + E4_PREREGISTRATION.md + e4_analyze.py, e5_alignment.py,
-                  e6.py + E6_PREREGISTRATION.md + e6_analyze.py
+                  e6.py + E6_PREREGISTRATION.md + e6_analyze.py,
+                  e7.py + E7_PREREGISTRATION.md + e7_analyze.py
 results/          raw JSON for every run, and analysis.md (all tables)
 figures/          plots made by analyze.py
 audio/            the three sound pieces, with the lapse data each one was rendered from

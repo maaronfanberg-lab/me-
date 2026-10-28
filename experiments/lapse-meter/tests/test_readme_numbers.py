@@ -73,5 +73,13 @@ order = [np.mean([at_loss(r["log"], 0.01) for r in runs if r["condition"] == c])
          for c in ("digits-2class", "digits-3class", "digits-5class", "digits")]
 claim("E6 class ordering at loss 0.01", ", ".join(f"{v:+.2f}" for v in order) + " at 0.01")
 
+# Experiment 7: residual tanh tilt at loss 0.01, depths 12-96
+r7 = [json.load(open(f)) for f in glob.glob(os.path.join(R, "e7", "*.json"))]
+for task, label in (("digits", "digits"), ("circle-clean", "circle (clean)")):
+    vals = []
+    for dep in (12, 24, 48, 96):
+        v = [at_loss(r["log"], 0.01) for r in r7 if r["task"] == task and r["act"] == "tanh" and r["depth"] == dep]
+        vals.append(np.mean([x for x in v if x is not None]))
+    claim(f"E7 {task} tanh at loss 0.01", f"| {label} | " + " | ".join(f"{x:+.2f}" for x in vals) + " |")
 print(f"{sum(RESULTS)}/{len(RESULTS)} README numbers match the raw results")
 sys.exit(0 if all(RESULTS) else 1)

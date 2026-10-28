@@ -68,3 +68,12 @@ Library checks and sonification checks pass after the change.
 **Limits.** One architecture (residual tanh, 24 layers), three seeds, two base tasks; matched-loss comparisons for
 the noisy circle tasks exist only at high loss, where seed spread is large.
 
+## Addendum, 2026-10-27: experiment 7
+
+**Observed problem.** Experiment 1 compared depths after equal steps; experiment 6 showed the tilt depends on
+training progress. **Baseline and criteria** were pushed before any run (`experiments/E7_PREREGISTRATION.md`,
+`e7.py`, `e7_analyze.py`, commit 528036a). **Post-change result.** The tanh prediction held on both tasks; a
+pre-registered secondary measure found a small consistent positive depth slope. ReLU at 96 layers behaved
+differently (reported as exploratory). A description of the ReLU runs given in conversation was wrong and was
+corrected before the write-up (CORRECTIONS 18). All test suites pass after the change.
+
