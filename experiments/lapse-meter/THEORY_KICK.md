@@ -63,3 +63,27 @@ The cutoffs measured in experiment 22 were 124 (circle) and 328 (digits), with a
 - It treats |m_l| as constant across layers, although the pile-up grows with depth.
 - It assumes the step-0 readout update is dominated by its shared part. That holds for the measured shares of
   73–87%, but not exactly.
+
+## Amendment, 2026-10-28, 14:31, still before any experiment-27, 29 or 30 result: prediction 1 was already refuted
+
+Before pre-registering experiment 32, I checked prediction 1 against data I already had, which I should have done
+before writing it.
+
+**What experiment 14 tested.** Its blocks-only warm-up scaled the blocks' learning rate by c = (t+1)/500 at step t.
+That puts c at 0.002 at step 0, so the critical kick this estimate predicts is around 100,000. The readout was left
+at full rate.
+
+**What happened.** Neither task was rescued. Five of the six runs lost transport (to about 0.0–0.3) within 100–500
+steps, one of those digits runs never trained, and one circle run stayed healthy (`results/e14/*_warmblocks_*`). So slowing the blocks during the first steps does not move
+the threshold, and prediction 1 is wrong (CORRECTIONS 49). Experiment 32, as planned, would only repeat experiment 14;
+it will not be run.
+
+**What the failure points to.** The damage does not have to be done at step 1. The readout's step-0 update gives
+W_out a large component along m, and nothing later removes it. Experiment 25 saw this: the readout's weights end
+with 82–88% of their energy along the shared direction. While that component persists, every example's stream
+gradient keeps a large part along m, whenever the blocks start moving. The kick matters because it *installs* that
+component. Its size relative to the blocks' learning rate is not the point.
+
+**What survives.** The order-of-magnitude coincidence (a predicted crossing near 200, against observed cutoffs of
+124–328) survives only as a coincidence. Prediction 2 (signed + offset healthy) came from the same step-1 picture, so
+it now has no support. Experiment 30 tests it regardless.

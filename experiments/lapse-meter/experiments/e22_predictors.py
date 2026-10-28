@@ -71,6 +71,7 @@ def step1_lr(c, net, k):
     if w and c["warmup_parts"] == "out" and i == L - 1 and k[0] != "V": return lr / w
     if w and c["warmup_parts"] == "blocks" and (1 <= i <= L - 2): return lr / w
     if i == L - 1 and k[0] != "V": return lr * c["out_lr_mult"]
+    if 1 <= i <= L - 2 and k[0] != "V": return lr * c.get("block_lr_mult", 1.0)
     return lr
 
 
