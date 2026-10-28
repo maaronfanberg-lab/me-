@@ -22,11 +22,26 @@ def _utterance_key(value: object) -> str:
     return " ".join(words)
 
 
+
+def _final_question_action(value: object) -> str:
+    """Identity of a final spoken question, excluding earlier statements.
+
+    A speaker may preface a question with background information. Repeating
+    only the final question is still an exact question-action echo, not an
+    answer. This does not compare topical vocabulary or arbitrary n-grams.
+    """
+    spoken = str(value or "").strip()
+    if not spoken.endswith("?"):
+        return ""
+    final = re.split(r"(?<=[.!?])\\s+", spoken)[-1]
+    return _utterance_key(final)
+
+
 def question_sequence(context: list, latest: Mapping | None) -> dict:
     """Identify unresolved question echoes without equating hearing with agreement."""
     if not isinstance(latest, Mapping) or not str(latest.get("text") or "").strip().endswith("?"):
         return {"kind": "not_question_sequence", "echoes": 0}
-    current = _utterance_key(latest.get("text"))
+    current = _final_question_action(latest.get("text"))
     if not current:
         return {"kind": "not_question_sequence", "echoes": 0}
     public = public_participant_turns(list(context or []))
@@ -41,7 +56,7 @@ def question_sequence(context: list, latest: Mapping | None) -> dict:
     prior = []
     for item in reversed(preceding):
         spoken = str(item.get("text") or "").strip()
-        if not spoken.endswith("?") or _utterance_key(spoken) != current:
+        if _final_question_action(spoken) != current:
             break
         prior.append(item)
     prior.reverse()
@@ -76,7 +91,9 @@ def validate_uptake(
     candidate = str(utterance or "").strip()
     if not (text.endswith("?") and candidate.endswith("?")):
         return
-    if _utterance_key(text) != _utterance_key(candidate):
+    if _utterance_key(candidate) not in {
+        _utterance_key(text), _final_question_action(text)
+    }:
         return
     action = str(move or "").strip().lower()
     if action not in {"repair", "clarify"}:
