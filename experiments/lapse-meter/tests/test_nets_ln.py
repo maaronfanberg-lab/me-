@@ -14,9 +14,10 @@ for j in range(7):
     xp = x.copy(); xp[2, j] += e; xm = x.copy(); xm[2, j] -= e
     fd = (np.sum(ln_fwd(xp)[0] * dy) - np.sum(ln_fwd(xm)[0] * dy)) / (2 * e); worst = max(worst, abs(fd - dx[2, j]))
 check("LayerNorm backward matches finite differences", worst < 1e-7, f"max abs err {worst:.1e}")
-for ln in ("none", "final", "pre", "pre_final", "post"):
+for ln in ("none", "final", "pre", "pre_final", "post", "center", "center_random"):
     for act, signed in (("tanh", False), ("relu", True)):   # tanh: no kinks, so finite differences are exact; relu signed too
         net = MLPLN(6, 8, 5, 3, act=act, ln=ln, seed=2, branch_sign=signed)
+        if ln.startswith("center"): net.set_center(X)
         _, gW, gb, _, _ = net.backward(X, y); worst = 0.0
         for i in range(len(net.W)):
             for _ in range(3):
@@ -34,4 +35,8 @@ check('ln="none" equals lapse.nets.MLP (weights, loss, every delta)', all(np.arr
       and all(np.allclose(u, v, rtol=0, atol=1e-14) for u, v in zip(ra[3], rb[3])))
 a = MLPLN(6, 8, 5, 3, act="relu", ln="none", seed=4, branch_sign=True); b = MLP(6, 8, 5, 3, act="relu", residual=True, seed=4, branch_sign=True)
 check("branch signs equal lapse.nets.MLP's", all(np.array_equal(u, v) for u, v in zip(a.S[1:-1], b.S[1:-1])))
+c1 = MLPLN(6, 8, 5, 3, act="relu", ln="center", seed=4); c1.set_center(X)
+check("center: the readout input averages to zero over X at initialisation", np.max(np.abs(c1.readout_input(X).mean(0))) < 1e-12)
+c2 = MLPLN(6, 8, 5, 3, act="relu", ln="center_random", seed=4); c2.set_center(X)
+check("center_random: offset has m0's norm", abs(np.linalg.norm(c2.center) - np.linalg.norm(c1.center)) < 1e-9)
 print(f"{sum(R)}/{len(R)} LayerNorm-network checks passed")

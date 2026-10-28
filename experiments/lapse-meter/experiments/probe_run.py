@@ -36,6 +36,7 @@ def run(cfg, path=None):
         assert c["opt"] == "sgd" and not c["zloss"]
         net = MLPLN(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"],
                     seed=c["seed"], ln=c["ln"], branch_sign=c["branch_sign"])
+        if c["ln"].startswith("center"): net.set_center(X, seed=c["seed"])
     elif c["block"] == "two":
         assert not c["branch_sign"] and c["opt"] == "sgd", "two-matrix blocks: SGD, no branch signs"
         net = MLP2(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"])

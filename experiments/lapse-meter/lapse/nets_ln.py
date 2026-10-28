@@ -6,6 +6,8 @@ Blocks are the one-matrix kind used in experiments 8-24, f = act (optionally wit
   ln = "pre"        h_l = h_{l-1} + a f(W_l LN(h_{l-1}) + b_l);            logits = W_out h_L + b_out
   ln = "pre_final"  "pre" blocks and a final LN before the readout (the usual Pre-LN transformer arrangement)
   ln = "post"       h_l = LN(h_{l-1} + a f(W_l h_{l-1} + b_l));            logits = W_out h_L + b_out (Post-LN)
+  ln = "center"     as "none", but logits = W_out (h_L - m0) + b_out, m0 a fixed vector (set_center; experiment 29)
+  ln = "center_random"  the same with a random fixed vector of m0's norm (the control)
 LN(x) = (x - mean(x)) / sqrt(var(x) + 1e-5) per example, without a learned gain or bias (a simplification: real
 transformers learn both). The input layer h_0 = act(W_0 x + b_0) is shared by all variants, a = 1/sqrt(depth).
 backward returns (loss, gW, gb, deltas, g) with deltas[i] = dL/dz_i and g[i] = dL/dh_i (the stream after block i,
@@ -32,7 +34,8 @@ class MLPLN:
     residual = True
 
     def __init__(self, din, width, depth, dout, act="relu", sigma_w=1.0, alpha=None, seed=0, ln="final", branch_sign=False):
-        assert ln in ("none", "final", "pre", "pre_final", "post")
+        assert ln in ("none", "final", "pre", "pre_final", "post", "center", "center_random")
+        self.center = None  # experiment 29: a fixed vector subtracted from the readout's input (see set_center)
         self.act, self.ln = act, ln
         self.alpha = 1.0 / np.sqrt(depth) if alpha is None else alpha
         rng = np.random.default_rng(seed)
@@ -65,6 +68,8 @@ class MLPLN:
         top = h[-1]
         if self.ln in ("final", "pre_final"):
             top, self._c["final"] = ln_fwd(top)
+        elif self.ln in ("center", "center_random"):
+            top = top - self.center
         self._top = top
         zo = top @ self.W[-1].T + self.b[-1]; z.append(zo)
         return h, z
@@ -98,6 +103,17 @@ class MLPLN:
         g[0] = gh
         d0 = gh * df(z[0]); deltas[0] = d0; gW[0] = d0.T @ X; gb[0] = d0.sum(0)
         return loss, gW, gb, deltas, g
+
+    def set_center(self, X, seed=0):
+        """Experiment 29. "center": subtract m0, the mean of the last stream over X at the current weights, held fixed.
+        "center_random": subtract a random vector with the same norm as m0 (the control). The readout's gradient into the
+        stream is unchanged by a constant offset; only what the readout sees, and so its own update, changes."""
+        saved = self.ln; self.ln = "none"; self.forward(X); m0 = self._top.mean(0); self.ln = saved
+        if self.ln == "center":
+            self.center = m0
+        else:
+            r = np.random.default_rng(seed + 4_242_424).standard_normal(m0.shape)
+            self.center = r / np.linalg.norm(r) * np.linalg.norm(m0)
 
     def readout_input(self, X):
         self.forward(X); return self._top

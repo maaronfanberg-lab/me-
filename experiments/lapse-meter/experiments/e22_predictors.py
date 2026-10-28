@@ -34,6 +34,7 @@ def build(cfg):
     if c["block"] == "ln":
         net = MLPLN(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"],
                     ln=c["ln"], branch_sign=c["branch_sign"])
+        if c["ln"].startswith("center"): net.set_center(X, seed=c["seed"])
     elif c["block"] == "two":
         net = MLP2(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], alpha=c["alpha"], seed=c["seed"])
     else:
@@ -130,6 +131,8 @@ def predictors(cfg):
         n_ = sum(get(net, k).size for k in keys)
         op = LinearOperator((n_, n_), matvec=lambda v: hvp(keys, np.asarray(v).ravel()), dtype=np.float64)
         v0 = np.random.default_rng(0).standard_normal(n_)
+        if not np.any(hvp(keys, v0)):  # Hessian exactly zero along v0 (softmax saturated to exact one-hot in floating
+            return 0.0                 # point); ARPACK cannot start from a zero image. Found in experiment 25.
         return float(eigsh(op, k=1, which="LA", v0=v0, tol=1e-6, maxiter=2000)[0][0])
     sharp = top_eig(P)
     sharp_out = top_eig([("W", L - 1), ("b", L - 1)])
