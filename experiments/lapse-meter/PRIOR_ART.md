@@ -20,6 +20,9 @@ papers' own text (arXiv or proceedings versions).
 | Kosson 2024 | Kosson et al., *Analyzing & Reducing the Need for Learning Rate Warmup in GPT Training*, NeurIPS 2024, arXiv:2410.23922 | Warm-up keeps the effective update size reasonable. "When the gradients of different samples are highly correlated these internal representations change too fast." For Adam, much of the early excess comes from the β₁ bias correction. |
 | Goyal 2017 | Goyal et al., *Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour*, arXiv:1706.02677 | Introduced the now-standard gradual warm-up, "a new warmup scheme that overcomes optimization challenges early in training". |
 | Cohen 2021 | Cohen et al., *Gradient Descent on Neural Networks Typically Occurs at the Edge of Stability*, ICLR 2021, arXiv:2103.00065 | Under **full-batch** gradient descent, "the maximum eigenvalue of the training loss Hessian hovers just above" 2/(step size). The runs here use minibatches of 64, so this applies only loosely. |
+| Lewkowycz 2020 | Lewkowycz et al., *The large learning rate phase of deep learning: the catapult mechanism*, arXiv:2003.02218 | Three phases by learning rate: lazy (η < 2/λ₀), catapult (2/λ₀ < η < about 12/λ₀ for ReLU) and divergent. In the catapult phase "the curvature at initialization is too high for training to converge to a nearby point". The loss grows while curvature drops "rapidly", typically "within the first 100 steps or so", and training then converges somewhere flatter. Tested here as mechanism M1 (experiment 25). |
+| Liu 2020 | Liu et al., *Understanding the Difficulty of Training Transformers*, EMNLP 2020, arXiv:2004.08249 | Post-LN instability is not caused by vanishing gradients but by an "amplification effect": "heavy dependency on its residual branch makes training unstable, since it amplifies small parameter perturbations". |
+| Wortsman 2023 | Wortsman et al., *Small-scale proxies for large-scale Transformer training instabilities*, ICLR 2024, arXiv:2309.14322 | Two logit instabilities: attention logit growth (fixed by qk-layernorm) and output logit divergence, where logits "diverge and become very negative" late in training, fixed by z-loss (coefficient 1e-4). Longer warm-up reduces learning-rate sensitivity. z-loss is tested here as a candidate fix (experiment 24). |
 | Yang 2022 (μP) | Yang et al., *Tensor Programs V: Tuning Large Neural Networks via Zero-Shot Hyperparameter Transfer*, arXiv:2203.03466 | In standard parametrization the output "will blow up with width after 1 step of SGD". μP gives the readout initial variance 1/n² and, for SGD, a learning rate scaled by 1/n. |
 
 ## Claim by claim
@@ -49,3 +52,15 @@ together, because mean shift raises all three:
 
 Experiment 22 measures all three at initialization for every condition run so far. Experiment 23 tests new
 conditions chosen so the three predict different outcomes.
+
+## Added 2026-10-28, after experiment 23
+
+Three more papers bear on what comes next:
+
+- **The catapult** (Lewkowycz 2020) may be what the collapse *is*: a network above its stable learning rate
+  reducing its curvature by shutting down backward transport. Experiment 25 measures sharpness step by step to see.
+- **Normalization placement** (Xiong 2020, Liu 2020) is the design choice real networks use against these early
+  instabilities. Experiment 26 tests whether it works here through the readout kick, as predicted, rather than by
+  removing the pile-up.
+- **z-loss** (Wortsman 2023) is the standard logit control in large language models. Experiment 24 tests whether
+  it prevents this collapse; the kick account predicts it does not.
