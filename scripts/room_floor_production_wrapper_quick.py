@@ -60,7 +60,7 @@ def main():
             chain.append({"id":f"{mode}-{step}","speaker":speaker,"text":out["text"]})
         traces[mode]={"turns":chain,"diagnostics":analyze(chain)}
         print("CHAIN",mode,len(chain),flush=True)
-    result={"purpose":"v2 source-action retry A/B using production wrapper, never deployed",
+    result={"purpose":"v2 verified whole-turn action retry A/B using production wrapper, never deployed",
             "model":"llama3.2-1b production wrapper",
             "source_cycle":(feed.get("state") or {}).get("cycle"),
             "pairs":pairs,"chains":traces,
