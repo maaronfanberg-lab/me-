@@ -1,0 +1,67 @@
+Traceback (most recent call last):
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e25_trace.py", line 81, in <module>
+    main(json.loads(sys.argv[1]), sys.argv[2])
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e25_trace.py", line 63, in main
+    e["eta_sharp"] = sharp_now(net, dict(cfg, warmup=0, lr=lr_now), Xp, yp)
+                     ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e25_trace.py", line 30, in sharp_now
+    return P22.predictors(c)["sharp"]
+           ~~~~~~~~~~~~~~^^^
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e22_predictors.py", line 135, in predictors
+    sharp_out = top_eig([("W", L - 1), ("b", L - 1)])
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e22_predictors.py", line 133, in top_eig
+    return float(eigsh(op, k=1, which="LA", v0=v0, tol=1e-6, maxiter=2000)[0][0])
+                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/scipy/sparse/linalg/_eigen/arpack/arpack.py", line 1787, in eigsh
+    params.iterate()
+    ~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/scipy/sparse/linalg/_eigen/arpack/arpack.py", line 646, in iterate
+    raise ArpackError(self.arpack_dict['info'],
+                      infodict=self.iterate_infodict)
+scipy.sparse.linalg._eigen.arpack.arpack.ArpackError: ARPACK error -9: Starting vector is zero.
+Traceback (most recent call last):
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e25_trace.py", line 81, in <module>
+    main(json.loads(sys.argv[1]), sys.argv[2])
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e25_trace.py", line 63, in main
+    e["eta_sharp"] = sharp_now(net, dict(cfg, warmup=0, lr=lr_now), Xp, yp)
+                     ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e25_trace.py", line 30, in sharp_now
+    return P22.predictors(c)["sharp"]
+           ~~~~~~~~~~~~~~^^^
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e22_predictors.py", line 135, in predictors
+    sharp_out = top_eig([("W", L - 1), ("b", L - 1)])
+  File "/home/claude/me-/experiments/lapse-meter/experiments/e22_predictors.py", line 133, in top_eig
+    return float(eigsh(op, k=1, which="LA", v0=v0, tol=1e-6, maxiter=2000)[0][0])
+                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/scipy/sparse/linalg/_eigen/arpack/arpack.py", line 1787, in eigsh
+    params.iterate()
+    ~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/scipy/sparse/linalg/_eigen/arpack/arpack.py", line 646, in iterate
+    raise ArpackError(self.arpack_dict['info'],
+                      infodict=self.iterate_infodict)
+scipy.sparse.linalg._eigen.arpack.arpack.ArpackError: ARPACK error -9: Starting vector is zero.
+results/e25/digits_plain_s1.json: loss 54.58->0.583 transport +2.27->+0.30 share_W 0.020->0.702 share_g 0.053->0.148 flips 0.36
+results/e25/digits_cap10_s0.json: loss 57.77->0.154 transport +2.30->+0.59 share_W 0.019->0.004 share_g 0.046->0.000 flips 0.26
+results/e25/digits_cap10_s1.json: loss 54.58->0.161 transport +2.27->+0.58 share_W 0.020->0.001 share_g 0.053->0.001 flips 0.25
+results/e25/digits_cap10_s2.json: loss 41.38->0.197 transport +2.19->+0.50 share_W 0.023->0.000 share_g 0.035->0.001 flips 0.26
+results/e25/digits_warm50_s0.json: loss 57.77->0.167 transport +2.30->+0.61 share_W 0.019->0.003 share_g 0.046->0.000 flips 0.24
+results/e25/digits_warm50_s1.json: loss 54.58->0.183 transport +2.27->+0.58 share_W 0.020->0.001 share_g 0.053->0.001 flips 0.23
+results/e25/digits_warm50_s2.json: loss 41.38->0.407 transport +2.19->+0.55 share_W 0.023->0.002 share_g 0.035->0.003 flips 0.25
+results/e25/digits_signed_s0.json: loss 2.67->0.119 transport +0.22->+0.55 share_W 0.013->0.007 share_g 0.011->0.003 flips 0.18
+results/e25/digits_signed_s1.json: loss 2.73->0.121 transport +0.24->+0.56 share_W 0.018->0.003 share_g 0.022->0.002 flips 0.18
+results/e25/digits_signed_s2.json: loss 2.60->0.128 transport +0.24->+0.55 share_W 0.015->0.008 share_g 0.013->0.010 flips 0.18
+results/e25/circle-clean_plain_s0.json: loss 0.95->0.053 transport +0.60->+0.08 share_W 0.004->0.889 share_g 0.001->0.954 flips 0.39
+results/e25/circle-clean_plain_s1.json: loss 0.99->0.052 transport +0.20->+0.19 share_W 0.006->0.510 share_g 0.000->0.679 flips 0.30
+results/e25/circle-clean_plain_s2.json: loss 19.70->0.053 transport +2.51->+0.04 share_W 0.031->0.883 share_g 0.080->0.959 flips 0.39
+results/e25/circle-clean_cap10_s0.json: loss 0.95->0.065 transport +0.60->+1.13 share_W 0.004->0.022 share_g 0.001->0.035 flips 0.26
+results/e25/circle-clean_cap10_s1.json: loss 0.99->0.053 transport +0.20->+1.17 share_W 0.006->0.013 share_g 0.000->0.020 flips 0.23
+results/e25/circle-clean_cap10_s2.json: loss 19.70->0.078 transport +2.51->+1.20 share_W 0.031->0.027 share_g 0.080->0.050 flips 0.25
+results/e25/circle-clean_warm50_s0.json: loss 0.95->0.070 transport +0.60->+1.10 share_W 0.004->0.025 share_g 0.001->0.041 flips 0.25
+results/e25/circle-clean_warm50_s1.json: loss 0.99->0.065 transport +0.20->+1.06 share_W 0.006->0.017 share_g 0.000->0.019 flips 0.20
+results/e25/circle-clean_warm50_s2.json: loss 19.70->0.079 transport +2.51->+1.26 share_W 0.031->0.025 share_g 0.080->0.056 flips 0.24
+results/e25/circle-clean_signed_s0.json: loss 0.66->0.073 transport +0.09->+0.93 share_W 0.010->0.098 share_g 0.020->0.122 flips 0.19
+results/e25/circle-clean_signed_s1.json: loss 0.79->0.062 transport +0.26->+0.97 share_W 0.032->0.058 share_g 0.010->0.061 flips 0.17
+results/e25/circle-clean_signed_s2.json: loss 0.88->0.071 transport +0.19->+0.99 share_W 0.022->0.098 share_g 0.058->0.134 flips 0.19
+ALLDONE
