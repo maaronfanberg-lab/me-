@@ -146,3 +146,19 @@ is far above the stability limit of 2: about 2,700 at initialization on digits. 
 but those are tanh networks at 24 layers. No plain-ReLU 96-layer runs exist at other learning rates. E-i and E-ii
 are tested unchanged, on new runs (`experiments/escape_check.py`, committed before it ran): plain ReLU, 96 layers,
 seed 0, lr 0.02, 0.05 and 0.1, both tasks, 500 steps.
+
+## Result of the escape checks (`results/escape_check.md`): account E refuted as stated
+
+- **E-i fails on both tasks.** Going from lr 0.02 to lr 0.1 shrinks the last stream 1.56× on digits and 21× on the
+  circle, not the predicted 1.7–2.9×.
+- **E-ii fails on both tasks.** After the shock, the readout's preconditioned sharpness is 0.31 (digits) and about 0
+  (circle) at lr 0.05: well below the edge of stability, not near 2.
+- **The premise was also wrong.** At initialization on digits the readout's curvature is essentially zero (η·λ ≈ 1e-9,
+  from the exact Hessian). The initial logits are so large that every example's softmax is saturated, and a
+  saturated softmax is flat. The readout is not "too sharp to converge"; it takes fixed-size linear steps across a
+  flat, saturated region. A stability-threshold story of the Gilmer 2022 kind does not apply at initialization here.
+  That fits sharpness being the weaker predictor in experiment 22 (AUC 0.91 and 0.85, against the kick's 0.99 and
+  0.94).
+
+What remains, as observation only: the stream shrinks right after the shock, and how much depends on the task and
+the learning rate in ways no account here has predicted. Signed + offset's divergence is not explained by E.
