@@ -203,6 +203,30 @@ class FloorTests(unittest.TestCase):
         self.assertNotIn("invented_intent", selected)
         self.assertNotIn("topic_reset", selected)
 
+    def test_unclaimed_floor_does_not_crown_static_most_extraverted_voice(self):
+        # In live single-pass mode there are NO separate deliberated bids.
+        # Strong fixed personality numbers are not observable floor bids;
+        # they must not select the same speaker in every neutral exchange.
+        cfg = config()
+        cfg["p"]["jules"]["traits"] = {
+            "curiosity": 1.0, "extraversion": 1.0, "inhibition": 0.0}
+        for name in ("sarah", "owen", "mara"):
+            cfg["p"][name]["traits"] = {
+                "curiosity": .15, "extraversion": .15, "inhibition": .9}
+        picks = [
+            choose_next([msg("mara", "The light changed in the forest.",
+                             id=f"open-floor-neutral-{i}")],
+                        bus(), cfg, {})["speaker"]
+            for i in range(96)
+        ]
+        self.assertGreaterEqual(len(set(picks)), 3, picks[:12])
+        # These are source-grounded independent opportunities, not quotas.
+        sample = choose_next([msg("mara", "The light changed in the forest.",
+                                  id="repeat-stable")], bus(), cfg, {})
+        self.assertEqual(sample, choose_next(
+            [msg("mara", "The light changed in the forest.",
+                 id="repeat-stable")], bus(), cfg, {}))
+
     def test_monolithic_autonomy_explicitly_skips_thought_generation(self):
         import room_private_model_autonomy as one_pass
         self.assertIsNone(one_pass.run("thought", {"entity": "mara"}))
