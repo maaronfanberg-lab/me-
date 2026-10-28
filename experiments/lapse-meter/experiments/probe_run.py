@@ -1,0 +1,52 @@
+"""One configurable residual-network run with full diagnostics (lapse/probe.py), for experiments 8 onward.
+With default settings it trains exactly the experiment-7 network (tests/test_probe_run.py checks the T* log is
+bit-identical to results/e7). Usage: python experiments/probe_run.py '<json config>' out.json
+Config keys (defaults in DEFAULTS): task, act, depth, seed, width, lr, steps, alpha, sigma_w, opt, freeze.
+freeze: list of parts held at their initial values: "out" (output layer), "blocks" (all residual blocks).
+"""
+import sys, os, json
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.dirname(__file__))
+import numpy as np
+from lapse.nets import MLP, SGD, Adam
+from lapse.probe import diagnose
+import e4
+
+DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500)
+
+
+def run(cfg, path=None):
+    c = {**DEFAULTS, **cfg}
+    if path: os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    X, y, Xt, yt = e4.make(c["task"], c["seed"])
+    ncls = int(max(y.max(), yt.max()) + 1)
+    net = MLP(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], residual=True,
+              alpha=c["alpha"], seed=c["seed"])
+    opt = SGD(c["lr"]) if c["opt"] == "sgd" else Adam(c["lr"])
+    rng = np.random.default_rng(10_000 + c["seed"])
+    L = len(net.W); frozen = set()
+    if "out" in c["freeze"]: frozen.add(L - 1)
+    if "blocks" in c["freeze"]: frozen.update(range(1, L - 1))
+    log = []
+    for s in range(c["steps"] + 1):
+        if s % c["log_every"] == 0:
+            dg, _ = diagnose(net, X[:256], y[:256])
+            e = dict(step=s, train_loss=net.loss(X, y), **{k: dg[k] for k in ("Tstar", "ln_out", "ln_transport", "ln_gate", "Wout")})
+            if s % c["layers_every"] == 0 or s == c["steps"]:
+                e.update({k: dg[k] for k in ("stream_grad", "gate", "stream_norm", "branch_ratio", "density", "dead")})
+            log.append(e)
+        if s == c["steps"]: break
+        idx = rng.integers(0, len(X), 64)
+        _, gW, gb, _ = net.backward(X[idx], y[idx])
+        if not all(np.all(np.isfinite(w)) for w in gW): break
+        for i in frozen: gW[i] = np.zeros_like(gW[i]); gb[i] = np.zeros_like(gb[i])
+        opt.step(net, gW, gb)
+    res = dict(config=c, test_acc=net.accuracy(Xt, yt), log=log)
+    if path: json.dump(res, open(path, "w"))
+    return res
+
+
+if __name__ == "__main__":
+    cfg = json.loads(sys.argv[1]); r = run(cfg, sys.argv[2]); z = r["log"][-1]
+    print(f"{sys.argv[2]}: T* {r['log'][0]['Tstar']:+.2f} -> {z['Tstar']:+.2f} (out {z['ln_out']:+.2f} transport {z['ln_transport']:+.2f} gate {z['ln_gate']:+.2f}) loss {z['train_loss']:.4f}", flush=True)
