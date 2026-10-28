@@ -40,6 +40,18 @@ Conversation-analysis research documents turn-taking, conditional relevance of r
 9. Implementation mapping: optional source projection in `room_conversation_project.py`, source identity in `room_private_model_autonomy_legacy.py`, explicit tests for contextual continuity and autonomy.
 10. Validation: baseline freeze, deterministic tests, model-run comparative trial, live 30–50 consecutive turns post-deploy with manual judgments; roll back if quality worsens.
 
+
+## Implementation / review audit at branch revision
+
+- Verified Claude consultation: `bridge/outbox/claude-consult-20261028-context-loss-34681-02.json` has `ok: true` and `verified_model_family: claude`; identity `claude-consult-20261028-context-loss-34681-02`. The first full repository-review request exceeded Claude's four-turn limit and supplied **no** verified guidance. The successful independent Claude reviewer was **context-only**, not a direct source audit. It supported the narrow optional-anchor hypothesis and explicitly advised against treating it as the only cause.
+- Source-level fix on this branch only: retain the *latest exact witnessed autonomous public statement* for optional uptake **only** when the current floor selection has matching reason `open_floor_uptake`, speaker, and source ID, and the source is neither self-speech nor directed to another character. Do not inject old topic terms, group memories, canned lines or word bans.
+- Runner binds `ROOM_FLOOR_REASON`, `ROOM_FLOOR_SOURCE_ID`, `ROOM_FLOOR_SPEAKER` exclusively to the selected expression process. The model payload still allows independent initiative. Existing question/invitation replies and directed addressee protections are preserved.
+- Added exact boundary tests for public anchor retention, speaker/source mismatches, and directed/self/system speech; read-only evidence reporter and observational tests. All tests are source-level/sandbox tests; no 1B-model live or shadow conversational quality benchmark has been completed.
+- A previous branch revision passed **all** dedicated conversational-floor tests in GitHub Actions run `40787772770` including the new contextual tests. A later revision added an evidence reporter and initially failed one fixture (the prior question also had <=3 words); the fixture was corrected in a subsequent commit. Final CI results must be checked separately.
+- Independent architecture smoke workflow `40787772794` failed a **pre-existing, unrelated viewer-history assertion**: `viewer does not load the pre-reset semantic archive`. It is not proof this conversational patch failed nor a pass for the overall repository. Remains an open separate item.
+- Live system has **not** been changed; production has **not** been updated; there is **no verified improvement in sustained conversation**. Draft PR `#336` remains unmerged.
+- The 100 items below are audit probes, not completed blockers. Relevant source checks verified by code and tests include source identity, audible addressed turns, no unauthorized private anchors, and branch-only tests; remaining semantic outcomes require model and human assessment.
+
 ## One hundred blocker probes (all start as unverified until exercised)
 
 ### Evidence and baseline
