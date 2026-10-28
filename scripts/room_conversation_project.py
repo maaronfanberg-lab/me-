@@ -107,7 +107,7 @@ def _optional_open_floor_anchor(latest: Mapping | None, entity: str,
             or not str(latest.get("text") or "").strip()
             or not str(latest.get("id") or "").strip()):
         return False
-    if (_lower(floor.get("reason")) != "open_floor_uptake"
+    if (_lower(floor.get("reason")) not in {"open_floor_uptake", "open_floor_relevance"}
             or _lower(floor.get("speaker")) != _lower(entity)
             or str(floor.get("source_id") or "") != str(latest.get("id"))):
         return False
