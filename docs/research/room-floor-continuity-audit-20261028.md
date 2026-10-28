@@ -193,6 +193,14 @@ Conversation-analysis research documents turn-taking, conditional relevance of r
 - **Gate D**: compare production-brain generated transcripts with baseline before deploy. No unreviewed automatic main merge.
 - **Gate E**: post-deploy verify live active selection and substantive multi-turn response continuity. `diagnostic_only` must not be relabeled as comprehensive semantic enforcement without evidence.
 
+## Production canary acceptance and rollback criteria
+
+The release is *not* successful because code merged or a label changed. The active runner must be restarted on the merged commit, and `room/state.json` must then contain `conversational_floor_health.source_anchor_version=optional_selected_public_v1` with `active=true`. This proves the new runner code loaded, **not** that substantive conversational grounding is effective.
+
+Use exact post-release source IDs and evaluate at least 30 consecutive autonomous public turns, expanding to 80 if possible. A human reviewer must find at least one coherent **five-turn** conversational sequence in which different characters reference and develop the same concrete matter, including a response, a follow-up, and a further contribution. The sequence must not consist of restating an invitation or announcing a new topic. Independently calculate exact repeated-turn runs, short-turn share, participant mix and source relevance, but never use those proxies alone to declare success. Retain authentic short replies and valid repair.
+
+Reject/roll back if there are privacy leaks, source-corruption, repeated unanswered echo loops, an increased rate of disconnected meta-conversation, or no observable improvement over contemporaneous pre-deploy samples. Record honest false negatives: zero enforced topic quotas, no scripted lines, and no blanket repeated-word bans. After promotion, update this document with exact cycles, timestamps, run IDs, samples and limitations.
+
 ## Post-change result
 
 Not run. Branch not deployed. Claude review pending or retry in progress.
