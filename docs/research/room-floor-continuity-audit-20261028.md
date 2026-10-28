@@ -193,6 +193,14 @@ Conversation-analysis research documents turn-taking, conditional relevance of r
 - **Gate D**: compare production-brain generated transcripts with baseline before deploy. No unreviewed automatic main merge.
 - **Gate E**: post-deploy verify live active selection and substantive multi-turn response continuity. `diagnostic_only` must not be relabeled as comprehensive semantic enforcement without evidence.
 
+## Actual 1B model trial, observed regression, corrective hypothesis
+
+On 2026-10-28, GitHub Actions run **40789717923** completed a four-pair, five-step-chain A/B using the actual production Llama 3.2 1B wrapper. Public result: `docs/research/room-floor-quick-model-20261028.json`. The before/after inputs used identical public source utterances and fixed seeds. **Restoring exact source context alone failed**: the retained-context model copied the preceding full statement verbatim in three of four paired examples, versus no full-source copies in the context-withheld baseline. Its five-step continuation also contained two adjacent full-turn echoes, whereas the baseline had zero (both continuations were poor semantically). This falsifies a simple claim that more visible context by itself improves conversation. No positive conversational-quality claim is justified.
+
+Revised research question: can source retention help if a second-position *action* must be distinct from a complete copied prior statement, with the model allowed to reattempt meaningful uptake? The new branch code (1) detects only **whole nonquestion source-action equality of >=12 words** from a different speaker, rather than vocabulary overlap; (2) rejects such an apparent answer at both candidate preflight and final publication; (3) instructs the 1B generator to treat source speech as someone else's claim and to contribute its own action; and (4) retries when a whole-action copy is generated. Legitimate short echoes, initial question repair, quotation followed by independent response, shared concepts, and self-directed topic changes remain allowed.
+
+**Risks:** the tiny model may keep echoing and exhaust bounded retries, causing fewer published beats. Revalidate source-specific evidence, generated utterances, publication success, unrelated behavior, and recovery before promotion. Keep PR draft and production unchanged for this component until a repeat model trial passes. This is an experimental mechanism, not a solved semantic evaluator.
+
 ## Production canary acceptance and rollback criteria
 
 The release is *not* successful because code merged or a label changed. The active runner must be restarted on the merged commit, and `room/state.json` must then contain `conversational_floor_health.source_anchor_version=optional_selected_public_v1` with `active=true`. This proves the new runner code loaded, **not** that substantive conversational grounding is effective.
