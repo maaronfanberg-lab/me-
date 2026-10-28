@@ -115,3 +115,29 @@ with the examples.
 
 If experiment 33's cut does not rescue, B is wrong. The total kick, through the example-specific errors it leaves
 behind, would then be enough (account K).
+
+## Amendment 3, 2026-10-28, 15:12: the collapse as an escape
+
+Written after seeing experiment 30's digits runs (signed + offset diverges in all three, and capping its kick
+rescues it) and experiment 29's follow-up traces. It was written **before looking at the experiment-21 or new data
+used to check it below.**
+
+**The account (E, "escape").** With a piled-up stream, the readout's effective step, η·|h_L|²·(softmax curvature),
+is far above the stability limit of 2: about 2,700 at initialization on digits. The readout cannot converge.
+
+- **Plain ReLU escapes** by shrinking its own stream. Within two steps it closes half its gates and the last stream
+  falls from 234 to about 11 (CORRECTIONS 53). That pushes the readout toward the edge of stability, at the price of
+  the backward signal.
+- **Signed + offset cannot escape.** Its huge readout input is a fixed vector the blocks cannot shrink, so it
+  diverges. Capping the kick keeps the readout's steps small and rescues it.
+- **Read this way, the collapse is not damage the kick does in passing. It is how the network makes its readout
+  stable.**
+
+**Predictions, written before checking:**
+
+- **E-i.** In plain 96-layer ReLU after the shock, the last stream's size scales as η^(−1/2) across learning rates.
+  Experiment 21 has SGD at lr 0.02, 0.05 and 0.1 on both tasks. Read at step 500, the ratio of the stream's RMS
+  between lr 0.02 and lr 0.1 should be √5 ≈ 2.2, accepted within 1.7–2.9 on each task.
+- **E-ii.** After the shock, the readout's preconditioned sharpness, η·λ_max of the loss Hessian over the readout
+  alone, sits near the edge of stability: between 1 and 4 at steps 100–500. At initialization it is far above 2.
+  This is measured on new traces, digits and circle, seed 0, at lr 0.05.
