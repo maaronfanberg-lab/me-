@@ -37,11 +37,17 @@ def response_project(latest: Mapping | None, entity: str) -> bool:
     text = str(latest.get("text") or "").strip()
     if not text or speaker == _lower(entity):
         return False
-    if speaker == "allen":
-        return True
-    if speaker not in AUTONOMOUS:
+    if speaker not in (*AUTONOMOUS, "allen"):
         return False
-    if is_directed(dict(latest), entity):
+    # Only publicly addressed recipients inherit a direct response
+    # opportunity. Other minds can listen without being assigned the answer.
+    addressed = [
+        name for name in AUTONOMOUS
+        if name != speaker and is_directed(dict(latest), name)
+    ]
+    if addressed:
+        return _lower(entity) in addressed
+    if speaker == "allen":
         return True
     if text.endswith("?"):
         return True  # An unaddressed question opens a group response opportunity.
