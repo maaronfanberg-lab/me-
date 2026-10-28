@@ -148,6 +148,25 @@ class UptakeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unchanged_full_turn_echo"):
             validate_candidate(part, "sarah", [source], {"root": "river"})
 
+    def test_generation_boundary_retries_whole_source_action_not_short_echo(self):
+        from room_private_model_autonomy_legacy import _unchanged_source_action
+        long_source = ("I can tell that our conversation needs to address that "
+                       "awkwardness in our past. Let's try to have a grown-up "
+                       "conversation about the elephant in the room.")
+        compact = {"event": {"speaker": "mara", "text": long_source}}
+        self.assertTrue(_unchanged_source_action(long_source, compact))
+        self.assertFalse(_unchanged_source_action(
+            "Mara, what particular awkwardness do you mean?", compact))
+        self.assertFalse(_unchanged_source_action(
+            long_source + " Could you name an example?", compact))
+        self.assertFalse(_unchanged_source_action(
+            "Trees? That oak has the best view.",
+            {"event": {"speaker": "mara",
+                       "text": "Trees? That oak has the best view."}}))
+        self.assertFalse(_unchanged_source_action(
+            long_source, {"event": {"speaker": "mara",
+                                   "text": "What do you mean by this?"}}))
+
     def test_source_identity_survives_mixed_public_conversation(self):
         history = [
             turn("q1", "mara", "Who do you think you are?"),
