@@ -47,6 +47,31 @@ class UptakeTests(unittest.TestCase):
                         utterance="I meant what sort of person you hope to become.",
                         move="repair")
 
+    def test_intervening_response_resets_question_echo_evidence(self):
+        history = [
+            turn("q1", "mara", "Who do you think you are?"),
+            turn("a1", "jules", "I'm Jules. I want to understand you."),
+            turn("q2", "mara", "Who do you think you are?"),
+        ]
+        project = question_sequence(history, history[-1])
+        self.assertEqual(project["kind"], "question_open")
+        self.assertEqual(project["echoes"], 0)
+        self.assertEqual(project["first_source_id"], "q2")
+        # An exact repetition after a real intervening contribution is not
+        # automatically a repeated unresolved repair.
+        validate_uptake(history=history, speaker="sarah",
+                        utterance="Who do you think you are?", move="repair")
+
+    def test_contiguous_question_echo_still_rejected(self):
+        history = [
+            turn("q1", "mara", "Who do you think you are?"),
+            turn("q2", "jules", "Who do you think you are?"),
+        ]
+        self.assertEqual(question_sequence(history, history[-1])["echoes"], 1)
+        with self.assertRaisesRegex(ValueError, "repair_sequence_not_advanced"):
+            validate_uptake(history=history, speaker="sarah",
+                            utterance="Who do you think you are?", move="repair")
+
     def test_no_arbitrary_topic_or_repeated_word_ban(self):
         previous = turn("m-1", "mara", "Trees? That oak has the best view.")
         for reply in (
