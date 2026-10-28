@@ -6,6 +6,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import numpy as np
 from e22_predictors import predictors
 from e8_analyze import at_loss_key, R
+os.makedirs(R, exist_ok=True)  # fail early, not after measuring (CORRECTIONS 16)
 out_path = os.path.join(R, "e22_predictors.json")
 done = json.load(open(out_path)) if os.path.exists(out_path) else {}
 files = sorted(f for e in ("e8", "e9", "e10", "e11", "e12", "e13", "e14", "e15", "e16", "e17", "e19") for f in glob.glob(os.path.join(R, e, "*.json")))
