@@ -175,7 +175,17 @@ def choose_next(history, bus, config, minds, *, rank=0):
     ranked = []
     for entity in awake:
         thought = (((recurrent.get(entity) or {}).get("thought") or {}).get("private") or {}).get("deliberation") or {}
-        score = _score(entity, last, thought, profile.get(entity) or {}, relationships)
+        if public_uptake:
+            # No separate intention was formed in this single-pass beat.
+            # Fixed personality traits or historical affection are NOT an
+            # observable claim to the current conversational floor. Instead
+            # preserve only local, public relevance below and break otherwise
+            # unclaimed opportunities by this immutable source's hash.
+            # A same-speaker continuation remains possible if no one else is
+            # awake, or when an actual deliberated bid is available.
+            score = -.24 if author == entity else 0.0
+        else:
+            score = _score(entity, last, thought, profile.get(entity) or {}, relationships)
         if public_uptake and last:
             # A mentioned interlocutor or the originator of an earlier
             # unanswered/answered question has genuine local relevance.
