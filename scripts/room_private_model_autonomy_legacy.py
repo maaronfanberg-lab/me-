@@ -402,11 +402,12 @@ def _unchanged_source_action(utterance: str, compact: dict) -> bool:
     if not isinstance(event, dict):
         return False
     source = str(event.get("text") or "").strip()
-    if not source or source.endswith("?"):
-        return False  # the existing question/repair sequence owns this case
+    if not source:
+        return False
     before = re.findall(r"[A-Za-z0-9']+", source.casefold())
     after = re.findall(r"[A-Za-z0-9']+", str(utterance or "").casefold())
-    return len(before) >= 12 and before == after
+    threshold = 20 if source.endswith("?") else 12
+    return len(before) >= threshold and before == after
 
 
 def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
