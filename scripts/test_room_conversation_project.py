@@ -141,6 +141,18 @@ class Projects(unittest.TestCase):
             context=[q], profile=PROFILE, private_self_state=MOTIVATION)
         self.assertEqual(bystander["interaction_project"]["kind"], "self_initiated_contribution")
 
+    def test_direct_address_wins_over_unrelated_private_partner(self):
+        q = event("jules", "Hey Mara, could you clarify your point?", "jules-directed")
+        payload = self.input(q)
+        payload["entity"] = "mara"
+        payload["deliberation"] = {"action": "ANSWER", "preferred_partner": "sarah",
+                                  "focus": "clarity", "new_information_goal": "answer"}
+        packed = autonomy._autonomy_compact(payload, "expression", "mara")
+        self.assertEqual(packed["intent"]["partner"], "jules")
+        schema = autonomy._autonomy_schema("expression", "mara",
+                                          intent=packed["intent"])
+        self.assertEqual(schema["properties"]["target"]["enum"], ["jules"])
+
     def test_personal_attention_without_canned_subject_rotation(self):
         old = event("mara", "Nothing else needed.", "m3")
         a = project.expression_project(entity="jules", latest=old, context=[old],
