@@ -42,9 +42,8 @@ def is_directed(event, recipient):
     target = _norm(recipient)
     if not isinstance(event, dict) or target not in ORDER or speaker == target:
         return False
-    declared = _target(event)
-    if declared and declared != target:
-        return False
+    # An audible vocative overrides private target metadata. The model's
+    # guessed partner is not evidence of whom the public speaker addressed.
     spoken = str(event.get("text") or "")
     # Actual vocatives, including Allen messages that have no hidden target.
     # Quoted name mentions without a conversational invitation are not enough.
