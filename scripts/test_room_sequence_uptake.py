@@ -114,6 +114,40 @@ class UptakeTests(unittest.TestCase):
             validate_uptake(history=[previous], speaker="sarah",
                             utterance=reply, move="support")
 
+    def test_long_unchanged_statement_is_not_a_responsive_action(self):
+        source = turn("mara-source", "mara",
+            "I can tell that our conversation needs to address that awkwardness "
+            "in our past. Let's try to have a grown-up conversation about "
+            "the elephant in the room.")
+        for action in ("answer", "support", "repair"):
+            with self.subTest(action=action), self.assertRaisesRegex(
+                    ValueError, "unchanged_full_turn_echo"):
+                validate_uptake(history=[source], speaker="sarah",
+                    utterance=source["text"], move=action)
+        # Sharing the subject or quotation AND giving an independent meaning
+        # remains legal. This is conversational action, not lexical censorship.
+        validate_uptake(history=[source], speaker="sarah",
+            utterance="The awkwardness matters, Mara, but I don't agree that "
+                      "we have a shared past in the way you suggest.", move="disagree")
+        validate_uptake(history=[source], speaker="sarah",
+            utterance=source["text"] + " What particular incident do you mean?",
+            move="repair")
+
+    def test_long_statement_copy_fails_selected_candidate_preflight(self):
+        os.environ["ROOM_CONVERSATIONAL_FLOOR"] = "1"
+        source = turn("mara-old", "mara",
+            "I think we should try new ideas, especially since we have "
+            "several different perspectives and we could test one concrete "
+            "hypothesis before committing to a joint project.")
+        part = {"node": 2, "entity": "sarah", "role": "expression",
+                "private": {"intent": {"readiness": .7}, "expression": {
+                    "decision": "SPEAK", "utterance": source["text"],
+                    "move": "answer", "target": "mara",
+                    "semantic_terms": ["hypothesis"]
+                }}}
+        with self.assertRaisesRegex(ValueError, "unchanged_full_turn_echo"):
+            validate_candidate(part, "sarah", [source], {"root": "river"})
+
     def test_source_identity_survives_mixed_public_conversation(self):
         history = [
             turn("q1", "mara", "Who do you think you are?"),
