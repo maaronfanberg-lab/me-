@@ -75,8 +75,9 @@ class Projects(unittest.TestCase):
             packed_input = self.input(source)
             packed_input["context"] = [older, source]
             compact = autonomy._autonomy_compact(packed_input, "expression", "jules")
-            self.assertEqual(compact["event"]["id"], "river-1")
-            self.assertEqual([item["id"] for item in compact["context"]], ["river-1"])
+            self.assertEqual(compact["event"]["text"], source["text"])
+            self.assertEqual([item["text"] for item in compact["context"]], [source["text"]])
+            self.assertEqual(compact["social_opportunity"]["source_id"], "river-1")
             self.assertEqual(compact["social_opportunity"]["action_due"],
                              "optional_uptake_or_self_initiated")
             self.assertIsNone(compact["discussion"]["subject"])
