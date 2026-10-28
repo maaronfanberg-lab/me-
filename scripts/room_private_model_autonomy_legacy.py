@@ -161,6 +161,11 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
             context=list(supplied.get("context") or []),
             profile=supplied.get("profile"),
             private_self_state=supplied.get("private_self_state"),
+            floor={
+                "reason": os.environ.get("ROOM_FLOOR_REASON", ""),
+                "source_id": os.environ.get("ROOM_FLOOR_SOURCE_ID", ""),
+                "speaker": os.environ.get("ROOM_FLOOR_SPEAKER", ""),
+            },
         )
         supplied.update(project)
         if project["interaction_project"]["kind"] == "self_initiated_contribution":
@@ -218,11 +223,13 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         current_project = compact.get("interaction_project")
         current_project = current_project if isinstance(current_project, dict) else {}
         initiative = current_project.get("kind") == "self_initiated_contribution"
+        optional_uptake = initiative and current_project.get("optional_uptake") is True
         proposal = current_project.get("kind") == "respond_to_proposal"
-        if initiative:
+        if initiative and not optional_uptake:
             compact["event"] = None
         compact["social_opportunity"] = {
-            "action_due": ("self_initiated_contribution" if initiative
+            "action_due": ("optional_uptake_or_self_initiated" if optional_uptake
+                           else "self_initiated_contribution" if initiative
                            else "respond_to_proposal" if proposal
                            else "directed_response_or_repair" if directly_addressed
                            else "open_floor_response_or_repair"),
