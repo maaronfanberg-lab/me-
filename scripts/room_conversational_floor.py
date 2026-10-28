@@ -60,6 +60,19 @@ def is_directed(event, recipient):
     )
 
 
+
+def audible_addressee(speaker, spoken, eligible=ORDER):
+    """Return only a uniquely audible, eligible addressee.
+
+    When an expression's internal target differs from its public vocative,
+    public speech determines the recorded recipient. No inferred targets
+    are produced for an unaddressed statement.
+    """
+    event = {"speaker": speaker, "text": spoken}
+    named = [name for name in eligible if is_directed(event, name)]
+    return named[0] if len(named) == 1 else None
+
+
 def public_participant_turns(history):
     """One source-of-truth for the public turns each awake mind may observe.
 
