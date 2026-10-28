@@ -472,6 +472,13 @@ def private_commit(parts: list[dict], key: str):
             "fallback_reason": _reason or None,
             "fallback_count": max(0, min(10000, int(os.environ.get("ROOM_FLOOR_RECOVERY_ATTEMPTS") or 0))),
             "diagnostic_only": True,
+            # Deployment fingerprint, not proof of substantive conversational
+            # quality. The latter still requires real consecutive-turn review.
+            "source_anchor_version": (
+                "optional_selected_public_v1"
+                if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+                else "inactive"
+            ),
         }
 
     c.audit_invariants(M, topic)
