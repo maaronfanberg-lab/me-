@@ -34,3 +34,8 @@ plain = MLP(12, 16, 10, 4, act="relu", residual=True, seed=4)
 fresh = MLP(12, 16, 10, 4, act="relu", residual=True, seed=4, branch_sign=True)  # (net above was nudged by the finite difference)
 check("branch_sign leaves the initial weights unchanged", all(np.array_equal(a, b) for a, b in zip(plain.W, fresh.W)))
 print(f"{sum(R)}/{len(R)} probe checks passed (with branch_sign)")
+# branch_sign = 1.0 (every sign +1) must be plain ReLU exactly
+a = MLP(12, 16, 10, 4, act="relu", residual=True, seed=4, branch_sign=1.0); b = MLP(12, 16, 10, 4, act="relu", residual=True, seed=4)
+ra, rb = a.backward(X, y), b.backward(X, y)
+check("branch_sign = 1.0 is plain ReLU bit for bit", ra[0] == rb[0] and all(np.array_equal(u, v) for u, v in zip(ra[3], rb[3])))
+print(f"{sum(R)}/{len(R)} probe checks passed (all)")

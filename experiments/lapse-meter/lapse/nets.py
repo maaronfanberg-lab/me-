@@ -55,9 +55,12 @@ class MLP:
         # +-1 sign, drawn separately for every block from its own generator, so the init weights above are unchanged.
         # The activation derivative's magnitude is untouched; only the direction each block writes into the stream varies.
         self.S = None
-        if branch_sign:
+        if branch_sign is True:
             srng = np.random.default_rng(seed + 7_777_777)
             self.S = [None] + [srng.choice([-1.0, 1.0], size=width) for _ in range(depth - 1)] + [None]
+        elif branch_sign:  # a number q in (0, 1]: each sign is +1 with probability q (q = 1 is plain ReLU exactly)
+            srng = np.random.default_rng(seed + 7_777_777)
+            self.S = [None] + [np.where(srng.random(width) < branch_sign, 1.0, -1.0) for _ in range(depth - 1)] + [None]
 
     @property
     def depth(self):
