@@ -30,3 +30,6 @@ If every comparison passes, A_l and P_l are empirically gauge-invariant under th
 - Neyshabur, Salakhutdinov & Srebro, Path-SGD (NeurIPS 2015): https://papers.neurips.cc/paper_files/paper/2015/hash/eaa32c96f620053cf442ad32258076b9-Abstract.html
 - Meng et al., G-SGD (ICLR 2019): https://arxiv.org/abs/1802.03713
 - Liang et al., Fisher-Rao Metric, Geometry, and Complexity (2017): https://arxiv.org/abs/1711.01530
+
+## Audit addendum (after development run, before independent confirmation)
+The initial seeds 0 and 1 were executed after this prediction document was committed but **before** the G2 executable was committed to GitHub. The sentence near the top claiming code was committed before those development runs is inaccurate for those two seeds. Treat their 36 gauge comparisons as **development evidence, not a fully code-preregistered confirmation**. The G2 executable was then committed as 05c36c0 and the G2 synthetic tests as b88d9ac. Independent seeds **2 and 3** were reserved for a subsequent confirmation after those code commits, using the executable's CLI seed arguments, all other settings unchanged. These held-out seeds supply the properly frozen-code check. No changes to hypotheses, gauge values, steps, or metrics were made in response to the development-run outcomes. The development and confirmation files must be reported separately.
