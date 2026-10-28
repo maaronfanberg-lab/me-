@@ -143,10 +143,11 @@ class FloorTests(unittest.TestCase):
             self.assertEqual(chosen["speaker"], "mara", text)
             self.assertEqual(chosen["reason"], "addressed_recipient", text)
 
-    def test_contradictory_hidden_target_never_reassigns_audible_address(self):
+    def test_contradictory_hidden_target_preserves_audible_address(self):
         event = msg("sarah", "Mara, could you help me?", target="owen", id="s1")
         result = choose_next([event], bus({"mara": {"action": "REPAIR"}}), config(), {})
-        self.assertNotEqual(result["reason"], "addressed_recipient")
+        self.assertEqual(result["speaker"], "mara")
+        self.assertEqual(result["reason"], "addressed_recipient")
 
     def test_system_metadata_at_end_does_not_change_last_public_contribution(self):
         public = msg("mara", "Sarah, are you listening?", "sarah", id="mara-22")
