@@ -67,7 +67,7 @@ groups = [("plain ReLU", "e8", "relu_d96"), ("tanh", "e8", "tanh_d96"), ("signed
           ("signs q = 0.625", "e15", "q0.625_d96"), ("signs q = 0.75", "e15", "q0.75_d96"), ("signs q = 0.875", "e15", "q0.875_d96"),
           ("two-matrix ReLU", "e17", "two_d96")]
 out.append("\n## Experiment 20 (exploratory): does losing transport cost learning?\n")
-out.append("Every 96-layer, width-64, SGD condition, at step 6,000. Mean over seeds of both tasks pooled per task.\n")
+out.append("Every 96-layer, width-64, SGD condition, at step 6,000. Each cell is the mean over three seeds, digits / circle.\n")
 out.append("| condition | transport at loss 0.03, digits / circle | final training loss, digits / circle | test accuracy, digits / circle |\n|---|---|---|---|")
 pts = []
 for name, exp, pat in groups:
@@ -87,6 +87,9 @@ from scipy.stats import spearmanr
 for task in TASKS:
     P = [p for p in pts if p[0] == task]
     if len(P) > 5:
-        rl = spearmanr([p[1] for p in P], [p[2] for p in P]).statistic; ra = spearmanr([p[1] for p in P], [p[3] for p in P]).statistic
-        out.append(f"\n{task}: across {len(P)} runs, Spearman correlation of transport with log final training loss {rl:+.2f}, with test accuracy {ra:+.2f}.")
+        rl = spearmanr([p[1] for p in P], [p[2] for p in P]).statistic
+        accs = [p[3] for p in P]
+        ra = (f"{spearmanr([p[1] for p in P], accs).statistic:+.2f}" if len(set(accs)) > 1
+              else f"undefined (every run scores {accs[0]:.3f})")
+        out.append(f"\n{task}: across {len(P)} runs, Spearman correlation of transport with log final training loss {rl:+.2f}, with test accuracy {ra}.")
 text = "\n".join(out); print(text); open(os.path.join(R, "e17_20_analysis.md"), "w").write(text + "\n")

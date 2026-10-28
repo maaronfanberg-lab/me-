@@ -59,7 +59,21 @@ def test_scripts_create_output_folder():
     check("run.py writes into a missing folder", r.returncode == 0 and os.path.exists(target), r.stderr[-200:])
 
 
+def test_failed_runs_are_counted():
+    """CORRECTIONS 23 and 28: comparing at a fixed training loss silently drops runs that never reach it, which twice
+    dropped the worst run. Every analysis written after that must report how many runs failed to train, and the
+    count must agree with the raw files."""
+    sys.path.insert(0, os.path.join(ROOT, "experiments"))
+    for name in ("e13_16_analysis.md", "e17_20_analysis.md"):
+        txt = open(os.path.join(ROOT, "results", name)).read()
+        check(f"{name} reports failed-to-train counts", "failed to train" in txt)
+    # the circle 128-layer plain ReLU run that never trained must be visible when counted from the raw files
+    rs = [json.load(open(f)) for f in glob.glob(os.path.join(ROOT, "results", "e12", "circle-clean_relu_d128_s*.json"))]
+    dead = sum(r["log"][-1]["train_loss"] > 0.5 * np.log(2) for r in rs)
+    check("the never-trained 128-layer circle run is counted", dead == 1, f"{dead} of {len(rs)}")
+
+
 if __name__ == "__main__":
-    for f in [test_one_time_base, test_alpha_removed_once, test_scripts_create_output_folder]:
+    for f in [test_one_time_base, test_alpha_removed_once, test_scripts_create_output_folder, test_failed_runs_are_counted]:
         f()
     print(f"{sum(RESULTS)}/{len(RESULTS)} regression checks passed")

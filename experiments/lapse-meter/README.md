@@ -19,7 +19,7 @@ so N is the rate at which that layer's clock runs. A layer with N → 0 sits beh
 learning, whatever the optimiser is doing. A steady exponential profile N ∝ e^{κℓ} gives the depth spacetime
 constant curvature R = −2κ².
 
-This repository is a small library (numpy only), a verified test suite, seven experiments that test claims about
+This repository is a small library (numpy only), a verified test suite, twenty experiments that test claims about
 this geometry, a sonification, and a [corrections ledger](CORRECTIONS.md) of every claim that turned out wrong.
 
 ## Definitions
@@ -53,7 +53,7 @@ arrays. **That PyTorch route has not been tested here**, because PyTorch could n
 where this was built; the numpy path is the one that is verified.
 
 ```bash
-python tests/test_lapse.py      # 20 correctness checks
+python tests/test_lapse.py      # 24 correctness checks
 python tests/test_sound.py      # 8 checks that the sonification does what it says
 ```
 
@@ -234,7 +234,134 @@ layers it does not, in two different ways. On the circle its tilt sits steadily 
 networks (about −1.4 against +1.4 at loss 0.03). On digits its tilt is erratic: it changes by about 0.13 every
 50 steps, against 0.004–0.017 for every other network, while the training loss itself falls smoothly. The ReLU
 drift seen in experiment 1 is therefore not an artifact of comparing at different losses. Why the deepest ReLU
-networks behave this way is open.
+networks behave this way is open. (Experiments 8–12 answer this; see section 8.)
+
+### 8. Why deep ReLU breaks: its outputs pile up on the residual stream
+
+**A three-part split (experiment 8, exploratory).** `lapse/probe.py` splits the corrected tilt T* exactly into
+three parts:
+
+- **output:** the output layer turning the loss signal into a gradient on the residual stream
+- **transport:** the stream carrying that gradient back from the last block to the first
+- **gate:** the first block's activation derivative letting it through
+
+The three add up to T* to rounding (tested). Experiment 8 repeats experiment 7's runs with this split logged. At
+training loss 0.03, at 96 layers:
+
+| 96 layers, loss 0.03 | T* | output | transport | gate |
+|---|---|---|---|---|
+| tanh, digits | +1.00 | +0.40 | +0.82 | −0.22 |
+| ReLU, digits | +0.37 | +1.73 | **+0.12** | **−1.49** |
+| tanh, circle | +2.24 | +0.73 | +1.61 | −0.11 |
+| ReLU, circle | −1.47 | +0.98 | **+0.07** | **−2.52** |
+
+Deep ReLU loses two things. Its stream stops carrying the gradient back (transport near zero), and its first
+block's gate closes far more than its open-gate fraction would explain. The swings in deep-ReLU T* reported in
+section 7 come mostly from that one gate. From 12 to 48 layers ReLU looks like tanh; the break happens within the
+first ~100 training steps. ![the three parts through training at 96 layers](figures/e8_parts_d96.png)
+
+**Where it comes from.** ReLU outputs are never negative, so every residual block adds a vector pointing in
+roughly the same direction, and the stream piles up. At initialization, at 96 layers:
+
+- the stream at the last block is about 38× its size at the first
+- 80% of its energy is one vector shared by every example
+- the starting loss on digits is 57.8, against 2.6 for tanh
+- within 10 steps the output layer's weights triple
+
+**The test (experiments 9–12, pre-registered:
+[`E9_12_PREREGISTRATION.md`](E9_12_PREREGISTRATION.md), 54 runs,
+[`results/e9_12_analysis.md`](results/e9_12_analysis.md)).** The measure is transport at training loss 0.03, and
+"rescued" means above plain 96-layer ReLU by more than twice the combined seed spread.
+
+| at 96 layers | digits | circle | rescued? |
+|---|---|---|---|
+| plain ReLU (reference) | +0.12 | +0.07 | – |
+| tanh (reference) | +0.82 | +1.61 | – |
+| **signed ReLU**: ReLU's exact gates, a fixed random ± sign on each unit so outputs don't stack | +0.70 | +1.16 | **yes, both** (P9 held) |
+| **soft threshold**: hard 0/1 gates like ReLU, but outputs centred on zero | +0.63 | +1.33 | **yes, both** (P10 held) |
+| tanh + 1: tanh's exact derivative, outputs always positive (exploratory) | +0.33 | +0.80 | circle only |
+| 500-step learning-rate warm-up | +0.82 | +1.19 | **yes, both**: P11a, which predicted no, **failed** |
+| output layer started at zero | +0.06 | +1.30 ± 0.66 | no, both (P11b held) |
+
+Signed ReLU also shows no depth break: its transport at 96 layers is no lower than at 24 (P9b held). So the hard
+gates are not the problem. What breaks deep ReLU is its outputs stacking up in one direction. By the rule fixed
+in advance, the pile-up hypothesis is **supported**.
+
+The warm-up result was my mistake. I predicted it would not help, from a 100-step preview in which transport
+does fall, but it recovers later. So the pile-up is not fatal by itself; the pile-up together with full-size
+first training steps is. Experiments 13–16 test that directly.
+
+**Depth (P12).** With plain ReLU, the break grows with the pile-up:
+
+- **Digits:** transport stays around +0.6–0.7 up to 48 layers (11× growth at initialization), falls at 64 (17×)
+  and is near zero from 80 layers (26×). P12 held on digits.
+- **Circle:** P12 failed, and the rule hid why. One of the three 128-layer circle runs never trained at all (loss
+  at chance, 0.693, for all 6,000 steps), so it never reached the measuring point and was excluded. The other two
+  trained well. Every later analysis also counts runs that failed to train (CORRECTIONS entry 23).
+
+### 9. The break is a first-steps shock to the output layer
+
+Experiments 13–16 ([`E13_16_PREREGISTRATION.md`](E13_16_PREREGISTRATION.md), 54 runs,
+[`results/e13_16_analysis.md`](results/e13_16_analysis.md)) vary how much warm-up the network gets, which part
+of it warms up, and how much it piles up. All are at 96 layers unless noted, with transport at loss 0.03.
+
+| condition | digits | circle | rescued? |
+|---|---|---|---|
+| plain ReLU (reference) | +0.12 | +0.07 | – |
+| warm-up over 50 steps | +0.75 | +1.23 | yes, both: P13b, which predicted no, **failed** |
+| warm-up over 1,500 steps | +0.84 | +1.19 | yes, both (P13a held) |
+| warm-up of the output layer only | +0.83 | +1.39 | yes, both: P14b, which predicted no, **failed** |
+| warm-up of the blocks only | no run reached loss 0.03; 1 of 3 never trained | +0.31 | no: P14a, which predicted yes, **failed** |
+| sign odds q = 0.75 (6× pile-up) | +0.78 | +1.21 | yes, both (P15a held) |
+| sign odds q = 0.875 (15× pile-up) | +0.33 | +1.11 | circle only |
+
+What this shows:
+
+- **Even a 50-step warm-up, out of 6,000 steps, is enough.** The damage is done by the first few dozen full-size
+  steps.
+- **The damage lands on the output layer.** That layer is fed the piled-up stream and takes full-size steps while
+  the stream is huge. Holding it back alone is enough. Holding back only the blocks is worse than doing nothing,
+  presumably because the output layer then takes the shock with the blocks unable to adjust. I predicted the
+  opposite location.
+- **A pile-up of about 6× is harmless; around 15× it starts to bite.**
+- **Warm-up still rescues at 128 layers on digits** (+0.91 against +0.01). On the circle the rule says no (P16),
+  but the reference there is the two plain runs that trained, with the dead one excluded. All three warm-up circle
+  runs trained.
+
+By the decision rule fixed in advance, the first-step-shock hypothesis is **mixed**. The shock is real and
+avoidable, but it was not where I predicted.
+
+### 10. Real architectures don't break this way, and the break does cost learning
+
+Experiments 17–19 ([`E17_20_PREREGISTRATION.md`](E17_20_PREREGISTRATION.md),
+[`results/e17_20_analysis.md`](results/e17_20_analysis.md)) ask whether the break survives in more realistic
+settings.
+
+| at 96 layers, transport at loss 0.03 | digits | circle | verdict |
+|---|---|---|---|
+| plain one-matrix ReLU, SGD (reference) | +0.12 | +0.07 | – |
+| **two-matrix block** h + α·V·relu(W h), as in ResNets and transformers | +0.84 | +1.35 | rescued, and no depth break from 24 to 96 (P17a, P17b held) |
+| **Adam** (lr 0.001), plain one-matrix ReLU | +1.42 | +2.21 | no depth break from 24 to 96 (P18 held) |
+| width 128 (instead of 64): plain one-matrix ReLU, SGD | +0.05 | +0.22 | same break |
+| width 128: signed ReLU | +0.65 | +1.08 | rescued against plain at width 128 (P19 held) |
+
+- **The standard block doesn't break.** Its second matrix gives block outputs random signs, so they never stack up
+  (1.3× stream growth at initialization), and its transport at 96 layers matches its own at 24.
+- **Width doesn't change it.** At width 128 plain ReLU breaks the same way, and the same fix works.
+- **Neither does Adam,** which caps every step at about the learning rate. The output layer's weights don't
+  move at the start (3.1 → 3.1 on digits), unlike the tripling under SGD.
+
+So the break studied in sections 8–9 belongs to one simple design, the one-matrix block trained with plain SGD and
+no warm-up. It is not a general property of deep ReLU networks. Adam also sets a different transport level from
+SGD (+1.4 against +0.8 on digits), so tilt and transport values are only comparable within one optimizer.
+
+**Does losing transport cost learning? (experiment 20, exploratory, no new runs.)** This pools every 96-layer
+SGD condition at step 6,000. On digits, plain ReLU ends with a final training loss of 0.0084 and 94.4% test
+accuracy. Every rescued condition ends near 0.0005 and 98%. Across 45 digits runs, transport correlates with
+final log training loss at −0.64 and with test accuracy at +0.55 (Spearman). On the circle every run reaches
+100% test accuracy, but the final loss is again about 9× higher for plain ReLU (0.0018 against about 0.0002).
+These are correlations across conditions that differ in more than transport, so they don't show that transport
+causes better learning. They do show the break is not harmless.
 
 ## Honest limits
 
@@ -243,7 +370,12 @@ networks behave this way is open.
 - Three seeds per cell; one learning rate per experiment; two image-like tasks and one tiny text corpus.
 - The depth-law correction for residual networks was identified after the data were in. It is exact and
   tested, but it was not pre-registered.
-- "Trained" means test accuracy ≥ 0.80. Changing that threshold changes which cells count.
+- "Trained" means test accuracy ≥ 0.80 in experiments 1–7. Changing that threshold changes which cells count.
+- Experiments 8–16 study the simplest residual block, h + α·act(W h), with plain SGD. Experiment 17 shows the
+  standard two-matrix block does not break the same way, so those results describe that one design.
+- Comparing conditions at a fixed training loss drops runs that never reach it. Twice (CORRECTIONS 23 and 28)
+  that dropped the worst run and biased a verdict. From experiment 13 on, every table also counts runs that
+  failed to train.
 
 ## How the experiments were run
 
@@ -273,14 +405,19 @@ Each log lasts 0.12 s of audio.
 ## Layout
 
 ```
-lapse/            the library: core.py (measurements), nets.py (numpy networks), sound.py, data.py
-tests/            test_lapse.py (24 checks), test_sound.py (8 checks), test_regressions.py (6 checks,
-                  one per error no earlier check caught), test_readme_numbers.py (15 README figures
-                  recomputed from the raw results)
+lapse/            the library: core.py (measurements), nets.py (numpy networks), nets2.py (two-matrix
+                  residual blocks), probe.py (the output/transport/gate split), sound.py, data.py
+tests/            test_lapse.py (24 checks), test_sound.py (8 checks), test_regressions.py (9 checks,
+                  one per error no earlier check caught), test_probe.py (10), test_probe_run.py (2 runs
+                  reproduced bit for bit), test_nets2.py (7, gradients against finite differences),
+                  test_readme_numbers.py (README figures recomputed from the raw results)
 experiments/      run.py (one training run), tiny_lm.py, sonify.py, analyze.py,
                   e4.py + E4_PREREGISTRATION.md + e4_analyze.py, e5_alignment.py,
                   e6.py + E6_PREREGISTRATION.md + e6_analyze.py,
-                  e7.py + E7_PREREGISTRATION.md + e7_analyze.py
+                  e7.py + E7_PREREGISTRATION.md + e7_analyze.py,
+                  probe_run.py (one configurable run, experiments 8-19) + run_jobs.sh + *_jobs.txt,
+                  e8_analyze.py, e9_12_analyze.py, e13_16_analyze.py, e17_20_analyze.py
+PROGRAM_E8.md, E9_12_, E13_16_, E17_20_PREREGISTRATION.md   plans pushed before each block of runs
 results/          raw JSON for every run, and analysis.md (all tables)
 figures/          plots made by analyze.py
 audio/            the three sound pieces, with the lapse data each one was rendered from
@@ -298,6 +435,9 @@ python experiments/run.py '{"task":"digits","depth":24,"act":"tanh","sigma_w":1.
 python experiments/tiny_lm.py 1 adam 0 lm.json
 python experiments/sonify.py settling settling.wav
 python experiments/analyze.py
+python experiments/probe_run.py '{"task":"digits","act":"relu","depth":96,"seed":0}' relu96.json   # about 3 minutes
+bash experiments/run_jobs.sh experiments/e9_12_jobs.txt e9_12.log   # skips runs whose result file already exists
+python experiments/e9_12_analyze.py
 ```
 
 The full experiment-1 sweep is 144 such runs (the grid is under "How the experiments were run"); on two CPU

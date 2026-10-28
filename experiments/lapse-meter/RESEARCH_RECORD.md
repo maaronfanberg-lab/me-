@@ -77,3 +77,52 @@ pre-registered secondary measure found a small consistent positive depth slope. 
 differently (reported as exploratory). A description of the ReLU runs given in conversation was wrong and was
 corrected before the write-up (CORRECTIONS 18). All test suites pass after the change.
 
+
+## Addendum, 2026-10-27: experiments 8–20
+
+**Observed problem.** In experiment 7, residual ReLU behaved differently at 96 layers. This series asks why.
+
+**Baseline and criteria.** Each block's plan was pushed to GitHub before its first run:
+
+| experiments | pre-registration | commit as pushed |
+|---|---|---|
+| 8 (exploratory) | `PROGRAM_E8.md` | c1c085d |
+| 9–12 | `E9_12_PREREGISTRATION.md` | e0d6aba |
+| 13–16 | `E13_16_PREREGISTRATION.md` | 0ab8296 |
+| 17–20 | `E17_20_PREREGISTRATION.md` | 4595938 |
+
+The main branch is rewritten by an automated process, so these hashes may not survive in its history; the files
+themselves carry the dates. One disclosed exception: 100-step smoke tests of two experiment-11 conditions were
+seen before their predictions were written.
+
+The new instrumentation is additive:
+
+- `lapse/probe.py` splits the tilt exactly into output, transport and gate parts.
+- `experiments/probe_run.py` reproduces experiment 7 bit for bit with default settings, and the warm-up path
+  reproduces experiment 11 exactly.
+- New network options have gradient and identity checks: `tests/test_probe.py`, `tests/test_probe_run.py`,
+  `tests/test_nets2.py`.
+
+**Post-change result.**
+
+- **Experiments 9–10:** the pile-up hypothesis held. Signed ReLU and a zero-mean hard-gate activation are rescued.
+- **Experiments 11–16:** several predictions failed:
+  - Warm-up rescues (P11a, wrong).
+  - 50 steps is enough (P13b, wrong).
+  - The shock lands on the output layer, not the blocks (P14a and P14b, wrong).
+  - Two comparisons were biased by the rule excluding a run that never trained (P12 and P16 on the circle).
+    The rule was supplemented with a failed-to-train count from experiment 13 on.
+- **Experiments 17–19:** the standard two-matrix block and Adam show no depth break (P17a, P17b, P18 held).
+  Width 128: see README section 10.
+- **Experiment 20 (exploratory):** the break goes with higher final loss and lower test accuracy on digits.
+- One presentation change was made to `e17_20_analyze.py` after its pre-registration push, before results were
+  final. It changes wording only: how an undefined correlation is printed, and a table caption.
+
+All test suites pass after the changes.
+
+**Limits.**
+
+- Small numpy networks.
+- Two tasks, three seeds per cell.
+- One learning rate per optimizer.
+- The one-matrix block is not what production networks use (experiment 17).

@@ -81,5 +81,39 @@ for task, label in (("digits", "digits"), ("circle-clean", "circle (clean)")):
         v = [at_loss(r["log"], 0.01) for r in r7 if r["task"] == task and r["act"] == "tanh" and r["depth"] == dep]
         vals.append(np.mean([x for x in v if x is not None]))
     claim(f"E7 {task} tanh at loss 0.01", f"| {label} | " + " | ".join(f"{x:+.2f}" for x in vals) + " |")
+# Experiments 8-12: transport at loss 0.03 (README section 8)
+import warnings; warnings.filterwarnings("ignore")
+from e9_12_analyze_lib import runs as r812, vals as v812
+def tr(exp, pat):
+    return "  ".join(f"{v812(r812(exp, f'{t}_{pat}_s*.json'))[0].mean():+.2f}" for t in ("digits", "circle-clean")).split("  ")
+for label, exp, pat in (("plain ReLU (reference)", "e8", "relu_d96"), ("tanh (reference)", "e8", "tanh_d96"),
+                        ("so outputs don't stack", "e9", "signed_d96"), ("but outputs centred on zero", "e10", "shrink_d96"),
+                        ("500-step learning-rate warm-up", "e11", "warmup_d96")):
+    d, c = tr(exp, pat)
+    claim(f"E9-12 {label}", f"{label} | {d} | {c} |")
+from e8_analyze import load as l8, summary as s8
+S8 = s8(l8("e8"), 0.03)
+for task, act, label in (("digits", "relu", "ReLU, digits"), ("circle-clean", "relu", "ReLU, circle")):
+    row = S8[(task, act, 96)]
+    claim(f"E8 split {label}", f"| {label} | {row['Tstar'][0]:+.2f} | {row['ln_out'][0]:+.2f} | **{row['ln_transport'][0]:+.2f}** | **{row['ln_gate'][0]:+.2f}** |".replace("-", "−"))
+# Experiments 13-16 (README section 9)
+for label, exp, pat in (("warm-up over 50 steps", "e13", "warmup50_d96"), ("warm-up over 1,500 steps", "e13", "warmup1500_d96"),
+                        ("warm-up of the output layer only", "e14", "warmout_d96"), ("sign odds q = 0.75 (6× pile-up)", "e15", "q0.75_d96"),
+                        ("sign odds q = 0.875 (15× pile-up)", "e15", "q0.875_d96")):
+    d, c = tr(exp, pat)
+    claim(f"E13-16 {label}", f"{label} | {d} | {c} |")
+c = f"{v812(r812('e14', 'circle-clean_warmblocks_d96_s*.json'))[0].mean():+.2f}"
+claim("E14 blocks-only circle", f"1 of 3 never trained | {c} |")
+claim("E16 digits 128", f"(+{v812(r812('e16', 'digits_warmup_d128_s*.json'))[0].mean():.2f} against +{v812(r812('e12', 'digits_relu_d128_s*.json'))[0].mean():.2f})")
+# Experiments 17-20 (README section 10)
+for label, exp, pat in (("as in ResNets and transformers", "e17", "two_d96"), ("(lr 0.001), plain one-matrix ReLU", "e18", "adam_relu_d96"),
+                        ("plain one-matrix ReLU, SGD", "e19", "plain_w128_d96"), ("width 128: signed ReLU", "e19", "signed_w128_d96")):
+    d, c = tr(exp, pat)
+    claim(f"E17-19 {label}", f"{label} | {d} | {c} |")
+pr = r812("e8", "digits_relu_d96_s*.json")
+claim("E20 digits plain final loss and accuracy", f"final training loss of {np.mean([r['log'][-1]['train_loss'] for r in pr]):.4f} and {100*np.mean([r['test_acc'] for r in pr]):.1f}% test")
+an = open(os.path.join(R, "e17_20_analysis.md")).read()
+m = re.search(r"digits: across (\d+) runs, Spearman correlation of transport with log final training loss ([+-]\d\.\d\d), with test accuracy ([+-]\d\.\d\d)", an)
+claim("E20 digits correlations", f"Across {m.group(1)} digits runs, transport correlates with\nfinal log training loss at {m.group(2).replace('-', '−')} and with test accuracy at {m.group(3)}")
 print(f"{sum(RESULTS)}/{len(RESULTS)} README numbers match the raw results")
 sys.exit(0 if all(RESULTS) else 1)
