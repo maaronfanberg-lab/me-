@@ -49,6 +49,79 @@ class Projects(unittest.TestCase):
                 "private_self_state": MOTIVATION, "topic": {"root": "category classification trees"},
                 "partner": "mara"}
 
+    def test_open_floor_selection_preserves_single_optional_public_anchor(self):
+        source = event("mara", "I found a strange track beside the river.", "river-1")
+        older = event("sarah", "Category classification trees again.", "old-1")
+        floor = {"reason": "open_floor_uptake", "source_id": "river-1",
+                 "speaker": "jules"}
+        result = project.expression_project(
+            entity="jules", latest=source, context=[older, source],
+            profile=PROFILE, private_self_state=MOTIVATION, floor=floor)
+        self.assertEqual(result["interaction_project"]["kind"],
+                         "self_initiated_contribution")
+        self.assertTrue(result["interaction_project"]["optional_uptake"])
+        self.assertEqual(result["event"]["id"], "river-1")
+        self.assertEqual(result["context"], [source])
+        self.assertNotIn("old-1", str(result))
+        self.assertNotIn("what_i_currently_believe",
+                         result["private_self_state"])
+
+        keys = ("ROOM_FLOOR_REASON", "ROOM_FLOOR_SOURCE_ID", "ROOM_FLOOR_SPEAKER")
+        prior = {key: os.environ.get(key) for key in keys}
+        try:
+            os.environ.update({"ROOM_FLOOR_REASON": "open_floor_uptake",
+                               "ROOM_FLOOR_SOURCE_ID": "river-1",
+                               "ROOM_FLOOR_SPEAKER": "jules"})
+            packed_input = self.input(source)
+            packed_input["context"] = [older, source]
+            compact = autonomy._autonomy_compact(packed_input, "expression", "jules")
+            self.assertEqual(compact["event"]["id"], "river-1")
+            self.assertEqual([item["id"] for item in compact["context"]], ["river-1"])
+            self.assertEqual(compact["social_opportunity"]["action_due"],
+                             "optional_uptake_or_self_initiated")
+            self.assertIsNone(compact["discussion"]["subject"])
+        finally:
+            for key, value in prior.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    def test_open_floor_anchor_requires_matching_selected_source_and_speaker(self):
+        source = event("mara", "The creek flooded.", "creek-2")
+        common = dict(entity="jules", latest=source, context=[source],
+                      profile=PROFILE, private_self_state=MOTIVATION)
+        for floor in (
+            None,
+            {"reason": "open_floor_relevance", "source_id": "creek-2",
+             "speaker": "jules"},
+            {"reason": "open_floor_uptake", "source_id": "other-episode",
+             "speaker": "jules"},
+            {"reason": "open_floor_uptake", "source_id": "creek-2",
+             "speaker": "owen"},
+        ):
+            with self.subTest(floor=floor):
+                output = project.expression_project(**common, floor=floor)
+                self.assertIsNone(output["event"])
+                self.assertEqual(output["context"], [])
+                self.assertFalse(output["interaction_project"].get("optional_uptake", False))
+
+    def test_optional_anchor_never_treats_directed_or_self_speech_as_own(self):
+        examples = (
+            event("mara", "Sarah, please answer me.", "m1"),
+            event("jules", "I was just speaking.", "m2"),
+            event("system", "Unpublished internal note.", "m3"),
+        )
+        for source in examples:
+            with self.subTest(source=source["id"]):
+                result = project.expression_project(
+                    entity="jules", latest=source, context=[source],
+                    profile=PROFILE, private_self_state=MOTIVATION,
+                    floor={"reason": "open_floor_uptake", "source_id": source["id"],
+                           "speaker": "jules"})
+                self.assertIsNone(result["event"])
+                self.assertEqual(result["context"], [])
+
     def test_unrequested_statement_allows_personal_initiative(self):
         old = event("mara", "Experimental classification trees are good.", "m1")
         p = project.expression_project(entity="jules", latest=old,
