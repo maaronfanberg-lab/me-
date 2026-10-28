@@ -26,7 +26,8 @@ DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, 
                 sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None)
 
 
-def run(cfg, path=None):
+def run(cfg, path=None, hook=None):
+    """hook (experiment 31): optional f(net, X, y) -> dict, called at every logged step; its entries join that log line."""
     c = {**DEFAULTS, **cfg}
     if path: os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     X, y, Xt, yt = e4.make(c["task"], c["seed"])
@@ -58,6 +59,7 @@ def run(cfg, path=None):
         if s % c["log_every"] == 0:
             dg, _ = diag(net, X[:256], y[:256])
             e = dict(step=s, train_loss=net.loss(X, y), **{k: dg[k] for k in ("Tstar", "ln_out", "ln_transport", "ln_gate", "Wout")})
+            if hook is not None: e.update(hook(net, X[:256], y[:256]))
             if s % c["layers_every"] == 0 or s == c["steps"]:
                 e.update({k: dg[k] for k in ("stream_grad", "gate", "stream_norm", "branch_ratio", "density", "dead")})
             log.append(e)
