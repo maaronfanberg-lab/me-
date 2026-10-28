@@ -340,6 +340,12 @@ def private_commit(parts: list[dict], key: str):
             target = planned["target"]
         if target not in available_partners or target == entity:
             target = next(other for other in AWAKE_ORDER if other != entity)
+        if os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1":
+            # Recorded public addressee must match the actual spoken
+            # vocative, not a contradictory private model target.
+            audible = _floor.audible_addressee(entity, text, AWAKE_ORDER)
+            if audible:
+                target = audible
         staged.append((entity, move, target, text, terms))
 
     if not staged:

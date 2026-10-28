@@ -129,6 +129,48 @@ class Projects(unittest.TestCase):
                          "jules-invite-1")
         self.assertIn("collaborate", compact["event"]["text"])
 
+    def test_named_recipient_owns_the_open_response_project(self):
+        source = event("jules", "Hey Sarah, can you explain the exercise?", "q1", target="mara")
+        self.assertTrue(project.response_project(source, "sarah"))
+        self.assertFalse(project.response_project(source, "mara"))
+        self.assertFalse(project.response_project(source, "owen"))
+        response = project.expression_project(entity="sarah", latest=source,
+            context=[source], profile=PROFILE, private_self_state=MOTIVATION)
+        self.assertEqual(response["interaction_project"]["kind"], "respond_or_repair")
+        self.assertEqual(response["event"]["id"], "q1")
+        bystander = project.expression_project(entity="mara", latest=source,
+            context=[source], profile=PROFILE, private_self_state=MOTIVATION)
+        self.assertEqual(bystander["interaction_project"]["kind"], "self_initiated_contribution")
+
+    def test_accepted_allen_named_turn_is_not_a_group_obligation(self):
+        source = event("allen", "Sarah, what happened?", "a1")
+        self.assertTrue(project.response_project(source, "sarah"))
+        for bystander in ("mara", "jules", "owen"):
+            self.assertFalse(project.response_project(source, bystander))
+        self.assertTrue(project.response_project(
+            event("allen", "What happened?", "a2"), "jules"))
+
+    def test_hundred_named_address_scenarios(self):
+        names = ("sarah", "mara", "owen", "jules")
+        templates = (
+            "Hey {name}, what happened?",
+            "{name}, do you have an idea?",
+            "Hi {name}: can you help?",
+            "@{name} could you answer?",
+            "{name} can you explain?")
+        for i in range(100):
+            author = (*names, "allen")[i % 5]
+            recipient = names[(i // 5) % 4]
+            if author == recipient:
+                recipient = names[(names.index(recipient) + 1) % 4]
+            last = event(author, templates[(i // 20) % 5].format(
+                name=recipient.capitalize()), "case-%03d" % i)
+            with self.subTest(case=i):
+                self.assertTrue(project.response_project(last, recipient))
+                for other in names:
+                    if other != recipient:
+                        self.assertFalse(project.response_project(last, other))
+
     def test_personal_attention_without_canned_subject_rotation(self):
         old = event("mara", "Nothing else needed.", "m3")
         a = project.expression_project(entity="jules", latest=old, context=[old],

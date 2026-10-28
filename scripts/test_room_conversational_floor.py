@@ -34,6 +34,36 @@ class FloorTests(unittest.TestCase):
         self.assertEqual(decision["reason"], "addressed_recipient")
         self.assertEqual(decision["source_id"], "jules-offer-1")
 
+    def test_live_vocative_overrides_hidden_partner(self):
+        from room_conversational_floor import is_directed
+        source = msg("jules",
+                     "Hey Sarah, can you tell me about the new exercise idea you want to explore?",
+                     "mara", id="20261028T120004873-jules-v5")
+        self.assertTrue(is_directed(source, "sarah"))
+        self.assertFalse(is_directed(source, "mara"))
+        selected = choose_next([source], bus(), config(), {})
+        self.assertEqual(selected["speaker"], "sarah")
+        self.assertEqual(selected["reason"], "addressed_recipient")
+
+    def test_hidden_partner_is_not_an_audible_invitation(self):
+        from room_conversational_floor import is_directed
+        source = msg("jules", "An owl flew past the window.", "mara")
+        self.assertFalse(is_directed(source, "mara"))
+        self.assertFalse(is_directed(source, "sarah"))
+
+    def test_audible_addressee_controls_public_target(self):
+        from room_conversational_floor import audible_addressee
+        self.assertEqual(audible_addressee("jules",
+            "Hey Sarah, can you explain your proposal?"), "sarah")
+        self.assertIsNone(audible_addressee("jules",
+            "I think Sarah made an interesting point about Mara."))
+        self.assertIsNone(audible_addressee("sarah",
+            "Hey Sarah, can you explain?"))
+        self.assertIsNone(audible_addressee("jules",
+            "Hey Sarah, can you explain?", ("mara", "owen")))
+        self.assertEqual(audible_addressee("jules",
+            "Mara, I am interested in your example."), "mara")
+
     def test_direct_question_selects_recipient_not_everyone(self):
         last = msg("mara", "Sarah, where did the moths go?", "sarah")
         selected = choose_next([last], bus(), config(), {})
@@ -113,10 +143,11 @@ class FloorTests(unittest.TestCase):
             self.assertEqual(chosen["speaker"], "mara", text)
             self.assertEqual(chosen["reason"], "addressed_recipient", text)
 
-    def test_contradictory_hidden_target_never_reassigns_audible_address(self):
+    def test_contradictory_hidden_target_preserves_audible_address(self):
         event = msg("sarah", "Mara, could you help me?", target="owen", id="s1")
         result = choose_next([event], bus({"mara": {"action": "REPAIR"}}), config(), {})
-        self.assertNotEqual(result["reason"], "addressed_recipient")
+        self.assertEqual(result["speaker"], "mara")
+        self.assertEqual(result["reason"], "addressed_recipient")
 
     def test_system_metadata_at_end_does_not_change_last_public_contribution(self):
         public = msg("mara", "Sarah, are you listening?", "sarah", id="mara-22")

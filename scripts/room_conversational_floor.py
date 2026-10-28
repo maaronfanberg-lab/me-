@@ -42,9 +42,8 @@ def is_directed(event, recipient):
     target = _norm(recipient)
     if not isinstance(event, dict) or target not in ORDER or speaker == target:
         return False
-    declared = _target(event)
-    if declared and declared != target:
-        return False
+    # An audible vocative overrides private target metadata. The model's
+    # guessed partner is not evidence of whom the public speaker addressed.
     spoken = str(event.get("text") or "")
     # Actual vocatives, including Allen messages that have no hidden target.
     # Quoted name mentions without a conversational invitation are not enough.
@@ -59,6 +58,19 @@ def is_directed(event, recipient):
         or re.search(r"^\s*" + name + r"\s+(?:can|could|would|will|what|why|how|are|do|did|is|have|tell|please)\b", spoken, re.I)
         or re.search(r",\s*" + name + r"\s*[?!\.]?\s*$", spoken, re.I)
     )
+
+
+
+def audible_addressee(speaker, spoken, eligible=ORDER):
+    """Return only a uniquely audible, eligible addressee.
+
+    When an expression's internal target differs from its public vocative,
+    public speech determines the recorded recipient. No inferred targets
+    are produced for an unaddressed statement.
+    """
+    event = {"speaker": speaker, "text": spoken}
+    named = [name for name in eligible if is_directed(event, name)]
+    return named[0] if len(named) == 1 else None
 
 
 def public_participant_turns(history):
