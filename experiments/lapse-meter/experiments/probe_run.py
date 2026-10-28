@@ -8,7 +8,7 @@ of +1; see lapse/nets.py), warmup_parts ("all", "out" = output layer only, "bloc
 block ("one" = h + alpha*act(Wh), the default; "two" = h + alpha*V act(Wh), lapse/nets2.py; "ln" = one-matrix
 blocks with LayerNorm placed by `ln`: none | final | pre | pre_final | post, lapse/nets_ln.py),
 out_lr_mult (learning-rate multiplier on the readout; SGD only; permanent unless out_lr_mult_until = k, experiment 30, limits it to steps 0 .. k-1), input_scale (inputs multiplied by it),
-block_lr_mult (experiment 32: learning-rate multiplier on the residual blocks 1..L-2, SGD; permanent unless block_lr_mult_until = k limits it to steps 0 .. k-1), zloss (coefficient of an auxiliary z-loss, gradient only; logged loss stays cross-entropy), kick_cap_until (experiment 27: the cap applies only to steps 0 .. kick_cap_until-1), kick_cap (SGD only: at each step the readout's update is scaled down, if needed, so the RMS change it makes to the
+detach (experiment 33: None, "mean" or "random"; see lapse.nets.MLP.detach; logged diagnostics always use the true gradient), block_lr_mult (experiment 32: learning-rate multiplier on the residual blocks 1..L-2, SGD; permanent unless block_lr_mult_until = k limits it to steps 0 .. k-1), zloss (coefficient of an auxiliary z-loss, gradient only; logged loss stays cross-entropy), kick_cap_until (experiment 27: the cap applies only to steps 0 .. kick_cap_until-1), kick_cap (SGD only: at each step the readout's update is scaled down, if needed, so the RMS change it makes to the
 minibatch's logits is at most this; the blocks' updates are untouched; capped_steps lists the steps it bound).
 freeze: list of parts held at their initial values: "out" (output layer), "blocks" (all residual blocks).
 """
@@ -23,7 +23,7 @@ from lapse.nets2 import MLP2
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None, block_lr_mult=1.0, block_lr_mult_until=None)
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None, block_lr_mult=1.0, block_lr_mult_until=None, detach=None)
 
 
 def run(cfg, path=None, hook=None):
@@ -55,14 +55,17 @@ def run(cfg, path=None, hook=None):
     if "out" in c["freeze"]: frozen.add(L - 1)
     if "blocks" in c["freeze"]: frozen.update(range(1, L - 1))
     log = []; capped = []
+    if c["detach"]:  # experiment 33: training gradients lose their readout-to-stream part along one direction
+        assert c["block"] == "one" and c["opt"] == "sgd"; net.detach = c["detach"]
     for s in range(c["steps"] + 1):
         if s % c["log_every"] == 0:
+            saved = getattr(net, "detach", None); net.detach = None  # diagnostics measure the true gradient
             dg, _ = diag(net, X[:256], y[:256])
             e = dict(step=s, train_loss=net.loss(X, y), **{k: dg[k] for k in ("Tstar", "ln_out", "ln_transport", "ln_gate", "Wout")})
             if hook is not None: e.update(hook(net, X[:256], y[:256]))
             if s % c["layers_every"] == 0 or s == c["steps"]:
                 e.update({k: dg[k] for k in ("stream_grad", "gate", "stream_norm", "branch_ratio", "density", "dead")})
-            log.append(e)
+            log.append(e); net.detach = saved
         if s == c["steps"]: break
         idx = rng.integers(0, len(X), 64)
         bw = net.backward(X[idx], y[idx]); gW, gb = bw[1], bw[2]

@@ -36,6 +36,11 @@ ACTS.update({
 
 class MLP:
     zloss = 0.0  # coefficient of an auxiliary z-loss on the gradient; 0 = off (experiments before 24 are unchanged)
+    # detach (experiment 33): None = the true gradient. "mean": in backward, the readout's gradient into the stream,
+    # dL/dh_{L-1} = d W_out, loses its component along u, the unit mean of the readout's input over the batch passed in.
+    # "random": the same along a fixed random unit vector (the control). Only the backward pass changes; the forward
+    # pass and the readout's own gradient are untouched, so this cuts one channel from the readout into the blocks.
+    detach = None
 
     def __init__(self, din, width, depth, dout, act="tanh", sigma_w=1.0, residual=False, alpha=None,
                  seed=0, orthogonal=False, branch_sign=False):
@@ -105,6 +110,12 @@ class MLP:
         deltas = [None] * L
         deltas[-1] = d
         gh = d @ self.W[-1]                      # dL/dh_{L-1}
+        if self.detach:                          # experiment 33 (see the class attribute)
+            if self.detach == "mean":
+                u = h[-2].mean(0)
+            else:
+                u = np.random.default_rng(31_337).standard_normal(gh.shape[1])
+            u = u / np.linalg.norm(u); gh = gh - np.outer(gh @ u, u)
         for i in range(L - 2, -1, -1):
             if self.residual and i > 0:
                 deltas[i] = gh * self.alpha * df(z[i]) * (1.0 if self.S is None else self.S[i])

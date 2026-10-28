@@ -87,3 +87,31 @@ component. Its size relative to the blocks' learning rate is not the point.
 **What survives.** The order-of-magnitude coincidence (a predicted crossing near 200, against observed cutoffs of
 124–328) survives only as a coincidence. Prediction 2 (signed + offset healthy) came from the same step-1 picture, so
 it now has no support. Experiment 30 tests it regardless.
+
+## Amendment 2, 2026-10-28, 14:50, before any experiment-27, 29, 30 or 33 result: the bias channel
+
+I tried a repair, done once, on a 3-step smoke run: before step 1, remove the readout's accumulated change along the
+mean input direction m̂. The step-0 kick simply happened again. At step 2 the loss was 108 with the repair, against
+22.5 without it. The readout's component along m is not a stray side effect. It is how this readout implements its
+**bias**: with every input ≈ m, W_out·m works as a per-class offset far larger than b_out. Remove it and the next
+step's error relearns it with another giant kick.
+
+**The account (B, "bias channel").** In a normal network the class-bias gradient stops at b_out. Here the effective
+bias is W_out·m, and m is built by every block, so the bias gradient flows backward into all of them. The readout's
+gradient into the stream, d_j W_out, contains (d_j · W_out m̂) m̂. That term asks every example's stream to move
+along m, by an amount set by how wrong the class priors currently are. After a large shared kick the priors are
+very wrong for many steps, so the blocks are flooded with a shared, bias-fitting request that has nothing to do
+with the examples.
+
+**Predictions of B:**
+
+- **Experiment 33** (pre-registered alongside this amendment): cut that channel alone, by projecting m̂ out of the
+  readout-to-stream gradient during training, with the forward pass and the kick left intact. That rescues plain
+  96-layer ReLU on both tasks. The same cut along a random direction does not.
+- **Experiment 30** (registered earlier with my bet on account K): B predicts account C's pattern.
+  - Signed + offset is broken. The bias rides on m_relu, so the bias gradient asks the twin's blocks to build
+    m_relu.
+  - Center + multiplier is healthy. The bias lives in b_out, and the readout's input carries no shared direction.
+
+If experiment 33's cut does not rescue, B is wrong. The total kick, through the example-specific errors it leaves
+behind, would then be enough (account K).
