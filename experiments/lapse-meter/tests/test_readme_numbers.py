@@ -164,5 +164,14 @@ sw = lambda task, cond: float(e25cell(task, cond, 5).split("→")[1])
 claim("E25 share_W", f"{sw('digits','plain')*100:.0f}% (digits) and {sw('circle-clean','plain')*100:.0f}% (circle) of their\n  energy, against {sw('digits','cap10')*100:.1f}% and {sw('circle-clean','cap10')*100:.0f}% when")
 f1 = lambda task, cond: float(e25cell(task, cond, 7).split()[0])
 claim("E25 gate flips", f"({f1('circle-clean','plain')*100:.0f}–{f1('digits','plain')*100:.0f}%), against {f1('digits','cap10')*100:.0f}% when capped")
+# Experiment 28 (README section 14), from the pre-registered analysis's own table
+e28 = open(os.path.join(R, "e28_analysis.md")).read()
+def e28row(key):
+    row = next(l for l in e28.splitlines() if l.startswith(f"| {key} |")).split("|")
+    return row[5].split()[0].strip(), row[6].split()[0].strip(), [float(x) for x in row[9].split("/")]
+for key, label in (("P28a", "ReLU, inputs ×1"), ("P28c", "ReLU ×10, kick capped at 10"), ("P28d", "ReLU ×10, final LayerNorm")):
+    a, b, (fa, fb) = e28row(key)
+    fmt2 = lambda v: f"{v:.3f}" if v < 0.1 else f"{v:.2f}"
+    claim(f"E28 {key}", f"| {a} / {b} | {fmt2(fa)} / {fmt2(fb)} |")
 print(f"{sum(RESULTS)}/{len(RESULTS)} README numbers match the raw results")
 sys.exit(0 if all(RESULTS) else 1)

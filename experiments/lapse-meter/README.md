@@ -472,6 +472,37 @@ step by step.
 - By step 10, about a third of block 1's gates have flipped (32–34%), against 12% when capped.
 - A catapult (Lewkowycz et al. 2020) is not what separates the outcomes: rescued runs also exceed η·λ = 2.
 
+### 14. A different task: next-character prediction (experiment 28)
+
+Everything above used two small image-like classification tasks. Experiment 28
+([`E28_PREREGISTRATION.md`](E28_PREREGISTRATION.md), [`results/e28_analysis.md`](results/e28_analysis.md)) moves to
+the tiny language-model corpus of experiment 3. The task is to predict the next character from the previous 16,
+one-hot: 82 classes and 1,312 inputs. Its one-hot inputs are small, which separates the pile-up from the kick:
+
+- **ReLU, inputs as they are:** the full 37× pile-up, but a kick of only 15–19.
+- **ReLU, inputs ×10:** a kick of about 3,000.
+
+| condition | kick | transport (ReLU / signed twin) | final training loss (ReLU / twin) | predicted | observed |
+|---|---|---|---|---|---|
+| ReLU, inputs ×1 | 15–19 | +2.66 / +1.78 | 0.85 / 0.27 | healthy | healthy |
+| ReLU, inputs ×10 | 2,756–3,196 | never reaches 3 nats / +0.26 at 2 nats | 3.17 / 0.018 | broken | broken |
+| ReLU ×10, kick capped at 10 | 10 | +0.74 / +0.26 | 1.75 / 0.018 | healthy | healthy |
+| ReLU ×10, final LayerNorm | 0.8–0.9 | +0.66 / +0.50 | 0.044 / 0.032 | healthy | healthy |
+
+All four predictions held: the kick account **carries over**.
+
+Three things the predictions did not cover:
+
+- **The broken runs learn nothing past letter frequencies.** Their final loss of 3.17 is exactly the entropy of
+  the character frequencies.
+- **One capped step saves the backward signal, not the learning.** The cap bound only at step 0, yet those runs end
+  at loss 1.75 against the twin's 0.018.
+- **The pile-up costs learning even without a collapse.** ReLU with inputs ×1 is healthy by transport but ends at
+  0.85 against its twin's 0.27. Only the final LayerNorm closes that gap.
+
+Every run overfits badly: test loss is 3.2–8.8 nats with 8,000 training windows. So these are results about how
+training proceeds, not about modelling language.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
