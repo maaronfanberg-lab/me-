@@ -1,0 +1,82 @@
+name: Room isolated production-model conversational A/B
+
+on:
+  push:
+    branches:
+      - research/room-floor-continuity-20261028
+    paths:
+      - '.github/workflows/room-floor-shadow-model.yml'
+      - 'scripts/room_floor_model_shadow.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-floor-shadow-model
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_CONVERSATIONAL_FLOOR: '1'
+      ROOM_NODE_PROMPT: 'Read-only public, isolated Room shadow validation'
+      ROOM_MODEL_NAME: llama3.2-1b-instruct-q4_k_m
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Check syntax and existing conversational regressions
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_floor_model_shadow.py scripts/room_conversation_project.py scripts/room_private_model_autonomy_legacy.py
+          python3 scripts/test_room_conversation_project.py
+          python3 scripts/test_room_sequence_uptake.py
+      - name: Download verified production-class local 1B brain
+        run: |
+          set -euo pipefail
+          mkdir -p .room_shadow/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_shadow
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_shadow/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .room_shadow/llama-runtime-linux-x64.tar.gz -C .room_shadow/runtime
+          curl --fail --location --retry 3 --retry-delay 4             'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true'             --output .room_shadow/llama-3.2-1b-instruct-q4_k_m.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_shadow/llama-3.2-1b-instruct-q4_k_m.gguf' | sha256sum -c -
+      - name: Compare actual model speech with and without optional uptake anchor
+        run: |
+          set -euo pipefail
+          server_bin=$(find .room_shadow/runtime -type f -name 'llama-server' | head -1)
+          test -n "$server_bin"
+          chmod +x "$server_bin"
+          "$server_bin" -m .room_shadow/llama-3.2-1b-instruct-q4_k_m.gguf             --host 127.0.0.1 --port 18080 -c 8192 -np 2 -t 4             >.room_shadow/server.log 2>&1 &
+          model_pid=$!
+          trap 'kill "$model_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:18080/health >/dev/null; then ready=1; break; fi
+            kill -0 "$model_pid" || break
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then tail -70 .room_shadow/server.log; exit 1; fi
+          ROOM_MODEL_URL='http://127.0.0.1:18080/completion' python3 -u scripts/room_floor_model_shadow.py
+      - name: Preserve public test evidence ONLY on research branch
+        if: always()
+        run: |
+          if [ ! -s docs/research/room-floor-shadow-20261028.json ]; then
+            echo 'No valid model comparison; preserve previous code only'
+            exit 1
+          fi
+          git config user.name "room-shadow-research"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/research/room-floor-shadow-20261028.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Record offline Room 1B speech A/B for reviewer"
+          for n in 1 2 3 4; do
+            git push origin HEAD:research/room-floor-continuity-20261028 && exit 0
+            git fetch origin research/room-floor-continuity-20261028
+            git rebase origin/research/room-floor-continuity-20261028 || { git rebase --abort; exit 1; }
+            sleep "$n"
+          done
+          exit 1

@@ -92,6 +92,31 @@ def _authored_resources(profile: Mapping | None) -> dict:
     }
 
 
+def _optional_open_floor_anchor(latest: Mapping | None, entity: str,
+                                floor: Mapping | None) -> bool:
+    """An optional witnessed source, not a mandate to repeat or answer it.
+
+    Only the floor decision for this exact public turn can authorize the
+    context projection. Other people's directed speech and private/system
+    records never become a self-initiated speaker's conversational evidence.
+    """
+    if not isinstance(latest, Mapping) or not isinstance(floor, Mapping):
+        return False
+    speaker = _lower(latest.get("speaker"))
+    if (speaker not in AUTONOMOUS or speaker == _lower(entity)
+            or not str(latest.get("text") or "").strip()
+            or not str(latest.get("id") or "").strip()):
+        return False
+    if (_lower(floor.get("reason")) not in {"open_floor_uptake", "open_floor_relevance"}
+            or _lower(floor.get("speaker")) != _lower(entity)
+            or str(floor.get("source_id") or "") != str(latest.get("id"))):
+        return False
+    return not any(
+        is_directed(dict(latest), recipient)
+        for recipient in AUTONOMOUS if recipient != speaker
+    )
+
+
 def expression_project(
     *,
     entity: str,
@@ -99,6 +124,7 @@ def expression_project(
     context: list,
     profile: Mapping | None,
     private_self_state: Mapping | None,
+    floor: Mapping | None = None,
 ) -> dict:
     """One immutable per-beat plan carrying source and provenance to expression.
 
@@ -135,14 +161,19 @@ def expression_project(
     psyche = private_self_state if isinstance(private_self_state, Mapping) else {}
     stable = {k: psyche[k] for k in ("who_i_am", "what_i_want")
               if isinstance(psyche.get(k), str) and psyche[k].strip()}
+    optional_anchor = _optional_open_floor_anchor(event, entity, floor)
     return {
-        # No direct response is outstanding. The recent turns are still
-        # independently observed, but no old subject is selected for expression.
-        "event": None,
-        "context": [],
+        # Independent initiative remains permitted. When the selector
+        # specifically chose open-floor uptake, retain exactly the last
+        # witnessed public turn for *optional* acknowledgement or development,
+        # without resurfacing the old topic episode or stale memory quotations.
+        "event": event if optional_anchor else None,
+        "context": [event] if optional_anchor else [],
+
         "private_self_state": stable,
         "interaction_project": {
             "kind": "self_initiated_contribution",
+            "optional_uptake": optional_anchor,
             "observed_source_id": source_id,
             "prior_speaker": event.get("speaker") if event else None,
             "evidence": "user_authored_character_motivations",

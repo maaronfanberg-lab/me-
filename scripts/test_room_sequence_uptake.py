@@ -114,6 +114,80 @@ class UptakeTests(unittest.TestCase):
             validate_uptake(history=[previous], speaker="sarah",
                             utterance=reply, move="support")
 
+    def test_long_unchanged_statement_is_not_a_responsive_action(self):
+        source = turn("mara-source", "mara",
+            "I can tell that our conversation needs to address that awkwardness "
+            "in our past. Let's try to have a grown-up conversation about "
+            "the elephant in the room.")
+        for action in ("answer", "support", "repair"):
+            with self.subTest(action=action), self.assertRaisesRegex(
+                    ValueError, "unchanged_full_turn_echo"):
+                validate_uptake(history=[source], speaker="sarah",
+                    utterance=source["text"], move=action)
+        # Sharing the subject or quotation AND giving an independent meaning
+        # remains legal. This is conversational action, not lexical censorship.
+        validate_uptake(history=[source], speaker="sarah",
+            utterance="The awkwardness matters, Mara, but I don't agree that "
+                      "we have a shared past in the way you suggest.", move="disagree")
+        validate_uptake(history=[source], speaker="sarah",
+            utterance=source["text"] + " What particular incident do you mean?",
+            move="repair")
+
+    def test_long_statement_copy_fails_selected_candidate_preflight(self):
+        os.environ["ROOM_CONVERSATIONAL_FLOOR"] = "1"
+        source = turn("mara-old", "mara",
+            "I think we should try new ideas, especially since we have "
+            "several different perspectives and we could test one concrete "
+            "hypothesis before committing to a joint project.")
+        part = {"node": 2, "entity": "sarah", "role": "expression",
+                "private": {"intent": {"readiness": .7}, "expression": {
+                    "decision": "SPEAK", "utterance": source["text"],
+                    "move": "answer", "target": "mara",
+                    "semantic_terms": ["hypothesis"]
+                }}}
+        with self.assertRaisesRegex(ValueError, "unchanged_full_turn_echo"):
+            validate_candidate(part, "sarah", [source], {"root": "river"})
+
+    def test_generation_boundary_retries_whole_source_action_not_short_echo(self):
+        from room_private_model_autonomy_legacy import _unchanged_source_action
+        long_source = ("I can tell that our conversation needs to address that "
+                       "awkwardness in our past. Let's try to have a grown-up "
+                       "conversation about the elephant in the room.")
+        compact = {"event": {"speaker": "mara", "text": long_source}}
+        self.assertTrue(_unchanged_source_action(long_source, compact))
+        self.assertFalse(_unchanged_source_action(
+            "Mara, what particular awkwardness do you mean?", compact))
+        self.assertFalse(_unchanged_source_action(
+            long_source + " Could you name an example?", compact))
+        self.assertFalse(_unchanged_source_action(
+            "Trees? That oak has the best view.",
+            {"event": {"speaker": "mara",
+                       "text": "Trees? That oak has the best view."}}))
+        self.assertFalse(_unchanged_source_action(
+            long_source, {"event": {"speaker": "mara",
+                                   "text": "What do you mean by this?"}}))
+
+    def test_live_long_multisentence_question_echo_is_not_a_repair(self):
+        source = turn("live-owen", "owen",
+            "That's a fascinating question. Can you tell me more about "
+            "what you think this is? What makes you think species might not "
+            "change into one shape in a single species lineage?")
+        echo = ("That's a fascinating question. Can you tell me more about "
+                "what you think this is. What makes you think species might not "
+                "change into one shape in a single species lineage?")
+        for action in ("answer", "support", "repair", "clarify"):
+            with self.subTest(action=action), self.assertRaisesRegex(
+                    ValueError, "unchanged_full_turn_echo"):
+                validate_uptake(history=[source], speaker="jules",
+                                utterance=echo, move=action)
+        # A real repair points to one unclear aspect, not the entire source.
+        validate_uptake(history=[source], speaker="jules",
+            utterance="Owen, what do you mean by one shape within a lineage?",
+            move="repair")
+        # Short exact questions can still be purposefully repeated as repair.
+        validate_uptake(history=[turn("short-q", "mara", "Where did it go?")],
+            speaker="jules", utterance="Where did it go?", move="repair")
+
     def test_source_identity_survives_mixed_public_conversation(self):
         history = [
             turn("q1", "mara", "Who do you think you are?"),

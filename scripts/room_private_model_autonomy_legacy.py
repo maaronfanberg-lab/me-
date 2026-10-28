@@ -161,6 +161,11 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
             context=list(supplied.get("context") or []),
             profile=supplied.get("profile"),
             private_self_state=supplied.get("private_self_state"),
+            floor={
+                "reason": os.environ.get("ROOM_FLOOR_REASON", ""),
+                "source_id": os.environ.get("ROOM_FLOOR_SOURCE_ID", ""),
+                "speaker": os.environ.get("ROOM_FLOOR_SPEAKER", ""),
+            },
         )
         supplied.update(project)
         if project["interaction_project"]["kind"] == "self_initiated_contribution":
@@ -218,11 +223,13 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         current_project = compact.get("interaction_project")
         current_project = current_project if isinstance(current_project, dict) else {}
         initiative = current_project.get("kind") == "self_initiated_contribution"
+        optional_uptake = initiative and current_project.get("optional_uptake") is True
         proposal = current_project.get("kind") == "respond_to_proposal"
-        if initiative:
+        if initiative and not optional_uptake:
             compact["event"] = None
         compact["social_opportunity"] = {
-            "action_due": ("self_initiated_contribution" if initiative
+            "action_due": ("optional_uptake_or_self_initiated" if optional_uptake
+                           else "self_initiated_contribution" if initiative
                            else "respond_to_proposal" if proposal
                            else "directed_response_or_repair" if directly_addressed
                            else "open_floor_response_or_repair"),
@@ -385,6 +392,24 @@ def _public_meta_language(utterance: str, compact: dict) -> bool:
     return not bool(re.search(r"\b(?:script|screenplay|screenwriter|screenwriting)\b", evidence))
 
 
+def _unchanged_source_action(utterance: str, compact: dict) -> bool:
+    """Whole prior spoken action copied as the entire long candidate turn.
+
+    Not an n-gram novelty ban. Short echoes, vocabulary alignment and a
+    quote followed by a real follow-up remain legitimate.
+    """
+    event = compact.get("event") if isinstance(compact, dict) else None
+    if not isinstance(event, dict):
+        return False
+    source = str(event.get("text") or "").strip()
+    if not source:
+        return False
+    before = re.findall(r"[A-Za-z0-9']+", source.casefold())
+    after = re.findall(r"[A-Za-z0-9']+", str(utterance or "").casefold())
+    threshold = 20 if source.endswith("?") else 12
+    return len(before) >= threshold and before == after
+
+
 def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
     if role not in AUTONOMY_PROMPTS:
         raise ValueError(f"unknown private model role: {role}")
@@ -406,8 +431,12 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
             "Respond naturally to the current conversation. Keep the chosen move, focus, and intended partner while choosing your own words. "
             "Use only details supported by what was actually said. Do not invent unsupported conflict, jealousy, secrets, threats, shared memories, "
             "or dramatic incidents. Treat reported claims as reports unless independent evidence is present. " +
-            ("Shared wording can be reused to answer, clarify, acknowledge, or emphasize a point. "
-             "Prioritize the relevant conversational action over novelty.\n" if social_floor
+            ("When another participant's statement is visible, it is evidence of what THEY said, not "
+             "your own turn to repeat. Respond with one actual conversational action: acknowledge "
+             "and develop a specific point, disagree with a reason, answer, ask a relevant "
+             "clarification, or independently introduce something meaningful. Reuse key "
+             "terms and brief quotations where useful, but give your own contribution "
+             "rather than reproducing their complete statement.\n" if social_floor
              else "Avoid copying recent speech. Stay inside the conversation.\n")
         )
 
@@ -418,8 +447,12 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
         if attempt:
             retry_guard = (
                 "\nTRY_AGAIN\n" +
-                ("Recheck the actual source utterance and the action it makes relevant. "
-                 "Keep your own voice, stance and uncertainty.\n" if social_floor
+                (("The last attempt repeated the previous speaker's entire statement. That is not "
+                  "an answer. State your own response to a concrete point, or ask a real "
+                  "clarifying question, without inventing facts.\n"
+                  if last_reason == "unchanged_source_action" else
+                  "Recheck the actual source utterance and the action it makes relevant. "
+                  "Keep your own voice, stance and uncertainty.\n") if social_floor
                  else "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n")
             )
 
@@ -481,6 +514,11 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                 # hygiene checks still run; an absent model is not silence.
                 if _public_meta_language(utterance, compact):
                     last_reason = "meta_language"
+                    continue
+                if social_floor and _unchanged_source_action(utterance, compact):
+                    # Retry at the model boundary rather than publish a whole
+                    # copied nonquestion as an apparent reply.
+                    last_reason = "unchanged_source_action"
                     continue
                 if not social_floor and (base._too_similar_to_context(utterance, compact) or _has_context_echo(utterance, compact)):
                     last_reason = "duplicate_context"

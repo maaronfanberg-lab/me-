@@ -78,7 +78,7 @@ def validate_uptake(
     """Fail a pseudo-answer that simply republishes an unresolved question.
 
     Legitimate purposeful quotation and genuine first repair initiation pass.
-    This gate checks only complete exact question-echo actions, never topic
+    This gate checks complete exact question/long-statement echo actions, never topic
     words or n-gram similarity. It cannot evaluate the wider meaning of prose.
     """
     public = public_participant_turns(history)
@@ -89,6 +89,19 @@ def validate_uptake(
         return
     text = str(latest.get("text") or "").strip()
     candidate = str(utterance or "").strip()
+    # Reproducing a complete, substantial previous statement as one's own
+    # answer does not display independent understanding or conversational
+    # progress. This checks WHOLE-ACTION identity, never repeated vocabulary.
+    # A short echo can be a valid emphasis or other-initiation of repair;
+    # first-position full-question repairs retain the existing exception below.
+    source_words = _utterance_key(text).split()
+    # Complete long, multi-sentence question echoes are not genuine
+    # clarification just because the model labels them "repair". Short
+    # first other-initiated question repair remains explicitly available.
+    min_echo_words = 20 if text.endswith("?") else 12
+    if (len(source_words) >= min_echo_words
+            and _utterance_key(candidate) == _utterance_key(text)):
+        raise ValueError("unchanged_full_turn_echo")
     if not (text.endswith("?") and candidate.endswith("?")):
         return
     if _utterance_key(candidate) not in {

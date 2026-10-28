@@ -331,6 +331,7 @@ assert state["conversational_floor"] == "opportunity_v1"
 assert state["conversational_floor_health"]["active"] is True
 assert state["conversational_floor_health"]["fallback_reason"] is None
 assert state["conversational_floor_health"]["diagnostic_only"] is True
+assert state["conversational_floor_health"]["source_anchor_version"] == "optional_selected_public_v1"
 
 # The old four-voice path must STILL reject the nine-node input.
 os.environ.pop("ROOM_CONVERSATIONAL_FLOOR", None)
