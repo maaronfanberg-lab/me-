@@ -60,12 +60,12 @@ def main():
             chain.append({"id":f"{mode}-{step}","speaker":speaker,"text":out["text"]})
         traces[mode]={"turns":chain,"diagnostics":analyze(chain)}
         print("CHAIN",mode,len(chain),flush=True)
-    result={"purpose":"quick production-wrapper 1B A/B, never deployed",
+    result={"purpose":"v2 source-action retry A/B using production wrapper, never deployed",
             "model":"llama3.2-1b production wrapper",
             "source_cycle":(feed.get("state") or {}).get("cycle"),
             "pairs":pairs,"chains":traces,
             "limitations":"Small sample and structural metrics; judge semantic responsiveness and multi-turn continuity manually."}
-    dst=ROOT/"docs/research/room-floor-quick-model-20261028.json"
+    dst=ROOT/"docs/research/room-floor-quick-model-v2-20261028.json"
     dst.write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n")
     print("COMPLETE",str(dst),flush=True)
 
