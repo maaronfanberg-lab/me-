@@ -38,7 +38,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertIn("Structural diagnostics", result["limitations"])
 
     def test_short_valid_reply_is_not_labeled_bad(self):
-        result = analyze([turn(1, "mara", "Will you come?"),
+        result = analyze([turn(1, "mara", "Would you be willing to come with us?"),
                           turn(2, "sarah", "Yes.")])
         self.assertEqual(result["short_autonomous_1to3_word_turns"], 1)
         self.assertNotIn("invalid", result)
