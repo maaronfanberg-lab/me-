@@ -173,6 +173,17 @@ class Projects(unittest.TestCase):
                     if observer != recipient:
                         self.assertFalse(project.response_project(source, observer))
 
+    def test_direct_address_partner_matrix(self):
+        people = ("sarah", "mara", "owen", "jules")
+        for i in range(100):
+            speaker = people[i % 4]
+            recipient = people[(i + 1) % 4]
+            payload = self.input(event(speaker, "Hey %s, why?" % recipient, str(i)))
+            payload["entity"] = recipient
+            payload["deliberation"] = {"action": "ANSWER", "preferred_partner": people[(i + 2) % 4]}
+            packed = autonomy._autonomy_compact(payload, "expression", recipient)
+            self.assertEqual(packed["intent"]["partner"], speaker)
+
     def test_personal_attention_without_canned_subject_rotation(self):
         old = event("mara", "Nothing else needed.", "m3")
         a = project.expression_project(entity="jules", latest=old, context=[old],
