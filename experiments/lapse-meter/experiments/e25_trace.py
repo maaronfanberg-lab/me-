@@ -65,11 +65,12 @@ def main(cfg, path, steps=200):
         if s == steps: break
         _, gW, gb, _ = net.backward(X[idx], y[idx])
         if c["warmup"]: opt.lr = c["lr"] * min(1.0, (s + 1) / c["warmup"])
-        kick = None
-        if c.get("kick_cap") is not None:
-            hb = net.forward(X[idx])[0][-2]; dzb = hb @ (-opt.lr * gW[L - 1]).T - opt.lr * gb[L - 1]
-            kb = float(np.sqrt(np.mean(np.sum(dzb * dzb, 1))))
-            if kb > c["kick_cap"]: f_ = c["kick_cap"] / kb; gW[L - 1] = gW[L - 1] * f_; gb[L - 1] = gb[L - 1] * f_
+        hb = net.forward(X[idx])[0][-2]; dzb = hb @ (-opt.lr * gW[L - 1]).T - opt.lr * gb[L - 1]
+        kb = float(np.sqrt(np.mean(np.sum(dzb * dzb, 1))))       # this step's proposed readout kick, on the minibatch
+        applied = kb
+        if c.get("kick_cap") is not None and kb > c["kick_cap"]:
+            f_ = c["kick_cap"] / kb; gW[L - 1] = gW[L - 1] * f_; gb[L - 1] = gb[L - 1] * f_; applied = c["kick_cap"]
+        if log and log[-1]["step"] == s: log[-1]["kick_proposed"], log[-1]["kick_applied"] = kb, applied
         opt.step(net, gW, gb)
     json.dump(dict(config=c, log=log), open(path, "w"))
     a, b = log[0], log[-1]
