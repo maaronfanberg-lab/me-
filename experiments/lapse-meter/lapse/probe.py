@@ -15,6 +15,11 @@ from .nets import ACTS
 from .core import _rms_norm as rms
 
 
+def _lr(a, b):
+    """ln(a / b), nan when either is zero (e.g. an output layer started at zero passes no gradient back)."""
+    return float(np.log(a / b)) if a > 0 and b > 0 else float("nan")
+
+
 def diagnose(net, X, y):
     assert net.residual, "residual networks only"
     f, df = ACTS[net.act]
@@ -28,24 +33,24 @@ def diagnose(net, X, y):
     for i in range(L - 2, -1, -1):
         g[i] = gh
         if i > 0:
-            deltas[i] = gh * net.alpha * df(z[i])
+            deltas[i] = gh * net.alpha * df(z[i]) * (1.0 if net.S is None else net.S[i])
             gh = gh + deltas[i] @ net.W[i]
         else:
             deltas[i] = gh * df(z[i]); gh = deltas[i] @ net.W[i]
     blocks = range(1, L - 1)
     r_out = rms(d)
-    ln_out = np.log(rms(g[L - 2]) / r_out)
-    ln_transport = np.log(rms(g[1]) / rms(g[L - 2]))
-    ln_gate = np.log(rms(deltas[1] / net.alpha) / rms(g[1]))
+    ln_out = _lr(rms(g[L - 2]), r_out)
+    ln_transport = _lr(rms(g[1]), rms(g[L - 2]))
+    ln_gate = _lr(rms(deltas[1] / net.alpha), rms(g[1]))  # a +-1 branch sign leaves RMS unchanged
     dens = [float(np.mean(df(z[i]) > 0)) if net.act == "relu" else float(np.mean(df(z[i]))) for i in blocks]
     dead = [float(np.mean(np.all(z[i] <= 0, axis=0))) for i in blocks] if net.act == "relu" else None
     return dict(
-        Tstar=float(np.log(rms(deltas[1] / net.alpha) / r_out)),
+        Tstar=_lr(rms(deltas[1] / net.alpha), r_out),
         ln_out=float(ln_out), ln_transport=float(ln_transport), ln_gate=float(ln_gate),
-        stream_grad=[float(np.log(rms(g[i]) / r_out)) for i in blocks],       # ln RMS g_l, relative to output delta
-        gate=[float(np.log(rms(deltas[i] / net.alpha) / rms(g[i]))) for i in blocks],
+        stream_grad=[_lr(rms(g[i]), r_out) for i in blocks],       # ln RMS g_l, relative to output delta
+        gate=[_lr(rms(deltas[i] / net.alpha), rms(g[i])) for i in blocks],
         stream_norm=[float(rms(h[i + 1])) for i in blocks],                     # forward residual-stream size
-        branch_ratio=[float(rms(net.alpha * f(z[i])) / rms(h[i])) for i in blocks],  # block update vs stream before it
+        branch_ratio=[float(rms(net.alpha * f(z[i])) / rms(h[i])) if rms(h[i]) > 0 else float("nan") for i in blocks],  # block update vs stream before it
         density=dens, dead=dead,
         Wout=float(np.linalg.norm(net.W[-1])),
     ), deltas

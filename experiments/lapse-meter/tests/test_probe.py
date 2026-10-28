@@ -21,3 +21,16 @@ for act in ("tanh", "relu"):
     s = dg["ln_out"] + dg["ln_transport"] + dg["ln_gate"]
     check(f"{act}: three parts add to T*", abs(s - T) < 1e-12, f"sum {s:.6f}")
 print(f"{sum(R)}/{len(R)} probe checks passed")
+# branch_sign: gradients must still be exact (finite differences) and probe must match backward
+net = MLP(12, 16, 10, 4, act="relu", residual=True, seed=4, branch_sign=True)
+dg, dl = diagnose(net, X, y); ref = net.backward(X, y)
+R2 = max(np.max(np.abs(a - b)) for a, b in zip(dl, ref[3]))
+check("branch_sign: probe deltas equal MLP.backward", R2 == 0.0)
+i, j, k, eps = 3, 2, 5, 1e-6
+net.W[i][j, k] += eps; lp = net.loss(X, y); net.W[i][j, k] -= 2 * eps; lm = net.loss(X, y); net.W[i][j, k] += eps
+fd = (lp - lm) / (2 * eps)
+check("branch_sign: gradient matches finite difference", abs(fd - ref[1][i][j, k]) < 1e-7 * max(1, abs(fd)), f"{fd:.3e} vs {ref[1][i][j, k]:.3e}")
+plain = MLP(12, 16, 10, 4, act="relu", residual=True, seed=4)
+fresh = MLP(12, 16, 10, 4, act="relu", residual=True, seed=4, branch_sign=True)  # (net above was nudged by the finite difference)
+check("branch_sign leaves the initial weights unchanged", all(np.array_equal(a, b) for a, b in zip(plain.W, fresh.W)))
+print(f"{sum(R)}/{len(R)} probe checks passed (with branch_sign)")

@@ -16,9 +16,27 @@ ACTS = {
 }
 
 
+def _shrink(th):
+    """Soft threshold: odd (zero-mean output), with ReLU-like hard 0/1 gates, open where |z| > th."""
+    return (lambda z: np.sign(z) * np.maximum(np.abs(z) - th, 0.0), lambda z: (np.abs(z) > th).astype(np.float64))
+
+
+def _leaky(a):
+    return (lambda z: np.where(z > 0, z, a * z), lambda z: np.where(z > 0, 1.0, a))
+
+
+# Added for experiments 9 onward (existing entries above are unchanged):
+ACTS.update({
+    "tanh+1": (lambda z: np.tanh(z) + 1.0, lambda z: 1.0 - np.tanh(z) ** 2),  # tanh's derivative exactly, positive mean
+    "shrink0.4": _shrink(0.4),    # threshold giving about half the gates open at initialisation on digits
+    "shrink0.12": _shrink(0.12),  # the same on the clean circle (its pre-activations are smaller)
+    "leaky0.1": _leaky(0.1), "leaky0.3": _leaky(0.3), "leaky0.6": _leaky(0.6),
+})
+
+
 class MLP:
     def __init__(self, din, width, depth, dout, act="tanh", sigma_w=1.0, residual=False, alpha=None,
-                 seed=0, orthogonal=False):
+                 seed=0, orthogonal=False, branch_sign=False):
         self.act, self.residual = act, residual
         self.alpha = (1.0 / np.sqrt(depth)) if (residual and alpha is None) else (alpha or 1.0)
         rng = np.random.default_rng(seed)
@@ -33,6 +51,13 @@ class MLP:
                 W = rng.standard_normal((fout, fin)) * sigma_w / np.sqrt(fin)
             self.W.append(W)
             self.b.append(np.zeros(fout))
+        # branch_sign (experiments 10 onward): each residual block's output is multiplied unit-wise by a fixed random
+        # +-1 sign, drawn separately for every block from its own generator, so the init weights above are unchanged.
+        # The activation derivative's magnitude is untouched; only the direction each block writes into the stream varies.
+        self.S = None
+        if branch_sign:
+            srng = np.random.default_rng(seed + 7_777_777)
+            self.S = [None] + [srng.choice([-1.0, 1.0], size=width) for _ in range(depth - 1)] + [None]
 
     @property
     def depth(self):
@@ -49,7 +74,7 @@ class MLP:
             if i == L - 1:
                 h.append(zi)
             elif self.residual and i > 0:
-                h.append(h[-1] + self.alpha * f(zi))
+                h.append(h[-1] + self.alpha * (f(zi) if self.S is None else self.S[i] * f(zi)))
             else:
                 h.append(f(zi))
         return h, z
@@ -74,7 +99,7 @@ class MLP:
         gh = d @ self.W[-1]                      # dL/dh_{L-1}
         for i in range(L - 2, -1, -1):
             if self.residual and i > 0:
-                deltas[i] = gh * self.alpha * df(z[i])
+                deltas[i] = gh * self.alpha * df(z[i]) * (1.0 if self.S is None else self.S[i])
                 gh = gh + deltas[i] @ self.W[i]  # skip path + block path
             else:
                 deltas[i] = gh * df(z[i])

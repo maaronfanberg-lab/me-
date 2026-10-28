@@ -1,7 +1,9 @@
 """One configurable residual-network run with full diagnostics (lapse/probe.py), for experiments 8 onward.
 With default settings it trains exactly the experiment-7 network (tests/test_probe_run.py checks the T* log is
 bit-identical to results/e7). Usage: python experiments/probe_run.py '<json config>' out.json
-Config keys (defaults in DEFAULTS): task, act, depth, seed, width, lr, steps, alpha, sigma_w, opt, freeze.
+Config keys (defaults in DEFAULTS): task, act, depth, seed, width, lr, steps, alpha, sigma_w, opt, freeze,
+warmup (steps of linear learning-rate warm-up; 0 = none), zero_out (start the output layer at zero),
+branch_sign (fixed random +-1 sign on each block's output units; see lapse/nets.py).
 freeze: list of parts held at their initial values: "out" (output layer), "blocks" (all residual blocks).
 """
 import sys, os, json
@@ -13,7 +15,7 @@ from lapse.probe import diagnose
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500)
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False)
 
 
 def run(cfg, path=None):
@@ -22,7 +24,8 @@ def run(cfg, path=None):
     X, y, Xt, yt = e4.make(c["task"], c["seed"])
     ncls = int(max(y.max(), yt.max()) + 1)
     net = MLP(X.shape[1], c["width"], c["depth"], ncls, act=c["act"], sigma_w=c["sigma_w"], residual=True,
-              alpha=c["alpha"], seed=c["seed"])
+              alpha=c["alpha"], seed=c["seed"], branch_sign=c["branch_sign"])
+    if c["zero_out"]: net.W[-1][:] = 0.0  # output layer starts at zero: initial logits are all zero
     opt = SGD(c["lr"]) if c["opt"] == "sgd" else Adam(c["lr"])
     rng = np.random.default_rng(10_000 + c["seed"])
     L = len(net.W); frozen = set()
@@ -41,6 +44,7 @@ def run(cfg, path=None):
         _, gW, gb, _ = net.backward(X[idx], y[idx])
         if not all(np.all(np.isfinite(w)) for w in gW): break
         for i in frozen: gW[i] = np.zeros_like(gW[i]); gb[i] = np.zeros_like(gb[i])
+        if c["warmup"]: opt.lr = c["lr"] * min(1.0, (s + 1) / c["warmup"])  # linear warm-up to lr
         opt.step(net, gW, gb)
     res = dict(config=c, test_acc=net.accuracy(Xt, yt), log=log)
     if path: json.dump(res, open(path, "w"))
