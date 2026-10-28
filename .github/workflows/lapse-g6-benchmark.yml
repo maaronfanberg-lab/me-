@@ -1,0 +1,61 @@
+name: Lapse G6A adversarial benchmark
+
+on:
+  pull_request:
+    paths:
+      - "experiments/lapse-meter/GAUGE_G6A_PREREGISTRATION.md"
+      - "experiments/lapse-meter/experiments/g6_benchmark.py"
+      - "experiments/lapse-meter/tests/test_g6_benchmark.py"
+      - "experiments/lapse-meter/results/g6a/**"
+      - ".github/workflows/lapse-g6-benchmark.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      PYTHONHASHSEED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numerical dependencies
+        run: python -m pip install "numpy==2.3.5" "scikit-learn==1.8.0"
+      - name: Check data isolation, determinism and supported models
+        working-directory: experiments/lapse-meter
+        run: python tests/test_g6_benchmark.py
+      - name: Run frozen tuning, five-seed holdout and gauge challenges
+        working-directory: experiments/lapse-meter
+        run: python -u experiments/g6_benchmark.py results/g6a/ci_results.json
+      - name: Print preregistered decisions
+        if: always()
+        working-directory: experiments/lapse-meter
+        run: |
+          python - <<'PY'
+          import json,os
+          p='results/g6a/ci_results.json'
+          if not os.path.exists(p):
+              print('Benchmark did not produce results')
+          else:
+              r=json.load(open(p))
+              s=r['summary']
+              print('H1 gauge invariance:',s['primary_gauge_pass'])
+              print('H2 G5 wins >=4/6:',s['directional_h2_pass'],'wins',s['g5_wins'])
+              for c in s['cells']:
+                  print(c['task'],c['architecture'],{k:v['mean_test_loss'] for k,v in c['metrics'].items()})
+          PY
+      - name: Preserve raw results whether positive or negative
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lapse-g6a-full-benchmark
+          path: experiments/lapse-meter/results/g6a/ci_results.json
+          if-no-files-found: warn
