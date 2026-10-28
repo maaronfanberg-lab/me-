@@ -5,7 +5,8 @@ Config keys (defaults in DEFAULTS): task, act, depth, seed, width, lr, steps, al
 warmup (steps of linear learning-rate warm-up; 0 = none), zero_out (start the output layer at zero),
 branch_sign (fixed random +-1 sign on each block's output units; True = even odds, a number q = probability
 of +1; see lapse/nets.py), warmup_parts ("all", "out" = output layer only, "blocks" = residual blocks only),
-block ("one" = h + alpha*act(Wh), the default; "two" = h + alpha*V act(Wh), lapse/nets2.py).
+block ("one" = h + alpha*act(Wh), the default; "two" = h + alpha*V act(Wh), lapse/nets2.py),
+out_lr_mult (permanent learning-rate multiplier on the readout; SGD only), input_scale (inputs multiplied by it).
 freeze: list of parts held at their initial values: "out" (output layer), "blocks" (all residual blocks).
 """
 import sys, os, json
@@ -18,13 +19,14 @@ from lapse.nets2 import MLP2
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one")
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0)
 
 
 def run(cfg, path=None):
     c = {**DEFAULTS, **cfg}
     if path: os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     X, y, Xt, yt = e4.make(c["task"], c["seed"])
+    if c["input_scale"] != 1.0: X, Xt = X * c["input_scale"], Xt * c["input_scale"]  # experiment 23
     ncls = int(max(y.max(), yt.max()) + 1)
     if c["block"] == "two":
         assert not c["branch_sign"] and c["opt"] == "sgd", "two-matrix blocks: SGD, no branch signs"
@@ -58,6 +60,8 @@ def run(cfg, path=None):
             k = min(1.0, (s + 1) / c["warmup"])
             for i in ([L - 1] if c["warmup_parts"] == "out" else range(1, L - 1)):
                 gW[i] = gW[i] * k; gb[i] = gb[i] * k
+        if c["out_lr_mult"] != 1.0:  # experiment 23: a permanent learning-rate multiplier on the readout alone
+            gW[L - 1] = gW[L - 1] * c["out_lr_mult"]; gb[L - 1] = gb[L - 1] * c["out_lr_mult"]
         opt.step(net, gW, gb)
         if c["block"] == "two":  # the blocks' second matrices, same SGD step (warm-up included via opt.lr)
             k = min(1.0, (s + 1) / c["warmup"]) if (c["warmup"] and c["warmup_parts"] == "blocks") else 1.0
