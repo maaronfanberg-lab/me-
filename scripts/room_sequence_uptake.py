@@ -30,12 +30,21 @@ def question_sequence(context: list, latest: Mapping | None) -> dict:
     if not current:
         return {"kind": "not_question_sequence", "echoes": 0}
     public = public_participant_turns(list(context or []))
-    prior = [
-        item for item in public[-8:]
+    # Count echoes within the current *contiguous* question sequence.
+    # An intervening substantive turn can answer, reject, or redirect the
+    # question. Without semantic evidence we must not call a later reuse
+    # of the wording an unresolved echo of the earlier action.
+    preceding = [
+        item for item in public
         if str(item.get("id")) != str(latest.get("id"))
-        and str(item.get("text") or "").strip().endswith("?")
-        and _utterance_key(item.get("text")) == current
     ]
+    prior = []
+    for item in reversed(preceding):
+        spoken = str(item.get("text") or "").strip()
+        if not spoken.endswith("?") or _utterance_key(spoken) != current:
+            break
+        prior.append(item)
+    prior.reverse()
     first = prior[0] if prior else latest
     return {
         "kind": "unanswered_question_echo" if prior else "question_open",
