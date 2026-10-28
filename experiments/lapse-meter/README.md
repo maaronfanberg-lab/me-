@@ -434,6 +434,44 @@ no voice is ever more than one auditory-filter width from its neighbours
 
 A full write-up is in the project's document "Why Deep ReLU Networks Lose Their Backward Signal".
 
+### 13. Testing the kick by intervention (experiments 24–26)
+
+Experiments 22–23 showed the kick *predicts* the collapse. The next three asked whether changing the kick, and
+nothing else, changes the outcome.
+
+**Experiment 24 (pre-registered, [`E24_PREREGISTRATION.md`](E24_PREREGISTRATION.md)).** At each step the readout's
+update was scaled down so that its logit change could not exceed a cap. The network, data and every other update
+were left alone.
+
+- Caps of 30 or less rescued all 18 runs (P24a held).
+- On digits, caps of 100 and 300 also rescued, though they bound only at steps 0–2.
+- A cap of 1,000 rescued 2 of 3 digits runs, which P24b had said it would not.
+- The response is a step, not a slope (P24c failed): within the rescued range, a smaller cap does not give more
+  transport.
+- z-loss, the standard logit control in large language models (Wortsman et al. 2023), did not prevent the collapse
+  (P24d and P24e held). At 1e-2 it *raised* the kick, because its gradient reaches the readout multiplied by the same
+  piled-up input.
+- The per-run kick rule was right in 42 of 48 runs.
+
+**Experiment 26 (pre-registered, [`E26_PREREGISTRATION.md`](E26_PREREGISTRATION.md)).** LayerNorm was tested in four
+placements, each ReLU network against its signed twin. All four are healthy at 96 layers on both tasks (P26a–P26d
+held).
+
+- A final LayerNorm protects although the stream still carries the full 37× pile-up. It works by bounding the
+  readout's input, and so the kick (0.8–0.9), not by removing the pile-up.
+- Pre-LN with no final LayerNorm is healthy even at 192 layers, with 96–98% of the stream one shared vector.
+- With a final LayerNorm, ReLU ends with *more* transport than its twin (digits +0.75 against +0.54). Experiment 31
+  asks why.
+
+**Experiment 25 (exploratory, signatures fixed in [`E25_PLAN.md`](E25_PLAN.md)).** The first 200 steps were traced
+step by step.
+
+- The natural kick is large only at steps 0 and 1, then near zero.
+- In collapsing runs the readout's weights swing onto the shared direction within 20 steps: 82% (digits) and 88% (circle) of their
+  energy, against 1.6% and 6% when the kick is capped.
+- By step 10, about a third of block 1's gates have flipped (32–34%), against 12% when capped.
+- A catapult (Lewkowycz et al. 2020) is not what separates the outcomes: rescued runs also exceed η·λ = 2.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be

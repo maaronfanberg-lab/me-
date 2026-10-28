@@ -66,3 +66,23 @@ Three more papers bear on what comes next:
   removing the pile-up.
 - **z-loss** (Wortsman 2023) is the standard logit control in large language models. Experiment 24 tests whether
   it prevents this collapse; the kick account predicts it does not.
+
+## Added 2026-10-28, while experiments 28–31 ran
+
+Centering, the manipulation behind experiments 29 and 30, is an old idea:
+
+- **Raiko, Valpola & LeCun 2012**, *Deep Learning Made Easier by Linear Transformations in Perceptrons*, AISTATS
+  2012, arXiv:1301.3476. They transform each hidden unit's output "to have zero output and zero slope on average".
+  The transformations "make the nondiagonal parts of the Fisher information matrix closer to zero", so that
+  "simple stochastic gradient behave[s] closer to second-order optimization methods". Quotes checked against the
+  arXiv text.
+- **LeCun, Bottou, Orr & Müller 1998**, *Efficient BackProp*, in *Neural Networks: Tricks of the Trade*, LNCS 1524.
+  Inputs should have mean near zero, because otherwise a unit's weight changes are synchronized and all move the
+  same way. I could not open the primary text from here, so this is paraphrased from course slides that teach from
+  it ("weight changes are less likely to be synchronized, since some will be positive, others negative"). The
+  wording is unverified.
+
+What experiments 29–30 add, if they hold, is narrower. The harm of a non-centered input here is concentrated at
+**one layer** (the readout) and in **one or two steps**: a single shared logit shift so large it saturates every
+example's prediction at once. That is a different failure from the slow, zig-zagging convergence those papers
+describe.
