@@ -1,0 +1,115 @@
+name: lapse-meter experiments
+
+# Runs a lapse-meter job file on GitHub's machines and commits the results back.
+# A job file is plain text, one shell command per line, run from experiments/lapse-meter.
+# Lines are split across `shards` parallel runners (line i goes to shard i mod shards).
+# After all shards finish, `post` (a shell command, e.g. an analysis script) runs on the combined results,
+# and everything under experiments/lapse-meter/results is committed to main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Job file, relative to experiments/lapse-meter (one command per line)"
+        required: true
+      shards:
+        description: "Number of parallel runners (1-64)"
+        required: true
+        default: "16"
+      post:
+        description: "Command to run after all shards, from experiments/lapse-meter (optional)"
+        required: false
+        default: ""
+      label:
+        description: "Short name used in the commit message"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.m.outputs.shards }}
+    steps:
+      - id: m
+        run: |
+          n=${{ inputs.shards }}
+          python3 -c "import json; print('shards=' + json.dumps(list(range(int('$n')))))" >> "$GITHUB_OUTPUT"
+
+  run:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy==2.1.3 scipy==1.14.1 matplotlib==3.9.2
+      - name: Run this shard's lines
+        working-directory: experiments/lapse-meter
+        env:
+          OPENBLAS_NUM_THREADS: "1"
+          OMP_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+        run: |
+          set -o pipefail
+          N=${{ inputs.shards }}; K=${{ matrix.shard }}
+          mkdir -p results/_ci; touch /tmp/start_marker; sleep 1
+          i=0; fails=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            if [ -n "$line" ] && [ "$((i % N))" -eq "$K" ]; then
+              echo "::group::$line"
+              bash -c "$line" 2>&1 | tee -a "results/_ci/shard_${K}.log" || { fails=$((fails+1)); echo "FAILED: $line" | tee -a "results/_ci/shard_${K}.log"; }
+              echo "::endgroup::"
+            fi
+            i=$((i+1))
+          done < "${{ inputs.jobs }}"
+          echo "shard $K done, $fails failed" | tee -a "results/_ci/shard_${K}.log"
+          # upload only what this shard created or changed
+          mkdir -p /tmp/out; find results -type f -newer /tmp/start_marker -exec cp --parents {} /tmp/out/ \;
+          find /tmp/out -type f | head -5; echo "$(find /tmp/out -type f | wc -l) files"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: /tmp/out
+          if-no-files-found: ignore
+          retention-days: 7
+
+  collect:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy==2.1.3 scipy==1.14.1 matplotlib==3.9.2
+      - uses: actions/download-artifact@v4
+        with:
+          path: shards
+      - name: Merge shard results
+        run: |
+          for d in shards/shard-*; do if [ -d "$d/results" ]; then cp -r "$d"/results/. experiments/lapse-meter/results/; fi; done
+          ls experiments/lapse-meter/results/_ci
+      - name: Post-processing
+        if: inputs.post != ''
+        working-directory: experiments/lapse-meter
+        run: bash -c "${{ inputs.post }}" 2>&1 | tee "results/_ci/post_${{ inputs.label }}.log"
+      - name: Commit results to main
+        run: |
+          git config user.name "lapse-meter CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add experiments/lapse-meter/results
+          git commit -q -m "lapse-meter CI: ${{ inputs.label }} results (run ${{ github.run_id }})" || { echo "nothing to commit"; exit 0; }
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && break
+            sleep $((i * 3))
+          done
