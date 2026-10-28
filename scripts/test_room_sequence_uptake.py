@@ -167,6 +167,27 @@ class UptakeTests(unittest.TestCase):
             long_source, {"event": {"speaker": "mara",
                                    "text": "What do you mean by this?"}}))
 
+    def test_live_long_multisentence_question_echo_is_not_a_repair(self):
+        source = turn("live-owen", "owen",
+            "That's a fascinating question. Can you tell me more about "
+            "what you think this is? What makes you think species might not "
+            "change into one shape in a single species lineage?")
+        echo = ("That's a fascinating question. Can you tell me more about "
+                "what you think this is. What makes you think species might not "
+                "change into one shape in a single species lineage?")
+        for action in ("answer", "support", "repair", "clarify"):
+            with self.subTest(action=action), self.assertRaisesRegex(
+                    ValueError, "unchanged_full_turn_echo"):
+                validate_uptake(history=[source], speaker="jules",
+                                utterance=echo, move=action)
+        # A real repair points to one unclear aspect, not the entire source.
+        validate_uptake(history=[source], speaker="jules",
+            utterance="Owen, what do you mean by one shape within a lineage?",
+            move="repair")
+        # Short exact questions can still be purposefully repeated as repair.
+        validate_uptake(history=[turn("short-q", "mara", "Where did it go?")],
+            speaker="jules", utterance="Where did it go?", move="repair")
+
     def test_source_identity_survives_mixed_public_conversation(self):
         history = [
             turn("q1", "mara", "Who do you think you are?"),
