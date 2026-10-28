@@ -121,6 +121,36 @@ class Projects(unittest.TestCase):
         # An independently deliberated initiative may hear the last speaker
         # without mandatory agreement, topic quotas or canned replies.
 
+    def test_actual_deliberation_floor_choice_retains_source(self):
+        from room_conversational_floor import choose_next
+        source = event("owen", "I found a hidden bird nest in the reeds.", "nest-1")
+        bus = {"recurrent": {
+            "sarah": {"thought": {"private": {"deliberation": {
+                "action": "DEEPEN", "preferred_partner": "owen",
+                "unresolved_thread": "How was the nest protected?",
+            }}}},
+            "mara": {"thought": {"private": {"deliberation": {
+                "action": "DISCLOSE", "preferred_partner": "jules",
+            }}}},
+            "jules": {"thought": {"private": {"deliberation": {
+                "action": "COMPARE", "preferred_partner": "sarah",
+            }}}},
+            "owen": {"thought": {"private": {"deliberation": {
+                "action": "CLOSE", "preferred_partner": "mara",
+            }}}},
+        }}
+        selected = choose_next(
+            [source], bus, {"p": {}},
+            {"entities": {entity: {"people": {}} for entity in
+                          ("sarah", "mara", "jules", "owen")}})
+        self.assertEqual(selected["reason"], "open_floor_relevance")
+        self.assertNotEqual(selected["speaker"], "owen")
+        projected = project.expression_project(
+            entity=selected["speaker"], latest=source, context=[source],
+            profile=PROFILE, private_self_state=MOTIVATION, floor=selected)
+        self.assertEqual(projected["event"]["id"], "nest-1")
+        self.assertTrue(projected["interaction_project"]["optional_uptake"])
+
     def test_optional_anchor_never_treats_directed_or_self_speech_as_own(self):
         examples = (
             event("mara", "Sarah, please answer me.", "m1"),
