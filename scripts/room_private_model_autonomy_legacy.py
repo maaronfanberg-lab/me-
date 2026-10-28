@@ -239,7 +239,20 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
         if isinstance(intent, dict):
             intent = dict(intent)
             intent.pop("aim", None)
-            if isinstance(deliberation, dict):
+            # A witnessed direct address outranks an older private preference
+            # for a different conversation partner. The generation schema
+            # must not lock a reply to Sarah when Jules just addressed Mara.
+            event = clean_payload.get("event")
+            directed = (isinstance(event, dict)
+                        and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1")
+            if directed:
+                from room_conversational_floor import is_directed
+                directed = is_directed(event, self_entity)
+            if directed:
+                partner = base._norm(event.get("speaker"))
+                if partner in PEOPLE and partner != self_entity:
+                    intent["partner"] = partner
+            elif isinstance(deliberation, dict):
                 partner = base._norm(deliberation.get("preferred_partner"))
                 if partner in PEOPLE and partner != self_entity:
                     intent["partner"] = partner
