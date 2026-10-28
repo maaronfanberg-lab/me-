@@ -42,7 +42,24 @@ PASS E21 RMSprop (normalization only): README should contain 'RMSprop (normaliza
 PASS E21 momentum SGD (momentum only): README should contain 'momentum SGD (momentum only) | +0.76 | +1.43 |'
 PASS sound shock median jump: README should contain '2.75'
 PASS sound shock_warmup median jump: README should contain '0.31'
-Traceback (most recent call last):
-  File "/home/runner/work/me-/me-/experiments/lapse-meter/tests/test_readme_numbers.py", line 128, in <module>
-    from sklearn.metrics import roc_auc_score
-ModuleNotFoundError: No module named 'sklearn'
+PASS E22 AUC kick: README should contain '| readout kick (logit change from one SGD step on the readout; μP's argument) | 0.99 | 0.94 |'
+PASS E22 AUC sharp: README should contain '| preconditioned sharpness (Gilmer 2022; Kalra & Barkeshli 2024) | 0.91 | 0.85 |'
+PASS E22 AUC stream_growth: README should contain '| pile-up ratio | 0.83 | 0.80 |'
+PASS E23 kick score: README should contain 'for kick in 18 of 18 runs, for sharpness in 15 of 18, and for the pile-up ratio in
+0 of 18'
+PASS independent replication 7 of 8: README should contain 'Of 8 predictions, 7
+held'
+PASS kick bands: README should contain 'Below 100, none of 144 runs lost transport; between 100 and 500, 13 of
+  27 did; above 500, 24 of 27.'
+PASS E24 per-run rule: README should contain 'right in 42 of 48 runs'
+PASS E26 final-LN digits ReLU vs twin: README should contain '(digits +0.75 against +0.54)'
+PASS E25 share_W: README should contain '82% (digits) and 88% (circle) of their
+  energy, against 1.6% and 6% when'
+PASS E25 gate flips: README should contain '(32–34%), against 12% when capped'
+PASS E28 P28a: README should contain '| +2.66 / +1.78 | 0.85 / 0.27 |'
+PASS E28 P28c: README should contain '| +0.74 / +0.26 | 1.75 / 0.018 |'
+PASS E28 P28d: README should contain '| +0.66 / +0.50 | 0.044 / 0.032 |'
+PASS escape ratios and sharpness: README should contain '(ratios 1.56 and 21; η·λ 0.31 and about 0)'
+PASS E27 shortest full window: README should contain '3 steps on digits and 5 on the circle'
+PASS E33 all detach-mean broken: README should contain 'All 6 runs diverged'
+59/59 README numbers match the raw results

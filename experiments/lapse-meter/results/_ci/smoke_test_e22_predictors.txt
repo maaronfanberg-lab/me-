@@ -6,19 +6,8 @@ PASS reference is step-size stable, {'task': 'circle-clean', 'act': 'relu', 'dep
 PASS sharpness matches reference, {'task': 'circle-clean', 'act': 'relu', 'depth': 3, 'width': 4, 'seed': 2, 'warmup': 500, 'warmup_parts': 'out'}  Lanczos 0.02271, explicit max 0.02271 (min -0.00286); kink failures 0
 PASS reference is step-size stable, {'task': 'circle-clean', 'act': 'relu', 'depth': 4, 'width': 8, 'seed': 11, 'branch_sign': True}  max eig 0.04892 at 1e-5, 0.04892 at 1e-6
 PASS sharpness matches reference, {'task': 'circle-clean', 'act': 'relu', 'depth': 4, 'width': 8, 'seed': 11, 'branch_sign': True}  Lanczos 0.04892, explicit max 0.04892 (min -0.01095); kink failures 0
-Traceback (most recent call last):
-  File "/home/runner/work/me-/me-/experiments/lapse-meter/tests/test_e22_predictors.py", line 27, in <module>
-    ev, ev2 = explicit(cfg), explicit(cfg, 1e-6)
-              ^^^^^^^^^^^^^
-  File "/home/runner/work/me-/me-/experiments/lapse-meter/tests/test_e22_predictors.py", line 13, in explicit
-    c, net, X, y = build(cfg); P = params(net); eta = {k: step1_lr(c, net, k) for k in P}
-                   ^^^^^^^^^^
-  File "/home/runner/work/me-/me-/experiments/lapse-meter/tests/../experiments/e22_predictors.py", line 31, in build
-    X, y, Xt, yt = e4.make(c["task"], c["seed"])
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/runner/work/me-/me-/experiments/lapse-meter/experiments/e4.py", line 42, in make
-    X, y, Xt, yt = D.digits(seed)
-                   ^^^^^^^^^^^^^^
-  File "/home/runner/work/me-/me-/experiments/lapse-meter/experiments/../lapse/data.py", line 6, in digits
-    from sklearn.datasets import load_digits
-ModuleNotFoundError: No module named 'sklearn'
+PASS reference is step-size stable, {'task': 'digits', 'act': 'relu', 'depth': 3, 'width': 16, 'seed': 6}  max eig 0.19592 at 1e-5, 0.19592 at 1e-6
+PASS sharpness matches reference, {'task': 'digits', 'act': 'relu', 'depth': 3, 'width': 16, 'seed': 6}  Lanczos 0.19592, explicit max 0.19592 (min -0.05775); kink failures 0
+PASS found a case whose largest-magnitude eigenvalue is negative
+PASS Lanczos returns the most positive eigenvalue there  got 0.13210, explicit max 0.13210, min -0.18748
+12/12 predictor checks passed
