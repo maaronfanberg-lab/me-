@@ -1,0 +1,241 @@
+{
+  "purpose": "quick production-wrapper 1B A/B, never deployed",
+  "model": "llama3.2-1b production wrapper",
+  "source_cycle": 34682,
+  "pairs": [
+    {
+      "source": {
+        "id": "20261028T232026320-mara-v5",
+        "speaker": "mara",
+        "text": "I can tell that our conversation needs to address that awkwardness in our past. Let's try to have a grown-up conversation about the elephant in the room."
+      },
+      "speaker": "sarah",
+      "baseline": {
+        "text": "I'm feeling really excited and eager to explore new ideas. I love the fact that we're having a conversation where we can share what we actually notice.",
+        "move": "support",
+        "target": "mara",
+        "salient_source_word_overlap": 0.111,
+        "exact_echo": false,
+        "response_word_count": 29,
+        "placeholder_or_scaffold": false
+      },
+      "retained": {
+        "text": "I can tell that our conversation needs to address that awkwardness in our past. Let's try to have a grown-up conversation about the elephant in the room.",
+        "move": "answer",
+        "target": "mara",
+        "salient_source_word_overlap": 1.0,
+        "exact_echo": true,
+        "response_word_count": 29,
+        "placeholder_or_scaffold": true
+      }
+    },
+    {
+      "source": {
+        "id": "20261028T232336255-jules-v5",
+        "speaker": "jules",
+        "text": "I think we should try new ideas, especially given that new ideas are a mystery to you. You already mentioned wanting to explore new ideas, but I've been trying to encourage you into trying new experiments, which have led to some success in the past."
+      },
+      "speaker": "mara",
+      "baseline": {
+        "text": "I want to explore ideas and share what I actually notice.",
+        "move": "support",
+        "target": "jules",
+        "salient_source_word_overlap": 0.154,
+        "exact_echo": false,
+        "response_word_count": 11,
+        "placeholder_or_scaffold": false
+      },
+      "retained": {
+        "text": "I think we should try new ideas, especially given that new ideas are a mystery to you. You already mentioned wanting to explore new ideas, but I've been trying to encourage you into trying new experiments, which have led to some success in the past.",
+        "move": "answer",
+        "target": "jules",
+        "salient_source_word_overlap": 1.0,
+        "exact_echo": true,
+        "response_word_count": 46,
+        "placeholder_or_scaffold": false
+      }
+    },
+    {
+      "source": {
+        "id": "20261028T232538559-jules-v5",
+        "speaker": "jules",
+        "text": "Sara, I've got a notion, I'd like to try something novel in our conversation today."
+      },
+      "speaker": "owen",
+      "baseline": {
+        "text": "I think what makes this exploration most valuable is exploring ideas and sharing what I actually notice.",
+        "move": "answer",
+        "target": "jules",
+        "salient_source_word_overlap": 0.0,
+        "exact_echo": false,
+        "response_word_count": 17,
+        "placeholder_or_scaffold": false
+      },
+      "retained": {
+        "text": "jules_speech_20261028T232538559_v1.2_23",
+        "move": "repair",
+        "target": "jules",
+        "salient_source_word_overlap": 0.0,
+        "exact_echo": false,
+        "response_word_count": 4,
+        "placeholder_or_scaffold": false
+      }
+    },
+    {
+      "source": {
+        "id": "20261028T232612067-owen-v5",
+        "speaker": "owen",
+        "text": "It was actually a mistake that my latest hypothesis needed to be refined and then revised for consistency and to find a model that worked for this complicated scenario."
+      },
+      "speaker": "sarah",
+      "baseline": {
+        "text": "I think it's a great idea.",
+        "move": "answer",
+        "target": "owen",
+        "salient_source_word_overlap": 0.0,
+        "exact_echo": false,
+        "response_word_count": 7,
+        "placeholder_or_scaffold": false
+      },
+      "retained": {
+        "text": "It was actually a mistake that my latest hypothesis needed to be refined and then revised for consistency and to find a model that worked for this complicated scenario.",
+        "move": "answer",
+        "target": "owen",
+        "salient_source_word_overlap": 1.0,
+        "exact_echo": true,
+        "response_word_count": 29,
+        "placeholder_or_scaffold": false
+      }
+    }
+  ],
+  "chains": {
+    "baseline": {
+      "turns": [
+        {
+          "id": "20261028T232026320-mara-v5",
+          "speaker": "mara",
+          "text": "I can tell that our conversation needs to address that awkwardness in our past. Let's try to have a grown-up conversation about the elephant in the room."
+        },
+        {
+          "id": "baseline-0",
+          "speaker": "jules",
+          "text": "I think it would be really interesting to try a new type of evolutionary ecology study. Maybe we could combine biological and geological data, and explore how different environments shape species' evolution. I'd need to familiarize myself with the literature and find some studies that align with this idea, then propose a methodology. What do you think?"
+        },
+        {
+          "id": "baseline-1",
+          "speaker": "mara",
+          "text": "I think it would be really interesting to try a new type of evolutionary ecology study."
+        },
+        {
+          "id": "baseline-2",
+          "speaker": "jules",
+          "text": "That I find it most fascinating that you're interested in exploring ideas and sharing what I notice. In my next utterance, I will focus on asking you to provide me with a specific instance of what I mean."
+        },
+        {
+          "id": "baseline-3",
+          "speaker": "mara",
+          "text": "I'd like to clarify that this has nothing to do with me or my own experiences, but more about the dynamics between different people and how it affects us all."
+        },
+        {
+          "id": "baseline-4",
+          "speaker": "jules",
+          "text": "conversations"
+        }
+      ],
+      "diagnostics": {
+        "sample_turns": 6,
+        "autonomous_turns": 6,
+        "speaker_counts": {
+          "jules": 3,
+          "mara": 3,
+          "owen": 0,
+          "sarah": 0
+        },
+        "exact_adjacent_repeats": 0,
+        "contiguous_question_echoes": 0,
+        "short_autonomous_1to3_word_turns": 1,
+        "short_autonomous_rate": 0.16667,
+        "longest_identical_action_run": 1,
+        "repeat_evidence": [],
+        "short_turn_evidence": [
+          {
+            "id": "baseline-4",
+            "speaker": "jules",
+            "text": "conversations"
+          }
+        ],
+        "limitations": "Structural diagnostics only. Cannot prove or disprove genuine responsiveness, semantic progress, intentional repair or appropriate short replies."
+      }
+    },
+    "retained": {
+      "turns": [
+        {
+          "id": "20261028T232026320-mara-v5",
+          "speaker": "mara",
+          "text": "I can tell that our conversation needs to address that awkwardness in our past. Let's try to have a grown-up conversation about the elephant in the room."
+        },
+        {
+          "id": "retained-0",
+          "speaker": "jules",
+          "text": "What the elephant in the room"
+        },
+        {
+          "id": "retained-1",
+          "speaker": "mara",
+          "text": "What the elephant in the room"
+        },
+        {
+          "id": "retained-2",
+          "speaker": "jules",
+          "text": "Hey, have you thought about it? We could explore more ideas and see where they lead."
+        },
+        {
+          "id": "retained-3",
+          "speaker": "mara",
+          "text": "Hey, have you thought about it? We could explore more ideas and see where they lead."
+        },
+        {
+          "id": "retained-4",
+          "speaker": "jules",
+          "text": "I'd be happy to help you explore more ideas and see where they lead."
+        }
+      ],
+      "diagnostics": {
+        "sample_turns": 6,
+        "autonomous_turns": 6,
+        "speaker_counts": {
+          "jules": 3,
+          "mara": 3,
+          "owen": 0,
+          "sarah": 0
+        },
+        "exact_adjacent_repeats": 2,
+        "contiguous_question_echoes": 0,
+        "short_autonomous_1to3_word_turns": 0,
+        "short_autonomous_rate": 0.0,
+        "longest_identical_action_run": 2,
+        "repeat_evidence": [
+          {
+            "previous_id": "retained-0",
+            "current_id": "retained-1",
+            "previous_speaker": "jules",
+            "speaker": "mara",
+            "previous_text": "What the elephant in the room",
+            "text": "What the elephant in the room"
+          },
+          {
+            "previous_id": "retained-2",
+            "current_id": "retained-3",
+            "previous_speaker": "jules",
+            "speaker": "mara",
+            "previous_text": "Hey, have you thought about it? We could explore more ideas and see where they lead.",
+            "text": "Hey, have you thought about it? We could explore more ideas and see where they lead."
+          }
+        ],
+        "short_turn_evidence": [],
+        "limitations": "Structural diagnostics only. Cannot prove or disprove genuine responsiveness, semantic progress, intentional repair or appropriate short replies."
+      }
+    }
+  },
+  "limitations": "Small sample and structural metrics; judge semantic responsiveness and multi-turn continuity manually."
+}
