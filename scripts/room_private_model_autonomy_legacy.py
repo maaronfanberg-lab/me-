@@ -392,6 +392,23 @@ def _public_meta_language(utterance: str, compact: dict) -> bool:
     return not bool(re.search(r"\b(?:script|screenplay|screenwriter|screenwriting)\b", evidence))
 
 
+def _unchanged_source_action(utterance: str, compact: dict) -> bool:
+    """Whole prior spoken action copied as the entire long candidate turn.
+
+    Not an n-gram novelty ban. Short echoes, vocabulary alignment and a
+    quote followed by a real follow-up remain legitimate.
+    """
+    event = compact.get("event") if isinstance(compact, dict) else None
+    if not isinstance(event, dict):
+        return False
+    source = str(event.get("text") or "").strip()
+    if not source or source.endswith("?"):
+        return False  # the existing question/repair sequence owns this case
+    before = re.findall(r"[\\w']+", source.casefold())
+    after = re.findall(r"[\\w']+", str(utterance or "").casefold())
+    return len(before) >= 12 and before == after
+
+
 def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
     if role not in AUTONOMY_PROMPTS:
         raise ValueError(f"unknown private model role: {role}")
@@ -413,8 +430,12 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
             "Respond naturally to the current conversation. Keep the chosen move, focus, and intended partner while choosing your own words. "
             "Use only details supported by what was actually said. Do not invent unsupported conflict, jealousy, secrets, threats, shared memories, "
             "or dramatic incidents. Treat reported claims as reports unless independent evidence is present. " +
-            ("Shared wording can be reused to answer, clarify, acknowledge, or emphasize a point. "
-             "Prioritize the relevant conversational action over novelty.\n" if social_floor
+            ("When another participant's statement is visible, it is evidence of what THEY said, not "
+             "your own turn to repeat. Respond with one actual conversational action: acknowledge "
+             "and develop a specific point, disagree with a reason, answer, ask a relevant "
+             "clarification, or independently introduce something meaningful. Reuse key "
+             "terms and brief quotations where useful, but give your own contribution "
+             "rather than reproducing their complete statement.\n" if social_floor
              else "Avoid copying recent speech. Stay inside the conversation.\n")
         )
 
@@ -425,8 +446,12 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
         if attempt:
             retry_guard = (
                 "\nTRY_AGAIN\n" +
-                ("Recheck the actual source utterance and the action it makes relevant. "
-                 "Keep your own voice, stance and uncertainty.\n" if social_floor
+                (("The last attempt repeated the previous speaker's entire statement. That is not "
+                  "an answer. State your own response to a concrete point, or ask a real "
+                  "clarifying question, without inventing facts.\n"
+                  if last_reason == "unchanged_source_action" else
+                  "Recheck the actual source utterance and the action it makes relevant. "
+                  "Keep your own voice, stance and uncertainty.\n") if social_floor
                  else "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n")
             )
 
@@ -488,6 +513,11 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                 # hygiene checks still run; an absent model is not silence.
                 if _public_meta_language(utterance, compact):
                     last_reason = "meta_language"
+                    continue
+                if social_floor and _unchanged_source_action(utterance, compact):
+                    # Retry at the model boundary rather than publish a whole
+                    # copied nonquestion as an apparent reply.
+                    last_reason = "unchanged_source_action"
                     continue
                 if not social_floor and (base._too_similar_to_context(utterance, compact) or _has_context_echo(utterance, compact)):
                     last_reason = "duplicate_context"
