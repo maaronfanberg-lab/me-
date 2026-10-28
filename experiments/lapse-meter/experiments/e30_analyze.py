@@ -12,10 +12,11 @@ for p in P:
     t = at_loss_key(r["log"], lv, "ln_transport") if lv else None
     broken = failed or t is None or not np.isfinite(t) or t < 0.3; n += 1; right += (p["kick_says"] == ("broken" if broken else "healthy"))
     by.setdefault((p["task"], p["cond"]), []).append(broken)
+    rs = next((e["step"] for e in r["log"] if lv and e["train_loss"] < lv), None)  # reported only (CORRECTIONS 52)
     rows.append(f"| {p['task']} | {p['cond']} | {p['seed']} | {p['kick']:.1f} | {p['common']:.3f} | {p['kick_says']} | "
                 + (f"{t:+.2f}" if t is not None else "–") + (f" (loss {lv})" if lv and lv != 0.03 else "")
                 + (" failed to train" if failed else "") + f" | {r['log'][-1]['train_loss']:.4f} | {r['test_acc']:.3f} | "
-                + f"{len(r.get('capped_steps', []))} | **{'broken' if broken else 'healthy'}** |")
+                + f"{len(r.get('capped_steps', []))} | {rs if rs is not None else '–'} | {len(r['log'])} | **{'broken' if broken else 'healthy'}** |")
 def state(task, c):
     b = by.get((task, c), [])
     return None if len(b) < 3 else ("broken" if sum(b) >= 2 else "healthy")
@@ -31,6 +32,6 @@ void = V["P30c (signed + offset + cap 10 healthy, both tasks)"] == "fails"
 out = ["# Experiment 30 results\n", "**Verdicts:** " + "; ".join(f"{k}: {v}" for k, v in V.items()) + ".\n",
        f"**Account supported on digits:** {acc}" + (" (but P30c failed, so the offset condition's reading is void)" if void else "") + ".\n",
        f"Per-run kick rule right in {right} of {n} runs (reported, not tested).\n",
-       "| task | condition | seed | effective step-one kick | common-mode share | rule says | transport | final loss | test acc | steps capped | observed |",
-       "|---|---|---|---|---|---|---|---|---|---|---|"] + rows
+       "| task | condition | seed | effective step-one kick | common-mode share | rule says | transport | final loss | test acc | steps capped | reading step | log lines | observed |",
+       "|---|---|---|---|---|---|---|---|---|---|---|---|---|"] + rows
 t = "\n".join(out); print(t); open(os.path.join(R, "e30_analysis.md"), "w").write(t + "\n")

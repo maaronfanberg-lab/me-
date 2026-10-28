@@ -141,3 +141,8 @@ is far above the stability limit of 2: about 2,700 at initialization on digits. 
 - **E-ii.** After the shock, the readout's preconditioned sharpness, η·λ_max of the loss Hessian over the readout
   alone, sits near the edge of stability: between 1 and 4 at steps 100–500. At initialization it is far above 2.
   This is measured on new traces, digits and circle, seed 0, at lr 0.05.
+
+*Correction, 15:20, before any run that tests E-i or E-ii.* Prediction E-i named experiment 21's learning-rate runs,
+but those are tanh networks at 24 layers. No plain-ReLU 96-layer runs exist at other learning rates. E-i and E-ii
+are tested unchanged, on new runs (`experiments/escape_check.py`, committed before it ran): plain ReLU, 96 layers,
+seed 0, lr 0.02, 0.05 and 0.1, both tasks, 500 steps.
