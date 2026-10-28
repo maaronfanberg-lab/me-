@@ -72,6 +72,38 @@ class UptakeTests(unittest.TestCase):
             validate_uptake(history=history, speaker="sarah",
                             utterance="Who do you think you are?", move="repair")
 
+    def test_live_prefaced_question_echo_is_not_a_new_answer(self):
+        source = turn("20261028T114814385-sarah-v5", "sarah",
+            "You want to be coherent and mutual understanding. "
+            "Can you help me achieve that by being helpful and supportive?")
+        echoed = turn("20261028T114932241-jules-v5", "jules",
+            "can you help me achieve that by being helpful and supportive?")
+        project = question_sequence([source, echoed], echoed)
+        self.assertEqual(project["kind"], "unanswered_question_echo")
+        self.assertEqual(project["echoes"], 1)
+        self.assertEqual(project["first_source_id"], source["id"])
+        with self.assertRaisesRegex(ValueError, "question_not_answered"):
+            validate_uptake(history=[source], speaker="jules",
+                utterance=echoed["text"], move="support")
+        # A first repair may repeat the trouble source, but a third does not.
+        validate_uptake(history=[source], speaker="jules",
+            utterance=echoed["text"], move="repair")
+        with self.assertRaisesRegex(ValueError, "repair_sequence_not_advanced"):
+            validate_uptake(history=[source, echoed], speaker="mara",
+                utterance=echoed["text"], move="repair")
+
+    def test_real_answer_and_new_question_remain_allowed(self):
+        source = turn("s1", "sarah",
+            "I could use help. Can you help me by being supportive?")
+        validate_uptake(history=[source], speaker="jules",
+            utterance="Yes, I can help by listening first.", move="answer")
+        validate_uptake(history=[source], speaker="jules",
+            utterance="What kind of support would actually help?", move="repair")
+        validate_uptake(history=[source], speaker="jules",
+            utterance="Can you help me by being supportive? I mean: what specifically?",
+            move="repair")
+        self.assertEqual(question_sequence([source], source)["echoes"], 0)
+
     def test_no_arbitrary_topic_or_repeated_word_ban(self):
         previous = turn("m-1", "mara", "Trees? That oak has the best view.")
         for reply in (
