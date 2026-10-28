@@ -184,6 +184,12 @@ class Projects(unittest.TestCase):
             packed = autonomy._autonomy_compact(payload, "expression", recipient)
             self.assertEqual(packed["intent"]["partner"], speaker)
 
+    def test_public_vocative_overrides_wrong_hidden_target(self):
+        q = event("jules", "Hey Sarah, can you tell me about exercising?",
+                  "20261028T120004873-jules-v5", target="mara")
+        self.assertTrue(project.response_project(q, "sarah"))
+        self.assertFalse(project.response_project(q, "mara"))
+
     def test_personal_attention_without_canned_subject_rotation(self):
         old = event("mara", "Nothing else needed.", "m3")
         a = project.expression_project(entity="jules", latest=old, context=[old],
