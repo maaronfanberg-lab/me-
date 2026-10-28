@@ -404,8 +404,8 @@ def _unchanged_source_action(utterance: str, compact: dict) -> bool:
     source = str(event.get("text") or "").strip()
     if not source or source.endswith("?"):
         return False  # the existing question/repair sequence owns this case
-    before = re.findall(r"[\\w']+", source.casefold())
-    after = re.findall(r"[\\w']+", str(utterance or "").casefold())
+    before = re.findall(r"[A-Za-z0-9']+", source.casefold())
+    after = re.findall(r"[A-Za-z0-9']+", str(utterance or "").casefold())
     return len(before) >= 12 and before == after
 
 
