@@ -10,6 +10,8 @@ on:
       - 'scripts/test_room_action_ledger.py'
       - 'scripts/test_room_sequence_uptake.py'
       - 'scripts/test_room_long_action_gate.py'
+      - 'scripts/room_group_dynamics.py'
+      - 'scripts/test_room_memory_relevance.py'
       - 'scripts/test_room_conversation_project.py'
       - 'scripts/room_participant.py'
       - 'scripts/test_room_allen_source_provenance.py'
@@ -74,3 +76,5 @@ jobs:
         run: python3 scripts/test_room_sleeping_entity.py
       - name: Existing group and personal-history regression
         run: python3 scripts/test_room_group_dynamics.py
+      - name: Verify recalled source relevance and preserved partner history
+        run: python3 scripts/test_room_memory_relevance.py

@@ -228,35 +228,65 @@ def model_context(minds: dict, entity: str, partner: str | None,
         for item in ent.get(kind, []):
             speaker = item.get("speaker") or (entity if kind == "self_history" else item.get("reported_by"))
             record = {"id": item.get("source") or item.get("id"), "speaker": speaker,
-                      "target": item.get("target"), "text": item.get("text"), "at": item.get("at")}
+                      "target": item.get("target"), "text": item.get("text"),
+                      "at": item.get("at"), "cycle": item.get("cycle")}
             if _safe(record):
                 candidates.append(record)
     topic_words = _terms(" ".join(str(m.get("text") or "") for m in context[-3:]))
     recent_ids = {m.get("id") for m in context}
+    last_cycle = max((item.get("cycle", 0) or 0 for item in data.get("encounters", [])), default=0)
+    latest_public = str((context[-1] if context else {}).get("text") or "")
+    explicit_recall = bool(re.search(
+        r"\b(?:remember|recall|previously|earlier|last time|you told|you said)\b",
+        latest_public, re.I))
     seen, selected = set(), []
     ranked = sorted(enumerate(candidates), key=lambda pair: (
         3 * (pair[1].get("speaker") == partner or pair[1].get("target") == partner)
         + 2 * (pair[1].get("target") == entity)
         + min(3, len(_terms(pair[1].get("text", "")) & topic_words)), pair[0]), reverse=True)
-    for _, item in ranked:
-        if not _safe(item) or item["id"] in seen or item["id"] in recent_ids:
-            continue
-        if item.get("speaker") not in awake and item.get("speaker") != "allen":
-            continue
-        # No irrelevant callback merely because a long-term memory exists.
-        if not (_terms(item["text"]) & topic_words or item.get("speaker") == partner or item.get("target") == partner):
-            continue
-        seen.add(item["id"])
-        selected.append({"speaker": item["speaker"], "target": item.get("target"),
-                         "text": item["text"][:180], "source": item["id"], "at": item.get("at"),
-                         "status": "remembered_speech_not_verified_fact"})
-        if len(selected) == 3:
+
+    # Partner identity alone is not evidence that an old quotation concerns
+    # the active discussion. Keep memories durable, but first retrieve those
+    # sharing the current public referent. In vague or explicitly backward-
+    # looking situations, at most one recent partner reference may help.
+    background_selected = 0
+    for background_pass in (False, True):
+        for _, item in ranked:
+            if len(selected) >= 3:
+                break
+            if not _safe(item) or item["id"] in seen or item["id"] in recent_ids:
+                continue
+            if item.get("speaker") not in awake and item.get("speaker") != "allen":
+                continue
+            overlap = _terms(item["text"]) & topic_words
+            if background_pass:
+                if overlap or background_selected or (
+                        len(topic_words) >= 2 and not explicit_recall):
+                    continue
+                if item.get("speaker") != partner and item.get("target") != partner:
+                    continue
+                try:
+                    memory_cycle = int(item.get("cycle"))
+                except (TypeError, ValueError):
+                    continue
+                if not 0 <= last_cycle - memory_cycle <= 16:
+                    continue
+                background_selected += 1
+            elif not overlap:
+                continue
+            seen.add(item["id"])
+            selected.append({
+                "speaker": item["speaker"], "target": item.get("target"),
+                "text": item["text"][:120 if background_pass else 180],
+                "source": item["id"], "at": item.get("at"),
+                "status": "remembered_speech_not_verified_fact",
+            })
+        if len(selected) >= 3:
             break
     peers = {other: {key: round(float(relation.get(key, 0)), 3)
                     for key in ("trust", "respect", "warmth", "tension", "reciprocity")}
              for other, relation in ent.get("people", {}).items()
              if other in awake and other != entity}
-    last_cycle = max((item.get("cycle", 0) for item in data.get("encounters", [])), default=0)
     activities = [{"owner": a["owner"], "proposal": a["proposal"][:180],
                    "status": a["status"], "invited": a["participants"],
                    "responses": {p: r["status"] for p, r in a["responses"].items()},
