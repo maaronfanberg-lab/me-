@@ -16,3 +16,5 @@ Per-run predictions from both rules are fixed in `experiments/e53_predictions.js
 
 - **P53a:** the product rule is right in at least 85% of runs.
 - **P53b:** it is right in more runs than the kick-alone rule.
+
+*Correction, 2026-10-29 11:41, before any result:* the grid is 72 runs, not 63 (circle and digits-pca2: 3 scales × 3 multipliers × 3 seeds = 27 each; digits: 2 × 3 × 3 = 18). The job file and per-run predictions already list all 72; only the count in this text was wrong.
