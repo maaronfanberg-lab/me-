@@ -34,6 +34,26 @@ class FloorTests(unittest.TestCase):
         self.assertEqual(decision["reason"], "addressed_recipient")
         self.assertEqual(decision["source_id"], "jules-offer-1")
 
+    def test_live_mid_utterance_vocative_selects_actual_recipient(self):
+        from room_conversational_floor import is_directed, audible_addressee
+        observed = msg(
+            "owen",
+            "That's an interesting observation - I didn't notice anything about the microphone cable, so I'm curious, Mara, did you notice anything unusual when you moved the cable?",
+            "sarah", id="20261029-choir-owen")
+        self.assertTrue(is_directed(observed, "mara"))
+        self.assertFalse(is_directed(observed, "sarah"))
+        self.assertEqual(audible_addressee("owen", observed["text"]), "mara")
+        decision = choose_next([observed], bus(), config(), {})
+        self.assertEqual((decision["speaker"], decision["reason"]),
+                         ("mara", "addressed_recipient"))
+        # A name mentioned in a third-person claim is not an invitation.
+        self.assertIsNone(audible_addressee(
+            "owen", "I think Sarah, Mara, and Jules all remember it differently."))
+        self.assertIsNone(audible_addressee(
+            "owen", "I spoke to Mara, did you hear what she said?"))
+        # The same speaker cannot address themselves through this mechanism.
+        self.assertFalse(is_directed(msg("mara", "I'm curious, Mara, did you see?"), "mara"))
+
     def test_live_vocative_overrides_hidden_partner(self):
         from room_conversational_floor import is_directed
         source = msg("jules",
