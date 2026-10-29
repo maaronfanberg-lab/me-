@@ -221,7 +221,7 @@ def choose_next(history, bus, config, minds, *, rank=0, cycle=None):
     public_uptake = addressed is None and not has_deliberated_bid
     scene_relevant = bool(
         os.environ.get('ROOM_SCENE_RELEVANCE_FLOOR') == '1'
-        and cycle is not None and int(cycle) >= 35220
+        and cycle is not None and int(cycle) >= 35232
         and addressed is None and public_uptake and last is not None
     )
     ranked = []
