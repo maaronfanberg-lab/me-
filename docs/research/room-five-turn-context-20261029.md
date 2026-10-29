@@ -36,3 +36,7 @@ For identical witnessed windows, character identity, model and seeds, does **fiv
 No private or system records enter model context. Retain Allen accepted public text up to existing limit and sleeping participant filtering, preserve all public source IDs, no new speaker quotas or topic priorities. If five-turn context adds bland echoes or latency without substantive improvement, remain on three. Deployment, if justified, must require main-branch CI and a later 30–80-turn live review. Even a green check and no exact repeats do not prove natural dialogue.
 
 Outcome: pending experimental results.
+
+## Matched-seed real-model outcome: rejected for production
+
+GitHub Actions run 40802013207 passed source/private/public-window tests and saved `docs/research/room-five-turn-shadow-20261029.json`. The three-turn and five-turn arms each returned 8/8 accepted single-case replies and six generated continuation turns. The five-turn arm failed to improve the human-inspected chain: it introduced unsupported physical stage directions ('I listen attentively ... nod thoughtfully'), speculative 'Fractal Entropies' and topic-only paraphrase. The three-turn chain was also weak. Widening the raw evidence window alone cannot be credited with substantive grounding; the extra context can distract the 1B model. Keep the live three-turn window; no merge. A richer independently verified compact sequence state remains a *future hypothesis*, not an implemented result.
