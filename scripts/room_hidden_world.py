@@ -329,8 +329,8 @@ def scene_common_ground(cycle: int, public_turns: list[dict]) -> str:
     if entries:
         lines.append("PUBLIC CHARACTER CLAIMS (NOT INDEPENDENTLY VERIFIED):")
         for e in entries:
-            lines.append(e["speaker"].capitalize() + " said [" + e["source_id"]
-                         + "]: " + e["public_text"])
+            lines.append(e["speaker"].capitalize() + " said: " + e["public_text"]
+                         + " [source " + e["source_id"] + "]")
     lines.append("A character's claim may disagree with a simulated observation. "
                  "Keep their provenance distinct; examine the discrepancy rather "
                  "than treating repeated claims as independent confirmation. "
