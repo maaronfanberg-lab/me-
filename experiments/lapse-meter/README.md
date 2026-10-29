@@ -552,6 +552,14 @@ kick is too large for the readout to absorb; otherwise it is pure damage. This r
 is not yet tested as a prediction. Experiment 35, which left the input layer free, was void by its rule: on the
 circle the teardown came in through the input layer.
 
+Experiment 37 (pre-registered, 50 runs) tested that reading by sweeping the kick with the teardown blocked. It was
+**mixed**:
+
+- On digits the kick decides, with a sharp threshold: kick ≤ 541 trained, ≥ 1,640 always diverged.
+- The circle never diverged, at any kick up to 5,403.
+
+So "too large" depends on the task, for reasons not yet known.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
