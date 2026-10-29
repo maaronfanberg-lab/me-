@@ -136,8 +136,10 @@ def complete_model_prefix(spoken: str) -> str:
             options.append(prefix)
     for prefix in reversed(options):
         remaining = text[len(prefix):].strip().lstrip("\"'”’").strip().casefold()
-        if remaining.startswith(("but ", "however", "actually ", "except ", "although ",
-                                 "instead ", "on the other hand", "no,", "no.")):
+        # Do not take a sentence out of a statement that is about to
+        # reverse or qualify it, even if the continuation was truncated.
+        if re.match(r"^(?:but|however|actually|except|although|instead|yet|nevertheless|no|on the other hand|on the contrary)\b",
+                    remaining):
             continue
         return prefix
     return ""
