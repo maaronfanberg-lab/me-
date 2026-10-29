@@ -165,6 +165,20 @@ def _fact_opportunity(entity, latest, history, cycle):
     question = str(latest.get("text") or "").strip()
     if not question.endswith("?"):
         return 0.0
+    # The newer planetarium trial uses a different source-bound world ledger.
+    # A person who privately saw the cardboard is especially relevant to an
+    # open question about the grille, without granting them a mandatory turn
+    # or disclosing their private observation to the other characters.
+    from room_causal_world import active as causal_active, PRIVATE, replay
+    if (os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1"
+            and causal_active(cycle)):
+        if entity in {item["speaker"] for item in replay(cycle, history)["disclosures"]}:
+            return 0.0
+        specific = (_fact_terms(question) & _fact_terms(PRIVATE.get(entity, ""))) - {
+            "projector", "dimming", "planetarium", "visitor", "observed",
+            "observation", "action", "something", "unusual",
+        }
+        return 0.72 if specific else 0.12
     from room_hidden_world import active_scene_window, private_observation
     if cycle < 35232 or not active_scene_window(cycle):
         return 0.0
@@ -230,6 +244,7 @@ def choose_next(history, bus, config, minds, *, rank=0, cycle=None):
         os.environ.get('ROOM_SCENE_RELEVANCE_FLOOR') == '1'
         and cycle is not None and int(cycle) >= 35232
         and addressed is None and public_uptake and last is not None
+        and author != "allen"  # a real visitor's turn supersedes the trial
     )
     ranked = []
     for entity in awake:

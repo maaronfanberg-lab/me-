@@ -329,5 +329,43 @@ class FloorTests(unittest.TestCase):
                 choose_next(earlier+[addressed],bus(),config(),{},cycle=35233)["speaker"],
                 "mara")
 
+    def test_causal_trial_unshared_private_fact_gets_relevant_open_floor(self):
+        import os
+        from unittest.mock import patch
+        from room_conversational_floor import _fact_opportunity
+        question = msg("mara",
+                       "What did the folded cardboard cover on the rear grille?",
+                       id="planetarium-open-question")
+        question["beat_id"] = "beat-test-036558"
+        with patch.dict(os.environ, {"ROOM_SCENE_RELEVANCE_FLOOR":"1",
+                                     "ROOM_CAUSAL_WORLD_EXPERIMENT":"1"}):
+            self.assertGreater(_fact_opportunity(
+                "jules", question, [question], 36559), .70)
+            with patch.dict(os.environ, {"ROOM_CAUSAL_WORLD_EXPERIMENT":"0"}):
+                self.assertEqual(_fact_opportunity(
+                    "jules", question, [question], 36559), 0)
+            chosen = choose_next([question], bus(), config(), {}, cycle=36559)
+            self.assertEqual(chosen["speaker"], "jules", chosen)
+            self.assertNotIn("required_action", chosen)
+            # Publicly speaking the clue consumes its information advantage;
+            # the referee never pretends that a mere plan disclosed it.
+            witnessed = msg("jules",
+                "I noticed folded cardboard partly covering the projector rear ventilation grille.",
+                id="jules-disclosed")
+            witnessed["beat_id"] = "beat-test-036557"
+            self.assertEqual(_fact_opportunity(
+                "jules", question, [witnessed, question], 36559), 0)
+            after = choose_next(
+                [witnessed, question], bus(), config(), {}, cycle=36559)
+            self.assertNotEqual(after["speaker"], "jules")
+            # Allen's actual question must not be redirected to the
+            # fictional scene, even when it shares a distinctive noun.
+            visitor = msg("allen", "What about the folded cardboard?",
+                          id="allen-question")
+            with patch("room_conversational_floor._fact_opportunity",
+                       side_effect=AssertionError("visitor was displaced")):
+                choose_next([visitor], bus(), config(), {}, cycle=36559)
+
+
 if __name__ == "__main__":
     unittest.main()
