@@ -92,9 +92,16 @@ assert "CLAIMS SPOKEN ALOUD" in rendered[1]["content"]
 assert "electrical buzz" in rendered[1]["content"]
 assert "PHYSICAL OPTIONS" in rendered[1]["content"]
 assert "an action happens when you" in rendered[1]["content"]
-assert "I move the microphone cable" in rendered[1]["content"]
+offered = rendered[1]["content"].split("PHYSICAL OPTIONS IN THE FICTIONAL SETTING", 1)[1]
+assert "I move the microphone cable" not in offered  # Owen already did this.
+assert "I check the mixer power cable" in offered
 assert "I check the mixer power cable" in rendered[1]["content"]
 assert "I push the input plug" in rendered[1]["content"]
+from room_world_actions import available_actions
+assert "I move the microphone cable" in available_actions("choir-recording")
+assert "I move the microphone cable" not in available_actions("choir-recording",completed={("move","microphone cable")})
+assert "I push the input plug" in available_actions("choir-recording",completed={("move","microphone cable")})
+assert "I move the microphone cable" in available_actions("choir-recording",completed={("open","supply valve")})
 assert h.private_observation("jules", start) not in rendered[1]["content"]
 assert h.private_observation("sarah", start) not in rendered[0]["content"]
 
