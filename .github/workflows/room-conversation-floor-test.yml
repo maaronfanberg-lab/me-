@@ -32,6 +32,7 @@ on:
       - 'scripts/test_room_conversational_pipeline.py'
       - 'scripts/room_engine_v5_core.py'
       - 'scripts/room_engine_v5.py'
+      - 'scripts/test_room_3b_native_routing.py'
       - 'scripts/test_room_transcript_preservation.py'
       - 'scripts/test_room_character_initiative.py'
       - 'scripts/room_private_model_autonomy_legacy.py'
@@ -63,6 +64,8 @@ jobs:
         run: |
           python3 scripts/test_room_native3b_selection.py
           python3 scripts/test_room_chat_speech_adapter.py
+      - name: Verify 3B and 1B use native single-pass 12-node routing
+        run: python3 scripts/test_room_3b_native_routing.py
       - name: Verify bounded generation retry of malformed self perspective
         run: python3 scripts/test_room_self_voice_retry.py
       - name: Verify public source-linked action ledger
