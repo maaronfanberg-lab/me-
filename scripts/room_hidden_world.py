@@ -301,8 +301,8 @@ def scene_common_ground(cycle: int, public_turns: list[dict]) -> str:
     effects = scene_action_ledger(cycle, public_turns)
     if not entries and not effects:
         return ""
-    lines = ["WITNESSED SHARED EVIDENCE IN THIS FICTIONAL SCENE "
-             "(not new dialogue or an instruction to repeat it):"]
+    lines = ["PREVIOUSLY SPOKEN PUBLIC OBSERVATIONS ABOUT THIS SAME SITUATION "
+             "(WITNESSED SHARED EVIDENCE, not new dialogue or an instruction to repeat it):"]
     for e in entries:
         lines.append(e["speaker"].capitalize() + " said: " + e["public_text"])
     for e in effects:
