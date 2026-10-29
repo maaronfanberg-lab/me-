@@ -84,6 +84,8 @@ assert natural_state['solved']
 measured = [turn(s, 'owen', 'I measure the wall socket voltage.')]
 voltage_state = w.replay(s+1, measured)
 assert voltage_state['completed_actions'] == ['check_voltage']
+assert voltage_state['disclosures'] == [], 'a measurement action is not the reading'
+assert w.replay(s+1, [turn(s, 'owen', 'Could the wall socket voltage monitor be faulty?')])['disclosures'] == []
 assert 'socket voltage stays steady' in voltage_state['effects'][0].observation
 next_cue = w.cue_for('mara', s+1, measured)
 assert 'measure the wall socket voltage' not in next_cue
