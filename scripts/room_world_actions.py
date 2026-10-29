@@ -52,7 +52,7 @@ _VERBS = {
     "flip": ("flip", "flipped", "switch", "switched"),
     "turn": ("turn", "turned", "rotate", "rotated"),
     "reset": ("reset",),
-    "inspect": ("inspect", "inspected", "examine", "examined", "look at", "looked at"),
+    "inspect": ("inspect", "inspected", "check", "checked", "examine", "examined", "look at", "looked at"),
     "move": ("move", "moved", "shift", "shifted"),
     "push": ("push", "pushed", "seat", "seated"),
     "open": ("open", "opened", "turn", "turned"),
