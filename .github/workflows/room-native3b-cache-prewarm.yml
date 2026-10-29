@@ -1,0 +1,67 @@
+name: Room native 3B model prewarm outside the live worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-native3b-cache-prewarm.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: room-native3b-model-cache-prewarm
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore or save checksum-pinned 3B model cache
+        uses: actions/cache@v4
+        with:
+          path: .room_model/llama-3.2-3b-instruct-q4_k_m.gguf
+          key: room-native-llama32-3b-q4km-6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff
+      - name: Acquire and validate model independently of the continuous Room
+        env:
+          HF_HUB_DOWNLOAD_TIMEOUT: '900'
+          HF_XET_HIGH_PERFORMANCE: '1'
+        run: |
+          set -euo pipefail
+          expected_sha='6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff'
+          target=.room_model/llama-3.2-3b-instruct-q4_k_m.gguf
+          mkdir -p .room_model
+          if echo "$expected_sha  $target" | sha256sum -c -; then
+            echo 'Already have the exact verified 3B model'
+            exit 0
+          fi
+
+          # Download to a separate location. Never populate the live cache
+          # path with partial or unverified bytes.
+          python3 -m pip install --disable-pip-version-check --quiet 'huggingface_hub[hf_xet]>=0.36,<2'
+          python3 - <<'PY'
+          from huggingface_hub import hf_hub_download
+          from pathlib import Path
+          source = hf_hub_download(
+              repo_id="bartowski/Llama-3.2-3B-Instruct-GGUF",
+              filename="Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+              local_dir=".room_model/_download",
+              etag_timeout=30,
+          )
+          source=Path(source)
+          if not source.is_file() or source.stat().st_size < 1_900_000_000:
+              raise RuntimeError("3B source bytes missing or suspiciously small")
+          print("Download completed to isolated staging path; verifying checksum")
+          PY
+          source=.room_model/_download/Llama-3.2-3B-Instruct-Q4_K_M.gguf
+          echo "$expected_sha  $source" | sha256sum -c -
+          cp -L "$source" "$target"
+          echo "$expected_sha  $target" | sha256sum -c -
+          echo 'Verified 3B model is ready to save in GitHub Actions cache'
+      - name: Confirm reusable cache content is exact
+        run: |
+          set -euo pipefail
+          echo '6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff  .room_model/llama-3.2-3b-instruct-q4_k_m.gguf' | sha256sum -c -
