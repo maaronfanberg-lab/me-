@@ -1,0 +1,67 @@
+name: Room speech model benchmark (isolated)
+on:
+  push:
+    branches: [room-model-speech-benchmark]
+    paths:
+      - 'experiments/room_model_conversation_benchmark.py'
+      - '.github/workflows/room-speech-model-benchmark.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: room-speech-model-benchmark
+  cancel-in-progress: true
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: llama3b
+            model: Llama-3.2-3B-Instruct
+            url: https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf
+            sha: 6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff
+          - label: qwen4b
+            model: Qwen3-4B-Instruct-2507
+            url: https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf
+            sha: 3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify benchmark source
+        run: python3 -m py_compile experiments/room_model_conversation_benchmark.py
+      - name: Download verified server and model
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL_URL: ${{ matrix.url }}
+          MODEL_SHA: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p .room_model/runtime experiments/results
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+          curl --fail --location --retry 3 --retry-delay 5 "$MODEL_URL" --output .room_model/model.gguf
+          echo "$MODEL_SHA  .room_model/model.gguf" | sha256sum -c -
+      - name: Run native speech for same starting scene
+        env:
+          MODEL_NAME: ${{ matrix.model }}
+          MODEL_LABEL: ${{ matrix.label }}
+        run: |
+          set -euo pipefail
+          server_bin="$(find .room_model/runtime -type f -name llama-server | head -1)"
+          chmod +x "$server_bin"
+          "$server_bin" -m .room_model/model.gguf --host 127.0.0.1 --port 18080 -c 8192 -np 1 -t 2 -a "$MODEL_NAME" >experiments/results/server.log 2>&1 &
+          for attempt in $(seq 1 120); do
+            if curl -fsS --max-time 2 http://127.0.0.1:18080/health >/dev/null; then break; fi
+            sleep 1
+          done
+          python3 experiments/room_model_conversation_benchmark.py --model "$MODEL_NAME" --turns 16 --out "experiments/results/$MODEL_LABEL.json"
+      - name: Save unaltered model-authored dialogue
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-model-benchmark-${{ matrix.label }}
+          path: experiments/results/*.json
+          retention-days: 7
