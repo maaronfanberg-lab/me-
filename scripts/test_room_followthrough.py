@@ -38,6 +38,14 @@ a=pending(START+5,source)
 assert len(a)==2
 assert {x["source_id"] for x in a}=={"j0","o1"}
 assert "not proof" in notice(START+5,source)
+own_notice=notice(START+5,source,entity="jules")
+assert "Your earlier stated plan [j0]" in own_notice
+assert "No completed inspection or outcome has been witnessed" in own_notice
+assert "Other participants have announced but not yet completed: Owen inspect irrigation filter" in own_notice
+assert "Jules previously said" not in own_notice
+partner_notice=notice(START+5,source,entity="mara")
+assert "Jules open supply valve" in partner_notice
+assert "Your earlier stated plan" not in partner_notice
 assert "j0" in notice(START+5,source)
 assert {x["source_id"] for x in pending(START+2,source)} == {"j0","o1"}
 assert {x["source_id"] for x in pending(START+1,source)} == {"j0"} # no future sources
