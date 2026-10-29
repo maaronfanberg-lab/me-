@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-TRIAL_START = 36320
+TRIAL_START = 36480
 TRIAL_END = TRIAL_START + 120
 PEOPLE = ('sarah', 'mara', 'owen', 'jules')
 COMMON = ('At the neighborhood planetarium, the projector repeatedly dims ten '
