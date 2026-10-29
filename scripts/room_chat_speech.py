@@ -216,7 +216,9 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                 # tolerated the missing final punctuation. Short authentic
                 # replies such as "No" remain valid.
                 if (len(re.findall(r"[a-z0-9']+", spoken.casefold())) >= 10
-                        and not re.search(r'[.!?]["”’]?\s*
+                        and not spoken.rstrip().rstrip('"”’').endswith((".", "!", "?"))):
+                    raise ValueError("unfinished_model_sentence")
+            except (RuntimeError,ValueError) as exc:
                 last_failure=str(exc)[:96]
                 # Shadow-only diagnosis. Never print real Allen speech or
                 # unseen private memories to an Actions log.
