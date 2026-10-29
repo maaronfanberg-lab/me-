@@ -13,6 +13,7 @@ import os
 import re
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 from room_conversational_floor import audible_addressee, ORDER
 from room_research_architecture import autonomous_text_issue
@@ -85,6 +86,17 @@ def messages(payload: dict, entity: str) -> list[dict]:
     )
     last=("Latest public Room turns:\n"+transcript if history
           else "Nobody has spoken to you directly in this moment.")
+    # Experiment-only: person-specific, *non-omniscient* fictional observations.
+    # This must never pre-empt a real visitor's message. Default remains off.
+    if os.environ.get("ROOM_HIDDEN_WORLD_EXPERIMENT") == "1" and not (
+        history and history[-1]["speaker"] == "allen"
+    ):
+        from room_hidden_world import context_for
+        room_cycle = payload.get("room_cycle")
+        if room_cycle is None:
+            state_path = Path(__file__).resolve().parents[1] / "room" / "state.json"
+            room_cycle = json.loads(state_path.read_text()).get("cycle", 0)
+        system += "\\n" + context_for(entity, int(room_cycle))
     user=(last+"\n\nThe final transcript line is the most recent real public turn. "
           "Use its meaning, not a copy of its wording, as your starting point. "
           f"Now speak as {entity.capitalize()}. Say only your own next conversational turn.")
