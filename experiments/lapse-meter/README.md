@@ -566,7 +566,13 @@ which was my bet:
 - digits with only 2 classes still diverged, at every readout multiplier.
 - The circle embedded in 64 inputs trained at ×1 and diverged at ×3 and ×10.
 
-With 2 inputs the network survives a blocked teardown; with 64 it does not.
+Experiment 39 (pre-registered, 90 runs) showed that what matters is really input **scale**, not dimension
+(embedding the circle in 64 dimensions had also scaled it up):
+
+- The circle in 64 dimensions at its own small scale never diverged.
+- Scaled-up 2-dimensional inputs did.
+- Freezing the input layer prevented the divergence at the multipliers where it had happened. At ×10 on digits it
+  did not, so large kicks find another route.
 
 ## Honest limits
 
