@@ -5,7 +5,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from e8_analyze import R
 rows = []
 for D in (8, 32):
-    for c in ("plain", "cap10", "norm", "finalln"):
+    for c in ("plain", "cap10", "norm", "finalln", "onemat", "onemat_cap10", "onemat_bcenter", "bcenter"):
         L = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(R, "e55", f"tf{D}_{c}_s*.json")))]
         if not L: continue
         fl = [r["log"][-1]["train_loss"] for r in L]; tr = [r["log"][-1]["transport"] for r in L]; dv = sum(r["log"][-1]["step"] < 6000 for r in L)
