@@ -167,3 +167,73 @@ def context_for(entity: str, cycle: int) -> str:
           "else already knows your observation. Do not turn the exercise into "
           "a discussion of conversation itself. Never invent shared memories."
     )
+
+
+# An independently staged phase of the rainwater replication. No private
+# observation ever becomes "shared" just because the coordinator knows it.
+LEDGER_ONSET = REPLICATION_START + 12
+_LEDGER_STOP = {"someone", "another", "before", "after", "about", "there",
+                "would", "could", "which", "their", "these", "those",
+                "noticed", "notice", "checked", "saying", "found",
+                "whole", "seems", "think", "looks", "really", "other",
+                "three", "given", "having"}
+
+
+def _evidence_words(text: str) -> set[str]:
+    import re
+    raw = re.findall(r"[a-z]{4,}", str(text or "").lower())
+    return {word for word in raw if word not in _LEDGER_STOP}
+
+
+def public_scene_ledger(cycle: int, public_turns: list[dict]) -> list[dict]:
+    """Only actual public statements can be promoted to common-ground notes.
+
+    Use an abbreviated verbatim *public* statement as evidence. Never insert
+    another character's private card, even when two words happen to match.
+    """
+    if not (LEDGER_ONSET <= cycle < REPLICATION_END):
+        return []
+    onset = REPLICATION_START
+    facts = {}
+    for turn in public_turns:
+        if not isinstance(turn, dict):
+            continue
+        speaker = str(turn.get("speaker") or "").lower()
+        if speaker not in PARTICIPANTS:
+            continue
+        beat = str(turn.get("beat_id") or "")
+        try:
+            beat_cycle = int(beat.rsplit("-", 1)[-1])
+        except (ValueError, TypeError):
+            continue
+        if not (onset <= beat_cycle < cycle):
+            continue
+        actual = str(turn.get("text") or "").strip()
+        own_fact = private_observation(speaker, cycle)
+        overlap = _evidence_words(actual) & _evidence_words(own_fact)
+        # Two nontrivial matched words provide conservative evidence that
+        # something about this character's clue was said out loud.
+        if len(overlap) < 2:
+            continue
+        # The returned entry contains ONLY the participant's real public
+        # text. Do not complete or embellish the private source material.
+        facts.setdefault(speaker, {
+            "speaker": speaker,
+            "public_text": actual[:240],
+            "source_id": str(turn.get("id") or ""),
+        })
+    return [facts[p] for p in PARTICIPANTS if p in facts]
+
+
+def scene_common_ground(cycle: int, public_turns: list[dict]) -> str:
+    entries = public_scene_ledger(cycle, public_turns)
+    if not entries:
+        return ""
+    lines = ["PREVIOUSLY SPOKEN PUBLIC OBSERVATIONS ABOUT THIS SAME SITUATION "
+             "(not new events; quoted from actual public speech):"]
+    for e in entries:
+        lines.append(e["speaker"].capitalize() + " said: " + e["public_text"])
+    lines.append("These statements are already in the group's conversational "
+                 "history. They may be questioned, compared, or tested; "
+                 "no observation proves an explanation by itself.")
+    return "\n".join(lines)
