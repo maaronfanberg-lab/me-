@@ -122,7 +122,7 @@ class NativeMemoryTests(unittest.TestCase):
         inp["group_context"]["encounters"]=[memory("public-55","sarah",text)]
         original=copy.deepcopy(inp)
         chat_text=chat.messages(inp,"owen")[-1]["content"]
-        self.assertIn("Earlier",chat_text)
+        self.assertIn("earlier relevant PUBLIC",chat_text)
         self.assertIn("source public-55",chat_text)
         self.assertNotIn("\nlike a network",chat_text)
         self.assertNotIn("X"*200,chat_text)
