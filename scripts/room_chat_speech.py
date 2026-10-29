@@ -87,18 +87,20 @@ def messages(payload: dict, entity: str) -> list[dict]:
     last=("Latest public Room turns:\n"+transcript if history
           else "Nobody has spoken to you directly in this moment.")
     new_world_event = None
+    situational_grounding = ''
     # Experiment-only: person-specific, *non-omniscient* fictional observations.
     # This must never pre-empt a real visitor's message. Default remains off.
     if os.environ.get("ROOM_HIDDEN_WORLD_EXPERIMENT") == "1" and not (
         history and history[-1]["speaker"] == "allen"
     ):
-        from room_hidden_world import context_for, trial_active, event_at, scene_for_cycle, private_observation
+        from room_hidden_world import context_for, trial_active, event_at, scene_for_cycle, private_observation, situational_notice
         room_cycle = payload.get("room_cycle")
         if room_cycle is None:
             state_path = Path(__file__).resolve().parents[1] / "room" / "state.json"
             room_cycle = json.loads(state_path.read_text()).get("cycle", 0)
         if trial_active(int(room_cycle)):
             system += chr(10) + context_for(entity, int(room_cycle))
+            situational_grounding = situational_notice(entity, int(room_cycle))
             if event_at(int(room_cycle)):
                 new_world_event = (scene_for_cycle(int(room_cycle)).common,
                                    private_observation(entity, int(room_cycle)))
@@ -117,6 +119,11 @@ def messages(payload: dict, entity: str) -> list[dict]:
               "Speak naturally as yourself; you may react to the event, ask another person, "
               "or continue an urgent earlier exchange. Say only your own next turn."
         )
+    if situational_grounding:
+        # World evidence is a distinct channel, not an invented speaker turn.
+        # Its final placement prevents short abstract transcript tails from
+        # silently erasing the ongoing situation during this bounded window.
+        user += chr(10) + chr(10) + situational_grounding
     return [{"role":"system","content":system},{"role":"user","content":user}]
 
 
