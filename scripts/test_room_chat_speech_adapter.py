@@ -74,6 +74,14 @@ class ChatAdapterTests(unittest.TestCase):
         self.assertNotIn("private_self_state",full)
         self.assertIn("latest",full.lower())
 
+    def test_accepted_allen_public_turn_remains_verbatim_up_to_room_limit(self):
+        said="Allen wants a specific discussion of the coastline. " + "x"*570
+        inp=payload("sarah",source("allen",said))
+        history=chat.witnessed_context(inp,"sarah")
+        self.assertEqual(history[-1]["text"],said)
+        self.assertIn(said,chat.messages(inp,"sarah")[-1]["content"])
+        self.assertEqual(history[-1]["speaker"],"allen")
+
     def test_candidate_has_real_model_text_and_passes_final_preflight(self):
         inp=payload()
         said="The species could diverge because different environments favor different adaptations."
