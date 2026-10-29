@@ -89,7 +89,7 @@ def run(cfg, path=None, hook=None):
                 capped.append(s)
         if c["out_lr_norm"]:  # experiment 48: readout lr scaled by out_lr_norm / mean_i |h_i|^2 on this minibatch, every step (mu-P-like)
             hb = net.readout_input(X[idx]) if c["block"] == "ln" else net.forward(X[idx])[0][-2]
-            f_ = c["out_lr_norm"] / float(np.mean(np.sum(hb * hb, 1))); gW[L - 1] = gW[L - 1] * f_; gb[L - 1] = gb[L - 1] * f_
+            f_ = c["out_lr_norm"] / max(float(np.mean(np.sum(hb * hb, 1))), 1e-12);  # guarded (CORRECTIONS 70) gW[L - 1] = gW[L - 1] * f_; gb[L - 1] = gb[L - 1] * f_
         if c["out_lr_mult"] != 1.0 and (c["out_lr_mult_until"] is None or s < c["out_lr_mult_until"]):  # experiment 23 (permanent); 30 (steps 0 .. until-1)
             gW[L - 1] = gW[L - 1] * c["out_lr_mult"]; gb[L - 1] = gb[L - 1] * c["out_lr_mult"]
         if c["block_nomean"]:  # experiment 35: no block update may shift its batch-mean pre-activation (dW hbar = 0, db = 0)
