@@ -12,6 +12,8 @@ on:
       - 'scripts/test_room_capacity_guard.py'
       - 'scripts/room_conversation_project.py'
       - 'scripts/room_chat_speech.py'
+      - 'scripts/room_causal_world.py'
+      - 'scripts/test_room_causal_world.py'
       - 'scripts/test_room_chat_speech_adapter.py'
       - 'scripts/test_room_native_chat_quality.py'
       - 'scripts/room_chat_speech.py'
@@ -101,6 +103,8 @@ jobs:
         run: python3 scripts/test_room_conversational_workflow.py
       - name: Test directed responses, sleeping participants, voluntary readiness
         run: python3 scripts/test_room_conversational_floor.py
+      - name: Verify source-bound causal world and privacy
+        run: python3 scripts/test_room_causal_world.py
       - name: Test actual selected-expression commit in sandbox
         run: python3 scripts/test_room_conversational_pipeline.py
       - name: Existing sleeping participant regression
