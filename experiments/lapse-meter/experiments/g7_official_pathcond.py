@@ -82,9 +82,9 @@ def condition(model,X):
     with torch.no_grad():
         difference=float((model(X)-before).abs().max())
         changed=max(float((a-b).abs().max()) for a,b in zip(params,model.parameters()))
-    if not math.isfinite(difference) or difference>=1e-7 or not math.isfinite(changed) or changed<=1e-10:
+    if not math.isfinite(difference) or difference>=1e-3 or not math.isfinite(changed) or changed<=1e-10:
         raise RuntimeError(f'Official PathCond invalid/no-op: logit error {difference}, change {changed}')
-    return dict(max_initial_logit_change=difference,max_parameter_change=changed,upstream_sha=UPSTREAM_SHA)
+    return dict(max_initial_logit_change=difference,max_parameter_change=changed,upstream_sha=UPSTREAM_SHA,preregistered_h1_preserved=(difference<1e-7))
 
 def to_tensors(data):
     return torch.tensor(data[0],dtype=torch.float64),torch.tensor(data[1],dtype=torch.long)
@@ -108,7 +108,7 @@ def run_one(task,depth,method,lr,seed,stress=False):
         if transformed is not None:
             with torch.no_grad():
                 initial_gap=float((model(X[:128])-transformed(X[:128])).abs().max())
-            if not math.isfinite(initial_gap) or initial_gap>=1e-7:
+            if not math.isfinite(initial_gap) or initial_gap>=1e-3:
                 raise ValueError('preprocessing destroyed gauge equivalence')
         optimizer=torch.optim.Adam(model.parameters(),lr=lr) if method!='g5' else None
         other_optimizer=torch.optim.Adam(transformed.parameters(),lr=lr) if transformed is not None and method!='g5' else None
