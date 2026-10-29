@@ -1,0 +1,81 @@
+name: Room isolated Qwen2.5 1.5B capacity trial
+
+on:
+  push:
+    branches: [research/room-qwen1p5-capacity-20261029]
+    paths:
+      - '.github/workflows/room-qwen1p5-comparison.yml'
+      - 'scripts/room_qwen1p5_probe.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-qwen1p5-capacity
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_NODE_PROMPT: 'Isolated public Room Qwen model comparison'
+      ROOM_CONVERSATIONAL_FLOOR: '1'
+      ROOM_BRAIN_ACTIVE: llama3.2-1b
+      ROOM_CAPACITY_VARIANT: qwen1p5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Validate source and current floor tests
+        run: |
+          python3 -m py_compile scripts/room_qwen1p5_probe.py
+          python3 scripts/test_room_conversational_floor.py
+      - name: Download checked Room runtime and public Qwen2.5 1.5B GGUF
+        run: |
+          set -euo pipefail
+          mkdir -p .qwen_model/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .qwen_model
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .qwen_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c - || {
+            echo 'Unexpected runtime hash; fail closed'
+            exit 1
+          }
+          tar -xzf .qwen_model/llama-runtime-linux-x64.tar.gz -C .qwen_model/runtime
+          curl -fsSL --retry 3 --retry-delay 4             'https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf?download=true'             -o .qwen_model/model.gguf
+          bytes=$(stat -c %s .qwen_model/model.gguf)
+          [ "$bytes" -ge 900000000 ] || { echo 'Model download incomplete'; exit 1; }
+          sha256sum .qwen_model/model.gguf
+      - name: Run actual Room wrapper with Qwen model
+        run: |
+          set -euo pipefail
+          bin=$(find .qwen_model/runtime -type f -name llama-server | head -1)
+          chmod +x "$bin"
+          "$bin" -m .qwen_model/model.gguf --host 127.0.0.1 --port 18084 -c 8192 -np 2 -t 4 >.qwen_model/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:18084/health >/dev/null; then ready=1; break; fi
+            kill -0 "$pid" || break
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then tail -75 .qwen_model/server.log; exit 1; fi
+          ROOM_MODEL_URL=http://127.0.0.1:18084/completion python3 -u scripts/room_qwen1p5_probe.py
+      - name: Keep public experimental text only on research branch
+        if: always()
+        run: |
+          path='docs/research/room-capacity-qwen1p5-20261029.json'
+          test -s "$path"
+          git config user.name 'room-qwen-research'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$path"
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record Qwen2.5 1.5B Room source-continuity trial'
+          for n in 1 2 3 4; do
+            git push origin HEAD:research/room-qwen1p5-capacity-20261029 && exit 0
+            git fetch origin research/room-qwen1p5-capacity-20261029
+            git rebase origin/research/room-qwen1p5-capacity-20261029 || { git rebase --abort; exit 1; }
+            sleep "$n"
+          done
+          exit 1
