@@ -129,6 +129,27 @@ class ChatAdapterTests(unittest.TestCase):
         self.assertEqual(model.call_count,2)
         self.assertEqual(shortened["utterance"],correct)
 
+    def test_model_must_not_ventriloquize_allen_or_another_agent(self):
+        valid="The forest contains several independent evolutionary branches."
+        for false_speaker in ("Allen","Mara","Sarah"):
+            with self.subTest(false_speaker=false_speaker),patch(
+                    "room_chat_speech.urllib.request.urlopen",
+                    side_effect=[
+                        Fake(false_speaker+": I think the idea is sound."),
+                        Fake(valid)]) as fake_model:
+                out=chat.run(payload("owen"))
+                self.assertEqual(fake_model.call_count,2)
+                self.assertEqual(out["utterance"],valid)
+        with patch("room_chat_speech.urllib.request.urlopen",
+                   return_value=Fake("Allen: I've already agreed.")) as fake_model:
+            self.assertIsNone(chat.run(payload("owen")))
+        self.assertEqual(fake_model.call_count,3)
+        # A character labeling their *own* utterance is not impersonation.
+        with patch("room_chat_speech.urllib.request.urlopen",
+                   return_value=Fake("Owen: "+valid)):
+            out=chat.run(payload("owen"))
+        self.assertEqual(out["utterance"],valid)
+
     def test_natural_vocative_controls_recipient_not_hidden_partner(self):
         x=payload("sarah",source("jules","I saw some migrating birds over the river."))
         x["partner"]="owen"
