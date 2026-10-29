@@ -131,12 +131,23 @@ def replay(cycle: int, turns: list[dict]) -> dict:
         if speaker not in PEOPLE:
             continue
         spoken = str(turn.get('text') or '').strip()
+        action = witnessed_action(speaker, spoken)
         overlap = evidence_terms(spoken) & evidence_terms(PRIVATE[speaker])
-        if len(overlap) >= 2 and speaker not in disclosures:
+        # Shared nouns are not a disclosure: "I measure the voltage" says
+        # nothing about the monitor reading, and a question is not evidence.
+        unasserted = (
+            spoken.endswith('?')
+            or re.match(r"^\\s*(?:I\\s+(?:think|wonder|suspect|guess|might|could|would|will|want)|"
+                        r"we\\s+(?:might|could|would|will|should)|maybe|perhaps|what if|let's)\\b",
+                        spoken, re.I) is not None
+            or (action is not None and re.search(
+                r"\\b(?:found|noticed|observed|saw|showed|shows|stayed|steady|"
+                r"reading|revealed|confirmed)\\b", spoken, re.I) is None)
+        )
+        if len(overlap) >= 2 and speaker not in disclosures and not unasserted:
             disclosures[speaker] = {
                 'speaker': speaker, 'text': spoken[:200], 'source_id': source_id,
             }
-        action = witnessed_action(speaker, spoken)
         if not action:
             continue
         key = ('restart_after_clear' if cleared else 'restart_before_clear') if action == 'restart_projector' else action
