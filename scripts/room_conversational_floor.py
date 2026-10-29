@@ -57,6 +57,10 @@ def is_directed(event, recipient):
         or re.search(r"^\s*" + name + r"\b\s*[,?!:]", spoken, re.I)
         or re.search(r"^\s*@" + name + r"\b", spoken, re.I)
         or re.search(r"^\s*" + name + r"\s+(?:can|could|would|will|what|why|how|are|do|did|is|have|tell|please)\b", spoken, re.I)
+        # Natural mid-utterance question vocative: "I'm curious, Mara, did you ...?"
+        # Require a following interrogative to distinguish direct selection
+        # from ordinary third-person mentions and appositives.
+        or re.search(r",\\s*" + name + r"\\s*,\\s*(?:can|could|would|will|do|did|are|is|have|has|what|why|where|when|how|tell|please)\\b", spoken, re.I)
         or re.search(r",\s*" + name + r"\s*[?!\.]?\s*$", spoken, re.I)
     )
 
