@@ -180,5 +180,6 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
             last_failure=type(exc).__name__
             print(f"Room chat speech local generation attempt {attempt+1} failed for {entity}: {type(exc).__name__}")
             continue
-    print(f"Room chat speech quarantined {entity}: no acceptable local model response")
+    # Safe allowlisted-style failure category, never user text or the prompt.
+    print(f"Room chat speech quarantined {entity}: {last_failure or 'unknown_invalid_response'}")
     return None
