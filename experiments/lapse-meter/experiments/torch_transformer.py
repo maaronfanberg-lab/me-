@@ -52,7 +52,8 @@ for s in range(6001):
         if base == "cap10":
             dz = -lo * (top @ out.weight.grad.T + out.bias.grad); kb = float(torch.sqrt((dz ** 2).sum(1).mean()))
             if kb > 10: lo *= 10 / kb
-        for p in params: p -= 0.05 * p.grad; p.grad = None
+        for p in params:
+            if p.grad is not None: p -= 0.05 * p.grad; p.grad = None  # unused branch weights get no gradient
         for p in oparams: p -= lo * p.grad; p.grad = None
 with torch.no_grad(): tloss = float(ce(fwd(Xt)[0], Yt))
 o = os.path.join(HERE, "..", "results", "e55", f"tf{depth}_{cond}_s{seed}.json"); os.makedirs(os.path.dirname(o), exist_ok=True)
