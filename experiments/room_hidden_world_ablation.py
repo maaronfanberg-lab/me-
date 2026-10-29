@@ -52,11 +52,11 @@ def construct_messages(speaker: str, history: list[dict], mode: str) -> list[dic
     if speaker not in PEOPLE or mode not in ("empty", "shared", "hidden"):
         raise ValueError("invalid speaker or experimental condition")
     if mode == "shared":
-        evidence = "All observations, available to everyone:\\n" + "\\n".join(
+        evidence = "All observations, available to everyone:\n" + "\n".join(
             f"{person.capitalize()}: {clue}" for person, clue in CLUES.items()
         )
     elif mode == "hidden":
-        evidence = "Your own private, not-yet-public observation:\\n" + CLUES[speaker]
+        evidence = "Your own private, not-yet-public observation:\n" + CLUES[speaker]
     else:
         evidence = "You have no additional personal observation."
     system = (
@@ -74,9 +74,9 @@ def construct_messages(speaker: str, history: list[dict], mode: str) -> list[dic
     for turn in history[-6:]:
         if turn.get("speaker") in PEOPLE and isinstance(turn.get("text"), str):
             valid.append(f"{turn['speaker'].capitalize()}: {turn['text'][:350]}")
-    user = QUESTION + "\\n" + evidence + "\\nRecent words actually spoken:\\n"
-    user += "\\n".join(valid) if valid else "(Nobody has spoken yet.)"
-    user += f"\\nWhat, if anything, does {speaker.capitalize()} say now?"
+    user = QUESTION + "\n" + evidence + "\nRecent words actually spoken:\n"
+    user += "\n".join(valid) if valid else "(Nobody has spoken yet.)"
+    user += f"\nWhat, if anything, does {speaker.capitalize()} say now?"
     return [{"role": "system", "content": system},
             {"role": "user", "content": user}]
 
@@ -93,7 +93,7 @@ def parse_speech(raw: str, speaker: str) -> str | None:
     text = str(raw or "").strip()
     if not text or text.upper() == "SILENCE":
         return None
-    named = re.match(r"^(Sarah|Mara|Owen|Jules)\\s*:\\s*", text, flags=re.I)
+    named = re.match(r"^(Sarah|Mara|Owen|Jules)\s*:\s*", text, flags=re.I)
     if named:
         if named.group(1).lower() != speaker:
             return None
@@ -101,7 +101,7 @@ def parse_speech(raw: str, speaker: str) -> str | None:
     if not text or len(text) > 580:
         return None
     # Reject paragraphs in another voice, never rewrite model speech.
-    if re.search(r"\\n\\s*(?:Sarah|Mara|Owen|Jules):", text, flags=re.I):
+    if re.search(r"\n\s*(?:Sarah|Mara|Owen|Jules):", text, flags=re.I):
         return None
     return text
 
@@ -148,7 +148,7 @@ def evaluate(history: list[dict]) -> dict:
         "private_clue_owners_who_shared": sorted(delivered),
         "adjacent_shared_content_words": mutual_uptake,
         "self_referential_turns": sum(bool(re.search(
-            r"\\b(?:our conversation|conversations about|our dialogue|the way we converse)\\b",
+            r"\b(?:our conversation|conversations about|our dialogue|the way we converse)\b",
             m["text"], re.I)) for m in history),
         "speakers": sorted(set(m["speaker"] for m in history)),
     }
@@ -182,7 +182,7 @@ def main():
     output={"protocol":"fictional_hidden_evidence_ablation_v1",
             "disclaimer":"An experimental model transcript, never public Room speech",
             "cases":cases}
-    Path(args.out).write_text(json.dumps(output,indent=2,ensure_ascii=False)+"\\n")
+    Path(args.out).write_text(json.dumps(output,indent=2,ensure_ascii=False)+"\n")
     print(json.dumps([{**{"mode":case["mode"]},**case["metrics"],
                        "model_errors":len(case["errors"])} for case in cases],indent=2))
 
