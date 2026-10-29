@@ -106,6 +106,42 @@ class Native3BSelectionTests(unittest.TestCase):
                                text=True,capture_output=True,check=False)
         self.assertEqual(checked.returncode,0,checked.stderr)
 
+    def test_real_3b_boot_activates_selected_floor_adapter(self):
+        # Import in a clean interpreter: the production wrapper binds the
+        # active backend at import time. A direct adapter unit test alone
+        # cannot detect the previous 3B wiring bug.
+        import sys
+        environment=dict(os.environ)
+        environment["ROOM_BRAIN_ACTIVE"]="llama3.2-3b"
+        environment["PYTHONPATH"]=str(Path(__file__).resolve().parent)
+        check=subprocess.run(
+            [sys.executable,"-c",
+             "import room_engine_v5 as e; "
+             "assert e._legacy._core.model_run is e._llama_model_run; "
+             "assert e._legacy._core.recurrent is e._coherent_recurrent"],
+            env=environment,capture_output=True,text=True,timeout=20)
+        self.assertEqual(check.returncode,0,check.stderr)
+
+    def test_native_selected_floor_skips_unused_cpu_generations(self):
+        import room_engine_v5 as engine
+        import room_private_model_autonomy as autonomy
+        before={key:os.environ.get(key) for key in (
+            "ROOM_NODE_PROMPT","ROOM_CHAT_SPEECH_MODE","ROOM_CONVERSATIONAL_FLOOR")}
+        os.environ.update({
+            "ROOM_NODE_PROMPT":"Configured",
+            "ROOM_CHAT_SPEECH_MODE":"1",
+            "ROOM_CONVERSATIONAL_FLOOR":"1",
+        })
+        try:
+            with patch.object(autonomy,"run") as generation:
+                self.assertIsNone(engine._llama_model_run("comprehension",payload()))
+                self.assertIsNone(engine._llama_model_run("thought",payload()))
+                generation.assert_not_called()
+        finally:
+            for key,value in before.items():
+                if value is None:os.environ.pop(key,None)
+                else:os.environ[key]=value
+
     def test_no_untrusted_model_url_and_no_fabricated_utterance(self):
         for path in ("https://untrusted.example/v1/chat/completions",
                      "file:///tmp/brain"):
