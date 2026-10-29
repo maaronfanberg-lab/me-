@@ -306,6 +306,15 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
         return None
     if not os.environ.get("ROOM_NODE_PROMPT", "").strip():
         return None
+    # The native selected-floor path is genuinely single-pass: the speech
+    # model plans inside its one utterance, while the eight sense/thought
+    # nodes still preserve the public-observation and commit invariants.
+    # Running eight extra structured generations against one CPU-hosted 3B
+    # server saturated both slots, timed out, and left the public feed frozen.
+    if (role in {"comprehension", "thought"}
+            and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+            and os.environ.get("ROOM_CHAT_SPEECH_MODE") == "1"):
+        return None
     import room_private_model_autonomy as autonomy
     autonomy._production_rejected_wordings = []
     payload = _episode_scoped_payload(payload)
@@ -434,7 +443,7 @@ def _coherent_recurrent(node, key, bus_data):
         _legacy._core.prior_expression_messages = original_prior
 
 
-if os.environ.get("ROOM_BRAIN_ACTIVE", "").strip() == "llama3.2-1b":
+if os.environ.get("ROOM_BRAIN_ACTIVE", "").strip() in {"llama3.2-1b", "llama3.2-3b"}:
     _social._declared_terms = _sanitize_declared_topic_terms
     _bounded_topic._declared_terms = _sanitize_declared_topic_terms
     _legacy._private_model.run = _llama_model_run
