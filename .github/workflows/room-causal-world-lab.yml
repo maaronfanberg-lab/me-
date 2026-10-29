@@ -1,0 +1,53 @@
+name: Room causal-world laboratory
+on:
+  push:
+    branches: [room-causal-world-lab]
+    paths:
+      - 'experiments/room_causal_world_ablation.py'
+      - 'experiments/test_room_causal_world_ablation.py'
+      - '.github/workflows/room-causal-world-lab.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: room-causal-world-lab
+  cancel-in-progress: true
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run causal world integrity tests
+        run: |
+          python3 -m py_compile experiments/room_causal_world_ablation.py experiments/test_room_causal_world_ablation.py
+          python3 experiments/test_room_causal_world_ablation.py -v
+      - name: Install verified model runtime and weights
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .room_model/runtime experiments/results
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          curl --fail --location --retry 3 --retry-delay 5 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' --output .room_model/model.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_model/model.gguf' | sha256sum -c -
+          tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+          server_bin="$(find .room_model/runtime -type f -name llama-server | head -1)"
+          chmod +x "$server_bin"
+          "$server_bin" -m .room_model/model.gguf --host 127.0.0.1 --port 18080 -c 4096 -np 1 -t 2 -a Llama-3.2-1B-Instruct >experiments/results/server.log 2>&1 &
+          for attempt in $(seq 1 120); do
+            if curl -fsS --max-time 2 http://127.0.0.1:18080/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Compare real model speech with and without executable consequences
+        run: |
+          python3 experiments/room_causal_world_ablation.py --turns 20 --out experiments/results/causal-ablation.json
+      - name: Save transcript and simulator event log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-causal-world-lab
+          path: experiments/results/causal-ablation.json
+          retention-days: 7
