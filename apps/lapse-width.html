@@ -13,7 +13,8 @@ button.on{background:var(--on)}button.big{width:100%;padding:14px;margin-top:6px
 .meter{font-variant-numeric:tabular-nums;color:var(--acc)}
 </style></head><body>
 <h1>Lapse Width</h1>
-<div class="card"><input id="file" type="file" accept="audio/*"><audio id="au" controls style="width:100%;margin-top:8px"></audio>
+<div class="card"><div class="lab">Sounds</div><div id="tracks" style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0"></div>
+<input id="file" type="file" accept="audio/*"><audio id="au" controls loop style="width:100%;margin-top:8px"></audio>
 <button id="power" class="big">START AUDIO ENGINE</button><div id="status" class="hint"></div></div>
 <div class="card"><div class="row"><div><div class="lab">Centre trim</div><div class="hint">Remove part of the shared (mid) sound so the image opens up</div></div>
 <div class="row"><button data-k="trim" data-d="-0.05">−</button><span class="val" id="v-trim"></span><button data-k="trim" data-d="0.05">+</button></div></div></div>
@@ -34,6 +35,9 @@ $("auto").textContent="AUTO-WIDTH: "+(P.auto?"ON":"OFF");$("auto").classList.tog
 $("ab").textContent="A/B: "+(P.bypass?"BYPASS (original)":"PROCESSED");$("ab").classList.toggle("on",!P.bypass);if(node)node.port.postMessage(P);}
 document.querySelectorAll("button[data-k]").forEach(b=>b.onclick=()=>{const k=b.dataset.k,[a,z]=LIM[k];P[k]=Math.round(Math.min(z,Math.max(a,P[k]+Number(b.dataset.d)))*100)/100;show();});
 $("auto").onclick=()=>{P.auto=!P.auto;show()};$("ab").onclick=()=>{P.bypass=!P.bypass;show()};$("slew").onclick=()=>{si=(si+1)%3;P.cap=SL[si][1];show()};
+const TR=[["Shock","shock"],["Shock, warm-up","shock_warmup"],["Horizon","horizon"],["Residual","residual"],["Settling","settling"]];
+TR.forEach(([n,f])=>{const b=document.createElement("button");b.textContent=n;b.onclick=()=>{$("au").src="../experiments/lapse-meter/audio/"+f+".wav";$("au").play().catch(()=>{});
+document.querySelectorAll("#tracks button").forEach(x=>x.classList.remove("on"));b.classList.add("on");};$("tracks").appendChild(b);});
 $("file").onchange=e=>{const f=e.target.files[0];if(f){$("au").src=URL.createObjectURL(f);$("status").textContent="Loaded "+f.name;}};
 $("power").onclick=async()=>{if(ctx){ctx.state==="running"?await ctx.suspend():await ctx.resume();$("power").textContent=ctx.state==="running"?"PAUSE ENGINE":"RESUME ENGINE";return;}
 try{ctx=new (window.AudioContext||window.webkitAudioContext)();await ctx.audioWorklet.addModule("lapse-width-core.js?v=1");await ctx.audioWorklet.addModule("lapse-width-worklet.js?v=1");
