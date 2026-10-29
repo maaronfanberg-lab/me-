@@ -302,6 +302,19 @@ def rp(bus_data, entity, role):
     return next(part for part in bus_data.get("private", {}).get(entity, []) if part.get("role") == role)
 
 
+def selected_floor_public_window() -> int:
+    """Bound public speech evidence for the active model path.
+
+    This only changes the witnessed input budget in the selected native-chat
+    experiment. It never grants access to private or sleeping conversations.
+    """
+    return 5 if (
+        os.environ.get("ROOM_CHAT_SPEECH_MODE") == "1"
+        and os.environ.get("ROOM_CHAT_CONTEXT_WINDOW") == "5"
+        and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+    ) else 3
+
+
 def sense(node, key):
     entity, local, role, tasks = ni(node)
     social_floor = os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
@@ -316,10 +329,7 @@ def sense(node, key):
         # between one character's utterances. Expose one such cycle only in
         # the isolated native-chat context experiment; normal floor behavior
         # and accepted user speech retain their original source filters.
-        context_size = 5 if (
-            os.environ.get("ROOM_CHAT_SPEECH_MODE") == "1"
-            and os.environ.get("ROOM_CHAT_CONTEXT_WINDOW") == "5"
-        ) else 3
+        context_size = selected_floor_public_window()
         context = public_participant_turns(conv())[-context_size:]
         last = context[-1] if context else None
     else:
