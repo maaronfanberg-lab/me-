@@ -71,7 +71,9 @@ def messages(payload: dict, entity: str) -> list[dict]:
         "Respond to what the last person actually meant where useful. "
         "You can agree, disagree, clarify, add a concrete example, or introduce your own relevant idea. "
         "Do not simply repeat their words or invent previous events or relationships. "
-        "Your response is one or two complete spoken sentences, not an explanation of your job."
+        "Make one specific point in one or two short, complete sentences (around 15-30 words). " 
+        "Do not address yourself by name or present imagined past events as facts. " 
+        "This is spoken conversation, not an explanation of your job."
     )
     history=witnessed_context(payload,entity)
     transcript="\n".join(
@@ -122,17 +124,22 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
     url=chat_endpoint(os.environ.get("ROOM_MODEL_URL") or "")
     incoming=messages(payload,entity)
     cycle_key=str(os.environ.get("ROOM_CYCLE_KEY") or "room-speech-beat")
-    for attempt in range(2):
+    last_failure=""
+    for attempt in range(3):
         keyed=f"{cycle_key}:chat-speech:{entity}:{attempt}"
         seed=int(hashlib.sha256(keyed.encode()).hexdigest()[:8],16) & 0x7FFFFFFF
         prompt=json.loads(json.dumps(incoming))
         if attempt:
+            hint = ("Use one or two complete sentences under 35 words. "
+                    "Do not refer to yourself in the third person. "
+                    "Reply directly with one substantive conversational action. "
+                    "Do not make up prior events.")
             prompt[0]["content"] += (
-                " The previous candidate did not pass speech safety or completeness checks. "
-                "Use a complete, natural first-person response in your own words.")
+                " The previous candidate did not pass public conversational integrity "
+                "checks (" + last_failure[:48] + "). " + hint)
         body={"model":"Llama-3.2-1B-Instruct","messages":prompt,
               "temperature":.78,"top_p":.93,
-              "max_tokens":145,"seed":seed,"stream":False}
+              "max_tokens":110,"seed":seed,"stream":False}
         req=urllib.request.Request(
             url, data=json.dumps(body,ensure_ascii=False).encode(),
             headers={"Content-Type":"application/json"}, method="POST")
@@ -143,14 +150,34 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
             data=choices[0].get("message") or {} if choices else {}
             spoken=SPEAKER_PREFIX.sub("",str(data.get("content") or "").strip()).strip()
             if not spoken or len(spoken)>700:
+                last_failure="empty_or_overlong_candidate"
                 continue
-            if autonomous_text_issue({"speaker":entity,"text":spoken}):
+            if (issue:=autonomous_text_issue({"speaker":entity,"text":spoken})):
+                last_failure=issue
                 continue
             from room_private_model import _contains_explicit_leak_marker, _contains_meta_language
             if _contains_explicit_leak_marker(spoken) or _contains_meta_language(spoken):
+                last_failure="model_process_or_privacy_marker"
                 continue
-            return speech_metadata(spoken,payload,entity)
+            result=speech_metadata(spoken,payload,entity)
+            # These are the SAME source-linked, speaker-bound publication
+            # validators that run at preflight and final commit. Apply them
+            # early so the local model can repair a candidate rather than
+            # consuming a Room beat or manufacturing fallback speech.
+            from room_private_commit import validate_public_expression, clean_terms
+            from room_sequence_uptake import validate_uptake
+            observed=witnessed_context(payload,entity)
+            try:
+                terms=clean_terms(result,payload.get("topic") or {},spoken)
+                validate_public_expression(entity,spoken,terms,observed)
+                validate_uptake(history=observed,speaker=entity,
+                                utterance=spoken,move=result["move"])
+            except (RuntimeError,ValueError) as exc:
+                last_failure=str(exc)[:96]
+                continue
+            return result
         except (TimeoutError,urllib.error.URLError,ValueError,KeyError,TypeError,IndexError) as exc:
+            last_failure=type(exc).__name__
             print(f"Room chat speech local generation attempt {attempt+1} failed for {entity}: {type(exc).__name__}")
             continue
     print(f"Room chat speech quarantined {entity}: no acceptable local model response")
