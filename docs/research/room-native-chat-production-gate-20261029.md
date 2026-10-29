@@ -41,4 +41,6 @@ Disable and restart if any private text leaks, wrong speaker publishes, Allen me
 
 ## Result
 
-Pending direct adapter smoke and live verification. Do not certify deployment solely from merging a PR.
+2026-10-29 shadow canary (research branch only): the native-chat adapter passed 4/4 selected-expression fixture preflights and produced six consecutive accepted model turns in an isolated evolution discussion. This is **not** evidence of sustained natural conversation. Manual inspection found a reply to Mara's unspecified request that explored the phrase "what I want" instead of asking what was needed, a hypothetical eight-meter worm introduced as if relevant to Owen's unnamed hypothesis, and a later reply that substantially restated Jules's prior ripple-effect claim. An earlier run even accepted an unclosed model quotation; a narrow quotation-integrity retry guard was added and re-tested. The adapter smoke now explicitly uses the production `ROOM_CHAT_SPEECH_MODE=1` quality boundary, correcting an earlier shadow-versus-production mismatch. Full qualitative evidence: `docs/research/room-chat-speech-integrity-20261029.json`.
+
+Production remains unchanged. PR #348 stays draft pending a stronger multi-topic natural-dialogue trial, independent integrity checks, and a live post-deployment review of at least 30 consecutive autonomous turns. The separate architecture workflow still fails the viewer-history semantic-archive assertion; it is not being represented as green.
