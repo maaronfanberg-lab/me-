@@ -1,0 +1,82 @@
+name: Room isolated native-chat 3B production-compatibility trial
+
+on:
+  push:
+    branches: [research/room-native-3b-20261029]
+    paths:
+      - '.github/workflows/room-native-3b-shadow.yml'
+      - 'scripts/room_native3b_probe.py'
+      - 'scripts/room_chat_speech.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-native-3b-shadow
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_NODE_PROMPT: 'Isolated native-chat 3B source-grounded trial'
+      ROOM_CHAT_SPEECH_MODE: '1'
+      ROOM_CONVERSATIONAL_FLOOR: '1'
+      ROOM_SHADOW_MODEL_ID: Llama-3.2-3B-Instruct
+      ROOM_BRAIN_ACTIVE: llama3.2-3b-shadow
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Test native Room speech safety under production backend
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_native3b_probe.py scripts/room_chat_speech.py
+          python3 scripts/test_room_chat_speech_adapter.py
+          python3 scripts/test_room_sequence_uptake.py
+      - name: Download the checked runtime and public 3B model
+        run: |
+          set -euo pipefail
+          mkdir -p .shadow3b/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .shadow3b
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .shadow3b/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .shadow3b/llama-runtime-linux-x64.tar.gz -C .shadow3b/runtime
+          curl -fsSL --retry 3 --retry-delay 4             'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true'             -o .shadow3b/model.gguf
+          test "$(stat -c '%s' .shadow3b/model.gguf)" -ge 1900000000
+          sha256sum .shadow3b/model.gguf > .shadow3b/model.sha256
+      - name: Run the real Room native speaker with 3B and final preflight
+        run: |
+          set -euo pipefail
+          bin=$(find .shadow3b/runtime -type f -name llama-server | head -1)
+          test -n "$bin"
+          chmod +x "$bin"
+          "$bin" -m .shadow3b/model.gguf --host 127.0.0.1 --port 18090 -c 8192 -np 2 -t 4 >.shadow3b/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:18090/health >/dev/null; then ready=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then tail -80 .shadow3b/server.log; exit 1; fi
+          ROOM_MODEL_URL=http://127.0.0.1:18090/completion python3 -u scripts/room_native3b_probe.py
+      - name: Store evidence only in isolated branch
+        if: always()
+        run: |
+          file=docs/research/room-native-chat-3b-20261029.json
+          test -s "$file"
+          git config user.name 'room-native-3b-research'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$file"
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record 3B native-chat Room real-model source trial'
+          for n in 1 2 3 4; do
+            git push origin HEAD:research/room-native-3b-20261029 && exit 0
+            git fetch origin research/room-native-3b-20261029
+            git rebase origin/research/room-native-3b-20261029 || { git rebase --abort; exit 1; }
+            sleep "$n"
+          done
+          exit 1
