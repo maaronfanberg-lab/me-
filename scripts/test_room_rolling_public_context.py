@@ -28,8 +28,9 @@ payload = {
 with patch("pathlib.Path.read_text", return_value=json.dumps({"conversation": public})):
     history = witnessed_context(payload, "mara")
     rendered = messages(payload, "mara")
-assert len(history) == 8, history
-assert [x["id"] for x in history] == ["source-%02d" % i for i in range(4, 12)]
+assert 8 <= len(history) <= 13, history
+assert {"source-%02d" % i for i in range(4, 12)} <= {x["id"] for x in history}
+assert "source-01" in {x["id"] for x in history}  # older completed observation
 assert history[-1]["speaker"] == "allen"
 assert len({x["id"] for x in history}) == len(history)
 assert "I tightened the loose connector." in rendered[1]["content"]
@@ -55,4 +56,50 @@ with patch("pathlib.Path.read_text", return_value=json.dumps({"conversation": pu
 assert len({x["id"] for x in dup}) == len(dup)
 assert dup[-1]["speaker"] == "allen"
 
-print("PASS: bounded source-linked history, completed action recall, dedupe, and visitor priority")
+# Live-failure regression: after a Sarah/Owen stretch, Jules and Mara were
+# absent from the last eight turns, and Owen kept proposing an already
+# completed pressure-gauge inspection. Retain those witnessed sources, not
+# imaginary interventions or private cognition.
+crowded = [
+    turn(1, "mara", "I measured the garden pressure gauge at 20 kPa."),
+    turn(2, "jules", "I tightened the garden hose connector."),
+]
+crowded.extend(
+    turn(i, "sarah" if i % 2 else "owen",
+         "The garden pressure gauge is low, but the dry beds still need water.")
+    for i in range(3, 20)
+)
+request = turn(20, "allen", "What actually changed in the garden?")
+with patch("pathlib.Path.read_text",
+           return_value=json.dumps({"conversation": crowded})):
+    recalled = witnessed_context({
+        "context": crowded[-2:], "event": request, "room_cycle": 36450
+    }, "sarah")
+assert recalled[-1]["id"] == request["id"]
+assert {"mara", "jules", "sarah", "owen", "allen"} <= {
+    x["speaker"] for x in recalled
+}
+assert {"source-01", "source-02"} <= {x["id"] for x in recalled}
+assert len(recalled) <= 13 and len({x["id"] for x in recalled}) == len(recalled)
+assert [x["id"] for x in recalled][-1] == "source-20"
+
+# A completed action from an unrelated earlier scene must not displace
+# evidence in a new scene just because both involved somebody inspecting.
+unrelated = [
+    turn(1, "owen", "I inspected the concert mixer power cable."),
+    turn(2, "jules", "The concert sounded much better."),
+]
+unrelated.extend(
+    turn(i, "sarah" if i % 2 else "owen",
+         "The library photograph frame has an unclear date on its label.")
+    for i in range(3, 20)
+)
+with patch("pathlib.Path.read_text",
+           return_value=json.dumps({"conversation": unrelated})):
+    selected = witnessed_context({
+        "context": unrelated[-2:], "event": turn(20,"allen","What date is it?")
+    }, "sarah")
+assert "source-01" not in {x["id"] for x in selected}
+assert selected[-1]["speaker"] == "allen"
+
+print("PASS: bounded source-linked history, completed action recall, dedupe, visitor priority and four-voice retention")

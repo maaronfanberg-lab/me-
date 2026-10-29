@@ -46,7 +46,7 @@ def witnessed_context(payload: dict, entity: str) -> list[dict]:
                                   / "room" / "feed.json").read_text())
             public=published.get("conversation") or []
             if isinstance(public,list):
-                source=public[-12:]+source
+                source=public[-48:]+source
         except (OSError,ValueError,TypeError,KeyError):
             pass
     event=payload.get("event")
@@ -78,7 +78,48 @@ def witnessed_context(payload: dict, entity: str) -> list[dict]:
         # shortened to the same 520-char budget used for autonomous speech.
         limit=700 if speaker=="allen" else 520
         out.append({"speaker":speaker,"text":spoken[:limit],"id":item.get("id")})
-    return out[-8:]
+    # A pure last-eight window turns a four-person conversation into a
+    # Sarah/Owen dyad whenever the other two have been quiet for a few beats.
+    # Retain the eight newest turns, then recover the latest witnessed turn
+    # from each temporarily absent participant, without inventing dialogue.
+    recent=out[-8:]
+    if len(out)<=8:
+        return recent
+    older=out[:-8][-32:]
+    selected=list(recent)
+    represented={turn["speaker"] for turn in recent}
+    for person in ORDER:
+        if person not in represented:
+            prior=next((turn for turn in reversed(older)
+                        if turn["speaker"]==person),None)
+            if prior is not None and prior not in selected:
+                selected.append(prior)
+
+    # One concrete, completed firsthand report can survive a long stretch of
+    # re-proposed inspections. It must share distinctive words with the current
+    # conversation, so a previous scene cannot masquerade as today's facts.
+    stop={"that","this","with","have","about","there","what","think",
+          "look","just","more","really","seems","again","other","could",
+          "would","should","noticed","checked","found","going","still"}
+    current=set()
+    for turn in recent[-6:]:
+        current.update(re.findall(r"[a-z]{4,}",turn["text"].lower()))
+    current-=stop
+    completed=re.compile(
+        r"^\s*(?:I|we)\s+(?:just\s+|already\s+)?"
+        r"(?:checked|found|measured|noticed|saw|heard|read|opened|tightened|"
+        r"fixed|repaired|moved|inspected|examined|confirmed|tested|reset)\b",
+        re.I)
+    for turn in reversed(older):
+        if not completed.match(turn["text"]):
+            continue
+        terms=set(re.findall(r"[a-z]{4,}",turn["text"].lower()))-stop
+        if len(terms & current)>=2:
+            if turn not in selected:
+                selected.append(turn)
+            break
+    # Keep original chronology, and always preserve the latest public event.
+    return [turn for turn in out if turn in selected][-13:]
 
 
 def messages(payload: dict, entity: str) -> list[dict]:
@@ -102,8 +143,8 @@ def messages(payload: dict, entity: str) -> list[dict]:
         "You can agree, disagree, clarify, add a concrete example, or introduce your own relevant idea. "
         "Do not simply repeat their words or invent previous events or relationships. "
         "A person's announced intention to inspect or fix something is not proof "
-        "they have acted. Do not report another person currently acting or a "
-        "problem being fixed unless the witnessed public speech establishes it. "
+        "they have acted. Build on witnessed completed actions and their consequences; "
+        "do not propose an already completed inspection as though nobody checked it. "
         "Give a complete, natural conversational turn, usually one or two sentences and under 40 words. End with punctuation. " 
         "Do not address yourself by name or present imagined past events as facts. " 
         "This is spoken conversation, not an explanation of your job."

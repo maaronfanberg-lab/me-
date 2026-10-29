@@ -18,6 +18,7 @@ on:
       - 'scripts/room_followthrough.py'
       - 'scripts/test_room_followthrough.py'
       - 'scripts/test_room_chat_speech_adapter.py'
+      - 'scripts/test_room_rolling_public_context.py'
       - 'scripts/test_room_native_chat_quality.py'
       - 'scripts/room_chat_speech.py'
       - 'scripts/test_room_native3b_selection.py'
@@ -86,6 +87,8 @@ jobs:
           python3 scripts/test_room_chat_speech_adapter.py
       - name: Verify bounded generation retry of malformed self perspective
         run: python3 scripts/test_room_self_voice_retry.py
+      - name: Regress four-voice history and completed public action recall
+        run: python3 scripts/test_room_rolling_public_context.py
       - name: Verify public source-linked action ledger
         run: python3 scripts/test_room_action_ledger.py
       - name: Verify source-linked response and personal initiative
