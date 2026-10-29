@@ -175,7 +175,7 @@ def messages(payload: dict, entity: str) -> list[dict]:
                                      / "room" / "feed.json").read_text())
                 public = source.get("conversation") or []
                 if isinstance(public, list):
-                    outstanding = plan_notice(int(room_cycle), public)
+                    outstanding = plan_notice(int(room_cycle), public, entity=entity)
                     if outstanding:
                         user += "\n\n" + outstanding
         except (OSError, ValueError, KeyError, TypeError):
@@ -194,11 +194,13 @@ def messages(payload: dict, entity: str) -> list[dict]:
                     + "PHYSICAL OPTIONS IN THE FICTIONAL SETTING (not actions anyone "
                       "has yet taken, and not dialogue you must imitate): "
                     + "; ".join(possibilities)
-                    + ". If you choose to investigate, you may just perform an "
-                      "action and tell the others what you did in first person. "
-                      "A witnessed action produces an observable simulated result; "
-                      "saying someone ought to check something does not. "
-                      "You may also answer directly from what you personally know."
+                    + ". You can speak naturally, decline, or change course. "
+                      "In this fictional environment an action happens when you "
+                      "describe yourself doing it now ('I inspect the filter'), "
+                      "and the next speaker can see the outcome. Saying you "
+                      "intend to inspect later ('I'll inspect') records a plan "
+                      "but does not make the inspection happen. Use no other "
+                      "person's unspoken observation as your own."
                 )
     # Source-linked causal environment. No invented speaker utterances.
     # An actual visitor turn supersedes the fictional setting.
