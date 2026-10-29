@@ -19,6 +19,11 @@ for phrasing in ("I might open the supply valve.","We should open the supply val
                  "I opened the supply valve.","I'll open the supply valve?",
                  "I will definitely open it if someone asks."):
     assert announced_plan(scene,"jules",phrasing) is None, phrasing
+# Regression from the actual published cycle 36329 (natural future action).
+assert announced_plan(scene,"jules",
+    "I'm going to check the irrigation filter, since it's the first thing I noticed that might be causing the issue, and see if it's clogged or dirty, as a clogged filter could be preventing water from flowing properly.") == ("inspect","irrigation filter")
+assert announced_plan(scene,"jules","I'll inspect the irrigation filter to see if it's clogged.") == ("inspect","irrigation filter")
+assert announced_plan(scene,"jules","I'll inspect the irrigation filter if somebody asks.") is None
 assert announced_plan(scene,"allen","I'll open the supply valve.") is None
 assert announced_plan(scene,"jules","I'll move the microphone cable.") is None
 
