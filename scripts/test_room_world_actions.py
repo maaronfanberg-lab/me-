@@ -31,3 +31,28 @@ for spoken in (
 assert action_consequence("garden-irrigation", "allen", "I check the pressure gauge.") is None
 assert action_consequence("flea-market-radio", "jules", "I check the pressure gauge.") is None
 print("PASS: witnessed first-person actions yield distinct fictional consequences; hypotheticals do not")
+
+import os
+from unittest.mock import patch
+from room_chat_speech import messages
+from room_hidden_world import GROUNDING_ONSET
+payload = {
+    "entity": "mara", "profile": {}, "room_cycle": GROUNDING_ONSET+1,
+    "context": [{"speaker":"sarah","text":"I check the pressure gauge."}],
+}
+with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACTIONS":"1"}):
+    with_feedback = messages(payload,"mara")
+assert "SIMULATED ENVIRONMENT RESPONSE" in with_feedback[1]["content"]
+assert "20 kPa" in with_feedback[1]["content"]
+with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACTIONS":"0"}):
+    no_feedback = messages(payload,"mara")
+assert "SIMULATED ENVIRONMENT RESPONSE" not in no_feedback[1]["content"]
+not_an_action = dict(payload, context=[{"speaker":"sarah","text":"What if I check the pressure gauge?"}])
+with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACTIONS":"1"}):
+    hypothetical = messages(not_an_action, "mara")
+assert "SIMULATED ENVIRONMENT RESPONSE" not in hypothetical[1]["content"]
+visitor = dict(payload, context=[{"speaker":"allen","text":"I check the pressure gauge."}])
+with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACTIONS":"1"}):
+    visitor_reply = messages(visitor, "mara")
+assert "SIMULATED ENVIRONMENT RESPONSE" not in visitor_reply[1]["content"]
+print("PASS: optional speech-linked environment effects never fabricate actions, speech, or visitor facts")
