@@ -15,11 +15,13 @@ TRIAL_START = 35160
 TRIAL_END = TRIAL_START + 100
 REPLICATION_START = TRIAL_END + 8  # eight unprompted washout turns
 REPLICATION_END = REPLICATION_START + 24
+ACTION_START = REPLICATION_END + 8  # independent new experiment after washout
+ACTION_END = ACTION_START + 24
 
 
 def trial_active(cycle: int) -> bool:
     """A finite 100-public-beat canary, never an indefinite production mode."""
-    return isinstance(cycle, int) and not isinstance(cycle, bool) and (TRIAL_START <= cycle < TRIAL_END or REPLICATION_START <= cycle < REPLICATION_END)
+    return isinstance(cycle, int) and not isinstance(cycle, bool) and (TRIAL_START <= cycle < TRIAL_END or REPLICATION_START <= cycle < REPLICATION_END or ACTION_START <= cycle < ACTION_END)
 
 
 @dataclass(frozen=True)
@@ -93,6 +95,8 @@ GROUNDING_WINDOW = 12
 
 def scene_phase(cycle: int) -> tuple[int, int]:
     """(scene index, actual onset) for a trial beat, without agent speech."""
+    if ACTION_START <= cycle < ACTION_END:
+        return 4, ACTION_START
     if REPLICATION_START <= cycle < REPLICATION_END:
         return 4, REPLICATION_START
     if trial_active(cycle) and cycle >= GROUNDING_SECOND_ONSET:
@@ -110,6 +114,7 @@ def event_at(cycle: int) -> bool:
         or cycle == GROUNDING_ONSET
         or cycle == GROUNDING_SECOND_ONSET
         or cycle == REPLICATION_START
+        or cycle == ACTION_START
     )
 
 
@@ -125,6 +130,7 @@ def active_scene_window(cycle: int) -> bool:
         GROUNDING_ONSET <= cycle < GROUNDING_ONSET + GROUNDING_WINDOW
         or GROUNDING_SECOND_ONSET <= cycle < GROUNDING_SECOND_ONSET + 3 * GROUNDING_WINDOW
         or REPLICATION_START <= cycle < REPLICATION_END
+        or ACTION_START <= cycle < ACTION_END
     )
 
 
