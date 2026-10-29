@@ -85,7 +85,12 @@ def action_consequence(scene: str, speaker: str, utterance: str) -> dict | None:
         return None
     # The first-person performative must occur near the start, not inside an
     # unrelated description of somebody else's actions.
-    prelude = re.match(r"^\s*(?:[A-Za-z]+\s*[:,]\s*)?(?:I|we)\s+", text, re.I)
+    # Ordinary completed-action speech often contains an aspect adverb:
+    # "I just moved the microphone cable." This is a witnessed action;
+    # "I'm going to move it" and "I could move it" remain proposals.
+    prelude = re.match(
+        r"^\s*(?:[A-Za-z]+\s*[:,]\s*)?(?:I|we)\s+(?:just\s+|already\s+|now\s+)?",
+        text, re.I)
     if not prelude:
         return None
     action = text[prelude.end():]
