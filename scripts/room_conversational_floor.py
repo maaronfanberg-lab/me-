@@ -162,7 +162,7 @@ def _fact_opportunity(entity, latest, history, cycle):
     if not question.endswith("?"):
         return 0.0
     from room_hidden_world import active_scene_window, private_observation
-    if not active_scene_window(cycle):
+    if cycle < 35232 or not active_scene_window(cycle):
         return 0.0
     fact = private_observation(entity, cycle)
     relevant = _fact_terms(question) & _fact_terms(fact)
