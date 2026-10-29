@@ -598,6 +598,9 @@ diverges when its kick is large and its inputs are large-scale, and trains other
   - Larger readout constants did nothing (0 of 20).
   - With the input layer's learning rate also scaled each step by c / mean |x|², the language model ×10 was healthy
     in 5 of 5 runs at both constants tried.
+- **But the input-layer half does not generalize** (experiment 52): with the same constant it broke digits and the
+  circle. Its constant has to match each task's input scale, so in effect it is input standardization. The readout
+  half alone covers four of five settings.
 
 ## Honest limits
 
