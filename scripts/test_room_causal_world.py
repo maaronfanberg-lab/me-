@@ -20,6 +20,13 @@ for text in ('I could check the air vent.', 'I will check the air vent.',
 assert w.witnessed_action('sarah','I inspect the air vent.') == 'inspect_vent'
 assert w.witnessed_action('mara','We clear the ventilation grille.') == 'clear_vent'
 assert w.witnessed_action('allen','I clear the air vent.') is None
+assert w.witnessed_action('owen','I checked the supply voltage.') == 'check_voltage'
+assert w.witnessed_action('jules','I restarted the projector.') == 'restart_projector'
+assert w.witnessed_action('mara','We cleared the ventilation grille.') == 'clear_vent'
+for negative in ("I didn't clear the air vent.", "I should have checked the voltage.",
+                 "I could have restarted the projector."):
+    assert w.witnessed_action('mara',negative) is None
+
 s = w.TRIAL_START
 history = [
     turn(s,'sarah','I inspect the air vent.'),
