@@ -91,12 +91,13 @@ def messages(payload: dict, entity: str) -> list[dict]:
     if os.environ.get("ROOM_HIDDEN_WORLD_EXPERIMENT") == "1" and not (
         history and history[-1]["speaker"] == "allen"
     ):
-        from room_hidden_world import context_for
+        from room_hidden_world import context_for, trial_active
         room_cycle = payload.get("room_cycle")
         if room_cycle is None:
             state_path = Path(__file__).resolve().parents[1] / "room" / "state.json"
             room_cycle = json.loads(state_path.read_text()).get("cycle", 0)
-        system += "\\n" + context_for(entity, int(room_cycle))
+        if trial_active(int(room_cycle)):
+            system += chr(10) + context_for(entity, int(room_cycle))
     user=(last+"\n\nThe final transcript line is the most recent real public turn. "
           "Use its meaning, not a copy of its wording, as your starting point. "
           f"Now speak as {entity.capitalize()}. Say only your own next conversational turn.")
