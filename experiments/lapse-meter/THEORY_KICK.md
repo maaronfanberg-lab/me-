@@ -162,3 +162,22 @@ seed 0, lr 0.02, 0.05 and 0.1, both tasks, 500 steps.
 
 What remains, as observation only: the stream shrinks right after the shock, and how much depends on the task and
 the learning rate in ways no account here has predicted. Signed + offset's divergence is not explained by E.
+
+## Amendment 4, 2026-10-29: deriving the cutoff of experiment 53 (failed)
+
+**Derivation.**
+
+- After the kick, the stream gradient is about K·|d|/|h|.
+- The input layer's step then moves the stream by about η|x|²·K|d|/|h|.
+- The relative growth per step is r = η|x|²·K·|d| / |h|², and it should run away above r = 1, with nothing fitted.
+
+**Test, on all 262 runs with the teardown blocked** (`results/theory_r.json`; post hoc for experiment 53's runs, but
+nothing was fitted):
+
+- r > 1 is right in only 149 of 262 runs (39 of the 72 new ones).
+- The best cutoff on r is 0.019, about 50× from the derivation, and even that cutoff is right in only 235, against
+  239 for the fitted product rule.
+- So dividing by |h|² makes the predictor worse. The derivation is wrong, probably in treating the input layer's
+  update as passing unchanged to the top of the stream.
+
+The fitted product rule stands as an empirical boundary with no derivation.
