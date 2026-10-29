@@ -38,7 +38,8 @@ class SpeechLengthTests(unittest.TestCase):
     def test_legacy_and_extreme_repetition_still_quarantined(self):
         os.environ["ROOM_CHAT_SPEECH_MODE"]="1"
         long=" ".join(["evolutionary","ecosystems","provide","interesting","possibilities"]*12)+"."
-        self.assertEqual(issue(long),"wordy_expression")
+        self.assertGreater(len(long),quality.MAX_EXPRESSION_CHARS)
+        self.assertEqual(issue(long),"rambling_expression")
         os.environ["ROOM_CHAT_SPEECH_MODE"]="0"
         self.assertEqual(issue(WITNESSED),"run_on_expression")
 
