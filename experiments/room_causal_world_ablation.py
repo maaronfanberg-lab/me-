@@ -46,9 +46,9 @@ OBJECT_ALIASES={
     "soil":r"\b(?:soil|moisture|irrigation)\b",
     "footprint":r"\b(?:footprint|shoe\s+print|potting\s+bench)\b",
 }
-ACTIVATORS=re.compile(r"\b(?:check|inspect|look at|measure|test|examine|read|investigate|verify|take a look)\b",re.I)
+ACTIVATORS=re.compile(r"\b(?:check(?:ing)?|inspect(?:ing)?|look(?:ing)? at|measur(?:e|ing)|test(?:ing)?|examin(?:e|ing)|read(?:ing)?|investigat(?:e|ing)|verif(?:y|ying)|take a look)\b",re.I)
 COMMITMENT=re.compile(r"\b(?:i(?:\x27ll| will|\x27m going to| am going to|\x27m| am)\s+(?:check|checking|inspect|inspecting|look at|measure|measuring|test|testing|examine|read|investigate|verify|close|shut|reset|fix|repair)|let me\s+(?:check|inspect|look at|measure|test|close|reset)|i\x27ll\s+start\s+by\s+checking)\b",re.I)
-FIXERS=re.compile(r"\b(?:close|shut|reset|repair|fix)\b",re.I)
+FIXERS=re.compile(r"\b(?:clos(?:e|ing)|shut(?:ting)?|reset(?:ting)?|repair(?:ing)?|fix(?:ing)?)\b",re.I)
 NEGATION=re.compile(r"\b(?:don't|do not|shouldn't|cannot|can't)\s+(?:check|inspect|look|close|reset|repair)\b",re.I)
 
 @dataclass
