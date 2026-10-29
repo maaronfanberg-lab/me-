@@ -90,7 +90,7 @@ unrelated = [
     turn(2, "jules", "The concert sounded much better."),
 ]
 unrelated.extend(
-    turn(i, "sarah" if i % 2 else "mara",
+    turn(i, "sarah" if i % 2 else "owen",
          "The library photograph frame has an unclear date on its label.")
     for i in range(3, 20)
 )
