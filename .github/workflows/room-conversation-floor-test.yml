@@ -8,6 +8,8 @@ on:
       - 'scripts/room_chat_speech.py'
       - 'scripts/test_room_chat_speech_adapter.py'
       - 'scripts/test_room_native_chat_quality.py'
+      - 'scripts/room_chat_speech.py'
+      - 'scripts/test_room_native3b_selection.py'
       - 'scripts/room_research_architecture.py'
       - 'scripts/test_room_process_label_hygiene.py'
       - 'scripts/room_sequence_uptake.py'
@@ -57,6 +59,10 @@ jobs:
         run: python3 scripts/test_room_sequence_uptake.py
       - name: Verify full-turn action gate on live echo regression
         run: python3 scripts/test_room_long_action_gate.py
+      - name: Verify native 3B model identity, failback and Allen integrity
+        run: |
+          python3 scripts/test_room_native3b_selection.py
+          python3 scripts/test_room_chat_speech_adapter.py
       - name: Verify bounded generation retry of malformed self perspective
         run: python3 scripts/test_room_self_voice_retry.py
       - name: Verify public source-linked action ledger
