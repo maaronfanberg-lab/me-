@@ -451,6 +451,10 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                   "an answer. State your own response to a concrete point, or ask a real "
                   "clarifying question, without inventing facts.\n"
                   if last_reason == "unchanged_source_action" else
+                  "Your last attempt described yourself unnaturally as 'I, Sarah' or 'I, Owen'. "
+                  "Use first-person speech without prefixing your own name, and respond "
+                  "to the other person normally.\n"
+                  if last_reason == "self_perspective_leak" else
                   "Recheck the actual source utterance and the action it makes relevant. "
                   "Keep your own voice, stance and uncertainty.\n") if social_floor
                  else "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n")
@@ -514,6 +518,10 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                 # hygiene checks still run; an absent model is not silence.
                 if _public_meta_language(utterance, compact):
                     last_reason = "meta_language"
+                    continue
+                if _research.autonomous_text_issue(
+                        {"speaker": self_entity, "text": utterance}) == "self_perspective_leak":
+                    last_reason = "self_perspective_leak"
                     continue
                 if social_floor and _unchanged_source_action(utterance, compact):
                     # Retry at the model boundary rather than publish a whole
