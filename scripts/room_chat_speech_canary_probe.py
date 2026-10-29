@@ -52,6 +52,26 @@ def generate(history, speaker, cfg, key):
                 "expression":out,"error":str(exc)[:180]}
 
 
+
+def shadow_chain(seed, config, name, turns=8):
+    """Autonomous selected-speaker turns; no fabricated model dialogue."""
+    chain=[seed]
+    failures=[]
+    for i in range(turns):
+        selected=choose_next(chain,{"recurrent":{}},{"p":config.get("p") or {}},
+                    {"entities":{p:{"people":{}} for p in NAMES}})
+        person=selected["speaker"]
+        generated=generate(chain,person,config,f"adapter-shadow-{name}:{i}:{person}")
+        if not generated.get("valid"):
+            failures.append({"step":i,"speaker":person,"response":generated})
+            print(name.upper(),"CHAIN FAILED",failures[-1],flush=True)
+            break
+        chain.append({"id":f"shadow-adapter-{name}-{i}","speaker":person,
+                      "text":generated["utterance"]})
+        print(name.upper(),"CHAIN",i+1,person,generated["utterance"],flush=True)
+    return chain,failures
+
+
 def main():
     if not os.environ.get("ROOM_MODEL_URL"):
         raise RuntimeError("A real local model is required")
@@ -66,32 +86,24 @@ def main():
         generated=generate([source_msg],person,config,f"adapter-shadow-case:{i}:{person}")
         cases.append({"source":source_msg,"speaker":person,"result":generated})
         print(f"CASE {i+1}/4 {source_msg['speaker']}->{person}: {generated}",flush=True)
-    chain=[cases[0]["source"]]
-    failures=[]
-    for i in range(6):
-        selected=choose_next(chain,{"recurrent":{}},{"p":config.get("p") or {}},
-                    {"entities":{p:{"people":{}} for p in NAMES}})
-        person=selected["speaker"]
-        generated=generate(chain,person,config,f"adapter-shadow-chain:{i}:{person}")
-        if not generated.get("valid"):
-            failures.append({"step":i,"speaker":person,"response":generated})
-            print("CHAIN FAILED",failures[-1],flush=True)
-            break
-        chain.append({"id":f"shadow-adapter-{i}","speaker":person,
-                      "text":generated["utterance"]})
-        print("CHAIN",i+1,person,generated["utterance"],flush=True)
+    chain,failures=shadow_chain(cases[0]["source"],config,"evolution")
+    ecology_chain,ecology_failures=shadow_chain(cases[1]["source"],config,"ecology")
     summary={"valid_cases":sum(bool(x["result"].get("valid")) for x in cases),
              "chain_turns":len(chain)-1,
              "failures":len(failures),
+             "ecology_chain_turns":len(ecology_chain)-1,
+             "ecology_failures":len(ecology_failures),
              "backend":"native_chat_v1",
              "publication":"shadow-only"}
     out={"summary":summary,"cases":cases,"chain":chain,"chain_failures":failures,
+         "ecology_chain":ecology_chain,"ecology_chain_failures":ecology_failures,
          "limitations":"Production preflight passed ≠ natural dialogue; manually inspect consecutive acts and unsupported claims."}
     report=ROOT/"docs/research/room-chat-speech-integrity-20261029.json"
     report.parent.mkdir(parents=True,exist_ok=True)
     report.write_text(json.dumps(out,indent=2,ensure_ascii=False)+"\n")
     print("SUMMARY",json.dumps(summary),flush=True)
-    if summary["valid_cases"]<3 or summary["chain_turns"]<4:
+    if (summary["valid_cases"]<3 or summary["chain_turns"]<5
+            or summary["ecology_chain_turns"]<5):
         raise SystemExit("Native speech adapter has insufficient publication-safe examples")
 
 if __name__=="__main__":main()
