@@ -13,9 +13,8 @@ button.on{background:var(--on)}button.big{width:100%;padding:14px;margin-top:6px
 .meter{font-variant-numeric:tabular-nums;color:var(--acc)}
 </style></head><body>
 <h1>Lapse Width</h1>
-<div class="sub">Two-channel width for a receiver with virtual surround. Every control is a tap.</div>
 <div class="card"><input id="file" type="file" accept="audio/*"><audio id="au" controls style="width:100%;margin-top:8px"></audio>
-<button id="power" class="big">START AUDIO ENGINE</button><div id="status" class="hint">Pick a track, then start.</div></div>
+<button id="power" class="big">START AUDIO ENGINE</button><div id="status" class="hint"></div></div>
 <div class="card"><div class="row"><div><div class="lab">Centre trim</div><div class="hint">Remove part of the shared (mid) sound so the image opens up</div></div>
 <div class="row"><button data-k="trim" data-d="-0.05">−</button><span class="val" id="v-trim"></span><button data-k="trim" data-d="0.05">+</button></div></div></div>
 <div class="card"><div class="row"><div><div class="lab">Width target</div><div class="hint">Side-to-mid balance the auto-width holds, at any volume</div></div>
@@ -40,7 +39,7 @@ $("power").onclick=async()=>{if(ctx){ctx.state==="running"?await ctx.suspend():a
 try{ctx=new (window.AudioContext||window.webkitAudioContext)();await ctx.audioWorklet.addModule("lapse-width-core.js?v=1");await ctx.audioWorklet.addModule("lapse-width-worklet.js?v=1");
 node=new AudioWorkletNode(ctx,"lapse-width",{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],channelCount:2,channelCountMode:"explicit"});
 ctx.createMediaElementSource($("au")).connect(node).connect(ctx.destination);node.port.onmessage=e=>{$("meter").textContent="width gain "+e.data.g.toFixed(2)+" · input side/mid "+e.data.ratio.toFixed(2)};
-show();$("power").textContent="PAUSE ENGINE";$("status").textContent="Engine running. Output: 2 channels to your receiver; set it to its virtual-surround / matrix mode.";}
+show();$("power").textContent="PAUSE ENGINE";$("status").textContent="Running.";}
 catch(err){$("status").textContent="Could not start audio: "+err.message;}};
 show();
 </script></body></html>
