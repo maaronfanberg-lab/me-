@@ -310,6 +310,15 @@ def _llama_model_run(role: str, payload: dict, timeout: int = 30):
     autonomy._production_rejected_wordings = []
     payload = _episode_scoped_payload(payload)
 
+    # Canary-selected speech-first local path. A model response must still
+    # pass normal selected-expression preflight and commit validation. There is
+    # no fallback speech and no untrusted text inserted as fabricated memory.
+    if (role == "expression"
+            and os.environ.get("ROOM_CHAT_SPEECH_MODE") == "1"
+            and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"):
+        import room_chat_speech
+        return room_chat_speech.run(payload, timeout=timeout)
+
     if not hasattr(autonomy, "_production_original_request_autonomy"):
         autonomy._production_original_request_autonomy = autonomy._request_autonomy
         def _production_request_autonomy(model_url, prompt, request_role, temperature, request_timeout,

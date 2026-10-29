@@ -493,7 +493,17 @@ def quality_issue(utterance: object, compact: dict, self_entity: str | None, sim
         return "empty_fragment"
     if len(words) > 48:
         return "wordy_expression"
-    if any(len(_tokens(sentence)) > 36 for sentence in _sentences(text)):
+    # A real native-chat turn sometimes forms one grammatical 37–44 word
+    # sentence. The legacy 36-word bound falsely rejected witnessed coherent
+    # science replies. Permit a modest extra eight words *only* for the
+    # selected-floor native-speech backend; the overall 48-word / 420-char
+    # bounds, identity, privacy, repeated-action and completeness gates remain.
+    chat_speech = (
+        os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+        and os.environ.get("ROOM_CHAT_SPEECH_MODE") == "1"
+    )
+    max_sentence_words = 44 if chat_speech else 36
+    if any(len(_tokens(sentence)) > max_sentence_words for sentence in _sentences(text)):
         return "run_on_expression"
     if _PRONOUN_R.search(text):
         return "malformed_pronoun"

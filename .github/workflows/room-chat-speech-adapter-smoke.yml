@@ -1,0 +1,84 @@
+name: Room native chat speech full integrity model canary
+
+on:
+  push:
+    branches: [research/room-chat-speech-adapter-20261029]
+    paths:
+      - '.github/workflows/room-chat-speech-adapter-smoke.yml'
+      - 'scripts/room_chat_speech_canary_probe.py'
+      - 'scripts/room_chat_speech.py'
+      - 'scripts/test_room_chat_speech_adapter.py'
+      - 'scripts/room_expression_quality_legacy.py'
+      - 'scripts/test_room_native_chat_quality.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-native-chat-1b-adapter-smoke
+  cancel-in-progress: true
+
+jobs:
+  model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_NODE_PROMPT: 'Isolated public model speech-only canary'
+      ROOM_CONVERSATIONAL_FLOOR: '1'
+      ROOM_CHAT_SPEECH_MODE: '1'
+      ROOM_BRAIN_ACTIVE: llama3.2-1b
+      ROOM_CHAT_PUBLIC_SHADOW_DIAGNOSTIC: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Compile exact adapter and validate production publication integration
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_chat_speech.py scripts/room_chat_speech_canary_probe.py
+          python3 scripts/test_room_chat_speech_adapter.py
+          python3 scripts/test_room_native_chat_quality.py
+          python3 scripts/test_room_sequence_uptake.py
+      - name: Download checksum-verified local Room brain
+        run: |
+          set -euo pipefail
+          mkdir -p .chat_adapter/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .chat_adapter
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .chat_adapter/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .chat_adapter/llama-runtime-linux-x64.tar.gz -C .chat_adapter/runtime
+          curl -fsSL --retry 3 --retry-delay 4             'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true'             -o .chat_adapter/model.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .chat_adapter/model.gguf' | sha256sum -c -
+      - name: Test real local chat adapter on public fixtures AND actual candidate preflight
+        run: |
+          set -euo pipefail
+          bin=$(find .chat_adapter/runtime -type f -name llama-server | head -1)
+          chmod +x "$bin"
+          "$bin" -m .chat_adapter/model.gguf --host 127.0.0.1 --port 18086 -c 8192 -np 2 -t 4 >.chat_adapter/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:18086/health >/dev/null; then ready=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then tail -80 .chat_adapter/server.log; exit 1; fi
+          ROOM_MODEL_URL=http://127.0.0.1:18086/completion python3 -u scripts/room_chat_speech_canary_probe.py
+      - name: Preserve qualitative evidence only on isolated research branch
+        if: always()
+        run: |
+          file='docs/research/room-chat-speech-integrity-20261029.json'
+          test -s "$file" || exit 1
+          git config user.name 'room-chat-integrity-research'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$file"
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record shadow production chat speech and final preflight results'
+          for n in 1 2 3 4; do
+            git push origin HEAD:research/room-chat-speech-adapter-20261029 && exit 0
+            git fetch origin research/room-chat-speech-adapter-20261029
+            git rebase origin/research/room-chat-speech-adapter-20261029 || { git rebase --abort; exit 1; }
+            sleep "$n"
+          done
+          exit 1
