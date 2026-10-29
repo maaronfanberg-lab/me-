@@ -17,17 +17,25 @@ for scene_index, scene in enumerate(h.SCENES):
             if other != entity:
                 assert h.private_observation(other, cycle) not in note
 
-payload = {'entity':'sarah', 'room_cycle':0, 'profile':{}, 'context':[{'speaker':'mara','text':'I noticed something unusual.'}]}
+payload = {'entity':'sarah', 'room_cycle':h.TRIAL_START, 'profile':{}, 'context':[{'speaker':'mara','text':'I noticed something unusual.'}]}
 with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'0'}):
     baseline = chat.messages(payload, 'sarah')
-assert h.SCENES[0].common not in baseline[0]['content']
+assert h.scene_for_cycle(h.TRIAL_START).common not in baseline[0]['content']
 with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1'}):
     experimental = chat.messages(payload, 'sarah')
-assert h.SCENES[0].common in experimental[0]['content']
+assert h.scene_for_cycle(h.TRIAL_START).common in experimental[0]['content']
 for other in ('mara','owen','jules'):
-    assert h.private_observation(other, 0) not in experimental[0]['content']
+    assert h.private_observation(other, h.TRIAL_START) not in experimental[0]['content']
 visitor = dict(payload, context=[{'speaker':'allen','text':'Please help me with an unrelated matter.'}])
 with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1'}):
     answer = chat.messages(visitor, 'sarah')
-assert h.SCENES[0].common not in answer[0]['content']
+assert h.scene_for_cycle(h.TRIAL_START).common not in answer[0]['content']
 print('PASS: optional scene information, isolated observations and visitor priority')
+
+assert h.trial_active(h.TRIAL_START)
+assert h.trial_active(h.TRIAL_END - 1)
+assert not h.trial_active(h.TRIAL_START - 1)
+assert not h.trial_active(h.TRIAL_END)
+with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1'}):
+    after = chat.messages(dict(payload, room_cycle=h.TRIAL_END), 'sarah')
+assert h.scene_for_cycle(h.TRIAL_END).common not in after[0]['content']
