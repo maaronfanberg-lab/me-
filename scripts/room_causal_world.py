@@ -32,9 +32,11 @@ class Consequence:
 
 _ACTIONS = (
     ('inspect_vent', r'inspect|inspected|check|checked|examine|examined|look at|looked at|take a closer look at|took a closer look at', r'air vent|rear vent|rear ventilation grille|rear grille|ventilation grille|projector vent|vent'),
-    ('check_voltage', r'check|checked|inspect|inspected|measure|measured|test|tested', r'supply voltage|wall voltage|socket voltage'),
+    ('check_voltage', r'check|checked|inspect|inspected|measure|measured|test|tested', r'supply voltage|wall(?: socket)? voltage|socket voltage'),
     ('inspect_lamp', r'inspect|inspected|check|checked|examine|examined', r'lamp housing|projector lamp'),
-    ('clear_vent', r'clear|cleared|unblock|unblocked|uncover|uncovered|clean|cleaned|remove|removed|pull|pulled', r'air vent|rear vent|rear ventilation grille|rear grille|ventilation grille|projector vent|vent|folded cardboard|cardboard'),
+    ('clear_vent', r'clear|cleared|unblock|unblocked|uncover|uncovered|clean|cleaned', r'air vent|rear vent|rear ventilation grille|rear grille|ventilation grille|projector vent|vent|folded cardboard|cardboard'),
+    # Removing a grille is not equivalent to removing the obstructing cardboard.
+    ('clear_vent', r'remove|removed|pull|pulled', r'folded cardboard|cardboard'),
     ('restart_projector', r'restart|restarted|switch on|switched on|turn on|turned on|power on|powered on', r'projector'),
 )
 
@@ -155,7 +157,8 @@ def replay(cycle: int, turns: list[dict]) -> dict:
         if key == 'restart_after_clear':
             solved = True
     return {'active': True, 'effects': effects, 'disclosures': list(disclosures.values()),
-            'solved': solved, 'vent_cleared': cleared}
+            'solved': solved, 'vent_cleared': cleared,
+            'completed_actions': sorted(seen_actions)}
 
 def cue_for(entity: str, cycle: int, public_turns: list[dict]) -> str:
     """A situational cue for a real model, not a command to speak about the scene."""
@@ -192,21 +195,28 @@ def cue_for(entity: str, cycle: int, public_turns: list[dict]) -> str:
         # Give the small model executable, public-world affordances, not another
         # abstract question. These are possibilities, never invented actions.
         # The next turn remains entirely authored by the selected character.
-        options = ['inspect the rear ventilation grille',
-                   'measure the wall socket voltage',
-                   'inspect the lamp housing']
+        completed = set(state['completed_actions'])
+        options = []
+        if 'inspect_vent' not in completed:
+            options.append('inspect the rear ventilation grille')
+        if 'check_voltage' not in completed:
+            options.append('measure the wall socket voltage')
+        if 'inspect_lamp' not in completed:
+            options.append('inspect the lamp housing')
         if not state['vent_cleared']:
             options.append('remove a visible obstruction from the grille, if one is found')
-        else:
+        elif 'restart_after_clear' not in completed:
             options.append('restart the projector and observe whether it stays bright')
         notice += (' The projector still dims; the practical cause has not been '
-                   'established by a completed test. Available physical choices: '
+                   'established by a completed test. '
+                   'Do not propose repeating a check already recorded as completed. '
+                   'Available physical choices not yet completed: '
                    + '; '.join(options) + '. '
                    'If you choose to do one, describe the action as something you '
                    'actually do now (for example, "I inspect the rear grille"), '
                    'not a promise to do it later. Only witnessed actions change '
                    'the simulated environment. You may also decline or pursue '
-                   "another person\'s important question.")
+                   "another person's important question.")
         recent = [turn for turn in public_turns
                   if isinstance(turn, dict)
                   and turn.get('speaker') in PEOPLE
