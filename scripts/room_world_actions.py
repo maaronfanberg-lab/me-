@@ -35,13 +35,15 @@ _EFFECTS = (
     Effect("rainwater-tank", "inspect", "gutter",
            "Wet leaves are blocking the downpipe that fills the tank."),
     Effect("choir-recording", "check", "mixer power cable",
-           "The mixer's power cable is firmly seated, so the buzz is unlikely to be caused by a loose power connection."),
+           "The mixer's power cable is securely seated at the mixer end; the wall outlet connection has not been checked."),
     Effect("choir-recording", "move", "microphone cable",
            "As the microphone lead moves away from the adapter, the electrical buzz becomes noticeably quieter."),
     Effect("choir-recording", "push", "input plug",
            "The mixer input plug clicks fully into place, and the recording's intermittent crackle stops."),
     Effect("greenhouse-watering", "inspect", "irrigation filter",
            "The irrigation filter is clogged with brown sediment."),
+    Effect("greenhouse-watering", "inspect", "supply valve",
+           "The supply valve is nearly closed: its handle sits almost across the pipe."),
     Effect("greenhouse-watering", "open", "supply valve",
            "Water starts flowing along the greenhouse irrigation line."),
 )
@@ -52,7 +54,7 @@ _VERBS = {
     "flip": ("flip", "flipped", "switch", "switched"),
     "turn": ("turn", "turned", "rotate", "rotated"),
     "reset": ("reset",),
-    "inspect": ("inspect", "inspected", "check", "checked", "examine", "examined", "look at", "looked at"),
+    "inspect": ("inspect", "inspected", "check", "checked", "examine", "examined", "look at", "looked at", "take a closer look at", "took a closer look at"),
     "move": ("move", "moved", "shift", "shifted"),
     "push": ("push", "pushed", "seat", "seated"),
     "open": ("open", "opened", "turn", "turned"),
@@ -65,11 +67,11 @@ _OBJECTS = {
     "breaker": ("breaker", "breaker panel", "fuse box"),
     "photograph frame": ("photo frame", "photograph frame", "picture frame"),
     "gutter": ("gutter", "downpipe", "downspout"),
-    "mixer power cable": ("mixer power cable", "mixer cord", "mixer power cord", "mixer cable"),
+    "mixer power cable": ("mixer power cable", "mixer's power cable", "mixer's cord", "mixer cord", "mixer power cord", "mixer cable"),
     "microphone cable": ("microphone cable", "mic cable", "microphone lead"),
     "input plug": ("input plug", "mixer plug", "input connector"),
     "irrigation filter": ("irrigation filter", "water filter"),
-    "supply valve": ("supply valve", "water valve"),
+    "supply valve": ("supply valve", "water valve", "valve itself", "valve handle", "valve"),
 }
 
 
@@ -119,5 +121,7 @@ def available_actions(scene: str) -> list[str]:
     An agent can ignore these, speak, or choose a real first-person action.
     Only the ordinary witnessed-action parser can cause a consequence.
     """
+    # The scene announces only possible affordances; it does not automatically
+    # mark any as accomplished. Speech or a witnessed action is still necessary.
     return ["I " + effect.action + " the " + effect.object
             for effect in _EFFECTS if effect.scene == scene]
