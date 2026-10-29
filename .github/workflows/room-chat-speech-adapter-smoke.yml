@@ -7,6 +7,8 @@ on:
       - '.github/workflows/room-chat-speech-adapter-smoke.yml'
       - 'scripts/room_chat_speech_canary_probe.py'
       - 'scripts/room_chat_speech.py'
+      - 'scripts/room_expression_quality_legacy.py'
+      - 'scripts/test_room_native_chat_quality.py'
 
 permissions:
   contents: write
@@ -34,6 +36,7 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/room_chat_speech.py scripts/room_chat_speech_canary_probe.py
           python3 scripts/test_room_chat_speech_adapter.py
+          python3 scripts/test_room_native_chat_quality.py
           python3 scripts/test_room_sequence_uptake.py
       - name: Download checksum-verified local Room brain
         run: |
