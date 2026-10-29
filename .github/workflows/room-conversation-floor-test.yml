@@ -9,6 +9,7 @@ on:
       - 'scripts/room_action_ledger.py'
       - 'scripts/test_room_action_ledger.py'
       - 'scripts/test_room_sequence_uptake.py'
+      - 'scripts/test_room_long_action_gate.py'
       - 'scripts/test_room_conversation_project.py'
       - 'scripts/room_participant.py'
       - 'scripts/test_room_allen_source_provenance.py'
@@ -47,6 +48,8 @@ jobs:
         run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_conversation_project.py scripts/room_action_ledger.py scripts/room_conversational_candidate.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
       - name: Verify conversational question, response, and repair sequence
         run: python3 scripts/test_room_sequence_uptake.py
+      - name: Verify full-turn action gate on live echo regression
+        run: python3 scripts/test_room_long_action_gate.py
       - name: Verify bounded generation retry of malformed self perspective
         run: python3 scripts/test_room_self_voice_retry.py
       - name: Verify public source-linked action ledger
