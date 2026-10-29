@@ -137,6 +137,28 @@ class ChatAdapterTests(unittest.TestCase):
         self.assertEqual(result["move"],"disagree")
         self.assertTrue(result["semantic_terms"])
 
+    def test_legacy_floor_recovery_does_not_invoke_chat_adapter(self):
+        import room_engine_v5 as engine
+        import room_private_model_autonomy as autonomy
+        prior={k:os.environ.get(k) for k in
+               ("ROOM_CHAT_SPEECH_MODE","ROOM_CONVERSATIONAL_FLOOR","ROOM_NODE_PROMPT")}
+        os.environ["ROOM_CHAT_SPEECH_MODE"]="1"
+        os.environ["ROOM_CONVERSATIONAL_FLOOR"]="0"
+        os.environ["ROOM_NODE_PROMPT"]="Local model prompt available"
+        dummy={"decision":"SPEAK","utterance":"A genuine model sentence.",
+               "move":"deepen","target":"jules","semantic_terms":["genuine"]}
+        try:
+            with patch("room_chat_speech.run") as spy,patch.object(
+                    autonomy,"run",return_value=dummy) as legacy:
+                out=engine._llama_model_run("expression",payload(),timeout=30)
+            self.assertEqual(out,dummy)
+            spy.assert_not_called()
+            legacy.assert_called_once()
+        finally:
+            for key,val in prior.items():
+                if val is None:os.environ.pop(key,None)
+                else:os.environ[key]=val
+
     def test_active_model_switch_is_the_only_adapter_activation(self):
         import room_engine_v5 as engine
         before=os.environ.get("ROOM_CHAT_SPEECH_MODE")
