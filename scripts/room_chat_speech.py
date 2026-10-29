@@ -106,9 +106,9 @@ def witnessed_context(payload: dict, entity: str) -> list[dict]:
         current.update(re.findall(r"[a-z]{4,}",turn["text"].lower()))
     current-=stop
     completed=re.compile(
-        r"^\\s*(?:I|we)\\s+(?:just\\s+|already\\s+)?"
+        r"^\s*(?:I|we)\s+(?:just\s+|already\s+)?"
         r"(?:checked|found|measured|noticed|saw|heard|read|opened|tightened|"
-        r"fixed|repaired|moved|inspected|examined|confirmed|tested|reset)\\b",
+        r"fixed|repaired|moved|inspected|examined|confirmed|tested|reset)\b",
         re.I)
     for turn in reversed(older):
         if not completed.match(turn["text"]):
