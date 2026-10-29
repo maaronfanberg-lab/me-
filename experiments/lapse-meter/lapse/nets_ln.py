@@ -37,7 +37,7 @@ class MLPLN:
     residual = True
 
     def __init__(self, din, width, depth, dout, act="relu", sigma_w=1.0, alpha=None, seed=0, ln="final", branch_sign=False):
-        assert ln in ("none", "final", "pre", "pre_final", "post", "center", "center_random", "offset")
+        assert ln in ("none", "final", "pre", "pre_final", "post", "center", "center_random", "offset", "dyt", "bcenter")
         self.center = None  # experiment 29: a fixed vector subtracted from the readout's input (see set_center)
         self.act, self.ln = act, ln
         self.alpha = 1.0 / np.sqrt(depth) if alpha is None else alpha
@@ -73,6 +73,10 @@ class MLPLN:
             top, self._c["final"] = ln_fwd(top)
         elif self.ln in ("center", "center_random", "offset"):
             top = top - self.center
+        elif self.ln == "dyt":  # experiment 56: tanh(h_L) before the readout (DyT with alpha = 1, Zhu et al. 2025)
+            top = np.tanh(top)
+        elif self.ln == "bcenter":  # experiment 56: subtract the current batch's mean readout input (mean-only batch norm)
+            top = top - top.mean(0, keepdims=True)
         self._top = top
         zo = top @ self.W[-1].T + self.b[-1]; z.append(zo)
         return h, z
@@ -93,6 +97,8 @@ class MLPLN:
         deltas[-1] = d; gW[-1] = d.T @ self._top; gb[-1] = d.sum(0)
         gh = d @ self.W[-1]
         if self.ln in ("final", "pre_final"): gh = ln_bwd(gh, self._c["final"])
+        elif self.ln == "dyt": gh = gh * (1.0 - self._top ** 2)
+        elif self.ln == "bcenter": gh = gh - gh.mean(0, keepdims=True)
         for i in range(L - 2, 0, -1):
             g[i] = gh                                  # dL/dh_i: gradient on the stream after block i
             if self.ln == "post": gh = ln_bwd(gh, self._c[("post", i)])   # through h_i = LN(sum)

@@ -14,7 +14,7 @@ for j in range(7):
     xp = x.copy(); xp[2, j] += e; xm = x.copy(); xm[2, j] -= e
     fd = (np.sum(ln_fwd(xp)[0] * dy) - np.sum(ln_fwd(xm)[0] * dy)) / (2 * e); worst = max(worst, abs(fd - dx[2, j]))
 check("LayerNorm backward matches finite differences", worst < 1e-7, f"max abs err {worst:.1e}")
-for ln in ("none", "final", "pre", "pre_final", "post", "center", "center_random", "offset"):
+for ln in ("none", "final", "pre", "pre_final", "post", "center", "center_random", "offset", "dyt", "bcenter"):
     for act, signed in (("tanh", False), ("relu", True)):   # tanh: no kinks, so finite differences are exact; relu signed too
         net = MLPLN(6, 8, 5, 3, act=act, ln=ln, seed=2, branch_sign=signed)
         if ln.startswith("center"): net.set_center(X)
