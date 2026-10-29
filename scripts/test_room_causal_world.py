@@ -25,6 +25,16 @@ assert w.witnessed_action('allen','I clear the air vent.') is None
 assert w.witnessed_action('owen','I checked the supply voltage.') == 'check_voltage'
 assert w.witnessed_action('jules','I restarted the projector.') == 'restart_projector'
 assert w.witnessed_action('mara','We cleared the ventilation grille.') == 'clear_vent'
+# Verbatim live Room speech at cycle 36567 must produce a voltage result.
+assert w.witnessed_action('owen',
+    'I measure the wall socket voltage to see if it is a correlation with the dimming.') == 'check_voltage'
+assert w.witnessed_action('owen',
+    'I checked the wall socket voltage.') == 'check_voltage'
+# Removing a protective grille does NOT establish that the blockage was cleared.
+assert w.witnessed_action('owen',
+    'I remove the rear ventilation grille.') is None
+assert w.witnessed_action('jules',
+    'I pull the cardboard out of the rear grille.') == 'clear_vent'
 # Live-dialogue affordances: people refer to the rear grille and cardboard,
 # not just the canonical "air vent" name in the action schema.
 assert w.witnessed_action('sarah',
@@ -70,6 +80,20 @@ assert [e.action for e in natural_state['effects']] == [
     'inspect_vent', 'clear_vent', 'restart_after_clear'
 ]
 assert natural_state['solved']
+# The live scene should not keep suggesting an already witnessed voltage test.
+measured = [turn(s, 'owen', 'I measure the wall socket voltage.')]
+voltage_state = w.replay(s+1, measured)
+assert voltage_state['completed_actions'] == ['check_voltage']
+assert voltage_state['disclosures'] == [], 'a measurement action is not the reading'
+assert w.replay(s+1, [turn(s, 'owen', 'Could the wall socket voltage monitor be faulty?')])['disclosures'] == []
+assert 'socket voltage stays steady' in voltage_state['effects'][0].observation
+next_cue = w.cue_for('mara', s+1, measured)
+assert 'measure the wall socket voltage' not in next_cue
+assert 'inspect the rear ventilation grille' in next_cue
+# An inspection is not removal; it must not make the projector stay bright.
+only_grille_removed = [turn(s, 'owen', 'I remove the rear ventilation grille.'),
+                       turn(s+1, 'jules', 'I restart the projector.')]
+assert not w.replay(s+2, only_grille_removed)['solved']
 assert 'stays bright' in w.cue_for('owen',s+6,history)
 assert not w.replay(s+4,history)['solved']
 assert len(w.replay(s+3,history)['effects']) == 2
