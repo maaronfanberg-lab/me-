@@ -115,13 +115,14 @@ def action_consequence(scene: str, speaker: str, utterance: str) -> dict | None:
     return None
 
 
-def available_actions(scene: str) -> list[str]:
-    """Physical possibilities, not instructions or pretend actions.
+def available_actions(scene: str, *, completed: set[tuple[str, str]] | None = None) -> list[str]:
+    """Offer unfinished physical opportunities without prescribing speech.
 
-    An agent can ignore these, speak, or choose a real first-person action.
-    Only the ordinary witnessed-action parser can cause a consequence.
+    A completed action stays valid in the historical ledger and may be repeated
+    voluntarily. It simply does not occupy the short list of *suggestions*.
+    Only source-linked witnessed public actions can remove it from suggestions.
     """
-    # The scene announces only possible affordances; it does not automatically
-    # mark any as accomplished. Speech or a witnessed action is still necessary.
+    completed = completed or set()
     return ["I " + effect.action + " the " + effect.object
-            for effect in _EFFECTS if effect.scene == scene]
+            for effect in _EFFECTS
+            if effect.scene == scene and (effect.action, effect.object) not in completed]
