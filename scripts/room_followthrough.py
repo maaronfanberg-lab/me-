@@ -90,14 +90,40 @@ def pending(cycle: int, public_turns: list[dict], limit: int=3) -> list[dict]:
             })
     return list(obligations.values())[-max(0,min(limit,5)):]
 
-def notice(cycle: int, public_turns: list[dict]) -> str:
+def notice(cycle: int, public_turns: list[dict], entity: str | None = None) -> str:
+    """Source-bound, person-relevant tasks, without copying stale plan dialogue.
+
+    Own commitments remain available as an opportunity, not an obligation.
+    Other people's commitments are labelled as unperformed; neither the
+    system nor a bystander is permitted to claim they did the action.
+    """
     items=pending(cycle,public_turns)
     if not items:
         return ""
-    lines=["UNRESOLVED SPOKEN INTENTIONS FROM ACTUAL PUBLIC MESSAGES "
-           "(not proof that these actions occurred, not a command to perform them):"]
-    lines.extend(x["speaker"].capitalize()+" previously said ["+x["source_id"]+"]: "+x["public_text"] for x in items)
-    lines.append("Someone may follow through, change their mind, ask a new question, "
-                 "or do something else. Do not describe a planned action as completed "
-                 "without a public first-person action statement.")
+    if entity not in PARTICIPANTS:
+        lines=["UNRESOLVED SPOKEN INTENTIONS FROM ACTUAL PUBLIC MESSAGES "
+               "(not proof that these actions occurred, not a command to perform them):"]
+        lines.extend(x["speaker"].capitalize()+" previously said ["+x["source_id"]+"]: "+x["public_text"] for x in items)
+        lines.append("Someone may follow through, change their mind, ask a new question, "
+                     "or do something else. Do not describe a planned action as completed "
+                     "without a public first-person action statement.")
+        return "\n".join(lines)
+    own=[item for item in items if item["speaker"]==entity]
+    others=[item for item in items if item["speaker"]!=entity]
+    lines=["PENDING PHYSICAL ACTIVITY (public intentions, NOT completed acts):"]
+    if own:
+        for item in own[-2:]:
+            lines.append(
+                "Your earlier stated plan ["+item["source_id"]+"] was to "
+                +item["action"]+" the "+item["object"]+
+                ". No completed inspection or outcome has been witnessed. "
+                "You can act now, decline, or do something else."
+            )
+    if others:
+        lines.append(
+            "Other participants have announced but not yet completed: "
+            +"; ".join(item["speaker"].capitalize()+" "+item["action"]+
+                         " "+item["object"] for item in others[-2:])
+            +". These are not observations of results."
+        )
     return "\n".join(lines)
