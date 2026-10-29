@@ -237,7 +237,7 @@ def model_context(minds: dict, entity: str, partner: str | None,
     last_cycle = max((item.get("cycle", 0) or 0 for item in data.get("encounters", [])), default=0)
     latest_public = str((context[-1] if context else {}).get("text") or "")
     explicit_recall = bool(re.search(
-        r"\\b(?:remember|recall|previously|earlier|last time|you told|you said)\\b",
+        r"\b(?:remember|recall|previously|earlier|last time|you told|you said)\b",
         latest_public, re.I))
     seen, selected = set(), []
     ranked = sorted(enumerate(candidates), key=lambda pair: (
