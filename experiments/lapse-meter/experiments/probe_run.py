@@ -54,6 +54,7 @@ def run(cfg, path=None, hook=None):
     L = len(net.W); frozen = set()
     if "out" in c["freeze"]: frozen.add(L - 1)
     if "blocks" in c["freeze"]: frozen.update(range(1, L - 1))
+    if "in" in c["freeze"]: frozen.add(0)  # experiment 39: the input layer
     log = []; capped = []
     if c["detach"]:  # experiment 33: training gradients lose their readout-to-stream part along one direction
         assert c["block"] == "one" and c["opt"] == "sgd"; net.detach = c["detach"]

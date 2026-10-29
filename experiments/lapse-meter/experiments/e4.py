@@ -33,6 +33,9 @@ def make(condition, seed):
         if condition == "circle-embed64":
             Q, _ = np.linalg.qr(np.random.default_rng(77).standard_normal((64, 2)))
             X, Xt = X @ Q.T * np.sqrt(32), Xt @ Q.T * np.sqrt(32)   # unit-ish scale per input
+        if condition == "circle-embed64u":  # experiment 39: the same embedding without the sqrt(32) scale (input norms unchanged)
+            Q, _ = np.linalg.qr(np.random.default_rng(77).standard_normal((64, 2)))
+            X, Xt = X @ Q.T, Xt @ Q.T
         if condition == "circle-std1":
             mu, sd = X.mean(0), X.std(0); X, Xt = (X - mu) / sd, (Xt - mu) / sd
         if condition == "circle-pad62noise":
