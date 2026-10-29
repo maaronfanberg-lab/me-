@@ -25,3 +25,6 @@ G7A is a **small but clean benchmark**. It does not include the paper's reported
 
 ## Prior research
 Lebeurrier, Vayer, Gribonval (ICML 2026): https://proceedings.mlr.press/v306/lebeurrier26a.html . Original implementation: https://github.com/Artim436/pathcond (CC-BY 4.0).
+
+## Protocol clarification before any held-out G7A execution
+For stress tests the positive neuronwise coordinate transform is applied **before** optional PathCond preprocessing. In the PathCond+Adam arm the same upstream `rescaling_path_cond` function is invoked separately on each equivalent unconditioned initialization, not on the already-conditioned network followed by a new distortion. This evaluates its claimed conditioning as a remedy for arbitrary starting coordinates. In all arms the preprocessing-equivalent logits must be preserved before optimization. The reference G5 PyTorch port must pass exact one-step NumPy comparison before training. The upstream git SHA above is immutable and PyTorch's default tensor dtype is set to float64 (the official initializer uses an implicit dtype for its dummy input). No alteration to H1/H2/H3 success thresholds, seeds, rates or tasks.
