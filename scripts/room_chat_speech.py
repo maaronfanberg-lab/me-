@@ -187,7 +187,20 @@ def messages(payload: dict, entity: str) -> list[dict]:
         user += chr(10) + chr(10) + situational_grounding
         if followup_active(int(room_cycle)):
             from room_world_actions import available_actions
-            possibilities = available_actions(scene_for_cycle(int(room_cycle)).identifier)
+            from room_hidden_world import scene_action_ledger
+            completed = set()
+            # Only observed, identified PUBLIC actions remove a suggested check.
+            # Private clue cards and promises are never accepted as completion.
+            try:
+                scene_public = json.loads((Path(__file__).resolve().parents[1]
+                                           / "room" / "feed.json").read_text()).get("conversation") or []
+                completed = {(e["action"], e["object"])
+                             for e in scene_action_ledger(int(room_cycle), scene_public)}
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+            possibilities = available_actions(
+                scene_for_cycle(int(room_cycle)).identifier,
+                completed=completed)
             if possibilities:
                 user += (
                     chr(10) + chr(10)
