@@ -13,6 +13,7 @@ message always retains the actual source text for an appropriate response.
 from __future__ import annotations
 
 import re
+import os
 from typing import Any, Mapping
 
 from room_conversational_floor import is_directed
@@ -135,6 +136,26 @@ def expression_project(
     psyche = private_self_state if isinstance(private_self_state, Mapping) else {}
     stable = {k: psyche[k] for k in ("who_i_am", "what_i_want")
               if isinstance(psyche.get(k), str) and psyche[k].strip()}
+    # An unaddressed statement does not create a conversational debt.
+    # On an experimental path only, carry a few publicly witnessed content
+    # cues, not the quoted statement. This lets the agent notice what the
+    # person just said without turning it into a mandatory reply or copying it.
+    # Silent/short/scaffold speech does not become a new topic anchor.
+    optional = {}
+    if (os.environ.get("ROOM_OPTIONAL_SOURCE_CUES") == "1"
+            and event and _lower(event.get("speaker")) in AUTONOMOUS
+            and _lower(event.get("speaker")) != _lower(entity)):
+        source_text = str(event.get("text") or "").strip()
+        if len(re.findall(r"[a-z0-9']+",source_text.lower())) >= 11:
+            from room_social_v5 import words
+            clues = [w for w in words(source_text) if w not in AUTONOMOUS][:6]
+            if len(clues) >= 2:
+                optional["public_occasion"] = {
+                    "role": "optional_reference_not_an_obligation",
+                    "source_id": source_id,
+                    "prior_speaker": event.get("speaker"),
+                    "cues": clues,
+                }
     return {
         # No direct response is outstanding. The recent turns are still
         # independently observed, but no old subject is selected for expression.
@@ -147,5 +168,6 @@ def expression_project(
             "prior_speaker": event.get("speaker") if event else None,
             "evidence": "user_authored_character_motivations",
             "resources": _authored_resources(profile),
+            **optional,
         },
     }
