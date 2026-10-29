@@ -34,6 +34,16 @@ _EFFECTS = (
            "The frame bears a clearly stamped date: 1934."),
     Effect("rainwater-tank", "inspect", "gutter",
            "Wet leaves are blocking the downpipe that fills the tank."),
+    Effect("rainwater-tank", "inspect", "outlet valve",
+           "A thin trickle runs from the outlet valve into the puddle at the tank base."),
+    Effect("rainwater-tank", "check", "rainfall log",
+           "The log confirms rain on three days; it gives no evidence that data entries were truncated."),
+    Effect("rainwater-tank", "clear", "gutter",
+           "The blocked wet leaves are removed from the gutter; water can flow into the tank at the next rainfall."),
+    Effect("rainwater-tank", "tighten", "outlet valve",
+           "The slow trickle at the tank's outlet stops."),
+    Effect("rainwater-tank", "close", "tank lid",
+           "The tank lid now seals, although the water level does not instantly rise."),
 )
 
 _VERBS = {
@@ -42,7 +52,9 @@ _VERBS = {
     "flip": ("flip", "flipped", "switch", "switched"),
     "turn": ("turn", "turned", "rotate", "rotated"),
     "reset": ("reset",),
-    "inspect": ("inspect", "inspected", "examine", "examined", "look at", "looked at"),
+    "inspect": ("inspect", "inspected", "inspecting", "examine", "examined", "look at", "looked at", "look around", "looking at"),
+    "clear": ("clear", "cleared", "remove leaves from", "unblock"),
+    "close": ("close", "closed", "shut"),
 }
 _OBJECTS = {
     "pressure gauge": ("pressure gauge", "the gauge"),
@@ -52,6 +64,9 @@ _OBJECTS = {
     "breaker": ("breaker", "breaker panel", "fuse box"),
     "photograph frame": ("photo frame", "photograph frame", "picture frame"),
     "gutter": ("gutter", "downpipe", "downspout"),
+    "outlet valve": ("outlet valve", "tank outlet", "outlet"),
+    "rainfall log": ("rainfall log", "rain log", "rain records"),
+    "tank lid": ("tank lid", "lid"),
 }
 
 
@@ -63,11 +78,15 @@ def action_consequence(scene: str, speaker: str, utterance: str) -> dict | None:
     # Guard conditional, quoted, or hypothetical utterances and reported speech.
     if not text or text.endswith("?") or len(text) > 500:
         return None
-    if re.search(r"\b(?:could|would|should|might|maybe|what if|imagine|hypothetically|pretend)\b",text,re.I):
-        return None
     # The first-person performative must occur near the start, not inside an
     # unrelated description of somebody else's actions.
-    prelude = re.match(r"^\s*(?:[A-Za-z]+\s*[:,]\s*)?(?:I|we)\s+", text, re.I)
+    prelude = re.match(
+        r"^\\s*(?:[A-Za-z]+\\s*[:,]\\s*)?"
+        r"(?:I|we|I'm\\s+going\\s+to|I\\s+am\\s+going\\s+to|"
+        r"we're\\s+going\\s+to|we\\s+are\\s+going\\s+to|"
+        r"let\\s+me|I\\s+will|we\\s+will)\\s+",
+        text, re.I,
+    )
     if not prelude:
         return None
     action = text[prelude.end():]
