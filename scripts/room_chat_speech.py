@@ -21,7 +21,7 @@ from room_social_v5 import words as social_words
 PARTICIPANTS=(*ORDER,"allen")
 ALLOWED_MOVES={"answer","deepen","disclose","compare","disagree","repair",
                "support","callback","bridge","close"}
-SPEAKER_PREFIX=re.compile(r"^(?:Sarah|Mara|Owen|Jules)\s*:\s*",re.I)
+SPEAKER_PREFIX=re.compile(r'^\s*["“]?\s*(Sarah|Mara|Owen|Jules|Allen)\s*:\s*',re.I)
 
 
 def chat_endpoint(model_url: str) -> str:
@@ -149,7 +149,15 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                 raw=json.loads(response.read().decode("utf-8","replace"))
             choices=raw.get("choices") or []
             data=choices[0].get("message") or {} if choices else {}
-            spoken=SPEAKER_PREFIX.sub("",str(data.get("content") or "").strip()).strip()
+            spoken=str(data.get("content") or "").strip()
+            labelled=SPEAKER_PREFIX.match(spoken)
+            if labelled:
+                if labelled.group(1).lower() != entity:
+                    # Do not publish one agent's fabricated lines as Allen or
+                    # another character. A real Allen turn is user-authored.
+                    last_failure="wrong_speaker_label"
+                    continue
+                spoken=spoken[labelled.end():].strip()
             if not spoken or len(spoken)>700:
                 last_failure="empty_or_overlong_candidate"
                 continue
