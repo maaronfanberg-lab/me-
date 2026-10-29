@@ -71,7 +71,7 @@ def messages(payload: dict, entity: str) -> list[dict]:
         "Respond to what the last person actually meant where useful. "
         "You can agree, disagree, clarify, add a concrete example, or introduce your own relevant idea. "
         "Do not simply repeat their words or invent previous events or relationships. "
-        "Make one specific point in one or two short, complete sentences (around 15-30 words). " 
+        "Make one concrete point in one complete sentence, ideally 12-24 words. " 
         "Do not address yourself by name or present imagined past events as facts. " 
         "This is spoken conversation, not an explanation of your job."
     )
@@ -130,16 +130,17 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
         seed=int(hashlib.sha256(keyed.encode()).hexdigest()[:8],16) & 0x7FFFFFFF
         prompt=json.loads(json.dumps(incoming))
         if attempt:
-            hint = ("Use one or two complete sentences under 35 words. "
-                    "Do not refer to yourself in the third person. "
-                    "Reply directly with one substantive conversational action. "
-                    "Do not make up prior events.")
+            hint = ("Start over. Say ONE complete sentence of no more than 24 words; "
+                    "end it with a period or question mark. No lists, no subordinate "
+                    "paragraphs or run-on clauses. Do not refer to yourself in the "
+                    "third person. Make one concrete response to what was actually said. "
+                    "Do not make up past events.")
             prompt[0]["content"] += (
                 " The previous candidate did not pass public conversational integrity "
                 "checks (" + last_failure[:48] + "). " + hint)
         body={"model":"Llama-3.2-1B-Instruct","messages":prompt,
               "temperature":.78,"top_p":.93,
-              "max_tokens":110,"seed":seed,"stream":False}
+              "max_tokens":80 if not attempt else 60,"seed":seed,"stream":False}
         req=urllib.request.Request(
             url, data=json.dumps(body,ensure_ascii=False).encode(),
             headers={"Content-Type":"application/json"}, method="POST")
