@@ -1,8 +1,8 @@
 {
   "summary": {
     "valid_cases": 4,
-    "chain_turns": 6,
-    "failures": 0,
+    "chain_turns": 1,
+    "failures": 1,
     "backend": "native_chat_v1",
     "publication": "shadow-only"
   },
@@ -16,17 +16,17 @@
       "speaker": "owen",
       "result": {
         "valid": true,
-        "utterance": "That raises interesting questions about homology, an area where studying similar structures in different species can reveal more about their shared ancestry, potentially shedding light on evolutionary history.",
+        "utterance": "That raises interesting questions about homology, what if it's not just a matter of convergent evolution but rather a fundamental property of life itself?",
         "expression": {
           "decision": "SPEAK",
-          "utterance": "That raises interesting questions about homology, an area where studying similar structures in different species can reveal more about their shared ancestry, potentially shedding light on evolutionary history.",
-          "move": "answer",
+          "utterance": "That raises interesting questions about homology, what if it's not just a matter of convergent evolution but rather a fundamental property of life itself?",
+          "move": "repair",
           "target": "jules",
           "semantic_terms": [
             "raises",
             "questions",
             "homology",
-            "area"
+            "it"
           ]
         }
       }
@@ -40,17 +40,17 @@
       "speaker": "mara",
       "result": {
         "valid": true,
-        "utterance": "I'd love to explore this idea further, considering the impact of invasive species on native ecosystems, and how an experiment could gauge the resilience of the local forest.",
+        "utterance": "She notes the tension between introducing an ecological experiment and the potential disruption of the forest ecosystem.",
         "expression": {
           "decision": "SPEAK",
-          "utterance": "I'd love to explore this idea further, considering the impact of invasive species on native ecosystems, and how an experiment could gauge the resilience of the local forest.",
+          "utterance": "She notes the tension between introducing an ecological experiment and the potential disruption of the forest ecosystem.",
           "move": "answer",
           "target": "jules",
           "semantic_terms": [
-            "love",
-            "explore",
-            "idea",
-            "further"
+            "she",
+            "notes",
+            "tension",
+            "introducing"
           ]
         }
       }
@@ -64,17 +64,17 @@
       "speaker": "sarah",
       "result": {
         "valid": true,
-        "utterance": "It seems like we have a clear intention here, and I want to understand what that intention is, so I'll clarify: what exactly do you need me to do?",
+        "utterance": "I'd like to propose a thought experiment: what if we were to ask a person, anyone, to describe a perfect day for the first time.",
         "expression": {
           "decision": "SPEAK",
-          "utterance": "It seems like we have a clear intention here, and I want to understand what that intention is, so I'll clarify: what exactly do you need me to do?",
+          "utterance": "I'd like to propose a thought experiment: what if we were to ask a person, anyone, to describe a perfect day for the first time.",
           "move": "deepen",
           "target": "mara",
           "semantic_terms": [
-            "clear",
-            "intention",
-            "here",
-            "understand"
+            "propose",
+            "experiment",
+            "were",
+            "ask"
           ]
         }
       }
@@ -88,17 +88,17 @@
       "speaker": "jules",
       "result": {
         "valid": true,
-        "utterance": "Your mistake turned out to be a minor calibration error that allowed you to uncover a previously unconsidered aspect of the data, which could potentially revolutionize our understanding of this particular species' unique life cycle?",
+        "utterance": "I'll try to steer the conversation away from just refining hypotheses and into some more far-fetched territory. My curiosity is piqued - what kind of complicated scenario could an unrefined hypothesis in your latest work have been meant to model?",
         "expression": {
           "decision": "SPEAK",
-          "utterance": "Your mistake turned out to be a minor calibration error that allowed you to uncover a previously unconsidered aspect of the data, which could potentially revolutionize our understanding of this particular species' unique life cycle?",
+          "utterance": "I'll try to steer the conversation away from just refining hypotheses and into some more far-fetched territory. My curiosity is piqued - what kind of complicated scenario could an unrefined hypothesis in your latest work have been meant to model?",
           "move": "deepen",
           "target": "owen",
           "semantic_terms": [
-            "mistake",
-            "turned",
-            "minor",
-            "calibration"
+            "i'll",
+            "steer",
+            "away",
+            "refining"
           ]
         }
       }
@@ -113,34 +113,18 @@
     {
       "id": "shadow-adapter-0",
       "speaker": "mara",
-      "text": "\"Interesting, Jules, that raises questions about homogenization and adaptability, and what implications that might have for cultural diversity and global ecosystems.\""
-    },
-    {
-      "id": "shadow-adapter-1",
-      "speaker": "jules",
-      "text": "The sheer diversity of organisms in our planet's ecosystems is staggering - some 8.7 million identified species - yet we've only scratched the surface of understanding their intricacies, especially the ones that defy conventional categorization."
-    },
-    {
-      "id": "shadow-adapter-2",
-      "speaker": "mara",
-      "text": "Does that mean our global ecosystems are essentially just vast, unstructured tapestries of different species and their peculiarities, without a coherent pattern or hierarchy?"
-    },
-    {
-      "id": "shadow-adapter-3",
-      "speaker": "jules",
-      "text": "The analogy between ecosystems and cultural heritage is intriguing - each has its own hidden patterns and narratives waiting to be deciphered."
-    },
-    {
-      "id": "shadow-adapter-4",
-      "speaker": "mara",
-      "text": "You'd be surprised what we often overlook in the grand tapestries of our own lives."
-    },
-    {
-      "id": "shadow-adapter-5",
-      "speaker": "sarah",
-      "text": "Allen: I think that's exactly what I've been trying to say – that our personal stories, though intricately woven, can sometimes blend together in ways that make it hard to pinpoint specific patterns or structures."
+      "text": "You're asking about the potential for species to evolve differently in a single lineage, but I want to dig deeper. What if the genetic material wasn't just a set of instructions, but a complex web of interactions and influences that shape the final form of the organism?"
     }
   ],
-  "chain_failures": [],
+  "chain_failures": [
+    {
+      "step": 1,
+      "speaker": "jules",
+      "response": {
+        "valid": false,
+        "error": "no_candidate"
+      }
+    }
+  ],
   "limitations": "Production preflight passed ≠ natural dialogue; manually inspect consecutive acts and unsupported claims."
 }
