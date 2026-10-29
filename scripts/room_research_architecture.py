@@ -84,7 +84,9 @@ def autonomous_text_issue(item: Any) -> str | None:
     low = _norm(text)
     if not low:
         return "empty"
-    if low in {"rejected_wording", "try_again", "return_structured_data_only"}:
+    if low in {"rejected_wording", "try_again", "return_structured_data_only",
+               "self_initiated_contribution", "open_floor_response_or_repair",
+               "directed_response_or_repair", "respond_to_proposal"}:
         return "control_sentinel"
     if text in {"{", "}", "[", "]"}:
         return "structured_debris"
