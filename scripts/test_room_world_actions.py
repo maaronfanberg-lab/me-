@@ -60,3 +60,7 @@ print("PASS: optional speech-linked environment effects never fabricate actions,
 with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACTIONS":"1"}):
     earlier_phase = messages(dict(payload,room_cycle=GROUNDING_ONSET+1), "mara")
 assert "SIMULATED ENVIRONMENT RESPONSE" not in earlier_phase[1]["content"]
+
+with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1', 'ROOM_WORLD_ACTIONS':'1'}):
+    later_phase = messages(dict(payload, room_cycle=GROUNDING_SECOND_ONSET+13), 'mara')
+assert 'SIMULATED ENVIRONMENT RESPONSE' not in later_phase[1]['content']

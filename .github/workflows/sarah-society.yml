@@ -52,6 +52,7 @@ jobs:
           ROOM_CHAT_SPEECH_MODE: ${{ vars.ROOM_CHAT_SPEECH_MODE_DISABLE == '1' && '0' || '1' }}
           ROOM_HIDDEN_WORLD_EXPERIMENT: '1' # guarded by finite public-cycle window in room_hidden_world.py
           ROOM_WORLD_ACTIONS: '1' # further bounded by second scene onset and witnessed action
+          ROOM_SCENE_RELEVANCE_FLOOR: '1' # second-scene-only response opportunity, never quotas
           ROOM_NATIVE_3B_DISABLE: ${{ vars.ROOM_NATIVE_3B_DISABLE == '1' && '1' || '0' }}
         run: |
           set -uo pipefail
