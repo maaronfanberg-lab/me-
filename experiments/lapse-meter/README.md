@@ -602,6 +602,19 @@ diverges when its kick is large and its inputs are large-scale, and trains other
   circle. Its constant has to match each task's input scale, so in effect it is input standardization. The readout
   half alone covers four of five settings.
 
+### 18. A boundary that predicts (experiment 53)
+
+With the teardown blocked, divergence comes from a loop. A large kick keeps the readout's error high, and that error
+drives input-layer steps of about η|x|², which grow the stream and raise the kick again. So the boundary should
+depend on **kick × η|x|²**.
+
+- **Fit.** On 190 earlier runs, a cutoff of 735 was right in 176.
+- **Prospective test** (experiment 53, pre-registered, 72 runs at input scales and readout rates never run before):
+  - right in **64 of 72 (89%)**, against 79% for the kick alone;
+  - right in all 7 runs where the two rules disagreed.
+
+The cutoff itself is fitted, not derived.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
