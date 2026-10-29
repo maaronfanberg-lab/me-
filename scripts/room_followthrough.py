@@ -123,7 +123,7 @@ def notice(cycle: int, public_turns: list[dict], entity: str | None = None) -> s
         lines.append(
             "Other participants have announced but not yet completed: "
             +"; ".join(item["speaker"].capitalize()+" "+item["action"]+
-                         " "+item["object"] for item in others[-2:])
+                         " "+item["object"]+" ["+item["source_id"]+"]" for item in others[-2:])
             +". These are not observations of results."
         )
     return "\n".join(lines)
