@@ -1,0 +1,65 @@
+name: Lapse G10 float32 and time-to-target
+on:
+  pull_request:
+    paths:
+      - "experiments/lapse-meter/GAUGE_G10_PREREGISTRATION.md"
+      - "experiments/lapse-meter/experiments/g10_time_to_target.py"
+      - "experiments/lapse-meter/results/g10/**"
+      - ".github/workflows/lapse-g10-time-to-target.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g10:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      PYTHONHASHSEED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install matched CPU scientific dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.5.1+cpu" "torchvision==0.20.1+cpu"
+          python -m pip install "numpy==2.3.5" "scikit-learn==1.8.0" "tqdm>=4.60,<5"
+      - name: Install authors' original pinned PathCond package
+        run: python -m pip install --no-deps "git+https://github.com/Artim436/pathcond.git@535b202e3476c64d5e7e9ec5e817344fb5cfd787"
+      - name: Run preflight using seed79, not a G10 evaluation seed
+        working-directory: experiments/lapse-meter
+        run: python -u experiments/g10_time_to_target.py --smoke
+      - name: Run all G10 target seeds and record censored targets
+        working-directory: experiments/lapse-meter
+        run: python -u experiments/g10_time_to_target.py results/g10/ci_full.json
+      - name: Print all hypotheses, including failures
+        if: always()
+        working-directory: experiments/lapse-meter
+        run: |
+          python - <<'PY'
+          import os,json
+          p='results/g10/ci_full.json'
+          if not os.path.isfile(p):
+              print('No full G10 result file; inspect integration failure.')
+          else:
+              s=json.load(open(p))['summary']
+              for key,value in s.items():
+                  if key!='cells':print(key,value)
+              for c in s['cells']:
+                  print(c['task'],c['depth'], 'timewin',c['h2_time_win'],
+                        'gauge',c['h3_robustness_win'],'final-acc',c['h4_accuracy_noninferior'])
+                  for arm,m in c['arms'].items():
+                      print(arm,'cross',m['crossings']['identity'],
+                            'test_acc',m['mean_accuracy_300'],'test_CE',m['mean_test_ce_300'],
+                            'gap',m['mean_gauge_gap_300'])
+          PY
+      - name: Keep raw data whether science passes or fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lapse-g10-full-results
+          path: experiments/lapse-meter/results/g10/ci_full.json
+          if-no-files-found: warn
