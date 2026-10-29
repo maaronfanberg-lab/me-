@@ -179,7 +179,7 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
             prompt[0]["content"] += (
                 " The previous candidate did not pass public conversational integrity "
                 "checks (" + last_failure[:48] + "). " + hint)
-        body={"model":"Llama-3.2-1B-Instruct","messages":prompt,
+        body={"model":os.environ.get("ROOM_SHADOW_MODEL_ID","Llama-3.2-1B-Instruct"),"messages":prompt,
               "temperature":.78 if not attempt else .62,"top_p":.9,
               "max_tokens":120 if not attempt else 100,
               "seed":seed,"stream":False}
