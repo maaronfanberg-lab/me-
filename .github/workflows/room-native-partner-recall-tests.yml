@@ -1,0 +1,27 @@
+name: Room native partner-specific memory isolation tests
+
+on:
+  push:
+    branches: [research/room-native-partner-uptake-20261029]
+    paths:
+      - '.github/workflows/room-native-partner-recall-tests.yml'
+      - 'scripts/room_chat_speech.py'
+      - 'scripts/test_room_native_partner_recall.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compile and verify source-linked native speech and preserved privacy
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_chat_speech.py
+          python3 scripts/test_room_native_partner_recall.py
+          python3 scripts/test_room_chat_speech_adapter.py
+          python3 scripts/test_room_memory_relevance.py
