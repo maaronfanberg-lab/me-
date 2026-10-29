@@ -81,10 +81,10 @@ def action_consequence(scene: str, speaker: str, utterance: str) -> dict | None:
     # The first-person performative must occur near the start, not inside an
     # unrelated description of somebody else's actions.
     prelude = re.match(
-        r"^\\s*(?:[A-Za-z]+\\s*[:,]\\s*)?"
-        r"(?:I|we|I'm\\s+going\\s+to|I\\s+am\\s+going\\s+to|"
-        r"we're\\s+going\\s+to|we\\s+are\\s+going\\s+to|"
-        r"let\\s+me|I\\s+will|we\\s+will)\\s+",
+        r"^\s*(?:[A-Za-z]+\s*[:,]\s*)?"
+        r"(?:I'm\s+going\s+to|I\s+am\s+going\s+to|"
+        r"we're\s+going\s+to|we\s+are\s+going\s+to|"
+        r"let\s+me|I\s+will|we\s+will|I|we)\s+",
         text, re.I,
     )
     if not prelude:
