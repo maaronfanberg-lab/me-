@@ -83,7 +83,7 @@ jobs:
             [ "$retry_patch_pushed" -eq 1 ] || exit 1
           fi
 
-          ROOM_NODE_TIMEOUT_SECONDS=45
+          ROOM_NODE_TIMEOUT_SECONDS=60
           ROOM_NODE_KILL_GRACE_SECONDS=5
           ROOM_RELAY_CONNECT_TIMEOUT_SECONDS=3
           ROOM_RELAY_MAX_TIME_SECONDS=8
@@ -178,7 +178,7 @@ jobs:
               [ -n "${server_bin:-}" ] || return 1
               chmod +x "$server_bin"
               env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION -u ROOM_NODE_PROMPT \
-                "$server_bin" -m "$model_path" --host 127.0.0.1 --port 18080 -c "$context_size" -np 2 >".room_model/server-${label}.log" 2>&1 &
+                "$server_bin" -m "$model_path" --host 127.0.0.1 --port 18080 -c "$context_size" -np 1 >".room_model/server-${label}.log" 2>&1 &
               model_pid=$!
               ready=0
               for attempt in $(seq 1 120); do
@@ -265,10 +265,10 @@ jobs:
             fetch_allen_turns
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" python3 scripts/room_participant.py room_work/allen-inbox.json room_work/allen-ack.json || return 1
             pids=(); for n in 1 2 4 5 7 8 10 11; do (timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase sense) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1
-            for pair in "0 3" "6 9"; do pids=(); for n in $pair; do (timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_PERCEPTION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase sense) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1; done
+            for n in 0 3 6 9; do timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_PERCEPTION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase sense || return 1; done
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_engine_v5.py bus || return 1
             pids=(); for n in 0 3 6 9; do (timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1
-            for pair in "1 4" "7 10"; do pids=(); for n in $pair; do (timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_DELIBERATION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1; done
+            for n in 1 4 7 10; do timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_DELIBERATION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json || return 1; done
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_engine_v5.py bus2 --bus room_work/bus-sense.json || return 1
             if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ]; then
               ROOM_FLOOR_LAST_FAILURE="pre_expression"
