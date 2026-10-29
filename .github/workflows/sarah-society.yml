@@ -34,6 +34,13 @@ jobs:
           ref: main
           fetch-depth: 20
 
+      - name: Restore pinned local Llama 3.2 3B inference cache
+        if: vars.ROOM_NATIVE_3B_DISABLE != '1'
+        uses: actions/cache@v4
+        with:
+          path: .room_model/llama-3.2-3b-instruct-q4_k_m.gguf
+          key: room-native-llama32-3b-q4km-6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff
+
       - name: Keep all 12 cognitive nodes hot and publish every beat
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -43,6 +50,7 @@ jobs:
           ROOM_PROMPT_EXPRESSION: ${{ secrets.ROOM_PROMPT_EXPRESSION }}
           ROOM_CONVERSATIONAL_FLOOR: ${{ vars.ROOM_CONVERSATIONAL_FLOOR_DISABLE == '1' && '0' || '1' }}
           ROOM_CHAT_SPEECH_MODE: ${{ vars.ROOM_CHAT_SPEECH_MODE_DISABLE == '1' && '0' || '1' }}
+          ROOM_NATIVE_3B_DISABLE: ${{ vars.ROOM_NATIVE_3B_DISABLE == '1' && '1' || '0' }}
         run: |
           set -uo pipefail
           git config user.name "the-room"
@@ -83,6 +91,7 @@ jobs:
 
           export ROOM_MODEL_URL=""
           export ROOM_BRAIN_ACTIVE="none"
+          export ROOM_CHAT_MODEL_ID="Llama-3.2-1B-Instruct"
           model_pid=""
           if [ -n "${ROOM_PROMPT_PERCEPTION:-}" ] && [ -n "${ROOM_PROMPT_DELIBERATION:-}" ] && [ -n "${ROOM_PROMPT_EXPRESSION:-}" ]; then
             mkdir -p .room_model/runtime
@@ -123,6 +132,35 @@ jobs:
           PY
             }
 
+            native_brain_probe() {
+              python3 - <<'PY'
+          import json
+          import urllib.request
+          body = {
+              "model": "Llama-3.2-3B-Instruct",
+              "messages": [
+                  {"role": "system", "content": "Local readiness check only."},
+                  {"role": "user", "content": "Answer READY."},
+              ],
+              "max_tokens": 16,
+              "temperature": 0.0,
+              "stream": False,
+          }
+          request = urllib.request.Request(
+              "http://127.0.0.1:18080/v1/chat/completions",
+              data=json.dumps(body).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=25) as response:
+              result = json.loads(response.read().decode("utf-8", "replace"))
+          choices = result.get("choices") or []
+          content = str((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
+          if not content:
+              raise SystemExit(1)
+          PY
+            }
+
             stop_model() {
               if [ -n "${model_pid:-}" ] && kill -0 "$model_pid" 2>/dev/null; then
                 kill "$model_pid" 2>/dev/null || true
@@ -131,6 +169,7 @@ jobs:
               model_pid=""
               export ROOM_MODEL_URL=""
               export ROOM_BRAIN_ACTIVE="none"
+              export ROOM_CHAT_MODEL_ID="Llama-3.2-1B-Instruct"
             }
 
             start_model() {
@@ -147,9 +186,22 @@ jobs:
                 if ! kill -0 "$model_pid" 2>/dev/null; then break; fi
                 sleep 1
               done
-              if [ "$ready" -eq 1 ] && brain_probe; then
+              probe_ok=0
+              if [ "$ready" -eq 1 ]; then
+                if [ "$label" = 'llama3.2-3b' ]; then
+                  if native_brain_probe; then probe_ok=1; fi
+                elif brain_probe; then
+                  probe_ok=1
+                fi
+              fi
+              if [ "$probe_ok" -eq 1 ]; then
                 export ROOM_MODEL_URL='http://127.0.0.1:18080/completion'
                 export ROOM_BRAIN_ACTIVE="$label"
+                if [ "$label" = 'llama3.2-3b' ]; then
+                  export ROOM_CHAT_MODEL_ID='Llama-3.2-3B-Instruct'
+                else
+                  export ROOM_CHAT_MODEL_ID='Llama-3.2-1B-Instruct'
+                fi
                 echo "ROOM_BRAIN_ACTIVE=$ROOM_BRAIN_ACTIVE"
                 return 0
               fi
@@ -159,13 +211,31 @@ jobs:
             }
 
             llama_ready=0
-            if curl --fail --location --retry 4 --retry-delay 5 \
-              'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' \
-              --output .room_model/llama-3.2-1b-instruct-q4_k_m.gguf && \
-              echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_model/llama-3.2-1b-instruct-q4_k_m.gguf' | sha256sum -c -; then
-              if start_model 'llama3.2-1b' .room_model/llama-3.2-1b-instruct-q4_k_m.gguf 8192; then llama_ready=1; fi
-            else
-              echo "Llama 3.2 download or checksum failed; preserving Qwen fallback"
+            if [ "${ROOM_NATIVE_3B_DISABLE:-0}" != "1" ]; then
+              model_3b_path=.room_model/llama-3.2-3b-instruct-q4_k_m.gguf
+              model_3b_hash='6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff'
+              if ! echo "$model_3b_hash  $model_3b_path" | sha256sum -c - >/dev/null 2>&1; then
+                echo "Pinned Llama 3.2 3B cache miss; downloading verified model"
+                curl --fail --location --retry 3 --retry-delay 5 \
+                  'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true' \
+                  --output "$model_3b_path" || true
+              fi
+              if echo "$model_3b_hash  $model_3b_path" | sha256sum -c -; then
+                if start_model 'llama3.2-3b' "$model_3b_path" 8192; then llama_ready=1; fi
+              else
+                echo "Llama 3.2 3B integrity unavailable; retaining 1B fallback"
+              fi
+            fi
+
+            if [ "$llama_ready" -ne 1 ]; then
+              if curl --fail --location --retry 4 --retry-delay 5 \
+                'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' \
+                --output .room_model/llama-3.2-1b-instruct-q4_k_m.gguf && \
+                echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_model/llama-3.2-1b-instruct-q4_k_m.gguf' | sha256sum -c -; then
+                if start_model 'llama3.2-1b' .room_model/llama-3.2-1b-instruct-q4_k_m.gguf 8192; then llama_ready=1; fi
+              else
+                echo "Llama 3.2 1B download or checksum failed; preserving Qwen fallback"
+              fi
             fi
 
             if [ "$llama_ready" -ne 1 ]; then
