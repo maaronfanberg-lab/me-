@@ -55,6 +55,8 @@ def generate(history, speaker, cfg, key):
 def main():
     if not os.environ.get("ROOM_MODEL_URL"):
         raise RuntimeError("A real local model is required")
+    if os.environ.get("ROOM_CHAT_SPEECH_MODE") != "1":
+        raise RuntimeError("Real-model smoke must exercise native-speech production quality limits")
     os.environ["ROOM_CONVERSATIONAL_FLOOR"]="1"
     past=json.loads((ROOT/"room/conversation.json").read_text())
     config=json.loads((ROOT/"room/config.json").read_text())
