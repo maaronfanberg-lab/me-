@@ -58,3 +58,20 @@ with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1","ROOM_SCENE_PUBL
         m=messages(visitor,"jules")
 assert "PREVIOUSLY SPOKEN PUBLIC OBSERVATIONS" not in m[1]["content"]
 print("PASS: common-ground ledger is public-only, actor-bound, cycle-bound, visitor-safe")
+
+
+# Actual Room 36425-36434 regression: several characters repeated a claimed
+# 2015 stamp while Sarah physically inspected the frames. Keep the model's
+# deterministic 1934 observation distinguishable from Owen's spoken 2015.
+museum = [
+    line("owen", 'I notice that the date embossed on the frame is "2015", and it is definitely older than the two photographs on display.', 36432, "live-36432"),
+    line("sarah", "I take a closer look at the photograph frames and notice that the one with the older typeface on the storefront sign has a thin layer of dust coating the frame's edges, whereas the other frame is spotless.", 36426, "live-36426"),
+]
+common = scene_common_ground(36434, museum)
+assert "SOURCE-LINKED SIMULATED ENVIRONMENT CONSEQUENCES" in common
+assert "PUBLIC CHARACTER CLAIMS (NOT INDEPENDENTLY VERIFIED)" in common
+assert "Sarah acted [live-36426]" in common
+assert "1934" in common and '"2015"' in common
+assert common.index("1934") < common.index('"2015"'), common
+assert "[source live-36432]" in common
+print("PASS: conflicting live photograph dates retain independent source provenance")
