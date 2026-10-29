@@ -71,6 +71,7 @@ def messages(payload: dict, entity: str) -> list[dict]:
         "Respond to what the last person actually meant where useful. "
         "When someone asks a question or requests help, engage with what they actually asked; "
         "if necessary details are missing, ask instead of inventing their request. "
+        "Do not assign an unstated subject, motive, or prior event to another speaker. "
         "You may disagree, decline, or redirect for a concrete reason. "
         "You can agree, disagree, clarify, add a concrete example, or introduce your own relevant idea. "
         "Do not simply repeat their words or invent previous events or relationships. "
@@ -120,6 +121,12 @@ def speech_metadata(text: str, payload: dict, entity: str) -> dict:
     terms=[w for w in social_words(text) if w not in PARTICIPANTS][:4]
     return {"decision":"SPEAK","utterance":text,"move":move,
             "target":target,"semantic_terms":terms or ["speech"]}
+
+
+def unfinished_model_quotation(spoken: str) -> bool:
+    """An unclosed model-authored quotation is not a complete public turn."""
+    text = str(spoken or "")
+    return (text.count('"') % 2 != 0 or text.count("“") > text.count("”"))
 
 
 def complete_model_prefix(spoken: str) -> str:
@@ -195,6 +202,9 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                 spoken=spoken[labelled.end():].strip()
             if not spoken or len(spoken)>700:
                 last_failure="empty_or_overlong_candidate"
+                continue
+            if unfinished_model_quotation(spoken):
+                last_failure="unclosed_model_quotation"
                 continue
             if (issue:=autonomous_text_issue({"speaker":entity,"text":spoken})):
                 last_failure=issue
