@@ -52,7 +52,15 @@ def witnessed_context(payload: dict, entity: str) -> list[dict]:
         # shortened to the same 520-char budget used for autonomous speech.
         limit=700 if speaker=="allen" else 520
         out.append({"speaker":speaker,"text":spoken[:limit],"id":item.get("id")})
-    return out[-3:]
+    # The optional wider window is supported only in the native selected-floor
+    # path. The source remains public, speaker-filtered and bounded exactly as
+    # before; this changes neither permissions nor memory persistence.
+    window = 5 if (
+        os.environ.get("ROOM_CHAT_CONTEXT_WINDOW") == "5"
+        and os.environ.get("ROOM_CHAT_SPEECH_MODE") == "1"
+        and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1"
+    ) else 3
+    return out[-window:]
 
 
 def messages(payload: dict, entity: str) -> list[dict]:
