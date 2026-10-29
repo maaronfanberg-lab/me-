@@ -49,13 +49,13 @@ def speaker_for_turn(index: int) -> str:
     return PEOPLE[(index * 3 + index // 4) % 4]
 
 def construct_messages(speaker: str, history: list[dict], mode: str) -> list[dict]:
-    if speaker not in PEOPLE or mode not in ("empty", "shared", "hidden"):
+    if speaker not in PEOPLE or mode not in ("empty", "shared", "hidden", "hidden_grounded"):
         raise ValueError("invalid speaker or experimental condition")
     if mode == "shared":
         evidence = "All observations, available to everyone:\n" + "\n".join(
             f"{person.capitalize()}: {clue}" for person, clue in CLUES.items()
         )
-    elif mode == "hidden":
+    elif mode in ("hidden", "hidden_grounded"):
         evidence = "Your own private, not-yet-public observation:\n" + CLUES[speaker]
     else:
         evidence = "You have no additional personal observation."
@@ -70,6 +70,21 @@ def construct_messages(speaker: str, history: list[dict], mode: str) -> list[dic
         "Do not refer to the mechanism of dialogue or the experiment design. "
         "If you genuinely have nothing useful to add, return only SILENCE."
     )
+    if mode == "hidden_grounded":
+        # Exchange of bounded information is the experiment's independent
+        # variable, not an instruction to avoid a prohibited subject.
+        system += (
+            " You have one witnessed evidence card; it is not something you "
+            "heard from another person. Others may possess DIFFERENT cards. "
+            "An observation that is relevant and not yet public is worth "
+            "sharing directly, with its actual measured details. "
+            "Do not narrate actions or your facial expression; say only "
+            "words you would speak aloud. Distinguish a measured observation "
+            "from an untested guess. If someone asks you a question, respond "
+            "first; otherwise contribute the most useful missing evidence "
+            "or ask what another witness actually saw. "
+            "Avoid falsely claiming you have inspected something you have not."
+        )
     valid = []
     for turn in history[-6:]:
         if turn.get("speaker") in PEOPLE and isinstance(turn.get("text"), str):
@@ -81,7 +96,7 @@ def construct_messages(speaker: str, history: list[dict], mode: str) -> list[dic
             {"role": "user", "content": user}]
 
 def private_leakage(messages: list[dict], speaker: str, mode: str) -> list[str]:
-    if mode != "hidden":
+    if mode not in ("hidden", "hidden_grounded"):
         return []
     prompt = json.dumps(messages).lower()
     # Only exact off-owner facts are a leakage violation. Public mention of
@@ -178,7 +193,7 @@ def main():
     if not 1 <= args.turns <= 100:
         parser.error("turns must be 1..100")
     cases=[run_condition(args.url,mode,args.turns,args.model)
-           for mode in ("empty","shared","hidden")]
+           for mode in ("empty","shared","hidden","hidden_grounded")]
     output={"protocol":"fictional_hidden_evidence_ablation_v1",
             "disclaimer":"An experimental model transcript, never public Room speech",
             "cases":cases}
