@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lapse Width</title>
+<style>
+:root{--bg:#0f1115;--fg:#e8e6e3;--mut:#9aa0a6;--acc:#7cc4ff;--card:#181b21;--on:#2f6f4f}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,sans-serif;padding:16px;max-width:560px;margin:auto}
+h1{font-size:1.3rem;margin:.2rem 0}.sub{color:var(--mut);font-size:.9rem;margin-bottom:1rem}
+.card{background:var(--card);border-radius:12px;padding:12px;margin:10px 0}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.lab{font-weight:600}.hint{color:var(--mut);font-size:.82rem}
+button{touch-action:manipulation;font:inherit;font-weight:600;border:0;border-radius:10px;background:#2a2f38;color:var(--fg);padding:12px 16px;min-width:52px}
+button.on{background:var(--on)}button.big{width:100%;padding:14px;margin-top:6px}
+.val{min-width:70px;text-align:center;font-variant-numeric:tabular-nums}
+.meter{font-variant-numeric:tabular-nums;color:var(--acc)}
+</style></head><body>
+<h1>Lapse Width</h1>
+<div class="sub">Two-channel width for a receiver with virtual surround. Every control is a tap.</div>
+<div class="card"><input id="file" type="file" accept="audio/*"><audio id="au" controls style="width:100%;margin-top:8px"></audio>
+<button id="power" class="big">START AUDIO ENGINE</button><div id="status" class="hint">Pick a track, then start.</div></div>
+<div class="card"><div class="row"><div><div class="lab">Centre trim</div><div class="hint">Remove part of the shared (mid) sound so the image opens up</div></div>
+<div class="row"><button data-k="trim" data-d="-0.05">−</button><span class="val" id="v-trim"></span><button data-k="trim" data-d="0.05">+</button></div></div></div>
+<div class="card"><div class="row"><div><div class="lab">Width target</div><div class="hint">Side-to-mid balance the auto-width holds, at any volume</div></div>
+<div class="row"><button data-k="target" data-d="-0.05">−</button><span class="val" id="v-target"></span><button data-k="target" data-d="0.05">+</button></div></div>
+<button id="auto" class="big">AUTO-WIDTH: ON</button></div>
+<div class="card"><div class="row"><div><div class="lab">Rear air</div><div class="hint">Extra side signal, which a matrix decoder sends to the surrounds</div></div>
+<div class="row"><button data-k="rear" data-d="-0.1">−</button><span class="val" id="v-rear"></span><button data-k="rear" data-d="0.1">+</button></div></div></div>
+<div class="card"><div class="row"><div><div class="lab">Change speed</div><div class="hint">The cap on how fast width may move (no pumping)</div></div>
+<div class="row"><button id="slew">MEDIUM</button></div></div></div>
+<div class="card"><div class="row"><div class="lab">Live</div><div class="meter" id="meter">—</div></div>
+<button id="ab" class="big">A/B: PROCESSED</button></div>
+<script>
+const P={trim:0.2,target:0.5,rear:0.3,auto:true,cap:0.004,bypass:false},LIM={trim:[0,0.5],target:[0.1,1.5],rear:[0,1]};
+const SL=[["SLOW",0.001],["MEDIUM",0.004],["FAST",0.016]];let si=1,ctx,node;const $=id=>document.getElementById(id);
+function show(){$("v-trim").textContent=Math.round(P.trim*100)+"%";$("v-target").textContent=P.target.toFixed(2);$("v-rear").textContent=Math.round(P.rear*100)+"%";
+$("auto").textContent="AUTO-WIDTH: "+(P.auto?"ON":"OFF");$("auto").classList.toggle("on",P.auto);$("slew").textContent=SL[si][0];
+$("ab").textContent="A/B: "+(P.bypass?"BYPASS (original)":"PROCESSED");$("ab").classList.toggle("on",!P.bypass);if(node)node.port.postMessage(P);}
+document.querySelectorAll("button[data-k]").forEach(b=>b.onclick=()=>{const k=b.dataset.k,[a,z]=LIM[k];P[k]=Math.round(Math.min(z,Math.max(a,P[k]+Number(b.dataset.d)))*100)/100;show();});
+$("auto").onclick=()=>{P.auto=!P.auto;show()};$("ab").onclick=()=>{P.bypass=!P.bypass;show()};$("slew").onclick=()=>{si=(si+1)%3;P.cap=SL[si][1];show()};
+$("file").onchange=e=>{const f=e.target.files[0];if(f){$("au").src=URL.createObjectURL(f);$("status").textContent="Loaded "+f.name;}};
+$("power").onclick=async()=>{if(ctx){ctx.state==="running"?await ctx.suspend():await ctx.resume();$("power").textContent=ctx.state==="running"?"PAUSE ENGINE":"RESUME ENGINE";return;}
+try{ctx=new (window.AudioContext||window.webkitAudioContext)();await ctx.audioWorklet.addModule("lapse-width-core.js?v=1");await ctx.audioWorklet.addModule("lapse-width-worklet.js?v=1");
+node=new AudioWorkletNode(ctx,"lapse-width",{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],channelCount:2,channelCountMode:"explicit"});
+ctx.createMediaElementSource($("au")).connect(node).connect(ctx.destination);node.port.onmessage=e=>{$("meter").textContent="width gain "+e.data.g.toFixed(2)+" · input side/mid "+e.data.ratio.toFixed(2)};
+show();$("power").textContent="PAUSE ENGINE";$("status").textContent="Engine running. Output: 2 channels to your receiver; set it to its virtual-surround / matrix mode.";}
+catch(err){$("status").textContent="Could not start audio: "+err.message;}};
+show();
+</script></body></html>
