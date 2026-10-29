@@ -121,7 +121,8 @@ def messages(payload: dict, entity: str) -> list[dict]:
         )
     # Explicitly separate witnessed character action and fictional environment
     # consequence from ordinary speech. No synthetic speech is generated.
-    if situational_grounding and os.environ.get("ROOM_WORLD_ACTIONS") == "1" and history:
+    if (situational_grounding and os.environ.get("ROOM_WORLD_ACTIONS") == "1"
+            and history and int(room_cycle) >= 35220):
         from room_hidden_world import scene_for_cycle
         from room_world_actions import action_consequence
         witnessed = history[-1]
