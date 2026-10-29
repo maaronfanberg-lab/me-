@@ -37,3 +37,7 @@ A stronger prompt must not produce conspicuous scripts such as every turn offeri
 ## Status and source evidence
 
 Baseline live around cycles 34853–34874 includes evolutionary modeling → fungal networks → urban agriculture. Branch-only experiments pending; no claim of verified conversational improvement from this proposal.
+
+## Matched-seed real-model result: rejected for production
+
+GitHub Actions run 40801391088 passed all code/preflight tests and saved `docs/research/room-next-action-shadow-20261029.json`. Both baseline and optional action-focused variants generated 8/8 valid single replies and six chained continuations. Human inspection found no reliable gain in specific Q/A development: the action-focused variant rephrased 'hidden patterns' and generic 'fascinating' ideas, and its six-turn chain remained abstract. In one urban-agriculture case the baseline asked what specific challenges a symbiotic network faces, while the action version merely praised the 'interconnectedness' of systems. No production merge or prompt modification authorized by this result. The A/B varied prompt wording only; small nonrepresentative sample remains a limitation.
