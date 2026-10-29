@@ -170,7 +170,8 @@ def _fact_opportunity(entity, latest, history, cycle):
     # open question about the grille, without granting them a mandatory turn
     # or disclosing their private observation to the other characters.
     from room_causal_world import active as causal_active, PRIVATE, replay
-    if causal_active(cycle):
+    if (os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1"
+            and causal_active(cycle)):
         if entity in {item["speaker"] for item in replay(cycle, history)["disclosures"]}:
             return 0.0
         specific = (_fact_terms(question) & _fact_terms(PRIVATE.get(entity, ""))) - {
