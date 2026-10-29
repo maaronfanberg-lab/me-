@@ -97,7 +97,10 @@ def notice(cycle: int, public_turns: list[dict], entity: str | None = None) -> s
     Other people's commitments are labelled as unperformed; neither the
     system nor a bystander is permitted to claim they did the action.
     """
-    items=pending(cycle,public_turns)
+    # Keep up to five source-linked outstanding intentions for the speaking
+    # character's context. Three global entries could exclude the actor's own
+    # earlier plan whenever other participants repeatedly promised to act.
+    items=pending(cycle,public_turns,limit=5 if entity in PARTICIPANTS else 3)
     if not items:
         return ""
     if entity not in PARTICIPANTS:

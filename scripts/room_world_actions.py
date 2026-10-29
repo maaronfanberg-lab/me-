@@ -83,7 +83,12 @@ def action_consequence(scene: str, speaker: str, utterance: str) -> dict | None:
     # Guard conditional, quoted, or hypothetical utterances and reported speech.
     if not text or text.endswith("?") or len(text) > 500:
         return None
-    if re.search(r"\b(?:could|would|should|might|maybe|what if|imagine|hypothetically|pretend)\b",text,re.I):
+    # A witnessed completed act may be followed by an uncertain explanation:
+    # "I checked the filter, but it might be blocked." Only the action clause
+    # determines whether the physical act occurred; uncertainty about its
+    # cause or outcome must not erase that first-person observation.
+    head = re.split(r"[,;.!?]", text, maxsplit=1)[0]
+    if re.search(r"\b(?:could|would|should|might|maybe|what if|imagine|hypothetically|pretend)\b",head,re.I):
         return None
     # The first-person performative must occur near the start, not inside an
     # unrelated description of somebody else's actions.

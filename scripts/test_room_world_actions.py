@@ -51,6 +51,10 @@ assert action_consequence("choir-recording","jules", "I just checked the mixer's
 assert "mixer end" in action_consequence("choir-recording","jules", "I checked the mixer's power cable.")["effect"]
 assert "nearly closed" in action_consequence("greenhouse-watering","jules", "I took a closer look at the valve itself.")["effect"]
 assert action_consequence("greenhouse-watering","jules", "I'm going to take a closer look at the valve itself.") is None
+assert action_consequence("greenhouse-watering","jules",
+    "I inspected the irrigation filter, but it might still be clogged.")["object"]=="irrigation filter"
+assert action_consequence("greenhouse-watering","jules",
+    "I might inspect the irrigation filter, but I haven't done it.") is None
 print("PASS: witnessed first-person actions yield distinct fictional consequences; hypotheticals do not")
 
 import os
