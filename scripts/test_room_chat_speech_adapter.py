@@ -82,6 +82,17 @@ class ChatAdapterTests(unittest.TestCase):
         self.assertIn(said,chat.messages(inp,"sarah")[-1]["content"])
         self.assertEqual(history[-1]["speaker"],"allen")
 
+    def test_direct_request_stays_visible_and_prompt_requires_no_invented_task(self):
+        item=source("mara","I need you to do something, but I haven't said what yet.")
+        inp=payload("sarah",item)
+        prompt=chat.messages(inp,"sarah")
+        self.assertEqual(len(prompt),2)
+        self.assertIn(item["text"],prompt[-1]["content"])
+        self.assertIn("ask instead of inventing their request",prompt[0]["content"])
+        self.assertIn("You may disagree, decline, or redirect",prompt[0]["content"])
+        self.assertIn("final transcript line",prompt[-1]["content"])
+        self.assertNotIn("private_self_state",str(prompt))
+
     def test_candidate_has_real_model_text_and_passes_final_preflight(self):
         inp=payload()
         said="The species could diverge because different environments favor different adaptations."
