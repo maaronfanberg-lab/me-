@@ -35,9 +35,9 @@ print('PASS: optional scene information, isolated observations and visitor prior
 assert h.trial_active(h.TRIAL_START)
 assert h.trial_active(h.TRIAL_END - 1)
 assert not h.trial_active(h.TRIAL_START - 1)
-assert not h.trial_active(h.TRIAL_END)
+assert not h.trial_active(h.REPLICATION_END)
 with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1'}):
-    after = chat.messages(dict(payload, room_cycle=h.TRIAL_END), 'sarah')
+    after = chat.messages(dict(payload, room_cycle=h.REPLICATION_END), 'sarah')
 assert h.scene_for_cycle(h.TRIAL_END).common not in after[0]['content']
 
 assert h.event_at(h.TRIAL_START + 15)
@@ -65,7 +65,7 @@ assert not h.event_at(h.GROUNDING_ONSET + 1)
 assert h.active_scene_window(h.GROUNDING_ONSET)
 assert h.active_scene_window(h.GROUNDING_ONSET + h.GROUNDING_WINDOW - 1)
 assert not h.active_scene_window(h.GROUNDING_ONSET + h.GROUNDING_WINDOW)
-assert not h.situational_notice("sarah", h.TRIAL_END)
+assert not h.situational_notice("sarah", h.REPLICATION_END)
 with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT": "1"}):
     grounded = chat.messages(dict(payload, room_cycle=h.GROUNDING_ONSET + 1), "sarah")
 assert "ONGOING FICTIONAL SITUATION" in grounded[1]["content"]
@@ -80,4 +80,15 @@ with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT": "1"}):
 assert "ONGOING FICTIONAL SITUATION" not in expired[1]["content"]
 
 assert h.active_scene_window(h.GROUNDING_SECOND_ONSET + 23)
-assert not h.active_scene_window(h.GROUNDING_SECOND_ONSET + 24)
+assert not h.active_scene_window(h.GROUNDING_SECOND_ONSET + 36)
+
+assert h.trial_active(h.REPLICATION_START)
+assert h.trial_active(h.REPLICATION_END - 1)
+assert not h.trial_active(h.REPLICATION_END)
+assert h.scene_for_cycle(h.REPLICATION_START).identifier == "rainwater-tank"
+assert h.active_scene_window(h.REPLICATION_START)
+assert h.event_at(h.REPLICATION_START)
+assert not h.active_scene_window(h.REPLICATION_END)
+with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1"}):
+    replicated = chat.messages(dict(payload,room_cycle=h.REPLICATION_START), "sarah")
+assert "rainwater tank" in replicated[1]["content"].lower()

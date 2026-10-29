@@ -288,5 +288,26 @@ class FloorTests(unittest.TestCase):
             no_opt_in = choose_next([source],bus(),config(),{},cycle=35233)
             self.assertEqual(no_opt_in,choose_next([source],bus(),config(),{},cycle=None))
 
+
+    def test_unshared_eyewitness_fact_can_answer_open_group_question(self):
+        import os
+        from unittest.mock import patch
+        earlier = [
+            msg("mara", "The generator fuel was checked at noon.", id="m1"),
+            msg("sarah", "The lanterns flickered and one row went dark.", id="s2"),
+        ]
+        open_question = msg("sarah", "Does anyone have another clue about the outage?", id="s3")
+        with patch.dict(os.environ, {"ROOM_SCENE_RELEVANCE_FLOOR":"1"}):
+            from room_conversational_floor import _fact_opportunity
+            assert _fact_opportunity("mara", open_question, earlier+[open_question], 35245) == 0
+            assert _fact_opportunity("owen", open_question, earlier+[open_question], 35245) > 0
+            assert _fact_opportunity("jules", open_question, earlier+[open_question], 35245) > 0
+            selected = choose_next(earlier+[open_question], bus(), config(), {},cycle=35245)
+            self.assertIn(selected["speaker"], ("owen","jules"))
+            addressed = msg("sarah","Mara, can you tell me more?", id="s4")
+            self.assertEqual(
+                choose_next(earlier+[addressed],bus(),config(),{},cycle=35233)["speaker"],
+                "mara")
+
 if __name__ == "__main__":
     unittest.main()

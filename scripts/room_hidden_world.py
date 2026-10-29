@@ -13,11 +13,13 @@ PARTICIPANTS = ("sarah", "mara", "owen", "jules")
 EPISODE_TURNS = 60
 TRIAL_START = 35160
 TRIAL_END = TRIAL_START + 100
+REPLICATION_START = TRIAL_END + 8  # eight unprompted washout turns
+REPLICATION_END = REPLICATION_START + 24
 
 
 def trial_active(cycle: int) -> bool:
     """A finite 100-public-beat canary, never an indefinite production mode."""
-    return isinstance(cycle, int) and not isinstance(cycle, bool) and TRIAL_START <= cycle < TRIAL_END
+    return isinstance(cycle, int) and not isinstance(cycle, bool) and (TRIAL_START <= cycle < TRIAL_END or REPLICATION_START <= cycle < REPLICATION_END)
 
 
 @dataclass(frozen=True)
@@ -91,6 +93,8 @@ GROUNDING_WINDOW = 12
 
 def scene_phase(cycle: int) -> tuple[int, int]:
     """(scene index, actual onset) for a trial beat, without agent speech."""
+    if REPLICATION_START <= cycle < REPLICATION_END:
+        return 4, REPLICATION_START
     if trial_active(cycle) and cycle >= GROUNDING_SECOND_ONSET:
         return 2, GROUNDING_SECOND_ONSET
     if trial_active(cycle) and cycle >= GROUNDING_ONSET:
@@ -105,6 +109,7 @@ def event_at(cycle: int) -> bool:
         cycle == TRIAL_START + 15
         or cycle == GROUNDING_ONSET
         or cycle == GROUNDING_SECOND_ONSET
+        or cycle == REPLICATION_START
     )
 
 
@@ -118,7 +123,8 @@ def active_scene_window(cycle: int) -> bool:
     """A short-lived scene to recall, not an indefinite mandatory topic."""
     return trial_active(cycle) and (
         GROUNDING_ONSET <= cycle < GROUNDING_ONSET + GROUNDING_WINDOW
-        or GROUNDING_SECOND_ONSET <= cycle < GROUNDING_SECOND_ONSET + 2 * GROUNDING_WINDOW
+        or GROUNDING_SECOND_ONSET <= cycle < GROUNDING_SECOND_ONSET + 3 * GROUNDING_WINDOW
+        or REPLICATION_START <= cycle < REPLICATION_END
     )
 
 
