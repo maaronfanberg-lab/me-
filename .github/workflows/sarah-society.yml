@@ -214,16 +214,13 @@ jobs:
             if [ "${ROOM_NATIVE_3B_DISABLE:-0}" != "1" ]; then
               model_3b_path=.room_model/llama-3.2-3b-instruct-q4_k_m.gguf
               model_3b_hash='6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff'
-              if ! echo "$model_3b_hash  $model_3b_path" | sha256sum -c - >/dev/null 2>&1; then
-                echo "Pinned Llama 3.2 3B cache miss; downloading verified model"
-                curl --fail --location --retry 3 --retry-delay 5 \
-                  'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true' \
-                  --output "$model_3b_path" || true
-              fi
+              # A cold 3B cache must NEVER block live conversation on
+              # a multi-gigabyte transfer. Independent prewarm owns fetching
+              # and checksumming; this worker stays available with Llama1B.
               if echo "$model_3b_hash  $model_3b_path" | sha256sum -c -; then
                 if start_model 'llama3.2-3b' "$model_3b_path" 8192; then llama_ready=1; fi
               else
-                echo "Llama 3.2 3B integrity unavailable; retaining 1B fallback"
+                echo "Pinned 3B model not prewarmed/verified; starting 1B without blocking conversation"
               fi
             fi
 
