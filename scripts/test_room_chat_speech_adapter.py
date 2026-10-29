@@ -150,6 +150,31 @@ class ChatAdapterTests(unittest.TestCase):
             out=chat.run(payload("owen"))
         self.assertEqual(out["utterance"],valid)
 
+    def test_only_complete_model_authored_prefix_may_be_preserved(self):
+        first=("Different species can develop separate adaptations when their "
+               "environments exert distinct pressures.")
+        unfinished=(" A second and even more complicated explanation could "
+                    "involve every possible kind of genetic effect, but it "
+                    "might still be missing a conclusion because")
+        raw=first+unfinished
+        with patch("room_chat_speech.urllib.request.urlopen",
+                   return_value=Fake(raw)) as model:
+            out=chat.run(payload())
+        self.assertEqual(model.call_count,1)
+        self.assertEqual(out["utterance"],first)
+        self.assertNotIn("second and even",out["utterance"])
+
+    def test_does_not_cut_off_a_pending_contradiction(self):
+        first="I think we should absolutely proceed with the experiment today."
+        trailing=" However, I need to explain why we cannot"
+        corrected="I'd prefer to collect one more observation before starting."
+        with patch("room_chat_speech.urllib.request.urlopen",
+                   side_effect=[Fake(first+trailing),Fake(corrected)]) as model:
+            out=chat.run(payload())
+        self.assertEqual(model.call_count,2)
+        self.assertEqual(out["utterance"],corrected)
+        self.assertEqual(chat.complete_model_prefix(first+trailing),"")
+
     def test_natural_vocative_controls_recipient_not_hidden_partner(self):
         x=payload("sarah",source("jules","I saw some migrating birds over the river."))
         x["partner"]="owen"
