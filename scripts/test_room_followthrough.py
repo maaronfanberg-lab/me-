@@ -34,7 +34,8 @@ assert len(a)==2
 assert {x["source_id"] for x in a}=={"j0","o1"}
 assert "not proof" in notice(START+5,source)
 assert "j0" in notice(START+5,source)
-assert not pending(START+2,source)[1:] # no future turns leaked
+assert {x["source_id"] for x in pending(START+2,source)} == {"j0","o1"}
+assert {x["source_id"] for x in pending(START+1,source)} == {"j0"} # no future sources
 # Owen's completed action resolves only Owen's plan, not Jules'.
 after=source+[turn(START+5,"owen","I inspect the irrigation filter.","o5")]
 assert len(pending(START+6,after))==1
