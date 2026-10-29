@@ -385,6 +385,24 @@ def _public_meta_language(utterance: str, compact: dict) -> bool:
     return not bool(re.search(r"\b(?:script|screenplay|screenwriter|screenwriting)\b", evidence))
 
 
+def _unchanged_source_action(utterance: str, compact: dict) -> bool:
+    """Reject only an entire copied long speech action from another person.
+
+    This is not a repeated-word ban. Short repairs, partial quotations and
+    substantive responses that use the same concepts remain permissible.
+    """
+    event = compact.get("event") if isinstance(compact, dict) else None
+    if not isinstance(event, dict):
+        return False
+    source = str(event.get("text") or "").strip()
+    if not source:
+        return False
+    before = re.findall(r"[A-Za-z0-9']+", source.casefold())
+    after = re.findall(r"[A-Za-z0-9']+", str(utterance or "").casefold())
+    threshold = 20 if source.endswith("?") else 12
+    return len(before) >= threshold and before == after
+
+
 def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
     if role not in AUTONOMY_PROMPTS:
         raise ValueError(f"unknown private model role: {role}")
@@ -406,8 +424,12 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
             "Respond naturally to the current conversation. Keep the chosen move, focus, and intended partner while choosing your own words. "
             "Use only details supported by what was actually said. Do not invent unsupported conflict, jealousy, secrets, threats, shared memories, "
             "or dramatic incidents. Treat reported claims as reports unless independent evidence is present. " +
-            ("Shared wording can be reused to answer, clarify, acknowledge, or emphasize a point. "
-             "Prioritize the relevant conversational action over novelty.\n" if social_floor
+            ("Another character's public speech is evidence of what THEY said. "
+             "Use that to make your own relevant conversational contribution, "
+             "such as a reason, a concrete answer, an appropriate disagreement, "
+             "a precise clarification or a new related observation. Shared words "
+             "and useful short quotations are welcome, but an identical whole "
+             "speech action does not answer its speaker.\n" if social_floor
              else "Avoid copying recent speech. Stay inside the conversation.\n")
         )
 
@@ -423,6 +445,10 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                   "prefixing your own name; still respond independently to "
                   "the person you are speaking with.\n"
                   if last_reason == "self_perspective_leak" else
+                  "Your prior reply copied the entire previous long question or statement. "
+                  "Give your own specific answer, objection, explanation or clarification "
+                  "of one genuinely unclear detail.\n"
+                  if last_reason == "unchanged_source_action" else
                   "Recheck the actual source utterance and the action it makes relevant. "
                   "Keep your own voice, stance and uncertainty.\n") if social_floor
                  else "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n")
@@ -493,6 +519,11 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                 # hygiene checks still run; an absent model is not silence.
                 if _public_meta_language(utterance, compact):
                     last_reason = "meta_language"
+                    continue
+                if social_floor and _unchanged_source_action(utterance, compact):
+                    # Preserve the hard final gate, but retry rather than
+                    # using an entire other speaker's turn as a pseudo-answer.
+                    last_reason = "unchanged_source_action"
                     continue
                 if not social_floor and (base._too_similar_to_context(utterance, compact) or _has_context_echo(utterance, compact)):
                     last_reason = "duplicate_context"
