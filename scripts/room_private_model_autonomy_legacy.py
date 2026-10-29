@@ -201,7 +201,9 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
     # do not silently discard the world, its private clues, or completed acts.
     if (role == "expression"
             and os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1"
-            and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1"):
+            and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1"
+            and not (isinstance(payload.get("event"), dict)
+                     and payload["event"].get("speaker") == "allen")):
         from room_causal_world import production_cue
         scene = production_cue(str(self_entity or ""))
         if scene:
