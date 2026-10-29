@@ -533,6 +533,25 @@ What the traces show, as observations rather than an explanation
 - **The readout is not "too sharp" at initialization.** Its exact Hessian has almost zero curvature, because the
   huge initial logits saturate every softmax. Sharpness-threshold explanations do not apply at the start here.
 
+### 16. The teardown: escape or damage? (experiments 34–36, run on GitHub Actions)
+
+Experiment 34 (exploratory, 5 seeds, traced every step) found that the teardown is the blocks following their own
+gradient. At step 2 their update alone closes about half the open gates, and it pushes against the shared stream
+on both tasks. Closed gates never reopen.
+
+Experiment 36 (pre-registered) stopped every layer's update from shifting its mean pre-activation. That prevented the
+teardown in 10 of 10 runs.
+
+| task | step-one kick | teardown prevented | kick also capped at 10 |
+|---|---|---|---|
+| digits | 1,640–2,396 | all 5 diverge: the teardown was the **escape** | healthy, 5 of 5 |
+| circle | 108–369 | all 5 healthy (transport +2.7 to +3.0): the teardown was the **damage** | healthy, 5 of 5 |
+
+Read together: the teardown is how the network corrects a large shared error. It averts divergence only when the
+kick is too large for the readout to absorb; otherwise it is pure damage. This reading came after the result and
+is not yet tested as a prediction. Experiment 35, which left the input layer free, was void by its rule: on the
+circle the teardown came in through the input layer.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
