@@ -23,7 +23,7 @@ from lapse.nets2 import MLP2
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None, block_lr_mult=1.0, block_lr_mult_until=None, detach=None, block_nomean=False)
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None, block_lr_mult=1.0, block_lr_mult_until=None, detach=None, block_nomean=False, out_bias_prior=False)
 
 
 def run(cfg, path=None, hook=None):
@@ -47,7 +47,9 @@ def run(cfg, path=None, hook=None):
                   alpha=c["alpha"], seed=c["seed"], branch_sign=c["branch_sign"])
     if c["zloss"]: net.zloss = c["zloss"]
     diag = {"two": diagnose2, "ln": diagnose_ln}.get(c["block"], diagnose)
-    if c["zero_out"]: net.W[-1][:] = 0.0  # output layer starts at zero: initial logits are all zero
+    if c["zero_out"]: net.W[-1][:] = 0.0
+    if c.get("out_bias_prior"):  # experiment 47: readout bias = log class frequencies of the training set (predictions start at the priors)
+        net.b[-1][:] = np.log(np.bincount(y, minlength=ncls) / len(y) + 1e-12)  # output layer starts at zero: initial logits are all zero
     opt = {"sgd": lambda: SGD(c["lr"]), "adam": lambda: Adam(c["lr"]), "rmsprop": lambda: Adam(c["lr"], b1=0.0),
            "momentum": lambda: Momentum(c["lr"])}[c["opt"]]()  # rmsprop = Adam without momentum (experiment 21)
     rng = np.random.default_rng(10_000 + c["seed"])
