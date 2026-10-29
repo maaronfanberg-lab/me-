@@ -29,10 +29,10 @@ class Consequence:
     observation: str
 
 _ACTIONS = (
-    ('inspect_vent', r'inspect|inspected|check|checked|examine|examined|look at|looked at', r'air vent|rear vent|ventilation grille|projector vent'),
+    ('inspect_vent', r'inspect|inspected|check|checked|examine|examined|look at|looked at|take a closer look at|took a closer look at', r'air vent|rear vent|rear ventilation grille|rear grille|ventilation grille|projector vent|vent'),
     ('check_voltage', r'check|checked|inspect|inspected|measure|measured|test|tested', r'supply voltage|wall voltage|socket voltage'),
     ('inspect_lamp', r'inspect|inspected|check|checked|examine|examined', r'lamp housing|projector lamp'),
-    ('clear_vent', r'clear|cleared|unblock|unblocked|uncover|uncovered|clean|cleaned', r'air vent|rear vent|ventilation grille|projector vent'),
+    ('clear_vent', r'clear|cleared|unblock|unblocked|uncover|uncovered|clean|cleaned|remove|removed|pull|pulled', r'air vent|rear vent|rear ventilation grille|rear grille|ventilation grille|projector vent|vent|folded cardboard|cardboard'),
     ('restart_projector', r'restart|restarted|switch on|switched on|turn on|turned on|power on|powered on', r'projector'),
 )
 
@@ -52,8 +52,6 @@ def witnessed_action(speaker: str, text: str) -> str | None:
     phrase = text.strip()
     if not phrase or len(phrase) > 500 or phrase.endswith('?'):
         return None
-    if re.search(r'\b(?:could|would|should|might|maybe|if|suppose|hypothetically|imagine)\b', phrase, re.I):
-        return None
     first = re.match(r'^\s*(?:I|we)\s+(?:just\s+|now\s+)?', phrase, re.I)
     if first is None:
         return None
@@ -62,7 +60,14 @@ def witnessed_action(speaker: str, text: str) -> str | None:
         return None
     for action, verbs, objects in _ACTIONS:
         pattern = rf'^(?:{verbs})\s+(?:the\s+|a\s+|my\s+)?(?:{objects})\b'
-        if re.match(pattern, phrase, re.I):
+        match = re.match(pattern, phrase, re.I)
+        if match:
+            # A direct action can be followed by uncertainty about its cause:
+            # "I cleared the rear grille, but it might still overheat."
+            # Do not let that uncertainty erase the witnessed physical act.
+            # A conditional action ("I clear the vent if...") is not witnessed.
+            if re.match(r'\\s+(?:only\\s+)?if\\b', phrase[match.end():], re.I):
+                return None
             return action
     return None
 
