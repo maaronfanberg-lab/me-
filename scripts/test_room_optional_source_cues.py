@@ -45,8 +45,8 @@ class OptionalSourceCues(unittest.TestCase):
                 self.assertNotIn("public_occasion",project(statement)["interaction_project"])
 
     def test_cues_opt_out_is_exact_backward_compatibility(self):
-        text=("What if communities of ocean organisms changed their migration "
-              "patterns after major shifts in the climate system?")
+        text=("I noticed communities of ocean organisms changed their migration "
+              "patterns after major shifts in the climate system.")
         os.environ["ROOM_OPTIONAL_SOURCE_CUES"]="0"
         old=project(text)
         os.environ["ROOM_OPTIONAL_SOURCE_CUES"]="1"
