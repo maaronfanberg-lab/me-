@@ -47,6 +47,10 @@ for spoken in (
     assert action_consequence("garden-irrigation", "sarah", spoken) is None, spoken
 assert action_consequence("garden-irrigation", "allen", "I check the pressure gauge.") is None
 assert action_consequence("flea-market-radio", "jules", "I check the pressure gauge.") is None
+assert action_consequence("choir-recording","jules", "I just checked the mixer's power cable.")["object"]=="mixer power cable"
+assert "mixer end" in action_consequence("choir-recording","jules", "I checked the mixer's power cable.")["effect"]
+assert "nearly closed" in action_consequence("greenhouse-watering","jules", "I took a closer look at the valve itself.")["effect"]
+assert action_consequence("greenhouse-watering","jules", "I'm going to take a closer look at the valve itself.") is None
 print("PASS: witnessed first-person actions yield distinct fictional consequences; hypotheticals do not")
 
 import os
