@@ -118,7 +118,7 @@ def active_scene_window(cycle: int) -> bool:
     """A short-lived scene to recall, not an indefinite mandatory topic."""
     return trial_active(cycle) and (
         GROUNDING_ONSET <= cycle < GROUNDING_ONSET + GROUNDING_WINDOW
-        or GROUNDING_SECOND_ONSET <= cycle < GROUNDING_SECOND_ONSET + GROUNDING_WINDOW
+        or GROUNDING_SECOND_ONSET <= cycle < GROUNDING_SECOND_ONSET + 2 * GROUNDING_WINDOW
     )
 
 
