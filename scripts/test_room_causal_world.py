@@ -108,4 +108,51 @@ assert 'last eight public turns contained no recognized completed physical actio
 assert 'practical problem appears resolved' in w.cue_for('sarah', 36549, resolved_loop)
 
 assert w.cue_for('sarah',w.TRIAL_END,history)==''
+
+# Production regression: the next unpublished beat must include the latest
+# published witnessed action, even though state.cycle names that last beat.
+import json
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    (root / 'room').mkdir()
+    latest = turn(s+2, 'jules', 'I remove the folded cardboard.')
+    (root / 'room' / 'state.json').write_text(json.dumps({'cycle': s+2}))
+    (root / 'room' / 'feed.json').write_text(json.dumps({'conversation': [latest]}))
+    cue = w.production_cue('sarah', root=root)
+    assert latest['id'] in cue
+    assert 'obstruction is removed' in cue
+    assert 'PRIVATE OBSERVATION KNOWN TO YOU ALONE' in cue
+    assert w.PRIVATE['jules'] not in cue
+    assert w.production_cue('allen', root=root) == ''
+    (root / 'room' / 'feed.json').write_text('{malformed')
+    assert w.production_cue('sarah', root=root) == ''
+
+# Both real speech paths must receive the same grounded world cue. Legacy
+# failback must not silently turn an active experiment into empty speculation.
+import room_private_model_autonomy_legacy as legacy
+import room_chat_speech as chat
+scene = 'BOUNDED FICTIONAL SHARED ENVIRONMENT: source-linked action happened.'
+with patch.dict(os.environ, {'ROOM_CAUSAL_WORLD_EXPERIMENT': '1',
+                             'ROOM_CONVERSATIONAL_FLOOR': '0',
+                             'ROOM_HIDDEN_WORLD_EXPERIMENT': '0'}):
+    with patch('room_causal_world.production_cue', return_value=scene) as cue_reader:
+        compact = legacy._autonomy_compact(
+            {'entity':'sarah', 'profile':{}, 'context':[], 'event':None,
+             'topic':{}, 'partner':'mara'}, 'expression', 'sarah')
+        assert compact['situated_environment'] == scene
+        cue_reader.assert_called_once_with('sarah')
+with patch.dict(os.environ, {'ROOM_CAUSAL_WORLD_EXPERIMENT': '1',
+                             'ROOM_HIDDEN_WORLD_EXPERIMENT': '0'}):
+    with patch('room_causal_world.production_cue', return_value=scene):
+        recent = [{'id':str(n), 'speaker':'mara', 'text':'The lamp dims.'}
+                  for n in range(8)]
+        prompt = chat.messages({'context':recent, 'room_presence':{
+            'present':list(w.PEOPLE)}}, 'sarah')
+        assert scene in prompt[-1]['content']
+
 print('PASS: finite test, provenance, private facts, source time ordering, actions, outcome and expiration')
