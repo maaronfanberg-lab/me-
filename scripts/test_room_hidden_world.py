@@ -39,3 +39,20 @@ assert not h.trial_active(h.TRIAL_END)
 with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1'}):
     after = chat.messages(dict(payload, room_cycle=h.TRIAL_END), 'sarah')
 assert h.scene_for_cycle(h.TRIAL_END).common not in after[0]['content']
+
+assert h.event_at(h.TRIAL_START + 15)
+assert h.event_at((h.TRIAL_START // h.EPISODE_TURNS + 1) * h.EPISODE_TURNS)
+assert not h.event_at(h.TRIAL_START + 14)
+assert not h.event_at(h.TRIAL_END)
+with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1'}):
+    cue = chat.messages(dict(payload, room_cycle=h.TRIAL_START + 15), 'sarah')
+assert 'new environmental event' in cue[1]['content'].lower()
+assert h.private_observation('sarah', h.TRIAL_START+15) in cue[1]['content']
+for other in ('mara','owen','jules'):
+    assert h.private_observation(other, h.TRIAL_START + 15) not in cue[1]['content']
+with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1'}):
+    nonevent = chat.messages(dict(payload, room_cycle=h.TRIAL_START + 16), 'sarah')
+assert 'new environmental event' not in nonevent[1]['content'].lower()
+with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1'}):
+    realvisitor = chat.messages(dict(visitor, room_cycle=h.TRIAL_START + 15), 'sarah')
+assert 'new environmental event' not in realvisitor[1]['content'].lower()
