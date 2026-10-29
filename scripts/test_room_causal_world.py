@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import room_causal_world as w
+import room_hidden_world as earlier
 
 def turn(n, who, text, uid=None):
     return {'id': uid or str(n), 'speaker':who, 'text':text,
             'beat_id':'beat-test-%06d' % n}
 
 assert w.TRIAL_END - w.TRIAL_START == 120
+assert w.TRIAL_START >= earlier.FOLLOWUP_END, 'independent trials must not run simultaneously'
 for n in (w.TRIAL_START-1, w.TRIAL_END, True): assert not w.active(n)
 assert w.active(w.TRIAL_START) and w.active(w.TRIAL_END-1)
 for who in w.PEOPLE:
