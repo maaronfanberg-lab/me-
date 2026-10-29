@@ -23,7 +23,7 @@ from lapse.nets2 import MLP2
 import e4
 
 DEFAULTS = dict(task="digits", act="relu", depth=24, seed=0, width=64, lr=0.05, steps=6000, alpha=None,
-                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None, block_lr_mult=1.0, block_lr_mult_until=None, detach=None, block_nomean=False, out_bias_prior=False, out_lr_norm=None)
+                sigma_w=1.0, opt="sgd", freeze=[], log_every=50, layers_every=500, warmup=0, zero_out=False, branch_sign=False, warmup_parts="all", block="one", out_lr_mult=1.0, input_scale=1.0, kick_cap=None, kick_cap_until=None, zloss=0.0, ln="none", out_lr_mult_until=None, block_lr_mult=1.0, block_lr_mult_until=None, detach=None, block_nomean=False, out_bias_prior=False, out_lr_norm=None, in_lr_norm=None)
 
 
 def run(cfg, path=None, hook=None):
@@ -90,6 +90,8 @@ def run(cfg, path=None, hook=None):
         if c["out_lr_norm"]:  # experiment 48: readout lr scaled by out_lr_norm / mean_i |h_i|^2 on this minibatch, every step (mu-P-like)
             hb = net.readout_input(X[idx]) if c["block"] == "ln" else net.forward(X[idx])[0][-2]
             f_ = c["out_lr_norm"] / max(float(np.mean(np.sum(hb * hb, 1))), 1e-12);  # guarded (CORRECTIONS 70) gW[L - 1] = gW[L - 1] * f_; gb[L - 1] = gb[L - 1] * f_
+        if c["in_lr_norm"]:  # experiment 51: input layer's lr scaled by in_lr_norm / mean_i |x_i|^2 on this minibatch, every step
+            f_ = c["in_lr_norm"] / max(float(np.mean(np.sum(X[idx] * X[idx], 1))), 1e-12); gW[0] = gW[0] * f_; gb[0] = gb[0] * f_
         if c["out_lr_mult"] != 1.0 and (c["out_lr_mult_until"] is None or s < c["out_lr_mult_until"]):  # experiment 23 (permanent); 30 (steps 0 .. until-1)
             gW[L - 1] = gW[L - 1] * c["out_lr_mult"]; gb[L - 1] = gb[L - 1] * c["out_lr_mult"]
         if c["block_nomean"]:  # experiment 35: no block update may shift its batch-mean pre-activation (dW hbar = 0, db = 0)
