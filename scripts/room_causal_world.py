@@ -66,7 +66,7 @@ def witnessed_action(speaker: str, text: str) -> str | None:
             # "I cleared the rear grille, but it might still overheat."
             # Do not let that uncertainty erase the witnessed physical act.
             # A conditional action ("I clear the vent if...") is not witnessed.
-            if re.match(r'\\s+(?:only\\s+)?if\\b', phrase[match.end():], re.I):
+            if re.match(r'\s+(?:only\s+)?if\b', phrase[match.end():], re.I):
                 return None
             return action
     return None
