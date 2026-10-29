@@ -89,3 +89,34 @@ assert "SIMULATED ENVIRONMENT RESPONSE" not in earlier_phase[1]["content"]
 with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1', 'ROOM_WORLD_ACTIONS':'1'}):
     later_phase = messages(dict(payload, room_cycle=GROUNDING_SECOND_ONSET+13), 'mara')
 assert 'SIMULATED ENVIRONMENT RESPONSE' not in later_phase[1]['content']
+
+
+# Live-public dialogue regression, cycles 36425-36434 (2026-10-29):
+# "I'll inspect" is an intention, while "I take a closer look at the
+# photograph frames" reports an inspection. The latter must cause a
+# source-linked result, survive replay, and retire the suggestion to inspect.
+from room_hidden_world import scene_action_ledger, scene_common_ground
+realistic_turns = [
+    {"id":"live-36425","speaker":"owen","beat_id":"beat-room-036425",
+     "text":"I'll take a closer look at the photograph frame... *inspects the frame*"},
+    {"id":"live-36426","speaker":"sarah","beat_id":"beat-room-036426",
+     "text":"I take a closer look at the photograph frames and notice dust on one."},
+    {"id":"live-36429","speaker":"jules","beat_id":"beat-room-036429",
+     "text":"I take a closer look at the photograph frames, noticing a streetcar."},
+    {"id":"live-36433","speaker":"jules","beat_id":"beat-room-036433",
+     "text":"I'll inspect the photograph frame, just to confirm what Owen already found."},
+]
+assert action_consequence("library-exhibit", "owen", realistic_turns[0]["text"]) is None
+assert action_consequence("library-exhibit", "sarah", realistic_turns[1]["text"])["effect"].endswith("1934.")
+assert action_consequence("library-exhibit", "jules", realistic_turns[2]["text"])["action"] == "inspect"
+assert action_consequence("library-exhibit", "jules", realistic_turns[3]["text"]) is None
+effects = scene_action_ledger(36434, realistic_turns)
+assert len(effects) == 1 and effects[0]["source_id"] == "live-36426", effects
+assert "1934" in scene_common_ground(36434, realistic_turns)
+assert ("inspect", "photograph frame") in {
+    (e["action"], e["object"]) for e in effects
+}
+assert not any("inspect the photograph frame" in option for option in
+               __import__("room_world_actions").available_actions(
+                   "library-exhibit", completed={(e["action"], e["object"]) for e in effects}))
+print("PASS: real witnessed plural inspection produces durable scene consequence; intentions do not")
