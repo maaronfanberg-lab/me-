@@ -594,6 +594,10 @@ diverges when its kick is large and its inputs are large-scale, and trains other
     5 of 5 each.
   - On the language model with inputs ×10 it fails: 0 of 35 runs, which learn nothing past letter frequencies. An
     earlier 3 of 5 was an artifact of GitHub runners building a different corpus, now pinned (CORRECTIONS 71–72).
+- **Normalizing the input layer's step the same way fixes that last case** (experiments 50–51, pre-registered).
+  - Larger readout constants did nothing (0 of 20).
+  - With the input layer's learning rate also scaled each step by c / mean |x|², the language model ×10 was healthy
+    in 5 of 5 runs at both constants tried.
 
 ## Honest limits
 
