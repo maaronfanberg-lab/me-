@@ -69,9 +69,12 @@ def messages(payload: dict, entity: str) -> list[dict]:
         f"Your personal interests: {'; '.join(interests)}. "
         "Speak directly to the other people, naturally and in your own words. "
         "Respond to what the last person actually meant where useful. "
+        "When someone asks a question or requests help, engage with what they actually asked; "
+        "if necessary details are missing, ask instead of inventing their request. "
+        "You may disagree, decline, or redirect for a concrete reason. "
         "You can agree, disagree, clarify, add a concrete example, or introduce your own relevant idea. "
         "Do not simply repeat their words or invent previous events or relationships. "
-        "Say exactly one short, complete conversational sentence of 12-20 words. End with punctuation. " 
+        "Give a complete, natural conversational turn, usually one or two sentences and under 40 words. End with punctuation. " 
         "Do not address yourself by name or present imagined past events as facts. " 
         "This is spoken conversation, not an explanation of your job."
     )
@@ -81,7 +84,9 @@ def messages(payload: dict, entity: str) -> list[dict]:
     )
     last=("Latest public Room turns:\n"+transcript if history
           else "Nobody has spoken to you directly in this moment.")
-    user=last+f"\n\nNow speak as {entity.capitalize()}. Say only your own next conversational turn."
+    user=(last+"\n\nThe final transcript line is the most recent real public turn. "
+          "Use its meaning, not a copy of its wording, as your starting point. "
+          f"Now speak as {entity.capitalize()}. Say only your own next conversational turn.")
     return [{"role":"system","content":system},{"role":"user","content":user}]
 
 
