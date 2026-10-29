@@ -615,6 +615,17 @@ depend on **kick × η|x|²**.
 
 The cutoff itself is fitted, not derived.
 
+### 19. The simplest fix that works everywhere tested, and transformers
+
+- **Live batch centering at the readout:** subtract the current batch's mean from the readout's input. It was healthy
+  on digits, the circle and the language model ×10 at 96 layers (5 of 5 each), and on digits at 192 layers (3 of 5).
+  This is mean-only batch normalization (Salimans & Kingma 2016) at one layer.
+- **DyT before the readout (tanh, Zhu et al. 2025) fails** except on the circle: the piled-up input saturates tanh
+  (CORRECTIONS 79).
+- **A small transformer without normalization does not collapse** (PyTorch, 8 and 32 blocks): train loss 0.36,
+  transport +0.88. Its MLP branches have two matrices, which do not pile up here. A test that swaps in the one-matrix
+  branch is pre-registered in `TF2_PREREGISTRATION.md`.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
