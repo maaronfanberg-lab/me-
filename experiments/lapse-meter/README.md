@@ -574,6 +574,10 @@ Experiment 39 (pre-registered, 90 runs) showed that what matters is really input
 - Freezing the input layer prevented the divergence at the multipliers where it had happened. At ×10 on digits it
   did not, so large kicks find another route.
 
+Experiment 40 (pre-registered) found that second route: the blocks themselves. Training only the readout never
+diverged, though it never learned either. With the input layer frozen and the blocks slowed tenfold, no run
+diverged and all trained to near-zero loss. My bet (the readout alone) was wrong.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
