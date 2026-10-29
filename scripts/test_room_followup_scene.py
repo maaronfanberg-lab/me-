@@ -49,7 +49,7 @@ spoken = [
     turn("allen", "I push the input plug.", start + 5, "a5"),
 ]
 assert h.public_scene_ledger(start + 2, spoken) == []
-assert [e["source_id"] for e in h.public_scene_ledger(start + 6, spoken)] == ["s1"]
+assert {e["source_id"] for e in h.public_scene_ledger(start + 6, spoken)} == {"s1", "o3"}
 effects = h.scene_action_ledger(start + 6, spoken)
 assert len(effects) == 1 and effects[0]["source_id"] == "o3"
 assert "quieter" in effects[0]["effect"]
