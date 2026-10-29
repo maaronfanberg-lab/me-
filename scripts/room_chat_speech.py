@@ -71,7 +71,7 @@ def messages(payload: dict, entity: str) -> list[dict]:
         "Respond to what the last person actually meant where useful. "
         "You can agree, disagree, clarify, add a concrete example, or introduce your own relevant idea. "
         "Do not simply repeat their words or invent previous events or relationships. "
-        "Make one concrete point in one complete sentence, ideally 12-24 words. " 
+        "Say exactly one short, complete conversational sentence of 12-20 words. End with punctuation. " 
         "Do not address yourself by name or present imagined past events as facts. " 
         "This is spoken conversation, not an explanation of your job."
     )
@@ -140,8 +140,9 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                 " The previous candidate did not pass public conversational integrity "
                 "checks (" + last_failure[:48] + "). " + hint)
         body={"model":"Llama-3.2-1B-Instruct","messages":prompt,
-              "temperature":.78,"top_p":.93,
-              "max_tokens":80 if not attempt else 60,"seed":seed,"stream":False}
+              "temperature":.78 if not attempt else .62,"top_p":.9,
+              "max_tokens":72 if not attempt else (48 if attempt==1 else 40),
+              "seed":seed,"stream":False}
         req=urllib.request.Request(
             url, data=json.dumps(body,ensure_ascii=False).encode(),
             headers={"Content-Type":"application/json"}, method="POST")
