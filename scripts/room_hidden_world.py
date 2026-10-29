@@ -13,7 +13,7 @@ PARTICIPANTS = ("sarah", "mara", "owen", "jules")
 EPISODE_TURNS = 60
 TRIAL_START = 35160
 TRIAL_END = TRIAL_START + 100
-REPLICATION_START = TRIAL_END + 4  # four unprompted washout turns
+REPLICATION_START = TRIAL_END + 8  # eight unprompted washout turns
 REPLICATION_END = REPLICATION_START + 24
 
 
