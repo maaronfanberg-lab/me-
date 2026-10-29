@@ -25,6 +25,23 @@ assert w.witnessed_action('allen','I clear the air vent.') is None
 assert w.witnessed_action('owen','I checked the supply voltage.') == 'check_voltage'
 assert w.witnessed_action('jules','I restarted the projector.') == 'restart_projector'
 assert w.witnessed_action('mara','We cleared the ventilation grille.') == 'clear_vent'
+# Live-dialogue affordances: people refer to the rear grille and cardboard,
+# not just the canonical "air vent" name in the action schema.
+assert w.witnessed_action('sarah',
+    'I take a closer look at the rear ventilation grille.') == 'inspect_vent'
+assert w.witnessed_action('jules',
+    'I remove the folded cardboard.') == 'clear_vent'
+assert w.witnessed_action('mara',
+    'I cleared the rear grille, but it might still overheat.') == 'clear_vent'
+assert w.witnessed_action('owen',
+    'I check the rear vent, but maybe the lamp is also faulty.') == 'inspect_vent'
+for unperformed in (
+    'I clear the vent if the light goes out.',
+    'I check the rear grille only if the projector dims.',
+    'I might remove the cardboard.',
+    'I would pull the cardboard away.',
+):
+    assert w.witnessed_action('sarah', unperformed) is None, unperformed
 for negative in ("I didn't clear the air vent.", "I should have checked the voltage.",
                  "I could have restarted the projector."):
     assert w.witnessed_action('mara',negative) is None
@@ -42,6 +59,17 @@ state=w.replay(s+6,history)
 assert [e.action for e in state['effects']] == [
     'inspect_vent','check_voltage','restart_before_clear','clear_vent','restart_after_clear']
 assert state['solved']
+# The exact names the fictional world supplies must lead to consequences.
+natural = [
+    turn(s, 'sarah', 'I inspect the rear ventilation grille.'),
+    turn(s+1, 'jules', 'I remove the folded cardboard.'),
+    turn(s+2, 'owen', 'I restart the projector.'),
+]
+natural_state = w.replay(s+3, natural)
+assert [e.action for e in natural_state['effects']] == [
+    'inspect_vent', 'clear_vent', 'restart_after_clear'
+]
+assert natural_state['solved']
 assert 'stays bright' in w.cue_for('owen',s+6,history)
 assert not w.replay(s+4,history)['solved']
 assert len(w.replay(s+3,history)['effects']) == 2
