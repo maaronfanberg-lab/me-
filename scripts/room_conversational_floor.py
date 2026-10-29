@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
@@ -131,7 +132,53 @@ def _score(entity, last, thought, profile, relationships):
     return score
 
 
-def choose_next(history, bus, config, minds, *, rank=0):
+_SCENE_STOP = set(
+    "about after again also along another before been being could would should "
+    "their there these those where which while with from into behind among "
+    "noticed notice check checked checking told said someone anyone happen happened "
+    "seems seemed thing things yours mine ours them they that this who what when "
+    "know really just more than some over under down have your been saw seen "
+    "else were been will have right already".split()
+)
+
+
+def _fact_terms(text):
+    return {token for token in re.findall(r"[a-z]{4,}", str(text or "").lower())
+            if token not in _SCENE_STOP}
+
+
+def _fact_opportunity(entity, latest, history, cycle):
+    """A specific unresolved question can make a knowledgeable person relevant.
+
+    The referee may compare an individual's private observation to the public
+    question, but does not disclose private information to the other agents.
+    Never selects speakers based on counts, rotation or personality stereotypes.
+    """
+    if not isinstance(latest, dict):
+        return 0.0
+    if _norm(latest.get("speaker")) == entity:
+        return 0.0
+    question = str(latest.get("text") or "").strip()
+    if not question.endswith("?"):
+        return 0.0
+    from room_hidden_world import active_scene_window, private_observation
+    if not active_scene_window(cycle):
+        return 0.0
+    fact = private_observation(entity, cycle)
+    relevant = _fact_terms(question) & _fact_terms(fact)
+    if not relevant:
+        return 0.0
+    # Once this agent has actually voiced the fact, it is no longer unshared.
+    for previous in history[-12:]:
+        if _norm(previous.get("speaker")) != entity:
+            continue
+        voiced = _fact_terms(previous.get("text")) & _fact_terms(fact)
+        if len(voiced) >= 2:
+            return 0.0
+    return 0.6
+
+
+def choose_next(history, bus, config, minds, *, rank=0, cycle=None):
     """Return the rank-th *independently plausible* speaker opportunity.
 
     Rank 1 is a liveness fallback only after rank 0 had a technical failure.
@@ -172,6 +219,11 @@ def choose_next(history, bus, config, minds, *, rank=0):
     # opportunity even when no independent model deliberation was scheduled.
     # This is not evidence of willingness, agreement, or comprehension.
     public_uptake = addressed is None and not has_deliberated_bid
+    scene_relevant = bool(
+        os.environ.get('ROOM_SCENE_RELEVANCE_FLOOR') == '1'
+        and cycle is not None and int(cycle) >= 35220
+        and addressed is None and public_uptake and last is not None
+    )
     ranked = []
     for entity in awake:
         thought = (((recurrent.get(entity) or {}).get("thought") or {}).get("private") or {}).get("deliberation") or {}
@@ -198,6 +250,8 @@ def choose_next(history, bus, config, minds, *, rank=0):
                    and str(p.get("text") or "").rstrip().endswith("?")
                    for p in prior):
                 score += .20
+        if scene_relevant:
+            score += _fact_opportunity(entity, last, history, int(cycle))
         seed = f"{(last or {}).get('id', '')}|{entity}|{_norm(thought.get('action'))}"
         tie = int(hashlib.sha256(seed.encode()).hexdigest()[:8], 16) / (16 ** 8)
         ranked.append((score, tie, entity))
@@ -238,7 +292,8 @@ def main():
     history = json.loads((root / "room/conversation.json").read_text(encoding="utf-8"))
     minds = json.loads((root / "room/cognitive_state.json").read_text(encoding="utf-8"))
     bus = json.loads(Path(args.bus).read_text(encoding="utf-8"))
-    decision = choose_next(history, bus, config, minds, rank=args.rank)
+    current = json.loads((root / 'room/state.json').read_text(encoding='utf-8'))
+    decision = choose_next(history, bus, config, minds, rank=args.rank, cycle=current.get('cycle'))
     decision["cycle_key"] = str(bus.get("key") or "")
     decision["bus_sha256"] = hashlib.sha256(Path(args.bus).read_bytes()).hexdigest()
     checked_floor(decision, awake=[e for e in ORDER if e not in config.get("sleeping_entities", [])], required=True)
