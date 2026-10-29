@@ -163,7 +163,9 @@ class ChatAdapterTests(unittest.TestCase):
         import room_engine_v5 as engine
         before=os.environ.get("ROOM_CHAT_SPEECH_MODE")
         before_node=os.environ.get("ROOM_NODE_PROMPT")
+        before_floor=os.environ.get("ROOM_CONVERSATIONAL_FLOOR")
         os.environ["ROOM_CHAT_SPEECH_MODE"]="1"
+        os.environ["ROOM_CONVERSATIONAL_FLOOR"]="1"
         os.environ["ROOM_NODE_PROMPT"]="Local model prompt available"
         try:
             with patch("room_chat_speech.run",return_value={
@@ -178,6 +180,8 @@ class ChatAdapterTests(unittest.TestCase):
             else:os.environ["ROOM_CHAT_SPEECH_MODE"]=before
             if before_node is None:os.environ.pop("ROOM_NODE_PROMPT",None)
             else:os.environ["ROOM_NODE_PROMPT"]=before_node
+            if before_floor is None:os.environ.pop("ROOM_CONVERSATIONAL_FLOOR",None)
+            else:os.environ["ROOM_CONVERSATIONAL_FLOOR"]=before_floor
 
 if __name__=="__main__":
     unittest.main()
