@@ -92,7 +92,16 @@ class Native3BSelectionTests(unittest.TestCase):
                      "file:///tmp/brain"):
             with self.subTest(path=path),self.assertRaises(ValueError):
                 chat.chat_endpoint(path)
-        self.assertIsNone(chat.run if False else None)  # No canned fallback speech
+        class WrongSpeaker:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def read(self):
+                return json.dumps({"choices":[{"message":{
+                    "content":"Allen: I approved this science experiment."}}]}).encode()
+        with patch("room_chat_speech.urllib.request.urlopen",
+                   return_value=WrongSpeaker()) as model:
+            self.assertIsNone(chat.run(payload()))
+        self.assertEqual(model.call_count,3)
 
 
 if __name__=="__main__":
