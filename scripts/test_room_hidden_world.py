@@ -56,3 +56,25 @@ assert 'new environmental event' not in nonevent[1]['content'].lower()
 with patch.dict(os.environ, {'ROOM_HIDDEN_WORLD_EXPERIMENT':'1'}):
     realvisitor = chat.messages(dict(visitor, room_cycle=h.TRIAL_START + 15), 'sarah')
 assert 'new environmental event' not in realvisitor[1]['content'].lower()
+
+assert h.scene_for_cycle(h.GROUNDING_ONSET).identifier == "garden-irrigation"
+assert h.scene_for_cycle(h.GROUNDING_SECOND_ONSET).identifier == "lantern-festival"
+assert h.event_at(h.GROUNDING_ONSET)
+assert h.event_at(h.GROUNDING_SECOND_ONSET)
+assert not h.event_at(h.GROUNDING_ONSET + 1)
+assert h.active_scene_window(h.GROUNDING_ONSET)
+assert h.active_scene_window(h.GROUNDING_ONSET + h.GROUNDING_WINDOW - 1)
+assert not h.active_scene_window(h.GROUNDING_ONSET + h.GROUNDING_WINDOW)
+assert not h.situational_notice("sarah", h.TRIAL_END)
+with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT": "1"}):
+    grounded = chat.messages(dict(payload, room_cycle=h.GROUNDING_ONSET + 1), "sarah")
+assert "ONGOING FICTIONAL SITUATION" in grounded[1]["content"]
+assert h.private_observation("sarah", h.GROUNDING_ONSET + 1) in grounded[1]["content"]
+assert h.private_observation("owen", h.GROUNDING_ONSET + 1) not in grounded[1]["content"]
+assert "Sarah:" not in grounded[1]["content"].split("ONGOING FICTIONAL SITUATION")[-1]
+with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT": "1"}):
+    visitor_grounded = chat.messages(dict(visitor, room_cycle=h.GROUNDING_ONSET), "sarah")
+assert "ONGOING FICTIONAL SITUATION" not in visitor_grounded[1]["content"]
+with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT": "1"}):
+    expired = chat.messages(dict(payload, room_cycle=h.GROUNDING_ONSET + h.GROUNDING_WINDOW), "sarah")
+assert "ONGOING FICTIONAL SITUATION" not in expired[1]["content"]

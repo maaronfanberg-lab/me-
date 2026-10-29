@@ -81,18 +81,62 @@ SCENES = (
 )
 
 
+# A later, independently registered intervention replaces a recurring
+# self-referential radio scene with genuinely different shared situations.
+# Outside the finite trial, retain the original deterministic scene mapping.
+GROUNDING_ONSET = 35200
+GROUNDING_SECOND_ONSET = 35220
+GROUNDING_WINDOW = 12
+
+
+def scene_phase(cycle: int) -> tuple[int, int]:
+    """(scene index, actual onset) for a trial beat, without agent speech."""
+    if trial_active(cycle) and cycle >= GROUNDING_SECOND_ONSET:
+        return 2, GROUNDING_SECOND_ONSET
+    if trial_active(cycle) and cycle >= GROUNDING_ONSET:
+        return 0, GROUNDING_ONSET
+    onset = (cycle // EPISODE_TURNS) * EPISODE_TURNS
+    return (cycle // EPISODE_TURNS) % len(SCENES), onset
+
+
 def event_at(cycle: int) -> bool:
-    """Only real scene onsets, not a repeated change-topic instruction."""
+    """Only observed environmental onsets, never a repetitive topic schedule."""
     return trial_active(cycle) and (
         cycle == TRIAL_START + 15
-        or (cycle > TRIAL_START and cycle % EPISODE_TURNS == 0)
+        or cycle == GROUNDING_ONSET
+        or cycle == GROUNDING_SECOND_ONSET
     )
 
 
 def scene_for_cycle(cycle: int) -> Scene:
     if isinstance(cycle, bool) or not isinstance(cycle, int) or cycle < 0:
         raise ValueError("cycle must be a nonnegative integer")
-    return SCENES[(cycle // EPISODE_TURNS) % len(SCENES)]
+    return SCENES[scene_phase(cycle)[0]]
+
+
+def active_scene_window(cycle: int) -> bool:
+    """A short-lived scene to recall, not an indefinite mandatory topic."""
+    return trial_active(cycle) and (
+        GROUNDING_ONSET <= cycle < GROUNDING_ONSET + GROUNDING_WINDOW
+        or GROUNDING_SECOND_ONSET <= cycle < GROUNDING_SECOND_ONSET + GROUNDING_WINDOW
+    )
+
+
+def situational_notice(entity: str, cycle: int) -> str:
+    """Truthful fictional-world evidence for one agent, not a forged turn."""
+    if not active_scene_window(cycle):
+        return ""
+    scene = scene_for_cycle(cycle)
+    return (
+        f"ONGOING FICTIONAL SITUATION: {scene.common} "
+        f"YOUR OWN OBSERVATION ONLY: {private_observation(entity, cycle)} "
+        "No one else has automatically been told your observation. "
+        "This notice is an environmental observation, not another person's words. "
+        "You can tell the others what you saw, ask something about it, "
+        "test an explanation, or respond to a more urgent direct question. "
+        "Make your response specific to what is happening, without inventing "
+        "another character's memory or claiming the situation was resolved."
+    )
 
 
 def private_observation(entity: str, cycle: int) -> str:
