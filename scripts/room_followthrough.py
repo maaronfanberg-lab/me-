@@ -24,7 +24,13 @@ def announced_plan(scene: str, speaker: str, utterance: str):
     text=utterance.strip()
     if not text or len(text)>500 or text.endswith("?"):
         return None
-    if re.search(r"\b(?:could|would|should|might|maybe|what if|hypothetically|imagine|if)\b",text,re.I):
+    # Test the self-commitment clause, not a later explanation of what will be
+    # inspected. "I'll inspect the filter, to see if it is clogged" is an
+    # intention; "I'll inspect it if someone asks" is conditional.
+    head=text.split(",",1)[0]
+    if re.search(r"\b(?:could|would|should|might|maybe|what if|hypothetically|imagine)\b",head,re.I):
+        return None
+    if re.search(r"\bif\b",head,re.I) and not re.search(r"\b(?:see|check|find out|know|tell)\s+if\b",head,re.I):
         return None
     # First person, affirmative, self-committing future. Not an imperative to somebody else.
     match=re.match(
