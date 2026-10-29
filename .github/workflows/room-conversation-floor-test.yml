@@ -4,6 +4,11 @@ on:
   pull_request:
     paths:
       - 'scripts/room_conversational_floor.py'
+      - 'scripts/room_hidden_world.py'
+      - 'scripts/test_room_hidden_world.py'
+      - 'scripts/room_world_actions.py'
+      - 'scripts/test_room_world_actions.py'
+      - 'scripts/test_room_capacity_guard.py'
       - 'scripts/room_conversation_project.py'
       - 'scripts/room_chat_speech.py'
       - 'scripts/test_room_chat_speech_adapter.py'
@@ -53,6 +58,8 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v6
+      - name: Witnessed environmental action consequence without fabricated speech
+        run: python3 scripts/test_room_world_actions.py
       - name: Verify optional private observations do not leak
         run: python3 scripts/test_room_hidden_world.py
       - name: Guard capacity and no model inference pileup
