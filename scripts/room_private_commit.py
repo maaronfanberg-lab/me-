@@ -471,7 +471,10 @@ def private_commit(parts: list[dict], key: str):
             "active": os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1",
             "fallback_reason": _reason or None,
             "fallback_count": max(0, min(10000, int(os.environ.get("ROOM_FLOOR_RECOVERY_ATTEMPTS") or 0))),
-            "diagnostic_only": True,
+            # The selected floor owns real publication when enabled; it is
+            # no longer a shadow-only score. This flag describes routing,
+            # NOT whether the resulting conversation is high quality.
+            "diagnostic_only": os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1",
             # Runner-loaded fingerprint, NOT proof of dialogue quality.
             "speech_backend": (
                 "native_chat_v1"
