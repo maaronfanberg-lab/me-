@@ -178,7 +178,8 @@ def situational_notice(entity: str, cycle: int) -> str:
         "You can tell the others what you saw, ask something about it, "
         "test an explanation, or respond to a more urgent direct question. "
         "Make your response specific to what is happening, without inventing "
-        "another character's memory or claiming the situation was resolved."
+        "another character's memory. You may conclude a problem is solved only "
+        "when a witnessed action or observation supports that conclusion."
     )
 
 
