@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -86,6 +87,24 @@ class Native3BSelectionTests(unittest.TestCase):
             source.index("start_model 'llama3.2-1b'"))
         self.assertIn('if [ "$llama_ready" -ne 1 ]; then',source)
         self.assertIn("start_model 'qwen2.5-0.5b-fallback'",source)
+
+    def test_full_production_beat_script_has_valid_bash_syntax(self):
+        # Validate the real embedded runner shell, including its new native
+        # 3B startup branch and heredoc. This only PARSES; it cannot start
+        # downloads, publish speech or alter any Room state.
+        source=(Path(__file__).resolve().parents[1]/
+                ".github/workflows/sarah-society.yml").read_text()
+        suffix=source.split(
+            "      - name: Keep all 12 cognitive nodes hot and publish every beat",
+            1)[1]
+        script=suffix.split("        run: |",1)[1]
+        unindented="\n".join(
+            line[10:] if line.startswith("          ") else line
+            for line in script.splitlines()
+        )
+        checked=subprocess.run(["bash","-n"],input=unindented,
+                               text=True,capture_output=True,check=False)
+        self.assertEqual(checked.returncode,0,checked.stderr)
 
     def test_no_untrusted_model_url_and_no_fabricated_utterance(self):
         for path in ("https://untrusted.example/v1/chat/completions",
