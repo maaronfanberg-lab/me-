@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Finite, source-linked Room follow-through memory.
+
+A promise is not a completed act. This module neither scripts speech nor
+changes the environment: it merely keeps published intentions available
+until that same public speaker explicitly reports doing the relevant act.
+"""
+from __future__ import annotations
+import re
+from room_world_actions import _EFFECTS, _VERBS, _OBJECTS, action_consequence
+from room_hidden_world import followup_active, active_scene_window, scene_for_cycle, scene_phase
+
+PARTICIPANTS = ("sarah", "mara", "owen", "jules")
+# Stage on the *second* followup scene only, not earlier choir baseline.
+START = 36328
+END = 36364
+
+def active(cycle: int) -> bool:
+    return type(cycle) is int and START <= cycle < END and followup_active(cycle) and active_scene_window(cycle)
+
+def announced_plan(scene: str, speaker: str, utterance: str):
+    if speaker not in PARTICIPANTS or not isinstance(utterance, str):
+        return None
+    text=utterance.strip()
+    if not text or len(text)>500 or text.endswith("?"):
+        return None
+    if re.search(r"\b(?:could|would|should|might|maybe|what if|hypothetically|imagine|if)\b",text,re.I):
+        return None
+    # First person, affirmative, self-committing future. Not an imperative to somebody else.
+    match=re.match(
+        r"^\s*(?:I\s+think\s+)?(?:I'll|I\s+will|I'm\s+(?:just\s+)?going\s+to|I\s+am\s+going\s+to|We\s+will|We're\s+going\s+to)\s+",
+        text, re.I)
+    if not match:
+        return None
+    remainder=text[match.end():]
+    remainder=re.sub(r"^(?:(?:go\s+ahead\s+and|try\s+to|just|now|carefully)\s+)*","",remainder,flags=re.I)
+    for effect in _EFFECTS:
+        if effect.scene != scene:
+            continue
+        verbs=_VERBS[effect.action]
+        objects=_OBJECTS[effect.object]
+        pattern=(r"^(?:"+"|".join(re.escape(v) for v in verbs)
+                 +r")\s+(?:the\s+|a\s+|my\s+)?(?:"
+                 +"|".join(re.escape(v) for v in objects)+r")\b")
+        if re.match(pattern,remainder,flags=re.I):
+            return (effect.action,effect.object)
+    return None
+
+def pending(cycle: int, public_turns: list[dict], limit: int=3) -> list[dict]:
+    """Unfulfilled *stated* intentions of the same identified public actor only."""
+    if not active(cycle) or not isinstance(public_turns,list):
+        return []
+    scene=scene_for_cycle(cycle).identifier
+    onset=scene_phase(cycle)[1]
+    seen=set()
+    obligations={}
+    for t in public_turns:
+        if not isinstance(t,dict):
+            continue
+        speaker=str(t.get("speaker") or "").lower()
+        if speaker not in PARTICIPANTS:
+            continue
+        sid=str(t.get("id") or "").strip()
+        if not sid or sid in seen:
+            continue
+        try:
+            at=int(str(t.get("beat_id") or "").rsplit("-",1)[-1])
+        except (ValueError,TypeError):
+            continue
+        if not onset <= at < cycle:
+            continue
+        seen.add(sid)
+        spoken=str(t.get("text") or "").strip()
+        observed=action_consequence(scene,speaker,spoken)
+        if observed:
+            obligations.pop((speaker,observed["action"],observed["object"]),None)
+        plan=announced_plan(scene,speaker,spoken)
+        if plan:
+            key=(speaker,plan[0],plan[1])
+            obligations.setdefault(key,{
+                "speaker":speaker,"action":plan[0],"object":plan[1],
+                "source_id":sid,"public_text":spoken[:180],
+                "status":"intention_unconfirmed"
+            })
+    return list(obligations.values())[-max(0,min(limit,5)):]
+
+def notice(cycle: int, public_turns: list[dict]) -> str:
+    items=pending(cycle,public_turns)
+    if not items:
+        return ""
+    lines=["UNRESOLVED SPOKEN INTENTIONS FROM ACTUAL PUBLIC MESSAGES "
+           "(not proof that these actions occurred, not a command to perform them):"]
+    lines.extend(x["speaker"].capitalize()+" previously said ["+x["source_id"]+"]: "+x["public_text"] for x in items)
+    lines.append("Someone may follow through, change their mind, ask a new question, "
+                 "or do something else. Do not describe a planned action as completed "
+                 "without a public first-person action statement.")
+    return "\n".join(lines)
