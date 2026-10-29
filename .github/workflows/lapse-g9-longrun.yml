@@ -1,0 +1,60 @@
+name: Lapse G9 long-horizon PathCond replication
+on:
+  pull_request:
+    paths:
+      - "experiments/lapse-meter/GAUGE_G9_PREREGISTRATION.md"
+      - "experiments/lapse-meter/experiments/g9_longrun.py"
+      - "experiments/lapse-meter/results/g9/**"
+      - ".github/workflows/lapse-g9-longrun.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  longrun-replication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      PYTHONHASHSEED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install compatible CPU torch
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.5.1+cpu" "torchvision==0.20.1+cpu"
+          python -m pip install "numpy==2.3.5" "scikit-learn==1.8.0" "tqdm>=4.60,<5"
+      - name: Pin original authors' package, no changes
+        run: python -m pip install --no-deps "git+https://github.com/Artim436/pathcond.git@535b202e3476c64d5e7e9ec5e817344fb5cfd787"
+      - name: Preflight with unused seed 79, all three optimizers
+        working-directory: experiments/lapse-meter
+        run: python -u experiments/g9_longrun.py --smoke
+      - name: Run all 120 paired, 300-update target-seed evaluations
+        working-directory: experiments/lapse-meter
+        run: python -u experiments/g9_longrun.py results/g9/ci_results.json
+      - name: Scientific hypotheses, including failures
+        if: always()
+        working-directory: experiments/lapse-meter
+        run: |
+          python - <<'PY'
+          import os,json
+          p='results/g9/ci_results.json'
+          if os.path.isfile(p):
+              s=json.load(open(p))['summary']
+              for k,v in s.items():
+                  if k!='cells': print(k, v)
+              for cell in s['cells']:
+                  print(cell['task'],'depth',cell['depth'],
+                        {k: m['mean_test_ce_300'] for k,m in cell['stats'].items()})
+          else: print('G9 did not produce full results')
+          PY
+      - name: Archive all 120 full records regardless of hypothesis success
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lapse-g9-complete
+          path: experiments/lapse-meter/results/g9/ci_results.json
+          if-no-files-found: warn
