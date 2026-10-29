@@ -177,7 +177,7 @@ def messages(payload: dict, entity: str) -> list[dict]:
                 if isinstance(public, list):
                     outstanding = plan_notice(int(room_cycle), public)
                     if outstanding:
-                        user += "\\n\\n" + outstanding
+                        user += "\n\n" + outstanding
         except (OSError, ValueError, KeyError, TypeError):
             pass
     if situational_grounding:
