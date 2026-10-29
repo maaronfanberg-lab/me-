@@ -177,7 +177,7 @@ def cue_for(entity: str, cycle: int, public_turns: list[dict]) -> str:
                    'actually do now (for example, "I inspect the rear grille"), '
                    'not a promise to do it later. Only witnessed actions change '
                    'the simulated environment. You may also decline or pursue '
-                   'another person's important question.')
+                   "another person\'s important question.")
         recent = [turn for turn in public_turns
                   if isinstance(turn, dict)
                   and turn.get('speaker') in PEOPLE
