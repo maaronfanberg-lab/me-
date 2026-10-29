@@ -138,6 +138,21 @@ def messages(payload: dict, entity: str) -> list[dict]:
                      + " This observation is now visible to the group, but it is not "
                        "another participant speaking and does not prove anyone has "
                        "understood it. You can react or ask about it, naturally.")
+    # Use actual, source-bearing public observations as collective memory in
+    # the second 12-turn replication phase. A scene card by itself is private
+    # and never appears in this ledger until its owner actually speaks it.
+    if (situational_grounding
+            and os.environ.get("ROOM_SCENE_PUBLIC_LEDGER") == "1"
+            and int(room_cycle) >= 35280):
+        from room_hidden_world import scene_common_ground
+        try:
+            published_file = Path(__file__).resolve().parents[1] / "room" / "feed.json"
+            published_history = json.loads(published_file.read_text()).get("conversation") or []
+            public_knowledge = scene_common_ground(int(room_cycle), published_history)
+        except (OSError, ValueError, TypeError):
+            public_knowledge = ""
+        if public_knowledge:
+            user += chr(10) + chr(10) + public_knowledge
     if situational_grounding:
         # World evidence is a distinct channel, not an invented speaker turn.
         # Its final placement prevents short abstract transcript tails from

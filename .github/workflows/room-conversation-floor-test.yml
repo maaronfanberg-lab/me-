@@ -8,6 +8,7 @@ on:
       - 'scripts/test_room_hidden_world.py'
       - 'scripts/room_world_actions.py'
       - 'scripts/test_room_world_actions.py'
+      - 'scripts/test_room_public_scene_ledger.py'
       - 'scripts/test_room_capacity_guard.py'
       - 'scripts/room_conversation_project.py'
       - 'scripts/room_chat_speech.py'
@@ -60,6 +61,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Witnessed environmental action consequence without fabricated speech
         run: python3 scripts/test_room_world_actions.py
+      - name: Verify source-linked conversational common-ground ledger
+        run: python3 scripts/test_room_public_scene_ledger.py
       - name: Verify optional private observations do not leak
         run: python3 scripts/test_room_hidden_world.py
       - name: Guard capacity and no model inference pileup
