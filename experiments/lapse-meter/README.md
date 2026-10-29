@@ -579,6 +579,10 @@ Experiment 40 (pre-registered) found that second route: the blocks themselves. T
 diverged, though it never learned either. With the input layer frozen and the blocks slowed tenfold, no run
 diverged and all trained to near-zero loss. My bet (the readout alone) was wrong.
 
+Experiments 41–46 (pre-registered, 60 runs) tested that rule well outside where it was found: a language task,
+width 128, 48 and 192 layers, and 10 new seeds. **All 8 predictions held.** With the teardown blocked, a network
+diverges when its kick is large and its inputs are large-scale, and trains otherwise.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be

@@ -220,3 +220,32 @@ The two estimates in `THEORY_KICK.md` were committed before the runs that test t
 - The loss-0.03 reading is uninformative for runs that fit within 50 steps (8 of 125 conditions).
 - Fixed centering is not a clean manipulation.
 - No account of *why* the teardown happens has survived its own predictions.
+
+## Addendum, 2026-10-29: experiments 34–46, run on GitHub Actions
+
+**Question.** Why does plain ReLU tear down its own pile-up after the shock, and is that teardown damage or an
+escape?
+
+**Method.** Heavy runs were moved to a sharded GitHub Actions workflow (`.github/workflows/lapse-meter-experiments.yml`).
+All test suites pass there, including bit-identical reproduction of experiment 7. Each experiment was pre-registered
+(E35–E46) or planned (E34, E45) before it ran.
+
+**Results.**
+
+- **E34:** the teardown is the blocks following their own gradient against the shared stream. Closed gates never
+  reopen.
+- **E35:** void by its rule. The input layer was left free and carried the teardown on the circle.
+- **E36:** blocking every route made digits diverge and left the circle healthy.
+- **E37:** on digits the kick decides through a transition band (CORRECTIONS 67).
+- **E38–E39:** the task difference is input scale, not class count or dimension.
+- **E40:** the second route to divergence is the blocks, not the readout.
+- **E41–E46:** the rule generalized, 8 of 8 predictions held.
+
+**Errors found.** Ledger 61–68, including a misreported threshold that a new README check caught.
+
+**Limits.**
+
+- Small numpy networks.
+- Plain SGD, one learning rate.
+- Every manipulation that blocks the teardown changes the optimizer, so the escape reading is about these networks
+  under that change.
