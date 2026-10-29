@@ -163,6 +163,23 @@ def messages(payload: dict, entity: str) -> list[dict]:
             public_knowledge = ""
         if public_knowledge:
             user += chr(10) + chr(10) + public_knowledge
+    # Finite second-scene source-linked intention recall. This retains spoken
+    # plans as *unfulfilled* until that same actor publicly reports acting.
+    # No generated substitute actions, speaker coercion or mandatory reply.
+    if (situational_grounding and os.environ.get("ROOM_PLAN_FOLLOWTHROUGH") == "1"
+            and not (history and history[-1]["speaker"] == "allen")):
+        from room_followthrough import notice as plan_notice, active as plan_active
+        try:
+            if plan_active(int(room_cycle)):
+                source = json.loads((Path(__file__).resolve().parents[1]
+                                     / "room" / "feed.json").read_text())
+                public = source.get("conversation") or []
+                if isinstance(public, list):
+                    outstanding = plan_notice(int(room_cycle), public)
+                    if outstanding:
+                        user += "\\n\\n" + outstanding
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
     if situational_grounding:
         # World evidence is a distinct channel, not an invented speaker turn.
         # Its final placement prevents short abstract transcript tails from
