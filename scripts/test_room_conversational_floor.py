@@ -337,7 +337,8 @@ class FloorTests(unittest.TestCase):
                        "What did the folded cardboard cover on the rear grille?",
                        id="planetarium-open-question")
         question["beat_id"] = "beat-test-036558"
-        with patch.dict(os.environ, {"ROOM_SCENE_RELEVANCE_FLOOR":"1"}):
+        with patch.dict(os.environ, {"ROOM_SCENE_RELEVANCE_FLOOR":"1",
+                                     "ROOM_CAUSAL_WORLD_EXPERIMENT":"1"}):
             self.assertGreater(_fact_opportunity(
                 "jules", question, [question], 36559), .70)
             chosen = choose_next([question], bus(), config(), {}, cycle=36559)
