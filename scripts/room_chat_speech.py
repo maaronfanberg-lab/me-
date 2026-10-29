@@ -211,6 +211,12 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                                 utterance=spoken,move=result["move"])
             except (RuntimeError,ValueError) as exc:
                 last_failure=str(exc)[:96]
+                # Shadow-only diagnosis. Never print real Allen speech or
+                # unseen private memories to an Actions log.
+                if (os.environ.get("ROOM_CHAT_PUBLIC_SHADOW_DIAGNOSTIC") == "1"
+                        and not any(h["speaker"]=="allen" for h in observed)):
+                    print(f"SHADOW REJECTED {entity} attempt {attempt+1}: "
+                          f"{last_failure}: {spoken[:460]!r}",flush=True)
                 # The model sometimes continues after an already complete
                 # sentence and ends mid-thought. Retain at most its own
                 # complete, coherent spoken prefix. Do not synthesize text,
