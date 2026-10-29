@@ -558,7 +558,15 @@ Experiment 37 (pre-registered, 50 runs) tested that reading by sweeping the kick
 - On digits the kick decides, with a sharp threshold: kick ≤ 541 trained, ≥ 1,640 always diverged.
 - The circle never diverged, at any kick up to 5,403.
 
-So "too large" depends on the task, for reasons not yet known.
+So "too large" depends on the task.
+
+Experiment 38 (pre-registered, 30 runs) found which difference matters. It is the input size, not the class count,
+which was my bet:
+
+- digits with only 2 classes still diverged, at every readout multiplier.
+- The circle embedded in 64 inputs trained at ×1 and diverged at ×3 and ×10.
+
+With 2 inputs the network survives a blocked teardown; with 64 it does not.
 
 ## Honest limits
 
