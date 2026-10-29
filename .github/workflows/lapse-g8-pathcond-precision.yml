@@ -1,0 +1,57 @@
+name: Lapse G8 upstream PathCond precision ablation
+on:
+  pull_request:
+    paths:
+      - "experiments/lapse-meter/GAUGE_G8A_PREREGISTRATION.md"
+      - "experiments/lapse-meter/experiments/g8_pathcond_precision.py"
+      - "experiments/lapse-meter/tests/test_g8_pathcond_precision.py"
+      - "experiments/lapse-meter/results/g8a/**"
+      - ".github/workflows/lapse-g8-pathcond-precision.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  precision-ablation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      PYTHONHASHSEED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned CPU torch and image backend
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.5.1+cpu" "torchvision==0.20.1+cpu"
+          python -m pip install "numpy==2.3.5" "scikit-learn==1.8.0" "tqdm>=4.60,<5"
+      - name: Install original PathCond source at exact commit
+        run: python -m pip install --no-deps "git+https://github.com/Artim436/pathcond.git@535b202e3476c64d5e7e9ec5e817344fb5cfd787"
+      - name: Verify original upstream primitives and run unused-seed smoke
+        working-directory: experiments/lapse-meter
+        run: python tests/test_g8_pathcond_precision.py
+      - name: Run all preregistered 80 independent precision comparisons
+        working-directory: experiments/lapse-meter
+        run: python -u experiments/g8_pathcond_precision.py results/g8a/ci_results.json
+      - name: Print ALL scientific decisions whether positive or negative
+        if: always()
+        working-directory: experiments/lapse-meter
+        run: |
+          python - <<'PY'
+          import json, os
+          p='results/g8a/ci_results.json'
+          if os.path.exists(p):
+              x=json.load(open(p))['summary']
+              for k,v in x.items(): print(k, v)
+          else: print('NO G8A JSON: integration or runtime failed before result archive')
+          PY
+      - name: Preserve all original and diagnostic errors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lapse-g8a-precision-complete
+          path: experiments/lapse-meter/results/g8a/ci_results.json
+          if-no-files-found: warn
