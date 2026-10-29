@@ -1,0 +1,74 @@
+name: Room isolated lean 1B dialogue ablation
+
+on:
+  push:
+    branches: [research/room-lean-dialogue-20261029]
+    paths:
+      - '.github/workflows/room-lean-dialogue.yml'
+      - 'scripts/room_lean_dialogue_probe.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-lean-1b-ablation
+  cancel-in-progress: true
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_NODE_PROMPT: 'Isolated lean public conversation model evaluator'
+      ROOM_CONVERSATIONAL_FLOOR: '1'
+      ROOM_BRAIN_ACTIVE: llama3.2-1b
+      ROOM_CAPACITY_VARIANT: lean1b
+    steps:
+      - uses: actions/checkout@v6
+      - name: Syntax and no-bid source tests
+        run: |
+          python3 -m py_compile scripts/room_lean_dialogue_probe.py
+          python3 scripts/test_room_conversational_floor.py
+      - name: Download verified production 1B model and matching runtime
+        run: |
+          set -euo pipefail
+          mkdir -p .room_lean/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_lean
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_lean/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .room_lean/llama-runtime-linux-x64.tar.gz -C .room_lean/runtime
+          curl -fsSL --retry 3 --retry-delay 4             'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true'             -o .room_lean/model.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_lean/model.gguf' | sha256sum -c -
+      - name: Generate real 1B compact-context reply and multi-turn trial
+        run: |
+          set -euo pipefail
+          bin=$(find .room_lean/runtime -type f -name llama-server | head -1)
+          chmod +x "$bin"
+          "$bin" -m .room_lean/model.gguf --host 127.0.0.1 --port 18083 -c 8192 -np 2 -t 4 >.room_lean/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:18083/health >/dev/null; then ready=1; break; fi
+            kill -0 "$pid" || break
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then tail -70 .room_lean/server.log; exit 1; fi
+          ROOM_MODEL_URL=http://127.0.0.1:18083/completion python3 -u scripts/room_lean_dialogue_probe.py
+      - name: Save non-deployed public test evidence in branch
+        if: always()
+        run: |
+          path='docs/research/room-capacity-lean1b-20261029.json'
+          test -s "$path"
+          git config user.name 'room-lean-research'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$path"
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record isolated lean 1B source-uptake experiment'
+          for n in 1 2 3 4; do
+            git push origin HEAD:research/room-lean-dialogue-20261029 && exit 0
+            git fetch origin research/room-lean-dialogue-20261029
+            git rebase origin/research/room-lean-dialogue-20261029 || { git rebase --abort; exit 1; }
+            sleep "$n"
+          done
+          exit 1
