@@ -446,13 +446,13 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
 
     if role == "expression" and compact.get("situated_environment"):
         base_guard += (
-            "\\nSITUATED_WORLD\\n"
+            "\nSITUATED_WORLD\n"
             "The situated_environment is a real part of this fictional scene, "
             "not a speaker turn. A possible inspection is not a completed one. "
             "You can take an available physical action now and report what you "
             "actually do, rather than continuing to speculate. Only describe "
             "an observation as shared if it was spoken publicly. "
-            "Do not claim an action or consequence that has not happened.\\n"
+            "Do not claim an action or consequence that has not happened.\n"
         )
 
     attempts = 3 if role == "expression" else 2
