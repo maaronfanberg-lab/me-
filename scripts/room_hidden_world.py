@@ -11,6 +11,13 @@ from dataclasses import dataclass
 
 PARTICIPANTS = ("sarah", "mara", "owen", "jules")
 EPISODE_TURNS = 60
+TRIAL_START = 35160
+TRIAL_END = TRIAL_START + 100
+
+
+def trial_active(cycle: int) -> bool:
+    """A finite 100-public-beat canary, never an indefinite production mode."""
+    return isinstance(cycle, int) and not isinstance(cycle, bool) and TRIAL_START <= cycle < TRIAL_END
 
 
 @dataclass(frozen=True)
