@@ -302,7 +302,7 @@ class FloorTests(unittest.TestCase):
             assert _fact_opportunity("mara", open_question, earlier+[open_question], 35233) == 0
             assert _fact_opportunity("owen", open_question, earlier+[open_question], 35233) > 0
             assert _fact_opportunity("jules", open_question, earlier+[open_question], 35233) > 0
-            selected = choose_next(earlier+[open_question], bus(), config(), {},cycle=35233)
+            selected = choose_next(earlier+[open_question], bus(), config(), {},cycle=35245)
             self.assertIn(selected["speaker"], ("owen","jules"))
             addressed = msg("sarah","Mara, can you tell me more?", id="s4")
             self.assertEqual(
