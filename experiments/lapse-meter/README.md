@@ -583,6 +583,15 @@ Experiments 41–46 (pre-registered, 60 runs) tested that rule well outside wher
 width 128, 48 and 192 layers, and 10 new seeds. **All 8 predictions held.** With the teardown blocked, a network
 diverges when its kick is large and its inputs are large-scale, and trains otherwise.
 
+### 17. A practical fix (experiments 47–48)
+
+- **Starting the readout at zero, with its bias at the class priors, failed** (experiment 47): the kick merely
+  arrives one step later (2,324 on digits at step 1).
+- **Scaling the readout's learning rate every step by width / mean |h|² works** (experiment 48, pre-registered).
+  This is μP's readout prescription (Yang et al. 2022), so the result confirms it rather than discovering it.
+  - Healthy on digits and the circle at 96 layers, on digits at 192 layers, and on the language model, 5 of 5 each.
+  - On the language model with inputs ×10 it was 3 of 5: one run's loss exploded, and one stream died to zero.
+
 ## Honest limits
 
 - Every network here is small and was trained in this environment, in numpy. No pretrained models could be
