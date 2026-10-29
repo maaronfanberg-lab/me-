@@ -43,6 +43,11 @@ assert "Your earlier stated plan [j0]" in own_notice
 assert "No completed inspection or outcome has been witnessed" in own_notice
 assert "Other participants have announced but not yet completed: Owen inspect irrigation filter" in own_notice
 assert "Jules previously said" not in own_notice
+# Later plans by other people must not erase the speaker's own still-open plan.
+crowded=source+[turn(START+5,"sarah","I'll inspect the irrigation filter.","s5"),
+                turn(START+6,"mara","I'll open the supply valve.","m6"),
+                turn(START+7,"owen","I'll open the supply valve.","o7")]
+assert "Your earlier stated plan [j0]" in notice(START+8,crowded,entity="jules")
 partner_notice=notice(START+5,source,entity="mara")
 assert "Jules open supply valve" in partner_notice
 assert "Your earlier stated plan" not in partner_notice
