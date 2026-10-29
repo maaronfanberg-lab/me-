@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Native speech-first Room adapter preserves identity, floor and final safety."""
+from __future__ import annotations
+import json
+import os
+import unittest
+from unittest.mock import patch
+
+import room_chat_speech as chat
+from room_conversational_candidate import validate_candidate
+from room_conversational_floor import NODE
+
+
+def source(speaker="jules", text="What if species didn't change into one shape in a lineage?"):
+    return {"id":"public-123","speaker":speaker,"text":text}
+
+
+def payload(entity="owen", previous=None):
+    item=previous or source()
+    return {"entity":entity,"profile":{
+        "name":entity.capitalize(),
+        "psychology_v2":{"core_identity":"An independent thinker.", "motives":["Understand natural patterns."]}},
+        "event":item,"context":[item],"topic":{},"partner":item["speaker"],
+        "private_self_state":{"who_i_am":"I am curious."},
+        "room_presence":{"present":["sarah","mara","owen","jules","allen"],"absent":[]}
+    }
+
+
+class Fake:
+    def __init__(self,text):
+        self.text=text
+    def __enter__(self):
+        return self
+    def __exit__(self,*args):
+        return False
+    def read(self):
+        return json.dumps({"choices":[{"message":{"content":self.text}}]}).encode()
+
+
+class ChatAdapterTests(unittest.TestCase):
+    def setUp(self):
+        self.old=os.environ.get("ROOM_MODEL_URL")
+        self.old_cycle=os.environ.get("ROOM_CYCLE_KEY")
+        os.environ["ROOM_MODEL_URL"]="http://127.0.0.1:18080/completion"
+        os.environ["ROOM_CYCLE_KEY"]="chat-speech-tested-source-123"
+    def tearDown(self):
+        if self.old is None:os.environ.pop("ROOM_MODEL_URL",None)
+        else:os.environ["ROOM_MODEL_URL"]=self.old
+        if self.old_cycle is None:os.environ.pop("ROOM_CYCLE_KEY",None)
+        else:os.environ["ROOM_CYCLE_KEY"]=self.old_cycle
+
+    def test_local_only_endpoint(self):
+        self.assertEqual(chat.chat_endpoint(os.environ["ROOM_MODEL_URL"]),
+                         "http://127.0.0.1:18080/v1/chat/completions")
+        for target in ("https://other.invalid/completion",
+                       "http://evil.invalid:18080/completion","file:///tmp/model"):
+            with self.subTest(target=target),self.assertRaises(ValueError):
+                chat.chat_endpoint(target)
+
+    def test_public_transcript_not_hidden_state_and_sleeping_excluded(self):
+        inp=payload()
+        inp["context"]=[
+            source("sarah","I heard the scientist discuss the forest."),
+            source("mara","I think forests are interesting."),
+            source("jules","I want to investigate tree adaptation."),
+        ]
+        inp["event"]=source("owen","The model received a new public observation.")
+        inp["room_presence"]={"present":["sarah","jules","owen","allen"],"absent":["mara"]}
+        out=chat.messages(inp,"sarah")
+        full=str(out)
+        self.assertNotIn("Mara: I think forests",full)
+        self.assertIn("Jules: I want",full)
+        self.assertNotIn("I am curious.",full)
+        self.assertNotIn("private_self_state",full)
+        self.assertIn("latest",full.lower())
+
+    def test_candidate_has_real_model_text_and_passes_final_preflight(self):
+        inp=payload()
+        said="The species could diverge because different environments favor different adaptations."
+        with patch("room_chat_speech.urllib.request.urlopen",return_value=Fake(said)) as fake:
+            result=chat.run(inp)
+        self.assertEqual(result["utterance"],said)
+        self.assertEqual(result["target"],"jules")
+        self.assertEqual(result["decision"],"SPEAK")
+        self.assertEqual(result["move"],"answer")
+        self.assertTrue(result["semantic_terms"])
+        self.assertEqual(fake.call_count,1)
+        part={"node":NODE["owen"],"entity":"owen","role":"expression",
+              "private":{"intent":{"readiness":.8},"expression":result}}
+        self.assertEqual(validate_candidate(part,"owen",[inp["event"]],{}),said)
+
+    def test_internal_role_label_is_retried_without_emitting_fake_speech(self):
+        replies=[Fake("self_initiated_contribution"),
+                 Fake("Jules, perhaps ecology changes as the habitat changes.")]
+        with patch("room_chat_speech.urllib.request.urlopen",side_effect=replies) as mock:
+            out=chat.run(payload())
+        self.assertEqual(mock.call_count,2)
+        self.assertIn("habitat changes",out["utterance"])
+        with patch("room_chat_speech.urllib.request.urlopen",
+                   return_value=Fake("self_initiated_contribution")):
+            self.assertIsNone(chat.run(payload()))
+
+    def test_natural_vocative_controls_recipient_not_hidden_partner(self):
+        x=payload("sarah",source("jules","I saw some migrating birds over the river."))
+        x["partner"]="owen"
+        result=chat.speech_metadata("Mara, I disagree because the river is frozen.",x,"sarah")
+        self.assertEqual(result["target"],"mara")
+        self.assertEqual(result["move"],"disagree")
+        self.assertTrue(result["semantic_terms"])
+
+    def test_active_model_switch_is_the_only_adapter_activation(self):
+        import room_engine_v5 as engine
+        before=os.environ.get("ROOM_CHAT_SPEECH_MODE")
+        before_node=os.environ.get("ROOM_NODE_PROMPT")
+        os.environ["ROOM_CHAT_SPEECH_MODE"]="1"
+        os.environ["ROOM_NODE_PROMPT"]="Local model prompt available"
+        try:
+            with patch("room_chat_speech.run",return_value={
+                "decision":"SPEAK","utterance":"The forest contains several species.",
+                "move":"deepen","target":"jules","semantic_terms":["forest"]
+            }) as spy:
+                response=engine._llama_model_run("expression",payload(),timeout=35)
+            self.assertEqual(response["utterance"],"The forest contains several species.")
+            self.assertEqual(spy.call_count,1)
+        finally:
+            if before is None:os.environ.pop("ROOM_CHAT_SPEECH_MODE",None)
+            else:os.environ["ROOM_CHAT_SPEECH_MODE"]=before
+            if before_node is None:os.environ.pop("ROOM_NODE_PROMPT",None)
+            else:os.environ["ROOM_NODE_PROMPT"]=before_node
+
+if __name__=="__main__":
+    unittest.main()
