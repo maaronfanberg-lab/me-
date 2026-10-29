@@ -158,6 +158,27 @@ def messages(payload: dict, entity: str) -> list[dict]:
         # Its final placement prevents short abstract transcript tails from
         # silently erasing the ongoing situation during this bounded window.
         user += chr(10) + chr(10) + situational_grounding
+    # Source-linked causal environment. No invented speaker utterances.
+    # An actual visitor turn supersedes the fictional setting.
+    if (os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1"
+            and not (history and history[-1]["speaker"] == "allen")):
+        from room_causal_world import active as causal_active, cue_for
+        try:
+            source_cycle = payload.get("room_cycle")
+            if source_cycle is None:
+                source_cycle = json.loads((Path(__file__).resolve().parents[1]
+                                          / "room" / "state.json").read_text())["cycle"]
+            source_cycle = int(source_cycle)
+            if causal_active(source_cycle):
+                source = json.loads((Path(__file__).resolve().parents[1]
+                                     / "room" / "feed.json").read_text())
+                public = source.get("conversation") or []
+                if isinstance(public, list):
+                    notice = cue_for(entity, source_cycle, public)
+                    if notice:
+                        user += "\n\n" + notice
+        except (OSError, ValueError, KeyError, TypeError):
+            pass  # malformed data never creates fictitious shared evidence
     return [{"role":"system","content":system},{"role":"user","content":user}]
 
 
