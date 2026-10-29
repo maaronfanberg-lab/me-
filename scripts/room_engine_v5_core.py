@@ -312,7 +312,15 @@ def sense(node, key):
     # autonomous speakers. Never mix them with control/status messages.
     if social_floor:
         from room_conversational_floor import public_participant_turns
-        context = public_participant_turns(conv())[-3:]
+        # Four autonomous participants can complete a full interaction cycle
+        # between one character's utterances. Expose one such cycle only in
+        # the isolated native-chat context experiment; normal floor behavior
+        # and accepted user speech retain their original source filters.
+        context_size = 5 if (
+            os.environ.get("ROOM_CHAT_SPEECH_MODE") == "1"
+            and os.environ.get("ROOM_CHAT_CONTEXT_WINDOW") == "5"
+        ) else 3
+        context = public_participant_turns(conv())[-context_size:]
         last = context[-1] if context else None
     else:
         context = msgs()[-8:]
