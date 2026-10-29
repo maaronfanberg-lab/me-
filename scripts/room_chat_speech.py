@@ -48,7 +48,10 @@ def witnessed_context(payload: dict, entity: str) -> list[dict]:
         spoken=str(item.get("text") or "").strip()
         if speaker not in PARTICIPANTS or not spoken:
             continue
-        out.append({"speaker":speaker,"text":spoken[:520],"id":item.get("id")})
+        # Allen's accepted public text is user-authored, never silently
+        # shortened to the same 520-char budget used for autonomous speech.
+        limit=700 if speaker=="allen" else 520
+        out.append({"speaker":speaker,"text":spoken[:limit],"id":item.get("id")})
     return out[-3:]
 
 
