@@ -101,7 +101,14 @@ def replay(cycle: int, turns: list[dict]) -> dict:
             continue
         spoken = str(turn.get('text') or '').strip()
         overlap = evidence_terms(spoken) & evidence_terms(PRIVATE[speaker])
-        if len(overlap) >= 2 and speaker not in disclosures:
+        # A speculative claim or question is not somebody's firsthand
+        # observation. In particular, theories involving "public speech"
+        # must not get recycled as physical evidence just by sharing nouns.
+        firsthand = bool(re.match(
+            r"^\\s*(?:I|we)\\s+(?:just\\s+|also\\s+)?"
+            r"(?:saw|noticed|heard|read|found|checked|measured|observed)\\b",
+            spoken, re.I))
+        if firsthand and len(overlap) >= 2 and speaker not in disclosures:
             disclosures[speaker] = {
                 'speaker': speaker, 'text': spoken[:200], 'source_id': source_id,
             }
@@ -129,38 +136,46 @@ def replay(cycle: int, turns: list[dict]) -> dict:
             'solved': solved, 'vent_cleared': cleared}
 
 def cue_for(entity: str, cycle: int, public_turns: list[dict]) -> str:
-    """A situational cue for a real model, not a command to speak about the scene."""
+    """Character-facing scene continuity, with source checks kept out of speech.
+
+    No implementation labels are exposed to the model. The private observation
+    stays private until its owner actually reports it, and physical effects
+    arise only from a past witnessed first-person action in the transcript.
+    """
     if entity not in PEOPLE or not active(cycle):
         return ''
     state = replay(cycle, public_turns)
     disclosed = {d['speaker'] for d in state['disclosures']}
-    notice = (
-        'BOUNDED FICTIONAL SHARED ENVIRONMENT (not a participant speaking): '
-        + COMMON + ' This situation changes only when an agent actually performs '
-        'an action in public speech. Do not claim an inspection was performed '
-        'or an observation was shared unless public evidence supports it.'
-    )
-    if cycle == TRIAL_START:
-        notice += ' This event is newly occurring AFTER the latest public turn.'
+    lines = [
+        'AT THE PLANETARIUM: ' + COMMON,
+        'You are here with the others. You may ask about what they saw, '
+        'check something yourself, describe what you actually do, '
+        'or follow an entirely different conversation if it matters more.'
+    ]
     if entity not in disclosed:
-        notice += ' PRIVATE OBSERVATION KNOWN TO YOU ALONE: ' + PRIVATE[entity]
+        lines.append('ONE DETAIL YOU PERSONALLY NOTICED: ' + PRIVATE[entity])
     else:
-        notice += ' Your relevant private observation has already been shared publicly.'
+        lines.append('You have already shared your earlier observation.')
     if state['disclosures']:
-        notice += ' PUBLICLY WITNESSED EVIDENCE: ' + ' '.join(
-            d['speaker'].capitalize() + ' said [' + d['source_id'] + ']: ' + d['text']
+        lines.append('WHAT PEOPLE HAVE ACTUALLY REPORTED SEEING:')
+        lines.extend(
+            d['speaker'].capitalize() + ' said: ' + d['text']
             for d in state['disclosures'][:4]
         )
     if state['effects']:
-        notice += ' CHANGES OBSERVED AFTER PUBLIC ACTIONS: ' + ' '.join(
-            e.actor.capitalize() + ' [' + e.source_id + ']: ' + e.observation
+        lines.append('WHAT HAS CHANGED IN THE ROOM:')
+        lines.extend(
+            'After ' + e.actor.capitalize() + ' acted: ' + e.observation
             for e in state['effects'][-4:]
         )
     if state['solved']:
-        notice += (' The projector stayed bright after a witnessed restart. '
-                   'The practical problem appears resolved, and other subjects are welcome.')
+        lines.append('The projector stayed bright for ten minutes after the '
+                     'latest restart. The immediate problem appears resolved.')
+    elif state['vent_cleared']:
+        lines.append('The grille is now clear, but nobody has yet checked '
+                     'whether the projector stays bright after restarting.')
     else:
-        notice += (' The cause is not yet established by public evidence. You may '
-                   'investigate, ask, challenge, take a direct action or continue '
-                   'a more interesting existing exchange. Nothing is mandatory.')
-    return notice
+        lines.append('The cause is still uncertain. The projector, its '
+                     'ventilation and power supply can be examined. '
+                     'A plan to check something is not the same as having done it.')
+    return '\\n'.join(lines)
