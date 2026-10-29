@@ -78,3 +78,6 @@ assert "ONGOING FICTIONAL SITUATION" not in visitor_grounded[1]["content"]
 with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT": "1"}):
     expired = chat.messages(dict(payload, room_cycle=h.GROUNDING_ONSET + h.GROUNDING_WINDOW), "sarah")
 assert "ONGOING FICTIONAL SITUATION" not in expired[1]["content"]
+
+assert h.active_scene_window(h.GROUNDING_SECOND_ONSET + 23)
+assert not h.active_scene_window(h.GROUNDING_SECOND_ONSET + 24)
