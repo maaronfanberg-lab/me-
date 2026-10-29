@@ -46,4 +46,28 @@ assert action_consequence(scene,"jules","I'll open the supply valve.") is None
 assert action_consequence(scene,"jules","I open the supply valve.") is not None
 assert not pending(START+7,done+[turn(START+6,"jules","I open the supply valve.","j6")])
 assert not pending(START+7,[turn(START-1,"jules","I'll open the supply valve.")])
+# Test actual expression-context integration with a mocked public feed.
+import json
+import os
+from unittest.mock import patch
+from room_chat_speech import messages
+payload={"entity":"mara","profile":{},"room_cycle":START+5,
+         "context":[{"id":"o1","speaker":"owen","text":"I'm going to inspect the irrigation filter."}]}
+flags={"ROOM_HIDDEN_WORLD_EXPERIMENT":"1","ROOM_SCENE_PUBLIC_LEDGER":"1",
+       "ROOM_WORLD_ACTIONS":"1","ROOM_PLAN_FOLLOWTHROUGH":"1"}
+with patch.dict(os.environ,flags):
+    with patch("pathlib.Path.read_text",return_value=json.dumps({"conversation":source})):
+        rendered=messages(payload,"mara")
+assert "UNRESOLVED SPOKEN INTENTIONS" in rendered[1]["content"]
+assert "j0" in rendered[1]["content"] and "o1" in rendered[1]["content"]
+assert "not proof" in rendered[1]["content"]
+visitor=dict(payload,context=[{"speaker":"allen","text":"Please answer my question.","id":"allen-turn"}])
+with patch.dict(os.environ,flags):
+    with patch("pathlib.Path.read_text",return_value=json.dumps({"conversation":source})):
+        reply=messages(visitor,"mara")
+assert "UNRESOLVED SPOKEN INTENTIONS" not in reply[1]["content"]
+with patch.dict(os.environ,flags):
+    later=messages(dict(payload,room_cycle=END),"mara")
+assert "UNRESOLVED SPOKEN INTENTIONS" not in later[1]["content"]
+
 print("PASS: source-bound plans, actor-specific completion, no false action, expiry, visitors, and time boundaries")
