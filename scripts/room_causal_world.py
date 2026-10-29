@@ -7,6 +7,8 @@ effect only after an affirmative, attributed public utterance.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+import json
+from pathlib import Path
 import re
 
 TRIAL_START = 36480
@@ -38,6 +40,33 @@ _ACTIONS = (
 
 def active(cycle: int) -> bool:
     return type(cycle) is int and TRIAL_START <= cycle < TRIAL_END
+
+def production_cue(entity: str, *, root: Path | None = None,
+                   next_cycle: int | None = None) -> str:
+    """Read the *next* unpublished beat's scene from witnessed public history.
+
+    Both the selected native-chat and legacy failback generators must see the
+    same source-bound consequences. Persisted state.cycle names the LAST
+    published beat, not the beat currently being generated.
+    """
+    if entity not in PEOPLE:
+        return ''
+    base = Path(root) if root is not None else Path(__file__).resolve().parents[1]
+    try:
+        if next_cycle is None:
+            state = json.loads((base / 'room' / 'state.json').read_text())
+            next_cycle = int(state.get('cycle', 0)) + 1
+        if not active(next_cycle):
+            return ''
+        feed = json.loads((base / 'room' / 'feed.json').read_text())
+        public = feed.get('conversation') or []
+        if not isinstance(public, list):
+            return ''
+        return cue_for(entity, next_cycle, public)
+    except (OSError, ValueError, TypeError, KeyError):
+        # A missing or malformed feed never becomes fabricated scene evidence.
+        return ''
+
 
 def cycle_of(turn: dict) -> int | None:
     try:
