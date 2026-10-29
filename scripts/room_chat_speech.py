@@ -117,6 +117,32 @@ def speech_metadata(text: str, payload: dict, entity: str) -> dict:
             "target":target,"semantic_terms":terms or ["speech"]}
 
 
+def complete_model_prefix(spoken: str) -> str:
+    """Use only a complete, self-standing prefix actually authored by the model.
+
+    This is *not* generated replacement text or a word-list filter. Reject
+    incomplete fragments, contrary follow-ons, and previews with no substantive
+    complete action. The normal publication validation still decides acceptance.
+    """
+    text = str(spoken or "").strip()
+    options = []
+    for found in re.finditer(r'[.!?](?=(?:["”’]?\s+|$))', text):
+        end = found.end()
+        if end < len(text) and text[end] in "\"”’":
+            end += 1
+        prefix = text[:end].strip()
+        count = len(re.findall(r"[a-z0-9']+", prefix.casefold()))
+        if 9 <= count <= 34 and prefix not in options:
+            options.append(prefix)
+    for prefix in reversed(options):
+        remaining = text[len(prefix):].strip().lstrip("\"'”’").strip().casefold()
+        if remaining.startswith(("but ", "however", "actually ", "except ", "although ",
+                                 "instead ", "on the other hand", "no,", "no.")):
+            continue
+        return prefix
+    return ""
+
+
 def run(payload: dict, timeout: int = 45) -> dict | None:
     entity=str(payload.get("entity") or "").strip().lower()
     if entity not in ORDER:
@@ -141,7 +167,7 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                 "checks (" + last_failure[:48] + "). " + hint)
         body={"model":"Llama-3.2-1B-Instruct","messages":prompt,
               "temperature":.78 if not attempt else .62,"top_p":.9,
-              "max_tokens":72 if not attempt else (48 if attempt==1 else 40),
+              "max_tokens":120 if not attempt else 100,
               "seed":seed,"stream":False}
         req=urllib.request.Request(
             url, data=json.dumps(body,ensure_ascii=False).encode(),
@@ -185,6 +211,27 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                                 utterance=spoken,move=result["move"])
             except (RuntimeError,ValueError) as exc:
                 last_failure=str(exc)[:96]
+                # The model sometimes continues after an already complete
+                # sentence and ends mid-thought. Retain at most its own
+                # complete, coherent spoken prefix. Do not synthesize text,
+                # suppress a contrary clause, or bypass the hard validators.
+                if any(key in last_failure for key in (
+                        "wordy_expression", "run_on_expression", "trailing_fragment")):
+                    prefix=complete_model_prefix(spoken)
+                    if prefix and prefix != spoken:
+                        shortened=speech_metadata(prefix,payload,entity)
+                        try:
+                            prefix_terms=clean_terms(
+                                shortened,payload.get("topic") or {},prefix)
+                            validate_public_expression(
+                                entity,prefix,prefix_terms,observed)
+                            validate_uptake(
+                                history=observed,speaker=entity,
+                                utterance=prefix,move=shortened["move"])
+                        except (RuntimeError,ValueError):
+                            pass
+                        else:
+                            return shortened
                 continue
             return result
         except (TimeoutError,urllib.error.URLError,ValueError,KeyError,TypeError,IndexError) as exc:
