@@ -182,7 +182,7 @@ def cue_for(entity: str, cycle: int, public_turns: list[dict]) -> str:
                   if isinstance(turn, dict)
                   and turn.get('speaker') in PEOPLE
                   and (when := cycle_of(turn)) is not None
-                  and TRIAL_START <= when < cycle][-10:]
+                  and TRIAL_START <= when < cycle][-8:]
         if len(recent) >= 8 and not any(
                 witnessed_action(str(turn.get('speaker')),
                                  str(turn.get('text') or ''))
