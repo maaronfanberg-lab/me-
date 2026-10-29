@@ -434,7 +434,11 @@ def _coherent_recurrent(node, key, bus_data):
         _legacy._core.prior_expression_messages = original_prior
 
 
-if os.environ.get("ROOM_BRAIN_ACTIVE", "").strip() == "llama3.2-1b":
+# Both Llama3.2 sizes run the same verified native-chat, single-pass brain.
+# Without this model-family binding, 3B silently falls through to legacy
+# multi-request comprehension/thought generation, saturates the local server,
+# and never reaches an utterance. Keep Qwen's existing fallback untouched.
+if os.environ.get("ROOM_BRAIN_ACTIVE", "").strip() in {"llama3.2-1b", "llama3.2-3b"}:
     _social._declared_terms = _sanitize_declared_topic_terms
     _bounded_topic._declared_terms = _sanitize_declared_topic_terms
     _legacy._private_model.run = _llama_model_run
