@@ -108,6 +108,27 @@ class ChatAdapterTests(unittest.TestCase):
                    return_value=Fake("self_initiated_contribution")):
             self.assertIsNone(chat.run(payload()))
 
+    def test_internal_quality_gate_retries_self_address_and_long_run_on(self):
+        wrong="That's an intriguing evolutionary explanation, Owen."
+        correct="Different habitats can favor different evolutionary adaptations."
+        with patch("room_chat_speech.urllib.request.urlopen",
+                   side_effect=[Fake(wrong),Fake(correct)]) as model:
+            out=chat.run(payload())
+        self.assertEqual(model.call_count,2)
+        self.assertEqual(out["utterance"],correct)
+        very_long=("I am interested in examining ecological patterns and scientific "
+                   "hypotheses about populations and environments, yet there are "
+                   "many related implications that I could describe in a lengthy "
+                   "and complicated statement while continuing to explore different "
+                   "possible scenarios and historical details without a clear answer "
+                   "to the actual question we are discussing right now, since "
+                   "everything is possible and might be worth exploring in theory.")
+        with patch("room_chat_speech.urllib.request.urlopen",
+                   side_effect=[Fake(very_long),Fake(correct)]) as model:
+            shortened=chat.run(payload())
+        self.assertEqual(model.call_count,2)
+        self.assertEqual(shortened["utterance"],correct)
+
     def test_natural_vocative_controls_recipient_not_hidden_partner(self):
         x=payload("sarah",source("jules","I saw some migrating birds over the river."))
         x["partner"]="owen"
