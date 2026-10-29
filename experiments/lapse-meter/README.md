@@ -587,7 +587,8 @@ diverges when its kick is large and its inputs are large-scale, and trains other
 
 - **Starting the readout at zero, with its bias at the class priors, failed** (experiment 47): the kick merely
   arrives one step later (2,324 on digits at step 1).
-- **Scaling the readout's learning rate every step by width / mean |h|² works** (experiment 48, pre-registered).
+- **Scaling the readout's learning rate every step by width / mean |h|² works in 4 of 5 settings** (experiment 48,
+  pre-registered).
   This is μP's readout prescription (Yang et al. 2022), so the result confirms it rather than discovering it.
   - Healthy on digits and the circle at 96 layers, on digits at 192 layers, and on the language model with inputs ×1,
     5 of 5 each.
