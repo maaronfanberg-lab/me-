@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/home/runner/work/me-/me-/experiments/lapse-meter/experiments/probe_run.py", line 114, in <module>
+    cfg = json.loads(sys.argv[1]); r = run(cfg, sys.argv[2]); z = r["log"][-1]
+                                       ~~~^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/me-/me-/experiments/lapse-meter/experiments/probe_run.py", line 92, in run
+    f_ = c["out_lr_norm"] / float(np.mean(np.sum(hb * hb, 1))); gW[L - 1] = gW[L - 1] * f_; gb[L - 1] = gb[L - 1] * f_
+         ~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero
+FAILED: python3 experiments/probe_run.py '{"act": "relu", "depth": 96, "seed": 3, "out_lr_norm": 64.0, "task": "lm", "input_scale": 10.0}' results/e48/lm10_norm_s3.json
+shard 13 done, 1 failed
