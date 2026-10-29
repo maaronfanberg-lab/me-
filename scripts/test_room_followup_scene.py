@@ -77,6 +77,10 @@ assert "ONGOING FICTIONAL SITUATION" in rendered[1]["content"]
 assert "SIMULATED ENVIRONMENT RESPONSE" in rendered[1]["content"]
 assert "WITNESSED SHARED EVIDENCE" in rendered[1]["content"]
 assert "electrical buzz" in rendered[1]["content"]
+assert "PHYSICAL OPTIONS" in rendered[1]["content"]
+assert "I move the microphone cable" in rendered[1]["content"]
+assert "I check the mixer power cable" in rendered[1]["content"]
+assert "I push the input plug" in rendered[1]["content"]
 assert h.private_observation("jules", start) not in rendered[1]["content"]
 assert h.private_observation("sarah", start) not in rendered[0]["content"]
 
@@ -87,6 +91,7 @@ with patch.dict(os.environ, flags):
 assert "ONGOING FICTIONAL SITUATION" not in reply[1]["content"]
 assert "SIMULATED ENVIRONMENT RESPONSE" not in reply[1]["content"]
 assert "WITNESSED SHARED EVIDENCE" not in reply[1]["content"]
+assert "PHYSICAL OPTIONS" not in reply[1]["content"]
 
 # No indefinite topic lock after the finite trial, even when flags are on.
 with patch.dict(os.environ, flags):
