@@ -341,6 +341,9 @@ class FloorTests(unittest.TestCase):
                                      "ROOM_CAUSAL_WORLD_EXPERIMENT":"1"}):
             self.assertGreater(_fact_opportunity(
                 "jules", question, [question], 36559), .70)
+            with patch.dict(os.environ, {"ROOM_CAUSAL_WORLD_EXPERIMENT":"0"}):
+                self.assertEqual(_fact_opportunity(
+                    "jules", question, [question], 36559), 0)
             chosen = choose_next([question], bus(), config(), {}, cycle=36559)
             self.assertEqual(chosen["speaker"], "jules", chosen)
             self.assertNotIn("required_action", chosen)
