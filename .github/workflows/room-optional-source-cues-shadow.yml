@@ -1,0 +1,79 @@
+name: Room optional public-source cues 1B A/B
+
+on:
+  push:
+    branches: [research/room-optional-source-cues-20261029]
+    paths:
+      - '.github/workflows/room-optional-source-cues-shadow.yml'
+      - 'scripts/room_optional_cues_shadow.py'
+      - 'scripts/test_room_optional_source_cues.py'
+      - 'scripts/room_conversation_project.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-optional-source-cue-ab
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_NODE_PROMPT: 'Isolated public source-cue A/B'
+      ROOM_CONVERSATIONAL_FLOOR: '1'
+      ROOM_BRAIN_ACTIVE: llama3.2-1b
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Check opt-in source-cue regression suite
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_optional_cues_shadow.py
+          python3 scripts/test_room_optional_source_cues.py
+          python3 scripts/test_room_conversation_project.py
+      - name: Download checksum-verified production 1B brain
+        run: |
+          set -euo pipefail
+          mkdir -p .source_cue/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .source_cue
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .source_cue/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .source_cue/llama-runtime-linux-x64.tar.gz -C .source_cue/runtime
+          curl -fsSL --retry 3 --retry-delay 4             'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true'             -o .source_cue/model.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .source_cue/model.gguf' | sha256sum -c -
+      - name: Compare public-source cue and baseline through production wrapper
+        run: |
+          set -euo pipefail
+          bin=$(find .source_cue/runtime -type f -name llama-server | head -1)
+          chmod +x "$bin"
+          "$bin" -m .source_cue/model.gguf --host 127.0.0.1 --port 18085 -c 8192 -np 2 -t 4 >.source_cue/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:18085/health >/dev/null; then ready=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then tail -75 .source_cue/server.log; exit 1; fi
+          ROOM_MODEL_URL=http://127.0.0.1:18085/completion python3 -u scripts/room_optional_cues_shadow.py
+      - name: Commit experiment evidence ONLY to isolated branch
+        if: always()
+        run: |
+          file='docs/research/room-optional-source-cues-shadow-20261029.json'
+          test -s "$file"
+          git config user.name room-public-cue-research
+          git config user.email actions@users.noreply.github.com
+          git add "$file"
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record isolated optional public cue model trial'
+          for n in 1 2 3 4 5; do
+            git push origin HEAD:research/room-optional-source-cues-20261029 && exit 0
+            git fetch origin research/room-optional-source-cues-20261029
+            git rebase origin/research/room-optional-source-cues-20261029 || { git rebase --abort; exit 1; }
+            sleep "$n"
+          done
+          exit 1
