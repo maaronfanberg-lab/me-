@@ -23,6 +23,10 @@ on:
       label:
         description: "Short name used in the commit message"
         required: true
+      extra_pip:
+        description: "Extra pip packages for the shards (optional)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -52,6 +56,10 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install numpy==2.5.3 scipy==1.18.1 scikit-learn==1.9.1 matplotlib==3.11.2
+      - if: inputs.extra_pip != ''
+        env:
+          EXTRA: ${{ inputs.extra_pip }}
+        run: pip install --index-url https://download.pytorch.org/whl/cpu $EXTRA || pip install $EXTRA
       - name: Run this shard's lines
         working-directory: experiments/lapse-meter
         env:
