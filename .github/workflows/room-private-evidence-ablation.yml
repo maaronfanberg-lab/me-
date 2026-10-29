@@ -1,0 +1,70 @@
+name: Room private-evidence ablation (isolated)
+on:
+  push:
+    branches: [room-private-evidence-lab]
+    paths:
+      - 'experiments/room_hidden_world_ablation.py'
+      - 'experiments/test_room_hidden_world_ablation.py'
+      - '.github/workflows/room-private-evidence-ablation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: room-hidden-world-ablation
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: room-private-evidence-lab
+      - name: Check isolated evidence boundaries and Python syntax
+        run: |
+          python3 -m py_compile experiments/room_hidden_world_ablation.py experiments/test_room_hidden_world_ablation.py
+          python3 experiments/test_room_hidden_world_ablation.py -v
+      - name: Start verified local model, no Room credentials or publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .room_model/runtime experiments/results
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          curl --fail --location --retry 3 --retry-delay 5 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' --output .room_model/llama-3.2-1b-instruct-q4_k_m.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_model/llama-3.2-1b-instruct-q4_k_m.gguf' | sha256sum -c -
+          tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+          server_bin="$(find .room_model/runtime -type f -name llama-server | head -1)"
+          chmod +x "$server_bin"
+          "$server_bin" -m .room_model/llama-3.2-1b-instruct-q4_k_m.gguf --host 127.0.0.1 --port 18080 -c 4096 -np 1 -t 2 -a Llama-3.2-1B-Instruct >experiments/results/server.log 2>&1 &
+          for attempt in $(seq 1 120); do
+            if curl -fsS --max-time 2 http://127.0.0.1:18080/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Generate real isolated LLM conversation under three evidence conditions
+        run: |
+          python3 experiments/room_hidden_world_ablation.py --turns 16 --out experiments/results/ablation.json
+          python3 - <<'PY'
+          import json
+          report=json.load(open('experiments/results/ablation.json'))
+          with open('experiments/results/summary.md','w') as out:
+              out.write('# Hidden-world conversation ablation (real local model)\n\n')
+              out.write('Not deployed and not a human-likeness score.\n\n')
+              for case in report['cases']:
+                  out.write(f"## {case['mode']}\n")
+                  out.write(json.dumps(case['metrics'],indent=2)+'\n')
+          PY
+      - name: Save model-authored transcript for scientific evaluation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-hidden-world-ablation
+          path: |
+            experiments/results/ablation.json
+            experiments/results/summary.md
+          retention-days: 7
