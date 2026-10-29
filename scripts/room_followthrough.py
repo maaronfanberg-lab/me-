@@ -110,7 +110,7 @@ def notice(cycle: int, public_turns: list[dict], entity: str | None = None) -> s
         return "\n".join(lines)
     own=[item for item in items if item["speaker"]==entity]
     others=[item for item in items if item["speaker"]!=entity]
-    lines=["PENDING PHYSICAL ACTIVITY (public intentions, NOT completed acts):"]
+    lines=["UNRESOLVED SPOKEN INTENTIONS (PENDING PHYSICAL ACTIVITY, not proof of completed acts):"]
     if own:
         for item in own[-2:]:
             lines.append(
