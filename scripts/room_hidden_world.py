@@ -81,6 +81,14 @@ SCENES = (
 )
 
 
+def event_at(cycle: int) -> bool:
+    """Only real scene onsets, not a repeated change-topic instruction."""
+    return trial_active(cycle) and (
+        cycle == TRIAL_START + 15
+        or (cycle > TRIAL_START and cycle % EPISODE_TURNS == 0)
+    )
+
+
 def scene_for_cycle(cycle: int) -> Scene:
     if isinstance(cycle, bool) or not isinstance(cycle, int) or cycle < 0:
         raise ValueError("cycle must be a nonnegative integer")
