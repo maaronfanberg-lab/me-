@@ -1,0 +1,94 @@
+name: Room isolated model-capacity comparison
+
+on:
+  push:
+    branches: [research/room-3b-capacity-20261029]
+    paths:
+      - '.github/workflows/room-model-capacity.yml'
+      - 'scripts/room_model_capacity_probe.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-model-capacity-trial
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 32
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ['1b', '3b']
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_NODE_PROMPT: 'Isolated public Room cognitive-comparison prompt'
+      ROOM_CONVERSATIONAL_FLOOR: '1'
+      ROOM_BRAIN_ACTIVE: llama3.2-1b
+      ROOM_CAPACITY_VARIANT: ${{ matrix.variant }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Validate Python
+        run: |
+          python3 -m py_compile scripts/room_model_capacity_probe.py
+          python3 scripts/test_room_conversational_floor.py
+      - name: Install exact Room runtime and download selected model
+        run: |
+          set -euo pipefail
+          mkdir -p .cap_model/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .cap_model
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .cap_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .cap_model/llama-runtime-linux-x64.tar.gz -C .cap_model/runtime
+          if [ "$ROOM_CAPACITY_VARIANT" = 3b ]; then
+            model='Llama-3.2-3B-Instruct-Q4_K_M.gguf'
+            url='https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true'
+            minimum_bytes=1900000000
+          else
+            model='Llama-3.2-1B-Instruct-Q4_K_M.gguf'
+            url='https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true'
+            minimum_bytes=500000000
+          fi
+          curl -fsSL --retry 3 --retry-delay 5 "$url" -o ".cap_model/model.gguf"
+          bytes=$(stat -c '%s' .cap_model/model.gguf)
+          [ "$bytes" -ge "$minimum_bytes" ] || { echo "Unexpectedly small model file"; exit 1; }
+          sha256sum .cap_model/model.gguf | tee .cap_model/model.sha256
+          if [ "$ROOM_CAPACITY_VARIANT" = 1b ]; then
+            echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .cap_model/model.gguf' | sha256sum -c -
+          fi
+      - name: Produce real model responses to the same witnessed public context
+        run: |
+          set -euo pipefail
+          model_bin=$(find .cap_model/runtime -type f -name llama-server | head -1)
+          chmod +x "$model_bin"
+          "$model_bin" -m .cap_model/model.gguf --host 127.0.0.1 --port 18082 -c 8192 -np 2 -t 4 >.cap_model/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:18082/health >/dev/null; then ready=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then tail -90 .cap_model/server.log; exit 1; fi
+          ROOM_MODEL_URL=http://127.0.0.1:18082/completion python3 -u scripts/room_model_capacity_probe.py
+      - name: Save independent results to research branch, not main
+        if: always()
+        run: |
+          file="docs/research/room-capacity-${ROOM_CAPACITY_VARIANT}-20261029.json"
+          test -s "$file" || exit 1
+          git config user.name 'room-model-capacity-research'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$file"
+          git diff --cached --quiet && exit 0
+          git commit -m "Record Room model-capacity ${ROOM_CAPACITY_VARIANT} speech trial"
+          for n in 1 2 3 4 5; do
+            git push origin HEAD:research/room-3b-capacity-20261029 && exit 0
+            git fetch origin research/room-3b-capacity-20261029
+            git rebase origin/research/room-3b-capacity-20261029 || { git rebase --abort; exit 1; }
+            sleep "$n"
+          done
+          exit 1
