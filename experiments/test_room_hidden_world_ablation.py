@@ -37,7 +37,7 @@ class HiddenWorldTests(unittest.TestCase):
     def test_no_ventriloquism_or_synthetic_silence(self):
         self.assertIsNone(lab.parse_speech("SILENCE","sarah"))
         self.assertIsNone(lab.parse_speech("Owen: I know.","sarah"))
-        self.assertIsNone(lab.parse_speech("A thought.\\nMara: I agree.","sarah"))
+        self.assertIsNone(lab.parse_speech("A thought.\nMara: I agree.","sarah"))
         self.assertEqual(lab.parse_speech("Sarah: The sensor dropped.","sarah"),
                          "The sensor dropped.")
     def test_evaluation_counts_public_evidence_only(self):
