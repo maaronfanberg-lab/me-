@@ -37,10 +37,35 @@ def witnessed_context(payload: dict, entity: str) -> list[dict]:
     presence=payload.get("room_presence") or {}
     present=set(presence.get("present") or PARTICIPANTS)
     source=list(payload.get("context") or [])
+    # The speech adapter often receives only a tiny immediate context.
+    # Recover a bounded public tail for continuity, never private cognition.
+    # Keep the supplied event last: it may not be published in feed.json yet.
+    if len(source) < 8:
+        try:
+            published=json.loads((Path(__file__).resolve().parents[1]
+                                  / "room" / "feed.json").read_text())
+            public=published.get("conversation") or []
+            if isinstance(public,list):
+                source=public[-12:]+source
+        except (OSError,ValueError,TypeError,KeyError):
+            pass
     event=payload.get("event")
     if isinstance(event,dict) and event.get("id") not in {
             s.get("id") for s in source if isinstance(s,dict)}:
         source.append(event)
+    out=[]
+    seen=set()
+    for item in reversed(source):
+        if not isinstance(item,dict):
+            continue
+        sid=item.get("id")
+        if sid and sid in seen:
+            continue
+        if sid:
+            seen.add(sid)
+        # The newest occurrence of a source ID wins; retain chronological order.
+        out.append(item)
+    source=list(reversed(out))
     out=[]
     for item in source:
         if not isinstance(item,dict) or item.get("speaker") not in present:
@@ -53,7 +78,7 @@ def witnessed_context(payload: dict, entity: str) -> list[dict]:
         # shortened to the same 520-char budget used for autonomous speech.
         limit=700 if speaker=="allen" else 520
         out.append({"speaker":speaker,"text":spoken[:limit],"id":item.get("id")})
-    return out[-3:]
+    return out[-8:]
 
 
 def messages(payload: dict, entity: str) -> list[dict]:
