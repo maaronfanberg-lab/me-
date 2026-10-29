@@ -29,11 +29,11 @@ class Consequence:
     observation: str
 
 _ACTIONS = (
-    ('inspect_vent', r'inspect|check|examine|look at', r'air vent|rear vent|ventilation grille|projector vent'),
-    ('check_voltage', r'check|inspect|measure|test', r'supply voltage|wall voltage|socket voltage'),
-    ('inspect_lamp', r'inspect|check|examine', r'lamp housing|projector lamp'),
-    ('clear_vent', r'clear|unblock|uncover|clean', r'air vent|rear vent|ventilation grille|projector vent'),
-    ('restart_projector', r'restart|switch on|turn on|power on', r'projector'),
+    ('inspect_vent', r'inspect|inspected|check|checked|examine|examined|look at|looked at', r'air vent|rear vent|ventilation grille|projector vent'),
+    ('check_voltage', r'check|checked|inspect|inspected|measure|measured|test|tested', r'supply voltage|wall voltage|socket voltage'),
+    ('inspect_lamp', r'inspect|inspected|check|checked|examine|examined', r'lamp housing|projector lamp'),
+    ('clear_vent', r'clear|cleared|unblock|unblocked|uncover|uncovered|clean|cleaned', r'air vent|rear vent|ventilation grille|projector vent'),
+    ('restart_projector', r'restart|restarted|switch on|switched on|turn on|turned on|power on|powered on', r'projector'),
 )
 
 def active(cycle: int) -> bool:
