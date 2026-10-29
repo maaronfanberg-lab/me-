@@ -168,6 +168,21 @@ def messages(payload: dict, entity: str) -> list[dict]:
         # Its final placement prevents short abstract transcript tails from
         # silently erasing the ongoing situation during this bounded window.
         user += chr(10) + chr(10) + situational_grounding
+        if followup_active(int(room_cycle)):
+            from room_world_actions import available_actions
+            possibilities = available_actions(scene_for_cycle(int(room_cycle)).identifier)
+            if possibilities:
+                user += (
+                    chr(10) + chr(10)
+                    + "PHYSICAL OPTIONS IN THE FICTIONAL SETTING (not actions anyone "
+                      "has yet taken, and not dialogue you must imitate): "
+                    + "; ".join(possibilities)
+                    + ". If you choose to investigate, you may just perform an "
+                      "action and tell the others what you did in first person. "
+                      "A witnessed action produces an observable simulated result; "
+                      "saying someone ought to check something does not. "
+                      "You may also answer directly from what you personally know."
+                )
     # Source-linked causal environment. No invented speaker utterances.
     # An actual visitor turn supersedes the fictional setting.
     if (os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1"
