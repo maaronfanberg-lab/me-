@@ -1,0 +1,68 @@
+name: Lapse G11 larger-network compute amortization
+
+on:
+  pull_request:
+    paths:
+      - "experiments/lapse-meter/GAUGE_G11_PREREGISTRATION.md"
+      - "experiments/lapse-meter/experiments/g11_amortization.py"
+      - "experiments/lapse-meter/results/g11/**"
+      - ".github/workflows/lapse-g11-amortization.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  g11:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      PYTHONHASHSEED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install tested CPU scientific dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.5.1+cpu" "torchvision==0.20.1+cpu"
+          python -m pip install "numpy==2.3.5" "scikit-learn==1.8.0" "tqdm>=4.60,<5"
+      - name: Install original authors' PathCond at immutable commit
+        run: python -m pip install --no-deps "git+https://github.com/Artim436/pathcond.git@535b202e3476c64d5e7e9ec5e817344fb5cfd787"
+      - name: Smoke-test all task-size-method combinations using reserved seed119
+        working-directory: experiments/lapse-meter
+        run: python -u experiments/g11_amortization.py --smoke
+      - name: Run all 40 preregistered G11 pairs (80 training trajectories)
+        working-directory: experiments/lapse-meter
+        run: python -u experiments/g11_amortization.py results/g11/ci_full.json
+      - name: Report original frozen scientific outcomes including failures
+        if: always()
+        working-directory: experiments/lapse-meter
+        run: |
+          python - <<'PY'
+          import json,os
+          p='results/g11/ci_full.json'
+          if not os.path.isfile(p):
+              print('NO G11 RESULTS: inspect installation or smoke failure')
+          else:
+              s=json.load(open(p))['summary']
+              for k,v in s.items():
+                  if k!='cells':print(k,v)
+              for c in s['cells']:
+                  print(c['task'],c['width'],c['depth'],'time win',c['h1_time_win'],
+                        'gauge win',c['h2_gauge_win'],'accuracy',c['h3_noninferior'])
+                  for k,v in c['stats'].items():
+                      print(k,'failures',v['failures'],'crossed',v['crossed'],
+                            'median_s',v['median_time_to_target'],'CE600',v['mean_test_ce_600'],
+                            'test_acc600',v['mean_test_acc_600'],'gauge_gap600',v['mean_gauge_gap_600'])
+          PY
+      - name: Archive full raw results, whether hypotheses pass or fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lapse-g11-full-results
+          path: experiments/lapse-meter/results/g11/ci_full.json
+          if-no-files-found: warn
