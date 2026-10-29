@@ -13,6 +13,20 @@ cases = (
     ("library-exhibit", "sarah", "I inspect the photograph frame.", "1934"),
     ("rainwater-tank", "owen", "I inspect the gutter.", "leaves"),
 )
+# Actual cycle-36303 speech was silently ignored by the earlier parser.
+# An adverb does not turn an already-completed physical act into a plan.
+assert "quieter" in action_consequence(
+    "choir-recording", "mara",
+    "I just moved the microphone cable, and it's now lying in a different location, but I'm not sure if that's going to make a difference.")["effect"]
+assert action_consequence("choir-recording", "mara",
+                          "I already moved the microphone cable.")["action"] == "move"
+for proposed in ("I'm going to move the microphone cable.",
+                 "I'll move the microphone cable.",
+                 "I just could move the microphone cable.",
+                 "I might just move the microphone cable.",
+                 "I just imagined moving the microphone cable."):
+    assert action_consequence("choir-recording", "mara", proposed) is None, proposed
+
 for scene, actor, spoken, expected in cases:
     observed = action_consequence(scene, actor, spoken)
     assert observed is not None, (scene, spoken)
