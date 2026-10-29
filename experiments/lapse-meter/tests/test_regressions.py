@@ -73,7 +73,16 @@ def test_failed_runs_are_counted():
     check("the never-trained 128-layer circle run is counted", dead == 1, f"{dead} of {len(rs)}")
 
 
+def test_lm_corpus_pinned():
+    """CORRECTIONS 71: the language-model corpus was built from whichever licence files a machine had, so GitHub's
+    runners trained on different text. It is now read from data/lm_corpus.txt, whose hash is fixed here."""
+    import hashlib
+    sys.path.insert(0, os.path.join(ROOT, "experiments")); import tiny_lm
+    txt, chars = tiny_lm.corpus()
+    check("language-model corpus is the pinned file", hashlib.sha256(txt.encode()).hexdigest()[:16] == "4a5df7f7fcde647e" and len(chars) == 82)
+
+
 if __name__ == "__main__":
-    for f in [test_one_time_base, test_alpha_removed_once, test_scripts_create_output_folder, test_failed_runs_are_counted]:
+    for f in [test_one_time_base, test_alpha_removed_once, test_scripts_create_output_folder, test_failed_runs_are_counted, test_lm_corpus_pinned]:
         f()
     print(f"{sum(RESULTS)}/{len(RESULTS)} regression checks passed")

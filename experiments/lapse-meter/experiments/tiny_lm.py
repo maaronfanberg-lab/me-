@@ -15,7 +15,16 @@ CONTEXT, DEPTH, WIDTH, STEPS, BATCH = 16, 24, 128, 6000, 64
 LOG_AT = [0, 100, 300, 1000, 2000, 4000, 6000]
 
 
+CORPUS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "lm_corpus.txt")
+
+
 def corpus():
+    """The pinned corpus (data/lm_corpus.txt, written from this environment's licence texts on 2026-10-29) if present.
+    Machines differ in which licence files they have, which silently changed the corpus on GitHub's runners
+    (CORRECTIONS 71); the pinned file makes every machine use the same text. tests/test_regressions.py fixes its hash."""
+    if os.path.exists(CORPUS_FILE):
+        txt = open(CORPUS_FILE, encoding="utf-8").read()
+        return txt, sorted(set(txt))
     names = ["Apache-2.0", "GPL-3", "GFDL-1.3", "Artistic", "BSD", "MPL-2.0", "LGPL-3", "CC0-1.0"]
     txt = ""
     for n in names:
