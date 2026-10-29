@@ -166,16 +166,19 @@ def _fact_opportunity(entity, latest, history, cycle):
         return 0.0
     fact = private_observation(entity, cycle)
     relevant = _fact_terms(question) & _fact_terms(fact)
-    if not relevant:
-        return 0.0
     # Once this agent has actually voiced the fact, it is no longer unshared.
+    # This is an information opportunity, not an across-beat speaker quota.
     for previous in history[-12:]:
-        if _norm(previous.get("speaker")) != entity:
+        if not isinstance(previous, dict) or _norm(previous.get("speaker")) != entity:
             continue
         voiced = _fact_terms(previous.get("text")) & _fact_terms(fact)
         if len(voiced) >= 2:
             return 0.0
-    return 0.6
+    # A specific question about my observation is strongest. An unaddressed
+    # open question about the shared *ongoing* problem can also invite a
+    # participant who has a new eyewitness fact to volunteer it. The next
+    # generation still chooses its words; no utterance is mandated.
+    return 0.6 if relevant else 0.36
 
 
 def choose_next(history, bus, config, minds, *, rank=0, cycle=None):
