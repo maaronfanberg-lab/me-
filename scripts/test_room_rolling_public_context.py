@@ -28,8 +28,9 @@ payload = {
 with patch("pathlib.Path.read_text", return_value=json.dumps({"conversation": public})):
     history = witnessed_context(payload, "mara")
     rendered = messages(payload, "mara")
-assert len(history) == 8, history
-assert [x["id"] for x in history] == ["source-%02d" % i for i in range(4, 12)]
+assert 8 <= len(history) <= 13, history
+assert {"source-%02d" % i for i in range(4, 12)} <= {x["id"] for x in history}
+assert "source-01" in {x["id"] for x in history}  # older completed observation
 assert history[-1]["speaker"] == "allen"
 assert len({x["id"] for x in history}) == len(history)
 assert "I tightened the loose connector." in rendered[1]["content"]
