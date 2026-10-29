@@ -612,6 +612,8 @@ depend on **kick × η|x|²**.
 - **Prospective test** (experiment 53, pre-registered, 72 runs at input scales and readout rates never run before):
   - right in **64 of 72 (89%)**, against 79% for the kick alone;
   - right in all 7 runs where the two rules disagreed.
+  - *but the 3 seeds per cell never disagreed, so the honest count is 24 cells: 21 right (88%, 95% CI 68–97%),
+    against 19 for kick alone. Every miss was a false alarm, never a missed divergence (CORRECTIONS 81).*
 
 The cutoff itself is fitted, not derived.
 
