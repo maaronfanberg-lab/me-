@@ -30,3 +30,8 @@ This is a CPU-only controlled screen, not matched-GPU/FLOPs or large-scale ML be
 If a code defect is found after any target run, publish the original results, explain correction, and use **new** genuinely untouched seeds for confirmation. Earlier G6–G10 original findings remain immutable; no merge to main before review.
 
 Source: Lebeurrier, Vayer, Gribonval, *Path-conditioned training*, ICML 2026 https://proceedings.mlr.press/v306/lebeurrier26a.html .
+
+## Preserved smoke-test failure and dtype integration fix (before target-seed runs)
+The initial [GitHub Actions run 40801254704](https://github.com/maaronfanberg-lab/me-/actions/runs/40801254704) installed the unchanged upstream PathCond, but its seed119 smoke test failed for all PathCond arms with `RuntimeError: mat1 and mat2 must have the same dtype, but got Double and Float`. The upstream pathnorm code constructs a dummy tensor with `torch.ones(...)` at the process-default dtype, while the new G11 harness had set PyTorch default to float64 for initial weight loading and subsequently cast MLP models to float32. **No target-seed training or heldout results were accessed.**
+
+The narrowly scoped correction is to set `torch.set_default_dtype(torch.float32)` only while invoking the unmodified official `rescaling_path_cond`, restoring the prior default in a `finally` block. This only repairs caller dtype compatibility; upstream implementation, factors, LR, architectures, targets, 600-step budget and fresh seeds120–124 are unchanged. Repeat the full seed119 smoke prior to the first target run. The failed smoke CI is retained as an audit record, not hidden.
