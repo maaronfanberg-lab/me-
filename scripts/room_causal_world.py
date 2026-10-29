@@ -137,12 +137,12 @@ def replay(cycle: int, turns: list[dict]) -> dict:
         # nothing about the monitor reading, and a question is not evidence.
         unasserted = (
             spoken.endswith('?')
-            or re.match(r"^\\s*(?:I\\s+(?:think|wonder|suspect|guess|might|could|would|will|want)|"
-                        r"we\\s+(?:might|could|would|will|should)|maybe|perhaps|what if|let's)\\b",
+            or re.match(r"^\s*(?:I\s+(?:think|wonder|suspect|guess|might|could|would|will|want)|"
+                        r"we\s+(?:might|could|would|will|should)|maybe|perhaps|what if|let's)\b",
                         spoken, re.I) is not None
             or (action is not None and re.search(
-                r"\\b(?:found|noticed|observed|saw|showed|shows|stayed|steady|"
-                r"reading|revealed|confirmed)\\b", spoken, re.I) is None)
+                r"\b(?:found|noticed|observed|saw|showed|shows|stayed|steady|"
+                r"reading|revealed|confirmed)\b", spoken, re.I) is None)
         )
         if len(overlap) >= 2 and speaker not in disclosures and not unasserted:
             disclosures[speaker] = {
