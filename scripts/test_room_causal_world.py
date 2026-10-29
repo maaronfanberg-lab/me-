@@ -74,10 +74,33 @@ assert 'stays bright' in w.cue_for('owen',s+6,history)
 assert not w.replay(s+4,history)['solved']
 assert len(w.replay(s+3,history)['effects']) == 2
 assert len(w.replay(s+7,history+[turn(s+6,'sarah','I inspect the air vent.')])['effects']) == 5
-fact=turn(s+1,'sarah','The dimming starts after the projector has run for several minutes.')
+fact=turn(s+1,'sarah','I noticed the dimming starts after the projector has run for several minutes.')
 d=w.replay(s+2,[fact])['disclosures']
 assert len(d)==1 and d[0]['source_id']==fact['id']
 assert w.PRIVATE['mara'] not in w.cue_for('owen',s+2,[fact])
 assert w.PRIVATE['sarah'] not in w.cue_for('sarah',s+2,[fact])
 assert w.cue_for('sarah',w.TRIAL_END,history)==''
+# The production feed drifted into a theory about "the agent's public
+# speech" causing the projector to dim. Such speculation must not enter a
+# first-person evidence ledger or be echoed as a scene mechanic.
+speculation = turn(s+8,'mara',
+    "I think the agent's public speech might be causing the projector to dim.")
+reported = turn(s+9,'jules',
+    "I noticed folded cardboard partly covering the rear ventilation grille.")
+effect = turn(s+10,'sarah',"I inspected the rear ventilation grille.")
+cue = w.cue_for('owen',s+11,[speculation,reported,effect])
+assert "folded cardboard" in cue.lower()
+assert "grille is packed" in cue.lower()
+assert "agent's public speech" not in cue.lower()
+assert "source_id" not in cue.lower()
+assert "public speech" not in cue.lower()
+assert "publicly witnessed evidence" not in cue.lower()
+assert "bounded fictional shared environment" not in cue.lower()
+assert "what has changed in the room" in cue.lower()
+assert "already" not in w.cue_for('jules',s+8,[speculation]).lower() or w.PRIVATE['jules'] in w.cue_for('jules',s+8,[speculation])
+assert w.PRIVATE['mara'] not in w.cue_for('owen',s+11,[speculation,reported,effect])
+# A scene cue must use actual line breaks, not literal backslash-n characters.
+assert '\\n' not in cue
+assert '\n' in cue
+
 print('PASS: finite test, provenance, private facts, source time ordering, actions, outcome and expiration')
