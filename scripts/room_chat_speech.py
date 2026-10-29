@@ -119,6 +119,24 @@ def messages(payload: dict, entity: str) -> list[dict]:
               "Speak naturally as yourself; you may react to the event, ask another person, "
               "or continue an urgent earlier exchange. Say only your own next turn."
         )
+    # Explicitly separate witnessed character action and fictional environment
+    # consequence from ordinary speech. No synthetic speech is generated.
+    if situational_grounding and os.environ.get("ROOM_WORLD_ACTIONS") == "1" and history:
+        from room_hidden_world import scene_for_cycle
+        from room_world_actions import action_consequence
+        witnessed = history[-1]
+        effect = action_consequence(
+            scene_for_cycle(int(room_cycle)).identifier,
+            witnessed.get("speaker"),
+            witnessed.get("text"),
+        )
+        if effect:
+            user += (chr(10) + chr(10)
+                     + "SIMULATED ENVIRONMENT RESPONSE TO THE PREVIOUS WITNESSED ACTION: "
+                     + effect["effect"]
+                     + " This observation is now visible to the group, but it is not "
+                       "another participant speaking and does not prove anyone has "
+                       "understood it. You can react or ask about it, naturally.")
     if situational_grounding:
         # World evidence is a distinct channel, not an invented speaker turn.
         # Its final placement prevents short abstract transcript tails from

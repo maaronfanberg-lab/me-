@@ -1,0 +1,28 @@
+# Witnessed environmental consequences for the Room (2026-10-29)
+
+## Observed problem, question and baseline
+After merging PR 356 and 357, the 100-turn Room canary's first 20+ turns remained dominated by meta-narratives about a radio's silence. Even when given private individual observations and a one-turn external-world event, the agents had no way to *do something* that altered their shared situation and created a new observational consequence. The narrow action-feedback hypothesis asks: can a real environment response to a freely authored character action create longer causal dialogues than repeatedly describing static scene facts? We **do not** claim success based on static tests.
+
+## Research foundation and recent counterpoints
+- Sacks, Schegloff & Jefferson (1974), Language 50, 696-735, DOI 10.2307/412243: locally managed turn-taking and accountable sequential responses.
+- Clark & Wilkes-Gibbs (1986), Cognition, DOI 10.1016/0010-0277(86)90010-7: real grounding requires mutual evidence and revision, not thematic lexical overlap.
+- Tang, Mao & Suhr, EMNLP 2024, https://aclanthology.org/2024.emnlp-main.1100/: models do worse than human pairs at multi-perspective referential grounding, and feedback on communicative success improves performance. Human communication tasks transfer imperfectly to four simulated independent Room agents.
+- Peng & Shang, NeurIPS 2025, https://papers.neurips.cc/paper_files/paper/2025/hash/15294ba2dcfb4521274f7aa1c26f4dd4-Abstract-Conference.html: executable character logic can improve consistency and controllability in role-playing, even with 1B models. This supports testing an explicit world-state consequence function rather than a purely verbal reminder; their experiments do not directly validate our Room.
+- Xu et al., 2026 preprint, https://arxiv.org/abs/2601.11007: AdaMARP explicitly interleaves thought, action, environment and speech with scene management, supporting this as a plausible design direction. Claims are preprint-dependent and not direct replication.
+
+## Mechanism and competing explanations
+An autonomous participant MAY say a simple actual first-person act (e.g., "I check the pressure gauge."). Only a conservative positively witnessed action, by one of the four agents, applied to the current fictional scene, produces an explicit *environmental* result (e.g., "The gauge reads 20 kPa"). Hypothetical / conditional sentences and visitor texts never mutate the simulated world. Every result has an actor, action, object, and source label, and is **not** a synthetic speech turn. The result appears in the next speaker's prompt as an environmental observation, not as a made-up statement by another person. The model must decide whether to act, and the external world only responds to a witnessed action. This feature is **OFF** in the workflow and cannot trigger without the separate `ROOM_WORLD_ACTIONS=1` gate alongside active finite scene trial; only a disabled prototype is being checked.
+
+The rule-based recognizer is intentionally conservative and will miss common natural-language actions, which could yield nearly zero events. A model may also learn to say formulaic "I check X" and then still fail to discuss consequences. If this happens, the mechanism fails. Environment consequences are fictional within the simulated setting, not real-world facts. The project must not hide prompts or publish private model internals.
+
+## Implementation mapping and limits
+- `scripts/room_world_actions.py`: narrowly scoped, inspectable `action_consequence(scene,speaker,utterance)` return or None.
+- `scripts/room_chat_speech.py`: separated world-result channel, only for an actual immediately preceding Room participant action, never as a forged spoken turn.
+- `scripts/test_room_world_actions.py`: positives, hypotheticals, other speakers, wrong scenes, actual adapter message, opt-out, visitor priority.
+- `.github/workflows/room-conversation-floor-test.yml`: CI gate.
+
+## Pre-registered live test and falsification
+Before any activation on the main live Room, run all CI, inspect trial run logs and verify a natural factual action actually appears in public speech. If a naturally occurring action arises within an active scene and user has approved experimental interventions, activate only a short, finite observation interval in a separate PR, not indefinitely. Compare 20 turns with versus without world feedback, plus at least 100 combined published turns across conditions. Observe proportion of actual consequence-bearing turns; specific question-answer pair links; correction/repair after new evidence; provenance violations; and repetitive paraphrases. Accept only if several consecutive turns display actual causal progress across multiple speakers. Report no improvement if no action is initiated, even if unit tests pass.
+
+## Ten-level research-gate summary
+1-4: Observed stagnant text, primary conversation analysis and 2024-2026 embodied/role-play research inspected. 5: causal world feedback in explicit channel. 6-7: competing lexical cueing, recognizer false negatives, possible prompt-shaped repetition. 8: model scale and four-agent longitudinal social context differ materially from published tasks. 9: separate disabled module and adapter flag. 10: passing CI is a software boundary only; live semantic proof pending.
