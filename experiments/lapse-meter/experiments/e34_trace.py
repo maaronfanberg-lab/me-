@@ -71,7 +71,8 @@ if __name__ == "__main__":
     task, cond, seed = sys.argv[1], sys.argv[2], int(sys.argv[3])
     base = dict(task=task, act="relu", depth=96, seed=seed)
     base.update({"plain": {}, "cap10": dict(kick_cap=10), "signed": dict(branch_sign=True), "nomean": dict(block_nomean=True),
-                 "nomean_cap10": dict(block_nomean=True, kick_cap=10)}[cond])  # nomean: experiment 35
+                 "nomean_cap10": dict(block_nomean=True, kick_cap=10),
+                 "nomeanall": dict(block_nomean="all"), "nomeanall_cap10": dict(block_nomean="all", kick_cap=10)}[cond])  # nomean: experiment 35
     a = run(dict(base, steps=20, log_every=1)); b = run(dict(base, steps=20, log_every=1), hook=make_hook())
     hook_inert = [e["train_loss"] for e in a["log"]] == [e["train_loss"] for e in b["log"]]
     fine = run(dict(base, steps=300, log_every=1), hook=make_hook())["log"]
@@ -79,7 +80,7 @@ if __name__ == "__main__":
     fl = {e["step"]: e["train_loss"] for e in fine}
     deterministic = all(fl[e["step"]] == e["train_loss"] for e in coarse if e["step"] in fl)
     keep = lambda lg: [{k: v for k, v in e.items() if k not in ("stream_grad", "gate", "stream_norm", "branch_ratio", "density", "dead")} for e in lg]
-    out = os.path.join(HERE, "..", "results", "e35" if cond.startswith("nomean") else "e34", f"{task}_{cond}_s{seed}.json")
+    out = os.path.join(HERE, "..", "results", ("e36" if cond.startswith("nomeanall") else "e35") if cond.startswith("nomean") else "e34", f"{task}_{cond}_s{seed}.json")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     json.dump(dict(config=base, hook_inert=hook_inert, deterministic=deterministic, fine=keep(fine), coarse=keep(coarse)), open(out, "w"))
     print(out, "hook inert:", hook_inert, "deterministic:", deterministic, flush=True)

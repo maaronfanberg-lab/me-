@@ -89,7 +89,7 @@ def run(cfg, path=None, hook=None):
         if c["block_nomean"]:  # experiment 35: no block update may shift its batch-mean pre-activation (dW hbar = 0, db = 0)
             assert c["block"] == "one" and c["opt"] == "sgd"
             hs = net.forward(X[idx])[0]
-            for i in range(1, L - 1):
+            for i in range(0 if c["block_nomean"] == "all" else 1, L - 1):  # "all" (experiment 36) adds the input layer
                 hb_ = hs[i].mean(0); u = hb_ / np.linalg.norm(hb_)
                 gW[i] = gW[i] - np.outer(gW[i] @ u, u); gb[i] = np.zeros_like(gb[i])
         if c["block_lr_mult"] != 1.0 and (c["block_lr_mult_until"] is None or s < c["block_lr_mult_until"]):  # experiment 32
