@@ -35,19 +35,19 @@ print("PASS: witnessed first-person actions yield distinct fictional consequence
 import os
 from unittest.mock import patch
 from room_chat_speech import messages
-from room_hidden_world import GROUNDING_ONSET
+from room_hidden_world import GROUNDING_ONSET, GROUNDING_SECOND_ONSET
 payload = {
-    "entity": "mara", "profile": {}, "room_cycle": GROUNDING_ONSET+1,
-    "context": [{"speaker":"sarah","text":"I check the pressure gauge."}],
+    "entity": "mara", "profile": {}, "room_cycle": GROUNDING_SECOND_ONSET+1,
+    "context": [{"speaker":"sarah","text":"I check the breaker."}],
 }
 with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACTIONS":"1"}):
     with_feedback = messages(payload,"mara")
 assert "SIMULATED ENVIRONMENT RESPONSE" in with_feedback[1]["content"]
-assert "20 kPa" in with_feedback[1]["content"]
+assert "tripped" in with_feedback[1]["content"]
 with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACTIONS":"0"}):
     no_feedback = messages(payload,"mara")
 assert "SIMULATED ENVIRONMENT RESPONSE" not in no_feedback[1]["content"]
-not_an_action = dict(payload, context=[{"speaker":"sarah","text":"What if I check the pressure gauge?"}])
+not_an_action = dict(payload, context=[{"speaker":"sarah","text":"What if I check the breaker?"}])
 with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACTIONS":"1"}):
     hypothetical = messages(not_an_action, "mara")
 assert "SIMULATED ENVIRONMENT RESPONSE" not in hypothetical[1]["content"]
@@ -56,3 +56,7 @@ with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACT
     visitor_reply = messages(visitor, "mara")
 assert "SIMULATED ENVIRONMENT RESPONSE" not in visitor_reply[1]["content"]
 print("PASS: optional speech-linked environment effects never fabricate actions, speech, or visitor facts")
+
+with patch.dict(os.environ, {"ROOM_HIDDEN_WORLD_EXPERIMENT":"1", "ROOM_WORLD_ACTIONS":"1"}):
+    earlier_phase = messages(dict(payload,room_cycle=GROUNDING_ONSET+1), "mara")
+assert "SIMULATED ENVIRONMENT RESPONSE" not in earlier_phase[1]["content"]
