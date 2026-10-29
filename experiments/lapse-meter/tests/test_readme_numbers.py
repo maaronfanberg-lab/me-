@@ -186,5 +186,20 @@ def first_full(task):
 claim("E27 shortest full window", f"{first_full('digits')} steps on digits and {first_full('circle-clean')} on the circle")
 e33 = open(os.path.join(R, "e33_analysis.md")).read()
 claim("E33 all detach-mean broken", "All 6 runs diverged" if sum(1 for l in e33.splitlines() if "detach_mean" in l and "**broken**" in l) == 6 else "MISMATCH")
+# Section 16 (experiments 36-40), from the analysis files the pre-registered scripts wrote
+def rows_of(name, tag):
+    return [l for l in open(os.path.join(R, name)).read().splitlines() if l.startswith(f"| {tag}")]
+e36 = open(os.path.join(R, "e36_analysis.md")).read()
+dig_div = sum(1 for l in rows_of("e36_analysis.md", "digits | nomeanall |") if "**diverged**" in l)
+cir_ok = sum(1 for l in rows_of("e36_analysis.md", "circle-clean | nomeanall |") if "**healthy**" in l)
+claim("E36 digits diverge, circle healthy", "all 5 diverge" if dig_div == 5 and cir_ok == 5 else "MISMATCH")
+e37 = [l.split("|") for l in rows_of("e37_analysis.md", "digits |")]
+ok = [int(c[4]) for c in e37 if "trained" in c[7]]; bad = [int(c[4]) for c in e37 if "diverged" in c[7]]
+lo = max(k for k in ok if k < min(bad)); band = sorted([k for k in ok + bad if lo < k < 1000]); hi = min(b for b in bad if b > 1000)
+claim("E37 digits band", f"kick ≤ {lo} always trained,\n  {band[0]}–{band[-1]} was mixed ({sum(1 for k in band if k in bad)} of {len(band)} diverged), and ≥ {hi:,} always diverged")
+cmax = max(int(c.split("|")[4]) for c in rows_of("e37_analysis.md", "circle-clean |"))
+claim("E37 circle max kick", f"at any kick up to {cmax:,}")
+e40 = open(os.path.join(R, "e40_analysis.md")).read()
+claim("E40 readout-only never diverged", "Training only the readout never\ndiverged" if "| A | 0 of 5" in e40 and "| A3 | 0 of 5" in e40 and "| Astd1 | 0 of 5" in e40 else "MISMATCH")
 print(f"{sum(RESULTS)}/{len(RESULTS)} README numbers match the raw results")
 sys.exit(0 if all(RESULTS) else 1)

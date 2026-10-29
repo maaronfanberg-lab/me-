@@ -555,7 +555,8 @@ circle the teardown came in through the input layer.
 Experiment 37 (pre-registered, 50 runs) tested that reading by sweeping the kick with the teardown blocked. It was
 **mixed**:
 
-- On digits the kick decides, with a sharp threshold: kick ≤ 541 trained, ≥ 1,640 always diverged.
+- On digits the kick decides, through a transition band rather than a sharp threshold: kick ≤ 541 always trained,
+  628–719 was mixed (2 of 3 diverged), and ≥ 1,640 always diverged.
 - The circle never diverged, at any kick up to 5,403.
 
 So "too large" depends on the task.
