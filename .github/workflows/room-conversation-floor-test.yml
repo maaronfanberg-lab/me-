@@ -7,6 +7,7 @@ on:
       - 'scripts/room_conversation_project.py'
       - 'scripts/room_chat_speech.py'
       - 'scripts/test_room_chat_speech_adapter.py'
+      - 'scripts/test_room_native_chat_quality.py'
       - 'scripts/room_research_architecture.py'
       - 'scripts/test_room_process_label_hygiene.py'
       - 'scripts/room_sequence_uptake.py'
@@ -64,6 +65,8 @@ jobs:
         run: python3 scripts/test_room_conversation_project.py
       - name: Validate native chat adapter with real publication preflight
         run: python3 scripts/test_room_chat_speech_adapter.py
+      - name: Test bounded native-chat sentence acceptance without changing legacy limits
+        run: python3 scripts/test_room_native_chat_quality.py
       - name: Verify exact control-label speech quarantine and memory provenance
         run: python3 scripts/test_room_process_label_hygiene.py
       - name: Verify Allen's words survive without invented historical topics
