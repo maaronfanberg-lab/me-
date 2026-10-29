@@ -89,6 +89,15 @@ def validate_uptake(
         return
     text = str(latest.get("text") or "").strip()
     candidate = str(utterance or "").strip()
+    # A full long copy is not a new conversational action, even when a
+    # model labels it "repair". Short exact questions remain valid as a first
+    # other-initiated clarification; shared words and substantive quotations
+    # followed by one's own response are unrestricted.
+    source_words = _utterance_key(text).split()
+    min_echo_words = 20 if text.endswith("?") else 12
+    if (len(source_words) >= min_echo_words
+            and _utterance_key(candidate) == _utterance_key(text)):
+        raise ValueError("unchanged_full_turn_echo")
     if not (text.endswith("?") and candidate.endswith("?")):
         return
     if _utterance_key(candidate) not in {
