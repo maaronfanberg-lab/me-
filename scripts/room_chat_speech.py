@@ -134,7 +134,8 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                     "end it with a period or question mark. No lists, no subordinate "
                     "paragraphs or run-on clauses. Do not refer to yourself in the "
                     "third person. Make one concrete response to what was actually said. "
-                    "Do not make up past events.")
+                    "Do not make up past events. Never write a line for Allen "
+                    "or another participant; speak only as yourself.")
             prompt[0]["content"] += (
                 " The previous candidate did not pass public conversational integrity "
                 "checks (" + last_failure[:48] + "). " + hint)
