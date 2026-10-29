@@ -1,0 +1,82 @@
+name: Room native speech action-specificity shadow A/B
+
+on:
+  push:
+    branches: [research/room-specific-uptake-20261029]
+    paths:
+      - '.github/workflows/room-next-action-shadow.yml'
+      - 'scripts/room_chat_speech.py'
+      - 'scripts/test_room_specific_uptake.py'
+      - 'scripts/room_specific_uptake_probe.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-next-action-model-shadow
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_CHAT_SPEECH_MODE: '1'
+      ROOM_CONVERSATIONAL_FLOOR: '1'
+      ROOM_NODE_PROMPT: 'Isolated, source-grounded local model test'
+      ROOM_BRAIN_ACTIVE: llama3.2-1b
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Compile and run identity, source and native-speech tests
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/room_chat_speech.py scripts/room_specific_uptake_probe.py
+          python3 scripts/test_room_specific_uptake.py
+          python3 scripts/test_room_chat_speech_adapter.py
+          python3 scripts/test_room_sequence_uptake.py
+      - name: Prepare verified production-class local 1B inference
+        run: |
+          set -euo pipefail
+          mkdir -p .shadow_action/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .shadow_action
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .shadow_action/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .shadow_action/llama-runtime-linux-x64.tar.gz -C .shadow_action/runtime
+          curl -fsSL --retry 3 --retry-delay 4             'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true'             -o .shadow_action/model.gguf
+          echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .shadow_action/model.gguf' | sha256sum -c -
+      - name: Real model paired source responses and six-turn continuation
+        run: |
+          set -euo pipefail
+          bin=$(find .shadow_action/runtime -type f -name llama-server | head -1)
+          test -n "$bin"
+          chmod +x "$bin"
+          "$bin" -m .shadow_action/model.gguf --host 127.0.0.1 --port 18089 -c 8192 -np 2 -t 4 >.shadow_action/model.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:18089/health >/dev/null; then ready=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then tail -70 .shadow_action/model.log; exit 1; fi
+          ROOM_MODEL_URL=http://127.0.0.1:18089/completion python3 -u scripts/room_specific_uptake_probe.py
+      - name: Save public, source-linked experiment evidence on branch only
+        if: always()
+        run: |
+          file=docs/research/room-next-action-shadow-20261029.json
+          test -s "$file"
+          git config user.name 'room-next-action-research'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$file"
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record shadow Room next-action A/B results'
+          for i in 1 2 3 4; do
+            git push origin HEAD:research/room-specific-uptake-20261029 && exit 0
+            git fetch origin research/room-specific-uptake-20261029
+            git rebase origin/research/room-specific-uptake-20261029 || { git rebase --abort; exit 1; }
+            sleep "$i"
+          done
+          exit 1
