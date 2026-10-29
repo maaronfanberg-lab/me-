@@ -1,0 +1,218 @@
+{
+  "purpose": "v2 verified whole-turn action retry A/B using production wrapper, never deployed",
+  "model": "llama3.2-1b production wrapper",
+  "source_cycle": 34682,
+  "pairs": [
+    {
+      "source": {
+        "id": "20261028T232026320-mara-v5",
+        "speaker": "mara",
+        "text": "I can tell that our conversation needs to address that awkwardness in our past. Let's try to have a grown-up conversation about the elephant in the room."
+      },
+      "speaker": "sarah",
+      "baseline": {
+        "text": "Hey Sarah, thanks for explaining it. It's great to see you're still pushing the boundaries of cognitive science! Your synthesis really resonates with what I've been exploring lately.",
+        "move": "answer",
+        "target": "allen",
+        "salient_source_word_overlap": 0.0,
+        "exact_echo": false,
+        "response_word_count": 31,
+        "placeholder_or_scaffold": false
+      },
+      "retained": {
+        "text": "I'm not sure what to say to address the elephant in the room. Let's try to have a grown-up conversation about it.",
+        "move": "answer",
+        "target": "mara",
+        "salient_source_word_overlap": 0.556,
+        "exact_echo": false,
+        "response_word_count": 25,
+        "placeholder_or_scaffold": false
+      }
+    },
+    {
+      "source": {
+        "id": "20261028T232336255-jules-v5",
+        "speaker": "jules",
+        "text": "I think we should try new ideas, especially given that new ideas are a mystery to you. You already mentioned wanting to explore new ideas, but I've been trying to encourage you into trying new experiments, which have led to some success in the past."
+      },
+      "speaker": "mara",
+      "baseline": {
+        "text": "You're looking at me like a typical, generic, human-acting, male, non-diversely-marginalized person. Like, just a standard normative male, right? You're treating me like you're addressing a stranger or something, right? I mean, can you do that to someone with a lot of subtle, internalized, socialized diversity? Please.",
+        "move": "answer",
+        "target": "jules",
+        "salient_source_word_overlap": 0.0,
+        "exact_echo": false,
+        "response_word_count": 53,
+        "placeholder_or_scaffold": false
+      },
+      "retained": {
+        "text": "newidea",
+        "move": "bridge",
+        "target": "sarah",
+        "salient_source_word_overlap": 0.0,
+        "exact_echo": false,
+        "response_word_count": 1,
+        "placeholder_or_scaffold": false
+      }
+    },
+    {
+      "source": {
+        "id": "20261028T232538559-jules-v5",
+        "speaker": "jules",
+        "text": "Sara, I've got a notion, I'd like to try something novel in our conversation today."
+      },
+      "speaker": "owen",
+      "baseline": {
+        "text": "I think what Owen just said made more sense.",
+        "move": "answer",
+        "target": "jules",
+        "salient_source_word_overlap": 0.0,
+        "exact_echo": false,
+        "response_word_count": 9,
+        "placeholder_or_scaffold": false
+      },
+      "retained": {
+        "text": "I've got a notion, I'd like to try something novel in our conversation today.",
+        "move": "answer",
+        "target": "jules",
+        "salient_source_word_overlap": 0.8,
+        "exact_echo": false,
+        "response_word_count": 16,
+        "placeholder_or_scaffold": false
+      }
+    },
+    {
+      "source": {
+        "id": "20261028T232612067-owen-v5",
+        "speaker": "owen",
+        "text": "It was actually a mistake that my latest hypothesis needed to be refined and then revised for consistency and to find a model that worked for this complicated scenario."
+      },
+      "speaker": "sarah",
+      "baseline": {
+        "text": "I think I can provide a more balanced and well-rounded perspective.",
+        "move": "answer",
+        "target": "owen",
+        "salient_source_word_overlap": 0.0,
+        "exact_echo": false,
+        "response_word_count": 12,
+        "placeholder_or_scaffold": false
+      },
+      "retained": {
+        "text": "I'll wait until I have a better understanding of the scenario before I share my thoughts. In the meantime, I'll keep exploring potential models and connections between the information, and I'll share what I've noticed so far in a way that makes sense for me.",
+        "move": "repair",
+        "target": "owen",
+        "salient_source_word_overlap": 0.077,
+        "exact_echo": false,
+        "response_word_count": 49,
+        "placeholder_or_scaffold": false
+      }
+    }
+  ],
+  "chains": {
+    "baseline": {
+      "turns": [
+        {
+          "id": "20261028T232026320-mara-v5",
+          "speaker": "mara",
+          "text": "I can tell that our conversation needs to address that awkwardness in our past. Let's try to have a grown-up conversation about the elephant in the room."
+        },
+        {
+          "id": "baseline-0",
+          "speaker": "jules",
+          "text": "If you ask me to share more about my most recent project, I'll try to think of ways to make my approach more innovative and different, since some of our previous attempts didn't quite satisfy my interests. Perhaps I'll use an example involving genetic variation and evolutionarily, we already discussed using this particular organism. I think, in addition, my latest idea could involve integrating machine learning with behavioral ecology, allowing researchers to simulate complex networks and predicting potential responses based on individual behavior. There are more detailed ideas there; if you'd like me to share them with you,"
+        },
+        {
+          "id": "baseline-1",
+          "speaker": "mara",
+          "text": "I'm not really sure I can do that,"
+        },
+        {
+          "id": "baseline-2",
+          "speaker": "jules",
+          "text": "Hey Sarah, I love our banter, but I was thinking, how do you define what we're saying when you react so quickly, even when I know we're in agreement? I'd really like to try something new, like exploring the idea of a 'mimetic hypothesis.' It's possible to think in terms of a 'mimetic hypothesis' when interacting with you and others like us. If we could simulate a 'mimetic' interaction, we could better understand what we're saying and when. This could be a fun task. Let's brainstorm together!"
+        },
+        {
+          "id": "baseline-3",
+          "speaker": "sarah",
+          "text": "I'm not really sure I can do that,."
+        },
+        {
+          "id": "baseline-4",
+          "speaker": "jules",
+          "text": "Hey Sarah, I think it would be really interesting to explore the possibility of some novel species emerging in a new environment. They could be influenced by a certain set of variables and could have unique characteristics, but we'd need to observe and study them to understand what's going on."
+        }
+      ],
+      "diagnostics": {
+        "sample_turns": 6,
+        "autonomous_turns": 6,
+        "speaker_counts": {
+          "jules": 3,
+          "mara": 2,
+          "owen": 0,
+          "sarah": 1
+        },
+        "exact_adjacent_repeats": 0,
+        "contiguous_question_echoes": 0,
+        "short_autonomous_1to3_word_turns": 0,
+        "short_autonomous_rate": 0.0,
+        "longest_identical_action_run": 1,
+        "repeat_evidence": [],
+        "short_turn_evidence": [],
+        "limitations": "Structural diagnostics only. Cannot prove or disprove genuine responsiveness, semantic progress, intentional repair or appropriate short replies."
+      }
+    },
+    "retained": {
+      "turns": [
+        {
+          "id": "20261028T232026320-mara-v5",
+          "speaker": "mara",
+          "text": "I can tell that our conversation needs to address that awkwardness in our past. Let's try to have a grown-up conversation about the elephant in the room."
+        },
+        {
+          "id": "retained-0",
+          "speaker": "jules",
+          "text": "what does the elephant in the room need for a grown-up conversation?"
+        },
+        {
+          "id": "retained-1",
+          "speaker": "mara",
+          "text": "I think we need to rethink our strategy and improve our clinic's services to better address our clients' needs."
+        },
+        {
+          "id": "retained-2",
+          "speaker": "jules",
+          "text": "Hey, Mara, we need to rethink our strategy and improve our clinic's services to better address our clients' needs."
+        },
+        {
+          "id": "retained-3",
+          "speaker": "mara",
+          "text": "Hey, Mara, you sound like you're stuck on that one strategy and strategy and our clinic's services are failing to address our clients' needs. Can you give me some concrete examples to explain why we need to rethink our strategy? I want to understand what's behind this, what's the problem, and how we can actually address these needs better."
+        },
+        {
+          "id": "retained-4",
+          "speaker": "jules",
+          "text": "Can you describe your approach to understanding the clients' needs? You said they're failing to address them, but I've noticed that they're sometimes happy with their services. They seem to appreciate what you do, and your approach is always so creative."
+        }
+      ],
+      "diagnostics": {
+        "sample_turns": 6,
+        "autonomous_turns": 6,
+        "speaker_counts": {
+          "jules": 3,
+          "mara": 3,
+          "owen": 0,
+          "sarah": 0
+        },
+        "exact_adjacent_repeats": 0,
+        "contiguous_question_echoes": 0,
+        "short_autonomous_1to3_word_turns": 0,
+        "short_autonomous_rate": 0.0,
+        "longest_identical_action_run": 1,
+        "repeat_evidence": [],
+        "short_turn_evidence": [],
+        "limitations": "Structural diagnostics only. Cannot prove or disprove genuine responsiveness, semantic progress, intentional repair or appropriate short replies."
+      }
+    }
+  },
+  "limitations": "Small sample and structural metrics; judge semantic responsiveness and multi-turn continuity manually."
+}
