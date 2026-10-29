@@ -27,6 +27,9 @@ for proposed in ("I'm going to move the microphone cable.",
                  "I just imagined moving the microphone cable."):
     assert action_consequence("choir-recording", "mara", proposed) is None, proposed
 
+assert action_consequence("greenhouse-watering", "jules", "I check the irrigation filter.")["action"] == "inspect"
+assert action_consequence("greenhouse-watering", "owen", "I checked the irrigation filter.")["object"] == "irrigation filter"
+assert action_consequence("greenhouse-watering", "jules", "I could check the irrigation filter.") is None
 for scene, actor, spoken, expected in cases:
     observed = action_consequence(scene, actor, spoken)
     assert observed is not None, (scene, spoken)
