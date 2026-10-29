@@ -28,12 +28,14 @@ turns = [
 ]
 assert public_scene_ledger(LEDGER_ONSET-1, turns) == []
 ledger = public_scene_ledger(LEDGER_ONSET,turns)
-assert {e["speaker"] for e in ledger} == {"owen","sarah","mara"}, ledger
-assert all(e["source_id"] in {"o-1","s-2","m-3"} for e in ledger)
+assert {e["speaker"] for e in ledger} == {"owen","sarah"}, ledger
+assert all(e["source_id"] in {"o-1","s-2"} for e in ledger)
 assert "gutter" not in scene_common_ground(LEDGER_ONSET,turns).lower()
 assert "rainfall log" in scene_common_ground(LEDGER_ONSET,turns).lower()
 assert "puddle" in scene_common_ground(LEDGER_ONSET,turns).lower()
 assert "narrative structure" not in scene_common_ground(LEDGER_ONSET,turns)
+assert "What if the open lid" not in scene_common_ground(LEDGER_ONSET,turns)
+assert "NOT INDEPENDENTLY VERIFIED" in scene_common_ground(LEDGER_ONSET,turns)
 assert public_scene_ledger(REPLICATION_END,turns) == []
 assert private_observation("jules",LEDGER_ONSET) not in scene_common_ground(LEDGER_ONSET,turns)
 
