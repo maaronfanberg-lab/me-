@@ -6,7 +6,7 @@ def turn(n, who, text, uid=None):
     return {'id': uid or str(n), 'speaker':who, 'text':text,
             'beat_id':'beat-test-%06d' % n}
 
-assert w.TRIAL_END - w.TRIAL_START == 120
+assert w.TRIAL_END - w.TRIAL_START == 240
 assert w.TRIAL_START >= earlier.FOLLOWUP_END, 'independent trials must not run simultaneously'
 for n in (w.TRIAL_START-1, w.TRIAL_END, True): assert not w.active(n)
 assert w.active(w.TRIAL_START) and w.active(w.TRIAL_END-1)
@@ -79,5 +79,33 @@ d=w.replay(s+2,[fact])['disclosures']
 assert len(d)==1 and d[0]['source_id']==fact['id']
 assert w.PRIVATE['mara'] not in w.cue_for('owen',s+2,[fact])
 assert w.PRIVATE['sarah'] not in w.cue_for('sarah',s+2,[fact])
+# Regression based on eight consecutive real public Room turns (36538-36545).
+# Each advanced the projector theory without a witnessed physical action.
+live_loop = [
+    turn(36538, 'owen', "The smell of hot dust seems too specific to be just a coincidence - is it possible that the projector's thermal management system is producing an abnormal heat signature that's being detected by the visitor?"),
+    turn(36539, 'mara', "The smell of hot dust seems like an obvious trigger, but have we considered that it might be a result of the projector's own malfunctioning thermal management system, rather than a environmental factor?"),
+    turn(36540, 'owen', "Is the cardboard grille's potential makeshift air filter being driven by a specific temperature threshold that's being exceeded by the projector's thermal management system?"),
+    turn(36541, 'mara', "I'd like to probe further into the visitor's claim of the smell of hot dust - what's the duration of the smell, does it persist throughout the dimming event, and has anyone noticed any other environmental factors, like unusual lighting or temperature fluctuations?"),
+    turn(36542, 'owen', "The visitor's claim of the smell of hot dust seems like a crucial lead - can we confirm the duration of the smell and whether it persists throughout the entire dimming event?"),
+    turn(36543, 'mara', "Let's consider the cardboard grille as a potential culprit, but also examine the environmental factors that might be influencing the projector's behavior – Jules, did you notice any unusual temperature fluctuations or air circulation patterns near the projector during the show?"),
+    turn(36544, 'owen', "Before we dive deeper into the potential causes, I think it's essential to consider the projector's internal thermal management system – is it possible that the agent's speech triggers a specific sequence of events that compromises the system's performance, resulting in the dimming?"),
+    turn(36545, 'mara', "That's a great point about the smell of hot dust – it's almost as if we're being primed to notice something unusual, rather than actually detecting a temperature fluctuation."),
+]
+assert w.replay(36546, live_loop)['effects'] == []
+stalled_cue = w.cue_for('jules', 36546, live_loop)
+assert 'last eight public turns contained no recognized completed physical action' in stalled_cue
+assert 'inspect the rear ventilation grille' in stalled_cue
+assert 'remove a visible obstruction' in stalled_cue
+assert 'restart the projector and observe' not in stalled_cue
+# Actual action consequences must replace speculation without pretending anyone acted.
+resolved_loop = live_loop + [
+    turn(36546, 'jules', 'I inspect the rear grille.'),
+    turn(36547, 'mara', 'I remove the folded cardboard.'),
+    turn(36548, 'owen', 'I restart the projector.'),
+]
+assert w.replay(36549, resolved_loop)['solved']
+assert 'last eight public turns contained no recognized completed physical action' not in w.cue_for('sarah', 36549, resolved_loop)
+assert 'practical problem appears resolved' in w.cue_for('sarah', 36549, resolved_loop)
+
 assert w.cue_for('sarah',w.TRIAL_END,history)==''
 print('PASS: finite test, provenance, private facts, source time ordering, actions, outcome and expiration')

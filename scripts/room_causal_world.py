@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import re
 
 TRIAL_START = 36480
-TRIAL_END = TRIAL_START + 120
+TRIAL_END = TRIAL_START + 240
 PEOPLE = ('sarah', 'mara', 'owen', 'jules')
 COMMON = ('At the neighborhood planetarium, the projector repeatedly dims ten '
           'minutes into the astronomy show, although it starts normally.')
@@ -160,7 +160,34 @@ def cue_for(entity: str, cycle: int, public_turns: list[dict]) -> str:
         notice += (' The projector stayed bright after a witnessed restart. '
                    'The practical problem appears resolved, and other subjects are welcome.')
     else:
-        notice += (' The cause is not yet established by public evidence. You may '
-                   'investigate, ask, challenge, take a direct action or continue '
-                   'a more interesting existing exchange. Nothing is mandatory.')
+        # Give the small model executable, public-world affordances, not another
+        # abstract question. These are possibilities, never invented actions.
+        # The next turn remains entirely authored by the selected character.
+        options = ['inspect the rear ventilation grille',
+                   'measure the wall socket voltage',
+                   'inspect the lamp housing']
+        if not state['vent_cleared']:
+            options.append('remove a visible obstruction from the grille, if one is found')
+        else:
+            options.append('restart the projector and observe whether it stays bright')
+        notice += (' The projector still dims; the practical cause has not been '
+                   'established by a completed test. Available physical choices: '
+                   + '; '.join(options) + '. '
+                   'If you choose to do one, describe the action as something you '
+                   'actually do now (for example, "I inspect the rear grille"), '
+                   'not a promise to do it later. Only witnessed actions change '
+                   'the simulated environment. You may also decline or pursue '
+                   "another person\'s important question.")
+        recent = [turn for turn in public_turns
+                  if isinstance(turn, dict)
+                  and turn.get('speaker') in PEOPLE
+                  and (when := cycle_of(turn)) is not None
+                  and TRIAL_START <= when < cycle][-8:]
+        if len(recent) >= 8 and not any(
+                witnessed_action(str(turn.get('speaker')),
+                                 str(turn.get('text') or ''))
+                for turn in recent):
+            notice += (' The last eight public turns contained no recognized '
+                       'completed physical action; more causal guesses alone '
+                       'will not test the projector.')
     return notice
