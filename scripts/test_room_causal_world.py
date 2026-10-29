@@ -146,6 +146,13 @@ with patch.dict(os.environ, {'ROOM_CAUSAL_WORLD_EXPERIMENT': '1',
              'topic':{}, 'partner':'mara'}, 'expression', 'sarah')
         assert compact['situated_environment'] == scene
         cue_reader.assert_called_once_with('sarah')
+        visitor = legacy._autonomy_compact(
+            {'entity':'sarah', 'profile':{}, 'context':[],
+             'event':{'id':'allen-1', 'speaker':'allen',
+                      'text':'I need help with something else.'},
+             'topic':{}, 'partner':'allen'}, 'expression', 'sarah')
+        assert 'situated_environment' not in visitor
+        cue_reader.assert_called_once_with('sarah')
 with patch.dict(os.environ, {'ROOM_CAUSAL_WORLD_EXPERIMENT': '1',
                              'ROOM_HIDDEN_WORLD_EXPERIMENT': '0'}):
     with patch('room_causal_world.production_cue', return_value=scene):
