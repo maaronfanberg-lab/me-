@@ -474,7 +474,9 @@ def private_commit(parts: list[dict], key: str):
             "diagnostic_only": True,
             # Runner-loaded fingerprint, NOT proof of dialogue quality.
             "speech_backend": (
-                "native_chat_v1" if os.environ.get("ROOM_CHAT_SPEECH_MODE") == "1"
+                "native_chat_v1"
+                if (os.environ.get("ROOM_CHAT_SPEECH_MODE") == "1"
+                    and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") == "1")
                 else "json_schema_v1"
             ),
         }
