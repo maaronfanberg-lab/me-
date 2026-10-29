@@ -196,6 +196,17 @@ def _autonomy_compact(payload: dict, role: str, self_entity: str | None = None) 
     relationship = clean_payload.get("relationship")
     compact = base._compact_payload(clean_payload, role, self_entity)
 
+    # The selected native-chat path already receives the causal scene. When
+    # generation fails and the runner temporarily falls back to legacy speech,
+    # do not silently discard the world, its private clues, or completed acts.
+    if (role == "expression"
+            and os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1"
+            and os.environ.get("ROOM_CONVERSATIONAL_FLOOR") != "1"):
+        from room_causal_world import production_cue
+        scene = production_cue(str(self_entity or ""))
+        if scene:
+            compact["situated_environment"] = scene
+
     self_description = _profile_lens(profile, role)
     if self_description:
         compact["self"] = self_description
@@ -431,6 +442,17 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
              "and useful short quotations are welcome, but an identical whole "
              "speech action does not answer its speaker.\n" if social_floor
              else "Avoid copying recent speech. Stay inside the conversation.\n")
+        )
+
+    if role == "expression" and compact.get("situated_environment"):
+        base_guard += (
+            "\\nSITUATED_WORLD\\n"
+            "The situated_environment is a real part of this fictional scene, "
+            "not a speaker turn. A possible inspection is not a completed one. "
+            "You can take an available physical action now and report what you "
+            "actually do, rather than continuing to speculate. Only describe "
+            "an observation as shared if it was spoken publicly. "
+            "Do not claim an action or consequence that has not happened.\\n"
         )
 
     attempts = 3 if role == "expression" else 2
