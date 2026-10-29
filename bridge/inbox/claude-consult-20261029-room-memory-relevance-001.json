@@ -1,0 +1,12 @@
+{
+  "nonce": "claude-consult-20261029-room-memory-relevance-001",
+  "prompt": "Please answer directly without calling repository tools. Engineering review of a four-agent 1B Room with long-term memories. Actual Python source from scripts/room_group_dynamics.py model_context: topic_words=_terms(' '.join(context[-3:])); ranked by (3*(memory.speaker==partner or memory.target==partner)+2*(memory.target==entity)+min(3,len(_terms(memory.text)&topic_words)), recency index); a memory is retrieved if (_terms(memory.text)&topic_words OR memory.speaker==partner OR memory.target==partner). Up to 3 raw 180-char old memory quotations are included in each expression payload, marked remembered_speech_not_verified_fact. Live problem: after several agents cycle on a species-evolution question, Owen abruptly recalls random variable X and P(X=0.1), apparently unrelated. Earlier smaller Llama3.2 1B generated off-topic invented clinics, repetitious questions. Is speaker-alone retrieval sufficient evidence of topical relevance? Propose a minimal backward-compatible test-first change to retrieve genuinely relevant old partner memories without destroying longitudinal relationship continuity or creating vocabulary blacklists. Think through 1- and 2-term topic cases, implicit callbacks, zero-context turns, stale memories, provenance, relationship context, chance of increasing ungrounded hallucinations. Provide 10 exact tests and a realistic offline or live falsification strategy. Discuss alternative explanations, CA research evidence on grounding and partner-specific conceptual pacts, and note uncertainty. Under 750 words. No production writes.",
+  "context": [
+    "Existing source in maaronfanberg-lab/me-, scripts/room_group_dynamics.py model_context, source snippet above is exact relevant behavior.",
+    "No private material. The Room's long-term group memory should be preserved, not erased or banned.",
+    "Only independent read-only answer requested."
+  ],
+  "expected_response": "Concrete source-linked review with tradeoffs, minimal safe algorithm and regression cases.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 8
+}
