@@ -96,11 +96,11 @@ def speech_metadata(text: str, payload: dict, entity: str) -> dict:
     deliberation=payload.get("deliberation")
     proposed=str((deliberation or {}).get("action") or "").lower() if isinstance(deliberation,dict) else ""
     # A naturally addressed disagreement can start with a vocative.
-    stance_text = re.sub(r"^\\s*(?:Sarah|Mara|Owen|Jules)\\s*[:,]\\s*",
+    stance_text = re.sub(r"^\s*(?:Sarah|Mara|Owen|Jules)\s*[:,]\s*",
                          "", text, flags=re.I)
     if proposed in ALLOWED_MOVES:
         move=proposed
-    elif re.match(r"^\\s*(?:no[,!. ]|i\\s+disagree\\b|i\\s+don't\\s+agree\\b)",
+    elif re.match(r"^\s*(?:no[,!. ]|i\s+disagree\b|i\s+don't\s+agree\b)",
                   stance_text,re.I):
         move="disagree"
     elif source and str(source.get("text") or "").rstrip().endswith("?"):
