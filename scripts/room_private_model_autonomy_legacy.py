@@ -418,8 +418,13 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
         if attempt:
             retry_guard = (
                 "\nTRY_AGAIN\n" +
-                ("Recheck the actual source utterance and the action it makes relevant. "
-                 "Keep your own voice, stance and uncertainty.\n" if social_floor
+                (("Your last attempt used a role-description form such as 'I, Sarah' "
+                  "instead of ordinary first-person speech. Speak as 'I' without "
+                  "prefixing your own name; still respond independently to "
+                  "the person you are speaking with.\n"
+                  if last_reason == "self_perspective_leak" else
+                  "Recheck the actual source utterance and the action it makes relevant. "
+                  "Keep your own voice, stance and uncertainty.\n") if social_floor
                  else "Use fresh natural wording. Keep the same chosen move, focus, and partner. Base the reply only on what was actually said.\n")
             )
 
@@ -460,6 +465,13 @@ def run(role: str, payload: dict, timeout: int = 30, min_words: int = 5):
                     last_reason = "intent_partner_not_realized"
                     continue
                 utterance = str(obj.get("utterance") or "").strip()
+                if _research.autonomous_text_issue(
+                        {"speaker": self_entity, "text": utterance}) == "self_perspective_leak":
+                    # Retry a bad author-perspective construction while the
+                    # model is still running. Never weaken final publication
+                    # integrity or synthesize a replacement utterance.
+                    last_reason = "self_perspective_leak"
+                    continue
                 bare_words = _words(utterance)
                 bare_move_labels = {
                     "acknowledge", "appreciate", "support", "repair", "answer",
