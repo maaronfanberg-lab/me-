@@ -32,7 +32,7 @@ class HiddenWorldTests(unittest.TestCase):
     def test_same_100_speaker_opportunities_in_both_conditions(self):
         seq=[lab.speaker_for_turn(i) for i in range(100)]
         self.assertEqual(set(seq),set(lab.PEOPLE))
-        for mode in ("empty","shared","hidden"):
+        for mode in ("empty","shared","hidden","hidden_grounded"):
             self.assertEqual([lab.speaker_for_turn(i) for i in range(100)],seq)
     def test_no_ventriloquism_or_synthetic_silence(self):
         self.assertIsNone(lab.parse_speech("SILENCE","sarah"))
