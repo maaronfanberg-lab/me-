@@ -6,6 +6,7 @@ on:
       - 'scripts/room_conversational_floor.py'
       - 'scripts/room_hidden_world.py'
       - 'scripts/test_room_hidden_world.py'
+      - 'scripts/test_room_followup_scene.py'
       - 'scripts/room_world_actions.py'
       - 'scripts/test_room_world_actions.py'
       - 'scripts/test_room_public_scene_ledger.py'
@@ -67,6 +68,8 @@ jobs:
         run: python3 scripts/test_room_public_scene_ledger.py
       - name: Verify optional private observations do not leak
         run: python3 scripts/test_room_hidden_world.py
+      - name: Verify bounded shared-world trial, sustained evidence and user priority
+        run: python3 scripts/test_room_followup_scene.py
       - name: Guard capacity and no model inference pileup
         run: python3 scripts/test_room_capacity_guard.py
       - name: Compile real conversational opportunity path

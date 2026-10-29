@@ -16,10 +16,21 @@ TRIAL_END = TRIAL_START + 100
 REPLICATION_START = TRIAL_END + 8  # eight unprompted washout turns
 REPLICATION_END = REPLICATION_START + 24
 
+# Bounded second trial. Reversible, with unprompted gaps between situations.
+FOLLOWUP_START = 36280
+FOLLOWUP_SCENE_TURNS = 48
+FOLLOWUP_SCENE_IDS = (5, 6, 0, 3)
+FOLLOWUP_END = FOLLOWUP_START + FOLLOWUP_SCENE_TURNS * len(FOLLOWUP_SCENE_IDS)
+FOLLOWUP_NOTICE_TURNS = 36
+
+def followup_active(cycle: int) -> bool:
+    return type(cycle) is int and FOLLOWUP_START <= cycle < FOLLOWUP_END
+
+
 
 def trial_active(cycle: int) -> bool:
     """A finite 100-public-beat canary, never an indefinite production mode."""
-    return isinstance(cycle, int) and not isinstance(cycle, bool) and (TRIAL_START <= cycle < TRIAL_END or REPLICATION_START <= cycle < REPLICATION_END)
+    return type(cycle) is int and (TRIAL_START <= cycle < TRIAL_END or REPLICATION_START <= cycle < REPLICATION_END or followup_active(cycle))
 
 
 @dataclass(frozen=True)
@@ -80,6 +91,26 @@ SCENES = (
             "You noticed that the collection gutter had become blocked with leaves.",
         ),
     ),
+    Scene(
+        "choir-recording",
+        "At a volunteer choir rehearsal, the recording has an electrical buzz, although the singers sound clear.",
+        (
+            "You saw the microphone cable lying directly across a mains power adapter.",
+            "You noticed the buzz gets louder when the mixer is plugged into the wall.",
+            "You heard the buzz briefly disappear when the microphone cable was moved.",
+            "You noticed one of the mixer's input plugs is only halfway inserted.",
+        ),
+    ),
+    Scene(
+        "greenhouse-watering",
+        "In the community greenhouse, seedlings are wilting although the irrigation reservoir is full.",
+        (
+            "You saw a pool of water collecting beneath the supply valve.",
+            "You heard the timer click on but couldn't hear any water moving.",
+            "You noticed brown debris caught inside the irrigation filter.",
+            "You saw the valve handle is almost perpendicular to the pipe.",
+        ),
+    ),
 )
 
 
@@ -93,6 +124,9 @@ GROUNDING_WINDOW = 12
 
 def scene_phase(cycle: int) -> tuple[int, int]:
     """(scene index, actual onset) for a trial beat, without agent speech."""
+    if followup_active(cycle):
+        episode = (cycle - FOLLOWUP_START) // FOLLOWUP_SCENE_TURNS
+        return FOLLOWUP_SCENE_IDS[episode], FOLLOWUP_START + episode * FOLLOWUP_SCENE_TURNS
     if REPLICATION_START <= cycle < REPLICATION_END:
         return 4, REPLICATION_START
     if trial_active(cycle) and cycle >= GROUNDING_SECOND_ONSET:
@@ -106,7 +140,8 @@ def scene_phase(cycle: int) -> tuple[int, int]:
 def event_at(cycle: int) -> bool:
     """Only observed environmental onsets, never a repetitive topic schedule."""
     return trial_active(cycle) and (
-        cycle == TRIAL_START + 15
+        (followup_active(cycle) and (cycle - FOLLOWUP_START) % FOLLOWUP_SCENE_TURNS == 0)
+        or cycle == TRIAL_START + 15
         or cycle == GROUNDING_ONSET
         or cycle == GROUNDING_SECOND_ONSET
         or cycle == REPLICATION_START
@@ -122,7 +157,9 @@ def scene_for_cycle(cycle: int) -> Scene:
 def active_scene_window(cycle: int) -> bool:
     """A short-lived scene to recall, not an indefinite mandatory topic."""
     return trial_active(cycle) and (
-        GROUNDING_ONSET <= cycle < GROUNDING_ONSET + GROUNDING_WINDOW
+        (followup_active(cycle) and
+         (cycle - FOLLOWUP_START) % FOLLOWUP_SCENE_TURNS < FOLLOWUP_NOTICE_TURNS)
+        or GROUNDING_ONSET <= cycle < GROUNDING_ONSET + GROUNDING_WINDOW
         or GROUNDING_SECOND_ONSET <= cycle < GROUNDING_SECOND_ONSET + 3 * GROUNDING_WINDOW
         or REPLICATION_START <= cycle < REPLICATION_END
     )
@@ -141,7 +178,8 @@ def situational_notice(entity: str, cycle: int) -> str:
         "You can tell the others what you saw, ask something about it, "
         "test an explanation, or respond to a more urgent direct question. "
         "Make your response specific to what is happening, without inventing "
-        "another character's memory or claiming the situation was resolved."
+        "another character's memory. You may conclude a problem is solved only "
+        "when a witnessed action or observation supports that conclusion."
     )
 
 
@@ -191,9 +229,14 @@ def public_scene_ledger(cycle: int, public_turns: list[dict]) -> list[dict]:
     Use an abbreviated verbatim *public* statement as evidence. Never insert
     another character's private card, even when two words happen to match.
     """
-    if not (LEDGER_ONSET <= cycle < REPLICATION_END):
+    if followup_active(cycle):
+        onset = scene_phase(cycle)[1]
+        if cycle < onset + 3 or not active_scene_window(cycle):
+            return []
+    elif LEDGER_ONSET <= cycle < REPLICATION_END:
+        onset = REPLICATION_START
+    else:
         return []
-    onset = REPLICATION_START
     facts = {}
     for turn in public_turns:
         if not isinstance(turn, dict):
@@ -225,15 +268,47 @@ def public_scene_ledger(cycle: int, public_turns: list[dict]) -> list[dict]:
     return [facts[p] for p in PARTICIPANTS if p in facts]
 
 
+def scene_action_ledger(cycle: int, public_turns: list[dict]) -> list[dict]:
+    """Reconstruct witnessed actions; effects are not invented speech or private facts."""
+    if not followup_active(cycle) or not active_scene_window(cycle):
+        return []
+    from room_world_actions import action_consequence
+    scene = scene_for_cycle(cycle).identifier
+    onset = scene_phase(cycle)[1]
+    effects = []
+    seen = set()
+    for turn in public_turns:
+        if not isinstance(turn, dict):
+            continue
+        try:
+            beat_cycle = int(str(turn.get("beat_id") or "").rsplit("-", 1)[-1])
+        except (TypeError, ValueError):
+            continue
+        if not onset <= beat_cycle < cycle:
+            continue
+        effect = action_consequence(scene, turn.get("speaker"), turn.get("text"))
+        if not effect:
+            continue
+        signature = (effect["action"], effect["object"])
+        if signature in seen:
+            continue
+        seen.add(signature)
+        effects.append({"source_id": str(turn.get("id") or ""), **effect})
+    return effects[-4:]
+
+
 def scene_common_ground(cycle: int, public_turns: list[dict]) -> str:
     entries = public_scene_ledger(cycle, public_turns)
-    if not entries:
+    effects = scene_action_ledger(cycle, public_turns)
+    if not entries and not effects:
         return ""
     lines = ["PREVIOUSLY SPOKEN PUBLIC OBSERVATIONS ABOUT THIS SAME SITUATION "
-             "(not new events; quoted from actual public speech):"]
+             "(WITNESSED SHARED EVIDENCE, not new dialogue or an instruction to repeat it):"]
     for e in entries:
         lines.append(e["speaker"].capitalize() + " said: " + e["public_text"])
-    lines.append("These statements are already in the group's conversational "
+    for e in effects:
+        lines.append(e["actor"].capitalize() + " acted; the simulated result was: " + e["effect"])
+    lines.append("These statements and results are already in the group's conversational "
                  "history. They may be questioned, compared, or tested; "
                  "no observation proves an explanation by itself.")
     return "\n".join(lines)

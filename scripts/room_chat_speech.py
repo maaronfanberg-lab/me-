@@ -93,13 +93,22 @@ def messages(payload: dict, entity: str) -> list[dict]:
     if os.environ.get("ROOM_HIDDEN_WORLD_EXPERIMENT") == "1" and not (
         history and history[-1]["speaker"] == "allen"
     ):
-        from room_hidden_world import context_for, trial_active, event_at, scene_for_cycle, private_observation, situational_notice
+        from room_hidden_world import context_for, trial_active, event_at, scene_for_cycle, private_observation, situational_notice, followup_active
         room_cycle = payload.get("room_cycle")
         if room_cycle is None:
             state_path = Path(__file__).resolve().parents[1] / "room" / "state.json"
             room_cycle = json.loads(state_path.read_text()).get("cycle", 0)
         if trial_active(int(room_cycle)):
             system += chr(10) + context_for(entity, int(room_cycle))
+            if followup_active(int(room_cycle)):
+                system += (
+                    " You are a participant physically present in this fictional scene. "
+                    "People can compare observations and try specific actions; the scene "
+                    "may react to witnessed actions. Explain what you see or try in plain "
+                    "language, rather than turning a practical difficulty into a lecture. "
+                    "You can also disagree, ask for an observation, or pursue a real "
+                    "interlocutor's more important question."
+                )
             situational_grounding = situational_notice(entity, int(room_cycle))
             if event_at(int(room_cycle)):
                 new_world_event = (scene_for_cycle(int(room_cycle)).common,
@@ -122,7 +131,8 @@ def messages(payload: dict, entity: str) -> list[dict]:
     # Explicitly separate witnessed character action and fictional environment
     # consequence from ordinary speech. No synthetic speech is generated.
     if (situational_grounding and os.environ.get("ROOM_WORLD_ACTIONS") == "1"
-            and history and 35220 <= int(room_cycle) < 35232):
+            and history and (35220 <= int(room_cycle) < 35232
+                         or followup_active(int(room_cycle)))):
         from room_hidden_world import scene_for_cycle
         from room_world_actions import action_consequence
         witnessed = history[-1]

@@ -34,6 +34,14 @@ _EFFECTS = (
            "The frame bears a clearly stamped date: 1934."),
     Effect("rainwater-tank", "inspect", "gutter",
            "Wet leaves are blocking the downpipe that fills the tank."),
+    Effect("choir-recording", "move", "microphone cable",
+           "As the microphone lead moves away from the adapter, the electrical buzz becomes noticeably quieter."),
+    Effect("choir-recording", "push", "input plug",
+           "The mixer input plug clicks fully into place, and the recording's intermittent crackle stops."),
+    Effect("greenhouse-watering", "inspect", "irrigation filter",
+           "The irrigation filter is clogged with brown sediment."),
+    Effect("greenhouse-watering", "open", "supply valve",
+           "Water starts flowing along the greenhouse irrigation line."),
 )
 
 _VERBS = {
@@ -43,6 +51,9 @@ _VERBS = {
     "turn": ("turn", "turned", "rotate", "rotated"),
     "reset": ("reset",),
     "inspect": ("inspect", "inspected", "examine", "examined", "look at", "looked at"),
+    "move": ("move", "moved", "shift", "shifted"),
+    "push": ("push", "pushed", "seat", "seated"),
+    "open": ("open", "opened", "turn", "turned"),
 }
 _OBJECTS = {
     "pressure gauge": ("pressure gauge", "the gauge"),
@@ -52,6 +63,10 @@ _OBJECTS = {
     "breaker": ("breaker", "breaker panel", "fuse box"),
     "photograph frame": ("photo frame", "photograph frame", "picture frame"),
     "gutter": ("gutter", "downpipe", "downspout"),
+    "microphone cable": ("microphone cable", "mic cable", "microphone lead"),
+    "input plug": ("input plug", "mixer plug", "input connector"),
+    "irrigation filter": ("irrigation filter", "water filter"),
+    "supply valve": ("supply valve", "water valve"),
 }
 
 
