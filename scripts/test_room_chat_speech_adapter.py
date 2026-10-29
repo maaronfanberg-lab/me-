@@ -108,6 +108,18 @@ class ChatAdapterTests(unittest.TestCase):
               "private":{"intent":{"readiness":.8},"expression":result}}
         self.assertEqual(validate_candidate(part,"owen",[inp["event"]],{}),said)
 
+    def test_unclosed_model_quotation_is_not_published_as_finished_speech(self):
+        broken='"Rethinking the ecology of a hypothetical predator that'
+        complete="I would first ask which hypothesis you mean before assessing it."
+        self.assertTrue(chat.unfinished_model_quotation(broken))
+        self.assertFalse(chat.unfinished_model_quotation('"That hypothesis needs a test."'))
+        with patch("room_chat_speech.urllib.request.urlopen",
+                   side_effect=[Fake(broken),Fake(complete)]) as model:
+            out=chat.run(payload("jules",source("owen",
+                "My hypothesis was mistaken, but I haven't named its subject.")))
+        self.assertEqual(model.call_count,2)
+        self.assertEqual(out["utterance"],complete)
+
     def test_internal_role_label_is_retried_without_emitting_fake_speech(self):
         replies=[Fake("self_initiated_contribution"),
                  Fake("Jules, perhaps ecology changes as the habitat changes.")]
