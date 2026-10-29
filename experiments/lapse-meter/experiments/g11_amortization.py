@@ -80,7 +80,14 @@ def probe_condition(model, name, samples):
         params=[p.detach().clone() for p in model.parameters()]
     if name=="pathcond_adam":
         tic=time.perf_counter()
-        rescaling_path_cond(model,nb_iter_optim_rescaling=10)
+        # The original upstream pathnorm code uses a default-dtype dummy input.
+        # Align that caller context with native float32 parameters, then restore.
+        original_dtype=torch.get_default_dtype()
+        try:
+            torch.set_default_dtype(torch.float32)
+            rescaling_path_cond(model,nb_iter_optim_rescaling=10)
+        finally:
+            torch.set_default_dtype(original_dtype)
         elapsed=time.perf_counter()-tic
     elif name=="adam":
         elapsed=0.0
