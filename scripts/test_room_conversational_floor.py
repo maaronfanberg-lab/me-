@@ -270,22 +270,22 @@ class FloorTests(unittest.TestCase):
         from room_conversational_floor import _fact_opportunity
         source = msg("mara", "Has anyone checked the warm breaker panel?", id="lantern-panel")
         with patch.dict(os.environ, {"ROOM_SCENE_RELEVANCE_FLOOR":"1"}):
-            chosen = choose_next([source], bus(), config(), {}, cycle=35221)
+            chosen = choose_next([source], bus(), config(), {}, cycle=35233)
             self.assertEqual(chosen["speaker"], "owen", chosen)
-            self.assertGreater(_fact_opportunity("owen", source, [source], 35221), 0)
+            self.assertGreater(_fact_opportunity("owen", source, [source], 35233), 0)
             self.assertEqual(_fact_opportunity("owen", source, [source], 35211), 0)
             self.assertNotEqual(
-                choose_next([source],bus(),config(["owen"]),{},cycle=35221)["speaker"],
+                choose_next([source],bus(),config(["owen"]),{},cycle=35233)["speaker"],
                 "owen")
             addressed = msg("mara", "Jules, did you see the breaker panel?", id="explicit")
-            directed = choose_next([addressed], bus(), config(), {}, cycle=35221)
+            directed = choose_next([addressed], bus(), config(), {}, cycle=35233)
             self.assertEqual(directed["speaker"], "jules")
             voiced = msg("owen", "I noticed the warm breaker panel.", id="owen-observed")
             self.assertEqual(
-                _fact_opportunity("owen", source, [voiced,source], 35221),0)
+                _fact_opportunity("owen", source, [voiced,source], 35233),0)
             assert "quota" not in chosen
         with patch.dict(os.environ, {"ROOM_SCENE_RELEVANCE_FLOOR":"0"}):
-            no_opt_in = choose_next([source],bus(),config(),{},cycle=35221)
+            no_opt_in = choose_next([source],bus(),config(),{},cycle=35233)
             self.assertEqual(no_opt_in,choose_next([source],bus(),config(),{},cycle=None))
 
 if __name__ == "__main__":
