@@ -55,6 +55,35 @@ def witnessed_context(payload: dict, entity: str) -> list[dict]:
     return out[-3:]
 
 
+def optional_next_action_cue(history: list[dict]) -> str:
+    """A conversational opportunity, never a script or semantic verdict.
+
+    Human sequential talk makes a question or proposal relevant to the next
+    speaker, without dictating agreement, a topic quota, or forced disclosure.
+    This cue is optional, source-bound, and based only on witnessed public
+    speech. The local LLM still independently chooses the actual words.
+    """
+    if not history:
+        return ""
+    latest = str(history[-1].get("text") or "").strip()
+    if not latest:
+        return ""
+    if latest.endswith("?"):
+        return (
+            "The latest person has asked a question. You can answer its actual "
+            "substance, say what you do not know, decline, or ask for one "
+            "specific missing detail. A question copied back or generic praise "
+            "does not answer it. Let a real response lead the exchange."
+        )
+    return (
+        "The latest person has made a statement, observation, or proposal. "
+        "If you take it up, respond to one particular point: give a reason, "
+        "an observation, a useful consequence, an exception, or a focused "
+        "follow-up. A brief acknowledgment or natural topic change is also "
+        "fine. Do not merely celebrate or rephrase their subject."
+    )
+
+
 def messages(payload: dict, entity: str) -> list[dict]:
     profile=payload.get("profile") or {}
     psych=profile.get("psychology_v2") or {}
@@ -88,6 +117,8 @@ def messages(payload: dict, entity: str) -> list[dict]:
     user=(last+"\n\nThe final transcript line is the most recent real public turn. "
           "Use its meaning, not a copy of its wording, as your starting point. "
           f"Now speak as {entity.capitalize()}. Say only your own next conversational turn.")
+    if os.environ.get("ROOM_CHAT_ACTION_FOCUS") == "1" and history:
+        user += "\n\n" + optional_next_action_cue(history)
     return [{"role":"system","content":system},{"role":"user","content":user}]
 
 
