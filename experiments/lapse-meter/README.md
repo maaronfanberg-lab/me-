@@ -589,8 +589,10 @@ diverges when its kick is large and its inputs are large-scale, and trains other
   arrives one step later (2,324 on digits at step 1).
 - **Scaling the readout's learning rate every step by width / mean |h|² works** (experiment 48, pre-registered).
   This is μP's readout prescription (Yang et al. 2022), so the result confirms it rather than discovering it.
-  - Healthy on digits and the circle at 96 layers, on digits at 192 layers, and on the language model, 5 of 5 each.
-  - On the language model with inputs ×10 it was 3 of 5: one run's loss exploded, and one stream died to zero.
+  - Healthy on digits and the circle at 96 layers, on digits at 192 layers, and on the language model with inputs ×1,
+    5 of 5 each.
+  - On the language model with inputs ×10 it fails: 0 of 35 runs, which learn nothing past letter frequencies. An
+    earlier 3 of 5 was an artifact of GitHub runners building a different corpus, now pinned (CORRECTIONS 71–72).
 
 ## Honest limits
 
