@@ -105,8 +105,8 @@ def replay(cycle: int, turns: list[dict]) -> dict:
         # observation. In particular, theories involving "public speech"
         # must not get recycled as physical evidence just by sharing nouns.
         firsthand = bool(re.match(
-            r"^\\s*(?:I|we)\\s+(?:just\\s+|also\\s+)?"
-            r"(?:saw|noticed|heard|read|found|checked|measured|observed)\\b",
+            r"^\s*(?:I|we)\s+(?:just\s+|also\s+)?"
+            r"(?:saw|noticed|heard|read|found|checked|measured|observed)\b",
             spoken, re.I))
         if firsthand and len(overlap) >= 2 and speaker not in disclosures:
             disclosures[speaker] = {
@@ -178,4 +178,4 @@ def cue_for(entity: str, cycle: int, public_turns: list[dict]) -> str:
         lines.append('The cause is still uncertain. The projector, its '
                      'ventilation and power supply can be examined. '
                      'A plan to check something is not the same as having done it.')
-    return '\\n'.join(lines)
+    return '\n'.join(lines)
