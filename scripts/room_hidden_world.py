@@ -252,19 +252,32 @@ def public_scene_ledger(cycle: int, public_turns: list[dict]) -> list[dict]:
         if not (onset <= beat_cycle < cycle):
             continue
         actual = str(turn.get("text") or "").strip()
+        # A question is evidence that someone ASKED something, not evidence
+        # that its presupposition is true. Do not launder a question into
+        # publicly established common ground.
+        if not actual or actual.endswith("?"):
+            continue
+        import re
+        if re.search(r"\bI\s+(?:didn't|did not|never)\s+(?:see|notice|hear|find|check|read|observe)\b", actual, re.I):
+            continue
         own_fact = private_observation(speaker, cycle)
         overlap = _evidence_words(actual) & _evidence_words(own_fact)
-        # Two nontrivial matched words provide conservative evidence that
-        # something about this character's clue was said out loud.
-        if len(overlap) < 2:
+        # A firsthand public report can paraphrase its private clue using
+        # one distinctive term. Other statements still need two.
+        first_hand = bool(re.search(
+            r"\bI\s+(?:just\s+|also\s+|personally\s+)?(?:saw|noticed|heard|read|found|checked|measured|observed)\b",
+            actual, re.I))
+        if len(overlap) < 2 and not (first_hand and len(overlap) >= 1):
             continue
-        # The returned entry contains ONLY the participant's real public
-        # text. Do not complete or embellish the private source material.
-        facts.setdefault(speaker, {
+        report = {
             "speaker": speaker,
             "public_text": actual[:240],
             "source_id": str(turn.get("id") or ""),
-        })
+            "evidence_status": "firsthand_report" if first_hand else "unverified_statement",
+        }
+        prior = facts.get(speaker)
+        if prior is None or (first_hand and prior["evidence_status"] != "firsthand_report"):
+            facts[speaker] = report
     return [facts[p] for p in PARTICIPANTS if p in facts]
 
 
@@ -303,7 +316,7 @@ def scene_common_ground(cycle: int, public_turns: list[dict]) -> str:
     if not entries and not effects:
         return ""
     lines = ["PREVIOUSLY SPOKEN PUBLIC OBSERVATIONS ABOUT THIS SAME SITUATION "
-             "(WITNESSED SHARED EVIDENCE, not new dialogue or an instruction to repeat it):"]
+             "(CLAIMS SPOKEN ALOUD; NOT INDEPENDENTLY VERIFIED; not new dialogue):"]
     for e in entries:
         lines.append(e["speaker"].capitalize() + " said: " + e["public_text"])
     for e in effects:

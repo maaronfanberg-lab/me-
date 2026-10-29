@@ -57,6 +57,19 @@ shared = h.scene_common_ground(start + 6, spoken)
 assert "Sarah said:" in shared and "Owen acted;" in shared
 assert h.private_observation("jules", start) not in shared
 assert "Jules said:" not in shared and "Allen acted;" not in shared
+# A question with an unsupported presupposition cannot turn into a fact
+# simply by sharing two nouns with the asker's private observation.
+false_premise = turn("owen",
+    "I'm curious, Mara, did you notice anything unusual when you moved the microphone cable?",
+    start + 7, "o7")
+jules_report = turn("jules",
+    "I just noticed the input plug was only halfway inserted.",
+    start + 8, "j8")
+source_entries = h.public_scene_ledger(start + 9, [false_premise, jules_report])
+assert {e["source_id"] for e in source_entries} == {"j8"}, source_entries
+assert source_entries[0]["evidence_status"] == "firsthand_report"
+assert "when you moved the microphone cable" not in h.scene_common_ground(start + 9, [false_premise, jules_report])
+
 assert h.scene_action_ledger(start + 48, spoken) == []
 assert h.scene_common_ground(start + 48, spoken) == ""
 
@@ -75,7 +88,7 @@ with patch.dict(os.environ, flags):
         rendered = messages(payload, "mara")
 assert "ONGOING FICTIONAL SITUATION" in rendered[1]["content"]
 assert "SIMULATED ENVIRONMENT RESPONSE" in rendered[1]["content"]
-assert "WITNESSED SHARED EVIDENCE" in rendered[1]["content"]
+assert "CLAIMS SPOKEN ALOUD" in rendered[1]["content"]
 assert "electrical buzz" in rendered[1]["content"]
 assert "PHYSICAL OPTIONS" in rendered[1]["content"]
 assert "I move the microphone cable" in rendered[1]["content"]
@@ -90,12 +103,12 @@ with patch.dict(os.environ, flags):
         reply = messages(visitor, "mara")
 assert "ONGOING FICTIONAL SITUATION" not in reply[1]["content"]
 assert "SIMULATED ENVIRONMENT RESPONSE" not in reply[1]["content"]
-assert "WITNESSED SHARED EVIDENCE" not in reply[1]["content"]
+assert "CLAIMS SPOKEN ALOUD" not in reply[1]["content"]
 assert "PHYSICAL OPTIONS" not in reply[1]["content"]
 
 # No indefinite topic lock after the finite trial, even when flags are on.
 with patch.dict(os.environ, flags):
     after = messages(dict(payload, room_cycle=h.FOLLOWUP_END), "mara")
 assert "ONGOING FICTIONAL SITUATION" not in after[1]["content"]
-assert "WITNESSED SHARED EVIDENCE" not in after[1]["content"]
+assert "CLAIMS SPOKEN ALOUD" not in after[1]["content"]
 print("PASS: bounded scene succession, distinct private clues, durable witnessed actions and visitor priority")
