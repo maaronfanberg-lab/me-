@@ -90,3 +90,29 @@ with patch.dict(os.environ,flags):
 assert "UNRESOLVED SPOKEN INTENTIONS" not in later[1]["content"]
 
 print("PASS: source-bound plans, actor-specific completion, no false action, expiry, visitors, and time boundaries")
+
+# Production regression: the speech adapter may receive only two upstream
+# messages even though earlier completed actions are still in the public feed.
+from room_chat_speech import witnessed_context
+public_tail=[
+    turn(START+i,["jules","owen","mara","sarah"][i%4],
+         ("I checked the pressure gauge." if i==3 else
+          "I tightened the hose connector." if i==5 else
+          "The greenhouse beds are still drying."), "recent-%02d"%i)
+    for i in range(10)
+]
+visitor={"id":"visitor-new","speaker":"allen",
+         "text":"What actually changed after the repair?"}
+short_context={"context":public_tail[-2:],"event":visitor}
+with patch("pathlib.Path.read_text",
+           return_value=json.dumps({"conversation":public_tail})):
+    retained=witnessed_context(short_context,"mara")
+assert len(retained)==8,retained
+assert retained[0]["id"]=="recent-03"
+assert retained[-1]["id"]=="visitor-new"
+assert "I tightened the hose connector." in [t["text"] for t in retained]
+assert len({t["id"] for t in retained})==8
+with patch("pathlib.Path.read_text",side_effect=OSError("no public feed")):
+    fallback=witnessed_context(short_context,"mara")
+assert [t["id"] for t in fallback]==["recent-08","recent-09","visitor-new"]
+print("PASS: production short-context speech retains public action evidence and Allen priority")
