@@ -178,7 +178,7 @@ def _fact_opportunity(entity, latest, history, cycle):
     # open question about the shared *ongoing* problem can also invite a
     # participant who has a new eyewitness fact to volunteer it. The next
     # generation still chooses its words; no utterance is mandated.
-    return 0.6 if relevant else 0.36
+    return 0.6 if relevant else (0.36 if cycle >= 35244 else 0.0)
 
 
 def choose_next(history, bus, config, minds, *, rank=0, cycle=None):
