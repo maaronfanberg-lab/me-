@@ -1,0 +1,31 @@
+# Room inference capacity and non-omniscient conversation experiment (2026-10-29)
+
+## Observation and baseline (research gate 1)
+On GitHub Actions runs 40859013943 and 40859592009, multiple 30-second `TimeoutError` exceptions occurred in `room_private_model._request` during simultaneous comprehension and thought requests. The existing workflow launches two model-backed nodes simultaneously against a **two-slot** llama.cpp CPU server with up to 512 output tokens on first attempts, 1024 on retries. The Room pulse replaces runs that have not published for 900 seconds, and repeated cancellation has prevented durable publication for extended periods. This is *observed correlation*, not proof that slot saturation is the sole cause: runner contention, large prompts, and a struggling 3B model could also account for the timeouts. The public feed resumed autonomously by 2026-10-29T11:44Z, cycle 35126; recovery does **not** establish acceptable dialogue quality.
+
+The latest 160 public turns at 11:44 UTC had approximately 95/160 (59.4%) containing at least one broad metadiscourse or systems term such as conversation, dialogue, interconnected, network, system, complex, or pattern. This deliberately broad lexical proxy has false positives and is not a direct behavioral quality score. Recent turns about predictive control repeatedly rephrase questions without new observations or corrections.
+
+## Foundational, current, and natural-behavior evidence (gates 2-4)
+- Sacks, Schegloff & Jefferson (1974), *Language* 50, 696-735, doi:10.2307/412243: locally managed turn-taking is recipient-sensitive; no guarantee that turn selection alone causes topic progress.
+- Clark & Wilkes-Gibbs (1986), *Cognition* 22, 1-39, doi:10.1016/0010-0277(86)90010-7: mutual reference is progressively established through expansion, repair and acceptance; agents should transfer and verify distinct facts, not mirror phrases.
+- Loewenstein (1994), *Psychological Bulletin*, doi:10.1037/0033-2909.116.1.75: knowledge gaps can motivate curiosity. Transfer to LLM characters is a hypothesis, not a proven mechanism.
+- Zhou et al. (2024), *EMNLP*, https://aclanthology.org/2024.emnlp-main.1208/: non-omniscient LLM social simulations can be *harder*, not easier, than omniscient simulations; this cautions against treating private information as a guaranteed fix.
+- Wang et al. (2024), *ACL*, https://aclanthology.org/2024.acl-long.331/: multi-agent discussion is not automatically superior to a single strong agent; compare baselines, not just plausibility.
+- Current llama.cpp server docs, https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md : `-np` controls inference slots and continuous batching shares decoder resources. The server has a single main decoding context as described in README-dev.md. This supports a capacity-controlled trial, not a universal claim that serialization is faster.
+
+## Mechanism and counterarguments (gates 5-7)
+**Capacity intervention**: run one private model request at a time in the existing beat, configure one slot, and bound output tokens to 192 comprehension, 256 thought, 320 structured expression. Keep all other response validation and publication gates unchanged. It should reduce request queue timeouts but may increase beat wall-clock time and truncate otherwise valid structured output. Token caps are an engineering hypothesis to be tested.
+
+**Conversation intervention (separate experiment)**: participants each have a different *fictional, explicitly sourced* local observation of one shared situation. A speaker can reveal their own observation, ask the others about theirs, or challenge apparent contradictions. Do not forge their shared past, invent other participants' knowledge, or reveal private cards in a shared prompt. Preserve organic off-topic transitions, disagreements, and silence. A successful test must demonstrate questions that lead to information transfer, clarification, and actual change in common understanding. It may instead produce stilted interrogations or repeated puzzle-solving, so evaluate that possibility explicitly.
+
+## Context transfer and implementation (gates 8-9)
+Human dyads, controlled tasks and small LLMs are not the same as four longitudinal, voluntary characters. Test separate epistemic contexts without scripting responses or mandating topic words. For capacity, change the real workflow `.github/workflows/sarah-society.yml`, model request bound `scripts/room_private_model/__init__.py`, and a regression guard. For hidden-world, introduce a *disabled-by-default* experimental provider and an isolated evaluation, without shipping untested story cards to the public conversation.
+
+## Validation plan (gate 10)
+1. CI shell syntax, existing conversational-floor tests and new saturation guard pass.
+2. Actual GitHub Actions logs show locally completed perception, thought and selected expression (not timeouts) and the public feed cycle increases by at least 3 published beats.
+3. Check actual `room/state.json` for `diagnostic_only`, `speech_backend` and real speech, not merely candidate intent.
+4. Before any hidden-world rollout, run counterbalanced multi-seed experiments for at least 100 turns per condition with the same model; review question-answer contingency, fact transfer without leaks, invented source errors, 5-turn topic pursuit, repetition and breadth. Assess every character's ability to initiate and revise. Blind human inspection should adjudicate whether the interaction feels meaningful.
+5. If capacity fix fails (e.g. another series of 30-second model timeouts), revise inference scheduling/runtime after inspecting logs; if conversation gets more repetitive, revert experimental prompts.
+
+Post-change: **pending actual CI and live verification**.

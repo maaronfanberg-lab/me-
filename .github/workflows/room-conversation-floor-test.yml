@@ -53,6 +53,10 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v6
+      - name: Verify optional private observations do not leak
+        run: python3 scripts/test_room_hidden_world.py
+      - name: Guard capacity and no model inference pileup
+        run: python3 scripts/test_room_capacity_guard.py
       - name: Compile real conversational opportunity path
         run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_conversation_project.py scripts/room_action_ledger.py scripts/room_conversational_candidate.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
       - name: Verify conversational question, response, and repair sequence

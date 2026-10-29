@@ -491,7 +491,7 @@ def _request(
 
     body = {
         "prompt": prompt,
-        "n_predict": 512 * (2 if attempt and role in {"comprehension", "thought"} else 1),
+        "n_predict": 192 if role == "comprehension" else (256 if role == "thought" else 320),
         "temperature": temperature,
         "cache_prompt": True,
         "json_schema": globals()["_schema"](role, self_entity),
