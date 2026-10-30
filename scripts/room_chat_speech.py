@@ -373,6 +373,21 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
     incoming=messages(payload,entity)
     cycle_key=str(os.environ.get("ROOM_CYCLE_KEY") or "room-speech-beat")
     last_failure=""
+    # The live public feed, not a synthetic transcript or topic label,
+    # determines whether the ongoing scene has stalled.
+    causal_gate = None
+    if os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1":
+        try:
+            from room_causal_world import circular_deferral
+            root = Path(__file__).resolve().parents[1] / "room"
+            state = json.loads((root / "state.json").read_text())
+            public = json.loads((root / "feed.json").read_text()).get("conversation") or []
+            cycle = int(payload.get("room_cycle") or (int(state["cycle"]) + 1))
+            if isinstance(public, list):
+                causal_gate = lambda spoken: circular_deferral(
+                    entity, spoken, cycle, public)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
     for attempt in range(3):
         keyed=f"{cycle_key}:chat-speech:{entity}:{attempt}"
         seed=int(hashlib.sha256(keyed.encode()).hexdigest()[:8],16) & 0x7FFFFFFF
@@ -384,6 +399,15 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                     "third person. Make one concrete response to what was actually said. "
                     "Do not make up past events. Never write a line for Allen "
                     "or another participant; speak only as yourself.")
+            if last_failure == "stalled_scene_deferral":
+                hint += (
+                    " The previous eight witnessed public turns only discussed "
+                    "the projector. A further hypothetical reframe postpones "
+                    "rather than develops this conversation. You may make a "
+                    "firsthand observation, choose and actually perform an "
+                    "available fictional action, give a direct answer, disagree "
+                    "for a concrete reason, or change course for your own "
+                    "reason. Never pretend a proposed action already happened.")
             prompt[0]["content"] += (
                 " The previous candidate did not pass public conversational integrity "
                 "checks (" + last_failure[:48] + "). " + hint)
@@ -471,8 +495,18 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                         except (RuntimeError,ValueError):
                             pass
                         else:
+                            if causal_gate is not None and not any(
+                                    h["speaker"] == "allen" for h in observed):
+                                if causal_gate(prefix):
+                                    last_failure = "stalled_scene_deferral"
+                                    continue
                             return shortened
                 continue
+            if causal_gate is not None and not any(
+                    h["speaker"] == "allen" for h in observed):
+                if causal_gate(spoken):
+                    last_failure = "stalled_scene_deferral"
+                    continue
             return result
         except (TimeoutError,urllib.error.URLError,ValueError,KeyError,TypeError,IndexError) as exc:
             last_failure=type(exc).__name__

@@ -131,6 +131,29 @@ assert w.replay(36549, resolved_loop)['solved']
 assert 'last eight public turns contained no recognized completed physical action' not in w.cue_for('sarah', 36549, resolved_loop)
 assert 'practical problem appears resolved' in w.cue_for('sarah', 36549, resolved_loop)
 
+# Regression from eight consecutive public turns 36604-36611: everyone
+# kept delaying a projector inspection to discuss another hypothetical.
+stalled_public = [
+    turn(36604, 'sarah', "It seems we've narrowed it down to the projector's behavior, but we're still missing a crucial detail: the duration of the dimming after the projector has run for several minutes."),
+    turn(36605, 'mara', "I'd like to revisit the smell of hot dust - has anyone considered the possibility that the dust is affecting the projector's thermal regulation?"),
+    turn(36606, 'sarah', "The smell of hot dust seems to be a crucial detail, but let's not assume it's the sole cause."),
+    turn(36607, 'mara', "The fact that the projector dims after running for several minutes suggests a possible cumulative effect."),
+    turn(36608, 'owen', "I'd like to test the projector's sensitivity to the agent's speech by intentionally triggering the dimming during a show."),
+    turn(36609, 'mara', "Can we agree that we're getting close to identifying a pattern, but we're still missing a specific duration?"),
+    turn(36610, 'sarah', "I think we're missing a crucial point: even if we inspect the rear ventilation grille, we still need to understand the mechanism."),
+    turn(36611, 'owen', "Before we proceed with physical inspections, I'd like to revisit the idea that the projector's behavior is an emergent property."),
+]
+assert w.circular_deferral('mara', "Before we inspect the projector, let's consider its internal dynamics.", 36612, stalled_public)
+assert w.circular_deferral('sarah', "What if the projector has a hidden social-awareness mechanism?", 36612, stalled_public)
+assert w.circular_deferral('jules', "Let's revisit the projector's thermal mechanism.", 36612, stalled_public)
+assert not w.circular_deferral('jules', "I inspect the rear grille.", 36612, stalled_public)
+assert not w.circular_deferral('jules', "I noticed folded cardboard covering the grille.", 36612, stalled_public)
+assert not w.circular_deferral('mara', "I disagree. The hot dust is enough reason to inspect it.", 36612, stalled_public)
+assert not w.circular_deferral('owen', "I want to talk about the music after the show.", 36612, stalled_public)
+assert not w.circular_deferral('owen', "Before we inspect the projector, I want to ask you something.", 36612, stalled_public[:7])
+assert not w.circular_deferral('owen', "Before we inspect the projector, I want to ask you something.", 36612, stalled_public[:7]+[turn(36611, 'jules', 'I inspect the rear grille.')])
+assert not w.circular_deferral('owen', "Before we inspect the projector, I want to ask you something.", w.TRIAL_END, stalled_public)
+
 assert w.cue_for('sarah',w.TRIAL_END,history)==''
 
 # Production regression: the next unpublished beat must include the latest
