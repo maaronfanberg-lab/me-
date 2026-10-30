@@ -109,49 +109,84 @@ def evidence_terms(text: str) -> set[str]:
         'machine', 'projector', 'several', 'running', 'image',
     }
 
-def circular_deferral(speaker: str, candidate: str, cycle: int,
-                      public_turns: list[dict]) -> bool:
-    """Detect a stalled-scene conversational move, not a forbidden vocabulary.
+def stalled_scene(cycle: int, public_turns: list[dict]) -> bool:
+    """Eight witnessed turns remain on one practical problem without progress.
 
-    An eight-turn action-free public loop is evidence that speculative
-    reframing is not advancing the shared problem. Reject only another
-    same-scene deferral; permit concrete observations, disagreement, action,
-    an answer to a visitor, and a genuine change of subject. Never fabricate
-    an action to satisfy this test.
+    A physical act, a firsthand finding, or an actual subject transition resets
+    the condition. This is evidence from public turns, not a topic-label guess.
     """
-    if speaker not in PEOPLE or not active(cycle) or not isinstance(candidate, str):
+    if not active(cycle) or not isinstance(public_turns, list):
         return False
     recent = [turn for turn in public_turns
               if isinstance(turn, dict)
               and turn.get('speaker') in PEOPLE
               and (when := cycle_of(turn)) is not None
               and TRIAL_START <= when < cycle][-8:]
-    if len(recent) < 8 or any(witnessed_action(
-            str(turn.get('speaker')), str(turn.get('text') or ''))
-            for turn in recent):
+    if len(recent) < 8:
+        return False
+    scene = {'projector', 'dimming', 'grille', 'voltage', 'ventilation',
+             'lamp', 'cardboard', 'thermal', 'dust', 'socket', 'agent'}
+    on_topic = 0
+    for turn in recent:
+        spoken = str(turn.get('text') or '').strip()
+        if witnessed_action(str(turn.get('speaker')), spoken):
+            return False
+        if re.match(r"^(?:I|we)\s+(?:saw|found|noticed|observed|measured|"
+                    r"checked|decided|fixed|repaired|resolved)\b", spoken, re.I):
+            return False
+        terms = set(re.findall(r'[a-z]{4,}', spoken.lower()))
+        if terms & scene:
+            on_topic += 1
+        elif re.search(r"\b(?:talk about|rather discuss|switch to|move on to)\b",
+                       spoken, re.I):
+            # An actual choice to change subjects ends the stuck-scene streak.
+            return False
+    # A brief anaphoric reply need not repeat the projector's name.
+    return on_topic >= 6
+
+
+def circular_deferral(speaker: str, candidate: str, cycle: int,
+                      public_turns: list[dict]) -> bool:
+    """Reject another speculative same-scene loop, not ordinary disagreement.
+
+    The stalled condition is derived from actual consecutive public turns.
+    Grounded findings, direct practical requests, actions, and topic transitions
+    remain admissible. Rejected words are never replaced with synthetic speech.
+    """
+    if speaker not in PEOPLE or not isinstance(candidate, str):
+        return False
+    if not stalled_scene(cycle, public_turns):
         return False
     spoken = candidate.strip()
     if witnessed_action(speaker, spoken):
         return False
-    # A firsthand finding or a clear decision can be progress without
-    # operating a physical object. Preserve these as voluntary speech.
     if re.match(r"^(?:I|we)\s+(?:saw|found|noticed|observed|measured|"
                 r"checked|decided|disagree|don't agree|cannot|can't|"
-                r"refuse|decline)\b", spoken, re.I):
+                r"refuse|decline)\b|^(?:no|yes)\b", spoken, re.I):
+        return False
+    # Requests for an observable finding or help with a concrete task advance
+    # a joint activity; do not penalize them for being phrased as questions.
+    if re.search(r"\b(?:did you (?:see|notice|measure|check|find)|"
+                 r"what did you (?:see|find|measure|check)|"
+                 r"what (?:does|did) the (?:monitor|meter|reading) (?:show|say)|"
+                 r"could you (?:show|measure|inspect|check|remove|restart|hold|pass))\b",
+                 spoken, re.I):
         return False
     scene = {'projector', 'dimming', 'grille', 'voltage', 'ventilation',
-             'lamp', 'cardboard', 'thermal', 'inspection', 'inspect'}
-    if not (set(re.findall(r"[a-z]{4,}", spoken.lower())) & scene):
+             'lamp', 'cardboard', 'thermal', 'dust', 'socket', 'agent'}
+    if not (set(re.findall(r'[a-z]{4,}', spoken.lower())) & scene):
         return False
-    # This is an intentionally narrow, observable failure pattern from the
-    # live feed: postponing the test to discuss another hypothetical cause.
-    return bool(re.match(
-        r"^(?:before\s+we\b|what\s+if\b|let'?s\s+(?:consider|focus|"
-        r"think|revisit)\b|(?:i'?d|i\s+would)\s+like\s+to\s+"
-        r"(?:consider|revisit|focus|think)\b|can\s+we\s+"
-        r"(?:consider|agree|focus|think)\b|we\s+(?:still\s+)?"
-        r"need\s+to\s+(?:consider|think|understand)\b)",
-        spoken, re.I))
+    # Earlier gate recognized only a few sentence openings. The live model
+    # evaded it with "I think...", "it seems...", and question variants.
+    # Classify the conversational act, not a prohibited list of subject words.
+    return bool(
+        spoken.endswith('?')
+        or re.search(r"\b(?:what if|before we|can we|should we|we need to|"
+                     r"we should|we could|let's|i think|i wonder|"
+                     r"i'd like to|i would like to|it seems|"
+                     r"perhaps|maybe|might|could be|possible|possibility|"
+                     r"consider|revisit|focus on)\b", spoken, re.I)
+    )
 
 
 def replay(cycle: int, turns: list[dict]) -> dict:
