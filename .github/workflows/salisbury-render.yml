@@ -1,0 +1,65 @@
+name: salisbury render
+
+# Renders LAPSE (compositions/salisbury) in full and commits the MP3 and a check report to its own branch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      t0:
+        description: "Start time (s)"
+        required: false
+        default: "0"
+      t1:
+        description: "End time (s)"
+        required: false
+        default: "1200"
+      label:
+        description: "Short name for the output"
+        required: false
+        default: "full"
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install numpy==2.5.3 scipy==1.18.1 matplotlib==3.11.2
+      - run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+      - name: Fetch the VSCO-2-CE sample library (CC0), only the folders the piece uses
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse https://github.com/sgossner/VSCO-2-CE "$RUNNER_TEMP/vsco"
+          cd "$RUNNER_TEMP/vsco"
+          git sparse-checkout set Strings Brass Woodwinds "Keys/Organ" Percussion
+          du -sh .
+      - name: Compose and render
+        working-directory: compositions/salisbury
+        env:
+          VSCO: ${{ runner.temp }}/vsco
+        run: |
+          python compose.py
+          python -W ignore render.py ${{ inputs.t0 }} ${{ inputs.t1 }} lapse.wav
+      - name: Encode and check
+        working-directory: compositions/salisbury
+        run: |
+          mkdir -p out
+          ffmpeg -hide_banner -loglevel error -y -i lapse.wav -codec:a libmp3lame -b:a 320k "out/Lapse_${{ inputs.label }}.mp3"
+          ffmpeg -hide_banner -nostats -i lapse.wav -af ebur128=peak=true -f null - 2>&1 | grep -E "I:|LRA:|Peak:" | tail -3 > out/loudness.txt
+          python -W ignore check_render.py lapse.wav ${{ inputs.t0 }} out
+          cat out/loudness.txt out/report.md
+      - name: Commit to a results branch
+        run: |
+          git config user.name "salisbury CI"
+          git config user.email "actions@users.noreply.github.com"
+          B="salisbury-render/${{ inputs.label }}-${{ github.run_id }}"
+          git checkout -q -b "$B"
+          git add -f compositions/salisbury/out
+          git commit -q -m "LAPSE render ${{ inputs.label }} (run ${{ github.run_id }})"
+          for i in 1 2 3 4 5; do git push -q origin "HEAD:refs/heads/$B" && { echo "pushed to $B"; exit 0; }; sleep $((i * 3)); done
+          echo "PUSH FAILED"; exit 1
