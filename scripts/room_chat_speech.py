@@ -495,6 +495,11 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                         except (RuntimeError,ValueError):
                             pass
                         else:
+                            if causal_gate is not None and not any(
+                                    h["speaker"] == "allen" for h in observed):
+                                if causal_gate(prefix):
+                                    last_failure = "stalled_scene_deferral"
+                                    continue
                             return shortened
                 continue
             if causal_gate is not None and not any(
