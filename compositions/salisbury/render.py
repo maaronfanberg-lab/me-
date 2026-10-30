@@ -73,14 +73,14 @@ def render_event(ev):
         x = perc_sample(ev["kind"], ev["dyn"], ev["rr"]); return x * (0.5 * ev["gain"] * (0.4 + 0.6 * ev["dyn"]))
     inst = ev["inst"]; fam = inst.split("_")[0]
     norm = 0.06 / LEV.get(inst, 0.06) * FAMILY.get(fam, 1.0)
-    out = None
+    parts = []
     for c in range(ev["copies"]):
         det = [0.0, 4.0, -4.0, 7.0, -7.0][c % 5]
         y = sampler.render(inst, ev["f"], ev["dur"], ev["dyn"], rel=ev["rel"], att=ev["att"], gain=ev["gain"] * norm,
                            detune_cents=det, rr=ev["rr"] + c)
-        lag = int((0.0 if c == 0 else 0.008 + 0.011 * c) * SR)
-        if out is None: out = np.zeros((len(y) + int(0.08 * SR), 2), np.float32)
-        out[lag:lag + len(y)] += y
+        parts.append((int((0.0 if c == 0 else 0.008 + 0.011 * c) * SR), y))
+    out = np.zeros((max(lag + len(y) for lag, y in parts), 2), np.float32)   # sized for the longest copy
+    for lag, y in parts: out[lag:lag + len(y)] += y
     return out / np.sqrt(ev["copies"]) * (1 + 0.35 * np.log2(ev["copies"]))   # bigger section, a little louder
 
 
