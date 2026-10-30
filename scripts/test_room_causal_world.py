@@ -210,3 +210,42 @@ with patch.dict(os.environ, {'ROOM_CAUSAL_WORLD_EXPERIMENT': '1',
         assert scene in prompt[-1]['content']
 
 print('PASS: finite test, provenance, private facts, source time ordering, actions, outcome and expiration')
+
+# Verbatim public Room turns 36613-36620: intentions and causal hypotheses
+# kept replacing observation. This is a *consecutive public* regression, not
+# a fabricated sample and not a topic-label transition.
+new_live_loop = [
+    turn(36613, 'sarah', "The duration of the dimming after several minutes of use seems like a crucial point - can we try to estimate or measure this duration using a more systematic approach, rather than just waiting for it to happen?"),
+    turn(36614, 'mara', "I think we're getting close to understanding that the projector's behavior is indeed linked to the agent's speech, but what if the cause is not just a malfunction, but rather a feedback loop between the projector's internal dynamics and the agent's external influence?"),
+    turn(36615, 'sarah', "I think we need to think about the projector's behavior in a more temporal framework - if the dimming persists even after the projector has been turned off, does that change our understanding of what's causing it?"),
+    turn(36616, 'mara', "It's the smell of hot dust that's been reported, and it seems to be directly linked to the projector's behavior – that's a crucial detail to consider; what if the agent's action somehow triggered an internal response within the projector, leading to the dimming?"),
+    turn(36617, 'sarah', "I think we've overlooked the most obvious aspect of the projector's behavior: what if the dimming is not just a malfunction, but rather a response to the agent's speech?"),
+    turn(36618, 'mara', "Let's take a closer look at the projector's behavior when it's still running – does the dimming persist, or does it return to normal after a certain period?"),
+    turn(36619, 'sarah', "I'd like to inspect the lamp housing, as it's a relatively accessible part of the projector that could be causing the dimming."),
+    turn(36620, 'owen', "I'd like to inspect the wall socket voltage drop during the projector's normal operation, to see if the duration of the dimming is indeed tied to the power grid's fluctuations, rather than a malfunction within the projector itself."),
+]
+assert w.stalled_scene(36621, new_live_loop)
+for rhetorical in (
+    "I think the projector's internal dynamics may explain its behavior.",
+    "It seems the projector might respond to the agent's speech.",
+    "I'd like to inspect the rear grille, but before that we need to consider the projector.",
+    "The projector may be an emergent social awareness mechanism?",
+    "Can we consider the projector's thermal management again?",
+):
+    assert w.circular_deferral('jules', rhetorical, 36621, new_live_loop), rhetorical
+for progress in (
+    "I inspect the rear ventilation grille.",
+    "I noticed folded cardboard blocking the grille.",
+    "Jules, what did you see behind the projector?",
+    "Could you measure the wall socket voltage?",
+    "No, I disagree that the projector responds to our speech.",
+    "I want to leave the planetarium and talk about the night sky.",
+):
+    assert not w.circular_deferral('jules', progress, 36621, new_live_loop), progress
+assert not w.stalled_scene(36621, new_live_loop[:-1] + [
+    turn(36620, 'owen', 'I measured the wall socket voltage.')])
+assert not w.stalled_scene(36621, new_live_loop[:-1] + [
+    turn(36620, 'owen', 'I found the socket voltage stayed steady.')])
+assert not w.stalled_scene(36621, new_live_loop[:-1] + [
+    turn(36620, 'owen', 'I would rather discuss the autumn meteor shower.')])
+assert not w.stalled_scene(36621, new_live_loop[-7:])
