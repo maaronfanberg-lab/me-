@@ -249,3 +249,26 @@ assert not w.stalled_scene(36621, new_live_loop[:-1] + [
 assert not w.stalled_scene(36621, new_live_loop[:-1] + [
     turn(36620, 'owen', 'I would rather discuss the autumn meteor shower.')])
 assert not w.stalled_scene(36621, new_live_loop[-7:])
+
+# First newly deployed public action, cycle 36622, included an invented
+# circuit-board result in the same sentence. A witnessed inspection is real;
+# its simulator-supplied result is not yet known at generation time.
+assert w.witnessed_action('jules',
+    "I inspect the rear ventilation grille, pulling out the dust cover to reveal a faint layer of dust and what appears to be a small, discarded circuit board fragment.") == 'inspect_vent'
+assert w.premature_action_result('jules',
+    "I inspect the rear ventilation grille, pulling out the dust cover to reveal a faint layer of dust and what appears to be a small, discarded circuit board fragment.")
+for action_only in (
+    'I inspect the rear ventilation grille.',
+    'I measure the wall socket voltage to see whether it is steady.',
+    'I remove the folded cardboard from the grille.',
+    'I restart the projector and wait ten minutes.',
+):
+    assert not w.premature_action_result('jules', action_only), action_only
+for premature in (
+    'I check the wall socket voltage and find it fluctuating.',
+    'I inspect the lamp housing and discover a cracked bulb.',
+    'I restart the projector, which reveals a hidden fault.',
+):
+    assert w.premature_action_result('owen', premature), premature
+assert not w.premature_action_result('jules',
+    'I noticed folded cardboard blocking the grille.')
