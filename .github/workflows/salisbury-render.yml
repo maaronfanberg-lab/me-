@@ -48,11 +48,20 @@ jobs:
       - name: Encode and check
         working-directory: compositions/salisbury
         run: |
-          mkdir -p out
+          mkdir -p out flac
+          # lossless master: 24-bit FLAC at the recordings' native 44.1 kHz, triangular dither from the float master
+          ffmpeg -hide_banner -loglevel error -y -i lapse.wav -af "aresample=osf=s32:dither_method=triangular" -sample_fmt s32 -bits_per_raw_sample 24 -compression_level 8 "flac/Lapse_${{ inputs.label }}_24bit_44k1.flac"
           ffmpeg -hide_banner -loglevel error -y -i lapse.wav -codec:a libmp3lame -b:a 320k "out/Lapse_${{ inputs.label }}.mp3"
+          ls -la flac out
           ffmpeg -hide_banner -nostats -i lapse.wav -af ebur128=peak=true -f null - 2>&1 | grep -E "I:|LRA:|Peak:" | tail -3 > out/loudness.txt
           python -W ignore check_render.py lapse.wav ${{ inputs.t0 }} out
           cat out/loudness.txt out/report.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lapse-flac
+          path: compositions/salisbury/flac
+          compression-level: 0
+          retention-days: 30
       - name: Commit to a results branch
         run: |
           git config user.name "salisbury CI"

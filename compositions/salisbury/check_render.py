@@ -9,7 +9,7 @@ from scipy.io import wavfile
 from scipy.signal import butter, sosfilt, spectrogram
 
 path, t0, outd = sys.argv[1], float(sys.argv[2]), sys.argv[3]
-sr, x = wavfile.read(path); x = x.astype(np.float32) / 32768; m = x.mean(1); n = len(m)
+sr, x = wavfile.read(path); x = x.astype(np.float32) / (32768 if x.dtype == np.int16 else 1.0); m = x.mean(1); n = len(m)
 R = ["# LAPSE render check", "", f"- length: {n / sr:.1f} s"]
 clip = int(np.sum(np.abs(x) >= 0.9999)); R.append(f"- samples at full scale: {clip} ({'pass' if clip == 0 else 'FAIL'})")
 b = int(0.05 * sr); nb = n // b

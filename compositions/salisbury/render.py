@@ -100,7 +100,7 @@ def render(t0=0.0, t1=1200.0, out="lapse.wav", tail=14.0):
         print(f"  group {gi + 1}/{len(groups)} {g:12s} d={d:5.1f} m  {len(es):4d} events  {time.time() - t_start:6.1f}s", flush=True)
     peak = float(np.max(np.abs(mix)))
     mix *= 10 ** (-1.0 / 20) / peak                                  # peak at -1 dBFS
-    wavfile.write(out, SR, (np.clip(mix, -1, 1) * 32767).astype(np.int16))
+    wavfile.write(out, SR, np.clip(mix, -1, 1).astype(np.float32))           # 32-bit float master; no 16-bit rounding
     return dict(peak_before=peak, seconds=n / SR)
 
 
