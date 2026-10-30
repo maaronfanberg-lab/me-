@@ -122,6 +122,24 @@ def witnessed_context(payload: dict, entity: str) -> list[dict]:
     return [turn for turn in out if turn in selected][-13:]
 
 
+def grounded_stall_history(history: list[dict]) -> list[dict]:
+    """Retain the last exchange and each participant's last real contribution.
+
+    A long chain of speculative utterances otherwise becomes the model's
+    strongest few-shot example. Preserve source IDs and original chronology;
+    never replace an actual utterance with a synthetic summary.
+    """
+    if len(history) <= 3:
+        return history
+    keep = {id(turn) for turn in history[-2:]}
+    for person in ORDER:
+        latest = next((turn for turn in reversed(history)
+                       if turn.get("speaker") == person), None)
+        if latest is not None:
+            keep.add(id(latest))
+    return [turn for turn in history if id(turn) in keep]
+
+
 def messages(payload: dict, entity: str) -> list[dict]:
     profile=payload.get("profile") or {}
     psych=profile.get("psychology_v2") or {}
@@ -150,6 +168,30 @@ def messages(payload: dict, entity: str) -> list[dict]:
         "This is spoken conversation, not an explanation of your job."
     )
     history=witnessed_context(payload,entity)
+    # When public dialogue stalls, stop using eight consecutive hypotheticals
+    # as the model's implicit conversational template. Only context changes.
+    if (os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1"
+            and not (history and history[-1]["speaker"] == "allen")):
+        from room_causal_world import stalled_scene
+        try:
+            root = Path(__file__).resolve().parents[1] / "room"
+            state = json.loads((root / "state.json").read_text())
+            public = json.loads((root / "feed.json").read_text()).get("conversation") or []
+            cycle = int(payload.get("room_cycle") or (int(state["cycle"]) + 1))
+            if isinstance(public, list) and stalled_scene(cycle, public):
+                history = grounded_stall_history(history)
+                system += (
+                    " The last eight public turns about the projector produced "
+                    "no completed test or firsthand finding. You are present "
+                    "in this practical situation, not merely reviewing theories. "
+                    "You can choose to perform an available physical action now, "
+                    "ask a particular person for a specific observation, disclose "
+                    "something you actually witnessed, disagree with a reason, "
+                    "or leave this subject for one that matters to you. "
+                    "A proposal alone changes nothing; never invent an outcome."
+                )
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
     transcript="\n".join(
         f"{h['speaker'].capitalize()}: {h['text']}" for h in history
     )
