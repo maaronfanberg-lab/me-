@@ -30,9 +30,18 @@ def ref_levels():
 
 LEV = None
 PERC = {"timp": "Percussion/Timpani", "timp_roll": "Percussion/Timpani/Rolls", "bdrum": "Percussion"}
+# cymbals and gong: (file prefix, dynamic layers soft to loud)
+PERC2 = {"crash": ("cymbal-crash1_", ["pp", "mp", "mf", "ff"]), "gong": ("gongHit_", ["p", "mf", "f", "fff"]),
+         "gongscrape": ("gongscrape_", ["pp", "mf"]), "scresc_long": ("susCymb1-cresc-Long", [""]),
+         "scresc_short": ("susCymb1-cresc-Short", [""])}
 
 
 def perc_sample(kind, dyn, rr):
+    if kind in PERC2:
+        pre, layers = PERC2[kind]; d = os.path.join(sampler.ROOT, "Percussion")
+        lay = layers[int(round(dyn * (len(layers) - 1)))]
+        files = sorted(f for f in os.listdir(d) if f.startswith(pre + lay) and f.endswith(".wav"))
+        x, _ = sampler.load(os.path.relpath(os.path.join(d, files[rr % len(files)]), sampler.ROOT)); return x
     d = os.path.join(sampler.ROOT, PERC[kind])
     pref = {"timp": "Timpani", "timp_roll": "Timpani", "bdrum": "BDrumNewhit"}[kind]
     files = sorted(f for f in os.listdir(d) if f.startswith(pref) and f.endswith(".wav"))
@@ -47,10 +56,11 @@ _tank_cache = {}
 
 
 def tank_sound(ev):
-    key = (tuple(ev["pins"]), ev["kT"], ev["dur"], ev["pulse"])
+    f0 = ev.get("f0", F0)
+    key = (round(f0, 3), tuple(ev["pins"]), ev["kT"], ev["dur"], ev["pulse"])
     if key not in _tank_cache:
         tk = Tank(decay=14.0, loss=0.12); tk.pins = set(ev["pins"])
-        y, _ = tk.strike(F0, ev["dur"], SR, pulse=ev["pulse"], kT=ev["kT"])
+        y, _ = tk.strike(f0, ev["dur"], SR, pulse=ev["pulse"], kT=ev["kT"])
         fade = np.ones(len(y)); L = int(1.5 * SR); fade[-L:] = np.cos(np.linspace(0, np.pi / 2, L)) ** 2
         y = y * fade[:, None]; y /= np.max(np.abs(y)) + 1e-12
         _tank_cache[key] = y.astype(np.float32)

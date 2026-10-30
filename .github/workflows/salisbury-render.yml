@@ -43,7 +43,7 @@ jobs:
         env:
           VSCO: ${{ runner.temp }}/vsco
         run: |
-          python compose.py
+          python compose2.py
           python -W ignore render.py ${{ inputs.t0 }} ${{ inputs.t1 }} lapse.wav
       - name: Encode and check
         working-directory: compositions/salisbury
