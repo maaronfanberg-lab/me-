@@ -36,15 +36,19 @@ jobs:
         run: |
           git clone -q --depth 1 --filter=blob:none --sparse https://github.com/sgossner/VSCO-2-CE "$RUNNER_TEMP/vsco"
           cd "$RUNNER_TEMP/vsco"
-          git sparse-checkout set Strings Brass Woodwinds "Keys/Organ" Percussion
-          du -sh .
+          git sparse-checkout set Strings Brass Woodwinds "Keys/Organ" Percussion 2>&1 | tee -a "$GITHUB_WORKSPACE/compositions/salisbury/ci.log"
+          du -sh . | tee -a "$GITHUB_WORKSPACE/compositions/salisbury/ci.log"
+          ls Percussion | head -3 | tee -a "$GITHUB_WORKSPACE/compositions/salisbury/ci.log"
+          head -c 64 "Strings/Harp/KSHarp_A2_mf.wav" | od -c | head -2 | tee -a "$GITHUB_WORKSPACE/compositions/salisbury/ci.log"
       - name: Compose and render
         working-directory: compositions/salisbury
         env:
           VSCO: ${{ runner.temp }}/vsco
         run: |
-          python compose2.py
-          python -W ignore render.py ${{ inputs.t0 }} ${{ inputs.t1 }} lapse.wav
+          set -o pipefail
+          python -c "import numpy, scipy, sys; print(sys.version, numpy.__version__, scipy.__version__)" 2>&1 | tee -a ci.log
+          python compose2.py 2>&1 | tee -a ci.log
+          python -W ignore render.py ${{ inputs.t0 }} ${{ inputs.t1 }} lapse.wav 2>&1 | tee -a ci.log
       - name: Encode and check
         working-directory: compositions/salisbury
         run: |
@@ -63,11 +67,13 @@ jobs:
           compression-level: 0
           retention-days: 30
       - name: Commit to a results branch
+        if: always()
         run: |
           git config user.name "salisbury CI"
           git config user.email "actions@users.noreply.github.com"
           B="salisbury-render/${{ inputs.label }}-${{ github.run_id }}"
           git checkout -q -b "$B"
+          mkdir -p compositions/salisbury/out; cp compositions/salisbury/ci.log compositions/salisbury/out/ 2>/dev/null || true
           git add -f compositions/salisbury/out
           git commit -q -m "LAPSE render ${{ inputs.label }} (run ${{ github.run_id }})"
           for i in 1 2 3 4 5; do git push -q origin "HEAD:refs/heads/$B" && { echo "pushed to $B"; exit 0; }; sleep $((i * 3)); done
