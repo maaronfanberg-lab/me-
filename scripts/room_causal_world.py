@@ -338,4 +338,22 @@ def cue_for(entity: str, cycle: int, public_turns: list[dict]) -> str:
             notice += (' The last eight public turns contained no recognized '
                        'completed physical action; more causal guesses alone '
                        'will not test the projector.')
+    # A just-performed action creates a new shared observation. Place that
+    # source-linked result last, after general scene options, so the small
+    # model sees the immediate consequence rather than another hypothetical.
+    # Older effects remain available in the normal witnessed ledger above.
+    latest = next((turn for turn in reversed(public_turns)
+                   if isinstance(turn, dict)
+                   and cycle_of(turn) == cycle - 1), None)
+    if latest is not None:
+        fresh = next((effect for effect in reversed(state['effects'])
+                      if effect.source_id == latest.get('id')), None)
+        if fresh is not None:
+            notice += (
+                ' IMMEDIATE SHARED OBSERVATION AFTER THE LAST PUBLIC ACTION: '
+                + fresh.actor.capitalize() + ' [' + fresh.source_id + '] '
+                + fresh.observation
+                + ' This is what the environment now shows, not a proposal '
+                  'or a guess about what the action might reveal.'
+            )
     return notice
