@@ -272,3 +272,20 @@ for premature in (
     assert w.premature_action_result('owen', premature), premature
 assert not w.premature_action_result('jules',
     'I noticed folded cardboard blocking the grille.')
+
+# The real cycle-36622 public inspection must cause an immediately visible
+# environment result at 36623, rather than another round of hypothetical
+# questions. No duplicate "new" event is claimed on subsequent cycles.
+first_action = turn(36622, 'jules',
+    'I inspect the rear ventilation grille.')
+immediate = w.cue_for('owen', 36623, [first_action])
+assert 'IMMEDIATE SHARED OBSERVATION AFTER THE LAST PUBLIC ACTION' in immediate
+assert first_action['id'] in immediate
+assert 'blocked by folded cardboard' in immediate
+older = w.cue_for('mara', 36624, [first_action])
+assert 'IMMEDIATE SHARED OBSERVATION' not in older
+assert 'CHANGES OBSERVED AFTER PUBLIC ACTIONS' in older
+duplicate = w.cue_for('sarah', 36624, [first_action,
+    turn(36623, 'mara', 'I inspect the rear ventilation grille.')])
+assert 'IMMEDIATE SHARED OBSERVATION' not in duplicate
+assert w.cue_for('owen', w.TRIAL_END, [first_action]) == ''
