@@ -109,6 +109,51 @@ def evidence_terms(text: str) -> set[str]:
         'machine', 'projector', 'several', 'running', 'image',
     }
 
+def circular_deferral(speaker: str, candidate: str, cycle: int,
+                      public_turns: list[dict]) -> bool:
+    """Detect a stalled-scene conversational move, not a forbidden vocabulary.
+
+    An eight-turn action-free public loop is evidence that speculative
+    reframing is not advancing the shared problem. Reject only another
+    same-scene deferral; permit concrete observations, disagreement, action,
+    an answer to a visitor, and a genuine change of subject. Never fabricate
+    an action to satisfy this test.
+    """
+    if speaker not in PEOPLE or not active(cycle) or not isinstance(candidate, str):
+        return False
+    recent = [turn for turn in public_turns
+              if isinstance(turn, dict)
+              and turn.get('speaker') in PEOPLE
+              and (when := cycle_of(turn)) is not None
+              and TRIAL_START <= when < cycle][-8:]
+    if len(recent) < 8 or any(witnessed_action(
+            str(turn.get('speaker')), str(turn.get('text') or ''))
+            for turn in recent):
+        return False
+    spoken = candidate.strip()
+    if witnessed_action(speaker, spoken):
+        return False
+    # A firsthand finding or a clear decision can be progress without
+    # operating a physical object. Preserve these as voluntary speech.
+    if re.match(r"^(?:I|we)\s+(?:saw|found|noticed|observed|measured|"
+                r"checked|decided|disagree|don't agree|cannot|can't|"
+                r"refuse|decline)\b", spoken, re.I):
+        return False
+    scene = {'projector', 'dimming', 'grille', 'voltage', 'ventilation',
+             'lamp', 'cardboard', 'thermal', 'inspection', 'inspect'}
+    if not (set(re.findall(r"[a-z]{4,}", spoken.lower())) & scene):
+        return False
+    # This is an intentionally narrow, observable failure pattern from the
+    # live feed: postponing the test to discuss another hypothetical cause.
+    return bool(re.match(
+        r"^(?:before\s+we\b|what\s+if\b|let'?s\s+(?:consider|focus|"
+        r"think|revisit)\b|(?:i'?d|i\s+would)\s+like\s+to\s+"
+        r"(?:consider|revisit|focus|think)\b|can\s+we\s+"
+        r"(?:consider|agree|focus|think)\b|we\s+(?:still\s+)?"
+        r"need\s+to\s+(?:consider|think|understand)\b)",
+        spoken, re.I))
+
+
 def replay(cycle: int, turns: list[dict]) -> dict:
     """Reconstruct the world solely from past, identified public speech."""
     if not active(cycle):
