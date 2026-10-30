@@ -102,6 +102,24 @@ def witnessed_action(speaker: str, text: str) -> str | None:
             return action
     return None
 
+def premature_action_result(speaker: str, text: str) -> bool:
+    """An action may be witnessed now; its simulated outcome is not known yet.
+
+    The world returns the result on the following beat. A model-generated
+    inspection cannot author an additional circuit board, voltage reading or
+    other consequence in the same breath. A standalone firsthand report with
+    no action is not subject to this particular check.
+    """
+    if not witnessed_action(speaker, text):
+        return False
+    return re.search(
+        r"\b(?:reveal(?:s|ed|ing)?|discover(?:s|ed|ing)?|"
+        r"find(?:s|ing)?|found|show(?:s|ed|ing)?|"
+        r"expos(?:es|ed|ing)|turns out|"
+        r"I (?:see|saw|notice|noticed)|there (?:is|are|was|were))\b",
+        text, re.I) is not None
+
+
 def evidence_terms(text: str) -> set[str]:
     return set(re.findall(r'[a-z]{5,}', text.lower())) - {
         'there', 'their', 'which', 'about', 'noticed', 'before',

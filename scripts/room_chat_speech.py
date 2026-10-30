@@ -338,6 +338,9 @@ def messages(payload: dict, entity: str) -> list[dict]:
             entity, next_cycle=int(source_cycle) if source_cycle is not None else None)
         if notice:
             user += "\n\n" + notice
+            user += (" If you perform a physical check, describe the action "
+                     "but wait for the simulated environment's next response "
+                     "before claiming what that check revealed.")
     return [{"role":"system","content":system},{"role":"user","content":user}]
 
 
@@ -420,14 +423,18 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
     causal_gate = None
     if os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1":
         try:
-            from room_causal_world import circular_deferral
+            from room_causal_world import circular_deferral, premature_action_result
             root = Path(__file__).resolve().parents[1] / "room"
             state = json.loads((root / "state.json").read_text())
             public = json.loads((root / "feed.json").read_text()).get("conversation") or []
             cycle = int(payload.get("room_cycle") or (int(state["cycle"]) + 1))
             if isinstance(public, list):
-                causal_gate = lambda spoken: circular_deferral(
-                    entity, spoken, cycle, public)
+                def causal_gate(spoken):
+                    if premature_action_result(entity, spoken):
+                        return "unwitnessed_action_outcome"
+                    if circular_deferral(entity, spoken, cycle, public):
+                        return "stalled_scene_deferral"
+                    return ""
         except (OSError, ValueError, KeyError, TypeError):
             pass
     for attempt in range(3):
@@ -441,6 +448,14 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                     "third person. Make one concrete response to what was actually said. "
                     "Do not make up past events. Never write a line for Allen "
                     "or another participant; speak only as yourself.")
+            if last_failure == "unwitnessed_action_outcome":
+                hint += (
+                    " A physical action can happen now, but the simulated "
+                    "environment supplies its result only after this turn. "
+                    "If you act, describe what you do without inventing what "
+                    "the inspection reveals. You can report a separate "
+                    "firsthand observation instead."
+                )
             if last_failure == "stalled_scene_deferral":
                 hint += (
                     " The previous eight witnessed public turns only discussed "
@@ -539,15 +554,15 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                         else:
                             if causal_gate is not None and not any(
                                     h["speaker"] == "allen" for h in observed):
-                                if causal_gate(prefix):
-                                    last_failure = "stalled_scene_deferral"
+                                if (reason := causal_gate(prefix)):
+                                    last_failure = reason
                                     continue
                             return shortened
                 continue
             if causal_gate is not None and not any(
                     h["speaker"] == "allen" for h in observed):
-                if causal_gate(spoken):
-                    last_failure = "stalled_scene_deferral"
+                if (reason := causal_gate(spoken)):
+                    last_failure = reason
                     continue
             return result
         except (TimeoutError,urllib.error.URLError,ValueError,KeyError,TypeError,IndexError) as exc:
