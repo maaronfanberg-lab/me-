@@ -252,5 +252,35 @@ class ChatAdapterTests(unittest.TestCase):
             if before_floor is None:os.environ.pop("ROOM_CONVERSATIONAL_FLOOR",None)
             else:os.environ["ROOM_CONVERSATIONAL_FLOOR"]=before_floor
 
+
+    def test_stalled_scene_uses_grounded_four_voice_history_not_eight_turn_imitation(self):
+        turns = [{"id":f"loop-{n}","speaker":who,
+                  "text":f"The projector question number {n} remains open."}
+                 for n,who in enumerate(
+                     ["sarah","mara","jules","owen",
+                      "sarah","mara","jules","owen",
+                      "sarah","mara","jules","owen"])]
+        reduced=chat.grounded_stall_history(turns)
+        self.assertEqual([t["id"] for t in reduced],
+                         ["loop-8","loop-9","loop-10","loop-11"])
+        self.assertEqual({t["speaker"] for t in reduced},
+                         {"sarah","mara","jules","owen"})
+        self.assertEqual(reduced[-1],turns[-1])
+        inp=payload("sarah",turns[-1])
+        inp["context"]=turns
+        inp["room_cycle"]=36621
+        def fake_file(path, *args, **kwargs):
+            return (json.dumps({"cycle":36620}) if path.name=="state.json"
+                    else json.dumps({"conversation":turns}))
+        with patch.dict(os.environ,{"ROOM_CAUSAL_WORLD_EXPERIMENT":"1"}), \
+             patch("room_chat_speech.Path.read_text",autospec=True,side_effect=fake_file), \
+             patch("room_causal_world.stalled_scene",return_value=True), \
+             patch("room_causal_world.production_cue",return_value=""):
+            prompt=chat.messages(inp,"sarah")
+        self.assertIn("no completed test or firsthand finding",prompt[0]["content"])
+        self.assertIn("Owen: The projector question number 11",prompt[1]["content"])
+        self.assertNotIn("question number 7",prompt[1]["content"])
+        self.assertIn("Jules: The projector question number 10",prompt[1]["content"])
+
 if __name__=="__main__":
     unittest.main()
