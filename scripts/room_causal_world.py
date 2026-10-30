@@ -126,6 +126,7 @@ def stalled_scene(cycle: int, public_turns: list[dict]) -> bool:
         return False
     scene = {'projector', 'dimming', 'grille', 'voltage', 'ventilation',
              'lamp', 'cardboard', 'thermal', 'dust', 'socket', 'agent'}
+    on_topic = 0
     for turn in recent:
         spoken = str(turn.get('text') or '').strip()
         if witnessed_action(str(turn.get('speaker')), spoken):
@@ -133,9 +134,15 @@ def stalled_scene(cycle: int, public_turns: list[dict]) -> bool:
         if re.match(r"^(?:I|we)\s+(?:saw|found|noticed|observed|measured|"
                     r"checked|decided|fixed|repaired|resolved)\b", spoken, re.I):
             return False
-        if not (set(re.findall(r'[a-z]{4,}', spoken.lower())) & scene):
+        terms = set(re.findall(r'[a-z]{4,}', spoken.lower()))
+        if terms & scene:
+            on_topic += 1
+        elif re.search(r"\b(?:talk about|rather discuss|switch to|move on to)\b",
+                       spoken, re.I):
+            # An actual choice to change subjects ends the stuck-scene streak.
             return False
-    return True
+    # A brief anaphoric reply need not repeat the projector's name.
+    return on_topic >= 6
 
 
 def circular_deferral(speaker: str, candidate: str, cycle: int,
