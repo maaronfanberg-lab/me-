@@ -282,5 +282,25 @@ class ChatAdapterTests(unittest.TestCase):
         self.assertNotIn("question number 7",prompt[1]["content"])
         self.assertIn("Jules: The projector question number 10",prompt[1]["content"])
 
+
+    def test_world_action_cannot_publish_an_unobserved_same_turn_result(self):
+        inp=payload("jules",source("mara",
+            "The projector dims after ten minutes. Could someone inspect the rear grille?"))
+        inp["room_cycle"]=36623
+        invented=("I inspect the rear ventilation grille, revealing a hidden "
+                  "circuit board fragment behind the dust cover.")
+        clean="I inspect the rear ventilation grille now while the projector is running."
+        def fake_file(path, *args, **kwargs):
+            return (json.dumps({"cycle":36622}) if path.name=="state.json"
+                    else json.dumps({"conversation":[]}))
+        with patch.dict(os.environ,{"ROOM_CAUSAL_WORLD_EXPERIMENT":"1"}), \
+             patch("room_chat_speech.Path.read_text",autospec=True,side_effect=fake_file), \
+             patch("room_causal_world.production_cue",return_value=""), \
+             patch("room_chat_speech.urllib.request.urlopen",
+                   side_effect=[Fake(invented),Fake(clean)]) as model:
+            result=chat.run(inp)
+        self.assertEqual(model.call_count,2)
+        self.assertEqual(result["utterance"],clean)
+
 if __name__=="__main__":
     unittest.main()
