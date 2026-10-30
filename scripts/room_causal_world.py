@@ -113,10 +113,10 @@ def premature_action_result(speaker: str, text: str) -> bool:
     if not witnessed_action(speaker, text):
         return False
     return re.search(
-        r"\\b(?:reveal(?:s|ed|ing)?|discover(?:s|ed|ing)?|"
+        r"\b(?:reveal(?:s|ed|ing)?|discover(?:s|ed|ing)?|"
         r"find(?:s|ing)?|found|show(?:s|ed|ing)?|"
         r"expos(?:es|ed|ing)|turns out|"
-        r"I (?:see|saw|notice|noticed)|there (?:is|are|was|were))\\b",
+        r"I (?:see|saw|notice|noticed)|there (?:is|are|was|were))\b",
         text, re.I) is not None
 
 
