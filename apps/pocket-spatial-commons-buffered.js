@@ -67,7 +67,7 @@ function forceMusicMatrixBaseline(){
    * The empirically proven rear output coefficients themselves are untouched.
    */
   setValue('centerAnchor',0);
-  setValue('steerSep',126);
+  setValue('steerSep',100);
   fireInput('centerAnchor');
   fireInput('steerSep');
 }
@@ -108,7 +108,7 @@ function applyReceiverFirstUI(){
   if(adaptiveButton)adaptiveButton.style.display='none';
   var adaptiveStatus=byId('adaptiveStatus');
   if(adaptiveStatus){
-    adaptiveStatus.textContent='Adaptive overlay parked. Bass protection is active: no extra broadband center copy, and rear extraction is near-pure L-R difference.';
+    adaptiveStatus.textContent='Adaptive overlay parked. Bass protection: everything below 120 Hz is locked to mono and bypasses the matrix (linear-phase crossover), so Steering Separation stays at 100% and Rear Surround Strength is fully active.';
     adaptiveStatus.className='status good';
   }
 
