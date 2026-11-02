@@ -89,6 +89,7 @@ var AC=window.AudioContext||window.webkitAudioContext,core=window.PocketSpatialC
 var audio=document.getElementById('audio'),file=document.getElementById('file'),spatial=document.getElementById('spatial'),adaptiveSteering=document.getElementById('adaptiveSteering'),adaptiveStatus=document.getElementById('adaptiveStatus');
 var space=document.getElementById('space'),angle=document.getElementById('angle'),depth=document.getElementById('depth'),delayStretch=document.getElementById('delayStretch'),headShadow=document.getElementById('headShadow'),roomScale=document.getElementById('roomScale'),roomWrap=document.getElementById('roomWrap'),reflectionTone=document.getElementById('reflectionTone'),polarity=document.getElementById('polarity');
 var rearStrength=document.getElementById('rearStrength'),centerAnchor=document.getElementById('centerAnchor'),steerSep=document.getElementById('steerSep'),badge=document.getElementById('badge'),track=document.getElementById('track'),status=document.getElementById('status');
+var MATRIX_MATCH=1;/* loudness match: centred (mono) content plays at the same level with matrix encoding on or off */
 var BASS_LOCK=true,BASS_XOVER_HZ=120,xoverHigh=null,xoverLow=null,bassMono=null,bassLevel=null,bassLimiter=null;
 /* Linear-phase Linkwitz-Riley 8th-order (48 dB/oct) crossover.
    LP kernel = zero-phase |BW4|^2: a 4th-order Butterworth (two biquads) run forward, then backward. Centred at D.
@@ -131,7 +132,7 @@ function applyMatrix(){
   setParam(matrixLL.gain,-.49*rear,.035);setParam(matrixLR.gain,.871*rear,.035);setParam(matrixRL.gain,-.871*rear,.035);setParam(matrixRR.gain,.49*rear,.035);setParam(matrixDirectL.gain,dL,.035);setParam(matrixDirectR.gain,dR,.035);
   setParam(objCenterOutL.gain,centerExtra,.030);setParam(objCenterOutR.gain,centerExtra,.030);setParam(objPresenceLGain.gain,frontL,.020);setParam(objPresenceRGain.gain,frontR,.020);
   var objCross=clamp(cross+.12*steer.objRear,.18,.98);setParam(objHighLA.gain,highFeed,.020);setParam(objHighLB.gain,-objCross*highFeed,.020);setParam(objHighRA.gain,highFeed,.020);setParam(objHighRB.gain,-objCross*highFeed,.020);
-  var trim=enabled?.64:.96;setParam(matrixTrim.gain,trim,.05);
+  var trim=enabled?MATRIX_MATCH*.9216/Math.max(.25,dL+2*center+centerExtra):.96;setParam(matrixTrim.gain,trim,.05);
   if(bassLevel){/* mono bass skips both spatial stages; match it to the mono power gain those stages give the highs, so balance across 120 Hz stays flat */
     var t=targets(),p1=t.masterGain*t.masterGain*(t.directGain*t.directGain+t.farGain*t.farGain+t.refl1Gain*t.refl1Gain+t.refl2Gain*t.refl2Gain+t.wrapGain1*t.wrapGain1+t.wrapGain2*t.wrapGain2);
     var fr=dL+2*center,sr=1.361*rear*(1-cross),p2=fr*fr+sr*sr;setParam(bassLevel.gain,Math.sqrt(p1*p2),.035);}text('matrixTrimRead',Math.round(trim*100)+'%');
