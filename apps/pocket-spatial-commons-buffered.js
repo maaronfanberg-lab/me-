@@ -108,7 +108,7 @@ function applyReceiverFirstUI(){
   if(adaptiveButton)adaptiveButton.style.display='none';
   var adaptiveStatus=byId('adaptiveStatus');
   if(adaptiveStatus){
-    adaptiveStatus.textContent='Adaptive overlay parked. Bass protection: everything below 120 Hz is locked to mono and bypasses the matrix (linear-phase crossover), and Steering Separation is held at 126%.';
+    adaptiveStatus.textContent='Adaptive overlay parked. Bass protection is active: no extra broadband center copy, and rear extraction is near-pure L-R difference.';
     adaptiveStatus.className='status good';
   }
 

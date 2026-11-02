@@ -217,7 +217,7 @@
 (function(){
   'use strict';
   if(typeof document==='undefined')return;
-  var build='20261101-rear-revert-2';
+  var build='20261101-restored-3';
   function versioned(src){return src+'?v='+build;}
   function load(src,next){var script=document.createElement('script');script.src=versioned(src);script.async=false;if(next)script.onload=next;document.head.appendChild(script);}
   load('pocket-spatial-commons-buffered.js',function(){load('pocket-spatial-single-playback.js',function(){load('pocket-spatial-buffered-catalog.js',function(){load('pocket-spatial-audius-catalog.js',function(){load('pocket-spatial-buffer-probe.js');});});});});
