@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Perennial</title>
+<style>
+:root{--bg:#0d0f12;--panel:#171a1f;--line:#2b3038;--ink:#ece8df;--dim:#a5a59f;--warm:#f2a65a;--cool:#6db4e8;--new:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,'Iowan Old Style',serif;padding:env(safe-area-inset-top) 16px 40px}
+main{max-width:760px;margin:auto}
+h1{font-size:2.3rem;font-weight:400;margin:22px 0 4px;letter-spacing:.02em}
+.lede{margin:0 0 14px;font-size:1.06rem}
+#stats,#today{color:var(--dim);margin:0 0 10px;font-size:.95rem}
+canvas{display:block;width:100%;aspect-ratio:1;background:#080a0c;border:1px solid var(--line);border-radius:8px;touch-action:pan-y}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.lab{font:600 .72rem/1 system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);width:100%;margin-top:6px}
+button{font:500 .95rem system-ui,sans-serif;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:10px 13px;min-height:44px;min-width:44px;touch-action:manipulation;cursor:pointer}
+button:disabled{opacity:.38}
+#dayLabel{min-width:104px;text-align:center;font:500 .95rem system-ui,sans-serif}
+#info,details{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:12px 0}
+#info b{font-weight:600}
+.key{display:inline-block;width:.8em;height:.8em;border-radius:50%;margin-right:.35em;vertical-align:-.03em}
+summary{cursor:pointer;font-weight:600}
+li{margin:.3em 0}
+a{color:var(--cool)}
+#err{color:var(--warm)}
+</style>
+</head>
+<body>
+<main>
+<h1>Perennial</h1>
+<p class="lede">A real part of the Mandelbrot set, growing once a day for a year. It predicts each new bud's size, measures it, and grows next wherever the math surprised it most.</p>
+<p id="stats">Loading…</p>
+<p id="today"></p>
+<p id="err" role="alert"></p>
+<canvas id="c" aria-label="Map of the buds grown so far"></canvas>
+<div class="row"><span class="lab">Go to</span>
+<button id="whole">Whole plant</button><button id="surp">Day's surprise</button><button id="ever">Biggest ever</button><button id="parent" disabled>Parent</button></div>
+<div class="row"><span class="lab">Look</span>
+<button id="zout" aria-label="Zoom out">−</button><button id="zin" aria-label="Zoom in">+</button><button id="L" aria-label="Move left">←</button><button id="U" aria-label="Move up">↑</button><button id="D" aria-label="Move down">↓</button><button id="R" aria-label="Move right">→</button></div>
+<div class="row"><span class="lab">Time</span>
+<button id="prev" aria-label="Previous day">◀</button><span id="dayLabel"></span><button id="next" aria-label="Next day">▶</button></div>
+<div id="info">Tap a bud to read its numbers.</div>
+<details><summary>How to read it</summary><ul>
+<li><b>Shape and position:</b> the bud's true boundary, computed from f(z) = z² + c.</li>
+<li><span class="key" style="background:var(--warm)"></span>Amber: bigger than expected. <span class="key" style="background:var(--cool)"></span>Blue: smaller than expected. Brighter means a bigger surprise.</li>
+<li><span class="key" style="background:var(--new)"></span>White outline: grown on the day shown.</li>
+<li><b>Rings:</b> true level curves of the bud's multiplier. More rings mean a longer period.</li>
+<li><b>Spokes:</b> where this bud's own children attach.</li>
+<li><b>Stem:</b> runs from the bud's attachment point on its parent to its centre.</li>
+<li><b>The law:</b> predicted radius = |dc/dλ at the root| ÷ q². Expected surprise is the average already seen in that kind of bud, so a repeating pattern stops counting as news.</li>
+</ul></details>
+</main>
+<script>
+"use strict";
+const DATA = "../experiments/perennial/data/";
+const $ = id => document.getElementById(id);
+const cv = $("c"), g = cv.getContext("2d");
+let buds = [], index = null, days = [], dayN = 0, sel = null, children = new Map();
+let view = { x: -0.55, y: 0, w: 2.6 };
+const WHOLE = { x: -0.55, y: 0, w: 2.6 };
+
+function boundary(b, r, theta) { // c(lambda) from the stored Taylor coefficients
+  let re = b.c[0], im = b.c[1];
+  const lx = r * Math.cos(theta), ly = r * Math.sin(theta);
+  let px = lx, py = ly;
+  for (const a of b.coeffs) {
+    re += a[0] * px - a[1] * py; im += a[0] * py + a[1] * px;
+    const t = px * lx - py * ly; py = px * ly + py * lx; px = t;
+  }
+  return [re, im];
+}
+function colour(b, a) {
+  const m = Math.tanh(Math.abs(b.residual || 0) / 0.02), warm = (b.residual || 0) >= 0;
+  const hue = warm ? 31 : 205, light = 34 + 44 * m, sat = 28 + 62 * m;
+  return `hsla(${hue},${sat}%,${light}%,${a})`;
+}
+function resize() {
+  const css = cv.clientWidth, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (cv.width !== Math.round(css * dpr)) { cv.width = cv.height = Math.round(css * dpr); }
+  draw();
+}
+function draw() {
+  if (!buds.length) return;
+  const W = cv.width, s = W / view.w;
+  const X = re => (re - view.x) * s + W / 2, Y = im => W / 2 - (im - view.y) * s;
+  g.fillStyle = "#080a0c"; g.fillRect(0, 0, W, W);
+  const limit = dayN ? days[dayN - 1].lastId : 0;
+  const first = dayN > 1 ? days[dayN - 2].lastId : 0;
+  const trace = (b, r) => {
+    const n = s * b.radius > 40 ? 96 : 40;
+    g.beginPath();
+    for (let i = 0; i <= n; i++) { const p = boundary(b, r, 2 * Math.PI * i / n); i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1])); }
+    g.closePath();
+  };
+  for (let i = 0; i <= limit; i++) {
+    const b = buds[i], rp = b.radius * s, x = X(b.c[0]), y = Y(b.c[1]), pad = rp * 2.2 + 3;
+    if (x < -pad || x > W + pad || y < -pad || y > W + pad) continue;
+    const isNew = i > first;
+    if (rp < 1.2) { g.fillStyle = isNew ? "#fff" : colour(b, 1); const d = Math.max(1.2, rp * 2); g.fillRect(x - d / 2, y - d / 2, d, d); continue; }
+    if (b.parent !== null && rp > 2) {
+      g.strokeStyle = colour(b, .8); g.lineWidth = Math.max(1, rp * .05);
+      g.beginPath(); g.moveTo(X(b.root[0]), Y(b.root[1])); g.lineTo(x, y); g.stroke();
+    }
+    trace(b, 1); g.fillStyle = colour(b, b.parent === null ? .1 : .3); g.fill();
+    g.strokeStyle = isNew ? "#fff" : colour(b, 1); g.lineWidth = isNew ? Math.min(2.4, 1 + rp / 40) : 1; g.stroke();
+    if (rp > 13) {
+      const rings = Math.min(1 + Math.floor(Math.log2(b.period) / 2), 5);
+      g.strokeStyle = colour(b, .55); g.lineWidth = 1;
+      for (let k = 1; k <= rings; k++) { trace(b, k / (rings + 1)); g.stroke(); }
+      g.strokeStyle = colour(b, .42);
+      for (const ch of children.get(i) || []) {
+        if (ch.id > limit) continue;
+        const e = boundary(b, 1, 2 * Math.PI * ch.p / ch.q);
+        g.beginPath(); g.moveTo(x, y); g.lineTo(X(e[0]), Y(e[1])); g.stroke();
+      }
+    }
+  }
+  if (sel !== null && sel <= limit) {
+    const b = buds[sel]; trace(b, 1); g.strokeStyle = "#ffe36e"; g.lineWidth = 2.5; g.stroke();
+    if (s * b.radius < 8) { g.beginPath(); g.arc(X(b.c[0]), Y(b.c[1]), 12, 0, 7); g.stroke(); }
+  }
+}
+function pct(x) { return (x >= 0 ? "+" : "−") + Math.abs((Math.exp(x) - 1) * 100).toFixed(2) + "%"; }
+function sig(x) { return x.toExponential(3).replace("e", " × 10^").replace("^+", "^").replace("^-", "^−"); }
+function show(i) {
+  sel = i; const b = buds[i];
+  $("parent").disabled = b.parent === null;
+  $("info").innerHTML = b.parent === null
+    ? "<b>The seed.</b> The main cardioid, period 1, where all growth begins."
+    : `<b>Bud ${b.id}</b>, the ${b.p}/${b.q} bud of bud ${b.parent}. Period ${b.period}, depth ${b.depth}.<br>` +
+      `Law predicted radius ${sig(b.predicted)}. Measured ${sig(b.radius)}, a ${pct(b.surprise)} miss.<br>` +
+      `Past buds of this kind missed by ${pct(b.expected)}, so this one surprised it by <b>${pct(b.residual)}</b>.`;
+  draw();
+}
+function goto(i) { const b = buds[i]; view = { x: b.c[0], y: b.c[1], w: Math.max(b.radius * 9, 1e-9) }; show(i); }
+function setDay(n) {
+  dayN = n; const d = days[n - 1];
+  $("dayLabel").textContent = `Day ${n} of ${index.days_total}`;
+  $("prev").disabled = n <= 1; $("next").disabled = n >= days.length;
+  $("stats").textContent = `${d.lastId.toLocaleString()} buds by ${d.date}, each predicted and then measured.`;
+  const t = buds[d.top];
+  $("today").textContent = `This day's surprise: bud ${t.id}, period ${t.period}, ${pct(t.residual)} against what the plant expected.`;
+  if (sel !== null && sel > d.lastId) { sel = null; $("info").textContent = "Tap a bud to read its numbers."; $("parent").disabled = true; }
+  draw();
+}
+cv.addEventListener("click", e => {
+  const box = cv.getBoundingClientRect(), W = cv.width, k = W / box.width, s = W / view.w;
+  const px = (e.clientX - box.left) * k, py = (e.clientY - box.top) * k;
+  const limit = dayN ? days[dayN - 1].lastId : 0;
+  let best = null, score = Infinity;
+  for (let i = 0; i <= limit; i++) {
+    const b = buds[i], x = (b.c[0] - view.x) * s + W / 2, y = W / 2 - (b.c[1] - view.y) * s;
+    const dist = Math.hypot(x - px, y - py), rp = b.radius * s, reach = Math.max(rp, 14 * k);
+    if (dist <= reach && dist / reach + rp / W < score) { best = i; score = dist / reach + rp / W; }
+  }
+  if (best !== null) show(best);
+});
+const bind = (id, fn) => $(id).addEventListener("click", fn);
+const pan = (dx, dy) => { view.x += dx * view.w * .25; view.y += dy * view.w * .25; draw(); };
+bind("whole", () => { view = { ...WHOLE }; draw(); });
+bind("surp", () => goto(days[dayN - 1].top));
+bind("ever", () => {
+  let top = 1; for (let i = 1; i <= days[dayN - 1].lastId; i++) if (Math.abs(buds[i].residual) > Math.abs(buds[top].residual)) top = i;
+  goto(top);
+});
+bind("parent", () => { if (sel !== null && buds[sel].parent !== null) goto(buds[sel].parent); });
+bind("zin", () => { view.w = Math.max(view.w / 2, 1e-9); draw(); });
+bind("zout", () => { view.w = Math.min(view.w * 2, 5); draw(); });
+bind("L", () => pan(-1, 0)); bind("R", () => pan(1, 0)); bind("U", () => pan(0, 1)); bind("D", () => pan(0, -1));
+bind("prev", () => setDay(dayN - 1)); bind("next", () => setDay(dayN + 1));
+window.addEventListener("resize", resize);
+(async () => {
+  try {
+    const res = await fetch(DATA + "index.json", { cache: "no-cache" });
+    if (!res.ok) throw new Error("index " + res.status);
+    index = await res.json();
+    buds = [index.seed];
+    const files = new Array(index.days.length); let next = 0;
+    await Promise.all(Array.from({ length: 6 }, async () => {
+      while (next < files.length) {
+        const k = next++, day = String(index.days[k].day).padStart(4, "0");
+        const r = await fetch(`${DATA}day-${day}.json?c=${index.days[k].chain.slice(0, 10)}`);
+        if (!r.ok) throw new Error("day " + day + " " + r.status);
+        files[k] = await r.json();
+      }
+    }));
+    for (const f of files) buds.push(...f.buds);
+    for (const b of buds) if (b.parent !== null) { if (!children.has(b.parent)) children.set(b.parent, []); children.get(b.parent).push(b); }
+    let last = 0;
+    days = files.map((f, k) => { last += f.buds.length; return { ...index.days[k], lastId: last }; });
+    resize(); setDay(days.length);
+  } catch (e) { $("stats").textContent = ""; $("err").textContent = "The plant's data could not load: " + e.message; }
+})();
+</script>
+</body>
+</html>
