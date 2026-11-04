@@ -103,10 +103,12 @@ for b in buds[::step][:12]:
     c0, P, r = complex(*b["c"]), b["period"], b["radius"]
     lam = 0.5 * cmath.exp(0.7j)
     z, c = E.walk(c0, P, lam, r)
-    _, c1 = E.solve_lambda(lam + 1e-4, z, c, P, r)
-    _, c2 = E.solve_lambda(lam - 1e-4, z, c, P, r)
-    worst = max(worst, abs((c1 - c2) / 2e-4 / E.dc_dlambda(z, c, P) - 1))
-check("dc/dlambda implicit vs finite difference", worst, 1e-4)
+    _, c1 = E.solve_lambda(lam + 2e-3, z, c, P, r)
+    _, c2 = E.solve_lambda(lam - 2e-3, z, c, P, r)
+    err = abs((c1 - c2) / 4e-3 / E.dc_dlambda(z, c, P) - 1)
+    # Allow for the roundoff a small bud puts into the difference itself.
+    worst = max(worst, err / (1e-4 + 4 * E.FLOOR / (4e-3 * r)))
+check("dc/dlambda implicit vs difference, over noise limit", worst, 1)
 
 # 5. Boundary coefficients reconstruct the true boundary.
 check("worst boundary reconstruction / radius", max(b["resid"] for b in buds), 1e-2)

@@ -89,7 +89,7 @@ function draw() {
   const limit = dayN ? days[dayN - 1].lastId : 0;
   const first = dayN > 1 ? days[dayN - 2].lastId : 0;
   const trace = (b, r) => {
-    const n = s * b.radius > 40 ? 96 : 40;
+    const n = Math.min(1440, Math.max(40, Math.ceil(s * b.radius * 1.5)));
     g.beginPath();
     for (let i = 0; i <= n; i++) { const p = boundary(b, r, 2 * Math.PI * i / n); i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1])); }
     g.closePath();
