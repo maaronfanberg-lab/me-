@@ -8,6 +8,7 @@ Research-only pure transition, not wired to the live Room.
 from __future__ import annotations
 
 import copy
+import hashlib
 import math
 import re
 from collections.abc import Mapping
@@ -20,6 +21,54 @@ MAX_HISTORY = 12
 
 def _plain(value):
     return " ".join(value.split()) if isinstance(value, str) else ""
+
+
+def reflection_id(*, owner: str, cycle: int, hypothesis: str,
+                  basis_kind: str, source_id: str) -> str:
+    if (owner not in AGENTS or type(cycle) is not int or cycle < 0
+            or not isinstance(hypothesis, str) or not hypothesis
+            or basis_kind not in {"witnessed", "own_goal"}
+            or not isinstance(source_id, str) or not source_id):
+        raise ValueError("invalid private reflection identity")
+    digest = hashlib.sha256(
+        f"{owner}|{cycle}|{basis_kind}|{source_id}|{hypothesis}".encode()
+    ).hexdigest()[:24]
+    return "self-reflection-" + digest
+
+
+def authenticated_reflection_ids(*, owner: str, private_state: object) -> set[str]:
+    """Return owner-authored reflection references, not unverified text IDs.
+
+    Only entries with matching owner, source fields, deterministic digest,
+    bounded text and a valid originating cycle can form a private goal basis.
+    An external public claim is never created by this function.
+    """
+    if owner not in AGENTS or not isinstance(private_state, Mapping):
+        return set()
+    history = private_state.get("private_reflections")
+    if not isinstance(history, list):
+        return set()
+    found = set()
+    for entry in history[-MAX_HISTORY:]:
+        if not isinstance(entry, Mapping) or entry.get("owner") != owner:
+            continue
+        try:
+            if (type(entry.get("cycle")) is not int
+                    or entry["cycle"] > private_state.get("last_updated_cycle", -1)
+                    or not isinstance(entry.get("hypothesis"), str)
+                    or len(entry["hypothesis"]) > MAX_HYPOTHESIS_CHARS
+                    or entry.get("status") != "unverified_self_interpretation"):
+                continue
+            expected = reflection_id(
+                owner=owner, cycle=entry["cycle"],
+                hypothesis=entry["hypothesis"],
+                basis_kind=entry["basis_kind"],
+                source_id=entry["source_id"])
+            if entry.get("id") == expected:
+                found.add(expected)
+        except (TypeError, KeyError, ValueError):
+            continue
+    return found
 
 
 def apply_private_reflection(*, agent: str, cycle: int, bid: Mapping,
@@ -67,6 +116,9 @@ def apply_private_reflection(*, agent: str, cycle: int, bid: Mapping,
     original["belief_epistemic_status"] = "self_hypothesis_not_external_fact"
     original["what_just_changed"] = "I reconsidered my private hypothesis."
     original["private_reflections"] = (history + [{
+        "id": reflection_id(owner=agent, cycle=cycle, hypothesis=hypothesis,
+                            basis_kind=basis["kind"], source_id=evidence_id),
+        "owner": agent,
         "cycle": cycle, "hypothesis": hypothesis,
         "confidence": effective_confidence,
         "basis_kind": basis["kind"], "source_id": evidence_id,
