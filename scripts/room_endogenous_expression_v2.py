@@ -118,6 +118,9 @@ def interpret(*, agent: str, cycle: int, raw: str, public_history: list[dict],
         word_count = len(re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", spoken))
         if (word_count < MIN_WORDS or word_count > MAX_WORDS
                 or re.match(r"^(?:sarah|mara|owen|jules|allen)\s*:", spoken, re.I)
+                or any(marker in spoken.casefold() for marker in
+                       ("system prompt", "hidden prompt", "developer message",
+                        "internal instructions", "chain of thought"))
                 or autonomous_text_issue({"speaker": agent, "text": spoken}) is not None):
             return {**safe, "issue": "bad_public_expression"}
     basis = data["basis"]
