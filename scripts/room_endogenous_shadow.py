@@ -223,7 +223,7 @@ def shadow_once(*, cycle: int, public_history: list[dict],
             "counts": counts, "failures": failures, "rejected": choice["rejected"]}
 
 
-def local_model_request(*, endpoint: str, model_id: str = DEFAULT_CHAT_MODEL):
+def local_model_request(*, endpoint: str, model_id: str = DEFAULT_CHAT_MODEL, max_tokens: int = 140):
     """Optional explicit loopback-only transport for isolated model canaries.
 
     Calling this factory does not issue a request. Never use the returned
@@ -235,11 +235,13 @@ def local_model_request(*, endpoint: str, model_id: str = DEFAULT_CHAT_MODEL):
     uri = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "/v1/chat/completions", "", ""))
     if not isinstance(model_id, str) or not 0 < len(model_id) <= 100:
         raise ValueError("invalid model id")
+    if type(max_tokens) is not int or not 1 <= max_tokens <= 320:
+        raise ValueError("invalid output token budget")
 
     def request(messages: list[dict], timeout: float) -> str:
         body = json.dumps({"model": model_id, "messages": messages,
                            "temperature": .55, "top_p": .9,
-                           "max_tokens": 140, "stream": False},
+                           "max_tokens": max_tokens, "stream": False},
                           ensure_ascii=False).encode("utf-8")
         query = urllib.request.Request(
             uri, data=body, method="POST", headers={"Content-Type": "application/json"})
