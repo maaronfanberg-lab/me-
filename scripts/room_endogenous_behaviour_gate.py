@@ -26,9 +26,9 @@ def _specific_measurement_test(text: str) -> bool:
         r"compare|compared|check|checked|test|tested|calibrate|calibrated|"
         r"measure|measured|repeat|recheck)\b",low)
     practical_object = re.search(
-        r"\b(?:cups?|water|volume|mass|200\s?ml|"
+        r"\b(?:cups?|water|volumes?|mass|200\s?ml|"
         r"mark(?:s|ing|ings)?|graduated cylinder|digital scale|"
-        r"kitchen scale|measuring cylinder)\b",low)
+        r"kitchen scale|calibrated scale|measuring cylinder)\b",low)
     if not (practical_verb and practical_object):
         return False
     # A quoted abstract question containing both words need not be a
