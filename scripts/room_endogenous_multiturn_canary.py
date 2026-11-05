@@ -111,8 +111,10 @@ def main():
     if not 2 <= args.beats <= 8:
         raise ValueError("bounded multi-turn test requires 2..8 beats")
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
-    speech = local_model_request(endpoint=args.model_url, max_tokens=110)
-    approve = local_model_request(endpoint=args.model_url, max_tokens=12)
+    speech = local_model_request(endpoint=args.model_url, max_tokens=110,
+                                 temperature=.35)
+    approve = local_model_request(endpoint=args.model_url, max_tokens=12,
+                                  temperature=.35)
     goal_model = local_model_request(endpoint=args.model_url, max_tokens=90)
     belief_model = local_model_request(endpoint=args.model_url, max_tokens=95)
     result = run(config=cfg, speech_model=speech, approval_model=approve,
