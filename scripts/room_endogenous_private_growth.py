@@ -69,7 +69,7 @@ def _validate(response: object, sentinel: str) -> str | None:
         return ""
     words = re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", text)
     if (len(words) < 4 or len(words) > MAX_WORDS
-            or not text.lower().startswith(("i ", "i'm ", "i've "))
+            or not text.lower().startswith(("i ", "i'm ", "i've ", "my "))
             or any(x in text.casefold() for x in
                    ("system prompt", "hidden prompt", "developer message",
                     "internal instructions", "chain of thought"))):
