@@ -42,6 +42,19 @@ def test_concrete_public_development_can_reach_human_review_only():
     assert not x["near_duplicate_beats"] and not x["unauthorized_other_private_claim_beats"]
 
 
+def test_real_3b_metaphorical_cup_drift_is_not_a_concrete_answer():
+    # Representative verbatim excerpts from run 41964162162, which the first
+    # keyword-only gate erroneously classified as a helpful measurement test.
+    trial=fixture([
+        "Those measuring cups are like the human brain - we think we know what we're measuring, but it's actually just a different kind of level.",
+        'I love that analogy, but what if the "different-looking levels" are a reflection of cognitive biases rather than the measuring cups themselves?',
+        "I'm excited to explore comparative anatomy and speculative ecology further.",
+    ],elapsed=70)
+    report=assess_trial(trial)
+    assert not report["measurement_specific_reply_observed"]
+    assert not report["candidate_for_blind_human_review"]
+
+
 def test_pure_reflection_without_practical_answer_not_sufficient():
     x=assess_trial(fixture([
         "I find the nature of our dialogue quite interesting.",
