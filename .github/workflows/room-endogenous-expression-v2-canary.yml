@@ -8,6 +8,8 @@ on:
       - 'scripts/room_endogenous_expression_v2_canary.py'
       - 'scripts/room_endogenous_expression_v2.py'
       - 'scripts/room_endogenous_shadow.py'
+      - 'scripts/room_endogenous_schema_transport.py'
+      - 'scripts/test_room_endogenous_schema_transport.py'
       - 'scripts/room_endogenous_preflight.py'
       - 'scripts/room_endogenous_goal_journal.py'
       - 'scripts/room_endogenous_reflection.py'
@@ -39,6 +41,7 @@ jobs:
           test "$(git branch --show-current)" = 'research/room-endogenous-preflight-20261104'
           python3 -m py_compile scripts/room_endogenous_expression_v2.py scripts/room_endogenous_expression_v2_canary.py
           python3 scripts/test_room_endogenous_expression_v2.py
+          python3 scripts/test_room_endogenous_schema_transport.py
 
       - name: Restore pinned 3B model if already cached
         uses: actions/cache/restore@v4
