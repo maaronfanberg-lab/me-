@@ -30,7 +30,8 @@ INIT = {
 
 
 def run(*, config: dict, speech_model, approval_model,
-        goal_model=None, belief_model=None, beats: int = 6) -> dict:
+        goal_model=None, belief_model=None, beats: int = 6,
+        on_beat=None) -> dict:
     profile_all = config.get("p") or {}
     profiles = {agent: profile_all[agent] for agent in PARTICIPANTS}
     snapshot = initial_store()
@@ -49,7 +50,7 @@ def run(*, config: dict, speech_model, approval_model,
             goal_request_model=goal_model,
             revision_request_model=belief_model,
             awake=PARTICIPANTS,
-            budget_seconds=125.0)
+            budget_seconds=85.0)
         if visitors:
             visible.extend(visitors)
         new_public = []
@@ -73,6 +74,8 @@ def run(*, config: dict, speech_model, approval_model,
             "model_utterance": new_public[0]["text"] if new_public else None,
         })
         snapshot = snap
+        if on_beat is not None:
+            on_beat(records, snapshot)
     return {
         "experiment": "room_endogenous_3b_multiturn_shadow",
         "model": "Llama-3.2-3B-Instruct",
@@ -117,8 +120,27 @@ def main():
                                   temperature=.35)
     goal_model = local_model_request(endpoint=args.model_url, max_tokens=90)
     belief_model = local_model_request(endpoint=args.model_url, max_tokens=95)
+    def checkpoint(records, snapshot):
+        # On interruption a real 3B run must preserve *completed* research
+        # beats, not fabricate missing turns or claim behavioral success.
+        partial = {
+            "experiment": "room_endogenous_3b_multiturn_shadow",
+            "mode": "synthetic_read_only_incomplete",
+            "completed_beats": len(records),
+            "requested_beats": args.beats,
+            "beats": records,
+            "research_state_revision": snapshot["revision"],
+            "ready_for_live": False,
+            "finished": False,
+            "published_live_dialogue": False,
+        }
+        Path(args.out).write_text(json.dumps(partial, indent=2, sort_keys=True)+"\n",
+                                  encoding="utf-8")
+        print(f"Completed synthetic beat {len(records)}/{args.beats}",flush=True)
+
     result = run(config=cfg, speech_model=speech, approval_model=approve,
-                 goal_model=goal_model, belief_model=belief_model, beats=args.beats)
+                 goal_model=goal_model, belief_model=belief_model,
+                 beats=args.beats, on_beat=checkpoint)
     Path(args.out).write_text(json.dumps(result, indent=2, sort_keys=True)+"\n",
                               encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
