@@ -8,6 +8,8 @@ on:
       - 'scripts/test_room_endogenous_preflight.py'
       - 'scripts/room_endogenous_shadow.py'
       - 'scripts/test_room_endogenous_shadow.py'
+      - 'scripts/room_endogenous_baseline.py'
+      - 'scripts/test_room_endogenous_baseline.py'
       - 'docs/research/room-endogenous-baseline-20261104.json'
       - 'scripts/room_hidden_world.py'
       - 'scripts/test_room_hidden_world.py'
@@ -88,6 +90,8 @@ jobs:
           python3 scripts/test_room_endogenous_preflight.py
           python3 -m py_compile scripts/room_endogenous_shadow.py scripts/test_room_endogenous_shadow.py
           python3 scripts/test_room_endogenous_shadow.py
+          python3 -m py_compile scripts/room_endogenous_baseline.py scripts/test_room_endogenous_baseline.py
+          python3 scripts/test_room_endogenous_baseline.py
       - name: Verify conversational question, response, and repair sequence
         run: python3 scripts/test_room_sequence_uptake.py
       - name: Verify full-turn action gate on live echo regression
