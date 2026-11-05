@@ -61,7 +61,8 @@ def optional_private_growth(*, owner: str, cycle: int,
         raw = goal_model(prompt, min(MAX_SECONDS, budget_seconds))
         outcome = accept_private_goal(
             owner=owner, cycle=cycle, journal=journal,
-            public_history=public_history, response=raw)
+            public_history=public_history, private_state=state,
+            response=raw)
         report["goal"] = "changed" if outcome["changed"] else "unchanged" if outcome["ok"] else outcome["issue"]
         if outcome["ok"]:
             journal = outcome["journal"]
