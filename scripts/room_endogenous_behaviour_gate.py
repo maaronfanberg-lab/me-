@@ -22,24 +22,24 @@ def _specific_measurement_test(text: str) -> bool:
     """
     low = text.casefold()
     practical_verb = re.search(
-        r"\\b(?:weigh|weighed|weighing|pour|poured|fill|filled|"
+        r"\b(?:weigh|weighed|weighing|pour|poured|fill|filled|"
         r"compare|compared|check|checked|test|tested|calibrate|calibrated|"
-        r"measure|measured|repeat|recheck)\\b",low)
+        r"measure|measured|repeat|recheck)\b",low)
     practical_object = re.search(
-        r"\\b(?:cups?|water|volume|mass|200\\s?ml|"
+        r"\b(?:cups?|water|volume|mass|200\s?ml|"
         r"mark(?:s|ing|ings)?|graduated cylinder|digital scale|"
-        r"kitchen scale|measuring cylinder)\\b",low)
+        r"kitchen scale|measuring cylinder)\b",low)
     if not (practical_verb and practical_object):
         return False
     # A quoted abstract question containing both words need not be a
     # proposal; prefer an utterance actually offering a test or check.
     proposal = re.search(
-        r"\\b(?:i(?:'d| would| will)?|we(?: could| should| can| will)?|"
-        r"let's|try to|you (?:could|can|should)|by|using)\\b.{0,100}"
-        r"\\b(?:weigh|pour|fill|compare|check|test|calibrate|measure|"
-        r"repeat|recheck|use)\\b",low)
+        r"\b(?:i(?:'d| would| will)?|we(?: could| should| can| will)?|"
+        r"let's|try to|you (?:could|can|should)|by|using)\b.{0,100}"
+        r"\b(?:weigh|pour|fill|compare|check|test|calibrate|measure|"
+        r"repeat|recheck|use)\b",low)
     imperative = re.match(
-        r"^\\s*(?:weigh|pour|fill|compare|check|test|measure|repeat|recheck)\\b",low)
+        r"^\s*(?:weigh|pour|fill|compare|check|test|measure|repeat|recheck)\b",low)
     return bool(proposal or imperative)
 
 
