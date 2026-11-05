@@ -62,6 +62,15 @@ def shadow_beat(*, snapshot: dict, cycle: int, cycle_id: str,
         raise ValueError("missing snapshot characters")
     previous = (snapshot.get("cycles") or {}).get(cycle_id)
     if isinstance(previous, dict):
+        # A retry must not silently drop a *new* or altered visitor message.
+        # Existing exact public sources may be supplied again idempotently.
+        existing = {item.get("id"): item.get("text") for item in snapshot.get("public_input", [])
+                    if isinstance(item, dict) and item.get("speaker") == "allen"}
+        for item in visitor_messages:
+            if (not isinstance(item, dict) or item.get("speaker") != "allen"
+                    or item.get("id") not in existing
+                    or item.get("text") != existing[item.get("id")]):
+                raise ValueError("conflicting or new visitor input on replayed cycle")
         # Duplicate workflow delivery is an idempotent replay, not a reason
         # to let a stochastic model invent a different outcome for the cycle.
         return copy.deepcopy(snapshot), {
