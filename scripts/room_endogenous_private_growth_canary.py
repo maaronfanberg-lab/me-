@@ -63,6 +63,10 @@ def evaluate(cfg, private_model, speech_model):
         private_state=state,journal=journal,public_history=PUBLIC,response=raw_revision)
     reports["revision"]={"valid":revision["ok"],"changed":revision["changed"],
                          "latency_ms":rtime,"reason":revision["issue"]}
+    if not revision["ok"] and isinstance(raw_revision, str):
+        # The entire scenario is synthetic, so a bounded diagnostic cannot
+        # expose real Room or visitor information.
+        reports["revision"]["synthetic_response_sample"] = raw_revision[:200]
     if revision["ok"]:
         state=revision["private_state"]
 
