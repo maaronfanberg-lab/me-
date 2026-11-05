@@ -224,7 +224,8 @@ def shadow_once(*, cycle: int, public_history: list[dict],
 
 
 def local_model_request(*, endpoint: str, model_id: str = DEFAULT_CHAT_MODEL,
-                        max_tokens: int = 140, response_schema: dict | None = None):
+                        max_tokens: int = 140, response_schema: dict | None = None,
+                        temperature: float = .55):
     """Optional explicit loopback-only transport for isolated model canaries.
 
     Calling this factory does not issue a request. Never use the returned
@@ -238,13 +239,15 @@ def local_model_request(*, endpoint: str, model_id: str = DEFAULT_CHAT_MODEL,
         raise ValueError("invalid model id")
     if type(max_tokens) is not int or not 1 <= max_tokens <= 320:
         raise ValueError("invalid output token budget")
+    if type(temperature) not in (float, int) or not math.isfinite(temperature) or not 0 <= temperature <= 1.2:
+        raise ValueError("invalid sampling temperature")
     if response_schema is not None:
         if not isinstance(response_schema, dict) or len(json.dumps(response_schema)) > 4096:
             raise ValueError("unbounded research output schema")
 
     def request(messages: list[dict], timeout: float) -> str:
         body_data = {"model": model_id, "messages": messages,
-                     "temperature": .55, "top_p": .9,
+                     "temperature": temperature, "top_p": .9,
                      "max_tokens": max_tokens, "stream": False}
         if response_schema is not None:
             body_data["response_format"] = {"type": "json_schema", "schema": response_schema}
