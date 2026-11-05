@@ -44,6 +44,8 @@ def test_one_event_published_with_exact_content_and_acked():
     assert f["conversation"][0]["text"]==snapshot["outbox"][0]["text"]
     assert p["outbox"][0]["status"]=="delivered"
     assert p["public_input"]==HISTORY
+    assert f["visitor_messages"] == HISTORY
+    assert report["new_visitor_events"] == 1
     assert all(x["speaker"]!="allen" for x in f["conversation"])
     assert snapshot["outbox"][0]["status"]=="pending"
 
@@ -53,6 +55,7 @@ def test_identical_retry_is_true_noop():
     q,g,r=reconcile(p,f)
     assert q==p and g==f
     assert r["new_public_events"]==0 and r["acknowledged"]==0
+    assert r["new_visitor_events"]==0
 
 
 def test_recovery_after_feed_write_before_ack():
@@ -78,6 +81,7 @@ def test_recovery_after_feed_write_before_ack():
         assert report["new_public_events"]==0
         assert report["acknowledged"]==1
         assert len(json.loads(pf.read_text())["conversation"])==1
+        assert len(json.loads(pf.read_text())["visitor_messages"])==1
         assert json.loads(sf.read_text())["outbox"][0]["status"]=="delivered"
 
 
@@ -149,6 +153,32 @@ def test_reject_production_room_paths_and_same_file():
                 pass
             else:
                 raise AssertionError("allowed real Room path")
+
+
+def test_visitor_cannot_be_disguised_as_autonomous_event():
+    snapshot=_snapshot()
+    event=snapshot["public_input"][0]
+    snapshot["public_input"][0]={**event,"speaker":"mara"}
+    try:
+        reconcile(snapshot, initial_feed())
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("visitor impersonation passed research publication")
+
+
+def test_visitor_conflict_in_recovered_feed_fails_closed():
+    snapshot=_snapshot()
+    feed=initial_feed()
+    feed["visitor_messages"].append({
+        "id":"input-1","speaker":"allen","text":"Modified visitor text."
+    })
+    try:
+        reconcile(snapshot,feed)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("changed visitor message was accepted")
 
 
 def test_exactly_once_across_two_pending_cycles():
