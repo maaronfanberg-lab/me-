@@ -24,6 +24,7 @@ from room_endogenous_transaction_store import apply_cycle
 from room_endogenous_preflight import AGENTS
 from room_endogenous_shadow import witnessed_tail
 from room_endogenous_private_beats import optional_private_growth
+from room_endogenous_public_hygiene import publication_issue
 
 ORDER = ("sarah", "mara", "owen", "jules")
 MAX_TOTAL_CALLS = 10  # at most 8 speech/endorsement and 2 private-cognition calls
@@ -146,6 +147,14 @@ def shadow_beat(*, snapshot: dict, cycle: int, cycle_id: str,
                     "self_declined" if endorsement is False else "invalid_self_review")
             else:
                 attempts[agent] = "owner_silent"
+            if candidate.get("utterance"):
+                issue = publication_issue(speaker=agent, text=candidate["utterance"],
+                                          public_history=history)
+                if issue:
+                    # A negative safety gate may suppress a copy/leak. It
+                    # never generates replacement text or chooses a topic.
+                    candidate = apply_endorsement(candidate, False)
+                    attempts[agent] = issue
             candidates[agent] = candidate
         except Exception:
             attempts[agent] = "model_unavailable_or_invalid"
