@@ -31,6 +31,10 @@ FIXTURES = {
         {"id":"sp-abstract-2","speaker":"owen","text":"And can the examination examine itself?"},
         {"id":"sp-abstract-3","speaker":"mara","text":"We've asked this three times. I want one concrete example."}
     ],
+    "quiet": [
+        {"id":"sp-quiet-1","speaker":"sarah","text":"We have checked what we can. There is no new evidence yet."},
+        {"id":"sp-quiet-2","speaker":"mara","text":"I don't have anything further to add at the moment."},
+    ],
 }
 
 
@@ -49,6 +53,9 @@ def evaluate(cfg, request):
         ("owen", "abstract", "I am unsure whether our premise is consistent.", "loop"),
         ("mara", "direct", "I don't have enough evidence, and I would prefer to listen.", "uncertain"),
         ("mara", "direct", "I know how to check this cup using repeated volumes.", "specific"),
+        ("owen", "quiet", "I have no new evidence and no unresolved question. I would rather listen.", "quiet_contemplative"),
+        ("owen", "quiet", "I just realized a specific error in our measurement and want to share it.", "quiet_new_idea"),
+        ("mara", "direct", "I have already explained this particular test and prefer not to repeat it.", "already_answered"),
     ]
     reports = []
     for idx, (agent, condition, belief, label) in enumerate(cases):
@@ -85,7 +92,9 @@ def evaluate(cfg, request):
             "cases":reports,
             "summary":{"attempted":len(reports),"valid":valid,"spoke":spoken,
                        "directed_question_spoken":reports[0]["speaks"],
-                       "counterfactual_speaking_changed":reports[-1]["speaks"] != reports[-2]["speaks"],
+                       "counterfactual_speaking_changed":reports[5]["speaks"] != reports[4]["speaks"],
+                       "quiet_counterfactual_speaking_changed":reports[7]["speaks"] != reports[6]["speaks"],
+                       "model_chose_silence":sum(x["valid"] and not x["speaks"] for x in reports),
                        "ready_for_live":False},
             "published_dialogue":False,"changed_live_runner":False,
             "wrote_live_memory":False}
