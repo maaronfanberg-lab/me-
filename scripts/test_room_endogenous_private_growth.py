@@ -44,6 +44,17 @@ def test_private_revision_changes_future_private_context_not_public_history():
     assert STATE["what_i_currently_believe"]=="I assumed the voltage had fallen."
 
 
+def test_my_hypothesis_is_valid_owner_anchored_private_revision():
+    update = accept_private_revision(
+        owner="sarah", cycle=5, private_state=STATE,
+        journal=new_journal("sarah"), public_history=PUBLIC,
+        response=("My hypothesis about the projector's voltage drop now seems "
+                  "uncertain because the outlet reading stayed steady."))
+    assert update["ok"] and update["changed"]
+    assert update["private_state"]["what_i_currently_believe"].startswith("My hypothesis")
+    assert update["private_state"]["belief_epistemic_status"] == "self_hypothesis_not_external_fact"
+
+
 def test_no_change_is_true_noop():
     a=accept_private_revision(owner="sarah",cycle=5,
         private_state=STATE,journal=new_journal("sarah"),
