@@ -10,6 +10,7 @@ messages were delivered.
 """
 from __future__ import annotations
 
+import copy
 import time
 from collections.abc import Mapping
 
@@ -59,6 +60,18 @@ def shadow_beat(*, snapshot: dict, cycle: int, cycle_id: str,
         raise ValueError("invalid shadow beat")
     if not isinstance(snapshot.get("characters"), dict):
         raise ValueError("missing snapshot characters")
+    previous = (snapshot.get("cycles") or {}).get(cycle_id)
+    if isinstance(previous, dict):
+        # Duplicate workflow delivery is an idempotent replay, not a reason
+        # to let a stochastic model invent a different outcome for the cycle.
+        return copy.deepcopy(snapshot), {
+            "mode": "research_only_shadow", "cycle": cycle,
+            "decision": previous["outcome"], "selected": None,
+            "outbox_id": previous.get("outbox_id"), "model_calls": 0,
+            "participant_outcomes": {}, "state_revision": snapshot["revision"],
+            "committed_research_beat": False, "replayed": True,
+            "live_room_written": False, "public_dialogue_published": False,
+        }
     history = public_history + visitor_messages
     witnessed = witnessed_tail(history)
     attempts = {}
