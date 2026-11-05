@@ -25,6 +25,26 @@ from room_endogenous_reflection import apply_private_reflection
 from room_research_architecture import autonomous_text_issue
 
 SCHEMA = "room_voluntary_expression_v1"
+OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "utterance": {"type": "string"},
+        "private_revision": {"type": "string"},
+        "personal_goal": {"type": "string"},
+        "basis": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["witnessed", "own_goal"]},
+                "source_id": {"type": "string"},
+                "goal_id": {"type": "string"},
+            },
+            "required": ["kind"],
+            "additionalProperties": False,
+        },
+    },
+    "required": ["utterance", "private_revision", "personal_goal", "basis"],
+    "additionalProperties": False,
+}
 MAX_REPLY = 4096
 MAX_SPEECH = 380
 MAX_HYPOTHESIS = 180
