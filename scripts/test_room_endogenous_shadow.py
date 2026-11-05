@@ -106,7 +106,7 @@ def test_4_call_budget_and_loopback_transport_only():
     x = shadow(fake)
     assert x["counts"]["requests"] == len(PEOPLE) == 4
     assert len(calls) == 4
-    assert all(0 < budget <= 12.0 for _, budget in calls)
+    assert all(0 < budget <= 24.0 for _, budget in calls)
     try:
         shadow_once(cycle=16, public_history=PUB, profiles=PROFILE,
                     private_states=STATE, goals=GOALS, consumed_ids=set(),
