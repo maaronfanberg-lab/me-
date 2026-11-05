@@ -108,14 +108,16 @@ def choose_private_bid(*, cycle: int, public_history: list[dict],
             continue  # private reflection or listening is not a public utterance
         gain = float(bid["motivation"]) - float(bid["cost"])
         if gain <= 0:
-            continue  # no externally assigned speaking threshold or quota
-        # Stable id-based tiebreak, not Python's process-randomized hash.
+            continue  # this owner preferred not to speak
+        # The agent's numeric reports are NOT comparable across agents.
+        # Ranking by claimed urgency rewards exaggeration and voice capture.
+        # Use a source-bound deterministic lottery only among volunteered bids.
         tie = hashlib.sha256(f"{cycle}:{agent}:{bid['bid_id']}".encode()).hexdigest()
-        candidates.append((gain, tie, agent, bid["bid_id"]))
+        candidates.append((tie, agent, bid["bid_id"]))
     if not candidates:
         return {"decision": "silent", "speaker": None,
                 "bid_id": None, "rejected": rejected}
-    _, _, speaker, bid_id = max(candidates)
+    _, speaker, bid_id = max(candidates)
     return {"decision": "speak", "speaker": speaker,
             "bid_id": bid_id, "rejected": rejected}
 
