@@ -1,0 +1,109 @@
+name: Research Room endogenous multi-turn 3B shadow
+
+on:
+  push:
+    branches: ['research/room-endogenous-preflight-20261104']
+    paths:
+      - '.github/workflows/room-endogenous-multiturn-canary.yml'
+      - 'scripts/room_endogenous_multiturn_canary.py'
+      - 'scripts/room_endogenous_shadow_beat.py'
+      - 'scripts/room_endogenous_transaction_store.py'
+      - 'scripts/room_endogenous_speech_option.py'
+      - 'scripts/room_endogenous_self_endorse.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: room-endogenous-multiturn-3b-research
+  cancel-in-progress: true
+
+jobs:
+  real-3b-canary:
+    name: Six sequential genuine model-authored turns with outbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - name: Checkout exact research branch, never main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify no live writer or relay used
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'research/room-endogenous-preflight-20261104'
+          test "$(git branch --show-current)" = 'research/room-endogenous-preflight-20261104'
+          python3 -m py_compile scripts/room_endogenous_multiturn_canary.py scripts/room_endogenous_shadow_beat.py scripts/room_endogenous_transaction_store.py
+          python3 scripts/test_room_endogenous_shadow_beat.py
+          python3 scripts/test_room_endogenous_transaction_store.py
+
+      - name: Restore pinned 3B model if already cached
+        uses: actions/cache/restore@v4
+        with:
+          path: .room_model/llama-3.2-3b-instruct-q4_k_m.gguf
+          key: room-native-llama32-3b-q4km-6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff
+
+      - name: Restore checksum-pinned Llama runtime and exact 3B model
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .research_3b/runtime .room_model
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" \
+            --pattern 'llama-runtime-linux-x64.tar.gz' --dir .research_3b
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .research_3b/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .research_3b/llama-runtime-linux-x64.tar.gz -C .research_3b/runtime
+          model=.room_model/llama-3.2-3b-instruct-q4_k_m.gguf
+          hash='6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff'
+          if ! echo "$hash  $model" | sha256sum -c - >/dev/null 2>&1; then
+            curl --fail --location --retry 2 --retry-delay 5 --max-time 900 \
+              'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true' \
+              -o "$model"
+          fi
+          echo "$hash  $model" | sha256sum -c -
+          binary="$(find .research_3b/runtime -type f -name llama-server | head -1)"
+          test -n "$binary"
+          chmod +x "$binary"
+
+      - name: Run strictly local 3B model and isolated shadow comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="$(find .research_3b/runtime -type f -name llama-server | head -1)"
+          test -n "$binary"
+          "$binary" -m .room_model/llama-3.2-3b-instruct-q4_k_m.gguf \
+             --host 127.0.0.1 --port 18177 -c 6144 -np 1 -t 4 \
+             >.research_3b/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for n in $(seq 1 90); do
+            if curl -fsS --connect-timeout 1 --max-time 2 \
+               http://127.0.0.1:18177/health >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'Pinned 3B model failed to reach local ready state'
+            exit 1
+          fi
+          timeout -k 10 620 python3 -u scripts/room_endogenous_multiturn_canary.py \
+              --model-url http://127.0.0.1:18177 \
+              --config room/config.json \
+              --beats 6 \
+              --out room-endogenous-multiturn-3b.json
+
+      - name: Upload metrics without prompts or private content
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-endogenous-multiturn-${{ github.run_id }}
+          path: room-endogenous-multiturn-3b.json
+          if-no-files-found: warn
+          retention-days: 14
