@@ -71,9 +71,11 @@ def attempt(*, agent, cycle, history, state, journal, profiles, request):
     before = time.monotonic()
     try:
         raw = request(messages, MAX_SECONDS_PER_CALL)
-    except Exception:
-        return ({"valid": False, "failure": "model_timeout_or_unavailable",
-                 "agent": agent, "latency_ms": round((time.monotonic()-before)*1000)},
+    except Exception as exc:
+        return ({"valid": False, "failure": "model_" + type(exc).__name__,
+                 "agent": agent, "speak": False, "utterance_words": 0,
+                 "belief_changed": False, "goal_changed": False,
+                 "latency_ms": round((time.monotonic()-before)*1000)},
                 None)
     result = interpret(
         agent=agent, cycle=cycle, raw=raw, public_history=history,
