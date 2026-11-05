@@ -23,9 +23,10 @@ from room_endogenous_expression_v2 import choose_volunteers
 from room_endogenous_transaction_store import apply_cycle
 from room_endogenous_preflight import AGENTS
 from room_endogenous_shadow import witnessed_tail
+from room_endogenous_private_beats import optional_private_growth
 
 ORDER = ("sarah", "mara", "owen", "jules")
-MAX_TOTAL_CALLS = 8
+MAX_TOTAL_CALLS = 10  # at most 8 speech/endorsement and 2 private-cognition calls
 MAX_BEAT_SECONDS = 180.0
 
 
@@ -47,6 +48,7 @@ def _private_seed(agent: str, profile: dict) -> dict:
 def shadow_beat(*, snapshot: dict, cycle: int, cycle_id: str,
                 public_history: list[dict], visitor_messages: list[dict],
                 profiles: Mapping, speech_request, endorsement_request_model,
+                goal_request_model=None, revision_request_model=None,
                 awake: tuple[str, ...] = ORDER,
                 budget_seconds: float = MAX_BEAT_SECONDS) -> tuple[dict, dict]:
     """Return candidate snapshot and diagnostics; never publish or mutate input."""
@@ -54,6 +56,9 @@ def shadow_beat(*, snapshot: dict, cycle: int, cycle_id: str,
             or not isinstance(public_history, list) or not isinstance(visitor_messages, list)
             or not isinstance(profiles, Mapping) or not isinstance(snapshot, dict)
             or not callable(speech_request) or not callable(endorsement_request_model)
+            or ((goal_request_model is None) != (revision_request_model is None))
+            or (goal_request_model is not None and not callable(goal_request_model))
+            or (revision_request_model is not None and not callable(revision_request_model))
             or not isinstance(awake, tuple) or len(awake) > 4
             or len(set(awake)) != len(awake) or any(a not in AGENTS for a in awake)
             or type(budget_seconds) not in (float, int) or not 0 < budget_seconds <= MAX_BEAT_SECONDS):
@@ -144,6 +149,24 @@ def shadow_beat(*, snapshot: dict, cycle: int, cycle_id: str,
             candidates[agent] = candidate
         except Exception:
             attempts[agent] = "model_unavailable_or_invalid"
+    growth = {}
+    if goal_request_model is not None and awake and calls <= MAX_TOTAL_CALLS-2:
+        # The scheduler allocates one FAIR private compute slot; it neither
+        # invents its content nor tells this character whether to speak.
+        private_owner = awake[cycle % len(awake)]
+        owner_candidate = candidates.get(private_owner)
+        budget_left = budget_seconds - (time.monotonic()-started)
+        if isinstance(owner_candidate, dict) and owner_candidate.get("ok") and budget_left > 0:
+            changed_candidate, private_outcome = optional_private_growth(
+                owner=private_owner, cycle=cycle,
+                candidate=owner_candidate, profile=profiles[private_owner],
+                public_history=history,
+                goal_model=goal_request_model,
+                revision_model=revision_request_model,
+                budget_seconds=min(72.0, budget_left))
+            candidates[private_owner] = changed_candidate
+            calls += private_outcome["model_calls"]
+            growth[private_owner] = private_outcome
     selected = choose_volunteers(
         cycle=cycle, public_history=history,
         candidates=candidates,
@@ -160,6 +183,7 @@ def shadow_beat(*, snapshot: dict, cycle: int, cycle_id: str,
         "outbox_id": next_state["cycles"][cycle_id]["outbox_id"],
         "model_calls": calls,
         "participant_outcomes": attempts,
+        "private_growth": growth,
         "state_revision": next_state["revision"],
         "committed_research_beat": changed,
         "live_room_written": False,
