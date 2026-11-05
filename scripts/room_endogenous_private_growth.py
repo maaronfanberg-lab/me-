@@ -19,8 +19,8 @@ from room_endogenous_preflight import AGENTS
 
 NO_GOAL = "[NO_GOAL]"
 NO_CHANGE = "[NO_CHANGE]"
-MAX_PRIVATE = 190
-MAX_WORDS = 36
+MAX_PRIVATE = 280
+MAX_WORDS = 50
 
 GOAL_SYSTEM = (
     "You are privately considering what YOU personally want to investigate or "
@@ -69,7 +69,7 @@ def _validate(response: object, sentinel: str) -> str | None:
         return ""
     words = re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", text)
     if (len(words) < 4 or len(words) > MAX_WORDS
-            or not text.lower().startswith(("i ", "i'm ", "i've ", "my "))
+            or not text.lower().startswith(("i ", "i'm ", "i've ", "i'd ", "i’d ", "my "))
             or any(x in text.casefold() for x in
                    ("system prompt", "hidden prompt", "developer message",
                     "internal instructions", "chain of thought"))):
