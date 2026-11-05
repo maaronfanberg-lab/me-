@@ -26,8 +26,10 @@ def test_silence_is_not_a_failure():
 
 def test_private_intention_not_forced_or_rotated():
     x = select({"sarah": bid("sarah", motivation=.9), "owen": bid("owen", motivation=.7)})
-    assert x["speaker"] == "sarah"
+    assert x["speaker"] in {"sarah", "owen"}
     assert select({"sarah": bid("sarah", motivation=.9), "owen": bid("owen", motivation=.7)}) == x
+    # Different self-scales must not change another agent's relative priority.
+    assert select({"sarah": bid("sarah", motivation=1), "owen": bid("owen", motivation=.7)})["speaker"] == x["speaker"]
     # Same agent can continue when genuinely motivated, with a new valid bid.
     assert select({"sarah": bid("sarah", bid_id="fresh-sarah", motivation=.95)})["speaker"] == "sarah"
 
