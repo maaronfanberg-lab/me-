@@ -24,8 +24,8 @@ from room_endogenous_preflight import AGENTS, choose_private_bid, validate_bid
 
 MAX_LOOKBACK = 6
 MAX_INFERENCE_CALLS = 4
-MAX_SECONDS_PER_CALL = 12.0
-TOTAL_TIME_BUDGET = 35.0
+MAX_SECONDS_PER_CALL = 24.0
+TOTAL_TIME_BUDGET = 100.0
 MAX_REPLY_BYTES = 4096
 DEFAULT_CHAT_MODEL = "Llama-3.2-3B-Instruct"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:@-]{1,128}$")
