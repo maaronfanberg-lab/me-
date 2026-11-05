@@ -176,6 +176,36 @@ def test_no_leakage_in_status_or_failure():
     assert x["decision"] == "silent"
 
 
+def test_incomplete_model_completions_are_never_released_as_speech():
+    from unittest.mock import patch
+
+    class FakeHTTP:
+        def __init__(self, outcome):
+            self.outcome = outcome
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self, n):
+            return json.dumps({"choices":[{"finish_reason":self.outcome,
+                 "message":{"content":"I notice the important value was unr."}}]}).encode()[:n]
+
+    model=local_model_request(endpoint="http://127.0.0.1:18200",max_tokens=80)
+    for reason in ("length","content_filter"):
+        with patch("room_endogenous_shadow.urllib.request.urlopen",
+                   return_value=FakeHTTP(reason)):
+            try:
+                model([{"role":"system","content":"test"},{"role":"user","content":"test"}], 10)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("truncated model output accepted")
+    with patch("room_endogenous_shadow.urllib.request.urlopen",
+               return_value=FakeHTTP("stop")):
+        assert "important value" in model(
+            [{"role":"system","content":"test"},{"role":"user","content":"test"}],10)
+
+
 if __name__ == "__main__":
     cases = [v for k,v in sorted(globals().copy().items())
              if k.startswith("test_") and callable(v)]
