@@ -88,6 +88,19 @@ def make_private_request(*, agent: str, profile: Mapping,
     if agent not in AGENTS or not isinstance(profile, Mapping) or not isinstance(private_state, Mapping):
         raise ValueError("invalid owner input")
     witnessed = witnessed_tail(public_history)
+    # The visitor's latest *public question* remains an affordance even when
+    # several agent reflections followed it. This is evidence, not a task:
+    # it may already have been answered and never obliges anyone to speak.
+    recent_question = None
+    for event in reversed(public_history[-32:]):
+        if (isinstance(event, Mapping) and event.get("speaker") == "allen"
+                and valid_id(event.get("id"))
+                and isinstance(event.get("text"), str)
+                and "?" in event["text"] and event["text"].strip()):
+            recent_question = {"id": event["id"],
+                               "text": bounded_text(event["text"], 280),
+                               "might_already_be_resolved": True}
+            break
     goals = owned_goals(own_goals)
     psych = profile.get("psychology_v2")
     psych = psych if isinstance(psych, Mapping) else {}
@@ -101,6 +114,7 @@ def make_private_request(*, agent: str, profile: Mapping,
         "confidence": private_state.get("belief_confidence") if type(private_state.get("belief_confidence")) in (int, float) and math.isfinite(private_state["belief_confidence"]) and 0 <= private_state["belief_confidence"] <= 1 else None,
         "what_changed": bounded_text(private_state.get("what_just_changed"), 140),
         "directly_addressed_by_last_speaker": bool(witnessed and is_directed(witnessed[-1], agent)),
+        "recent_public_visitor_question": recent_question,
         "owned_goals": goals,
         "witnessed_turns": witnessed,
     }
