@@ -14,7 +14,7 @@ from collections.abc import Mapping
 
 from room_endogenous_preflight import AGENTS
 
-MAX_HYPOTHESIS_CHARS = 180
+MAX_HYPOTHESIS_CHARS = 250
 MAX_HISTORY = 12
 
 
