@@ -88,6 +88,30 @@ def test_replayed_cycle_rejects_new_or_changed_visitor_message():
     assert previous["public_input"] == PUBLIC
 
 
+def test_public_copy_of_prior_approved_turn_becomes_silence_not_more_loop():
+    previous, initial = run()
+    event = previous["outbox"][0]
+    seen = PUBLIC + [{"id":event["id"],"speaker":event["speaker"],"text":event["text"]}]
+    result, report = run(
+        state=previous, incoming=[], history=seen, cycle=7, ident="beat-7-duplicate")
+    assert report["decision"] == "silent"
+    assert report["participant_outcomes"]["mara"] == "near_duplicate_public_speech"
+    assert len(result["outbox"]) == 1
+    assert result["revision"] == 2
+
+
+def test_peer_private_state_invention_must_not_enter_public_outbox():
+    def private_claim(messages, timeout):
+        import json
+        if json.loads(messages[1]["content"])["character"] == "mara":
+            return "Owen's private belief changed after he saw the measuring cup."
+        return "[SILENCE]"
+    result,report = run(speech=private_claim)
+    assert report["decision"] == "silent"
+    assert report["participant_outcomes"]["mara"] == "asserts_other_mind_private_state"
+    assert result["outbox"] == [] and result["public_input"] == PUBLIC
+
+
 def test_next_beat_keeps_earlier_public_outbox_pending_not_forged_as_delivered():
     previous,stats=run()
     second,rec=run(state=previous,incoming=[],history=[],
