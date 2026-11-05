@@ -29,7 +29,8 @@ INIT = {
 }
 
 
-def run(*, config: dict, speech_model, approval_model, beats: int = 6) -> dict:
+def run(*, config: dict, speech_model, approval_model,
+        goal_model=None, belief_model=None, beats: int = 6) -> dict:
     profile_all = config.get("p") or {}
     profiles = {agent: profile_all[agent] for agent in PARTICIPANTS}
     snapshot = initial_store()
@@ -45,6 +46,8 @@ def run(*, config: dict, speech_model, approval_model, beats: int = 6) -> dict:
             visitor_messages=visitors,
             profiles=profiles, speech_request=speech_model,
             endorsement_request_model=approval_model,
+            goal_request_model=goal_model,
+            revision_request_model=belief_model,
             awake=PARTICIPANTS,
             budget_seconds=125.0)
         if visitors:
@@ -65,6 +68,7 @@ def run(*, config: dict, speech_model, approval_model, beats: int = 6) -> dict:
             "selected": diag["selected"],
             "model_calls": diag["model_calls"],
             "participant_outcomes": diag["participant_outcomes"],
+            "private_growth": diag.get("private_growth", {}),
             "source_id": new_public[0]["id"] if new_public else None,
             "model_utterance": new_public[0]["text"] if new_public else None,
         })
@@ -80,6 +84,12 @@ def run(*, config: dict, speech_model, approval_model, beats: int = 6) -> dict:
             "silent_beats": sum(r["decision"] == "silent" for r in records),
             "simulated_public_messages": len(visible),
             "model_calls": sum(r["model_calls"] for r in records),
+            "owner_created_goals": sum(
+                int(bool(event.get("goal_state_changed")))
+                for row in records for event in row["private_growth"].values()),
+            "owner_revised_beliefs": sum(
+                int(bool(event.get("private_state_changed")))
+                for row in records for event in row["private_growth"].values()),
             "speakers": dict((a,sum(r["selected"] == a for r in records)) for a in PARTICIPANTS),
             "elapsed_seconds": round(time.monotonic()-start,2),
             "research_state_revision": snapshot["revision"],
@@ -103,7 +113,10 @@ def main():
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
     speech = local_model_request(endpoint=args.model_url, max_tokens=110)
     approve = local_model_request(endpoint=args.model_url, max_tokens=12)
-    result = run(config=cfg, speech_model=speech, approval_model=approve, beats=args.beats)
+    goal_model = local_model_request(endpoint=args.model_url, max_tokens=90)
+    belief_model = local_model_request(endpoint=args.model_url, max_tokens=95)
+    result = run(config=cfg, speech_model=speech, approval_model=approve,
+                 goal_model=goal_model, belief_model=belief_model, beats=args.beats)
     Path(args.out).write_text(json.dumps(result, indent=2, sort_keys=True)+"\n",
                               encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
