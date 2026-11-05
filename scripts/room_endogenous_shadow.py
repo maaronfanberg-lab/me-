@@ -259,6 +259,14 @@ def local_model_request(*, endpoint: str, model_id: str = DEFAULT_CHAT_MODEL,
         if len(raw) > MAX_REPLY_BYTES:
             raise ValueError("model output too large")
         obj = json.loads(raw)
-        return obj["choices"][0]["message"]["content"]
+        choice = obj["choices"][0]
+        # A model that exhausted its output token budget did not finish the
+        # sentence. Do not publish truncated text as though it were intentional.
+        if choice.get("finish_reason") in {"length", "content_filter"}:
+            raise ValueError("truncated_or_restricted_model_completion")
+        content = choice["message"]["content"]
+        if not isinstance(content, str):
+            raise ValueError("missing_model_content")
+        return content
 
     return request
