@@ -84,6 +84,11 @@ def attempt(*, agent, cycle, history, state, journal, profiles, request):
               "belief_changed": result["belief_changed"],
               "goal_changed": result["goal_changed"],
               "latency_ms": round((time.monotonic()-before)*1000)}
+    if not result["ok"]:
+        # Synthetic research content only. Capture a bounded excerpt so a real
+        # model format failure can be distinguished from a provenance rejection.
+        # The production Room and private visitor histories are never used here.
+        report["synthetic_raw_diagnostic"] = str(raw)[:340]
     return report, result
 
 
