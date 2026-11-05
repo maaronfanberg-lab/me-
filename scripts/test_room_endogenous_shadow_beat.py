@@ -112,6 +112,42 @@ def test_unrelated_agent_context_remains_private_to_owner():
                 assert other+" unique belief" not in context["self_belief"]
 
 
+def test_independent_private_growth_commits_even_when_owner_does_not_speak():
+    def choose_goal(messages, timeout):
+        import json
+        ctx = json.loads(messages[1]["content"])
+        assert ctx["character"] == "owen"
+        return "I want to examine whether our measuring cups share the same scale."
+    state, stats = shadow_beat(
+        snapshot=initial_store(), cycle=6, cycle_id="private-beat-6",
+        public_history=[], visitor_messages=PUBLIC,
+        profiles=PROFILES, speech_request=draft,
+        endorsement_request_model=endorse,
+        goal_request_model=choose_goal,
+        revision_request_model=lambda m, t: "My former explanation may need revision.",
+        awake=PEOPLE, budget_seconds=120.0)
+    growth = stats["private_growth"]["owen"]
+    assert growth["goal_state_changed"] and growth["private_state_changed"]
+    assert len(state["characters"]["owen"]["journal"]["goals"]) == 1
+    assert "need revision" in state["characters"]["owen"]["private_state"]["what_i_currently_believe"]
+    assert stats["model_calls"] == 7
+    assert stats["selected"] == "mara"  # Owen's private change never compels public speech
+
+
+def test_private_growth_failure_does_not_override_owner_silence_or_visitor():
+    state, stats = shadow_beat(
+        snapshot=initial_store(), cycle=6, cycle_id="private-beat-failure",
+        public_history=[], visitor_messages=PUBLIC,
+        profiles=PROFILES, speech_request=lambda *args: "[SILENCE]",
+        endorsement_request_model=endorse,
+        goal_request_model=lambda *args: "fabricated administrative command",
+        revision_request_model=lambda *args: "[NO_CHANGE]",
+        awake=PEOPLE, budget_seconds=120.0)
+    assert stats["decision"] == "silent"
+    assert stats["private_growth"]["owen"]["goal_state_changed"] is False
+    assert state["public_input"] == PUBLIC and state["outbox"] == []
+
+
 def test_own_private_goal_may_initiate_without_a_new_public_event():
     state=initial_store()
     journal=state["characters"]["jules"]["journal"]
