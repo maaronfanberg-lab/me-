@@ -22,3 +22,13 @@ The user requested that a sprawling statistical mathematical manuscript be trans
 - Cédric Villani, Optimal Transport: Old and New, Springer (2009).
 
 The simulation is **not independently peer reviewed**. The term "attractor" is a visualization title, not a mathematical certification of attractor existence.
+
+
+## Visual-first usability revision (2026-11-05)
+**Observation:** The interface covered too much of the visualization, and slider changes did not visibly morph an orbit while paused or when stale historical trajectories dominated the screen. A phone-specific fullscreen option and an accessible live slider drawer were requested.
+
+**Mechanism and implementation:** Removed explanatory overlay text and excess telemetry from the stage; on narrow viewports the sticky canvas now initially occupies 65svh. Fullscreen uses the browser API if available and a fixed-position full-viewport fallback otherwise. In fullscreen, the 31 sliders appear in a scrollable drawer with the plot translated into the unobstructed display area. Parameter `input` events are coalesced into animation frames; with live-morph enabled by default, changes to the ODE parameters discard an obsolete trail, advance 540 RK4 steps under the *new* vector field, and resume numerical animation. Pure view sliders redraw immediately. Topology and score-only adjustments update their diagnostics and activate the Ω color encoding instead of pretending to alter dynamics.
+
+**Competing explanations and limits:** This is a UX change, not evidence of a mathematical attractor. The sudden redraw does not trace a single autonomous orbit under a constant vector field across slider interactions; changing the parameter defines a succession of different vector fields and their numerical trajectories. On iPhones lacking the general Fullscreen API, a full-viewport CSS layout may not hide native browser chrome. Frequent updates are coalesced to avoid invoking the expensive warm-up routine on every drag event.
+
+**Validation:** Chromium/Playwright checks at 430×844, 1000×750 and 1440×900 confirmed 31 sliders, no console exceptions, no horizontal overflow, a full-height focus stage, drawer visibility, active control input, exit/restore, and simulation-time advancement following a rho slider change even when the simulation had been paused. Exact spectral-metric identity tests continue to pass. Tests: `tests/test_math.py`, `tests/test_ui.py`. Actual iPhone Safari hardware has not been tested.
