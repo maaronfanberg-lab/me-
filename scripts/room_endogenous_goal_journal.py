@@ -17,8 +17,8 @@ from room_endogenous_preflight import AGENTS
 
 VERSION = "room_private_goals_v1"
 MAX_GOALS = 12
-MAX_WORDS = 40
-MAX_TEXT = 210
+MAX_WORDS = 50
+MAX_TEXT = 260
 MAX_PUBLIC_LOOKBACK = 32
 VALID_ACTIONS = frozenset({"propose", "pause", "resume", "resolve", "abandon"})
 ACTIVE_STATES = frozenset({"active", "paused"})
