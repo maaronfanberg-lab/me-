@@ -14,7 +14,7 @@ from collections.abc import Mapping
 
 from room_endogenous_shadow import make_private_request, witnessed_tail
 from room_endogenous_goal_journal import active_goals, apply_proposal, VERSION
-from room_endogenous_reflection import apply_private_reflection
+from room_endogenous_reflection import apply_private_reflection, authenticated_reflection_ids
 from room_endogenous_preflight import AGENTS
 
 NO_GOAL = "[NO_GOAL]"
@@ -77,35 +77,46 @@ def _validate(response: object, sentinel: str) -> str | None:
     return text
 
 
-def _basis(journal: Mapping, owner: str, public_history: list[dict]):
+def _basis(journal: Mapping, owner: str, public_history: list[dict],
+           private_state: dict | None = None):
     witnessed = witnessed_tail(public_history)
     if witnessed:
         return {"kind": "witnessed", "source_id": witnessed[-1]["id"]}
     goals = active_goals(journal, owner=owner)
     if goals:
         return {"kind": "own_goal", "goal_id": goals[0]["id"]}
+    if private_state is not None:
+        ids = authenticated_reflection_ids(owner=owner, private_state=private_state)
+        if ids:
+            # Never invent a reflection or promote an unverified external fact.
+            # The model can form a goal from *its own earlier private thought*.
+            return {"kind": "own_reflection", "reflection_id": sorted(ids)[-1]}
     return None
 
 
 def accept_private_goal(*, owner: str, cycle: int,
                         journal: dict, public_history: list[dict],
-                        response: object) -> dict:
+                        response: object,
+                        private_state: dict | None = None) -> dict:
     value = _validate(response, NO_GOAL)
     if value is None:
         return {"ok": False, "issue": "invalid_goal_response",
                 "journal": journal, "changed": False}
     if value == "":
         return {"ok": True, "issue": None, "journal": journal, "changed": False}
-    source = _basis(journal, owner, public_history)
+    source = _basis(journal, owner, public_history, private_state)
     if source is None:
         return {"ok": False, "issue": "goal_without_witnessed_basis",
                 "journal": journal, "changed": False}
-    kind = "witnessed_public" if source["kind"] == "witnessed" else "own_goal"
-    key = source.get("source_id") or source.get("goal_id")
+    kind = ("witnessed_public" if source["kind"] == "witnessed"
+            else source["kind"])
+    key = source.get("source_id") or source.get("goal_id") or source.get("reflection_id")
     try:
         new = apply_proposal(
             journal, owner=owner, expected_revision=journal["revision"],
             cycle=cycle, public_history=public_history,
+            owner_reflection_ids=authenticated_reflection_ids(
+                owner=owner, private_state=private_state),
             proposal={"action": "propose", "description": value,
                       "source": {"kind": kind, "source_id": key}})
     except (ValueError, TypeError, KeyError, IndexError):
