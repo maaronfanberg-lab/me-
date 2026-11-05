@@ -56,7 +56,7 @@ def _copy_checked(journal, owner, expected_revision, cycle):
     return copy.deepcopy(journal)
 
 
-def _source_exists(source, owner, goals, history):
+def _source_exists(source, owner, goals, history, owner_reflection_ids=None):
     if not isinstance(source, Mapping) or set(source) != {"kind", "source_id"}:
         return False
     kind, source_id = source.get("kind"), source.get("source_id")
@@ -72,10 +72,14 @@ def _source_exists(source, owner, goals, history):
     if kind == "own_goal":
         return any(goal["id"] == source_id and goal["owner"] == owner
                    for goal in goals)
+    if kind == "own_reflection":
+        return (isinstance(owner_reflection_ids, set)
+                and source_id in owner_reflection_ids)
     return False
 
 
-def apply_proposal(journal, *, owner, expected_revision, cycle, proposal, public_history):
+def apply_proposal(journal, *, owner, expected_revision, cycle, proposal,
+                   public_history, owner_reflection_ids=None):
     """Validate owner-authored goal operation or raise without mutation.
 
     The caller is responsible for proving the proposal came from that
@@ -90,7 +94,7 @@ def apply_proposal(journal, *, owner, expected_revision, cycle, proposal, public
         raise ValueError("unsupported goal operation")
     goals = snapshot["goals"]
     source = proposal.get("source")
-    if not _source_exists(source, owner, goals, public_history):
+    if not _source_exists(source, owner, goals, public_history, owner_reflection_ids):
         raise ValueError("unwitnessed or unowned source")
     if action == "propose":
         if set(proposal) != {"action", "description", "source"}:
