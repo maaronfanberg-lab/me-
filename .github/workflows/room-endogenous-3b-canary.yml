@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/room-endogenous-3b-canary.yml'
       - 'scripts/room_endogenous_3b_canary.py'
+      - 'scripts/room_endogenous_reflection_canary.py'
+      - 'scripts/room_endogenous_reflection.py'
+      - 'scripts/room_endogenous_private_step.py'
+      - 'scripts/room_endogenous_goal_journal.py'
       - 'scripts/room_endogenous_shadow.py'
       - 'scripts/room_endogenous_preflight.py'
       - 'scripts/test_room_endogenous_shadow.py'
@@ -35,9 +39,12 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF_NAME" = 'research/room-endogenous-preflight-20261104'
           test "$(git branch --show-current)" = 'research/room-endogenous-preflight-20261104'
-          python3 -m py_compile scripts/room_endogenous_preflight.py scripts/room_endogenous_shadow.py scripts/room_endogenous_3b_canary.py
+          python3 -m py_compile scripts/room_endogenous_preflight.py scripts/room_endogenous_shadow.py scripts/room_endogenous_3b_canary.py scripts/room_endogenous_reflection_canary.py scripts/room_endogenous_private_step.py scripts/room_endogenous_reflection.py scripts/room_endogenous_goal_journal.py
           python3 scripts/test_room_endogenous_preflight.py
           python3 scripts/test_room_endogenous_shadow.py
+          python3 scripts/test_room_endogenous_goal_journal.py
+          python3 scripts/test_room_endogenous_private_step.py
+          python3 scripts/test_room_endogenous_reflection.py
 
       - name: Restore pinned 3B model if already cached
         uses: actions/cache/restore@v4
@@ -97,12 +104,18 @@ jobs:
               --model-url http://127.0.0.1:18177 \
               --config room/config.json \
               --out room-endogenous-3b-canary.json
+          timeout -k 10 130 python3 -u scripts/room_endogenous_reflection_canary.py \
+              --model-url http://127.0.0.1:18177 \
+              --config room/config.json \
+              --out room-endogenous-reflection-canary.json
 
       - name: Upload metrics without prompts or private content
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: room-endogenous-3b-canary-${{ github.run_id }}
-          path: room-endogenous-3b-canary.json
+          path: |
+            room-endogenous-3b-canary.json
+            room-endogenous-reflection-canary.json
           if-no-files-found: warn
           retention-days: 14
