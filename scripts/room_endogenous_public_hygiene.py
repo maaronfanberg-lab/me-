@@ -55,18 +55,29 @@ def _is_close_copy(text: str, earlier: str) -> bool:
 
 
 def _third_party_private_claim(text: str, speaker: str) -> bool:
-    other_names = [name for name in AGENTS if name != speaker]
-    for name in other_names:
-        # The model must not claim to inspect another simulated mind's
-        # private memory, confidence, hypothesis, or hidden state.
-        pattern = rf"\b{re.escape(name)}(?:['’]s)?\b.{0,95}(?:{PRIVATE_WORDS}|{CONFIDENT_COGNITION})"
-        if re.search(pattern,text,flags=re.I):
-            return True
-        inverse = rf"(?:{PRIVATE_WORDS})\b.{0,70}\b{re.escape(name)}\b"
-        if re.search(inverse,text,flags=re.I):
-            return True
+    """Block *asserted* access to peers' hidden cognition, not social guesses."""
+    lower = text.casefold()
+    private_terms = (
+        "private hypothesis", "private belief", "private thought",
+        "private memory", "private goal", "private state",
+        "private reflection", "hidden belief", "hidden thought",
+    )
+    for name in AGENTS:
+        if name == speaker:
+            continue
+        # Name-bound windows are intentionally easier to audit than one giant
+        # regex with nested optional and alternative capture groups.
+        for mention in re.finditer(rf"\\b{re.escape(name)}\\b", text, flags=re.I):
+            forward = lower[mention.end():mention.end()+125]
+            backward = lower[max(0,mention.start()-85):mention.start()]
+            if any(term in forward for term in private_terms):
+                return True
+            if ("confidence level" in forward and
+                    re.search(r"\\b(?:drop|fell|declin|chang|lower|higher|increas|decreas|rose)\\w*", forward)):
+                return True
+            if any(term in backward for term in private_terms):
+                return True
     return False
-
 
 def publication_issue(*, speaker: str, text: str,
                       public_history: list[dict]) -> str | None:
