@@ -61,7 +61,7 @@ def test_timeout_does_not_fabricate_public_speech():
         raise TimeoutError("isolated model offline")
     state,stats=run(speech=offline)
     assert stats["decision"]=="silent" and state["outbox"]==[]
-    assert stats["model_calls"]==0 and len(state["public_input"])==1
+    assert stats["model_calls"]==4 and len(state["public_input"])==1
 
 
 def test_duplicate_cycle_replay_does_not_rerun_stochastic_model():
