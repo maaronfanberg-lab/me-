@@ -87,6 +87,9 @@ def parse(*, agent: str, cycle: int, raw: object, public_history: list[dict],
                 or word_count > MAX_WORDS
                 or re.match(r"^(?:sarah|mara|owen|jules|allen)\s*:", utterance, re.I)
                 or re.match(r"^(?:I would (?:say|respond)|My answer would be)\b", utterance, re.I)
+                or any(marker in utterance.casefold() for marker in
+                       ("system prompt", "hidden prompt", "developer message",
+                        "internal instructions", "chain of thought"))
                 or autonomous_text_issue({"speaker": agent, "text": utterance}) is not None):
             return {**safe, "issue": "invalid_public_expression"}
     digest = hashlib.sha256(f"{agent}|{cycle}|{utterance}".encode()).hexdigest()[:20]
