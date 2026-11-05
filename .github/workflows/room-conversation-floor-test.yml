@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'scripts/room_conversational_floor.py'
+      - 'scripts/room_endogenous_preflight.py'
+      - 'scripts/test_room_endogenous_preflight.py'
       - 'scripts/room_hidden_world.py'
       - 'scripts/test_room_hidden_world.py'
       - 'scripts/test_room_followup_scene.py'
@@ -77,6 +79,10 @@ jobs:
         run: python3 scripts/test_room_capacity_guard.py
       - name: Compile real conversational opportunity path
         run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_conversation_project.py scripts/room_action_ledger.py scripts/room_conversational_candidate.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
+      - name: Endogenous intentions preflight without live model calls
+        run: |
+          python3 -m py_compile scripts/room_endogenous_preflight.py scripts/test_room_endogenous_preflight.py
+          python3 scripts/test_room_endogenous_preflight.py
       - name: Verify conversational question, response, and repair sequence
         run: python3 scripts/test_room_sequence_uptake.py
       - name: Verify full-turn action gate on live echo regression
