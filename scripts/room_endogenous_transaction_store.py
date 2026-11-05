@@ -28,7 +28,7 @@ def initial_store() -> dict:
     return {"schema": STORE_VERSION, "revision": 0, "last_cycle": -1,
             "characters": {agent: {"journal": new_journal(agent),
                                    "private_state": {}} for agent in sorted(AGENTS)},
-            "public_input": [], "outbox": [], "cycles": {}}
+            "public_input": [], "outbox": [], "cycles": {}, "consumed_bids": []}
 
 
 def _valid(snapshot):
@@ -38,6 +38,7 @@ def _valid(snapshot):
             or not isinstance(snapshot.get("outbox"), list)
             or not isinstance(snapshot.get("public_input"), list)
             or not isinstance(snapshot.get("cycles"), dict)
+            or not isinstance(snapshot.get("consumed_bids"), list)
             or not isinstance(snapshot.get("characters"), dict)):
         raise ValueError("invalid research snapshot")
     if set(snapshot["characters"]) != AGENTS:
@@ -68,6 +69,7 @@ def apply_cycle(snapshot: dict, *, expected_revision: int, cycle: int,
             or not isinstance(visitor_messages, list)):
         raise ValueError("invalid transaction")
     clean_visitor = []
+    submitted_visitor = []
     existing = {x["id"]: x for x in snapshot["public_input"]}
     for event in visitor_messages:
         if (not isinstance(event, dict) or event.get("speaker") != "allen"
@@ -76,12 +78,13 @@ def apply_cycle(snapshot: dict, *, expected_revision: int, cycle: int,
                 or not event["text"].strip()):
             raise ValueError("untrusted visitor input")
         public = {"id": event["id"], "speaker": "allen", "text": event["text"]}
+        submitted_visitor.append(public)
         if event["id"] in existing and existing[event["id"]] != public:
             raise ValueError("conflicting visitor source")
         if event["id"] not in existing:
             clean_visitor.append(public)
             existing[event["id"]] = public
-    signature = _payload_fingerprint(selected, clean_visitor)
+    signature = _payload_fingerprint(selected, submitted_visitor)
     prior = snapshot["cycles"].get(cycle_id)
     if prior is not None:
         if prior["fingerprint"] != signature:
@@ -125,6 +128,10 @@ def apply_cycle(snapshot: dict, *, expected_revision: int, cycle: int,
                 or candidate.get("bid", {}).get("bid_id") != selected.get("bid_id")
                 or candidate.get("bid", {}).get("action") != "speak"):
             raise ValueError("fabricated or mismatched public speech")
+        consumed_key = agent + ":" + selected["bid_id"]
+        if consumed_key in next_state["consumed_bids"]:
+            raise ValueError("bid already published in earlier cycle")
+        next_state["consumed_bids"].append(consumed_key)
         # ID is stable for retry and must be externally deduplicated by ID.
         stable_id = "room-bid-" + hashlib.sha256(
             f"{cycle_id}|{agent}|{selected['bid_id']}".encode()
