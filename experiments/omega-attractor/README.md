@@ -33,3 +33,18 @@ With Python, Playwright and a Chromium browser installed, run
     python tests/test_math.py
 
 The smoke test compares graph heat trace, KL divergence, Wasserstein distance and graph Betti counts against exact finite-dimensional values, counts 31 sliders, and exercises interactive controls.
+
+
+## Visual-first controls (2026-11-05 update)
+
+On phones, the live plot takes approximately 65% of the initial viewport and remains visible as you scroll through the 31 sliders. Use **Fullscreen** to expand the plot. If the browser supports the Fullscreen API it is used; iPhone browsers that do not allow arbitrary-element fullscreen instead use a full-viewport immersive fallback. Tap **Sliders** in immersive mode for a compact scrollable drawer. The projection shifts to keep the attractor visible above the drawer.
+
+**Live morph while dragging** is on by default. Changing a field/graph/spectral parameter changes the actual 9D ODE and immediately clears the stale trajectory, integrates a new RK4 trajectory segment, and resumes animation even if paused. Slider input is coalesced into animation frames. Uncheck Live morph to preserve a paused orbit while adjusting parameters. Camera/ink sliders redraw immediately. Diagnostic weight and topology-cutoff sliders switch the color view to the Ω diagnostic so their effect can be seen; the statistics-window slider changes numerical readouts, not the vector field.
+
+Two test scripts are available:
+```sh
+python tests/test_math.py
+python tests/test_ui.py
+```
+The latter checks fullscreen, control drawer, live morph, all 31 slider controls, and absence of browser JavaScript errors at phone/tablet/desktop widths.
+
