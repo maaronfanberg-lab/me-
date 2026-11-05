@@ -73,6 +73,21 @@ def test_duplicate_cycle_replay_does_not_rerun_stochastic_model():
     assert rec["replayed"] is True and len(repeated["outbox"])==1
 
 
+def test_replayed_cycle_rejects_new_or_changed_visitor_message():
+    previous, stats = run()
+    for proposed in (
+        [{"id": "visitor-2", "speaker": "allen", "text": "Replaced words"}],
+        [{"id": "visitor-3", "speaker": "allen", "text": "A new question."}],
+    ):
+        try:
+            run(state=previous, incoming=proposed)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("replay silently dropped a visitor message")
+    assert previous["public_input"] == PUBLIC
+
+
 def test_next_beat_keeps_earlier_public_outbox_pending_not_forged_as_delivered():
     previous,stats=run()
     second,rec=run(state=previous,incoming=[],history=[],
