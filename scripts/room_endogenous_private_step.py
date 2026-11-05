@@ -13,7 +13,8 @@ from collections.abc import Mapping
 from room_endogenous_shadow import model_bid
 from room_endogenous_goal_journal import active_goals, apply_proposal, VERSION
 
-REQUIRED = frozenset({"action", "motivation", "cost", "basis"})
+REQUIRED = ("action", "motivation", "cost", "basis")
+REQUIRED_SET = frozenset(REQUIRED)
 OPTIONAL = frozenset({"goal_proposal"})
 MAX_RAW = 4096
 
@@ -37,7 +38,7 @@ def interpret_private_step(*, agent: str, cycle: int, raw: object,
         value = json.loads(raw)
     except (ValueError, TypeError):
         return safe
-    if not isinstance(value, dict) or not REQUIRED.issubset(value) or set(value) - (REQUIRED | OPTIONAL):
+    if not isinstance(value, dict) or not REQUIRED_SET.issubset(value) or set(value) - (REQUIRED_SET | OPTIONAL):
         return safe
     if not isinstance(public_history, list) or not isinstance(consumed_ids, set):
         return safe
