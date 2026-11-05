@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           mkdir -p .research_3b
           gh api "repos/$GITHUB_REPOSITORY/contents/room/feed.json?ref=main" \
-            --jq '.content' | tr -d '\\n' | base64 -d \
+            --jq '.content' | tr -d '\n' | base64 -d \
             > .research_3b/current-public-feed.json
           python3 - <<'PY'
           import json
