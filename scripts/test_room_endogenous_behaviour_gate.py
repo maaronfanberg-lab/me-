@@ -16,12 +16,14 @@ def fixture(words, elapsed=30):
 
 
 def test_actual_repeated_dialogue_does_not_pass_behavioral_gate():
-    r=assess_trial(fixture([
+    case=fixture([
         "I think we could compare the markings by measuring water.",
         REPEAT,
         REPEAT,
         "I notice how Mara's confidence level dropped after reconsidering her private hypothesis.",
-    ],elapsed=220))
+    ],elapsed=220)
+    case["beats"][-1]["selected"] = "sarah"  # talking about Mara's private state
+    r = assess_trial(case)
     assert 3 in r["near_duplicate_beats"]
     assert 4 in r["unauthorized_other_private_claim_beats"]
     assert not r["candidate_for_blind_human_review"]
