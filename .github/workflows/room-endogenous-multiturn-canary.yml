@@ -10,6 +10,9 @@ on:
       - 'scripts/room_endogenous_transaction_store.py'
       - 'scripts/room_endogenous_speech_option.py'
       - 'scripts/room_endogenous_self_endorse.py'
+      - 'scripts/room_endogenous_public_hygiene.py'
+      - 'scripts/room_endogenous_behaviour_gate.py'
+      - 'scripts/test_room_endogenous_behaviour_gate.py'
   workflow_dispatch:
 
 permissions:
@@ -38,6 +41,7 @@ jobs:
           python3 -m py_compile scripts/room_endogenous_multiturn_canary.py scripts/room_endogenous_shadow_beat.py scripts/room_endogenous_transaction_store.py
           python3 scripts/test_room_endogenous_shadow_beat.py
           python3 scripts/test_room_endogenous_transaction_store.py
+          python3 scripts/test_room_endogenous_behaviour_gate.py
 
       - name: Restore pinned 3B model if already cached
         uses: actions/cache/restore@v4
@@ -98,6 +102,7 @@ jobs:
               --config room/config.json \
               --beats 6 \
               --out room-endogenous-multiturn-3b.json
+          python3 scripts/room_endogenous_behaviour_gate.py room-endogenous-multiturn-3b.json --strict
 
       - name: Upload metrics without prompts or private content
         if: always()
