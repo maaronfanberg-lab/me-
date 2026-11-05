@@ -121,8 +121,8 @@ def shadow_beat(*, snapshot: dict, cycle: int, cycle_id: str,
             if remaining <= 0:
                 attempts[agent] = "inference_budget_exhausted"
                 continue
+            calls += 1  # count attempted inference even when it times out
             raw = speech_request(request, min(34.0,remaining))
-            calls += 1
             candidate = parse(agent=agent, cycle=cycle, raw=raw,
                               public_history=history, journal=journal,
                               private_state=private, consumed_ids=set(snapshot.get("consumed_bids", [])))
@@ -139,8 +139,8 @@ def shadow_beat(*, snapshot: dict, cycle: int, cycle_id: str,
                                              private_state=private, journal=journal,
                                              public_history=history,
                                              draft=candidate["utterance"])
-                response = endorsement_request_model(review, min(34.0,remaining))
                 calls += 1
+                response = endorsement_request_model(review, min(34.0,remaining))
                 endorsement = interpret_endorsement(response)
                 candidate = apply_endorsement(candidate, endorsement)
                 attempts[agent] = "self_endorsed" if endorsement is True else (
