@@ -14,6 +14,35 @@ import re
 from room_endogenous_public_hygiene import publication_issue
 
 
+def _specific_measurement_test(text: str) -> bool:
+    """A concrete action applied to measurable objects, not metaphorical scales.
+
+    This probe is scenario-specific evaluation. It is NOT used to direct the
+    actors' dialogue, and cannot substitute for a blind human evaluation.
+    """
+    low = text.casefold()
+    practical_verb = re.search(
+        r"\\b(?:weigh|weighed|weighing|pour|poured|fill|filled|"
+        r"compare|compared|check|checked|test|tested|calibrate|calibrated|"
+        r"measure|measured|repeat|recheck)\\b",low)
+    practical_object = re.search(
+        r"\\b(?:cups?|water|volume|mass|200\\s?ml|"
+        r"mark(?:s|ing|ings)?|graduated cylinder|digital scale|"
+        r"kitchen scale|measuring cylinder)\\b",low)
+    if not (practical_verb and practical_object):
+        return False
+    # A quoted abstract question containing both words need not be a
+    # proposal; prefer an utterance actually offering a test or check.
+    proposal = re.search(
+        r"\\b(?:i(?:'d| would| will)?|we(?: could| should| can| will)?|"
+        r"let's|try to|you (?:could|can|should)|by|using)\\b.{0,100}"
+        r"\\b(?:weigh|pour|fill|compare|check|test|calibrate|measure|"
+        r"repeat|recheck|use)\\b",low)
+    imperative = re.match(
+        r"^\\s*(?:weigh|pour|fill|compare|check|test|measure|repeat|recheck)\\b",low)
+    return bool(proposal or imperative)
+
+
 def assess_trial(trial: dict, *, max_seconds_per_beat: float = 55.0) -> dict:
     if (not isinstance(trial,dict) or not isinstance(trial.get("beats"),list)
             or not isinstance(trial.get("initial_public_event"),dict)):
@@ -44,12 +73,9 @@ def assess_trial(trial: dict, *, max_seconds_per_beat: float = 55.0) -> dict:
         message={"speaker":actor,"text":text}
         public.append(message)
         history.append(message)
-    # This is a concrete measurement task. Test whether *any* response
-    # offered a check rather than only discussing the philosophical meaning.
-    specific=bool(re.search(
-        r"\b(?:weigh|measur\w*|calibrat\w*|compare|pour|fill|scale|"
-        r"graduated|marking|standard volume|weight)\b",
-        " ".join(x["text"].casefold() for x in public)))
+    # Measure relevance to the synthetic visitor's checkable cup question,
+    # not mere occurrence of words such as 'measuring' or 'scales'.
+    specific=any(_specific_measurement_test(msg["text"]) for msg in public)
     summary=trial.get("summary") or {}
     beat_count=len(trial["beats"])
     elapsed=summary.get("elapsed_seconds")
