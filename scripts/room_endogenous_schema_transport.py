@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 
 MAX_SCHEMA_BYTES = 5000
-MAX_RESULT_BYTES = 5000
+MAX_RESULT_BYTES = 65536  # server response includes token/timing metadata as well as generated JSON
 MAX_TOKENS = 320
 
 
