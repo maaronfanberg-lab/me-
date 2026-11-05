@@ -55,6 +55,8 @@ def evaluate(cfg, private_model, speech_model):
         journal=journal,public_history=PUBLIC,response=raw_goal)
     reports["goal"]={"valid":goal["ok"],"changed":goal["changed"],"latency_ms":gtime,
                      "reason":goal["issue"]}
+    if not goal["ok"] and isinstance(raw_goal, str):
+        reports["goal"]["synthetic_response_sample"] = raw_goal[:200]
     if goal["ok"]:
         journal=goal["journal"]
 
