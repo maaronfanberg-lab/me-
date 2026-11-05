@@ -67,13 +67,13 @@ def _third_party_private_claim(text: str, speaker: str) -> bool:
             continue
         # Name-bound windows are intentionally easier to audit than one giant
         # regex with nested optional and alternative capture groups.
-        for mention in re.finditer(rf"\\b{re.escape(name)}\\b", text, flags=re.I):
+        for mention in re.finditer(rf"\b{re.escape(name)}\b", text, flags=re.I):
             forward = lower[mention.end():mention.end()+125]
             backward = lower[max(0,mention.start()-85):mention.start()]
             if any(term in forward for term in private_terms):
                 return True
             if ("confidence level" in forward and
-                    re.search(r"\\b(?:drop|fell|declin|chang|lower|higher|increas|decreas|rose)\\w*", forward)):
+                    re.search(r"\b(?:drop|fell|declin|chang|lower|higher|increas|decreas|rose)\\w*", forward)):
                 return True
             if any(term in backward for term in private_terms):
                 return True
