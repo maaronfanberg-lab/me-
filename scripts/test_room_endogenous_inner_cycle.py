@@ -82,6 +82,59 @@ def test_peer_cannot_borrow_another_character_private_reflection():
     assert outcome["characters"]["owen"]["journal"]["goals"]==[]
 
 
+def test_direct_private_goal_transaction_rejects_forged_source():
+    from room_endogenous_transaction_store import apply_cycle
+    state=state_with_prior_reflection()
+    journal=state["characters"]["mara"]["journal"]
+    tampered={"schema":journal["schema"],"owner":"mara","revision":1,
+              "goals":[{
+                  "id":"fake-goal-1","owner":"mara","description":"A forged claim.",
+                  "status":"active","last_cycle":4,
+                  "origin":{"kind":"own_reflection","source_id":"invented-reflection"},
+              }]}
+    fake={
+        "ok":True,"private_only":True,"utterance":"",
+        "bid":{"speaker":"mara","cycle":4,"action":"wait",
+               "schema":"room_private_cognition_step_v1",
+               "source_id":"invented-reflection"},
+        "journal":tampered,"private_state":state["characters"]["mara"]["private_state"],
+    }
+    try:
+        apply_cycle(state,expected_revision=0,cycle=4,cycle_id="forged-own-goal",
+                    candidates={"mara":fake},selected={"decision":"silent"},
+                    visitor_messages=[])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("forged private source escaped transactional validation")
+
+
+def test_private_only_commit_cannot_mutate_an_old_private_belief():
+    from room_endogenous_transaction_store import apply_cycle
+    state=state_with_prior_reflection()
+    updated,report=silent_inner_cycle(
+        snapshot=state,owner="mara",cycle=4,cycle_id="valid-before-tamper",
+        profile=PROFILE,model_request=lambda m,t:"I want to inspect the cup width.")
+    journal=updated["characters"]["mara"]["journal"]
+    altered=dict(state["characters"]["mara"]["private_state"])
+    altered["what_i_currently_believe"]="A new statement the model never authored."
+    entry={
+        "ok":True,"private_only":True,"utterance":"",
+        "bid":{"speaker":"mara","cycle":4,"action":"wait",
+               "schema":"room_private_cognition_step_v1",
+               "source_id":journal["goals"][-1]["origin"]["source_id"]},
+        "journal":journal,"private_state":altered,
+    }
+    try:
+        apply_cycle(state,expected_revision=0,cycle=4,cycle_id="tampered-mental-state",
+                    candidates={"mara":entry},selected={"decision":"silent"},
+                    visitor_messages=[])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("private belief was replaced without own revision")
+
+
 if __name__=="__main__":
     tests=[v for k,v in sorted(globals().copy().items())
            if k.startswith("test_") and callable(v)]
