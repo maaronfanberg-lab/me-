@@ -15,6 +15,8 @@ on:
       - 'scripts/room_endogenous_reflection.py'
       - 'scripts/room_endogenous_expression_v2.py'
       - 'scripts/test_room_endogenous_expression_v2.py'
+      - 'scripts/room_endogenous_transaction_store.py'
+      - 'scripts/test_room_endogenous_transaction_store.py'
       - 'scripts/test_room_endogenous_reflection.py'
       - 'scripts/room_endogenous_baseline.py'
       - 'scripts/test_room_endogenous_baseline.py'
@@ -106,6 +108,8 @@ jobs:
           python3 scripts/test_room_endogenous_reflection.py
           python3 -m py_compile scripts/room_endogenous_expression_v2.py scripts/test_room_endogenous_expression_v2.py
           python3 scripts/test_room_endogenous_expression_v2.py
+          python3 -m py_compile scripts/room_endogenous_transaction_store.py scripts/test_room_endogenous_transaction_store.py
+          python3 scripts/test_room_endogenous_transaction_store.py
           python3 -m py_compile scripts/room_endogenous_baseline.py scripts/test_room_endogenous_baseline.py
           python3 scripts/test_room_endogenous_baseline.py
       - name: Verify conversational question, response, and repair sequence
