@@ -57,8 +57,8 @@ def optional_private_growth(*, owner: str, cycle: int,
         prompt = messages_for(kind="goal", agent=owner, profile=profile,
                               private_state=state, journal=journal,
                               public_history=public_history)
-        raw = goal_model(prompt, min(MAX_SECONDS, budget_seconds))
         report["model_calls"] += 1
+        raw = goal_model(prompt, min(MAX_SECONDS, budget_seconds))
         outcome = accept_private_goal(
             owner=owner, cycle=cycle, journal=journal,
             public_history=public_history, response=raw)
@@ -73,8 +73,8 @@ def optional_private_growth(*, owner: str, cycle: int,
             prompt = messages_for(kind="revision", agent=owner,
                                   profile=profile, private_state=state,
                                   journal=journal, public_history=public_history)
-            raw = revision_model(prompt, min(MAX_SECONDS, remaining))
             report["model_calls"] += 1
+            raw = revision_model(prompt, min(MAX_SECONDS, remaining))
             outcome = accept_private_revision(
                 owner=owner, cycle=cycle, journal=journal,
                 private_state=state, public_history=public_history,
