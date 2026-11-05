@@ -70,12 +70,19 @@ def _third_party_private_claim(text: str, speaker: str) -> bool:
         for mention in re.finditer(rf"\b{re.escape(name)}\b", text, flags=re.I):
             forward = lower[mention.end():mention.end()+125]
             backward = lower[max(0,mention.start()-85):mention.start()]
-            if any(term in forward for term in private_terms):
+            possessive = bool(re.match(r"^['’]s\b", forward))
+            peer_claim = possessive or bool(re.match(
+                r"^\s+(?:has|had|is|was|changed|believes|knows|thinks)\b",
+                forward))
+            if peer_claim and any(term in forward for term in private_terms):
                 return True
-            if ("confidence level" in forward and
-                    re.search(r"\b(?:drop|fell|declin|chang|lower|higher|increas|decreas|rose)\\w*", forward)):
+            if (peer_claim and "confidence level" in forward and
+                    re.search(r"\b(?:drop|fell|declin|chang|lower|higher|increas|decreas|rose)\w*",
+                              forward)):
                 return True
-            if any(term in backward for term in private_terms):
+            # "The private hypothesis of Owen" asserts privileged access.
+            if (any(term in backward for term in private_terms)
+                    and re.search(r"\b(?:of|belonging to|about)\s*$", backward)):
                 return True
     return False
 
