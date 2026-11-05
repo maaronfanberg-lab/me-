@@ -21,6 +21,7 @@ import fcntl
 from room_endogenous_preflight import AGENTS, _plain_id
 from room_endogenous_goal_journal import new_journal, VERSION
 from room_endogenous_public_hygiene import publication_issue
+from room_endogenous_reflection import authenticated_reflection_ids
 
 STORE_VERSION = "room_endogenous_research_store_v1"
 
@@ -109,6 +110,30 @@ def apply_cycle(snapshot: dict, *, expected_revision: int, cycle: int,
                 or not isinstance(private, dict)):
             raise ValueError("invalid candidate identity or state")
         old_journal = snapshot["characters"][name]["journal"]
+        if candidate.get("private_only"):
+            old_private = snapshot["characters"][name]["private_state"]
+            references = authenticated_reflection_ids(owner=name, private_state=old_private)
+            new_entries = journal.get("goals")
+            old_entries = old_journal.get("goals")
+            if (bid.get("schema") != "room_private_cognition_step_v1"
+                    or bid.get("action") != "wait"
+                    or candidate.get("utterance")
+                    or private != old_private
+                    or not isinstance(old_entries, list)
+                    or not isinstance(new_entries, list)
+                    or len(new_entries) != len(old_entries) + 1
+                    or new_entries[:-1] != old_entries
+                    or journal.get("revision") != old_journal.get("revision", -2) + 1
+                    or not isinstance(new_entries[-1], dict)
+                    or new_entries[-1].get("owner") != name
+                    or new_entries[-1].get("status") != "active"):
+                raise ValueError("unauthorized silent private-state transition")
+            origin = new_entries[-1].get("origin")
+            if (not isinstance(origin, dict)
+                    or origin.get("kind") != "own_reflection"
+                    or origin.get("source_id") not in references
+                    or bid.get("source_id") != origin["source_id"]):
+                raise ValueError("unowned private reflection origin")
         if (type(journal.get("revision")) is not int
                 or journal["revision"] not in (old_journal["revision"], old_journal["revision"] + 1)):
             raise ValueError("invalid goal revision")
