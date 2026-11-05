@@ -11,40 +11,66 @@ a reply, or treat a failed model call as speech.
 This is a behavioral research objective for a simulation; it does not assert
 that language models have subjective experiences.
 
-## Scope currently implemented
+## Scope currently implemented (updated November 5, 2026 UTC)
 
-- A provenance-bound, fail-closed private-bid schema and bounded voluntary
-  arbitration (`room_endogenous_preflight.py`).
-- Owner-isolated request construction, model-authored choices among
-  `speak/listen/reflect/wait`, and optional loopback-only local transport
-  (`room_endogenous_shadow.py`).
-- A pure, owner-bound, versioned private-goal journal with witnessed/owned
-  provenance and pause/resume/resolve/abandon operations
-  (`room_endogenous_goal_journal.py`).
-- A source-pinned observational baseline and synthetic regression tests.
-- A real 3B isolated canary using synthetic history and counterfactual private
-  states (`room_endogenous_3b_canary.py`).
-- No production Room entrypoint imports the experimental modules.
+- **Voluntary natural utterance or silence**, followed by the same character's
+  independently generated YES/NO approval of its own concrete draft. The earlier
+  `speak/listen/reflect/wait` selector had an observed non-speaking attractor
+  and is retained only as a legacy research comparison.
+- **True model-originated personal goals and private epistemic revisions**:
+  owner-bound, source-linked candidate changes survive into later choices.
+  Two independently sampled real Llama 3.2 3B trials accepted both a goal and
+  a belief revision. A deterministic A/B/A trial repeated an original answer
+  exactly when the original private state was restored, but changed with a
+  different private belief. This demonstrates state sensitivity in one case,
+  not simulation of subjective experience.
+- **Individual cognition and voluntary speech in one research heartbeat**.
+  Private states are not exposed to peers. Every agent can remain silent,
+  and no candidate is fabricated if generation or endorsement fails.
+- **Conservative negative publication filter** against near-verbatim repeated
+  speech and ungrounded claims to other characters' private cognitive states.
+  No replacement text, speaker quotas, novelty quotas, or forced topics.
+- **Research-only crash/replay-safe state, outbox, and public feed publisher**,
+  including a separate visitor lane, file locking, atomic rename, validation,
+  stable IDs, and idempotent retries. A local Git-atomic drill verifies a
+  paired commit and rejection of stale competing writers.
+- **Strict observed-behavior gate** separate from unit CI, with a regression
+  for the actual model's evasion of a concrete measuring-cup question into
+  brain/cognitive-bias/ecology metaphors. A green CI is not by itself evidence
+  of social naturalness.
+- **Read-only current-public-context shadow**: the actual current main Room
+  supplied 12 public messages to four awake isolated characters and the
+  experiment returned metrics without publishing or changing live memory.
+- **Full Room conversational CI** and more than 150 dedicated research unit,
+  fault-injection and integration tests. No production Room entrypoint imports
+  the experimental modules.
 
-## Known experimental gaps
+## Remaining deployment and evidence gaps
 
-1. The research canary still uses externally prepared *initial* individual
-   goals, even though its speech intentions are model authored. Full
-   endogenous goal genesis remains unproven.
-2. A private goal journal can validate a model-authored proposal, but it
-   cannot authenticate *authorship* by itself. A trusted model wrapper needs
-   to bind every proposal to the requesting agent before journal commit.
-3. The 3B model's decisions may be weakly sensitive to private beliefs, or
-   biased toward silence; counterfactuals must establish this empirically.
-4. Failing closed is not the same as a socially appropriate response to a
-   visitor. Directly addressed question trials are required.
-5. A single successful Actions run does not establish multistep stability,
-   learning, social realism, or security.
-6. The current live Room has no deployed silence heartbeat, model-authored
-   intention commit protocol, or atomic publication-and-consumption state.
-7. Synthetic conversations are safe for exploratory trials but insufficient
-   for human-likeness claims. Use blinded evaluations on multiple
-   independently seeded episodes.
+1. **Long-horizon human-like behavior is still unproven.** The six-beat trial
+   with integrated private cognition generated two own goals and four belief
+   revisions but became repetitive and made an unsupported claim about a peer's
+   private confidence. A later guarded trial eliminated exact copies and
+   produced genuine silence but still evaded the practical question. The
+   stricter checker correctly classifies metaphorical talk as *not* a test
+   proposal.
+2. **Reliability across held-out multi-agent conversations is unproven.**
+   Some validated real 3B trials answered relevantly; other trials spoke only
+   when silence would be more appropriate or failed completion budgets. One
+   positive example or a deterministic A/B/A is not a population estimate.
+3. **The production Git push and viewer relay transaction is not integrated.**
+   The real Room uses `sarah-society.yml`, commits authoritative state to
+   `main`, then separately mirrors the viewer and acknowledges visitor input.
+   Research-file fsync and local Git drill cannot prove no duplicate or dropped
+   relay message. Integration requires separate source control, rollback,
+   idempotent acknowledgements, and conflict/restart tests.
+4. **Cost/latency remains material.** A six-beat 2-agent trial took 578
+   seconds and 31 3B calls, and another timed out before six full beats. The
+   85-second beat ceiling and progress checkpoints mitigate runaway failure
+   but are not evidence of production-scale four-agent performance.
+5. **Blind, independent human scoring and live canary sign-off are absent.**
+   A small reversible production trial cannot begin from this draft without
+   explicit permission and reproducible readiness evidence.
 
 ## Safety gates (hard)
 
