@@ -33,7 +33,8 @@ RESTRICTED = ("system prompt", "hidden prompt", "developer message",
 
 
 def initial_feed() -> dict:
-    return {"schema": FEED_SCHEMA, "revision": 0, "conversation": []}
+    return {"schema": FEED_SCHEMA, "revision": 0,
+            "conversation": [], "visitor_messages": []}
 
 
 def validate_feed(feed: dict) -> None:
@@ -41,7 +42,9 @@ def validate_feed(feed: dict) -> None:
             or type(feed.get("revision")) is not int
             or feed["revision"] < 0
             or not isinstance(feed.get("conversation"), list)
-            or len(feed["conversation"]) > MAX_FEED):
+            or not isinstance(feed.get("visitor_messages"), list)
+            or len(feed["conversation"]) > MAX_FEED
+            or len(feed["visitor_messages"]) > MAX_FEED):
         raise ValueError("unrecognized research feed")
     seen = set()
     for event in feed["conversation"]:
@@ -49,6 +52,16 @@ def validate_feed(feed: dict) -> None:
         if event["id"] in seen:
             raise ValueError("duplicate research public event")
         seen.add(event["id"])
+    for visitor in feed["visitor_messages"]:
+        if (not isinstance(visitor, dict)
+                or set(visitor) != {"id", "speaker", "text"}
+                or visitor.get("speaker") != "allen"
+                or not _plain_id(visitor.get("id"))
+                or not isinstance(visitor.get("text"), str)
+                or not visitor["text"].strip()
+                or visitor["id"] in seen):
+            raise ValueError("corrupt or repeated visitor event")
+        seen.add(visitor["id"])
 
 
 def validate_event(event: dict, *, delivered: bool = False) -> None:
@@ -86,7 +99,27 @@ def reconcile(snapshot: dict, feed: dict) -> tuple[dict, dict, dict]:
     new_state = copy.deepcopy(snapshot)
     new_feed = copy.deepcopy(feed)
     lookup = {e["id"]: e for e in new_feed["conversation"]}
-    published, acknowledged, already_seen = 0, 0, 0
+    published, acknowledged, already_seen, received_visitor = 0, 0, 0, 0
+    visitors = {e["id"]: e for e in new_feed["visitor_messages"]}
+    for event in snapshot["public_input"]:
+        if (not isinstance(event, dict)
+                or set(event) != {"id", "speaker", "text"}
+                or event.get("speaker") != "allen"
+                or not _plain_id(event.get("id"))
+                or not isinstance(event.get("text"), str)
+                or not event["text"].strip()):
+            raise ValueError("corrupted trusted visitor input")
+        if event["id"] in lookup:
+            raise ValueError("visitor ID conflicts with autonomous public text")
+        if event["id"] in visitors:
+            if visitors[event["id"]] != event:
+                raise ValueError("visitor input mismatch on publication retry")
+        else:
+            if len(new_feed["visitor_messages"]) >= MAX_FEED:
+                raise ValueError("research visitor lane at capacity")
+            visitors[event["id"]] = event
+            new_feed["visitor_messages"].append(copy.deepcopy(event))
+            received_visitor += 1
     outbox_seen = set()
     for idx, event in enumerate(outbox):
         validate_event(event)
@@ -115,12 +148,13 @@ def reconcile(snapshot: dict, feed: dict) -> tuple[dict, dict, dict]:
         if event["status"] == "pending":
             new_state["outbox"][idx]["status"] = "delivered"
             acknowledged += 1
-    if published:
+    if published or received_visitor:
         new_feed["revision"] += 1
     if acknowledged:
         new_state["revision"] += 1
     return new_state, new_feed, {
         "new_public_events": published,
+        "new_visitor_events": received_visitor,
         "acknowledged": acknowledged,
         "seen_before": already_seen,
         "public_feed_revision": new_feed["revision"],
