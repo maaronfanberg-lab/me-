@@ -41,6 +41,15 @@ def test_public_observation_of_uncertainty_not_treated_as_private_access():
     assert publication_issue(speaker="sarah",text=spoken,public_history=H) is None
 
 
+def test_addressing_a_friend_while_disclosing_my_own_private_belief_is_allowed():
+    assert publication_issue(speaker="sarah",
+        text="Mara, my private hypothesis about the two cups may have been mistaken.",
+        public_history=H) is None
+    assert publication_issue(speaker="owen",
+        text="Jules, I have changed my private belief after reading the measurements.",
+        public_history=H) is None
+
+
 def test_self_disclosure_does_not_automatically_get_censored():
     assert publication_issue(speaker="sarah",
         text="My private hypothesis about the cup might be wrong. I want another measurement.",
