@@ -20,12 +20,18 @@ The original private-action generator repeatedly selected `reflect`, including w
 - [Real private-growth test](https://github.com/maaronfanberg-lab/me-/actions/runs/41960282029): one independently proposed, source-linked personal goal was accepted. That goal supported a later model-generated speech opportunity **without a new public event**. One attempted belief-revision was rejected by the validator; the model did not produce a recognized private belief change in this first run. Speech wording differed before and after the goal was introduced, but the result is not sufficient to isolate causality statistically.
 - A later diagnostic found the model used the ordinary first-person expression `My hypothesis...`, which the validator incorrectly rejected when it expected `I...`. The parser has been fixed and regression-tested, while real-model repeatability remains under evaluation.
 
+### New direct evidence for private-state causality
+
+- [Real belief-and-goal replication](https://github.com/maaronfanberg-lab/me-/actions/runs/41962345800): model-authored personal goal **accepted**, private hypothesis **revised and stored**, follow-up speech changed, and another self-initiated contribution arose without a fresh public event. This replicates the successful [earlier run](https://github.com/maaronfanberg-lab/me-/actions/runs/41961813520), though sampling variation still limits quantitative causal claims.
+- [Deterministic A/B/A test](https://github.com/maaronfanberg-lab/me-/actions/runs/41962408863): the same public conversation and model settings produced identical speech in the original private-belief state **A** on both repetitions, while changing only the private belief to **B** changed the answer. All **3/3** outputs were provenance-valid. This is controlled evidence that supplied private state can influence public speech in this one test, not proof of genuine human-equivalent agency.
+- The research Room heartbeat now offers each participant a budgeted, individually owned private-cognition opportunity. A model may independently say `[NO_GOAL]` or `[NO_CHANGE]`; neither creates an artificial state transition.
+
 ### Crash and concurrent-run integrity
 
 - `room_endogenous_transaction_store.py`: file-lock + revision guard, fsync and atomic rename, stable publication outbox IDs, consumed-bid deduplication, exact preservation of visitor messages.
 - `room_endogenous_shadow_beat.py`: bounded private draft, same-character endorsement, genuine silence, a single selected candidate, and an uncommitted public-outbox message. Duplicate research cycles do not regenerate random speech. Replayed cycles reject new or altered visitor content.
 - This is a **research-only** committed candidate state. It is *not* an integrated live Room publisher and does not establish exactly-once publication into the separate live feed without a separate acknowledgement protocol.
-- All research-specific unit and synthetic-integration tests are included in the existing Room conversation CI workflow, with green runs. The long-form 3B simulation is a separate experimental canary.
+- **108 research-specific unit and synthetic-integration checks** are included in the existing Room conversation CI workflow, with green runs, alongside the older Room regression suite. The long-form 3B simulation is a separate experimental canary.
 
 ### The necessary remaining checks
 
