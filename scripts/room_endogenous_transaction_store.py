@@ -20,6 +20,7 @@ import fcntl
 
 from room_endogenous_preflight import AGENTS, _plain_id
 from room_endogenous_goal_journal import new_journal, VERSION
+from room_endogenous_public_hygiene import publication_issue
 
 STORE_VERSION = "room_endogenous_research_store_v1"
 
@@ -128,6 +129,15 @@ def apply_cycle(snapshot: dict, *, expected_revision: int, cycle: int,
                 or candidate.get("bid", {}).get("bid_id") != selected.get("bid_id")
                 or candidate.get("bid", {}).get("action") != "speak"):
             raise ValueError("fabricated or mismatched public speech")
+        # Defense in depth: publisher cannot bypass earlier volunteer-stage
+        # quality checks and insert a previous conversation line again.
+        earlier = [{"speaker": e["speaker"], "text": e["text"]}
+                   for e in snapshot["outbox"] if isinstance(e, dict)
+                   and e.get("speaker") in AGENTS and isinstance(e.get("text"), str)]
+        issue = publication_issue(speaker=agent, text=selected["utterance"],
+                                  public_history=earlier)
+        if issue:
+            raise ValueError("research public utterance quarantined: " + issue)
         consumed_key = agent + ":" + selected["bid_id"]
         if consumed_key in next_state["consumed_bids"]:
             raise ValueError("bid already published in earlier cycle")
