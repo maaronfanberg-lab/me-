@@ -81,7 +81,7 @@ def test_invalid_confidence_and_unbounded_text_fail_closed():
     for candidate in (
         {"hypothesis": "I should reconsider.", "confidence": float("nan")},
         {"hypothesis": "I should reconsider.", "confidence": 2},
-        {"hypothesis": "x"*220, "confidence": .5},
+        {"hypothesis": "x"*300, "confidence": .5},
         {"hypothesis": "", "confidence": .4},
         {"hypothesis": "I wonder.", "confidence": "high"},
     ):
