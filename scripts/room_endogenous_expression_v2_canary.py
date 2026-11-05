@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from room_endogenous_expression_v2 import build_request, interpret, choose_volunteers, OUTPUT_SCHEMA
+from room_endogenous_schema_transport import local_grammar_request
 from room_endogenous_goal_journal import new_journal, active_goals
 from room_endogenous_shadow import local_model_request, MAX_SECONDS_PER_CALL
 
@@ -203,8 +204,8 @@ def main():
     parser.add_argument("--out", default="room-expression-v2-real3b.json")
     args = parser.parse_args()
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
-    request = local_model_request(endpoint=args.model_url, max_tokens=270,
-                                  response_schema=OUTPUT_SCHEMA)
+    request = local_grammar_request(endpoint=args.model_url, schema=OUTPUT_SCHEMA,
+                                    n_predict=270)
     result = evaluate(cfg, request)
     Path(args.out).write_text(json.dumps(result, indent=2, sort_keys=True)+"\n",
                               encoding="utf-8")
