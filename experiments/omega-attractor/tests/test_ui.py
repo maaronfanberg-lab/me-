@@ -39,3 +39,15 @@ with sync_playwright() as pw:
         print(f"PASS {width}x{height}: visual-only, fullscreen plot, 31 sliders, live morph, no JS errors")
         page.close()
     browser.close()
+
+# A constrained in-app HTML file preview may disable JavaScript entirely.
+# Keep a mathematically generated orbit visible even then.
+with sync_playwright() as pw:
+    browser = pw.chromium.launch(headless=True)
+    page = browser.new_page(java_script_enabled=False,viewport={"width": 430, "height": 844})
+    page.set_content(source)
+    assert page.locator("#fallbackArt").is_visible()
+    assert page.locator("#fallbackArt path").count() == 3
+    assert page.locator("#fallbackArt").evaluate("e=>getComputedStyle(e).opacity") == "1"
+    print("PASS: visual fallback survives JavaScript-disabled previews")
+    browser.close()
