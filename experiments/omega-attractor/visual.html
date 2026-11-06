@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,interactive-widget=resizes-content">
+<meta name="theme-color" content="#080e17">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ω</title>
+<style>
+:root{color-scheme:dark;--ink:#c3f5f0;--panel:#101b2aed;--stroke:#38536a}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;background:#080e17;color:#f0f7fa;font:14px system-ui,-apple-system,sans-serif}
+button,select,input{font:inherit}
+button{cursor:pointer;color:#e6fffc;background:#0b1b2acf;border:1px solid #426376;border-radius:13px;padding:9px 12px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #80f9e7;outline-offset:2px}
+.shell,.stage{position:fixed;inset:0;width:100%;height:100%;height:100dvh;overflow:hidden}
+.stage{background:radial-gradient(ellipse at 50% 50%,#152938,#080e17 68%)}
+#view{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.stageactions{position:absolute;z-index:40;right:max(12px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));display:flex;gap:7px}
+.stageactions button{width:42px;height:42px;border-radius:50%;font-size:20px;padding:0;backdrop-filter:blur(12px);box-shadow:0 4px 14px #0008}
+.stageactions button:active{transform:scale(.96)}
+.controlpane{display:none;position:fixed;z-index:35;top:12px;right:12px;bottom:12px;width:min(365px,calc(100vw - 24px));border:1px solid #456177;border-radius:20px;background:var(--panel);box-shadow:0 20px 80px #000b;overflow:auto;overscroll-behavior:contain;padding:16px 16px 24px;scrollbar-width:thin}
+body.controls-open .controlpane{display:block}
+.paneltop{position:sticky;top:-16px;margin:-16px -16px 8px;padding:16px 16px 12px;background:#101b2afa;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #2b4359}
+.paneltop strong{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#b9ebe4}
+#closeControls{height:32px;padding:3px 12px;font-size:17px}
+.toolbar{display:flex;gap:7px;margin:10px 0}
+.toolbar button{flex:1;min-width:0;font-size:12px;padding:8px 3px}
+button.primary{background:#155960;border-color:#438b87}
+.switchline{display:flex;align-items:center;gap:8px;margin:10px 0;color:#b6ccd7;font-size:12px}
+.switchline input{accent-color:#8ff3dd;width:16px;height:16px;flex:0 0 auto}
+.picker{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:9px 0;font-size:12px;color:#c2d5e3}
+.picker select{min-width:0;max-width:63%;border:1px solid #40546b;border-radius:8px;background:#1a2d3c;color:white;font-size:12px;padding:7px}
+.section{padding-top:12px;margin-top:10px;border-top:1px solid #294456}
+.section-title{font-size:11px;color:#8edccc;text-transform:uppercase;letter-spacing:.11em;margin-bottom:12px;font-weight:750}
+.field{display:grid;grid-template-columns:minmax(0,1fr) 70px;column-gap:8px;margin:0 0 16px}
+.field label{font-size:12px;color:#d5e5f0;overflow-wrap:anywhere}
+.field output{text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:#96f1e1}
+.field input[type=range]{width:100%;grid-column:1/-1;min-height:28px;margin:0;accent-color:#83f2df;cursor:pointer}
+.filebox{display:flex;gap:7px;margin-top:14px}
+.filebox button{flex:1;font-size:12px;padding:8px 5px}
+.hidden-data,[hidden]{display:none!important}
+/* The controls are a floating drawer, never a replacement for the canvas. */
+@media(max-width:680px){
+ .controlpane{top:auto;left:8px;right:8px;bottom:max(7px,env(safe-area-inset-bottom));height:47dvh;max-height:47dvh;width:auto;border-radius:18px 18px 10px 10px;padding:12px 14px 30px}
+ .paneltop{top:-12px;margin:-12px -14px 8px;padding:12px 14px}
+ .stageactions{right:12px}
+}
+</style>
+</head><body class="focus-view"><main class="shell">
+<section class="stage" aria-label="Animated nine-dimensional attractor"><canvas id="view" aria-label="Live mathematical attractor; drag to rotate, pinch to zoom"></canvas>
+<div class="stageactions"><button id="focusButton" type="button" aria-label="Browser fullscreen" title="Browser fullscreen">⛶</button><button id="controlsButton" type="button" aria-label="Show sliders" title="Show sliders" aria-expanded="false">☷</button></div>
+</section>
+<aside class="controlpane" id="panel" aria-hidden="true">
+<div class="paneltop"><strong>Ω / Sliders</strong><button id="closeControls" type="button" aria-label="Close sliders">✕</button></div>
+<div class="toolbar"><button id="pause" class="primary">Pause</button><button id="reset">Reset</button><button id="step">Step</button></div>
+<div class="switchline"><input type="checkbox" id="liveMorph" checked><label for="liveMorph">Live morph</label></div>
+<div class="picker"><label for="preset">Regime</label><select id="preset"><option value="classic">Three butterflies</option><option value="sync">Synchronized</option><option value="split">Fractured symmetry</option><option value="spectral">Spectral intervention</option><option value="quiet">Equilibrium</option></select></div>
+<div class="section"><div class="section-title">01 / Field</div><div id="fieldSliders"></div></div>
+<div class="section"><div class="section-title">02 / Coupling</div><div id="graphSliders"></div></div>
+<div class="section"><div class="section-title">03 / Spectral geometry</div><div id="spectralSliders"></div></div>
+<div class="section"><div class="section-title">04 / Integration</div><div id="solverSliders"></div><div class="switchline"><input type="checkbox" id="tangent" checked><label for="tangent">Lyapunov estimate</label></div></div>
+<div class="section"><div class="section-title">05 / Camera &amp; ink</div>
+<div class="picker"><label for="observable">Projection</label><select id="observable"><option value="all">All three</option><option value="a">A</option><option value="b">B</option><option value="c">C</option><option value="mean">Centroid</option><option value="fiedler">Graph mode 2</option></select></div>
+<div class="picker"><label for="colorMode">Color</label><select id="colorMode"><option value="node">Nodes</option><option value="speed">Speed</option><option value="height">Height</option><option value="age">Age</option><option value="omega">Ω diagnostic</option></select></div>
+<div id="viewSliders"></div><div class="switchline"><input type="checkbox" id="autorotate"><label for="autorotate">Rotate slowly</label></div></div>
+<div class="section"><div class="section-title">06 / Ω diagnostics</div><div id="scoreSliders"></div></div>
+<div class="filebox"><button id="png">Save image</button><button id="export">Save preset</button><button id="import">Load preset</button><input type="file" id="importFile" accept="application/json" hidden></div>
+</aside>
+<div class="hidden-data" aria-hidden="true"><span id="timeRead"></span><span id="lyapRead"></span><span id="heatRead"></span><span id="wasserRead"></span><span id="klRead"></span><span id="entropyRead"></span><span id="bettiRead"></span><span id="radiusRead"></span><span id="meanRead"></span><span id="varRead"></span><span id="speedRead"></span><span id="spreadRead"></span><span id="scoreRead"></span><span id="status"></span></div>
+</main>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id), canvas=$('view'),ctx=canvas.getContext('2d',{alpha:false});
+const definitions={
+sigma:{name:'σ · Prandtl parameter',min:3,max:25,step:.1,value:10,section:'field'},
+rho:{name:'ρ · base forcing',min:0,max:75,step:.1,value:28,section:'field'},
+beta:{name:'β · vertical dissipation',min:.5,max:6,step:.01,value:2.667,section:'field'},
+detune:{name:'δ · site asymmetry',min:-12,max:12,step:.1,value:4,section:'field'},
+kx:{name:'κₓ · x diffusion',min:0,max:12,step:.05,value:.25,section:'graph'},
+ky:{name:'κᵧ · y diffusion',min:0,max:12,step:.05,value:.10,section:'graph'},
+kz:{name:'κᶻ · z diffusion',min:0,max:12,step:.05,value:.10,section:'graph'},
+w01:{name:'wAB · graph edge',min:0,max:2,step:.01,value:1,section:'graph'},
+w12:{name:'wBC · graph edge',min:0,max:2,step:.01,value:.62,section:'graph'},
+w02:{name:'wAC · graph edge',min:0,max:2,step:.01,value:.15,section:'graph'},
+tau:{name:'τ · heat diffusion time',min:.02,max:4,step:.02,value:.65,section:'spectral'},
+g:{name:'g · spectral metric strength',min:.05,max:4,step:.05,value:1,section:'spectral'},
+eta:{name:'η · spectral forcing',min:0,max:18,step:.1,value:2,section:'spectral'},
+threshold:{name:'θ · topological edge cutoff',min:0,max:2,step:.02,value:.5,section:'spectral'},
+dt:{name:'Δt · RK4 step size',min:.001,max:.018,step:.001,value:.007,section:'solver'},
+substeps:{name:'Steps per animation frame',min:1,max:24,step:1,value:9,section:'solver'},
+lyapInterval:{name:'Tangent renormalization period',min:.05,max:1,step:.05,value:.25,section:'solver'},
+trail:{name:'Trail length (samples)',min:250,max:6500,step:50,value:2300,section:'view'},
+yaw:{name:'Camera yaw (degrees)',min:0,max:360,step:1,value:0,section:'view'},
+pitch:{name:'Camera pitch (degrees)',min:-85,max:85,step:1,value:0,section:'view'},
+zoom:{name:'Camera zoom',min:.35,max:3.8,step:.05,value:1.55,section:'view'},
+line:{name:'Stroke width (px)',min:.35,max:3.5,step:.05,value:1.35,section:'view'},
+opacity:{name:'Trail ink opacity',min:.06,max:1,step:.02,value:.77,section:'view'},
+perspective:{name:'Perspective intensity',min:0,max:1.8,step:.05,value:.65,section:'view'},
+rotation:{name:'Auto-rotation speed',min:-2,max:2,step:.05,value:.3,section:'view'},
+hue:{name:'Hue rotation',min:0,max:360,step:1,value:0,section:'view'},
+bscore:{name:'βₒ · radial score weight',min:0,max:4,step:.05,value:.3,section:'score'},
+gscore:{name:'γₒ · transport score weight',min:0,max:8,step:.1,value:1.1,section:'score'},
+zscore:{name:'ζₒ · topology score weight',min:0,max:8,step:.1,value:1,section:'score'},
+xiscore:{name:'ξₒ · graph energy score weight',min:0,max:8,step:.1,value:1.6,section:'score'},
+statwindow:{name:'Statistics window (samples)',min:50,max:2000,step:50,value:600,section:'score'}
+};
+const groups={field:'fieldSliders',graph:'graphSliders',spectral:'spectralSliders',solver:'solverSliders',view:'viewSliders',score:'scoreSliders'};
+const params={}; let needGeometry=true,needScore=true;
+const dynamics=new Set(['sigma','rho','beta','detune','kx','ky','kz','w01','w12','w02','tau','g','eta']);
+const omegaSensitive=new Set(['threshold','bscore','gscore','zscore','xiscore','statwindow']);
+let pendingMorph=false,focusView=true;
+for(const [key,d] of Object.entries(definitions)){params[key]=d.value;const box=document.createElement('div');box.className='field'; const label=document.createElement('label');label.htmlFor='p_'+key;label.textContent=d.name;const output=document.createElement('output');output.id='o_'+key;output.textContent=String(d.value);const slider=document.createElement('input');slider.type='range';slider.id='p_'+key;slider.min=d.min;slider.max=d.max;slider.step=d.step;slider.value=d.value;slider.setAttribute('aria-label',d.name);slider.addEventListener('input',()=>{params[key]=Number(slider.value);output.textContent=formatParam(params[key],d.step);if(['w01','w12','w02','g','tau','eta','threshold'].includes(key))needGeometry=true;if(dynamics.has(key)){clearLyap();if(key==='rho'||key==='beta'||key==='sigma')smoothCamera=0;}needScore=true;if(key==='trail')trim(); if(key==='yaw'||key==='pitch'||key==='zoom')autoFrame=false; if(key==='dt'||key==='substeps')updateStatus(); if(needGeometry)updateGeometry();if(history.length)stats();if(omegaSensitive.has(key))$('colorMode').value='omega';if(dynamics.has(key)&&$('liveMorph').checked){if(invalid)state=new Float64Array([-.8,1.4,22,1.1,-1.9,25,-2.3,.9,17]);pendingMorph=true;running=true;invalid=false;$('pause').textContent='Pause'}render(); });box.append(label,output,slider);$(groups[d.section]).appendChild(box)}
+function formatParam(v,step){return Number(v).toFixed(step>=1?0:step>=.1?1:step>=.01?2:3)}
+const presets={classic:{sigma:10,rho:28,beta:2.667,detune:4,kx:.25,ky:.1,kz:.1,w01:1,w12:.62,w02:.15,tau:.65,g:1,eta:2},sync:{sigma:10,rho:28,beta:2.667,detune:0,kx:8,ky:8,kz:8,w01:1,w12:1,w02:1,eta:0,tau:.8,g:1},split:{sigma:12.5,rho:36,beta:2.1,detune:9,kx:.1,ky:1.8,kz:.06,w01:1.8,w12:.3,w02:.8,eta:6,tau:.55,g:1},spectral:{sigma:10,rho:26,beta:2.667,detune:1,kx:2,ky:.5,kz:1.3,w01:2,w12:.12,w02:.04,tau:1.7,g:3.5,eta:13},quiet:{sigma:10,rho:10,beta:2.667,detune:0,kx:3,ky:3,kz:3,w01:1,w12:1,w02:1,eta:0,tau:.8,g:1}};
+$('preset').onchange=()=>{for(const [k,v] of Object.entries(presets[$('preset').value]))setParam(k,v);reset()};
+function setParam(k,v){if(!(k in definitions))return;const d=definitions[k];const num=Math.min(d.max,Math.max(d.min,Number(v)));params[k]=num;$('p_'+k).value=num;$('o_'+k).textContent=formatParam(num,d.step);if(['w01','w12','w02','g','tau','eta','threshold'].includes(k))needGeometry=true;needScore=true;}
+function laplacian(){let a=params.w01,b=params.w12,c=params.w02;return [[a+c,-a,-c],[-a,a+b,-b],[-c,-b,b+c]]}
+function eigenSym3(matrix){const a=matrix.map(r=>r.slice()),V=[[1,0,0],[0,1,0],[0,0,1]];for(let iter=0;iter<60;iter++){let p=0,q=1,max=Math.abs(a[0][1]);for(const [u,v] of [[0,2],[1,2]])if(Math.abs(a[u][v])>max){p=u;q=v;max=Math.abs(a[u][v])}if(max<1e-13)break;let angle=.5*Math.atan2(2*a[p][q],a[q][q]-a[p][p]);let c=Math.cos(angle),s=Math.sin(angle);let app=a[p][p],aqq=a[q][q],apq=a[p][q];a[p][p]=c*c*app-2*c*s*apq+s*s*aqq;a[q][q]=s*s*app+2*c*s*apq+c*c*aqq;a[p][q]=a[q][p]=0;for(let k=0;k<3;k++)if(k!==p&&k!==q){let x=a[k][p],y=a[k][q];a[k][p]=a[p][k]=c*x-s*y;a[k][q]=a[q][k]=s*x+c*y}for(let k=0;k<3;k++){let x=V[k][p],y=V[k][q];V[k][p]=c*x-s*y;V[k][q]=s*x+c*y}}let vals=[0,1,2].map(j=>({val:Math.max(0,a[j][j]),vec:V.map(row=>row[j])})).sort((l,r)=>l.val-r.val);return {lambda:vals.map(o=>o.val),eig:vals.map(o=>o.vec)}}
+let L,lambda,U,rhoSites,heat, heatTrace,w2,kl,entropy,betti0,betti1,topo, spectralSigma;
+function updateGeometry(){L=laplacian();const eig=eigenSym3(L);lambda=eig.lambda;U=eig.eig;const exp=lambda.map(l=>Math.exp(-params.tau*params.g*l));heat=[0,1,2].map(i=>U.reduce((s,u,j)=>s+u[i]*u[i]*exp[j],0));heatTrace=exp.reduce((a,b)=>a+b,0);rhoSites=heat.map((h,i)=>params.rho+(i-1)*params.detune+params.eta*h);const eigcov=lambda.map(l=>1/(1+params.g*l));spectralSigma=eigcov;w2=eigcov.reduce((s,v)=>s+(1-Math.sqrt(v))**2,0);kl=.5*eigcov.reduce((s,v)=>s+v-1-Math.log(v),0);const weights=exp.map(x=>x/heatTrace);entropy=-weights.reduce((s,x)=>s+x*Math.log(x),0);const T=params.threshold;const edges=[[0,1,params.w01],[1,2,params.w12],[0,2,params.w02]].filter(e=>e[2]>=T&&e[2]>0);const parent=[0,1,2];function find(i){while(parent[i]!==i)i=parent[i];return i}for(const [i,j] of edges){let a=find(i),b=find(j);if(a!==b)parent[b]=a}betti0=new Set([0,1,2].map(find)).size;betti1=edges.length-3+betti0;topo=betti0+betti1;
+needGeometry=false;needScore=true;$('heatRead').textContent=heatTrace.toFixed(4);$('wasserRead').textContent=w2.toFixed(5);$('klRead').textContent=kl.toFixed(5);$('entropyRead').textContent=entropy.toFixed(4);$('bettiRead').textContent=betti0+' / '+betti1;}
+function derivative(y,out){for(let i=0;i<3;i++){let j=i*3,x=y[j],v=y[j+1],z=y[j+2],lx=0,ly=0,lz=0;for(let h=0;h<3;h++){let a=L[i][h],n=h*3;lx+=a*y[n];ly+=a*y[n+1];lz+=a*y[n+2]}out[j]=params.sigma*(v-x)-params.kx*lx;out[j+1]=x*(rhoSites[i]-z)-v-params.ky*ly;out[j+2]=x*v-params.beta*z-params.kz*lz}return out}
+function tangentDeriv(y,v,out){for(let i=0;i<3;i++){let j=i*3,x=y[j],yy=y[j+1],z=y[j+2],lx=0,ly=0,lz=0;for(let h=0;h<3;h++){let a=L[i][h],n=h*3;lx+=a*v[n];ly+=a*v[n+1];lz+=a*v[n+2]}out[j]=params.sigma*(v[j+1]-v[j])-params.kx*lx;out[j+1]=(rhoSites[i]-z)*v[j]-v[j+1]-x*v[j+2]-params.ky*ly;out[j+2]=yy*v[j]+x*v[j+1]-params.beta*v[j+2]-params.kz*lz}return out}
+const dim=9;let state=new Float64Array(dim),tangent=new Float64Array(dim),deltaTime=0,lyapTime=0,lyapLog=0,lyapEpoch=0,t=0,history=[],running=true,invalid=false,frames=0,w=0,h=0,dpr=1,scaleSmooth=24,centerSmooth=[0,0,28],smoothCamera=0,autoFrame=true;
+const k1=new Float64Array(dim),k2=new Float64Array(dim),k3=new Float64Array(dim),k4=new Float64Array(dim),q1=new Float64Array(dim),q2=new Float64Array(dim),q3=new Float64Array(dim),q4=new Float64Array(dim),mid=new Float64Array(dim),midV=new Float64Array(dim);
+function rk4(h){derivative(state,k1);if($('tangent').checked)tangentDeriv(state,tangent,q1);for(let i=0;i<dim;i++){mid[i]=state[i]+h*k1[i]/2;midV[i]=tangent[i]+h*q1[i]/2}derivative(mid,k2);if($('tangent').checked)tangentDeriv(mid,midV,q2);for(let i=0;i<dim;i++){mid[i]=state[i]+h*k2[i]/2;midV[i]=tangent[i]+h*q2[i]/2}derivative(mid,k3);if($('tangent').checked)tangentDeriv(mid,midV,q3);for(let i=0;i<dim;i++){mid[i]=state[i]+h*k3[i];midV[i]=tangent[i]+h*q3[i]}derivative(mid,k4);if($('tangent').checked)tangentDeriv(mid,midV,q4);for(let i=0;i<dim;i++){state[i]+=h*(k1[i]+2*k2[i]+2*k3[i]+k4[i])/6;if($('tangent').checked)tangent[i]+=h*(q1[i]+2*q2[i]+2*q3[i]+q4[i])/6}t+=h;if($('tangent').checked){deltaTime+=h;if(deltaTime>=params.lyapInterval){let norm=Math.hypot(...tangent);if(norm>0&&isFinite(norm)){lyapLog+=Math.log(norm);lyapTime+=deltaTime;tangent=tangent.map(v=>v/norm)}else tangent=new Float64Array([1,0,0,0,0,0,0,0,0]);deltaTime=0}}for(const v of state)if(!Number.isFinite(v)||Math.abs(v)>1e7){invalid=true;running=false;updateStatus();break}}
+function clearLyap(){tangent=new Float64Array(dim);for(let i=0;i<dim;i++)tangent[i]=(i===0?1:0);lyapLog=0;lyapTime=0;deltaTime=0}
+function trim(){const max=params.trail|0;if(history.length>max)history.splice(0,history.length-max)}
+function reset(){if(needGeometry)updateGeometry();state=new Float64Array([-.8,1.4,22,1.1,-1.9,25,-2.3,.9,17]);clearLyap();t=0;history=[];running=true;invalid=false;frames=0;scaleSmooth=24;centerSmooth=[0,0,27];$('pause').textContent='Pause';pendingMorph=false;// warm-up to remove a large initial transient
+for(let i=0;i<1750&&!invalid;i++)rk4(Math.min(params.dt,.007));history=[];for(let j=0;j<5700&&!invalid;j++){rk4(params.dt);if(j%3===0)history.push(new Float64Array(state))}t=0;clearLyap();updateStatus()}
+function updateStatus(){let txt=invalid?'Numerical orbit escaped the safe domain. Lower Δt or change parameters, then reset.':running?'Integrating the 9D graph-coupled Lorenz ODE with classical fourth-order Runge–Kutta.':'Paused. Adjust sliders or advance one step.';if(params.dt>.013&&params.rho>40)txt+=' Small Δt is recommended for high forcing.';$('status').textContent=txt;$('status').classList.toggle('bad',invalid)}
+function gaussianScore(s){const xs=[s[0]/30,s[3]/30,s[6]/30],ys=[s[1]/30,s[4]/30,s[7]/30];let quad=0,T=0;for(let i=0;i<3;i++){quad+=xs[i]*xs[i];for(let j=0;j<3;j++)T+=xs[i]*L[i][j]*xs[j]}const m=1/(1+Math.exp(-Math.hypot(...xs)));const R=quad+params.g*T;return Math.exp(m)*heatTrace+params.bscore*Math.log1p(Math.max(0,R))+params.gscore*w2+params.zscore*topo+params.xiscore*T*T/(1+T*T)}
+function stats(){const n=Math.min(params.statwindow,history.length);if(n<2)return;let sum=0,sum2=0,sumSp=0,sumRad=0,spread=0;const vtemp=new Float64Array(9);let first=history.length-n;for(let k=first;k<history.length;k++){const s=history[k];sum+=s[0];sum2+=s[0]*s[0];const a=[s[0],s[3],s[6]],b=[s[1],s[4],s[7]],c=[s[2],s[5],s[8]];const mx=(a[0]+a[1]+a[2])/3,my=(b[0]+b[1]+b[2])/3,mz=(c[0]+c[1]+c[2])/3;spread+=Math.hypot(...a.map(v=>v-mx),...b.map(v=>v-my),...c.map(v=>v-mz));sumRad+=Math.hypot(mx,my,mz);derivative(s,vtemp);sumSp+=Math.hypot(vtemp[0],vtemp[1],vtemp[2])}$('meanRead').textContent=(sum/n).toFixed(2);$('varRead').textContent=Math.max(0,sum2/n-(sum/n)**2).toFixed(2);$('radiusRead').textContent=(sumRad/n).toFixed(2);$('spreadRead').textContent=(spread/n).toFixed(2);$('speedRead').textContent=(sumSp/n).toFixed(1);$('scoreRead').textContent=gaussianScore(state).toFixed(3);$('timeRead').textContent=t.toFixed(2);$('lyapRead').textContent=($('tangent').checked&&lyapTime>1?(lyapLog/lyapTime).toFixed(3):'…')}
+const triplets=[[0,1,2],[3,4,5],[6,7,8]];
+function observed(s,type){if(type==='a')return [[s[0],s[1],s[2]]];if(type==='b')return [[s[3],s[4],s[5]]];if(type==='c')return [[s[6],s[7],s[8]]];if(type==='mean')return [[(s[0]+s[3]+s[6])/3,(s[1]+s[4]+s[7])/3,(s[2]+s[5]+s[8])/3]];if(type==='fiedler'){const u=U[1];return [[u[0]*s[0]+u[1]*s[3]+u[2]*s[6],u[0]*s[1]+u[1]*s[4]+u[2]*s[7],u[0]*s[2]+u[1]*s[5]+u[2]*s[8]]]}return [[s[0],s[1],s[2]],[s[3],s[4],s[5]],[s[6],s[7],s[8]]]}
+let omegaBaseline=0;
+function color(k,i,count,speed,zz,score){const mode=$('colorMode').value;const base=[194,37,283][k%3];let hue=base;if(mode==='speed')hue=190-140*Math.min(1,speed/25);else if(mode==='height')hue=310-260*Math.min(1,(zz+40)/110);else if(mode==='age')hue=(155+i/count*180)%360;else if(mode==='omega')hue=(215+125*Math.tanh((score-omegaBaseline)*.7)+360)%360;hue=(hue+params.hue)%360;return 'hsl('+hue.toFixed(0)+' 93% '+(mode==='node'?70:65)+'%)'}
+function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(window.devicePixelRatio||1,2);w=Math.max(250,r.width);h=Math.max(250,r.height);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0)}window.addEventListener('resize',resize,{passive:true});resize();
+function render(){if(!history.length)return;ctx.fillStyle='#08101b';ctx.fillRect(0,0,w,h);const obs=$('observable').value,num=obs==='all'?3:1,n=history.length,skip=Math.max(1,Math.floor(n/2300));let maxR=0,cx=0,cy=0,cz=0,sampleN=0;for(let i=0;i<n;i+=Math.max(1,Math.floor(n/160))){for(const p of observed(history[i],obs)){cx+=p[0];cy+=p[1];cz+=p[2];sampleN++}}cx/=sampleN;cy/=sampleN;cz/=sampleN;for(let i=0;i<n;i+=Math.max(1,Math.floor(n/300)))for(const p of observed(history[i],obs))maxR=Math.max(maxR,Math.hypot(p[0]-cx,p[1]-cy,p[2]-cz));maxR=Math.max(7,maxR);if(autoFrame){scaleSmooth=.93*scaleSmooth+.07*maxR;for(let a=0;a<3;a++)centerSmooth[a]=.93*centerSmooth[a]+.07*[cx,cy,cz][a]}else{scaleSmooth=.985*scaleSmooth+.015*maxR;for(let a=0;a<3;a++)centerSmooth[a]=.985*centerSmooth[a]+.015*[cx,cy,cz][a]}
+if($('colorMode').value==='omega'){
+ const count=Math.min(params.statwindow,n),start=n-count,step=Math.max(1,Math.floor(count/180));
+ let avg=0,total=0;
+ for(let k=start;k<n;k+=step){avg+=gaussianScore(history[k]);total++}
+ omegaBaseline=total?avg/total:gaussianScore(history[n-1]);
+ }
+const yaw=params.yaw*Math.PI/180,pitch=params.pitch*Math.PI/180,C=Math.cos(yaw),S=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);const drawerOpen=focusView&&document.body.classList.contains('controls-open');const size=Math.min(w,h)*.43*params.zoom/Math.max(7,scaleSmooth)*(drawerOpen&&w<650?.78:1);const frameX=drawerOpen&&w>=650?(w-Math.min(385,w*.36))/2:w/2;const frameY=drawerOpen&&w<650?h*.25:h/2;function project(p){const x=p[0]-centerSmooth[0],y=p[1]-centerSmooth[1],z=p[2]-centerSmooth[2];const xx=C*x-S*y, yy=S*x+C*y, vert=cp*z-sp*yy,dep=sp*z+cp*yy;const fac=1/(1+Math.max(-.8,params.perspective*dep/125));return [frameX+xx*size*fac,frameY-vert*size*fac,dep]}
+ctx.save();ctx.lineJoin='round';ctx.lineCap='round';for(let j=0;j<num;j++){let prev=null;for(let idx=0;idx<n;idx+=skip){const hitem=history[idx],p=observed(hitem,obs)[j],xy=project(p);if(prev){let speed=Math.hypot(p[0]-prev.p[0],p[1]-prev.p[1],p[2]-prev.p[2])/Math.max(1e-3,params.dt*params.substeps);let omega= $('colorMode').value==='omega'?gaussianScore(hitem):0;let alpha=params.opacity*(.10+.90*(idx/n)**1.7);ctx.strokeStyle=color(j,idx,n,speed,p[2],omega);ctx.globalAlpha=alpha;ctx.lineWidth=params.line*(.6+.65*idx/n);ctx.beginPath();ctx.moveTo(prev.xy[0],prev.xy[1]);ctx.lineTo(xy[0],xy[1]);ctx.stroke()}prev={xy,p}}if(prev){ctx.globalAlpha=.9;ctx.fillStyle=color(j,n,n,0,prev.p[2],0);ctx.beginPath();ctx.arc(prev.xy[0],prev.xy[1],Math.max(2.3,params.line*2.5),0,Math.PI*2);ctx.fill()}}ctx.restore()}
+function loop(){requestAnimationFrame(loop);if(needGeometry)updateGeometry();if(pendingMorph){pendingMorph=false;history=[];clearLyap();for(let j=0;j<540&&!invalid;j++){rk4(Math.min(params.dt,.01));if(j%2===0)history.push(new Float64Array(state))}trim();stats();updateStatus()}if(running&&!invalid){const n=params.substeps|0;for(let i=0;i<n&&!invalid;i++)rk4(params.dt);if(!invalid){history.push(new Float64Array(state));trim()}}if($('autorotate').checked){params.yaw=(params.yaw+params.rotation*.23+360)%360;$('p_yaw').value=params.yaw;$('o_yaw').textContent=Math.round(params.yaw)}frames++;if(frames%9===0){stats();if(frames%54===0)updateStatus()}render()}
+const stage=document.querySelector('.stage');
+function syncFocusUI(){
+  document.body.classList.add('focus-view');
+  const open=document.body.classList.contains('controls-open');
+  $('controlsButton').setAttribute('aria-expanded',String(open));
+  $('controlsButton').setAttribute('aria-label',open?'Hide sliders':'Show sliders');
+  $('controlsButton').setAttribute('title',open?'Hide sliders':'Show sliders');
+  $('controlsButton').textContent=open?'✕':'☷';
+  $('panel').setAttribute('aria-hidden',String(!open));
+  resize();render();
+}
+$('controlsButton').onclick=()=>{document.body.classList.toggle('controls-open');syncFocusUI()};
+$('closeControls').onclick=()=>{document.body.classList.remove('controls-open');syncFocusUI()};
+$('focusButton').onclick=async()=>{
+  if(document.fullscreenElement&&document.exitFullscreen){try{await document.exitFullscreen()}catch(_){}}
+  else if(document.documentElement.requestFullscreen){try{await document.documentElement.requestFullscreen()}catch(_){}}
+  syncFocusUI();
+};
+document.addEventListener('fullscreenchange',syncFocusUI);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.body.classList.remove('controls-open');syncFocusUI()}});
+$('pause').onclick=()=>{running=!running;updateStatus();$('pause').textContent=running?'Pause':'Resume'};$('reset').onclick=reset;$('step').onclick=()=>{running=false;if(needGeometry)updateGeometry();if(!invalid){rk4(params.dt);history.push(new Float64Array(state));trim()}$('pause').textContent='Resume';updateStatus();stats();render()};$('tangent').onchange=()=>clearLyap();for(const id of ['observable','colorMode'])$(id).addEventListener('change',()=>{stats();render()});
+const touches=new Map();let grab=false,lastX=0,lastY=0,pinchLast=0;canvas.addEventListener('pointerdown',e=>{touches.set(e.pointerId,[e.clientX,e.clientY]);grab=touches.size===1;lastX=e.clientX;lastY=e.clientY;if(touches.size===2){const p=[...touches.values()];pinchLast=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1])}canvas.setPointerCapture(e.pointerId)});function release(e){touches.delete(e.pointerId);grab=false;pinchLast=0}canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);canvas.addEventListener('pointermove',e=>{if(!touches.has(e.pointerId))return;touches.set(e.pointerId,[e.clientX,e.clientY]);if(touches.size===2){const p=[...touches.values()];const dist=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);if(pinchLast>0){setParam('zoom',params.zoom*dist/pinchLast);render()}pinchLast=dist;return}if(!grab)return;setParam('yaw',(params.yaw+(e.clientX-lastX)*.35+360)%360);setParam('pitch',Math.max(-85,Math.min(85,params.pitch+(e.clientY-lastY)*.3)));lastX=e.clientX;lastY=e.clientY;autoFrame=false;render()});canvas.addEventListener('wheel',e=>{e.preventDefault();setParam('zoom',params.zoom*(e.deltaY>0?.93:1.07))},{passive:false});
+function download(blob,name){const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1200)}$('png').onclick=()=>canvas.toBlob(b=>b&&download(b,'omega_attractor.png'),'image/png');$('export').onclick=()=>download(new Blob([JSON.stringify({version:1,params,observable:$('observable').value,colorMode:$('colorMode').value,autoRotate:$('autorotate').checked},null,2)],{type:'application/json'}),'omega_attractor_settings.json');$('import').onclick=()=>$('importFile').click();$('importFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{let o=JSON.parse(await file.text());for(const [k,v] of Object.entries(o.params||{}))if(k in definitions&&Number.isFinite(Number(v)))setParam(k,v);if(['all','a','b','c','mean','fiedler'].includes(o.observable))$('observable').value=o.observable;if(['node','speed','height','age','omega'].includes(o.colorMode))$('colorMode').value=o.colorMode;$('autorotate').checked=!!o.autoRotate;reset()}catch(err){$('status').textContent='Could not load settings: '+err.message;$('status').classList.add('bad')}};
+updateGeometry();reset();syncFocusUI();requestAnimationFrame(loop);
+})();
+</script></body></html>
