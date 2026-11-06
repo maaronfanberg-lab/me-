@@ -48,3 +48,15 @@ python tests/test_ui.py
 ```
 The latter checks fullscreen, control drawer, live morph, all 31 slider controls, and absence of browser JavaScript errors at phone/tablet/desktop widths.
 
+
+
+## Visual-only mode (2026-11-05)
+
+The entire opening screen is now the live Canvas artwork. No headline, statistics panel, descriptive text, equations, or introductory material renders in the app. Two small icon buttons provide browser fullscreen and a slider drawer. This reduces opportunities for in-app browsers to substitute article/reader content for the simulation, although the browser's own Reader setting remains user-controlled.
+
+All 31 sliders remain in the overlay drawer and respond while dragging. The 9D ODE continues to run and changes to its parameters reset the old trajectory segment. The statistics-memory slider now shifts the baseline for Ω coloring, providing a visible diagnostic effect without adding text. Exact numerical diagnostics are computed but hidden from the default stage.
+
+Direct fresh-path entry: https://maaronfanberg-lab.github.io/me-/experiments/omega-attractor/visual.html
+
+The alternative `visual.html` deliberately uses a distinct URL to help bypass reader preferences cached against the previous path. Both `visual.html` and `index.html` contain the same self-contained app.
+
