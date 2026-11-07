@@ -56,7 +56,7 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
   <div class="ctl"><span class="lab">Hologram</span><div class="row" id="holos"></div></div>
   <div class="ctl"><span class="lab">Space</span><div class="row" id="halls"></div></div>
   <div class="ctl"><span class="lab">Impact</span><div class="row" id="impacts"></div></div>
-  <div class="ctl"><span class="lab">Attractors</span><div class="row" id="attrs"></div></div>
+  <div class="ctl"><span class="lab">Attractors</span><div class="row" id="attrs"></div><span id="anote" class="nm" hidden></span></div>
   <div class="ctl"><span class="lab">Formula to attractor</span><input id="fname" placeholder="Name" maxlength="28" autocomplete="off"><textarea id="fsrc" rows="4" placeholder="A formula in x, like sin(3*x)*x, or a whole JavaScript function" spellcheck="false" autocapitalize="off"></textarea><div class="row"><button id="fgo">Make attractor</button><span id="fstat" class="nm"></span></div></div>
   <div class="ctl"><span class="lab">Attractor variables</span><div class="row"><button id="allm">All −</button><button id="allp">All +</button><button id="reset">Reset</button></div><div class="pn" id="params"></div></div>
   <div class="ctl"><span class="lab">Pitch</span><div class="row"><button id="pm">Lower</button><button id="pp">Higher</button></div></div>
@@ -701,7 +701,8 @@ function mkAttrBtn(a,i){const b=document.createElement('button');b.id='at'+i;b.t
   if(onSet[i]&&onSet.filter(Boolean).length===1)return;onSet[i]=!onSet[i];b.setAttribute('aria-pressed',onSet[i]);
   if(!onSet[i]&&focus===i){focus=onSet.findIndex(Boolean);setZoom(1);send({focus});}
   if(!onSet[i]){const nx=onSet.findIndex(Boolean);route.forEach((r,e)=>{if(r>=0&&r<100&&(r/3|0)===i)route[e]=nx*3+r%3;});}
-  send({on:onSet,route});paintRoutes();buildParams();};$('attrs').append(b);}
+  send({on:onSet,route});paintRoutes();buildParams();heavyNote();};$('attrs').append(b);}
+function heavyNote(){const h=ATTR.filter((a,i)=>onSet[i]&&a.init.length>3).map(a=>a.name);const n=$('anote');n.hidden=!h.length;n.textContent=h.length?h.join(', ')+' has more than three variables and is too heavy to play live on a phone. It may stutter; the GitHub render workflow plays it in full.':'';}
 ATTR.forEach(mkAttrBtn);
 const PL='abcdefg',TAPX=7;
 function addSystem(spec,name,field){const def=spec.nd?ND.attr(spec,name):formulaAttr(spec,name);if(field)def.field=field;const i=ATTR.length;ATTR.push(def);onSet.push(false);params.push(def.p.slice());PT.push(null);flash.push(0);T.push(new Float32Array(TN*3));tN.push(0);tW.push(0);
