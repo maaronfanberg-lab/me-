@@ -39,6 +39,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: strange-effects-render
@@ -102,6 +103,11 @@ jobs:
           git commit -q -m "Strange Effects render: $NAME (run ${{ github.run_id }})"
           for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q origin HEAD:main && { echo "published $D"; exit 0; }; sleep $((i * 4)); done
           echo "PUSH FAILED"; exit 1
+      - name: Rebuild the site
+        # commits made with the workflow token do not start other workflows on their own; a dispatch does
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST repos/${{ github.repository }}/actions/workflows/pages.yml/dispatches -f ref=main
       - uses: actions/upload-artifact@v4
         if: always()
         with:
