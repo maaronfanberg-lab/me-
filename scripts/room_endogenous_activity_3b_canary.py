@@ -17,6 +17,9 @@ from room_endogenous_activity_world import (
     AGENTS, available_action_schema, parse_activity_choice, activity_messages,
 )
 from room_endogenous_activity_society import initial_society, activity_beat
+from room_endogenous_activity_menu import (
+    menu_messages, menu_response_schema, parse_menu_choice, encode_tool_plan,
+)
 
 SPEECH_SCHEMA={
     'type':'object',
@@ -50,7 +53,11 @@ def experiment(config, action_request, speech_request, beats=3):
         failures=[]
         def plan(messages, owner):
             try:
-                return action_request(messages,33.0)
+                # The model chooses one of its OWN executable experiments.
+                # Only the simulator translates that key to a tool payload.
+                menu=menu_messages(owner=owner,profile=profiles[owner],world=state['world'])
+                raw=action_request(menu,33.0,menu_response_schema(state['world'],owner))
+                return encode_tool_plan(parse_menu_choice(raw,state['world'],owner))
             except Exception:
                 failures.append(owner+':action_unavailable')
                 return None
@@ -114,8 +121,11 @@ def main():
     p.add_argument('--beats',type=int,default=3)
     args=p.parse_args()
     config=json.loads(Path(args.config).read_text(encoding='utf-8'))
-    tool=local_grammar_request(endpoint=args.model_url,schema=available_action_schema(),
-                               n_predict=170,temperature=.42)
+    def tool(messages,timeout,schema):
+        # One-field constrained choice is simpler for the pinned 3B model.
+        model=local_grammar_request(endpoint=args.model_url,schema=schema,
+                                    n_predict=70,temperature=.45)
+        return model(messages,timeout)
     speech=local_grammar_request(endpoint=args.model_url,schema=SPEECH_SCHEMA,
                                  n_predict=170,temperature=.42)
     report=experiment(config,tool,speech,beats=args.beats)
