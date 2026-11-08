@@ -92,6 +92,37 @@ class SocietyTests(unittest.TestCase):
                              'source_id':seen})
         self.assertIsNone(parse_voluntary_speech(reported,owner='sarah',world=s['world'],previous=[]))
 
+    def test_hallucinated_foreign_share_cannot_stop_ongoing_world(self):
+        state=initial_society()
+        state,_=run(state,lambda m,o:encoded('observe',channel='algae')
+                    if o=='jules' else encoded('wait'))
+        private_id=state['world']['private_notebooks']['jules'][0]['id']
+        before=state['world']['environment'].copy()
+        def bad_share(messages, owner):
+            if owner=='sarah':
+                return encoded('share', source_id=private_id)
+            if owner=='mara':
+                return encoded('observe', channel='oxygen')
+            return encoded('wait')
+        state,report=run(state,bad_share)
+        self.assertEqual(state['world']['tick'],2)
+        self.assertNotEqual(state['world']['environment'],before)
+        self.assertEqual(report['new_receipts'],1)
+        self.assertEqual(report['agent_choices']['sarah'],'wait')
+        self.assertIn('sarah:foreign_or_missing_evidence',report['model_failures'])
+        self.assertEqual(state['world']['public_evidence'],[])
+        self.assertEqual(state['world']['private_notebooks']['sarah'],[])
+
+    def test_no_private_peer_claim_may_hide_in_source_linked_speech(self):
+        state=initial_society()
+        state,_=run(state,lambda m,o:encoded('observe',channel='oxygen')
+                    if o=='sarah' else encoded('wait'))
+        own_id=state['world']['private_notebooks']['sarah'][0]['id']
+        candidate=json.dumps({'utterance':"Mara's private hypothesis has changed overnight.",
+                              'source_id':own_id})
+        self.assertIsNone(parse_voluntary_speech(
+            candidate,owner='sarah',world=state['world'],previous=[]))
+
     def test_fabricated_numeric_claim_cannot_be_published(self):
         s=initial_society()
         s, _=run(s,lambda m,o:encoded('observe',channel='oxygen'))
