@@ -25,6 +25,7 @@ class WorldTests(unittest.TestCase):
                      "What if I open the window?", "I imagine I open the window."):
             self.assertIsNone(world.witnessed_action("sarah", text), text)
         self.assertIsNone(world.witnessed_action("allen", "I open the window."))
+        self.assertIsNone(world.witnessed_action("jules", "We open the window."))
 
     def test_source_bound_world_state_and_real_constraints(self):
         w = world.initial(9)
