@@ -442,7 +442,7 @@ function makeDSP(rate){
   const keep={buf:c.buf,gt:c.gt,gc:c.gc,ht5:c.ht5,hc:c.hc,sh:c.sh};for(const key in k){const x=k[key];if(typeof x!=='object'||x===null||key==='v')c[key]=x;}Object.assign(c,keep);
   if(!c.buf)c.buf=new Float32Array(Math.ceil(rate/20));if(!c.gt){c.gt=[0,0,0,0,0];c.gc=[0,0,0,0,0];c.ht5=[0,0,0,0,0];c.hc=[0,0,0,0,0];}
   if(!c.sh||c.sh.length!==k.sh.length)c.sh=new Float64Array(k.sh.length);for(let w=0;w<k.sh.length;w++)c.sh[w]=k.sh[w];
-  c.hm=1;c.t=0;c.f=c.f0=c.ft=c.tapF=H;c.amp=k.amp*.85;c.dop=1;c.pd=null;c.g=Math.pow(10,-3/(Math.max(1.5,c.dur*5)*H))*(c.type===4?.996:1);
+  c.hm=1;c.t=0;c.f=c.f0=c.ft=c.tapF=H;c.amp=k.amp*1.15;c.dur=k.dur*1.6;c.dop=1;c.pd=null;c.g=Math.pow(10,-3/(Math.max(1.5,c.dur*5)*H))*(c.type===4?.996:1);
   for(let q=0;q<5;q++){let a=0,b=0;for(const z of set){const w=1/z.f0/sI;a+=w*z.gt[q];b+=w*z.ht5[q];}c.gt[q]=c.gc[q]=a;c.ht5[q]=c.hc[q]=b;}
   for(const key of['dist','dg','ht','sz','det','w2','airC','brT']){let a=0;for(const z of set)a+=z[key]/z.f0/sI;c[key]=a;}
   const n=c.buf.length,d=Math.min(n-2,Math.ceil(rate/H));c.buf.fill(0);let lp=0;for(let j=0;j<d;j++){S.nzs=(S.nzs*1103515245+12345)>>>0;const z=S.nzs/4294967296*2-1;lp+=(z-lp)*c.exB;c.buf[(c.w-d+j+n)%n]=lp*(c.type===1?.4:1);}
