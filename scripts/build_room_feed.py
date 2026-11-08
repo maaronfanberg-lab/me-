@@ -7,7 +7,13 @@ ROOT = Path(__file__).resolve().parents[1]
 ROOM = ROOT / "room"
 live = json.loads((ROOM / "live.json").read_text())
 from room_concordia_world import sync as sync_concordia_world
-concordia_world = sync_concordia_world(ROOT, live)
+try:
+    concordia_world = sync_concordia_world(ROOT, live)
+except (OSError, ValueError, KeyError, TypeError) as exc:
+    # World-state integrity errors must fail CLOSED, but must not silence
+    # the independent live Room conversation or interfere with Allen.
+    concordia_world = None
+    print(f"Concordia world skipped for this beat: {type(exc).__name__}")
 entities = {}
 for entity_id, mind in (live.get("minds", {}).get("entities", {}) or {}).items():
     entities[entity_id] = {
