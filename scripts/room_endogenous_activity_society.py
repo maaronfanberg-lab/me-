@@ -104,6 +104,9 @@ def parse_voluntary_speech(raw: object, *, owner: str, world: dict,
     references=_known_speech_sources(world,owner)
     if source not in references:
         return None
+    from room_endogenous_public_hygiene import publication_issue
+    if publication_issue(speaker=owner, text=speech, public_history=previous):
+        return None
     text=' '.join(speech.split())
     if any(x in text.casefold() for x in ('system prompt','hidden prompt',
                                           'developer message','chain of thought')):
@@ -171,6 +174,17 @@ def activity_beat(*, society: dict, expected_revision: int, cycle_id: str,
         except Exception:
             plans[owner]={'kind':'wait'}
             failures.append(owner + ':model_unavailable')
+    # One model can hallucinate another owner's observation ID while the
+    # others made valid independent plans. The attempted unauthorized share
+    # must not abort the entire environmental tick or publish private evidence.
+    # Its invalid choice becomes a no-op, never a fabricated replacement task.
+    for owner, plan in list(plans.items()):
+        if plan.get('kind') == 'share':
+            owned_ids = {r['id'] for r in society['world']['private_notebooks'][owner]
+                         if r.get('result', {}).get('status') not in ('rejected', 'failed')}
+            if plan.get('source_id') not in owned_ids:
+                plans[owner] = {'kind': 'wait'}
+                failures.append(owner + ':foreign_or_missing_evidence')
     world, evidence=advance_world(society['world'],expected_revision=society['world']['revision'],
                                   cycle_id=cycle_id,proposals=plans)
     out=copy.deepcopy(society)
