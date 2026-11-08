@@ -1,0 +1,22 @@
+// Reads all shards, applies fixed pass conditions, writes report.md and report.html, exits 1 on any failure.
+const fs=require('fs');const L=fs.readFileSync(0,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+const li=L.filter(x=>x.kind==='listen'),pu=L.filter(x=>x.kind==='pull'),de=L.find(x=>x.kind==='determinism');
+const sum=a=>a.reduce((s,x)=>s+x,0);const lab=x=>`${x.tone} · ${x.names.join(' + ')}${x.cpl?' · Tangle':''}`;
+const C=[];const add=(name,cond,value,pass,worst)=>C.push({name,cond,value,pass,worst});
+let w=li.slice().sort((a,b)=>a.quietestDb-b.quietestDb)[0];
+add('Never silent','every 20 ms window louder than −60 dB, all '+li.length+' runs',`quietest ${w.quietestDb} dB`,w.quietestDb>=-60,lab(w));
+w=li.slice().sort((a,b)=>b.undertowPct-a.undertowPct)[0];const um=sum(li.map(x=>x.undertowPct))/li.length;
+add('Finite events, not a roar','undertow up ≤ 50% of the time in every run',`average ${um.toFixed(1)}%, most ${w.undertowPct}%`,w.undertowPct<=50,lab(w));
+w=li.slice().sort((a,b)=>Math.min(...a.notesPerSec)-Math.min(...b.notesPerSec))[0];
+add('Every attractor plays','each playing attractor ≥ 0.5 notes a second',`slowest ${Math.min(...w.notesPerSec)}/s`,Math.min(...w.notesPerSec)>=.5,lab(w));
+w=li.slice().sort((a,b)=>b.clipPct-a.clipPct)[0];add('No harsh clipping','≤ 0.5% of samples at full scale',`most ${w.clipPct}%`,w.clipPct<=.5,lab(w));
+const bad=li.filter(x=>x.nan>0);add('No broken samples','0 NaN in every run',`${bad.length} runs with NaN`,!bad.length,bad[0]?lab(bad[0]):'');
+const lv=pu.flatMap(x=>['nudge','pull','tangle'].map(k=>({x,k,r:sum(x[k])/Math.max(1e-9,sum(x.apart))})));lv.sort((a,b)=>a.r-b.r);
+add('Pulls keep the notes','no pair below half its Apart notes, '+pu.length+' pairs × 3 pulls',`lowest ${(100*lv[0].r).toFixed(0)}%`,lv[0].r>=.5,`${lv[0].x.names.join(' + ')} · ${lv[0].k}`);
+add('Deterministic','same settings twice → bit-identical sound',de&&de.same?'identical':'differs',!!(de&&de.same),'');
+const ok=C.every(c=>c.pass);const when=new Date().toISOString().slice(0,16).replace('T',' ')+' UTC';
+const md=`# Strange Effects listening review\n\n${when} · commit ${process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):'local'} · **${ok?'ALL PASS':'FAIL'}**\n\n| Check | Pass condition | Result | | Worst case |\n|---|---|---|---|---|\n`+C.map(c=>`| ${c.name} | ${c.cond} | ${c.value} | ${c.pass?'✅':'❌'} | ${c.worst} |`).join('\n')+'\n';
+fs.writeFileSync('report.md',md);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+fs.writeFileSync('index.html',`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Listening review</title><style>:root{--bg:#0f1115;--fg:#e8e6e1;--mut:#9a978f;--ok:#7fd49a;--bad:#ff7b7b;--line:#2a2d35}@media (prefers-color-scheme:light){:root{--bg:#faf8f4;--fg:#1d1c1a;--mut:#6b675f;--ok:#1d7a3e;--bad:#b3261e;--line:#e4dfd6}}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 -apple-system,system-ui,sans-serif;padding:20px 16px}h1{font-size:22px;margin:0 0 4px}.m{color:var(--mut);font-size:14px;margin-bottom:18px}.v{font-weight:700;color:${ok?'var(--ok)':'var(--bad)'}}.c{border-top:1px solid var(--line);padding:12px 0}.n{font-weight:600}.r{float:right}.p{color:var(--ok)}.f{color:var(--bad)}.s{color:var(--mut);font-size:14px}</style></head><body><h1>Strange Effects · listening review</h1><div class="m">${esc(when)} · <span class="v">${ok?'All pass':'Fail'}</span></div>${C.map(c=>`<div class="c"><span class="n">${esc(c.name)}</span><span class="r ${c.pass?'p':'f'}">${c.pass?'pass':'fail'}</span><div>${esc(c.value)}</div><div class="s">${esc(c.cond)}${c.worst?' · worst: '+esc(c.worst):''}</div></div>`).join('')}</body></html>`);
+console.log(md);process.exit(ok?0:1);

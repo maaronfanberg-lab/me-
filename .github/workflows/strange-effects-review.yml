@@ -1,0 +1,83 @@
+name: Strange Effects listening review
+
+# Runs by itself whenever the Strange Effects app or its checks change. Plays the app's own engine through
+# fixed listening checks (silence, roar, every attractor playing, clipping, broken samples, pulls, determinism)
+# and publishes the pass/fail report at apps/strange-effects/review/ on the GitHub Pages site.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/strange-effects/index.html
+      - apps/strange-effects/review/check.js
+      - apps/strange-effects/review/summarize.js
+      - .github/workflows/strange-effects-review.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: strange-effects-review
+  cancel-in-progress: true
+
+jobs:
+  listen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Extract the app's engine
+        run: python3 apps/strange-effects/render/mkengine.py
+      - name: Listen
+        working-directory: apps/strange-effects/review
+        run: |
+          node check.js ${{ matrix.shard }} 16 > part-a.jsonl &
+          node check.js $(( ${{ matrix.shard }} + 8 )) 16 > part-b.jsonl &
+          wait
+          cat part-a.jsonl part-b.jsonl > shard-${{ matrix.shard }}.jsonl
+          wc -l shard-${{ matrix.shard }}.jsonl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: apps/strange-effects/review/shard-${{ matrix.shard }}.jsonl
+
+  report:
+    needs: listen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          path: shards
+          merge-multiple: true
+      - name: Judge
+        id: judge
+        working-directory: apps/strange-effects/review
+        run: |
+          cat ../../../shards/*.jsonl > results.jsonl
+          set +e
+          node summarize.js < results.jsonl
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish report
+        run: |
+          git config user.name "strange-effects-review"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/strange-effects/review/index.html apps/strange-effects/review/report.md apps/strange-effects/review/results.jsonl
+          git commit -q -m "Strange Effects listening review (run ${{ github.run_id }})" || exit 0
+          for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0; sleep $((i * 4)); done
+          exit 1
+      - name: Fail loudly if any check failed
+        if: steps.judge.outputs.code != '0'
+        run: exit 1
