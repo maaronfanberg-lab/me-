@@ -36,6 +36,34 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(read_activity(file),state)
             self.assertEqual(state['conversation'],[])
 
+    def test_model_authored_investigation_survives_atomic_file_restart(self):
+        from room_endogenous_activity_goals import current_goal
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'research-owner-investigations.json'
+            base=initial_society('goal-restart')
+            selected=lambda m,o: (
+                json.dumps({'kind':'observe','channel':'oxygen','device':'',
+                            'setting':0,'horizon':1,'control':'current',
+                            'window':2,'source_id':''})
+                if o=='mara' else waiting_request(m,o))
+            state,report=activity_beat(
+                society=base,expected_revision=0,cycle_id='first-owner-goal',
+                profiles={x:{'core_identity':x} for x in ('sarah','mara','owen','jules')},
+                choose_activity=selected, choose_speech=None,
+                choose_goal=lambda m,o:'I want to compare oxygen measurements to a calibration reference.',
+                awake=('mara','owen'))
+            self.assertEqual(report['new_self_authored_goals'],1)
+            commit_activity(path,expected_revision=0,candidate=state,cycle_id='first-owner-goal')
+            recovered=read_activity(path)
+            self.assertEqual(recovered['private_goals']['mara'],state['private_goals']['mara'])
+            self.assertIn('oxygen',current_goal(recovered['private_goals']['mara'],'mara'))
+            self.assertIsNone(recovered['private_goals']['owen']['current'])
+            self.assertEqual(recovered['conversation'],[])
+            second=evolve(recovered,'second-cycle')
+            commit_activity(path,expected_revision=1,candidate=second,cycle_id='second-cycle')
+            self.assertEqual(read_activity(path)['private_goals']['mara'],
+                             recovered['private_goals']['mara'])
+
     def test_same_committed_cycle_is_idempotent(self):
         with tempfile.TemporaryDirectory() as folder:
             f=Path(folder)/'research-state.json'
