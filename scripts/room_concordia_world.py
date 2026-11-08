@@ -25,16 +25,16 @@ def cycle_of(turn):
 
 
 _ACTIONS = (
-    ("open_window", r"(?:open|opened|push open|pushed open) the window"),
-    ("close_window", r"(?:close|closed|shut) the window"),
-    ("lamp_on", r"(?:turn|turned|switch|switched) (?:on the lamp|the lamp on)"),
-    ("lamp_off", r"(?:turn|turned|switch|switched) (?:off the lamp|the lamp off)"),
-    ("fill_kettle", r"(?:fill|filled) the kettle"),
-    ("boil_kettle", r"(?:boil|boiled|heat|heated) the kettle"),
-    ("pour_tea", r"(?:pour|poured) (?:a cup of tea|tea into a cup)"),
-    ("water_plant", r"(?:water|watered) the plant"),
-    ("write_notebook", r"(?:write|wrote|scribble|scribbled) (?:a note|something|a page) in the notebook"),
-    ("move_chair", r"(?:move|moved|pull|pulled) (?:a|the) chair (?:over )?to the window"),
+    ("open_window", r"(?:open|opened|opening|push open|pushed open|pushing open) the window"),
+    ("close_window", r"(?:close|closed|closing|shut|shutting) the window"),
+    ("lamp_on", r"(?:turn|turned|turning|switch|switched|switching) (?:on the lamp|the lamp on)"),
+    ("lamp_off", r"(?:turn|turned|turning|switch|switched|switching) (?:off the lamp|the lamp off)"),
+    ("fill_kettle", r"(?:fill|filled|filling) the kettle"),
+    ("boil_kettle", r"(?:boil|boiled|boiling|heat|heated|heating) the kettle"),
+    ("pour_tea", r"(?:pour|poured|pouring) (?:a cup of tea|tea into a cup)"),
+    ("water_plant", r"(?:water|watered|watering) the plant"),
+    ("write_notebook", r"(?:write|wrote|writing|scribble|scribbled|scribbling) (?:a note|something|a page) in the notebook"),
+    ("move_chair", r"(?:move|moved|moving|pull|pulled|pulling) (?:a|the) chair (?:over )?to the window"),
 )
 
 
@@ -42,10 +42,17 @@ def witnessed_action(speaker, text):
     """Fail-closed recognizer for actually asserted physical acts, not plans."""
     if speaker not in PEOPLE or not isinstance(text, str) or len(text) > 500:
         return None
-    match = re.match(r"^\s*I\s+(?:just\s+|now\s+)?", text, re.I)
+    # First-person completed or currently enacted verbs qualify; promises,
+    # wishes and conditionals do not. Llama often uses contractions or an
+    # ongoing tense even when a physical action is actually happening.
+    match = re.match(r"^\s*I(?:\s+|['’](?:m|ve)\s+)(?:just\s+|now\s+)?", text, re.I)
     if not match or text.strip().endswith("?"):
         return None
     phrase = text[match.end():]
+    if phrase.lower().startswith(("am ", "have ")):
+        phrase = phrase.split(" ", 1)[1]
+    if phrase.lower().startswith(("about to ", "going to ")):
+        return None
     if re.match(r"(?:will|would|could|should|might|may|want|plan|hope|try|tried|didn't|don't|did not|never|can't|cannot|won't|am going to)\b", phrase, re.I):
         return None
     for name, grammar in _ACTIONS:
@@ -56,6 +63,37 @@ def witnessed_action(speaker, text):
                 return None
             return name
     return None
+
+
+def stalled_observation(history):
+    """Recognize repeated, unacted observation talk, not a normal discussion.
+
+    Only use this to improve *context*, never to manufacture speech. A recent
+    Allen message takes priority, including when it shares a beat with a reply.
+    """
+    if not isinstance(history, list) or any(
+        isinstance(t, dict) and str(t.get("speaker", "")).lower() == "allen"
+        for t in history[-4:]
+    ):
+        return False
+    recent = [t for t in history if isinstance(t, dict)
+              and str(t.get("speaker", "")).lower() in PEOPLE][-8:]
+    if len(recent) < 7 or any(
+        witnessed_action(str(t.get("speaker", "")).lower(), t.get("text"))
+        for t in recent
+    ):
+        return False
+    topic = re.compile(
+        r"\b(?:room|space|lamp|window|kettle|chair|plant|notebook|"
+        r"atmosphere|collective|perception|observation|observing|energy|"
+        r"light|narrative|environment|dynamics|setup)\b", re.I)
+    deferring = re.compile(
+        r"\b(?:what if|I wonder|I'd like|I would like|let's|"
+        r"shall we|we could|could we|perhaps|maybe|seems|might|"
+        r"observe|consider|perceiv\w*|subtle|symbolic|metaphor\w*|"
+        r"collective|dynamics|imagine)\b", re.I)
+    return (sum(bool(topic.search(str(t.get("text") or ""))) for t in recent) >= 6
+            and sum(bool(deferring.search(str(t.get("text") or ""))) for t in recent) >= 5)
 
 
 def premature_result(speaker, text):
