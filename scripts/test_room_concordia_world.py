@@ -80,6 +80,58 @@ class WorldTests(unittest.TestCase):
         self.assertEqual(report["distinct_action_speakers"], 1)
         self.assertEqual(report["abstract_vocabulary_turn_share"], 0.5)
 
+    def test_natural_enacted_tense_not_unfulfilled_promises(self):
+        actual = (
+            ("sarah", "I'm opening the window.", "open_window"),
+            ("mara", "I am turning off the lamp.", "lamp_off"),
+            ("owen", "I've filled the kettle.", "fill_kettle"),
+            ("jules", "I am watering the plant.", "water_plant"),
+        )
+        for speaker, text, expected in actual:
+            self.assertEqual(world.witnessed_action(speaker, text), expected, text)
+        for text in (
+            "I'll open the window.", "I will open the window.",
+            "I am about to open the window.", "I'm going to open the window.",
+            "I might open the window.", "I haven't opened the window.",
+            "I would like to open the window.",
+        ):
+            self.assertIsNone(world.witnessed_action("sarah", text), text)
+
+    def test_repeated_observation_detected_without_replacing_allen(self):
+        talk = [
+            "What if we observe the room again?",
+            "I'd like to see how the lamp affects this space.",
+            "Let's consider our collective energy in the room.",
+            "The light in the room seems subtle, perhaps symbolic.",
+            "I wonder what the chair means for our observation.",
+            "Could we examine the narrative of the room?",
+            "Perhaps the plant's position reflects our collective perception.",
+            "Let's observe the atmosphere in the space."
+        ]
+        history = [turn(i + 1, ["sarah", "mara", "owen", "jules"][i % 4], t)
+                   for i, t in enumerate(talk)]
+        self.assertTrue(world.stalled_observation(history))
+        self.assertFalse(world.stalled_observation(
+            history[:-1] + [turn(8, "allen", "What is going on?")]))
+        self.assertFalse(world.stalled_observation(
+            history[:-1] + [turn(8, "jules", "I'm opening the window.")]))
+
+    def test_world_notice_does_not_reprime_static_room_indefinitely(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+                os.environ, {"ROOM_CONCORDIA_WORLD_ENABLE": "1"}):
+            root = Path(tmp)
+            (root / "room").mkdir()
+            w = world.initial(0)
+            world.update(w, [turn(1, "sarah", "I open the window.")], 1)
+            (root / "room" / world.FILE).write_text(json.dumps(w))
+            (root / "room" / "state.json").write_text(json.dumps({"cycle": 1}))
+            self.assertIn("Verified outcome", world.notice("jules", root))
+            world.update(w, [turn(i, "mara", "That seems worth considering.")
+                             for i in range(2, 6)], 5)
+            (root / "room" / world.FILE).write_text(json.dumps(w))
+            (root / "room" / "state.json").write_text(json.dumps({"cycle": 5}))
+            self.assertEqual(world.notice("jules", root), "")
+
     def test_live_allen_and_sarah_share_a_cycle_without_stalling_world(self):
         # Exact production regression: a visitor speaks on cycle N, the
         # answering character speaks on the same N, and N+1 must still replay.
