@@ -154,5 +154,29 @@ class WorldTests(unittest.TestCase):
             self.assertEqual(feed["conversation"][0]["speaker"],"jules")
 
 
+    def test_unreadable_world_does_not_kill_independent_room_publication(self):
+        import shutil
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/"scripts").mkdir(); (root/"room").mkdir()
+            source=Path(__file__).resolve().parent
+            for name in ("room_concordia_world.py","build_room_feed.py"):
+                shutil.copyfile(source/name,root/"scripts"/name)
+            (root/"room"/"concordia-world.json").write_text('{"version":999}')
+            live={"generated_at":"test", "state":{"cycle":43},
+                  "minds":{"entities":{}},
+                  "conversation":[turn(43,"sarah","I water the plant.")]}
+            (root/"room"/"live.json").write_text(json.dumps(live))
+            env={**os.environ,"ROOM_CONCORDIA_WORLD_ENABLE":"1"}
+            job=subprocess.run([sys.executable,str(root/"scripts"/"build_room_feed.py")],
+                               env=env,capture_output=True,text=True)
+            self.assertEqual(job.returncode,0,job.stderr)
+            feed=json.loads((root/"room"/"feed.json").read_text())
+            self.assertNotIn("concordia_world",feed)
+            self.assertEqual(feed["conversation"][0]["speaker"],"sarah")
+
+
 if __name__ == "__main__":
     unittest.main()
