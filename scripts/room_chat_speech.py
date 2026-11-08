@@ -168,29 +168,32 @@ def messages(payload: dict, entity: str) -> list[dict]:
         "This is spoken conversation, not an explanation of your job."
     )
     history=witnessed_context(payload,entity)
+    inertia_reset = False
     # The persistent world is NOT an assigned subject. Several consecutive
     # speculative observations without an enacted step otherwise get fed back
     # into the small model as examples of what it is supposed to say.
     if (os.environ.get("ROOM_CONCORDIA_WORLD_ENABLE") == "1"
             and not (history and history[-1]["speaker"] == "allen")):
-        from room_concordia_world import stalled_observation
-        if stalled_observation(history):
+        from room_concordia_world import stalled_dialogue
+        if stalled_dialogue(history):
+            inertia_reset = True
             # Preserve the last real exchange, including its addressee, but
             # withhold the redundant examples of recursive speculation.
             history = history[-2:]
             system += (
-                " Your recent conversation has repeatedly described the "
-                "same setting without changing or learning anything. "
-                "Do not keep analyzing the group's observation, atmosphere, "
-                "energy, or the meaning of the room. Choose your own next "
-                "specific step in your own voice, based on your interests: "
-                "an actual first-person action if you want to change the "
-                "physical scene, a direct personal remark, a concrete "
-                "disagreement, or a different subject you genuinely care about. "
-                "You are not required to interact with the furniture. "
-                "If you act, say what you are doing now, not what you might "
-                "do later, and do not invent the consequences. "
-                "Never replace a real visitor's question with this advice."
+                " The last several speakers have repeatedly reinterpreted "
+                "the same idea without evidence or progress. Do not offer "
+                "another theoretical reading, repeat another person's "
+                "interpretation, or speculate about anyone's unstated motives. "
+                "Do not announce or discuss that the conversation is stuck. "
+                "You may now change course of your own accord, based on "
+                "your interests: share an actual firsthand experience, "
+                "make a concrete choice or physical action, offer a specific "
+                "personal view, or bring up something different that matters "
+                "to you. There is no assigned task or preferred topic. "
+                "If you physically act, describe your present action without "
+                "inventing its consequence. Always answer a real visitor's "
+                "pending request before pursuing your own initiative."
             )
     # When public dialogue stalls, stop using eight consecutive hypotheticals
     # as the model's implicit conversational template. Only context changes.
@@ -248,9 +251,16 @@ def messages(payload: dict, entity: str) -> list[dict]:
             if event_at(int(room_cycle)):
                 new_world_event = (scene_for_cycle(int(room_cycle)).common,
                                    private_observation(entity, int(room_cycle)))
-    user=(last+"\n\nThe final transcript line is the most recent real public turn. "
-          "Use its meaning, not a copy of its wording, as your starting point. "
-          f"Now speak as {entity.capitalize()}. Say only your own next conversational turn.")
+    if inertia_reset:
+        user=(last+"\n\nThis exchange needs no further interpretation. "
+              "You do not need to preserve its metaphor, analyze a person's "
+              "inner life, or explain why the conversation has stalled. "
+              "Independently choose a specific, grounded next remark or action "
+              "that matters to you. Speak naturally as yourself only.")
+    else:
+        user=(last+"\n\nThe final transcript line is the most recent real public turn. "
+              "Use its meaning, not a copy of its wording, as your starting point. "
+              f"Now speak as {entity.capitalize()}. Say only your own next conversational turn.")
     if new_world_event:
         shared, own = new_world_event
         user = (

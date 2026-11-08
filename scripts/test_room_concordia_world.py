@@ -97,6 +97,51 @@ class WorldTests(unittest.TestCase):
         ):
             self.assertIsNone(world.witnessed_action("sarah", text), text)
 
+    def test_repeated_unsupported_interpretation_is_a_stall(self):
+        repetitive = [
+            "I think Allen's desire for change suggests a deeper internal motive.",
+            "Could Allen's desire for change imply a different psychological state?",
+            "Let's explore whether his desire for change has a hidden meaning.",
+            "Perhaps the desire for change is actually about personal constraints.",
+            "That raises the question of whether his desire for change is symbolic.",
+            "I think his desire for change might have a deeper interpretation.",
+            "Doesn't that imply his desire for change reflects something internal?",
+            "This seems to suggest the desire for change is psychological."
+        ]
+        turns = [turn(i + 1, ["sarah", "mara", "owen", "jules"][i % 4], t)
+                 for i, t in enumerate(repetitive)]
+        self.assertFalse(world.stalled_observation(turns))
+        self.assertTrue(world.stalled_dialogue(turns))
+        turns[-1] = turn(8, "allen", "Please answer my question.")
+        self.assertFalse(world.stalled_dialogue(turns))
+
+    def test_stalled_dialogue_prompt_unhooks_but_respects_visitor(self):
+        from room_chat_speech import messages
+        turns = [turn(i + 1, ["sarah", "mara", "owen", "jules"][i % 4],
+                      "I think his desire for change might have a deeper meaning "
+                      "that could imply an internal psychological desire.")
+                 for i in range(8)]
+        payload = {
+            "entity": "sarah",
+            "profile": {"psychology_v2": {
+                "core_identity": "Independent person.",
+                "motives": ["Explore independent interests."]}},
+            "room_presence": {"present": [
+                "sarah", "mara", "owen", "jules", "allen"]},
+            "context": turns,
+        }
+        with patch.dict(os.environ, {"ROOM_CONCORDIA_WORLD_ENABLE": "1"}), \
+                patch("room_concordia_world.notice", return_value=""):
+            out = messages(payload, "sarah")
+            self.assertIn("Independently choose", out[-1]["content"])
+            self.assertIn("speculate about anyone's unstated motives",
+                          out[0]["content"])
+            payload["context"] = turns[:-1] + [
+                turn(8, "allen", "Please answer my question.")]
+            out = messages(payload, "sarah")
+            self.assertNotIn("Independently choose", out[-1]["content"])
+            self.assertIn("Please answer my question.", out[-1]["content"])
+
     def test_repeated_observation_detected_without_replacing_allen(self):
         talk = [
             "What if we observe the room again?",

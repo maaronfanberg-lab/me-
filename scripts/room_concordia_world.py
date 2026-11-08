@@ -96,6 +96,52 @@ def stalled_observation(history):
             and sum(bool(deferring.search(str(t.get("text") or ""))) for t in recent) >= 5)
 
 
+def stalled_dialogue(history):
+    """High-confidence repeated inference without fresh source-linked progress.
+
+    Avoid confusing a sustained, substantive discussion with an attractor:
+    require both repeated distinctive terms and speculative framing across
+    eight agent turns. Recent visitor messages always take precedence.
+    """
+    if stalled_observation(history):
+        return True
+    if not isinstance(history, list) or any(
+        isinstance(t, dict) and str(t.get("speaker", "")).lower() == "allen"
+        for t in history[-4:]
+    ):
+        return False
+    recent = [t for t in history if isinstance(t, dict)
+              and str(t.get("speaker", "")).lower() in PEOPLE][-8:]
+    if len(recent) < 8 or any(
+        witnessed_action(str(t.get("speaker", "")).lower(), t.get("text"))
+        for t in recent
+    ):
+        return False
+    # Count a repeated word only once per turn; character names and routine
+    # conversational connective tissue carry no evidence of semantic cycling.
+    stop = {
+        "allen", "sarah", "mara", "owen", "jules", "about", "after",
+        "again", "could", "would", "should", "their", "there", "these",
+        "those", "because", "between", "rather", "through", "might",
+        "which", "while", "think", "seems", "where", "further",
+        "perhaps", "actually", "other", "comment", "you're", "we're",
+        "our", "the", "that", "this", "with", "have", "from", "more"
+    }
+    counts = {}
+    for turn in recent:
+        terms = set(re.findall(r"[a-z]{5,}", str(turn.get("text") or "").lower()))
+        for term in terms - stop:
+            counts[term] = counts.get(term, 0) + 1
+    repeated = sum(value >= 5 for value in counts.values()) >= 2
+    speculation = re.compile(
+        r"\b(?:suggest\w*|imply|implies|implication|might|could|"
+        r"seems|perhaps|what if|question\w*|explor\w*|"
+        r"interpret\w*|perception|underlying|deeper|lens|"
+        r"consider\w*|examin\w*|I think|raises)\b", re.I)
+    return repeated and sum(bool(speculation.search(str(t.get("text") or "")))
+                            for t in recent) >= 5
+
+
 def premature_result(speaker, text):
     """Prevent the actor from inventing the referee's result in the same turn."""
     return bool(witnessed_action(speaker, text) and re.search(
