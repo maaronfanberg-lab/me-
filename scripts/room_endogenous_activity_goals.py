@@ -39,11 +39,35 @@ def _check(journal,owner):
             or not isinstance(journal.get('history'),list)
             or len(journal['history'])>MAX_HISTORY):
         raise ValueError('invalid source-bound private investigation journal')
+    history=journal['history']
+    if journal['revision'] < len(history):
+        raise ValueError('invalid investigation revision count')
+    seen=set()
+    for entry in history:
+        if (not isinstance(entry,dict) or entry.get('owner')!=owner
+                or not isinstance(entry.get('description'),str)
+                or not 12<=len(entry['description'])<=MAX_GOAL
+                or not isinstance(entry.get('source_id'),str)
+                or not re.fullmatch(r'obs-[a-f0-9]{24}',entry['source_id'])
+                or not isinstance(entry.get('source_digest'),str)
+                or not re.fullmatch(r'[a-f0-9]{64}',entry['source_digest'])
+                or entry.get('epistemic_status')!='personal_investigation_not_external_fact'
+                or type(entry.get('created_tick')) is not int
+                or entry['created_tick']<0):
+            raise ValueError('corrupt private goal history')
+        expected='activity-goal-'+_digest({
+            'owner':owner,'source_id':entry['source_id'],
+            'description':entry['description']})[:22]
+        if entry.get('id')!=expected or expected in seen:
+            raise ValueError('tampered or duplicate private goal')
+        seen.add(expected)
     current=journal.get('current')
-    if current is not None and (not isinstance(current,dict) or
-                                 current.get('owner')!=owner or
-                                 not isinstance(current.get('id'),str)):
-        raise ValueError('corrupt private goal')
+    if current is not None and (
+            not isinstance(current,dict)
+            or not history or current!=history[-1]):
+        raise ValueError('current investigation does not match owned history')
+    if current is None and history:
+        raise ValueError('lost current investigation without resolution event')
 
 
 def current_goal(journal,owner):
