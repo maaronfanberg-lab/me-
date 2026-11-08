@@ -259,6 +259,12 @@ def notice(entity, root):
         state = json.loads((root / "room" / "state.json").read_text())
         if w.get("version") != VERSION or w["processed_cycle"] != state["cycle"]:
             return ""
+        recent = w.get("recent_actions") or []
+        # When nothing has changed, repeatedly presenting the same furniture
+        # as a new message makes a small model talk about furniture forever.
+        # The world persists silently; only new consequences are salient.
+        if not recent or w["processed_cycle"] - recent[-1]["source_cycle"] > 3:
+            return ""
         o = w["objects"]
         pieces = [
             "FICTIONAL ROOM ENVIRONMENT (not character speech): A shared studio has a window, "
@@ -267,11 +273,9 @@ def notice(entity, root):
             f"kettle {o['kettle']}; prepared cups {o['cups']}; plant soil {o['plant']}; "
             f"notebook pages {o['notebook_pages']}; chair by {o['chair']}.",
         ]
-        recent = w.get("recent_actions") or []
-        if recent and w["processed_cycle"] - recent[-1]["source_cycle"] <= 3:
-            item = recent[-1]
-            pieces.append(f"Verified outcome after {item['actor']}'s public action "
-                          f"(source {item['source_id']}): {item['outcome']}")
+        item = recent[-1]
+        pieces.append(f"Verified outcome after {item['actor']}'s public action "
+                      f"(source {item['source_id']}): {item['outcome']}")
         pieces.append("These are optional physical circumstances, not an assigned topic or task. "
                       "You can converse, ignore the objects, or act voluntarily. "
                       "Only your actual published first-person action changes this environment; "
