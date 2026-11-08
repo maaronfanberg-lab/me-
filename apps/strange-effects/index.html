@@ -524,7 +524,7 @@ function makeDSP(rate){
    x=x*(1-E.rough*.65+E.rough*.65*(.5+.5*Math.sin(2*Math.PI*62*E.t)))*Math.min(1,E.t/.0012)+nz*E.ce*.22;x*=E.amp;
    for(let q=0;q<5;q++)bus[q]+=x*E.g[q]*.12;rkAL+=x*(E.g[0]+.7*E.g[1]+.75*E.g[4]+.35*E.g[3])*.7;rkAR+=x*(E.g[2]+.7*E.g[1]+.75*E.g[3]+.35*E.g[4])*.7;sum+=x;}
   return sum;};
- const hall=new Hall(rate);let brEnv=0,brG=0;const brRnd=mulberry(7771);S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
+ const hall=new Hall(rate);let brEnv=0,brG=0;const GBR=.02;S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
  const voiceOf=e=>route[e]>=0?V[route[e]/3|0]:null;
  const on=e=>force[e]!==null||(route[e]>=0&&(route[e]>=100?S.rank:V[route[e]/3|0].on));
  const proc=(ch,inp,idx,chIdx)=>{
@@ -596,10 +596,10 @@ function makeDSP(rate){
    const cp=dk>.0001;for(let k=0;k<3;k++){const x=v.m[k],xl=cp?Math.min(x,v.lo0[k]):x,xh=cp?Math.max(x,v.hi0[k]):x;if(x<v.lo[k])v.lo[k]=x;else v.lo[k]+=(xl-v.lo[k])*dk;if(x>v.hi[k])v.hi[k]=x;else v.hi[k]+=(xh-v.hi[k])*dk;}}
    bound(v);
    for(let k=0;k<3;k++){const n=(v.m[k]-v.c[k])/v.sc;v.n[k]=n;const f=v.idx===S.focus?fs[k]:0,z=v.idx===S.focus?zs:1;v.vv[k]=cl(.5+(n-f)*z/2);if(ctr%2048===0){const H=v.vh[k];let c=0;for(let q=0;q<H.length;q++)if(H[q]<v.vv[k])c++;v.vr[k]=(c+.5)/(H.length+1);H.push(v.vv[k]);if(H.length>128)H.shift();}}
-   {const b=v.br||(v.br={lo:0,bd:0,f:.05,q:1,a:0,pan:.5,sp:0,spM:0,px:v.n.slice()});const cl1=x=>x<-1.5?-1.5:x>1.5?1.5:x;
+   {const b=v.br||(v.br={u:null,on:false,lp:0,dc:0,ns:1,h:0,a:0,pan:.5,sp:0,spM:0,px:v.n.slice()});const cl1=x=>x<-1.5?-1.5:x>1.5?1.5:x;
     const sp=Math.hypot(v.n[0]-b.px[0],v.n[1]-b.px[1],v.n[2]-b.px[2]);b.px[0]=v.n[0];b.px[1]=v.n[1];b.px[2]=v.n[2];b.spM+=(sp-b.spM)*.002;b.sp+=(sp-b.sp)*.05;
-    const fc=150*Math.pow(2,1.7*(cl1(v.n[0])+1));b.f=2*Math.sin(Math.PI*Math.min(fc,6000)/rate);b.q=.35+.5*(cl1(v.n[2])+1.5)/3;b.pan=.5+.42*Math.tanh(v.n[1]);
-    b.a=Math.max(.35,Math.min(2,b.sp/(b.spM+1e-9)));}
+    b.pan=.5+.42*Math.tanh(v.n[1]);b.a=Math.max(.35,Math.min(2,b.sp/(b.spM+1e-9)));
+    const dA=v.def.T*120/rate;b.ns=Math.max(1,Math.ceil(dA/v.def.hMax));b.h=dA/b.ns;}
    if(S.alive){
     // the system's own slow variable moves one of its own parameters, so its regime keeps changing
     const dp=v.def.drP;v.a.pv[dp]=v.base[dp]*(1+v.def.drA*v.vv[2]*2);
@@ -750,8 +750,9 @@ function makeDSP(rate){
    if(on(IDX.ds)){const g=1/(1+7*u[IDX.ds]);l*=g;r*=g;}
    if(S.breath!==false){ // the undertow: never silence. Each playing system's path breathes softly, and only into the gaps
     brEnv+=((l*l+r*r)*.5-brEnv)*.0012;const qt=brEnv<1e-5?1:brEnv>1e-4?0:1-Math.log10(brEnv/1e-5);brG+=(qt-brG)*(qt>brG?.0008:.00007);
-    if(brG>1e-4){let bl=0,br=0,nb=0;for(const v of V){if(!v.on||!v.br)continue;const b=v.br,x=brRnd()*2-1;b.lo+=b.f*b.bd;const hp=x-b.lo-b.q*b.bd;b.bd+=b.f*hp;const y=b.bd*b.a;bl+=y*Math.sqrt(1-b.pan);br+=y*Math.sqrt(b.pan);nb++;}
-     if(nb){const g=.095*brG/Math.sqrt(nb);l+=bl*g;r+=br*g;}}}
+    if(brG>1e-4){let bl=0,br=0,nb=0;for(const v of V){if(!v.on||!v.br||v.dim!==3)continue;const b=v.br;if(!b.on){b.u=v.m.slice(0,3);b.on=true;}
+     for(let z=0;z<b.ns;z++)rk4(v.a,b.u,b.h);if(!(Math.abs(b.u[0]-v.c[0])<8*v.sc)){b.u=v.m.slice(0,3);}const x=(b.u[0]-v.c[0])/v.sc;b.dc+=(x-b.dc)*.0005;b.lp+=(x-b.dc-b.lp)*.22;const y=b.lp*b.a;bl+=y*Math.sqrt(1-b.pan);br+=y*Math.sqrt(b.pan);nb++;}
+     if(nb){const g=GBR*brG/Math.sqrt(nb);l+=bl*g;r+=br*g;}}else for(const v of V)if(v.br)v.br.on=false;}
    if(S.spk!==0||spkS!==0||S.pol!==0||on(IDX.sd)||on(IDX.pr)){
     // bass stays mono and undelayed; only sound above about 120 Hz is shifted or flipped
     const k=1-Math.exp(-2*Math.PI*120/rate);oLp[0]+=(l-oLp[0])*k;oLp[1]+=(r-oLp[1])*k;let hl=l-oLp[0],hr=r-oLp[1];

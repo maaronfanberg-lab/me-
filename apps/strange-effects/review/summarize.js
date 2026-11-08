@@ -1,10 +1,12 @@
 // Reads all shards, applies fixed pass conditions, writes report.md and report.html, exits 1 on any failure.
 const fs=require('fs');const L=fs.readFileSync(0,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
 const li=L.filter(x=>x.kind==='listen'),pu=L.filter(x=>x.kind==='pull'),de=L.find(x=>x.kind==='determinism');
-const sum=a=>a.reduce((s,x)=>s+x,0);const lab=x=>`${x.tone} · ${x.names.join(' + ')}${x.cpl?' · Tangle':''}`;
+const sum=a=>a.reduce((s,x)=>s+x,0);const lab=x=>`${x.setting||x.tone} · ${x.names.length>3?'all '+x.names.length:x.names.join(' + ')}${x.cpl?' · Tangle':''}`;
 const C=[];const add=(name,cond,value,pass,worst)=>C.push({name,cond,value,pass,worst});
 let w=li.slice().sort((a,b)=>a.quietestDb-b.quietestDb)[0];
 add('Never silent','every 20 ms window louder than −60 dB, all '+li.length+' runs',`quietest ${w.quietestDb} dB`,w.quietestDb>=-60,lab(w));
+w=li.slice().sort((a,b)=>a.phoneQuietestDb-b.phoneQuietestDb)[0];
+add('Never silent on a phone','same, counting only sound above 300 Hz (what phone speakers play)',`quietest ${w.phoneQuietestDb} dB`,w.phoneQuietestDb>=-60,lab(w));
 w=li.slice().sort((a,b)=>b.undertowPct-a.undertowPct)[0];const um=sum(li.map(x=>x.undertowPct))/li.length;
 add('Finite events, not a roar','undertow up ≤ 50% of the time in every run',`average ${um.toFixed(1)}%, most ${w.undertowPct}%`,w.undertowPct<=50,lab(w));
 w=li.slice().sort((a,b)=>Math.min(...a.notesPerSec)-Math.min(...b.notesPerSec))[0];
