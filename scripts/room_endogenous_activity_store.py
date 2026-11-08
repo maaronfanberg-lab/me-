@@ -13,7 +13,8 @@ import os
 import tempfile
 from pathlib import Path
 from room_endogenous_activity_society import SCHEMA as SOCIETY_SCHEMA
-from room_endogenous_activity_world import _state_ok, _canonical
+from room_endogenous_activity_world import _state_ok, _canonical, AGENTS
+from room_endogenous_activity_goals import current_goal
 
 
 def _guard_path(filename: Path):
@@ -30,8 +31,12 @@ def _check(snapshot: dict) -> None:
             or not _state_ok(snapshot.get('world'))
             or snapshot['revision']!=snapshot['world']['revision']
             or not isinstance(snapshot.get('cycles'),dict)
-            or not isinstance(snapshot.get('conversation'),list)):
+            or not isinstance(snapshot.get('conversation'),list)
+            or not isinstance(snapshot.get('private_goals'),dict)
+            or set(snapshot['private_goals']) != set(AGENTS)):
         raise ValueError('invalid activity society state')
+    for owner in AGENTS:
+        current_goal(snapshot['private_goals'][owner], owner)
 
 
 def read_activity(path: str | Path) -> dict:
