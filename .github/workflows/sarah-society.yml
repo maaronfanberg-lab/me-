@@ -56,7 +56,7 @@ jobs:
           ROOM_SCENE_PUBLIC_LEDGER: '1' # later half of separate 24-turn replication only
           ROOM_PLAN_FOLLOWTHROUGH: '1' # finite greenhouse interval 36328-36363 only
           ROOM_CAUSAL_WORLD_EXPERIMENT: '1' # time-limited 36480-36599 canary, following earlier scene trial
-          ROOM_CONCORDIA_WORLD_ENABLE: ${{ vars.ROOM_CONCORDIA_WORLD_ENABLE == '1' && '1' || '0' }} # persistent world, off until deliberate canary
+          ROOM_CONCORDIA_WORLD_ENABLE: '1' # live canary, revert to '0' to disable
           ROOM_NATIVE_3B_DISABLE: ${{ vars.ROOM_NATIVE_3B_DISABLE == '1' && '1' || '0' }}
         run: |
           set -uo pipefail
