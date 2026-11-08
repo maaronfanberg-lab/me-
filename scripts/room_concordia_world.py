@@ -167,13 +167,12 @@ def update(world, published, through_cycle):
             raise ValueError("new turn lacks unique public evidence")
         seen.add(uid)
         new.append((cycle, uid, turn))
-    new.sort()
-    if through_cycle > previous and (not new or new[0][0] != previous + 1
-                                     or new[-1][0] != through_cycle):
-        raise ValueError("missing intervening public turn; refuse to invent world updates")
-    if len({item[0] for item in new}) != len(new):
-        raise ValueError("ambiguous public cycle")
-    if any(cycle != previous + offset for offset, (cycle, _, _) in enumerate(new, 1)):
+    # A single committed cycle can contain Allen's accepted turn AND an
+    # autonomous reply. They have distinct source IDs and are *not* duplicate
+    # evidence. Preserve public ordering within each cycle (stable sort).
+    new.sort(key=lambda item: item[0])
+    cycles = sorted({cycle for cycle, _, _ in new})
+    if cycles != list(range(previous + 1, through_cycle + 1)):
         raise ValueError("missing intermediate published cycle; refuse partial world updates")
     for cycle, uid, turn in new:
         age(world, cycle)
