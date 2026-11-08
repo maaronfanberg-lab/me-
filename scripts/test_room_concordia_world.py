@@ -80,6 +80,30 @@ class WorldTests(unittest.TestCase):
         self.assertEqual(report["distinct_action_speakers"], 1)
         self.assertEqual(report["abstract_vocabulary_turn_share"], 0.5)
 
+    def test_live_allen_and_sarah_share_a_cycle_without_stalling_world(self):
+        # Exact production regression: a visitor speaks on cycle N, the
+        # answering character speaks on the same N, and N+1 must still replay.
+        w = world.initial(57803)
+        live = [turn(57804, "allen", "I open the window.", "allen-57804"),
+                turn(57804, "sarah", "I open the window.", "sarah-57804"),
+                turn(57805, "owen", "The window is open.", "owen-57805")]
+        world.update(w, live, 57805)
+        self.assertEqual(w["processed_cycle"], 57805)
+        self.assertEqual(w["objects"]["window"], "open")
+        self.assertEqual(len(w["recent_actions"]), 1)
+        self.assertEqual(w["recent_actions"][0]["source_id"], "sarah-57804")
+        # Re-reading an already processed cycle must never reapply it.
+        world.update(w, live, 57805)
+        self.assertEqual(len(w["recent_actions"]), 1)
+
+    def test_multiple_unique_actions_in_same_cycle_keep_public_order(self):
+        w = world.initial(10)
+        world.update(w, [turn(11, "sarah", "I open the window.", "first"),
+                         turn(11, "mara", "I close the window.", "second")], 11)
+        self.assertEqual(w["objects"]["window"], "closed")
+        self.assertEqual([a["source_id"] for a in w["recent_actions"]],
+                         ["first", "second"])
+
     def test_internal_gap_is_rejected_without_mutating_world(self):
         w = world.initial(3)
         with self.assertRaisesRegex(ValueError, "intermediate"):
