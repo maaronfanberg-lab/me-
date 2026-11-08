@@ -749,9 +749,9 @@ function makeDSP(rate){
    if(on(IDX.ld)){const g=Math.pow(10,(-30+30*u[IDX.ld])/20);l*=g;r*=g;}
    if(on(IDX.ds)){const g=1/(1+7*u[IDX.ds]);l*=g;r*=g;}
    if(S.breath!==false){ // the undertow: never silence. Each playing system's path breathes softly, and only into the gaps
-    brEnv+=((l*l+r*r)*.5-brEnv)*.0012;const qt=brEnv<3.2e-5?1:brEnv>3.2e-4?0:1-Math.log10(brEnv/3.2e-5);brG+=(qt-brG)*(qt>brG?.00026:.00007);
+    brEnv+=((l*l+r*r)*.5-brEnv)*.0012;const qt=brEnv<1e-5?1:brEnv>1e-4?0:1-Math.log10(brEnv/1e-5);brG+=(qt-brG)*(qt>brG?.0008:.00007);
     if(brG>1e-4){let bl=0,br=0,nb=0;for(const v of V){if(!v.on||!v.br)continue;const b=v.br,x=brRnd()*2-1;b.lo+=b.f*b.bd;const hp=x-b.lo-b.q*b.bd;b.bd+=b.f*hp;const y=b.bd*b.a;bl+=y*Math.sqrt(1-b.pan);br+=y*Math.sqrt(b.pan);nb++;}
-     if(nb){const g=.03*brG/Math.sqrt(nb);l+=bl*g;r+=br*g;}}}
+     if(nb){const g=.095*brG/Math.sqrt(nb);l+=bl*g;r+=br*g;}}}
    if(S.spk!==0||spkS!==0||S.pol!==0||on(IDX.sd)||on(IDX.pr)){
     // bass stays mono and undelayed; only sound above about 120 Hz is shifted or flipped
     const k=1-Math.exp(-2*Math.PI*120/rate);oLp[0]+=(l-oLp[0])*k;oLp[1]+=(r-oLp[1])*k;let hl=l-oLp[0],hr=r-oLp[1];
