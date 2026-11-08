@@ -115,6 +115,30 @@ class WorldTests(unittest.TestCase):
         turns[-1] = turn(8, "allen", "Please answer my question.")
         self.assertFalse(world.stalled_dialogue(turns))
 
+    def test_native_speaker_receives_personal_agency_not_only_analysis(self):
+        from room_chat_speech import messages
+        payload = {
+            "entity": "mara",
+            "profile": {"psychology_v2": {
+                "core_identity": "Independent and humorous.",
+                "motives": [
+                    "Observe social dynamics.",
+                    "Consider human consequences.",
+                    "Use humor and friendly banter.",
+                    "Leave stale topics and start something new.",
+                    "This fifth motive is intentionally not selected."
+                ],
+                "agency_style": "Can challenge, joke, change the subject."
+            }},
+            "context": [{"id": "real-10", "speaker": "jules",
+                         "text": "Is that all we have to say?"}]
+        }
+        prompt = messages(payload, "mara")[0]["content"]
+        self.assertIn("Use humor and friendly banter.", prompt)
+        self.assertIn("Leave stale topics and start something new.", prompt)
+        self.assertIn("Can challenge, joke, change the subject.", prompt)
+        self.assertNotIn("intentionally not selected", prompt)
+
     def test_stalled_dialogue_prompt_unhooks_but_respects_visitor(self):
         from room_chat_speech import messages
         turns = [turn(i + 1, ["sarah", "mara", "owen", "jules"][i % 4],
