@@ -65,6 +65,21 @@ class WorldTests(unittest.TestCase):
                 world.update(world.initial(3),transcript,5)
         self.assertEqual(w["objects"]["window"],"closed")
 
+    def test_behavior_audit_reports_actions_without_confusing_abstract_talk(self):
+        from room_behavior_audit import measure
+        sample = {"conversation": [
+            turn(1, "sarah", "We are mirroring the labyrinth."),
+            turn(2, "mara", "I open the window."),
+            turn(3, "owen", "The window is open now."),
+            turn(4, "jules", "I wonder about recursive patterns."),
+        ]}
+        report = measure(sample)
+        self.assertEqual(report["turns"], 4)
+        self.assertEqual(report["first_person_actions"], 1)
+        self.assertEqual(report["action_followups_within_three_turns"], 1)
+        self.assertEqual(report["distinct_action_speakers"], 1)
+        self.assertEqual(report["abstract_vocabulary_turn_share"], 0.5)
+
     def test_internal_gap_is_rejected_without_mutating_world(self):
         w = world.initial(3)
         with self.assertRaisesRegex(ValueError, "intermediate"):
