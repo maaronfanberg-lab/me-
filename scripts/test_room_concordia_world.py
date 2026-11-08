@@ -65,6 +65,14 @@ class WorldTests(unittest.TestCase):
                 world.update(world.initial(3),transcript,5)
         self.assertEqual(w["objects"]["window"],"closed")
 
+    def test_internal_gap_is_rejected_without_mutating_world(self):
+        w = world.initial(3)
+        with self.assertRaisesRegex(ValueError, "intermediate"):
+            world.update(w, [turn(4, "sarah", "I open the window."),
+                             turn(6, "mara", "I close the window.")], 6)
+        self.assertEqual(w["processed_cycle"], 3)
+        self.assertEqual(w["objects"]["window"], "closed")
+
     def test_no_double_apply_with_repeated_sync(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ,{"ROOM_CONCORDIA_WORLD_ENABLE":"1"}):
             root=Path(tmp); (root/"room").mkdir()
