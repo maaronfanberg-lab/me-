@@ -4,7 +4,7 @@ const fs=require('fs'),path=require('path');const B=require('./engine.js');
 const E=process.env,out=E.SE_OUT||'out';fs.mkdirSync(out,{recursive:true});
 const R=48000,FPS=30,SPF=R/FPS;const SECONDS=Math.max(10,Math.min(600,+E.SE_SECONDS||120));
 const report=[];const log=(...a)=>{const t=a.join(' ');console.log(t);report.push(t);};
-const specs={'Cavity':'cavity.json','Fibonacci ring':'fibonacci-ring.json'};
+const specs={'Cavity':'cavity.json','Fibonacci ring':'fibonacci-ring.json','Feedback attractor':'feedback-attractor.json'};
 let idx=-1,title='',field='';
 const formula=(E.SE_FORMULA||'').trim();
 if(formula){log('Formula:',formula);const t0=Date.now();
