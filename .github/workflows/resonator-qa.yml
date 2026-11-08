@@ -114,7 +114,7 @@ jobs:
           git init -q
           git checkout -q -b results
           git add -A
-          git -c user.name=resonator-qa -c user.email=actions@users.noreply.github.com commit -qm "QA ${{ github.sha }}"
+          git -c user.name=Claude -c user.email=noreply@anthropic.com commit -qm "QA ${{ github.sha }}"
           git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" HEAD:refs/heads/qa-results/qa
       - name: Keep the evidence
         if: always()

@@ -60,8 +60,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "vault-room-dynamics"
-          git config user.name 'room-2-keeper'
-          git config user.email 'actions@users.noreply.github.com'
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
           printf 'keeper-%s-%s\n' "$GITHUB_RUN_ID" "$(date -u +%Y%m%dT%H%M%SZ)" > vault/live-kick.txt
           git add vault/live-kick.txt
           git commit -m 'Keeper restart ROOM 2'

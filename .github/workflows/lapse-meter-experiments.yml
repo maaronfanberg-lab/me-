@@ -119,8 +119,8 @@ jobs:
         env:
           LABEL: ${{ inputs.label }}
         run: |
-          git config user.name "lapse-meter CI"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
           git add experiments/lapse-meter/results
           git commit -q -m "lapse-meter CI: ${LABEL} results (run ${{ github.run_id }})" || { echo "nothing to commit"; exit 0; }
           # each run's results go to their own branch (main is pushed to by other automation every minute)

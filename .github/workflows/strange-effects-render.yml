@@ -97,8 +97,8 @@ jobs:
           OK=false; if [ -f "$SE_OUT/video.mp4" ]; then cp "$SE_OUT/video.mp4" "$SE_OUT/audio.mp3" "$D/"; OK=true; fi
           printf '{"title":"%s","when":"%s","ok":%s}\n' "$(echo "$NAME" | sed 's/"/\\"/g')" "$(date -u '+%Y-%m-%d %H:%M UTC')" "$OK" > "$D/meta.json"
           python3 apps/strange-effects/render/index.py
-          git config user.name "strange-effects render"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
           git add "$D" apps/strange-effects/renders/index.html
           git commit -q -m "Strange Effects render: $NAME (run ${{ github.run_id }})"
           for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q origin HEAD:main && { echo "published $D"; exit 0; }; sleep $((i * 4)); done

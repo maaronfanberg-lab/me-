@@ -39,8 +39,8 @@ jobs:
         if: always()
         run: |
           test -f room/warm-runner-watchdog-diagnostic.json || printf '%s\n' '{"pass":false,"error":"watchdog simulator produced no diagnostic"}' > room/warm-runner-watchdog-diagnostic.json
-          git config user.name "room-warm-runner-simulator"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
           git add room/warm-runner-watchdog-diagnostic.json
           git commit -m "Record Room warm-runner watchdog diagnostic" || exit 0
           for n in 1 2 3 4 5; do

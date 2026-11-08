@@ -98,7 +98,7 @@ jobs:
           git init -q
           git checkout -q -b results
           git add -A
-          git -c user.name=resonator-webkit -c user.email=actions@users.noreply.github.com commit -qm "WebKit QA ${{ github.sha }} (${OSN}): ${{ steps.check.outcome }}"
+          git -c user.name=Claude -c user.email=noreply@anthropic.com commit -qm "WebKit QA ${{ github.sha }} (${OSN}): ${{ steps.check.outcome }}"
           git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" HEAD:refs/heads/qa-results/webkit-${OSN}
       - name: Keep the evidence
         if: always()

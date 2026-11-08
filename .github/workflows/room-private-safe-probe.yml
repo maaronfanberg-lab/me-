@@ -94,8 +94,8 @@ jobs:
       - name: Publish safe simulator results
         if: always()
         run: |
-          git config user.name "the-room-probe"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
           git add room/topic-tree-diagnostic.json room/expression-diversity-diagnostic.json room/private-full-beat-diagnostic.json 2>/dev/null || true
           git commit -m "Record Room simulator results" || true
           for n in 1 2 3 4; do
