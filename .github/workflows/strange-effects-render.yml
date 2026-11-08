@@ -23,6 +23,10 @@ on:
         type: choice
         options: [gentle, gilmour, strange]
         default: gentle
+      harmonic_mean:
+        description: "Harmonic mean (off, pair or swarm)"
+        required: false
+        default: "off"
       particles:
         description: "Particles (1 to 128)"
         required: false
@@ -55,6 +59,7 @@ jobs:
       SE_LABEL: ${{ inputs.label }}
       SE_TONE: ${{ inputs.tone }}
       SE_PARTICLES: ${{ inputs.particles }}
+      SE_HM: ${{ inputs.harmonic_mean }}
       SE_SPACE: ${{ inputs.space }}
       SE_SECONDS: ${{ inputs.seconds }}
       SE_OUT: ${{ github.workspace }}/se-out

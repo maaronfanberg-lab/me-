@@ -23,8 +23,8 @@ const D=B.makeDSP(R);B.EFFECTS.forEach((e,i)=>D.route[i]=B.SWARM_ROUTES[e.id]??-
 D.route.forEach((r,e)=>{if(r>=0&&r<100)D.route[e]=idx*3+r%3;});
 D.V.forEach((v,i)=>v.on=i===idx);
 const tone=(E.SE_TONE||'gentle').toLowerCase(),space=(E.SE_SPACE||'hall').toLowerCase(),rt=space==='room'?1.8:space==='cathedral'?9:4.5;
-Object.assign(D,{swarm:true,nP:Math.max(1,Math.min(128,+E.SE_PARTICLES||4)),gentle:tone==='gentle',strange:tone==='strange',recv:true,cine:false,alive:false,rank:false,move:.35,hallRT:rt,hallSize:rt>8?1.5:rt>3?1:.7,pitch:1});
-log('Tone:',tone+'. Particles:',D.nP+'. Space:',space+'. Length:',SECONDS+' s.');
+const hmS=(E.SE_HM||'off').toLowerCase();Object.assign(D,{hm:hmS==='pair'?1:hmS==='swarm'?2:0,swarm:true,nP:Math.max(1,Math.min(128,+E.SE_PARTICLES||4)),gentle:tone==='gentle',strange:tone==='strange',recv:true,cine:false,alive:false,rank:false,move:.35,hallRT:rt,hallSize:rt>8?1.5:rt>3?1:.7,pitch:1});
+log('Tone:',tone+'. Particles:',D.nP+'. Harmonic mean:',hmS+'. Space:',space+'. Length:',SECONDS+' s.');
 const L=new Float32Array(SECONDS*R),Rr=new Float32Array(SECONDS*R);const fo=fs.openSync(path.join(out,'frames.jsonl'),'w');const v=D.V[idx];
 const pre=[];for(let i=0;i+v.dim-1<v.pool.length;i+=v.dim)pre.push(+((v.pool[i]-v.c[0])/v.sc).toFixed(3),+((v.pool[i+1]-v.c[1])/v.sc).toFixed(3),+((v.pool[i+2]-v.c[2])/v.sc).toFixed(3));
 const t0=Date.now();
