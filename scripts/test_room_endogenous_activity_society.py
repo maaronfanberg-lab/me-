@@ -31,6 +31,94 @@ def run(society, selector, speaker=None, *, beat=None, awake=AGENTS, budget=2):
 
 
 class SocietyTests(unittest.TestCase):
+    def test_owned_goal_is_authored_after_experiment_and_guides_later_work(self):
+        state=initial_society('own-self-investigation')
+        observations=[]
+        def self_chosen_action(messages,owner):
+            ctx=json.loads(messages[1]['content'])
+            if owner!='sarah':return encoded('wait')
+            own=ctx['my_own_world_experiences']['own_witnessed_records']
+            if not own:return encoded('observe',channel='oxygen')
+            observations.append(ctx['individual_current_goal'])
+            return encoded('calibrate',channel='oxygen') if (
+                'sensor bias' in ctx['individual_current_goal']) else encoded('wait')
+        goal_calls=[]
+        def choose_goal(messages,owner):
+            goal_calls.append(owner)
+            assert owner=='sarah'
+            assert 'own_witnessed_records' not in messages[1]['content']
+            return 'I want to investigate whether oxygen sensor bias explains my reading.'
+        first, report=activity_beat(
+            society=state, expected_revision=0, cycle_id='first',
+            profiles=PROFILES, choose_activity=self_chosen_action,
+            choose_speech=None, choose_goal=choose_goal,
+            awake=('sarah','jules'))
+        self.assertEqual(first['world']['tick'],1)
+        self.assertEqual(report['new_self_authored_goals'],1)
+        self.assertEqual(report['private_goal_attempts'],1)
+        self.assertEqual(goal_calls,['sarah'])
+        self.assertEqual(first['conversation'],[])
+        owned=first['private_goals']['sarah']
+        self.assertEqual(owned['owner'],'sarah')
+        self.assertEqual(owned['current']['source_id'],
+                         first['world']['private_notebooks']['sarah'][-1]['id'])
+        self.assertIsNone(first['private_goals']['jules']['current'])
+        second, report=activity_beat(
+            society=first, expected_revision=1, cycle_id='second',
+            profiles=PROFILES, choose_activity=self_chosen_action,
+            choose_speech=None, awake=('sarah','jules'))
+        self.assertEqual(report['agent_choices']['sarah'],'calibrate')
+        self.assertEqual(second['world']['private_notebooks']['sarah'][-1]['kind'],'calibrate')
+        self.assertTrue(any('sensor bias' in x for x in observations))
+        self.assertEqual(second['private_goals']['sarah'],owned)
+        self.assertEqual(state['private_goals']['sarah']['revision'],0)
+
+    def test_goal_model_no_goal_and_failure_never_trigger_speech_or_fake_actions(self):
+        for response in ('[NO_GOAL]',None):
+            state=initial_society('private-decline')
+            def voluntary_no_goal(messages,owner):
+                if response is None:raise TimeoutError('private goal model offline')
+                return response
+            next_,report=activity_beat(
+                society=state, expected_revision=0, cycle_id='private-idle',
+                profiles=PROFILES, choose_activity=lambda m,o:(
+                    encoded('observe',channel='oxygen') if o=='sarah' else encoded('wait')),
+                choose_goal=voluntary_no_goal, choose_speech=None,
+                awake=('sarah','jules'))
+            self.assertEqual(report['new_self_authored_goals'],0)
+            self.assertEqual(report['private_goal_attempts'],1)
+            self.assertIsNone(next_['private_goals']['sarah']['current'])
+            self.assertEqual(next_['conversation'],[])
+            self.assertEqual(report['new_receipts'],1)
+
+    def test_direct_external_goal_injection_cannot_override_model_owned_work(self):
+        state=initial_society()
+        with self.assertRaises(ValueError):
+            activity_beat(
+                society=state,expected_revision=0,cycle_id='no-imposed-goals',
+                profiles=PROFILES,choose_activity=lambda m,o:encoded('wait'),
+                goals={'sarah':'You must speak about labyrinths.'})
+        self.assertEqual(state['world']['tick'],0)
+
+    def test_same_private_goal_cycle_replay_does_not_infer_again(self):
+        state=initial_society()
+        def choose(messages,owner):
+            return encoded('observe',channel='oxygen') if owner=='sarah' else encoded('wait')
+        first,report=activity_beat(
+            society=state,expected_revision=0,cycle_id='replay-goal',
+            profiles=PROFILES,choose_activity=choose,
+            choose_goal=lambda m,o:'I want to investigate the oxygen trend.',
+            awake=('sarah',),choose_speech=None)
+        self.assertEqual(report['new_self_authored_goals'],1)
+        def explode(*args):raise AssertionError('replayed private inference')
+        repeated,rec=activity_beat(
+            society=first,expected_revision=0,cycle_id='replay-goal',
+            profiles=PROFILES,choose_activity=explode,
+            choose_goal=explode,awake=('sarah',))
+        self.assertEqual(first,repeated)
+        self.assertTrue(rec['replayed'])
+        self.assertEqual(rec['model_calls'],0)
+
     def test_no_model_discoveries_needed_to_keep_world_alive(self):
         s=initial_society()
         untouched=copy.deepcopy(s)
