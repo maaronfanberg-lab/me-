@@ -173,6 +173,8 @@ def update(world, published, through_cycle):
         raise ValueError("missing intervening public turn; refuse to invent world updates")
     if len({item[0] for item in new}) != len(new):
         raise ValueError("ambiguous public cycle")
+    if any(cycle != previous + offset for offset, (cycle, _, _) in enumerate(new, 1)):
+        raise ValueError("missing intermediate published cycle; refuse partial world updates")
     for cycle, uid, turn in new:
         age(world, cycle)
         actor = str(turn.get("speaker") or "").strip().lower()
