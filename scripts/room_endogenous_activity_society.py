@@ -168,8 +168,13 @@ def activity_beat(*, society: dict, expected_revision: int, cycle_id: str,
             calls += 1
             raw=choose_activity(messages, owner)
             choice=parse_activity_choice(raw)
-            if choice['kind']=='wait' and raw not in (None,''):
-                failures.append(owner + ':wait_or_invalid')
+            if choice['kind']=='wait':
+                try:
+                    parsed = json.loads(raw) if isinstance(raw, str) else None
+                except ValueError:
+                    parsed = None
+                if not isinstance(parsed,dict) or parsed.get('kind')!='wait':
+                    failures.append(owner + ':invalid_activity_choice')
             plans[owner]=choice
         except Exception:
             plans[owner]={'kind':'wait'}
