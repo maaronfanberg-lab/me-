@@ -1,11 +1,11 @@
 # Strange Effects listening review
 
-2026-11-08 19:20 UTC · commit f5da6d3 · **FAIL**
+2026-11-08 19:29 UTC · commit 768f717 · **ALL PASS**
 
 | Check | Pass condition | Result | | Worst case |
 |---|---|---|---|---|
-| Never silent | every 20 ms window louder than −60 dB, all 95 runs | quietest -63.1 dB | ❌ | Everything · Hindmarsh–Rose + Willamowski–Rössler · Tangle |
-| Finite events, not a roar | undertow up ≤ 50% of the time in every run | average 7.9%, most 47.8% | ✅ | Space synth · Rabinovich–Fabrikant |
+| Never silent | every 20 ms window louder than −60 dB, all 95 runs | quietest -53.9 dB | ✅ | Everything · Hindmarsh–Rose + Willamowski–Rössler · Tangle |
+| Finite events, not a roar | undertow up ≤ 50% of the time in every run | average 6.3%, most 41.6% | ✅ | Space synth · Rabinovich–Fabrikant |
 | Every attractor plays | each playing attractor ≥ 0.5 notes a second | slowest 2.07/s | ✅ | Everything · Willamowski–Rössler + Nosé–Hoover · Tangle |
 | No harsh clipping | ≤ 0.5% of samples at full scale | most 0.058% | ✅ | Space synth · Rabinovich–Fabrikant |
 | No broken samples | 0 NaN in every run | 0 runs with NaN | ✅ |  |
