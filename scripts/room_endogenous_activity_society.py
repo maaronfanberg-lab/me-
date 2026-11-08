@@ -23,6 +23,7 @@ from room_endogenous_activity_world import (
     AGENTS, initial_world, advance_world, agent_view,
     activity_messages, parse_activity_choice, _state_ok, _canonical,
 )
+from room_endogenous_activity_goals import initial_goals, current_goal, optional_goal_inference
 
 SCHEMA = 'room_activity_society_v1'
 SILENCE = '[SILENCE]'
@@ -34,7 +35,8 @@ MAX_MODEL_CALLS = 8
 
 def initial_society(seed='room-living-observatory') -> dict:
     return {'schema': SCHEMA, 'revision': 0, 'world': initial_world(seed),
-            'conversation': [], 'cycles': {}}
+            'conversation': [], 'cycles': {},
+            'private_goals': {owner: initial_goals(owner) for owner in AGENTS}}
 
 
 def _known_speech_sources(world: dict, owner: str) -> dict[str, dict]:
@@ -132,7 +134,7 @@ def parse_voluntary_speech(raw: object, *, owner: str, world: dict,
 def activity_beat(*, society: dict, expected_revision: int, cycle_id: str,
                   profiles: Mapping, choose_activity, choose_speech=None,
                   awake: tuple[str,...]=AGENTS, goals: Mapping|None=None,
-                  speech_budget: int=2) -> tuple[dict,dict]:
+                  speech_budget: int=2, choose_goal=None) -> tuple[dict,dict]:
     """Commit one research beat atomically in-memory; caller persists separately.
 
     All four agents can work; a grounded speech chance is offered only when a
@@ -145,6 +147,7 @@ def activity_beat(*, society: dict, expected_revision: int, cycle_id: str,
             or not isinstance(cycle_id,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,90}',cycle_id)
             or not isinstance(profiles,Mapping) or not callable(choose_activity)
             or (choose_speech is not None and not callable(choose_speech))
+            or (choose_goal is not None and not callable(choose_goal))
             or not isinstance(awake,tuple) or not set(awake).issubset(AGENTS)
             or len(set(awake))!=len(awake) or len(awake)>4
             or type(speech_budget) is not int or not 0<=speech_budget<=4):
@@ -153,7 +156,18 @@ def activity_beat(*, society: dict, expected_revision: int, cycle_id: str,
         return copy.deepcopy(society),{'replayed':True,'model_calls':0,'publications':0,'world_tick':society['world']['tick']}
     if society['revision'] != expected_revision:
         raise ValueError('stale research society revision')
-    goals = goals or {}
+    # Only owner-authored, persisted investigations may influence later
+    # choices. A legacy externally supplied goal cannot silently override it.
+    journals = society.get('private_goals')
+    if not isinstance(journals, dict) or set(journals) != set(AGENTS):
+        raise ValueError('missing independently owned investigation journals')
+    personal_goals = {owner: current_goal(journals[owner], owner) for owner in AGENTS}
+    if goals is not None:
+        if (not isinstance(goals, Mapping) or any(
+                owner not in AGENTS or not isinstance(value,str)
+                or value != personal_goals[owner] for owner,value in goals.items())):
+            raise ValueError('external goal injection not allowed')
+    goals = personal_goals
     plans = {}
     failures = []
     calls = 0
@@ -222,6 +236,32 @@ def activity_beat(*, society: dict, expected_revision: int, cycle_id: str,
                     f'{cycle_id}|{owner}|{speech["text"]}|{speech["source_id"]}'.encode()).hexdigest()[:24]
                 accepted.append(speech)
                 already.append(speech)
+    # Independently generated interests are private. Offer one bounded
+    # cognition opportunity after executing actual new experiments, not a
+    # quota or a request to deliver public dialogue. Rejected/failed records
+    # can never become goals. A model's NO_GOAL remains a legitimate no-op.
+    private_goal_attempts = 0
+    new_self_authored_goals = 0
+    if choose_goal is not None and calls < MAX_MODEL_CALLS:
+        fresh = [r for r in evidence['receipts']
+                 if r.get('owner') in awake and
+                 r.get('result',{}).get('status') not in ('rejected','failed')]
+        if fresh:
+            # Fair compute opportunity, not a speaker or topic rotation.
+            fresh.sort(key=lambda r: hashlib.sha256(
+                f'{world["seed"]}|{cycle_id}|{r["owner"]}'.encode()).hexdigest())
+            owner = fresh[0]['owner']
+            def inquiry(request,timeout):
+                return choose_goal(request,owner)
+            journal,report=optional_goal_inference(
+                journal=out['private_goals'][owner],owner=owner,
+                profile=profiles[owner],world=world,model_request=inquiry)
+            out['private_goals'][owner] = journal
+            private_goal_attempts = report['model_calls']
+            new_self_authored_goals = int(report['changed'])
+            calls += private_goal_attempts
+            if not report['valid']:
+                failures.append(owner+':private_goal_'+report['reason'])
     # Avoid artificial multi-agent turn queues by selecting at most one
     # self-generated utterance for the social feed; others remain candidates.
     # Even when there is no public utterance, the numerical world evolves.
@@ -234,6 +274,8 @@ def activity_beat(*, society: dict, expected_revision: int, cycle_id: str,
     return out,{
         'replayed':False,'world_tick':world['tick'],
         'model_calls':calls,'agent_choices':{k:v['kind'] for k,v in plans.items()},
+        'private_goal_attempts':private_goal_attempts,
+        'new_self_authored_goals':new_self_authored_goals,
         'new_receipts':evidence['new_receipts'],
         'new_shared_evidence':evidence['new_public_evidence'],
         'environmental_events':len(evidence['new_events']),
