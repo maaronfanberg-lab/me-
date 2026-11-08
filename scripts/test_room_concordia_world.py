@@ -80,6 +80,82 @@ class WorldTests(unittest.TestCase):
         self.assertEqual(report["distinct_action_speakers"], 1)
         self.assertEqual(report["abstract_vocabulary_turn_share"], 0.5)
 
+    def test_natural_enacted_tense_not_unfulfilled_promises(self):
+        actual = (
+            ("sarah", "I'm opening the window.", "open_window"),
+            ("mara", "I am turning off the lamp.", "lamp_off"),
+            ("owen", "I've filled the kettle.", "fill_kettle"),
+            ("jules", "I am watering the plant.", "water_plant"),
+        )
+        for speaker, text, expected in actual:
+            self.assertEqual(world.witnessed_action(speaker, text), expected, text)
+        for text in (
+            "I'll open the window.", "I will open the window.",
+            "I am about to open the window.", "I'm going to open the window.",
+            "I might open the window.", "I haven't opened the window.",
+            "I would like to open the window.",
+        ):
+            self.assertIsNone(world.witnessed_action("sarah", text), text)
+
+    def test_repeated_observation_detected_without_replacing_allen(self):
+        talk = [
+            "What if we observe the room again?",
+            "I'd like to see how the lamp affects this space.",
+            "Let's consider our collective energy in the room.",
+            "The light in the room seems subtle, perhaps symbolic.",
+            "I wonder what the chair means for our observation.",
+            "Could we examine the narrative of the room?",
+            "Perhaps the plant's position reflects our collective perception.",
+            "Let's observe the atmosphere in the space."
+        ]
+        history = [turn(i + 1, ["sarah", "mara", "owen", "jules"][i % 4], t)
+                   for i, t in enumerate(talk)]
+        self.assertTrue(world.stalled_observation(history))
+        self.assertFalse(world.stalled_observation(
+            history[:-1] + [turn(8, "allen", "What is going on?")]))
+        self.assertFalse(world.stalled_observation(
+            history[:-1] + [turn(8, "jules", "I'm opening the window.")]))
+
+    def test_world_notice_does_not_reprime_static_room_indefinitely(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+                os.environ, {"ROOM_CONCORDIA_WORLD_ENABLE": "1"}):
+            root = Path(tmp)
+            (root / "room").mkdir()
+            w = world.initial(0)
+            world.update(w, [turn(1, "sarah", "I open the window.")], 1)
+            (root / "room" / world.FILE).write_text(json.dumps(w))
+            (root / "room" / "state.json").write_text(json.dumps({"cycle": 1}))
+            self.assertIn("Verified outcome", world.notice("jules", root))
+            world.update(w, [turn(i, "mara", "That seems worth considering.")
+                             for i in range(2, 6)], 5)
+            (root / "room" / world.FILE).write_text(json.dumps(w))
+            (root / "room" / "state.json").write_text(json.dumps({"cycle": 5}))
+            self.assertEqual(world.notice("jules", root), "")
+
+    def test_live_allen_and_sarah_share_a_cycle_without_stalling_world(self):
+        # Exact production regression: a visitor speaks on cycle N, the
+        # answering character speaks on the same N, and N+1 must still replay.
+        w = world.initial(57803)
+        live = [turn(57804, "allen", "I open the window.", "allen-57804"),
+                turn(57804, "sarah", "I open the window.", "sarah-57804"),
+                turn(57805, "owen", "The window is open.", "owen-57805")]
+        world.update(w, live, 57805)
+        self.assertEqual(w["processed_cycle"], 57805)
+        self.assertEqual(w["objects"]["window"], "open")
+        self.assertEqual(len(w["recent_actions"]), 1)
+        self.assertEqual(w["recent_actions"][0]["source_id"], "sarah-57804")
+        # Re-reading an already processed cycle must never reapply it.
+        world.update(w, live, 57805)
+        self.assertEqual(len(w["recent_actions"]), 1)
+
+    def test_multiple_unique_actions_in_same_cycle_keep_public_order(self):
+        w = world.initial(10)
+        world.update(w, [turn(11, "sarah", "I open the window.", "first"),
+                         turn(11, "mara", "I close the window.", "second")], 11)
+        self.assertEqual(w["objects"]["window"], "closed")
+        self.assertEqual([a["source_id"] for a in w["recent_actions"]],
+                         ["first", "second"])
+
     def test_internal_gap_is_rejected_without_mutating_world(self):
         w = world.initial(3)
         with self.assertRaisesRegex(ValueError, "intermediate"):

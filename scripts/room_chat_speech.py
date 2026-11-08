@@ -168,6 +168,30 @@ def messages(payload: dict, entity: str) -> list[dict]:
         "This is spoken conversation, not an explanation of your job."
     )
     history=witnessed_context(payload,entity)
+    # The persistent world is NOT an assigned subject. Several consecutive
+    # speculative observations without an enacted step otherwise get fed back
+    # into the small model as examples of what it is supposed to say.
+    if (os.environ.get("ROOM_CONCORDIA_WORLD_ENABLE") == "1"
+            and not (history and history[-1]["speaker"] == "allen")):
+        from room_concordia_world import stalled_observation
+        if stalled_observation(history):
+            # Preserve the last real exchange, including its addressee, but
+            # withhold the redundant examples of recursive speculation.
+            history = history[-2:]
+            system += (
+                " Your recent conversation has repeatedly described the "
+                "same setting without changing or learning anything. "
+                "Do not keep analyzing the group's observation, atmosphere, "
+                "energy, or the meaning of the room. Choose your own next "
+                "specific step in your own voice, based on your interests: "
+                "an actual first-person action if you want to change the "
+                "physical scene, a direct personal remark, a concrete "
+                "disagreement, or a different subject you genuinely care about. "
+                "You are not required to interact with the furniture. "
+                "If you act, say what you are doing now, not what you might "
+                "do later, and do not invent the consequences. "
+                "Never replace a real visitor's question with this advice."
+            )
     # When public dialogue stalls, stop using eight consecutive hypotheticals
     # as the model's implicit conversational template. Only context changes.
     if (os.environ.get("ROOM_CAUSAL_WORLD_EXPERIMENT") == "1"
