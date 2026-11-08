@@ -264,8 +264,9 @@ def advance_world(world: dict, *, expected_revision: int, cycle_id: str,
     result['tick'] = tick
     result['revision'] += 1
     result['history'] = (world['history'] + [{'tick': tick, **new_environment}])[-MAX_HISTORY:]
-    result['events'] = (world['events'] + _consequence_events(
-        environment, new_environment, tick, world['seed']))[-MAX_EVENTS:]
+    fresh_events = _consequence_events(
+        environment, new_environment, tick, world['seed'])
+    result['events'] = (world['events'] + fresh_events)[-MAX_EVENTS:]
     receipts = []
     shares = 0
     for owner in sorted(sanitized):
@@ -327,7 +328,7 @@ def advance_world(world: dict, *, expected_revision: int, cycle_id: str,
     return result, {'replayed': False, 'tick': tick,
                     'new_receipts': len(receipts), 'new_public_evidence': shares,
                     'control_changes': changes, 'receipts': receipts,
-                    'new_events': result['events'][len(world['events']):],
+                    'new_events': fresh_events,
                     'world_hash': _hash({'tick': tick, 'environment': new_environment,
                                          'controls': controls})[:24]}
 
