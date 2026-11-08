@@ -8,6 +8,8 @@ on:
       - 'scripts/room_endogenous_activity_3b_canary.py'
       - 'scripts/room_endogenous_activity_world.py'
       - 'scripts/room_endogenous_activity_society.py'
+      - 'scripts/room_endogenous_activity_menu.py'
+      - 'scripts/test_room_endogenous_activity_menu.py'
       - 'scripts/room_endogenous_schema_transport.py'
   workflow_dispatch:
 
@@ -37,6 +39,7 @@ jobs:
           python3 -m py_compile scripts/room_endogenous_activity_world.py scripts/room_endogenous_activity_society.py scripts/room_endogenous_activity_3b_canary.py
           python3 scripts/test_room_endogenous_activity_world.py
           python3 scripts/test_room_endogenous_activity_society.py
+          python3 scripts/test_room_endogenous_activity_menu.py
           python3 scripts/test_room_endogenous_activity_3b_canary.py
 
       - name: Restore pinned 3B model if already cached
