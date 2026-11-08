@@ -106,5 +106,53 @@ class WorldTests(unittest.TestCase):
         self.assertFalse(world.premature_result("allen","I open the window and I see a bird."))
 
 
+    def test_native_chat_prompt_respects_real_visitor_priority(self):
+        from room_chat_speech import messages
+        payload = {
+            "entity": "sarah",
+            "profile": {"psychology_v2":{"core_identity":"Independent person.",
+                                        "motives":["Explore independent interests."]}},
+            "room_presence":{"present":["sarah","mara","owen","jules","allen"]},
+            "context":[{"id":"real-13","speaker":"mara",
+                        "text":"I have a question about the window."}],
+        }
+        with patch.dict(os.environ,{"ROOM_CONCORDIA_WORLD_ENABLE":"1"}), \
+                patch("room_concordia_world.notice",
+                      return_value="A VERIFIED ENVIRONMENT NOTICE.") as observer:
+            prompt = messages(payload,"sarah")
+            self.assertIn("A VERIFIED ENVIRONMENT NOTICE.",prompt[-1]["content"])
+            self.assertEqual(observer.call_count,1)
+            payload["context"]=[{"id":"allen-real","speaker":"allen",
+                                "text":"Please answer my question."}]
+            observer.reset_mock()
+            prompt = messages(payload,"sarah")
+            self.assertNotIn("A VERIFIED ENVIRONMENT NOTICE.",str(prompt))
+            observer.assert_not_called()
+
+    def test_publication_outputs_world_as_distinct_non_speech_channel(self):
+        import shutil
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/"scripts").mkdir(); (root/"room").mkdir()
+            source = Path(__file__).resolve().parent
+            for name in ("room_concordia_world.py","build_room_feed.py"):
+                shutil.copyfile(source/name,root/"scripts"/name)
+            live={"generated_at":"test", "state":{"cycle":42},
+                  "minds":{"entities":{}},
+                  "conversation":[turn(42,"jules","I open the window.")]}
+            (root/"room"/"live.json").write_text(json.dumps(live))
+            env={**os.environ,"ROOM_CONCORDIA_WORLD_ENABLE":"1"}
+            subprocess.run([sys.executable,str(root/"scripts"/"build_room_feed.py")],
+                           check=True,env=env,capture_output=True,text=True)
+            feed=json.loads((root/"room"/"feed.json").read_text())
+            self.assertEqual(feed["concordia_world"]["objects"]["window"],"open")
+            self.assertEqual(feed["concordia_world"]["last_action"]["source_id"],
+                             "published-42")
+            self.assertEqual(len(feed["conversation"]),1)
+            self.assertEqual(feed["conversation"][0]["speaker"],"jules")
+
+
 if __name__ == "__main__":
     unittest.main()
