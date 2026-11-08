@@ -175,6 +175,45 @@ class SocietyTests(unittest.TestCase):
                         'source_id':source})
         self.assertIsNotNone(parse_voluntary_speech(out,owner='owen',world=s['world'],previous=[]))
 
+    def test_shared_discovery_changes_another_agents_possible_work(self):
+        # A synthetic policy explicitly chooses each action. This verifies
+        # the social physics, NOT autonomous initiative by a real model.
+        society=initial_society('shared-evidence-scenario')
+        society,first=run(society,
+            lambda msgs,owner:encoded('observe',channel='oxygen')
+            if owner=='jules' else encoded('wait'))
+        original=society['world']['private_notebooks']['jules'][-1]['id']
+        self.assertEqual(len(society['world']['public_evidence']),0)
+        society,second=run(society,
+            lambda msgs,owner:encoded('share',source_id=original)
+            if owner=='jules' else encoded('wait'))
+        self.assertEqual(second['new_shared_evidence'],1)
+        def following(messages,owner):
+            context=json.loads(messages[1]['content'])
+            shared=context['my_own_world_experiences']['shared_computed_evidence']
+            if owner=='sarah' and shared:
+                return encoded('forecast',channel='oxygen',horizon=4,control='filter')
+            return encoded('wait')
+        def voluntary_speech(messages,owner):
+            if owner!='sarah': return SILENCE
+            context=json.loads(messages[1]['content'])
+            own=context['my_experiences']['own_witnessed_records']
+            if not own: return SILENCE
+            latest=own[-1]
+            difference=latest['result']['difference']
+            return json.dumps({'utterance':
+                    f'I calculated a simulated oxygen difference of {difference} units under filtration.',
+                    'source_id':latest['id']})
+        society,third=run(society,following,voluntary_speech,budget=4)
+        self.assertEqual(third['new_receipts'],1)
+        self.assertEqual(third['publications'],1)
+        self.assertEqual(society['conversation'][-1]['speaker'],'sarah')
+        self.assertEqual(society['world']['private_notebooks']['mara'],[])
+        self.assertEqual(society['world']['public_evidence'][0]['source_id'],original)
+        self.assertEqual(society['world']['private_notebooks']['sarah'][-1]['kind'],'forecast')
+        self.assertNotIn(original,[v['id'] for v in
+                         society['world']['private_notebooks']['sarah']])
+
     def test_model_output_with_fake_tool_id_never_makes_a_public_turn(self):
         s=initial_society()
         s,r=run(s,lambda m,o:encoded('observe',channel='algae'),
