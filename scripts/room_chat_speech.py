@@ -144,14 +144,16 @@ def messages(payload: dict, entity: str) -> list[dict]:
     profile=payload.get("profile") or {}
     psych=profile.get("psychology_v2") or {}
     persona=str(psych.get("core_identity") or "A curious and independent participant.")[:300]
-    interests=[str(x)[:100] for x in (psych.get("motives") or [])[:2]]
+    interests=[str(x)[:130] for x in (psych.get("motives") or [])[:4]]
+    agency=str(psych.get("agency_style") or "")[:220]
     presence=payload.get("room_presence") or {}
     present=[x.capitalize() for x in PARTICIPANTS if
              x in set(presence.get("present") or PARTICIPANTS)]
     system=(
         f"You are {entity.capitalize()}, a distinct person in a conversation "
         f"with {', '.join(present)}. Identity: {persona}. "
-        f"Your personal interests: {'; '.join(interests)}. "
+        f"Your personal interests and self-directed motives: {'; '.join(interests)}. "
+        f"Your individual agency style: {agency}. "
         "Speak directly to the other people, naturally and in your own words. "
         "Respond to what the last person actually meant where useful. "
         "When someone asks a question or requests help, engage with what they actually asked; "
