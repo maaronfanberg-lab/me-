@@ -14,6 +14,9 @@ on:
       - 'scripts/room_conversation_project.py'
       - 'scripts/room_chat_speech.py'
       - 'scripts/room_causal_world.py'
+      - 'scripts/room_concordia_world.py'
+      - 'scripts/test_room_concordia_world.py'
+      - 'scripts/build_room_feed.py'
       - 'scripts/test_room_causal_world.py'
       - 'scripts/room_followthrough.py'
       - 'scripts/test_room_followthrough.py'
@@ -111,6 +114,8 @@ jobs:
         run: python3 scripts/test_room_conversational_workflow.py
       - name: Test directed responses, sleeping participants, voluntary readiness
         run: python3 scripts/test_room_conversational_floor.py
+      - name: Verify persistent Concordia-style world referee, provenance and restart safety
+        run: python3 scripts/test_room_concordia_world.py
       - name: Verify source-bound causal world and privacy
         run: python3 scripts/test_room_causal_world.py
       - name: Verify source-linked unfulfilled intentions vs witnessed actions

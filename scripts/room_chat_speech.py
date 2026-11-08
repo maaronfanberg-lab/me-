@@ -341,6 +341,14 @@ def messages(payload: dict, entity: str) -> list[dict]:
             user += (" If you perform a physical check, describe the action "
                      "but wait for the simulated environment's next response "
                      "before claiming what that check revealed.")
+    # A distinct, deterministic, source-linked simulated environment.
+    # Not a character turn, and never permitted to override Allen's speech.
+    if (os.environ.get("ROOM_CONCORDIA_WORLD_ENABLE") == "1"
+            and not (history and history[-1]["speaker"] == "allen")):
+        from room_concordia_world import notice as concordia_notice
+        grounded = concordia_notice(entity, Path(__file__).resolve().parents[1])
+        if grounded:
+            user += "\n\n" + grounded
     return [{"role":"system","content":system},{"role":"user","content":user}]
 
 
@@ -437,6 +445,15 @@ def run(payload: dict, timeout: int = 45) -> dict | None:
                     return ""
         except (OSError, ValueError, KeyError, TypeError):
             pass
+    # Complete actions may be published, but their results belong to the
+    # environment on the next beat. Compose with the older finite-scene gate.
+    if os.environ.get("ROOM_CONCORDIA_WORLD_ENABLE") == "1":
+        from room_concordia_world import premature_result as concordia_premature
+        previous_gate = causal_gate
+        def causal_gate(spoken):
+            reason = previous_gate(spoken) if previous_gate else ""
+            return reason or (
+                "unwitnessed_action_outcome" if concordia_premature(entity, spoken) else "")
     for attempt in range(3):
         keyed=f"{cycle_key}:chat-speech:{entity}:{attempt}"
         seed=int(hashlib.sha256(keyed.encode()).hexdigest()[:8],16) & 0x7FFFFFFF

@@ -6,6 +6,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ROOM = ROOT / "room"
 live = json.loads((ROOM / "live.json").read_text())
+from room_concordia_world import sync as sync_concordia_world
+try:
+    concordia_world = sync_concordia_world(ROOT, live)
+except (OSError, ValueError, KeyError, TypeError) as exc:
+    # World-state integrity errors must fail CLOSED, but must not silence
+    # the independent live Room conversation or interfere with Allen.
+    concordia_world = None
+    print(f"Concordia world skipped for this beat: {type(exc).__name__}")
 entities = {}
 for entity_id, mind in (live.get("minds", {}).get("entities", {}) or {}).items():
     entities[entity_id] = {
@@ -29,5 +37,11 @@ feed = {
     "brain": brain,
     "minds": {"entities": entities}, "conversation": conversation,
 }
+if concordia_world is not None:
+    feed["concordia_world"] = {
+        "processed_cycle": concordia_world["processed_cycle"],
+        "objects": concordia_world["objects"],
+        "last_action": (concordia_world.get("recent_actions") or [None])[-1],
+    }
 (ROOM / "brain-status.json").write_text(json.dumps(brain, ensure_ascii=False, indent=2) + "\n")
 (ROOM / "feed.json").write_text(json.dumps(feed, ensure_ascii=False, separators=(",", ":")) + "\n")
