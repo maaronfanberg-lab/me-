@@ -563,10 +563,14 @@ function makeDSP(rate){
   return r<=.8?1:r>=1.1?0:1-(r-.8)/.3;};
  function ctrl(){
   let cpN=0;for(const w of V)if(w.on)cpN++;
+  // each system's running average and spread over ~3 orbits, so its pull on partners is a two-way swing about
+  // its own running median (lopsided, spiky systems such as the food chain otherwise give a constant one-way shove)
+  for(const w of V){if(!w.on)continue;const al=Math.min(1,S.move/rate*32/(3*.75));if(!w.cm){w.cm=[0,0,0];w.cv=[.25,.25,.25];}
+   for(let k=0;k<3;k++){const u=(w.s[k]-w.c[k])/w.sc,e=u-w.cm[k];w.cm[k]+=4*al*Math.sqrt(w.cv[k])*Math.sign(e);w.cv[k]+=al*(Math.min(e*e,16*w.cv[k])-w.cv[k]);}}
   // attractors play each other's knobs: each parameter of a system swings around its set value, inside its
   // verified range, by the other systems' current position (coordinate p mod 3, averaged over them), scaled by the pull
   for(const v of V){if(!v.on)continue;const d=v.def,pv=v.a.pv;
-   if(S.cpl>0&&cpN>1){for(let p=0;p<pv.length;p++){if(d.fix&&d.fix.includes(p))continue;const k=p%3;let m=0,c=0;for(const w of V){if(!w.on||w===v)continue;m+=Math.tanh((w.s[k]-w.c[k])/w.sc*1.5);c++;}
+   if(S.cpl>0&&cpN>1){for(let p=0;p<pv.length;p++){if(d.fix&&d.fix.includes(p))continue;const k=p%3;let m=0,c=0;for(const w of V){if(!w.on||w===v)continue;m+=Math.tanh(((w.s[k]-w.c[k])/w.sc-w.cm[k])/Math.sqrt(Math.max(w.cv[k],1e-4)));c++;}
      pv[p]=Math.max(d.lo[p],Math.min(d.hi[p],v.base[p]+S.cpl*.5*(d.hi[p]-d.lo[p])*m/c));v.sig[p]=(pv[p]-d.p[p])/Math.max(Math.abs(d.p[p])*.21,(d.hi[p]-d.lo[p])*.084);}v.cplOn=1;}
    else if(v.cplOn){for(let p=0;p<pv.length;p++){pv[p]=v.base[p];v.sig[p]=(pv[p]-d.p[p])/Math.max(Math.abs(d.p[p])*.21,(d.hi[p]-d.lo[p])*.084);}v.cplOn=0;}}
   let aB=0,aTd=0,aTr=0,aGr=0,aRot=0;rk4(sAM,am2,.025);
@@ -588,7 +592,8 @@ function makeDSP(rate){
    v.stT+=32/rate;for(let k=0;k<3;k++){const x=v.s[k];if(x<v.sMin[k])v.sMin[k]=x;if(x>v.sMax[k])v.sMax[k]=x;}
    if(v.stT>=.5){let w=0;for(let k=0;k<3;k++){w=Math.max(w,v.sMax[k]-v.sMin[k]);v.sMin[k]=1e9;v.sMax[k]=-1e9;}v.stT=0;if(w<.02*v.sc0){v.stirs++;reseed(v);}}
    rk4(v.a,v.m,S.move/rate*32*(v.def.T/.75));guard(v);
-   for(let k=0;k<3;k++){const x=v.m[k];if(x<v.lo[k])v.lo[k]=x;else v.lo[k]+=(x-v.lo[k])*.00002;if(x>v.hi[k])v.hi[k]=x;else v.hi[k]+=(x-v.hi[k])*.00002;}
+   {const dk=S.cpl>0&&cpN>1?.0004:.00002; // pulled systems: the box forgets a partner's one-off kick in ~2 s, settling back to its verified shape (never smaller)
+   const cp=dk>.0001;for(let k=0;k<3;k++){const x=v.m[k],xl=cp?Math.min(x,v.lo0[k]):x,xh=cp?Math.max(x,v.hi0[k]):x;if(x<v.lo[k])v.lo[k]=x;else v.lo[k]+=(xl-v.lo[k])*dk;if(x>v.hi[k])v.hi[k]=x;else v.hi[k]+=(xh-v.hi[k])*dk;}}
    bound(v);
    for(let k=0;k<3;k++){const n=(v.m[k]-v.c[k])/v.sc;v.n[k]=n;const f=v.idx===S.focus?fs[k]:0,z=v.idx===S.focus?zs:1;v.vv[k]=cl(.5+(n-f)*z/2);if(ctr%2048===0){const H=v.vh[k];let c=0;for(let q=0;q<H.length;q++)if(H[q]<v.vv[k])c++;v.vr[k]=(c+.5)/(H.length+1);H.push(v.vv[k]);if(H.length>128)H.shift();}}
    if(S.alive){
