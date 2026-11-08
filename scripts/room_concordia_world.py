@@ -42,7 +42,7 @@ def witnessed_action(speaker, text):
     """Fail-closed recognizer for actually asserted physical acts, not plans."""
     if speaker not in PEOPLE or not isinstance(text, str) or len(text) > 500:
         return None
-    match = re.match(r"^\s*(?:I|we)\s+(?:just\s+|now\s+)?", text, re.I)
+    match = re.match(r"^\s*I\s+(?:just\s+|now\s+)?", text, re.I)
     if not match or text.strip().endswith("?"):
         return None
     phrase = text[match.end():]
