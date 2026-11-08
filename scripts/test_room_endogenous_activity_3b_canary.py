@@ -21,13 +21,13 @@ def choice(kind='wait',**kwargs):
 class CanaryTests(unittest.TestCase):
     def test_real_model_probe_with_model_chosen_operators(self):
         calls=[]
-        def tools(messages,timeout):
+        def tools(messages,timeout,schema):
             p=json.loads(messages[1]['content'])
             name=p['agent']
             calls.append(name)
             if not p['my_own_world_experiences']['own_witnessed_records']:
-                return choice('observe',channel='oxygen' if name=='sarah' else 'algae')
-            return choice('calibrate',channel='oxygen' if name=='sarah' else 'algae')
+                return json.dumps({'choice':'observe:oxygen' if name=='sarah' else 'observe:algae'})
+            return json.dumps({'choice':'calibrate:oxygen' if name=='sarah' else 'calibrate:algae'})
         result=experiment(CONFIG,tools,lambda *args: json.dumps({'utterance':'','source_id':''}),beats=2)
         self.assertEqual(result['summary']['model_chose_computational_actions'],4)
         self.assertEqual(result['summary']['distinct_computational_actions'],2)
@@ -39,7 +39,7 @@ class CanaryTests(unittest.TestCase):
         self.assertFalse(result['changed_live_main'])
 
     def test_inert_model_cannot_fool_agency_gate(self):
-        report=experiment(CONFIG,lambda m,t: choice('wait'),
+        report=experiment(CONFIG,lambda m,t,sch: json.dumps({'choice':'wait'}),
                           lambda m,t:json.dumps({'utterance':'','source_id':''}),beats=2)
         self.assertFalse(report['summary']['computational_agency_observed'])
         self.assertEqual(report['summary']['verified_private_receipts'],0)
