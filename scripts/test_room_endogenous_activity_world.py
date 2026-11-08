@@ -23,6 +23,20 @@ def tick(world, proposals=None, cycle_id=None):
 
 
 class ActivityWorldTests(unittest.TestCase):
+    def test_new_environment_event_survives_bounded_event_log_rotation(self):
+        from unittest.mock import patch
+        world=initial_world('event-log-full')
+        world['events']=[{'id':f'old-{n}','tick':0} for n in range(32)]
+        new={'id':'new-event-id','tick':1,'channel':'oxygen',
+             'threshold':5.2,'new_value':4.9,'status':'simulated_threshold_crossing'}
+        with patch('room_endogenous_activity_world._consequence_events',
+                   return_value=[new]):
+            updated,report=tick(world)
+        self.assertEqual(report['new_events'],[new])
+        self.assertEqual(len(updated['events']),32)
+        self.assertEqual(updated['events'][-1],new)
+        self.assertEqual(updated['events'][0]['id'],'old-1')
+
     def test_initial_state_independent_of_conversation(self):
         world = initial_world()
         self.assertEqual(world['tick'], 0)
