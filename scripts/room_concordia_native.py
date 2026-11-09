@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+"""Native DeepMind Concordia Room runner, using the published engine and GM.
+
+This is a separate proof-of-integration entry point. It does NOT silently
+replace the production Room or mutate its public conversation ledger.
+Run with --mode scripted for a deterministic upstream-engine smoke test.
+Run with --mode llama only while the existing local llama-server is running.
+"""
+from __future__ import annotations
+
+import argparse
+from collections.abc import Collection, Mapping, Sequence
+import datetime as dt
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import threading
+import urllib.parse
+import urllib.request
+from typing import Any
+
+import numpy as np
+from concordia.agents import entity_agent_with_logging
+from concordia.associative_memory import basic_associative_memory
+from concordia.components import agent as agent_components
+from concordia.components.game_master import interrupt_scheduling
+from concordia.components.game_master import interrupt_response_parsing
+from concordia.environment.engines import simultaneous
+from concordia.language_model import language_model, no_language_model
+from concordia.prefabs.game_master import interrupt_driven
+
+PARTICIPANTS = ("sarah", "mara", "owen", "jules")
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def embed(text: str) -> np.ndarray:
+    """Reproducible local embedding for the integration test, NOT semantic SOTA."""
+    vec = np.zeros(256, dtype=np.float32)
+    for token in re.findall(r"[a-z0-9]+", str(text).lower()):
+        hashed = hashlib.blake2b(token.encode(), digest_size=4).digest()
+        position = int.from_bytes(hashed, "big") % len(vec)
+        vec[position] += 1
+    size = float(np.linalg.norm(vec))
+    if size:
+        vec /= size
+    return vec
+
+
+def identity_text(name: str, config: Mapping[str, Any]) -> str:
+    """Use the Room's actual character definitions, not a replacement cast."""
+    profile = ((config.get("p") or {}).get(name.lower()) or {})
+    psyche = profile.get("psychology_v2") or {}
+    elements = [
+        str(psyche.get("core_identity") or name),
+        str(psyche.get("agency_style") or ""),
+        "Personal motives: " + "; ".join(map(str, (psyche.get("motives") or [])[:4])),
+        "Act independently, including working quietly when that is genuinely appropriate.",
+        "Never invent another person's speech or turn a plan into an accomplished action.",
+    ]
+    return "\n".join(x for x in elements if x.strip())
+
+
+class LocalLlama(language_model.LanguageModel):
+    """Adapter from Concordia's real LanguageModel interface to Room llama.cpp."""
+
+    def __init__(self, url: str, model_id: str) -> None:
+        address = urllib.parse.urlsplit(url)
+        if address.scheme != "http" or address.hostname not in ("127.0.0.1", "localhost"):
+            raise ValueError("Concordia pilot accepts only the Room's local llama-server")
+        if address.path != "/v1/chat/completions":
+            raise ValueError("Expected llama.cpp's /v1/chat/completions endpoint")
+        self.url, self.model_id = url, model_id
+
+    def sample_text(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = language_model.DEFAULT_MAX_TOKENS,
+        terminators: Collection[str] = language_model.DEFAULT_TERMINATORS,
+        temperature: float = language_model.DEFAULT_TEMPERATURE,
+        top_p: float = language_model.DEFAULT_TOP_P,
+        top_k: int = language_model.DEFAULT_TOP_K,
+        timeout: float = language_model.DEFAULT_TIMEOUT_SECONDS,
+        seed: int | None = None,
+    ) -> str:
+        body: dict[str, Any] = {
+            "model": self.model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": min(int(max_tokens), 600),
+            "temperature": max(0.05, min(float(temperature), 1.2)),
+            "top_p": float(top_p),
+            "stream": False,
+        }
+        if seed is not None:
+            body["seed"] = seed
+        request = urllib.request.Request(
+            self.url,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=min(90, max(5, timeout))) as reply:
+            result = json.load(reply)
+        choices = result.get("choices") or []
+        output = str((choices[0].get("message") or {}).get("content") or "") if choices else ""
+        if not output.strip():
+            raise RuntimeError("Local llama-server returned empty Concordia action")
+        for stop in terminators:
+            if stop and stop in output:
+                output = output.split(stop, 1)[0]
+        action, data = interrupt_response_parsing.extract_json_block(output)
+        safe_silence = '\n{"mask": [], "timer": {"time": "15m", "reason": "reflect quietly"}}'
+        if not isinstance(data.get("mask"), list) or not isinstance(data.get("timer"), dict):
+            return safe_silence
+        if any(not isinstance(v, str) for v in data["mask"]):
+            return safe_silence
+        if not (data["timer"].get("time") or data["timer"].get("until")):
+            return safe_silence
+        if len(action) > 520 or re.search(
+            r"(?i)system prompt|hidden prompt|developer message|chain of thought|room_prompt_",
+            action,
+        ):
+            return safe_silence
+        return output
+
+    def sample_choice(
+        self,
+        prompt: str,
+        responses: Sequence[str],
+        *,
+        seed: int | None = None,
+    ) -> tuple[int, str, Mapping[str, Any]]:
+        if not responses:
+            raise ValueError("No choices")
+        options = "\n".join(f"{i}: {value}" for i, value in enumerate(responses))
+        answer = self.sample_text(
+            prompt + "\n\nSelect ONE choice by its integer index only:\n" + options,
+            max_tokens=15, temperature=0.1, seed=seed,
+        )
+        index_match = re.search(r"\b\d+\b", answer)
+        if index_match is None:
+            raise language_model.InvalidResponseError("No choice index in model output")
+        idx = int(index_match.group())
+        if not 0 <= idx < len(responses):
+            raise language_model.InvalidResponseError("Choice index outside supplied options")
+        return idx, responses[idx], {}
+
+
+class ScriptedModel(no_language_model.NoLanguageModel):
+    """Deterministic fixture, used ONLY to test the genuine Concordia engine."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lock = threading.Lock()
+        self.calls: list[str] = []
+
+    def sample_text(self, prompt: str, **kwargs: Any) -> str:
+        del kwargs
+        match = re.findall(r"What does (Sarah|Mara|Owen|Jules) (?:independently choose to )?do next", prompt)
+        if not match:
+            raise RuntimeError("Unexpected Concordia action prompt")
+        name = match[-1]
+        with self.lock:
+            self.calls.append(name)
+        if name == "Mara":
+            action = "I ask Jules whether she saw the notebook."
+        elif name == "Jules":
+            action = "I check the notebook while the others work."
+        else:
+            action = ""
+        return action + '\n{"mask": [], "timer": {"time": "45m", "reason": "resume own work"}}'
+
+
+def build_agents(model: language_model.LanguageModel, config: Mapping[str, Any]):
+    """Instantiate four native Concordia entities from the existing Room cast."""
+    sleeping = {str(x).lower() for x in config.get("sleeping_entities", [])}
+    players = []
+    for name in PARTICIPANTS:
+        if name in sleeping:
+            continue
+        key = name.capitalize()
+        memory_bank = basic_associative_memory.AssociativeMemoryBank(
+            sentence_embedder=embed,
+        )
+        components = {
+            "identity": agent_components.constant.Constant(
+                state=identity_text(name, config),
+                pre_act_label="Your identity and independent interests",
+            ),
+            agent_components.memory.DEFAULT_MEMORY_COMPONENT_KEY:
+                agent_components.memory.AssociativeMemory(
+                    memory_bank=memory_bank,
+                ),
+            "observation_to_memory": agent_components.observation.ObservationToMemory(),
+            "observations": agent_components.observation.LastNObservations(
+                history_length=24,
+            ),
+        }
+        actor = agent_components.concat_act_component.ConcatActComponent(
+            model=model,
+            component_order=list(components),
+            prefix_entity_name=False,
+        )
+        players.append(
+            entity_agent_with_logging.EntityAgentWithLogging(
+                agent_name=key,
+                act_component=actor,
+                context_components=components,
+            )
+        )
+    if not players:
+        raise ValueError("All Room characters are sleeping")
+    return players
+
+
+def run(
+    *,
+    mode: str,
+    steps: int = 5,
+    root: Path = ROOT,
+    start_time: str = "2026-11-09T09:00:00",
+    user_event: str = "",
+    bootstrap_context: Sequence[Mapping[str, str]] = (),
+    llama_url: str = "http://127.0.0.1:18080/v1/chat/completions",
+    state_in: Path | None = None,
+    state_out: Path | None = None,
+) -> dict[str, Any]:
+    config = json.loads((root / "room" / "config.json").read_text(encoding="utf-8"))
+    model = (
+        ScriptedModel()
+        if mode == "scripted"
+        else LocalLlama(llama_url, os.getenv("ROOM_CHAT_MODEL_ID", "Llama-3.2-3B-Instruct"))
+    )
+    players = build_agents(model, config)
+    names = [p.name for p in players]
+    # One-time migration of publicly witnessed Room interactions only.
+    if state_in is None:
+        for item in list(bootstrap_context)[-12:]:
+            speaker = str(item.get("speaker") or "").strip().lower()
+            utterance = str(item.get("text") or "").strip()[:520]
+            if speaker in (*PARTICIPANTS, "allen") and utterance:
+                for player in players:
+                    if player.name.lower() != speaker:
+                        player.observe(f"{speaker.capitalize()}: {utterance}")
+
+    if mode == "scripted":
+        # Exact selective-attention regression: two entities are busy,
+        # only two hear the invitation. No compulsory four-speaker beat.
+        initial_states = {
+            "Sarah": {"mask": ["emergency."], "timer_duration": "45m"},
+            "Mara": {"mask": [""], "timer_duration": "15m"},
+            "Owen": {"mask": ["logic."], "timer_duration": "1h"},
+            "Jules": {"mask": [""], "timer_duration": "20m"},
+        }
+        initial_events = [{
+            "timestamp": start_time,
+            "tag": "chat.invitation",
+            "source": "visitor",
+            "description": "A visitor asks who would like to look at a mysterious notebook.",
+        }]
+    else:
+        # New conversations can wake via genuine external events; timers also
+        # give each agent an independent opportunity to return from quiet work.
+        # Stagger wake-ups: no compulsory synchronized four-character beat.
+        delays = {"Sarah": "7m", "Mara": "19m", "Owen": "31m", "Jules": "43m"}
+        initial_states = {
+            name: {"mask": ["chat.allen", "action."],
+                   "timer_duration": delays[name],
+                   "timer_description": "return to own interests"}
+            for name in names
+        }
+        initial_events = ([{
+            "timestamp": start_time,
+            "tag": "chat.allen",
+            "source": "allen",
+            "description": user_event[:700],
+        }] if user_event.strip() else [])
+
+    memory_bank = basic_associative_memory.AssociativeMemoryBank(
+        sentence_embedder=embed, allow_duplicates=True,
+    )
+    master = interrupt_driven.GameMaster(
+        entities=players,
+        params={
+            "name": "Room native Concordia referee",
+            "start_time": start_time,
+            "initial_events": initial_events,
+            "initial_entity_states": {k: v for k, v in initial_states.items() if k in names},
+            "call_to_action": (
+                "What does {name} independently choose to do next, given only their "
+                "own identity, memory and current observation? Give their exact "
+                "first-person speech or present action, if any, with no narration "
+                "about other minds. Silence is allowed: write no action text when "
+                "they prefer to remain occupied privately. Then finish with exactly "
+                "one JSON object: "
+                "{\"mask\":[\"chat.allen\",\"action.\"],"
+                "\"timer\":{\"time\":\"15m\",\"reason\":\"a personal reason\"}}. "
+                "Masks may be empty [] or selective, and timers should represent "
+                "the character's actual current interests, not mandatory chatter. "
+                "Do not write dialogue for other characters."
+            ),
+        },
+    ).build(model=model, memory_bank=memory_bank)
+
+    if not type(master).__module__.startswith("concordia."):
+        raise RuntimeError("Native Concordia game master is not active")
+    scheduler = master.get_component("entity_scheduler")
+    if state_in is not None:
+        snapshot = json.loads(Path(state_in).read_text(encoding="utf-8"))
+        if snapshot.get("schema") != 1 or snapshot.get("players") != names:
+            raise ValueError("Native Concordia checkpoint incompatible with these players")
+        master.set_state(snapshot["game_master"])
+        for player in players:
+            player.set_state(snapshot["entities"][player.name])
+        saved_scheduler = snapshot["game_master"]["context_components"]["entity_scheduler"]
+        if scheduler.get_state() != saved_scheduler:
+            raise ValueError("Concordia scheduler checkpoint was not restored")
+        if user_event.strip():
+            scheduler.inject_event(interrupt_scheduling.Event(
+                timestamp=scheduler.get_current_time(), tag="chat.allen",
+                source="allen", description=user_event[:700],
+            ))
+    engine = simultaneous.Simultaneous()
+    records: list[dict[str, Any]] = []
+
+    def record(step) -> None:
+        records.append({
+            "step": step.step,
+            "acting": list(step.entity_actions),
+            "actions": dict(step.entity_actions),
+        })
+
+    engine.run_loop(
+        game_masters=[master],
+        entities=players,
+        max_steps=steps,
+        step_callback=record,
+    )
+    if state_out is not None:
+        # This is Concordia's own serialized entity, memory and GM state.
+        # Atomic persistence so an interrupted write cannot corrupt a snapshot.
+        snapshot = {
+            "schema": 1,
+            "framework": "google-deepmind/concordia",
+            "players": names,
+            "game_master": master.get_state(),
+            "entities": {p.name: p.get_state() for p in players},
+        }
+        destination = Path(state_out)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temp = destination.with_name(destination.name + ".tmp")
+        temp.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+        os.replace(temp, destination)
+    return {
+        "framework": "google-deepmind/concordia",
+        "engine_class": f"{type(engine).__module__}.{type(engine).__name__}",
+        "game_master_class": f"{type(master).__module__}.{type(master).__name__}",
+        "scheduler_class": f"{type(scheduler).__module__}.{type(scheduler).__name__}",
+        "mode": mode,
+        "players": names,
+        "simulated_time": scheduler.format_time(),
+        "steps": records,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=("scripted", "llama"), required=True)
+    parser.add_argument("--steps", type=int, default=5)
+    parser.add_argument("--user-event", default="")
+    parser.add_argument("--output", default="")
+    parser.add_argument("--state-in", default="")
+    parser.add_argument("--state-out", default="")
+    parser.add_argument("--llama-url", default="http://127.0.0.1:18080/v1/chat/completions")
+    args = parser.parse_args()
+    if not 1 <= args.steps <= 100:
+        parser.error("--steps must be between 1 and 100")
+    report = run(
+        mode=args.mode, steps=args.steps, user_event=args.user_event,
+        llama_url=args.llama_url,
+        state_in=Path(args.state_in) if args.state_in else None,
+        state_out=Path(args.state_out) if args.state_out else None,
+    )
+    report_json = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    if args.output:
+        Path(args.output).write_text(report_json, encoding="utf-8")
+    print(report_json)
+
+
+if __name__ == "__main__":
+    main()
