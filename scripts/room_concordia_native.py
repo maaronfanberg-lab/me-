@@ -221,6 +221,30 @@ def build_agents(model: language_model.LanguageModel, config: Mapping[str, Any])
     return players
 
 
+def scheduler_is_exhausted(state: Mapping[str, Any]) -> bool:
+    """The native scheduler can reach a terminal all-silent state.
+
+    A valid empty subscription mask plus no timers or future events is
+    voluntary quiet, but it must not kill the *service*. Keep the characters'
+    memory and let them resume independent activity in a fresh scheduling
+    interval, without generating or requiring any public utterance.
+    """
+    if not isinstance(state, Mapping):
+        return False
+    masks = state.get("masks")
+    timers = state.get("timers")
+    if not isinstance(masks, dict) or not masks:
+        return False
+    if not isinstance(timers, dict) or not timers:
+        return False
+    return (
+        all(not any(str(tag).strip() for tag in (mask or []))
+            for mask in masks.values())
+        and all(not timer for timer in timers.values())
+        and not state.get("event_queue")
+    )
+
+
 def run(
     *,
     mode: str,
@@ -317,10 +341,20 @@ def run(
         snapshot = json.loads(Path(state_in).read_text(encoding="utf-8"))
         if snapshot.get("schema") != 1 or snapshot.get("players") != names:
             raise ValueError("Native Concordia checkpoint incompatible with these players")
+        saved_scheduler = snapshot["game_master"]["context_components"]["entity_scheduler"]
+        if scheduler_is_exhausted(saved_scheduler):
+            # The upstream scheduler otherwise returns [''] as an actor and
+            # Simultaneous raises ValueError. Preserve every character's
+            # memory and the GM's history; refresh ONLY its exhausted
+            # scheduling interval. This creates opportunities, not dialogue.
+            print("Native Concordia scheduler exhausted; rearming quiet "
+                  "independent timers without resetting character memory",
+                  flush=True)
+            snapshot["game_master"]["context_components"]["entity_scheduler"] = scheduler.get_state()
+            saved_scheduler = scheduler.get_state()
         master.set_state(snapshot["game_master"])
         for player in players:
             player.set_state(snapshot["entities"][player.name])
-        saved_scheduler = snapshot["game_master"]["context_components"]["entity_scheduler"]
         if scheduler.get_state() != saved_scheduler:
             raise ValueError("Concordia scheduler checkpoint was not restored")
         if user_event.strip():
