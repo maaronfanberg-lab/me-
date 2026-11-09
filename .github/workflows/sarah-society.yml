@@ -372,7 +372,10 @@ jobs:
             fi
           done
           if [ -n "$model_pid" ]; then kill "$model_pid" 2>/dev/null || true; fi
-          if [ "$runner_exit_reason" = "repeated_beat_failure" ]; then exit 1; fi
+          if [ "$runner_exit_reason" = "repeated_beat_failure" ] || [ "$runner_exit_reason" = "native_concordia_failure" ] || [ "$runner_exit_reason" = "unrealized_conversational_action" ]; then
+            echo "::error::Room runner stopped abnormally: $runner_exit_reason"
+            exit 1
+          fi
           # The Room Pulse is the single normal handoff authority. Do not dispatch
           # another Room here or race the pulse chain with a duplicate replacement.
           exit 0
