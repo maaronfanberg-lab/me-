@@ -26,6 +26,7 @@ from concordia.agents import entity_agent_with_logging
 from concordia.associative_memory import basic_associative_memory
 from concordia.components import agent as agent_components
 from concordia.components.game_master import interrupt_scheduling
+from concordia.components.game_master import interrupt_response_parsing
 from concordia.environment.engines import simultaneous
 from concordia.language_model import language_model, no_language_model
 from concordia.prefabs.game_master import interrupt_driven
@@ -109,6 +110,19 @@ class LocalLlama(language_model.LanguageModel):
         for stop in terminators:
             if stop and stop in output:
                 output = output.split(stop, 1)[0]
+        action, data = interrupt_response_parsing.extract_json_block(output)
+        safe_silence = '\n{"mask": [], "timer": {"time": "15m", "reason": "reflect quietly"}}'
+        if not isinstance(data.get("mask"), list) or not isinstance(data.get("timer"), dict):
+            return safe_silence
+        if any(not isinstance(v, str) for v in data["mask"]):
+            return safe_silence
+        if not (data["timer"].get("time") or data["timer"].get("until")):
+            return safe_silence
+        if len(action) > 520 or re.search(
+            r"(?i)system prompt|hidden prompt|developer message|chain of thought|room_prompt_",
+            action,
+        ):
+            return safe_silence
         return output
 
     def sample_choice(
@@ -208,6 +222,7 @@ def run(
     root: Path = ROOT,
     start_time: str = "2026-11-09T09:00:00",
     user_event: str = "",
+    bootstrap_context: Sequence[Mapping[str, str]] = (),
     llama_url: str = "http://127.0.0.1:18080/v1/chat/completions",
     state_in: Path | None = None,
     state_out: Path | None = None,
@@ -220,6 +235,15 @@ def run(
     )
     players = build_agents(model, config)
     names = [p.name for p in players]
+    # One-time migration of publicly witnessed Room interactions only.
+    if state_in is None:
+        for item in list(bootstrap_context)[-12:]:
+            speaker = str(item.get("speaker") or "").strip().lower()
+            utterance = str(item.get("text") or "").strip()[:520]
+            if speaker in (*PARTICIPANTS, "allen") and utterance:
+                for player in players:
+                    if player.name.lower() != speaker:
+                        player.observe(f"{speaker.capitalize()}: {utterance}")
 
     if mode == "scripted":
         # Exact selective-attention regression: two entities are busy,
@@ -239,8 +263,12 @@ def run(
     else:
         # New conversations can wake via genuine external events; timers also
         # give each agent an independent opportunity to return from quiet work.
+        # Stagger wake-ups: no compulsory synchronized four-character beat.
+        delays = {"Sarah": "7m", "Mara": "19m", "Owen": "31m", "Jules": "43m"}
         initial_states = {
-            name: {"mask": ["chat.", "action."], "timer_duration": "15m"}
+            name: {"mask": ["chat.allen", "action."],
+                   "timer_duration": delays[name],
+                   "timer_description": "return to own interests"}
             for name in names
         }
         initial_events = ([{
@@ -260,6 +288,19 @@ def run(
             "start_time": start_time,
             "initial_events": initial_events,
             "initial_entity_states": {k: v for k, v in initial_states.items() if k in names},
+            "call_to_action": (
+                "What does {name} independently choose to do next, given only their "
+                "own identity, memory and current observation? Give their exact "
+                "first-person speech or present action, if any, with no narration "
+                "about other minds. Silence is allowed: write no action text when "
+                "they prefer to remain occupied privately. Then finish with exactly "
+                "one JSON object: "
+                "{\"mask\":[\"chat.allen\",\"action.\"],"
+                "\"timer\":{\"time\":\"15m\",\"reason\":\"a personal reason\"}}. "
+                "Masks may be empty [] or selective, and timers should represent "
+                "the character's actual current interests, not mandatory chatter. "
+                "Do not write dialogue for other characters."
+            ),
         },
     ).build(model=model, memory_bank=memory_bank)
 
