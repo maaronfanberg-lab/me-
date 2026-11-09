@@ -25,6 +25,7 @@ import numpy as np
 from concordia.agents import entity_agent_with_logging
 from concordia.associative_memory import basic_associative_memory
 from concordia.components import agent as agent_components
+from concordia.components.game_master import interrupt_scheduling
 from concordia.environment.engines import simultaneous
 from concordia.language_model import language_model, no_language_model
 from concordia.prefabs.game_master import interrupt_driven
@@ -208,6 +209,8 @@ def run(
     start_time: str = "2026-11-09T09:00:00",
     user_event: str = "",
     llama_url: str = "http://127.0.0.1:18080/v1/chat/completions",
+    state_in: Path | None = None,
+    state_out: Path | None = None,
 ) -> dict[str, Any]:
     config = json.loads((root / "room" / "config.json").read_text(encoding="utf-8"))
     model = (
@@ -262,6 +265,22 @@ def run(
 
     if not type(master).__module__.startswith("concordia."):
         raise RuntimeError("Native Concordia game master is not active")
+    scheduler = master.get_component("entity_scheduler")
+    if state_in is not None:
+        snapshot = json.loads(Path(state_in).read_text(encoding="utf-8"))
+        if snapshot.get("schema") != 1 or snapshot.get("players") != names:
+            raise ValueError("Native Concordia checkpoint incompatible with these players")
+        master.set_state(snapshot["game_master"])
+        for player in players:
+            player.set_state(snapshot["entities"][player.name])
+        saved_scheduler = snapshot["game_master"]["context_components"]["entity_scheduler"]
+        if scheduler.get_state() != saved_scheduler:
+            raise ValueError("Concordia scheduler checkpoint was not restored")
+        if user_event.strip():
+            scheduler.inject_event(interrupt_scheduling.Event(
+                timestamp=scheduler.get_current_time(), tag="chat.allen",
+                source="allen", description=user_event[:700],
+            ))
     engine = simultaneous.Simultaneous()
     records: list[dict[str, Any]] = []
 
@@ -278,7 +297,21 @@ def run(
         max_steps=steps,
         step_callback=record,
     )
-    scheduler = master.get_component("entity_scheduler")
+    if state_out is not None:
+        # This is Concordia's own serialized entity, memory and GM state.
+        # Atomic persistence so an interrupted write cannot corrupt a snapshot.
+        snapshot = {
+            "schema": 1,
+            "framework": "google-deepmind/concordia",
+            "players": names,
+            "game_master": master.get_state(),
+            "entities": {p.name: p.get_state() for p in players},
+        }
+        destination = Path(state_out)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temp = destination.with_name(destination.name + ".tmp")
+        temp.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+        os.replace(temp, destination)
     return {
         "framework": "google-deepmind/concordia",
         "engine_class": f"{type(engine).__module__}.{type(engine).__name__}",
@@ -297,6 +330,8 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=5)
     parser.add_argument("--user-event", default="")
     parser.add_argument("--output", default="")
+    parser.add_argument("--state-in", default="")
+    parser.add_argument("--state-out", default="")
     parser.add_argument("--llama-url", default="http://127.0.0.1:18080/v1/chat/completions")
     args = parser.parse_args()
     if not 1 <= args.steps <= 100:
@@ -304,6 +339,8 @@ def main() -> None:
     report = run(
         mode=args.mode, steps=args.steps, user_event=args.user_event,
         llama_url=args.llama_url,
+        state_in=Path(args.state_in) if args.state_in else None,
+        state_out=Path(args.state_out) if args.state_out else None,
     )
     report_json = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     if args.output:
