@@ -524,7 +524,7 @@ function makeDSP(rate){
    x=x*(1-E.rough*.65+E.rough*.65*(.5+.5*Math.sin(2*Math.PI*62*E.t)))*Math.min(1,E.t/.0012)+nz*E.ce*.22;x*=E.amp;
    for(let q=0;q<5;q++)bus[q]+=x*E.g[q]*.12;rkAL+=x*(E.g[0]+.7*E.g[1]+.75*E.g[4]+.35*E.g[3])*.7;rkAR+=x*(E.g[2]+.7*E.g[1]+.75*E.g[3]+.35*E.g[4])*.7;sum+=x;}
   return sum;};
- const hall=new Hall(rate);let brEnv=0,brG=0,mixMs=0;const GBR=.05,BLP=1-Math.exp(-2*Math.PI*110/rate),BDC=1-Math.exp(-2*Math.PI*28/rate),BDK=Math.exp(-1/(.65*rate)),BMS=1-Math.exp(-1/(1.5*rate));S.bodyAmt=1;const BG=+(globalThis.SE_BG||.7);S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
+ const hall=new Hall(rate);let brEnv=0,brG=0,mixMs=0,lowMs=0,bdNeed=0,bdAvg=.1;const mL1=[0,0],mL2=[0,0];const GBR=.05,BLP=1-Math.exp(-2*Math.PI*110/rate),BDC=1-Math.exp(-2*Math.PI*28/rate),BDK=Math.exp(-1/(.65*rate)),BMS=1-Math.exp(-1/(1.5*rate));S.bodyAmt=1;const BT=+(globalThis.SE_BT||.13),BL8=1-Math.exp(-2*Math.PI*80/rate);S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
  const voiceOf=e=>route[e]>=0?V[route[e]/3|0]:null;
  const on=e=>force[e]!==null||(route[e]>=0&&(route[e]>=100?S.rank:V[route[e]/3|0].on));
  const proc=(ch,inp,idx,chIdx)=>{
@@ -754,14 +754,15 @@ function makeDSP(rate){
     if(brG>1e-4){let bl=0,br=0,nb=0;for(const v of V){if(!v.on||!v.br||v.dim!==3)continue;const b=v.br;if(!b.on){b.u=v.m.slice(0,3);b.on=true;}
      const x0=b.u[0];for(let z=0;z<b.ns;z++)rk4(v.a,b.u,b.h);if(!(Math.abs(b.u[0]-v.c[0])<8*v.sc)){b.u=v.m.slice(0,3);}const dx=(b.u[0]-x0)/v.sc;b.lp+=(dx-b.lp)*.35;b.ms+=(b.lp*b.lp-b.ms)*.00035;const y=b.lp*Math.min(1e3,1/Math.sqrt(b.ms+1e-30))*.35*b.a;bl+=y*Math.sqrt(1-b.pan);br+=y*Math.sqrt(b.pan);nb++;}
      if(nb){const g=GBR*brG/Math.sqrt(nb);l+=bl*g;r+=br*g;}}else for(const v of V)if(v.br)v.br.on=false;}
-   if(S.body!==false){mixMs+=((l*l+r*r)*.5-mixMs)*BMS;let bs=0,nb=0;for(const v of V){if(!v.on||v.dim!==3)continue;const b=v.bd||(v.bd={u:v.m.slice(0,3),e:0,l1:0,l2:0,d1:0,d2:0,ns:1,h:0,cnt:0,k:1,zc:0,zt:0,ps:0,ms:1e-4});
+   if(S.body!==false){mixMs+=((l*l+r*r)*.5-mixMs)*BMS;mL1[0]+=(l-mL1[0])*BL8;mL2[0]+=(mL1[0]-mL2[0])*BL8;mL1[1]+=(r-mL1[1])*BL8;mL2[1]+=(mL1[1]-mL2[1])*BL8;lowMs+=((mL2[0]*mL2[0]+mL2[1]*mL2[1])*.5-lowMs)*BMS;let bs=0,bp=0,nb=0;for(const v of V){if(!v.on||v.dim!==3)continue;const b=v.bd||(v.bd={u:v.m.slice(0,3),e:0,l1:0,l2:0,d1:0,d2:0,ns:1,h:0,cnt:0,k:1,zc:0,zt:0,ps:0,ms:1e-4});
      if(b.cnt--<=0){b.cnt=31;const dA=v.def.T*45*b.k/rate;b.ns=Math.max(1,Math.ceil(dA/v.def.hMax));b.h=dA/b.ns;}
      if(v.bdHit){b.e=Math.max(b.e,v.bdHit);v.bdHit=0;}if(b.e<1e-4)continue;
      for(let z=0;z<b.ns;z++)rk4(v.a,b.u,b.h);if(!(Math.abs(b.u[0]-v.c[0])<8*v.sc))b.u=v.m.slice(0,3);
      const x=(b.u[0]-v.c[0])/v.sc;b.d1+=(x-b.d1)*BDC;const y1=x-b.d1;b.d2+=(y1-b.d2)*BDC;const y2=y1-b.d2;b.l1+=(y2-b.l1)*BLP;b.l2+=(b.l1-b.l2)*BLP;
      if((b.l2>0)!==(b.ps>0))b.zc++;b.ps=b.l2;if(++b.zt>=rate/2){const f=b.zc;b.k=Math.max(.2,Math.min(5,b.k*Math.pow(48/Math.max(4,f),.35)));b.zc=0;b.zt=0;}
-     b.ms+=(b.l2*b.l2-b.ms)*BMS;bs+=b.l2/Math.sqrt(b.ms+1e-9)*b.e;nb++;b.e*=BDK;}
-    const g=Math.sqrt(mixMs)*(S.gentle&&!S.strange?BG*.8:BG)*S.bodyAmt/Math.sqrt(Math.max(1,nb));l+=bs*g;r+=bs*g;}
+     b.ms+=(b.l2*b.l2-b.ms)*BMS;const w=b.l2/Math.sqrt(b.ms+1e-9)*b.e;bs+=w;bp+=b.e*b.e;nb++;b.e*=BDK;}
+    bdNeed+=((Math.max(0,BT*(S.gentle&&!S.strange?.8:1)*mixMs-lowMs))-bdNeed)*BMS;bdAvg+=(bp/Math.max(1,nb)-bdAvg)*BMS;
+    const g=Math.sqrt(bdNeed/Math.max(.02,bdAvg))*S.bodyAmt/Math.sqrt(Math.max(1,nb));l+=bs*g;r+=bs*g;}
    if(S.spk!==0||spkS!==0||S.pol!==0||on(IDX.sd)||on(IDX.pr)){
     // bass stays mono and undelayed; only sound above about 120 Hz is shifted or flipped
     const k=1-Math.exp(-2*Math.PI*120/rate);oLp[0]+=(l-oLp[0])*k;oLp[1]+=(r-oLp[1])*k;let hl=l-oLp[0],hr=r-oLp[1];

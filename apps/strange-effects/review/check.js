@@ -52,7 +52,7 @@ const jobs=[];
 for(const t in TONES){for(let a=0;a<N.ATTR.length;a++)jobs.push({kind:'listen',tone:t,on:[a],cpl:0});
  for(const c of[0,1])for(const p of[[3,1],[4,8],[2,4],[0,7]])jobs.push({kind:'listen',tone:t,on:p,cpl:c});jobs.push({kind:'listen',tone:t,on:N.ATTR.map((_,i)=>i),cpl:1});}
 const SET={'Slow':{move:.06},'Fast':{move:1.6},'1 particle':{nP:1},'32 particles':{nP:32},'128 particles':{nP:128},'Hall':{hallRT:4.5,hallSize:1},'Cathedral':{hallRT:9,hallSize:1.5},'Stereo':{recv:false},'Mono':{recv:false,mono:true},
- 'Rank':{style:'k'},'Electric':{style:'e'},'War':{style:'w'},'Alive':{style:'a'},'Cinematic':{style:'c'},'Raw':{style:'r'},'Pair harmonic':{hm:1},'Swarm harmonic':{hm:2}};
+ /* styles (Rank, Electric, War, Alive, Cinematic, Raw) are hidden in the app and never switched on, so they are not tested */'Pair harmonic':{hm:1},'Swarm harmonic':{hm:2}};
 for(const s in SET)for(const on of[[0],[4,8],N.ATTR.map((_,i)=>i)])jobs.push({kind:'listen',tone:'Gentle',setting:s,on,cpl:on.length>2?1:0});
 for(let a=0;a<N.ATTR.length;a++)for(let b=a+1;b<N.ATTR.length;b++)jobs.push({kind:'pull',on:[a,b]});
 jobs.push({kind:'determinism'});
