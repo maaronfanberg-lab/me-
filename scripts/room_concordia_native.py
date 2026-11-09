@@ -174,11 +174,13 @@ def build_agents(model: language_model.LanguageModel, config: Mapping[str, Any])
                 state=identity_text(name, config),
                 pre_act_label="Your identity and independent interests",
             ),
+            agent_components.memory.DEFAULT_MEMORY_COMPONENT_KEY:
+                agent_components.memory.AssociativeMemory(
+                    memory_bank=memory_bank,
+                ),
+            "observation_to_memory": agent_components.observation.ObservationToMemory(),
             "observations": agent_components.observation.LastNObservations(
                 history_length=24,
-            ),
-            "memory": agent_components.memory.AssociativeMemory(
-                memory_bank=memory_bank,
             ),
         }
         actor = agent_components.concat_act_component.ConcatActComponent(
