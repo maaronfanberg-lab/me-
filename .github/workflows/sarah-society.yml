@@ -56,7 +56,8 @@ jobs:
           ROOM_SCENE_PUBLIC_LEDGER: '1' # later half of separate 24-turn replication only
           ROOM_PLAN_FOLLOWTHROUGH: '1' # finite greenhouse interval 36328-36363 only
           ROOM_CAUSAL_WORLD_EXPERIMENT: '1' # time-limited 36480-36599 canary, following earlier scene trial
-          ROOM_CONCORDIA_WORLD_ENABLE: '1' # live canary, revert to '0' to disable
+          ROOM_CONCORDIA_WORLD_ENABLE: '0' # replaced by actual DeepMind Concordia referee
+          ROOM_NATIVE_CONCORDIA: ${{ vars.ROOM_NATIVE_CONCORDIA_DISABLE == '1' && '0' || '1' }}
           ROOM_NATIVE_3B_DISABLE: ${{ vars.ROOM_NATIVE_3B_DISABLE == '1' && '1' || '0' }}
         run: |
           set -uo pipefail
@@ -259,6 +260,12 @@ jobs:
           ack_allen_turns() { [ -s room_work/allen-ack.json ] || return 0; ack_count=$(python3 -c 'import json; print(len(json.load(open("room_work/allen-ack.json")).get("ids", [])))' 2>/dev/null || echo 0); [ "$ack_count" -gt 0 ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room_work/allen-ack.json "${ROOM_RELAY_URL%/}/api/participant/ack" >/dev/null || true; }
           wait_batch() { failed=0; for pid in "$@"; do wait "$pid" || failed=1; done; [ "$failed" -eq 0 ]; }
 
+          if [ "${ROOM_NATIVE_CONCORDIA:-0}" = "1" ]; then
+            python3 -m pip install --disable-pip-version-check -r requirements-room-concordia.txt || exit 1
+            python3 -m py_compile scripts/room_concordia_native.py scripts/room_concordia_live.py || exit 1
+            echo "LIVE ROOM: DeepMind native Concordia engine selected"
+          fi
+
           # Desired behavior is separate from the temporary technical
           # fallback. A single bad model period must not condemn a whole
           # multi-hour Room session to the old repetitive engine.
@@ -271,6 +278,12 @@ jobs:
             beat_seq=$((beat_seq + 1)); export ROOM_CYCLE_KEY="${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${beat_seq}"; rm -rf room_parts room_work; mkdir -p room_parts room_work
             fetch_allen_turns
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" python3 scripts/room_participant.py room_work/allen-inbox.json room_work/allen-ack.json || return 1
+            if [ "${ROOM_NATIVE_CONCORDIA:-0}" = "1" ]; then
+              [ "${ROOM_BRAIN_ACTIVE:-none}" != "none" ] || { echo "Native Room requires a working Llama brain"; return 1; }
+              timeout -k 15s 300s python3 scripts/room_concordia_live.py --mode llama --ack-path room_work/allen-ack.json || return 1
+              python3 scripts/build_room_feed.py || return 1
+              return 0
+            fi
             pids=(); for n in 1 2 4 5 7 8 10 11; do (timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase sense) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1
             for n in 0 3 6 9; do timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_PERCEPTION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase sense || return 1; done
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_engine_v5.py bus || return 1
@@ -322,7 +335,11 @@ jobs:
                 candidate_preflight|commit_integrity|floor_selection)
                   floor_action_integrity_pending=1 ;;
               esac
-              if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ] && [ "$consecutive_failures" -ge 2 ] && [ "$floor_action_integrity_pending" -eq 1 ]; then
+              if [ "${ROOM_NATIVE_CONCORDIA:-0}" = "1" ] && [ "$consecutive_failures" -ge 2 ]; then
+                runner_exit_reason="native_concordia_failure"
+                echo "Native Concordia failed twice; not publishing compulsory legacy dialogue"
+                break
+              elif [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ] && [ "$consecutive_failures" -ge 2 ] && [ "$floor_action_integrity_pending" -eq 1 ]; then
                 runner_exit_reason="unrealized_conversational_action"
                 echo "Room action integrity unresolved; refusing legacy publication fallback"
                 break
