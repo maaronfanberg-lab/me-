@@ -56,7 +56,13 @@ def identity_text(name: str, config: Mapping[str, Any]) -> str:
         str(psyche.get("core_identity") or name),
         str(psyche.get("agency_style") or ""),
         "Personal motives: " + "; ".join(map(str, (psyche.get("motives") or [])[:4])),
-        "Act independently, including working quietly when that is genuinely appropriate.",
+        "Values: " + "; ".join(map(str, (psyche.get("values") or [])[:5])),
+        "What catches my interest: " + "; ".join(
+            map(str, (psyche.get("attention_magnets") or [])[:5])
+        ),
+        "Pursue your own substantive interests rather than discussing the "
+        "design, quality or mechanics of conversation. You may volunteer a "
+        "concrete observation, pursue an idea, act, or stay occupied quietly.",
         "Never invent another person's speech or turn a plan into an accomplished action.",
     ]
     return "\n".join(x for x in elements if x.strip())
