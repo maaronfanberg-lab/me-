@@ -79,7 +79,7 @@ class LiveRoomTests(unittest.TestCase):
         history = [{"text": "Hi there"}]
         self.assertEqual(
             bridge._message_from_concordia(
-                'Sarah: Hi there\\n{"mask":[],"timer":{"time":"5m"}}',
+                'Sarah: Hi there\n{"mask":[],"timer":{"time":"5m"}}',
                 "Sarah", history,
             ), "",
         )
