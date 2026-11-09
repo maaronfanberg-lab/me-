@@ -8,6 +8,23 @@ import room_concordia_native as native
 
 
 class NativeConcordiaTests(unittest.TestCase):
+    def test_terminal_all_silent_checkpoint_rearms_without_erasing_memory(self):
+        root = native.ROOT
+        # The live outage checkpoint had masks [''] for all four people,
+        # no remaining timers, and an empty future event queue.
+        exhausted = {
+            "masks": {name: [""] for name in ("Sarah", "Mara", "Owen", "Jules")},
+            "timers": {name: None for name in ("Sarah", "Mara", "Owen", "Jules")},
+            "event_queue": [],
+            "pending": {"Sarah": [{"tag": "timer.expired.Owen"}]},
+        }
+        self.assertTrue(native.scheduler_is_exhausted(exhausted))
+        exhausted["timers"]["Sarah"] = {"time": "15m"}
+        self.assertFalse(native.scheduler_is_exhausted(exhausted))
+        exhausted["timers"]["Sarah"] = None
+        exhausted["event_queue"] = [{"tag": "action.", "timestamp": "tomorrow"}]
+        self.assertFalse(native.scheduler_is_exhausted(exhausted))
+
     def test_upstream_engine_and_referee_are_really_running(self):
         result = native.run(mode="scripted", steps=1)
         self.assertEqual(result["framework"], "google-deepmind/concordia")
