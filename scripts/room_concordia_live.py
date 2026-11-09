@@ -87,21 +87,27 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     checkpoint = _load(checkpoint_path, {}) if checkpoint_path.is_file() else {}
     new_input = _new_input(conversation, ack_path, checkpoint)
     user_event = "\n".join(f"Allen: {m.get('text','')}" for m in new_input)
+    # One-time transition away from the old repeated, abstract dialogue.
+    # The public Room history and all existing relationships remain intact.
+    # Do NOT re-prime a new autonomous memory bank with the same stale turns.
+    bootstrap_policy = 2
+    old_seen = list(checkpoint.get("seen_allen_messages", []))
+    resume = checkpoint_path if checkpoint.get("bootstrap_policy") == bootstrap_policy else None
     # This is a real Concordia engine tick, not a call to the legacy Room floor.
     output = native.run(
         mode=mode,
         steps=steps,
         root=root,
         start_time=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
-        state_in=checkpoint_path if checkpoint_path.is_file() else None,
+        state_in=resume,
         state_out=checkpoint_path,
-        bootstrap_context=conversation[-8:],
+        bootstrap_context=(),
         user_event=user_event,
     )
     checkpoint = _load(checkpoint_path, {})
-    already_seen = list(checkpoint.get("seen_allen_messages", []))
+    checkpoint["bootstrap_policy"] = bootstrap_policy
     checkpoint["seen_allen_messages"] = list(
-        dict.fromkeys([*already_seen, *(str(m["id"]) for m in new_input)])
+        dict.fromkeys([*old_seen, *(str(m["id"]) for m in new_input)])
     )[-300:]
     _save(checkpoint_path, checkpoint)
 
