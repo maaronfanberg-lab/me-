@@ -75,6 +75,29 @@ class LiveRoomTests(unittest.TestCase):
             original["game_master"]["context_components"]["entity_scheduler"]["tick_count"],
         )
 
+    def test_one_time_context_reset_keeps_public_history(self):
+        root = self.make_root()
+        ack = root / "ack.json"
+        ack.write_text('{"ids":[]}')
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        public_before = json.loads((root / "room" / "conversation.json").read_text())
+        state_path = root / "room" / bridge.CHECKPOINT
+        stale = json.loads(state_path.read_text())
+        stale["bootstrap_policy"] = 1
+        stale["seen_allen_messages"] = ["already-accepted-user-message"]
+        stale["game_master"]["context_components"]["entity_scheduler"]["tick_count"] = 99999
+        state_path.write_text(json.dumps(stale))
+        out = bridge.beat(root, mode="scripted", ack_path=ack)
+        fresh = json.loads(state_path.read_text())
+        public_after = json.loads((root / "room" / "conversation.json").read_text())
+        self.assertEqual(out["cycle"], 2)
+        self.assertEqual(fresh["bootstrap_policy"], 2)
+        self.assertIn("already-accepted-user-message", fresh["seen_allen_messages"])
+        self.assertLess(
+            fresh["game_master"]["context_components"]["entity_scheduler"]["tick_count"], 99999
+        )
+        self.assertEqual(public_after[:len(public_before)], public_before)
+
     def test_invalid_model_scaffolding_not_published(self):
         history = [{"text": "Hi there"}]
         self.assertEqual(
