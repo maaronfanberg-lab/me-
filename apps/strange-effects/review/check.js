@@ -3,7 +3,27 @@
 const N=require('../render/engine.js');const R=48000,W=960;
 const TONES={Gentle:{gentle:true},Gilmour:{gentle:false},Strange:{gentle:false,strange:true},Everything:{gentle:false,allT:true},'Space synth':{gentle:false,synT:true}};
 const BASE={swarm:true,nP:4,recv:true,holo:true,cine:false,alive:false,move:.35,hallRT:1.8,hallSize:.7,cpl:0};
-const nm=i=>N.ATTR[i].name;const K=+(process.env.SE_SCALE||1); // SE_SCALE<1 only for quick smoke tests
+const nm=i=>N.ATTR[i].name;
+// Audible onsets by spectral flux (Dixon 2006, "Onset detection revisited"): 1024-pt Hann frames, 10 ms hop,
+// log-compressed magnitudes; flux = sum of rises in each bin over the previous frame; an onset is a local peak
+// (±30 ms) that clears the local mean (±100 ms) by DELTA, in a frame louder than -55 dB, >= 50 ms after the last.
+const heardOnsets=(()=>{
+const N=1024,HN=N/2,win=new Float64Array(N).map((_,i)=>.5-.5*Math.cos(2*Math.PI*i/N));
+const rev=new Uint32Array(N);for(let i=0,b=Math.log2(N);i<N;i++){let r=0;for(let k=0;k<b;k++)r|=((i>>k)&1)<<(b-1-k);rev[i]=r;}
+function fft(re,im){for(let i=0;i<N;i++){const j=rev[i];if(j>i){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]];}}
+ for(let s=2;s<=N;s*=2){const h=s/2,a=-2*Math.PI/s;for(let i=0;i<N;i+=s)for(let k=0;k<h;k++){const c=Math.cos(a*k),d=Math.sin(a*k),xr=re[i+k+h]*c-im[i+k+h]*d,xi=re[i+k+h]*d+im[i+k+h]*c;re[i+k+h]=re[i+k]-xr;im[i+k+h]=im[i+k]-xi;re[i+k]+=xr;im[i+k]+=xi;}}}
+// bands: 1/3 octave from 63 Hz to 12.5 kHz; level in dB with a -80 dB floor; flux = summed rise of each band over the
+// louder of the two frames before (SuperFlux-style max filter, Böck & Widmer 2013, which ignores beating flicker)
+const TH=7,FL=3;
+function heardOnsets(L,R,rate){const H=Math.round(rate*.01),nf=Math.floor((L.length-N)/H);const B=[];{let a=Math.round(100*N/rate);for(let c=100*Math.pow(2,1/3);a<HN;c*=Math.pow(2,1/3)){let b=Math.min(HN,Math.round(c*N/rate));if(b-a<4&&b<HN)continue;B.push([a,b]);a=b;if(c>12500)break;}}
+ const re=new Float64Array(N),im=new Float64Array(N),Lv=[],flux=new Float64Array(nf),en=new Float64Array(nf);
+ for(let f=0;f<nf;f++){let e=0;for(let i=0;i<N;i++){const x=.5*(L[f*H+i]+R[f*H+i]);re[i]=x*win[i];im[i]=0;e+=x*x;}en[f]=e/N;fft(re,im);
+  const lv=B.map(([a,b])=>{let p=0;for(let k=a;k<b;k++)p+=re[k]*re[k]+im[k]*im[k];return 10*Math.log10(p/(N*N/16)+1e-12);});const top=Math.max(...lv);for(let j=0;j<lv.length;j++)lv[j]=Math.max(lv[j],top-40,-70);Lv.push(lv);
+  if(f>=3){let fl=0;for(let j=0;j<B.length;j++){const d=lv[j]-Math.max(Lv[f-1][j],Lv[f-2][j],Lv[f-3][j])-FL;if(d>0)fl+=d;}flux[f]=fl;}}
+ let c=0,last=-99;for(let f=10;f<nf-10;f++){let pk=true;for(let j=f-3;j<=f+3;j++)if(flux[j]>flux[f]){pk=false;break;}if(!pk)continue;let m=0;for(let j=f-10;j<=f+10;j++)m+=flux[j];m/=21;
+  if(flux[f]>=TH&&flux[f]>1.5*m&&en[f]>3.2e-6&&f-last>=5){c++;last=f;}}return c/(nf*.01);}
+return heardOnsets;})();
+const K=+(process.env.SE_SCALE||1); // SE_SCALE<1 only for quick smoke tests
 // set the engine up exactly as the app does: it opens with the swarm routes; a style re-routes the effects
 // through the app's useRoutes() mapping, switches the hall like the app, and Cinematic slows Movement
 function make(on,cfg){const D=N.makeDSP(R);D.V.forEach((v,i)=>v.on=on.includes(i));Object.assign(D,BASE);
@@ -15,13 +35,13 @@ function make(on,cfg){const D=N.makeDSP(R);D.V.forEach((v,i)=>v.on=on.includes(i
  Object.assign(D,rest);return D;}
 // listening run: 20 ms windows; silence = below -60 dBFS; notes = particle crossings; clipping = |sample| > .99
 function listen(on,cfg,sec){const D=make(on,cfg);D.process(2*R);const hk=Math.exp(-2*Math.PI*300/R);let h1=[0,0],h2=[0,0],hx=[0,0],hy=[0,0],pmn=0; // two one-pole high-passes at 300 Hz
- const dbs=[];let run=0,longest=0,sil=0,n=0,mn=0,up=0,clip=0,tot=0,nan=0;const notes=on.map(()=>0);
- for(let r=0;r<sec*R/W;r++){const ps=on.map(i=>[...D.V[i].Ps]);const o=D.process(W);let e=0,ep=0;
+ const dbs=[],AL=new Float32Array(Math.round(sec*R/W)*W),AR=new Float32Array(AL.length);let run=0,longest=0,sil=0,n=0,mn=0,up=0,clip=0,tot=0,nan=0;const notes=on.map(()=>0);
+ for(let r=0;r<sec*R/W;r++){const ps=on.map(i=>[...D.V[i].Ps]);const o=D.process(W);AL.set(o.L,r*W);AR.set(o.R,r*W);let e=0,ep=0;
   for(let i=0;i<W;i++){const a=o.L[i],b=o.R[i];if(!(a===a&&b===b))nan++;e+=a*a+b*b;
    for(let ch=0;ch<2;ch++){const x=ch?b:a,y1=hk*(h1[ch]+x-hx[ch]);hx[ch]=x;h1[ch]=y1;const y2=hk*(h2[ch]+y1-hy[ch]);hy[ch]=y1;h2[ch]=y2;ep+=y2*y2;}if(Math.abs(a)>.99||Math.abs(b)>.99)clip++;tot+=2;}
-  on.forEach((v,j)=>{const P=D.V[v].Ps;for(let q=0;q<P.length&&q<ps[j].length;q++)if(P[q]!==ps[j][q]&&P[q]!==0)notes[j]++;});
+  on.forEach((v,j)=>{const P=D.V[v].Ps,both=D.V[v].def.sec[2];for(let q=0;q<P.length&&q<ps[j].length;q++)if(P[q]!==ps[j][q]&&ps[j][q]!==0&&(P[q]===1||both))notes[j]++;});
   const db=10*Math.log10(e/(2*W)+1e-20);dbs.push(db);pmn=Math.min(pmn,10*Math.log10(ep/(2*W)+1e-20));n++;mn=Math.min(mn,db);if(D.brGate&&D.brGate()>.5)up++;if(db<-60){sil++;run++;longest=Math.max(longest,run);}else run=0;}
- return{longestSilence:+(longest*W/R).toFixed(2),silentPct:+(100*sil/n).toFixed(1),quietestDb:+mn.toFixed(1),phoneQuietestDb:+pmn.toFixed(1),undertowPct:+(100*up/n).toFixed(1),contrastDb:+(()=>{const q=dbs.slice().sort((x,y)=>x-y);return q[Math.floor(.9*q.length)]-q[Math.floor(.1*q.length)];})().toFixed(1),move:D.move,clipPct:+(100*clip/tot).toFixed(3),nan:nan+(D.bad||0),notesPerSec:notes.map(x=>+(x/sec).toFixed(2))};}
+ return{longestSilence:+(longest*W/R).toFixed(2),silentPct:+(100*sil/n).toFixed(1),quietestDb:+mn.toFixed(1),phoneQuietestDb:+pmn.toFixed(1),undertowPct:+(100*up/n).toFixed(1),heardPerSec:+heardOnsets(AL,AR,R).toFixed(2),contrastDb:+(()=>{const q=dbs.slice().sort((x,y)=>x-y);return q[Math.floor(.9*q.length)]-q[Math.floor(.1*q.length)];})().toFixed(1),move:D.move,clipPct:+(100*clip/tot).toFixed(3),nan:nan+(D.bad||0),notesPerSec:notes.map(x=>+(x/sec).toFixed(2))};}
 const jobs=[];
 for(const t in TONES){for(let a=0;a<N.ATTR.length;a++)jobs.push({kind:'listen',tone:t,on:[a],cpl:0});
  for(const c of[0,1])for(const p of[[3,1],[4,8],[2,4],[0,7]])jobs.push({kind:'listen',tone:t,on:p,cpl:c});jobs.push({kind:'listen',tone:t,on:N.ATTR.map((_,i)=>i),cpl:1});}
