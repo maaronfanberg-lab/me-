@@ -1,0 +1,44 @@
+name: Native DeepMind Concordia integration test
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/room_concordia_native.py'
+      - 'scripts/test_room_concordia_native.py'
+      - 'requirements-room-concordia.txt'
+      - '.github/workflows/room-concordia-native-test.yml'
+      - 'room/config.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-upstream-concordia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install actual Google DeepMind package
+        run: python -m pip install --disable-pip-version-check -r requirements-room-concordia.txt
+      - name: Prove native framework APIs are used
+        run: python -m unittest discover -s scripts -p 'test_room_concordia_native.py' -v
+      - name: Run actual Concordia engine and save an execution receipt
+        run: |
+          python scripts/room_concordia_native.py --mode scripted --steps 5 --output /tmp/native-concordia-result.json
+          python - <<'PY'
+          import json
+          x=json.load(open('/tmp/native-concordia-result.json'))
+          assert x['engine_class']=='concordia.environment.engines.simultaneous.Simultaneous'
+          assert x['steps'] and set(x['steps'][0]['acting'])=={'Mara','Jules'}
+          print('Verified native Concordia engine and selective first action')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-concordia-execution-receipt
+          path: /tmp/native-concordia-result.json
+          if-no-files-found: ignore
