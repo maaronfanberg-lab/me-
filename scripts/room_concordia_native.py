@@ -158,7 +158,7 @@ class ScriptedModel(no_language_model.NoLanguageModel):
 
     def sample_text(self, prompt: str, **kwargs: Any) -> str:
         del kwargs
-        match = re.findall(r"What does (Sarah|Mara|Owen|Jules) do next\?", prompt)
+        match = re.findall(r"What does (Sarah|Mara|Owen|Jules) (?:independently choose to )?do next", prompt)
         if not match:
             raise RuntimeError("Unexpected Concordia action prompt")
         name = match[-1]
