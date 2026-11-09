@@ -397,7 +397,7 @@ function makeDSP(rate){
   if(!k.buf)k.buf=new Float32Array(Math.ceil(rate/20));
   // fast crossings are picked; slow ones swell or slide
   const sb=spd>.62?2:spd>.32?1:0;const r2=(()=>{const H=(v.q2H||(v.q2H=[[],[],[]]))[sb];let c=0;for(const x of H)if(x<q2)c++;const r=H.length>4?(c+.5)/(H.length+1):q2;H.push(q2);if(H.length>48)H.shift();return r;})();
-  const r3=r2<.34?0:r2<.67?1:2;const ty=S.forceTy!=null?S.forceTy:S.synT?[[22,23,21],[20,21,23],[21,20,23]][sb][r3]:S.allT?[[2,1,17,16,13],[0,5,14,10,18],[3,4,11,12,15]][sb][Math.min(4,Math.floor(r2*5))]:S.strange?[[16,17,18],[13,14,15],[10,11,12]][sb][r3]:S.gentle?(sb===2?0:sb===1?(r2>.5?1:0):(r2>.5?1:2)):sb===2?(r2>.5?3:4):sb===1?(r2>.5?5:0):(r2>.5?1:2);S.tech[ty]++;
+  const r3=r2<.34?0:r2<.67?1:2;const ty=S.forceTy!=null?S.forceTy:S.synT?[[22,23,21],[20,21,23],[21,20,23]][sb][r3]:S.allT?[[2,1,17,16,13],[0,5,14,10,18],[3,4,11,12,15]][sb][Math.min(4,Math.floor(r2*5))]:S.strange?[[16,17,18],[13,14,15],[10,11,12]][sb][r3]:S.gentle?(sb===2?0:sb===1?(r2>.5?1:0):(r2>.5?1:2)):sb===2?(r2>.5?3:4):sb===1?(r2>.5?5:0):(r2>.5?1:2);S.tech[ty]++;v.bdHit=Math.max(v.bdHit||0,.4+.6*spd);
   let f=(S.strange||S.allT?82*Math.pow(2,4*q1)*(ty===11?(q2>.5?5:3):ty===18?(q2>.5?4:2):ty===17?.5:1):S.gentle?110*Math.pow(2,2.6*q1):82*Math.pow(2,4*q1))*S.pf*v.fmul;if(S.gentle&&!S.strange)f=Math.min(1200,f);if(ty===4)f*=q1>.5?2:3;if(ty===3)f=Math.max(f,600*S.pf);f=Math.max(48,Math.min(4000,f));
   k.stA=(.25+.75*spd)*(S.gentle&&!S.strange?.35:1);k.stF=Math.min(.95,2*Math.sin(Math.PI*Math.min(rate*.45,(S.gentle&&!S.strange?900:1500)*Math.pow(2,2.2*q1))/rate));k.stQ=.25+.6*(1-q2);k.sLo=0;k.sBp=0;k.ttu=0;k.hm=0;k.apx=0;k.apy=0;k.sz=0;k.hs=0;k.a2=0;k.h2=0;k.vib=1;k.wg=.05;k.fd=[9,5,7,12,3,9][ty]*(.6+.8*q2)*(S.gentle?.2:1);k.fn=1/Math.tanh(k.fd*.3)*.35;Object.assign(k,{on:true,type:ty,t:0,v,q,n0:n1,f,f0:f,ft:f,vp:0,vr:4.6+1.6*q2,vd:ty===2?.004:.009,gr2:ty===2?.00025:.002,lp:0,s1:0,s2:0,
    dur:[.45+1.3*(1-spd),1.4+1.6*q1,1.3+1.4*q1,.18+.25*q1,.25+.5*(1-spd),.5+1*(1-spd)][ty],att:.35+.9*q1,cs:6+6*q1,
@@ -524,7 +524,7 @@ function makeDSP(rate){
    x=x*(1-E.rough*.65+E.rough*.65*(.5+.5*Math.sin(2*Math.PI*62*E.t)))*Math.min(1,E.t/.0012)+nz*E.ce*.22;x*=E.amp;
    for(let q=0;q<5;q++)bus[q]+=x*E.g[q]*.12;rkAL+=x*(E.g[0]+.7*E.g[1]+.75*E.g[4]+.35*E.g[3])*.7;rkAR+=x*(E.g[2]+.7*E.g[1]+.75*E.g[3]+.35*E.g[4])*.7;sum+=x;}
   return sum;};
- const hall=new Hall(rate);let brEnv=0,brG=0;const GBR=.05;S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
+ const hall=new Hall(rate);let brEnv=0,brG=0,mixMs=0;const GBR=.05,BLP=1-Math.exp(-2*Math.PI*110/rate),BDC=1-Math.exp(-2*Math.PI*28/rate),BDK=Math.exp(-1/(.65*rate)),BMS=1-Math.exp(-1/(1.5*rate));S.bodyAmt=1;const BG=+(globalThis.SE_BG||.7);S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
  const voiceOf=e=>route[e]>=0?V[route[e]/3|0]:null;
  const on=e=>force[e]!==null||(route[e]>=0&&(route[e]>=100?S.rank:V[route[e]/3|0].on));
  const proc=(ch,inp,idx,chIdx)=>{
@@ -647,7 +647,7 @@ function makeDSP(rate){
  }
  S.process=(n)=>{
   const L=new Float32Array(n),R=new Float32Array(n),trail=V.map(()=>[]);
-  const rc=1-2*Math.PI*(S.alive?22:S.cine?120:160)/rate,hitDecay=Math.exp(-1/(1.5*rate)),crackDecay=Math.exp(-1/(.03*rate));
+  const rc=1-2*Math.PI*(S.alive?22:S.cine?120:160)/rate,rcR=1-2*Math.PI*20/rate,hitDecay=Math.exp(-1/(1.5*rate)),crackDecay=Math.exp(-1/(.03*rate));
   if(S.alive!==wasAlive&&!S.alive){for(const v of V){const dp=v.def.drP;v.a.pv[dp]=v.base[dp];}}wasAlive=S.alive;
   for(let i=0;i<n;i++){
    zs+=(S.zoom-zs)*.0007;for(let k=0;k<3;k++)fs[k]+=(S.fc[k]-fs[k])*.002;
@@ -744,7 +744,7 @@ function makeDSP(rate){
     const inL=mid+side,inR=mid-side;
     xfL+=(c[1].xt.read(d)-xfL)*.9;xfR+=(c[0].xt.read(d)-xfR)*.9;
     const a=inL-k*xfL,b=inR-k*xfR;c[0].xt.push(a);c[1].xt.push(b);const lift=.55+.45*k;l=a*lift;r=b*lift;}
-   for(let ch=0;ch<2;ch++){const v=ch?r:l,o=v-dcI[ch]+rc*dc[ch];dcI[ch]=v;dc[ch]=o;(ch?(r=o):(l=o));}
+   for(let ch=0;ch<2;ch++){const v=ch?r:l,o=v-dcI[ch]+(S.recv&&S.body!==false?rcR:rc)*dc[ch];dcI[ch]=v;dc[ch]=o;(ch?(r=o):(l=o));}
    if(S.level!==false&&cin){const ce=1-Math.exp(-2*Math.PI*350/rate);eLp[0]+=(l-eLp[0])*ce;eLp[1]+=(r-eLp[1])*ce;const el=l-eLp[0],er=r-eLp[1];env+=((el*el+er*er)*.5-env)*.000012;const w=Math.min(9,.13/Math.sqrt(env+1e-7));if(env>2e-6||w<gain)gain+=(w-gain)*.00002;l*=gain;r*=gain;}
    else if(S.level!==false){env+=((l*l+r*r)*.5-env)*.00002;const w=Math.min(14,.17/Math.sqrt(env+1e-7));if(w<gain)gain+=(w-gain)*.0006;else if(env>4e-6)gain+=(w-gain)*(S.swarm?.00015:.00006);l*=gain;r*=gain;}
    if(on(IDX.ld)){const g=Math.pow(10,(-30+30*u[IDX.ld])/20);l*=g;r*=g;}
@@ -754,6 +754,14 @@ function makeDSP(rate){
     if(brG>1e-4){let bl=0,br=0,nb=0;for(const v of V){if(!v.on||!v.br||v.dim!==3)continue;const b=v.br;if(!b.on){b.u=v.m.slice(0,3);b.on=true;}
      const x0=b.u[0];for(let z=0;z<b.ns;z++)rk4(v.a,b.u,b.h);if(!(Math.abs(b.u[0]-v.c[0])<8*v.sc)){b.u=v.m.slice(0,3);}const dx=(b.u[0]-x0)/v.sc;b.lp+=(dx-b.lp)*.35;b.ms+=(b.lp*b.lp-b.ms)*.00035;const y=b.lp*Math.min(1e3,1/Math.sqrt(b.ms+1e-30))*.35*b.a;bl+=y*Math.sqrt(1-b.pan);br+=y*Math.sqrt(b.pan);nb++;}
      if(nb){const g=GBR*brG/Math.sqrt(nb);l+=bl*g;r+=br*g;}}else for(const v of V)if(v.br)v.br.on=false;}
+   if(S.body!==false){mixMs+=((l*l+r*r)*.5-mixMs)*BMS;let bs=0,nb=0;for(const v of V){if(!v.on||v.dim!==3)continue;const b=v.bd||(v.bd={u:v.m.slice(0,3),e:0,l1:0,l2:0,d1:0,d2:0,ns:1,h:0,cnt:0,k:1,zc:0,zt:0,ps:0,ms:1e-4});
+     if(b.cnt--<=0){b.cnt=31;const dA=v.def.T*45*b.k/rate;b.ns=Math.max(1,Math.ceil(dA/v.def.hMax));b.h=dA/b.ns;}
+     if(v.bdHit){b.e=Math.max(b.e,v.bdHit);v.bdHit=0;}if(b.e<1e-4)continue;
+     for(let z=0;z<b.ns;z++)rk4(v.a,b.u,b.h);if(!(Math.abs(b.u[0]-v.c[0])<8*v.sc))b.u=v.m.slice(0,3);
+     const x=(b.u[0]-v.c[0])/v.sc;b.d1+=(x-b.d1)*BDC;const y1=x-b.d1;b.d2+=(y1-b.d2)*BDC;const y2=y1-b.d2;b.l1+=(y2-b.l1)*BLP;b.l2+=(b.l1-b.l2)*BLP;
+     if((b.l2>0)!==(b.ps>0))b.zc++;b.ps=b.l2;if(++b.zt>=rate/2){const f=b.zc;b.k=Math.max(.2,Math.min(5,b.k*Math.pow(48/Math.max(4,f),.35)));b.zc=0;b.zt=0;}
+     b.ms+=(b.l2*b.l2-b.ms)*BMS;bs+=b.l2/Math.sqrt(b.ms+1e-9)*b.e;nb++;b.e*=BDK;}
+    const g=Math.sqrt(mixMs)*(S.gentle&&!S.strange?BG*.8:BG)*S.bodyAmt/Math.sqrt(Math.max(1,nb));l+=bs*g;r+=bs*g;}
    if(S.spk!==0||spkS!==0||S.pol!==0||on(IDX.sd)||on(IDX.pr)){
     // bass stays mono and undelayed; only sound above about 120 Hz is shifted or flipped
     const k=1-Math.exp(-2*Math.PI*120/rate);oLp[0]+=(l-oLp[0])*k;oLp[1]+=(r-oLp[1])*k;let hl=l-oLp[0],hr=r-oLp[1];

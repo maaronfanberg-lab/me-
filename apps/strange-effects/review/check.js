@@ -7,6 +7,12 @@ const nm=i=>N.ATTR[i].name;
 // Audible onsets by spectral flux (Dixon 2006, "Onset detection revisited"): 1024-pt Hann frames, 10 ms hop,
 // log-compressed magnitudes; flux = sum of rises in each bin over the previous frame; an onset is a local peak
 // (±30 ms) that clears the local mean (±100 ms) by DELTA, in a frame louder than -55 dB, >= 50 ms after the last.
+const subShare=(()=>{const M=8192,win=new Float64Array(M).map((_,i)=>.5-.5*Math.cos(2*Math.PI*i/M));
+ function spec(x,o){const re=new Float64Array(M),im=new Float64Array(M);for(let i=0;i<M;i++)re[i]=x[o+i]*win[i];for(let i=1,j=0;i<M;i++){let b=M>>1;for(;j&b;b>>=1)j^=b;j|=b;if(i<j){const t=re[i];re[i]=re[j];re[j]=t;}}
+  for(let s=2;s<=M;s*=2){const h=s/2,a=-2*Math.PI/s;for(let i=0;i<M;i+=s)for(let k=0;k<h;k++){const c=Math.cos(a*k),d=Math.sin(a*k),xr=re[i+k+h]*c-im[i+k+h]*d,xi=re[i+k+h]*d+im[i+k+h]*c;re[i+k+h]=re[i+k]-xr;im[i+k+h]=im[i+k]-xi;re[i+k]+=xr;im[i+k]+=xi;}}const P=new Float64Array(M/2);for(let k=0;k<M/2;k++)P[k]=re[k]*re[k]+im[k]*im[k];return P;}
+ return(L,Rr,rate)=>{const P=new Float64Array(M/2);for(let o=0;o+M<=L.length;o+=M){const a=spec(L,o),b=spec(Rr,o);for(let k=0;k<M/2;k++)P[k]+=a[k]+b[k];}
+  const band=(f0,f1)=>{let e=0;for(let k=Math.ceil(f0*M/rate);k<f1*M/rate;k++)e+=P[k];return e;},t=band(20,20000)+1e-30;
+  return{sub80:+(10*Math.log10(band(20,80)/t+1e-30)).toFixed(1),rumble:+(10*Math.log10(band(20,40)/t+1e-30)).toFixed(1),punch:+(10*Math.log10(band(40,80)/t+1e-30)).toFixed(1)};};})();
 const heardOnsets=(()=>{
 const N=1024,HN=N/2,win=new Float64Array(N).map((_,i)=>.5-.5*Math.cos(2*Math.PI*i/N));
 const rev=new Uint32Array(N);for(let i=0,b=Math.log2(N);i<N;i++){let r=0;for(let k=0;k<b;k++)r|=((i>>k)&1)<<(b-1-k);rev[i]=r;}
@@ -41,7 +47,7 @@ function listen(on,cfg,sec){const D=make(on,cfg);D.process(2*R);const hk=Math.ex
    for(let ch=0;ch<2;ch++){const x=ch?b:a,y1=hk*(h1[ch]+x-hx[ch]);hx[ch]=x;h1[ch]=y1;const y2=hk*(h2[ch]+y1-hy[ch]);hy[ch]=y1;h2[ch]=y2;ep+=y2*y2;}if(Math.abs(a)>.99||Math.abs(b)>.99)clip++;tot+=2;}
   on.forEach((v,j)=>{const P=D.V[v].Ps,both=D.V[v].def.sec[2];for(let q=0;q<P.length&&q<ps[j].length;q++)if(P[q]!==ps[j][q]&&ps[j][q]!==0&&(P[q]===1||both))notes[j]++;});
   const db=10*Math.log10(e/(2*W)+1e-20);dbs.push(db);pmn=Math.min(pmn,10*Math.log10(ep/(2*W)+1e-20));n++;mn=Math.min(mn,db);if(D.brGate&&D.brGate()>.5)up++;if(db<-60){sil++;run++;longest=Math.max(longest,run);}else run=0;}
- return{longestSilence:+(longest*W/R).toFixed(2),silentPct:+(100*sil/n).toFixed(1),quietestDb:+mn.toFixed(1),phoneQuietestDb:+pmn.toFixed(1),undertowPct:+(100*up/n).toFixed(1),heardPerSec:+heardOnsets(AL,AR,R).toFixed(2),contrastDb:+(()=>{const q=dbs.slice().sort((x,y)=>x-y);return q[Math.floor(.9*q.length)]-q[Math.floor(.1*q.length)];})().toFixed(1),move:D.move,clipPct:+(100*clip/tot).toFixed(3),nan:nan+(D.bad||0),notesPerSec:notes.map(x=>+(x/sec).toFixed(2))};}
+ return{longestSilence:+(longest*W/R).toFixed(2),silentPct:+(100*sil/n).toFixed(1),quietestDb:+mn.toFixed(1),phoneQuietestDb:+pmn.toFixed(1),undertowPct:+(100*up/n).toFixed(1),heardPerSec:+heardOnsets(AL,AR,R).toFixed(2),...subShare(AL,AR,R),recv:D.recv,contrastDb:+(()=>{const q=dbs.slice().sort((x,y)=>x-y);return q[Math.floor(.9*q.length)]-q[Math.floor(.1*q.length)];})().toFixed(1),move:D.move,clipPct:+(100*clip/tot).toFixed(3),nan:nan+(D.bad||0),notesPerSec:notes.map(x=>+(x/sec).toFixed(2))};}
 const jobs=[];
 for(const t in TONES){for(let a=0;a<N.ATTR.length;a++)jobs.push({kind:'listen',tone:t,on:[a],cpl:0});
  for(const c of[0,1])for(const p of[[3,1],[4,8],[2,4],[0,7]])jobs.push({kind:'listen',tone:t,on:p,cpl:c});jobs.push({kind:'listen',tone:t,on:N.ATTR.map((_,i)=>i),cpl:1});}
