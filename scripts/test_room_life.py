@@ -48,6 +48,60 @@ class RoomLifeTests(unittest.TestCase):
         room_life.advance(w, self.cfg, 103, [])
         self.assertEqual(w["objects"]["instruments"]["tests"], 1)
 
+    def test_literal_present_action_starts_verified_work_without_instant_success(self):
+        # Some live agent outputs contain an action and valid scheduler JSON
+        # but no optional structured work. Only a direct action is actionable.
+        step = [{"actions": {"Sarah":
+                 'Sarah: I quietly organize my bookshelf.\\n'
+                 '{"mask":["chat.allen"],"timer":{"time":"15m"}}'}}]
+        room_life.advance(self.world, self.cfg, 100, step)
+        task = self.world["lives"]["sarah"]["task"]
+        self.assertEqual((task["verb"], task["object"]), ("organize", "bookshelf"))
+        self.assertEqual(self.world["objects"]["bookshelf"]["organized_sets"], 0)
+        room_life.advance(self.world, self.cfg, 101, [])
+        room_life.advance(self.world, self.cfg, 102, [])
+        self.assertEqual(self.world["objects"]["bookshelf"]["organized_sets"], 1)
+        self.assertEqual(self.world["lives"]["sarah"]["completed"], 1)
+        self.assertEqual(
+            [e["kind"] for e in self.world["events"]],
+            ["work_started", "work_completed"],
+        )
+
+    def test_literal_action_bridge_does_not_turn_intentions_into_facts(self):
+        disallowed = (
+            "I will inspect the notebook.",
+            "I'd like to inspect the notebook.",
+            "I decide to inspect the notebook.",
+            "I inspected the notebook.",
+            "I inspect the notebook and discover a secret.",
+            "Mara: I inspect the notebook.",
+            "I inspect the window and test the samples.",
+        )
+        for action in disallowed:
+            with self.subTest(action=action):
+                self.assertIsNone(room_life._literal_work_from_action(action, "Sarah"))
+        self.assertEqual(
+            room_life._literal_work_from_action("I inspect the notebook.", "Sarah"),
+            {"verb": "inspect", "object": "notebook"},
+        )
+        self.assertEqual(
+            room_life._literal_work_from_action("I write in my notebook.", "Sarah"),
+            {"verb": "write", "object": "notebook"},
+        )
+
+    def test_invalid_control_or_explicit_bad_work_cannot_use_literal_fallback(self):
+        malformed = [{"actions": {"Mara":
+                     'I inspect the notebook.\\n{"mask":[]}'}}]
+        room_life.advance(self.world, self.cfg, 100, malformed)
+        self.assertIsNone(self.world["lives"]["mara"]["task"])
+        self.assertFalse(self.world["events"])
+        invalid = [{"actions": {"Mara":
+                  'I inspect the notebook.\\n{"mask":[],"timer":{"time":"15m"},'
+                  '"work":{"verb":"invent","object":"outside"}}'}}]
+        room_life.advance(self.world, self.cfg, 101, invalid)
+        self.assertIsNone(self.world["lives"]["mara"]["task"])
+        self.assertFalse(self.world["events"])
+
     def test_invalid_affordances_do_not_change_world(self):
         room_life.advance(self.world, self.cfg, 100,
                           self.act("mara", "invent facts", "outside world"))
