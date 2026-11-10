@@ -64,11 +64,14 @@ jobs:
         id: oracle
         continue-on-error: true
         shell: bash
+        env:
+          # For personal repositories, use a user-owned fine-grained PAT with Account: Copilot Requests.
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         run: |
           request='${{ steps.request.outputs.file }}'
           response='${{ steps.request.outputs.out }}'
           if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-            if python3 bridge/claude_code_oracle.py "$request" "$response"; then
+            if env -u COPILOT_GITHUB_TOKEN python3 bridge/claude_code_oracle.py "$request" "$response"; then
               exit 0
             fi
             # Only switch authorization paths for an explicit subscription quota failure.
