@@ -86,6 +86,10 @@ class LiveRoomTests(unittest.TestCase):
         state = json.loads((root / "room" / "state.json").read_text())
         self.assertEqual(state["cycle"], 1)
         self.assertEqual(state["messages"], 2)
+        self.assertEqual(state["native_publication_diagnostics"]["published"], 2)
+        self.assertGreaterEqual(state["native_publication_diagnostics"]["actions"], 2)
+        self.assertEqual(state["native_publication_diagnostics"]["invalid_format"], 0)
+        self.assertEqual(state["native_publication_diagnostics"]["semantic_echo"], 0)
         self.assertEqual(state["conversational_floor"],
                          "native_concordia_interrupt_driven")
         self.assertTrue((root / "room" / bridge.CHECKPOINT).exists())
