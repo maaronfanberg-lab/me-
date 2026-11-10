@@ -391,7 +391,7 @@ function makeDSP(rate){
  const G=[];for(let i=0;i<14;i++)G.push({on:false,s:[0,0,0],v:null,h:0,e:0,d:1,g:[0,0,0,0,0],dr:1,buf:new Float64Array(Math.ceil(.07*rate)),w:0,taps:null,lp:0,a:1});const enc={hA:new Hilbert(129),hB:new Hilbert(129),dl:[new Delay(90),new Delay(90),new Delay(90)],lag:63,Lt:0,Rt:0};const bus=[0,0,0,0,0],bedG=[.2,.2,.2,.2,.2],bedT=[.2,.2,.2,.2,.2],tmpG=[0,0,0,0,0];let bassLp=0,wasAlive=false;
  const W=[];for(let i=0;i<16;i++)W.push({on:false,type:0,t:0,dur:1,wait:0,f0:0,f1:0,th0:0,th1:0,amp:1,ph:0,ph2:0,lp:0,nx:.3+i*.017,g:[0,0,0,0,0],dist:1,pd:0,x0:0,y0:0,vx:0,vy:0,doppler:1,send:.5,frac:0,ct:0});
  const dRw=new Delay(Math.ceil(.03*rate));const dT=new Delay(Math.ceil(.06*rate));const tearR=(x,t,d)=>{dT.push(x);if(t<=0)return x;const y=dT.read(t*.045*rate*(.5+.5*Math.tanh(d*2)));return x*(1-t)+y*t*(1+Math.tanh(d*3)*.6);};const pfNow=()=>S.pf||1;const pS=[0,0,0],PL=[];for(let q=0;q<10;q++)PL.push({on:false,t:0,dur:1,f:100,w:0,buf:null});
- const RING=new Uint8Array(24);for(const t of[10,11,13,14,17,18])RING[t]=1;const kick=v=>{if(!(S.cpl>0)||S.sync===false)return;S.kicks=(S.kicks||0)+1;for(const w of V){if(!w.on||w===v||!w.np||w.dim!==3)continue;if(S.kickLog.length<400)S.kickLog.push(w.idx);const ax=w.def.sec[0];for(let p=0;p<w.np;p++){const o=3*p,d=(w.P[o+ax]-w.Pp[o+ax])>=0?1:-1;w.P[o+ax]+=d*KP*S.cpl*w.sc*(w.cv?Math.sqrt(w.cv[ax])*2:1);}}};
+ const RING=new Uint8Array(24);for(const t of[10,11,13,14,17,18])RING[t]=1;const kick=v=>{if(!(S.cpl>0)||S.sync===false)return;S.kicks=(S.kicks||0)+1;let ns=0;for(const w of V)if(w.on&&w.dim===3)ns++;const nrm=4/Math.max(4,v.np||4)/Math.max(1,ns-1);for(const w of V){if(!w.on||w===v||!w.np||w.dim!==3)continue;if(S.kickLog.length<400)S.kickLog.push(w.idx);const ax=w.def.sec[0];for(let p=0;p<w.np;p++){const o=3*p,d=(w.P[o+ax]-w.Pp[o+ax])>=0?1:-1;w.P[o+ax]+=d*KP*S.cpl*nrm*w.sc*(w.cv?Math.sqrt(w.cv[ax])*2:1);}}};
 S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(const z of PL){if(!z.on){k=z;break;}if(z.t/z.dur>k.t/k.dur)k=z;}
   const P=v.P,ax=v.def.sec[0],a1=(ax+1)%3,a2=(ax+2)%3,n1=(P[o+a1]-v.c[a1])/v.sc,n2=(P[o+a2]-v.c[a2])/v.sc,q1=cl((n1+1)/2),q2=cl((n2+1)/2);
   const sp=Math.hypot(P[o]-v.Pp[o],P[o+1]-v.Pp[o+1],P[o+2]-v.Pp[o+2])/v.sc*rate/32/(S.move*v.dens*(S.pf||1)+1e-9),spd=(()=>{const H=v.spH||(v.spH=[]);let c=0;for(const x of H)if(x<sp)c++;const r=H.length>4?(c+.5)/(H.length+1):cl(Math.tanh(sp/8));H.push(sp);if(H.length>48)H.shift();return r;})();
@@ -567,7 +567,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
   // each system's running average and spread over ~3 orbits, so its pull on partners is a two-way swing about
   // its own running median (lopsided, spiky systems such as the food chain otherwise give a constant one-way shove)
   for(const w of V){if(!w.on)continue;const al=Math.min(1,S.move/rate*32/(3*.75));if(!w.cm){w.cm=[0,0,0];w.cv=[.25,.25,.25];}
-   for(let k=0;k<3;k++){const u=(w.s[k]-w.c[k])/w.sc,e=u-w.cm[k];w.cm[k]+=4*al*Math.sqrt(w.cv[k])*Math.sign(e);w.cv[k]+=al*(Math.min(e*e,16*w.cv[k])-w.cv[k]);}}
+   if(!w.isd){w.isd=[1,1,1];w.sd=[1,1,1];}for(let k=0;k<3;k++){w.sd[k]=Math.sqrt(w.cv[k]+1e-6);w.isd[k]=1/w.sd[k];}for(let k=0;k<3;k++){const u=(w.s[k]-w.c[k])/w.sc,e=u-w.cm[k];w.cm[k]+=4*al*Math.sqrt(w.cv[k])*Math.sign(e);w.cv[k]+=al*(Math.min(e*e,16*w.cv[k])-w.cv[k]);}}
   // attractors play each other's knobs: each parameter of a system swings around its set value, inside its
   // verified range, by the other systems' current position (coordinate p mod 3, averaged over them), scaled by the pull
   for(const v of V){if(!v.on)continue;const d=v.def,pv=v.a.pv;
@@ -583,9 +583,9 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
     const hT=S.move*v.dens/rate*32*(v.def.T/.75),nsub=Math.min(8,Math.ceil(hT/v.def.hMax)),h=hT/nsub,P=v.P,Q=v.Pp,ax=v.def.sec[0],th=v.def.sec[1],both=v.def.sec[2];
     const D=v.dim,pX=D===3?pS:v.pS;for(let q=0;q<v.np;q++){const o=D*q;for(let k=0;k<D;k++){Q[o+k]=P[o+k];pX[k]=P[o+k];}for(let z=0;z<nsub;z++)rk4(v.a,pX,h);for(let k=0;k<D;k++)P[o+k]=pX[k];
      if(S.cpl>0&&cpN>1){let t0=0,t1=0,t2=0,m=0,z0=0,z1=0,z2=0;for(const w of V){if(!w.on||w===v||!w.np)continue;const oo=w.dim*(q%w.np),W=w.P,a0=(W[oo]-w.c[0])/w.sc,a1=(W[oo+1]-w.c[1])/w.sc,a2=(W[oo+2]-w.c[2])/w.sc;t0+=a0;t1+=a1;t2+=a2;
-       if(w.cm){z0+=(a0-w.cm[0])/Math.sqrt(w.cv[0]+1e-6);z1+=(a1-w.cm[1])/Math.sqrt(w.cv[1]+1e-6);z2+=(a2-w.cm[2])/Math.sqrt(w.cv[2]+1e-6);}m++;}
+       if(w.isd){z0+=(a0-w.cm[0])*w.isd[0];z1+=(a1-w.cm[1])*w.isd[1];z2+=(a2-w.cm[2])*w.isd[2];}m++;}
       if(m){t0/=m;t1/=m;t2/=m;const y0=(P[o]-v.c[0])/v.sc,y1=(P[o+1]-v.c[1])/v.sc,y2=(P[o+2]-v.c[2])/v.sc;
-       if(S.sync!==false&&v.cm){const al=CPK*S.cpl,T0=v.cm[0]+Math.sqrt(v.cv[0])*z0/m,T1=v.cm[1]+Math.sqrt(v.cv[1])*z1/m,T2=v.cm[2]+Math.sqrt(v.cv[2])*z2/m;P[o]+=al*(T0-y0)*v.sc;P[o+1]+=al*(T1-y1)*v.sc;P[o+2]+=al*(T2-y2)*v.sc;}
+       if(S.sync!==false&&v.sd){const al=CPK*S.cpl,T0=v.cm[0]+v.sd[0]*z0/m,T1=v.cm[1]+v.sd[1]*z1/m,T2=v.cm[2]+v.sd[2]*z2/m;P[o]+=al*(T0-y0)*v.sc;P[o+1]+=al*(T1-y1)*v.sc;P[o+2]+=al*(T2-y2)*v.sc;}
        // a meeting: this particle comes within .2 of where its partner particles are (leaves past .35) -> a chime
        const dm=Math.hypot(t0-y0,t1-y1,t2-y2),M=v.Mt||(v.Mt=new Uint8Array(128));if(!M[q]&&dm<.2){M[q]=1;S.meets++;const ft=S.forceTy;S.forceTy=18;ping(v,q,o);S.forceTy=ft;}else if(M[q]&&dm>.35)M[q]=0;}}
      v.ph=h;v.nsub=nsub;const x=(P[o+ax]-v.c[ax])/v.sc,sd=v.Ps[q];v.Pc[q]+=32/rate;if(x>th&&sd<=0){if(sd!==0){ping(v,q,o);kick(v);v.Pc[q]=0;}v.Ps[q]=1;}else if(x<(both?-th:th-.2)&&sd>=0){if(sd!==0&&both){ping(v,q,o);kick(v);v.Pc[q]=0;}v.Ps[q]=-1;}
