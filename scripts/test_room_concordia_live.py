@@ -122,6 +122,30 @@ class LiveRoomTests(unittest.TestCase):
         self.assertEqual(w["objects"]["notebook"]["observations"], 1)
         self.assertTrue(any(e["kind"] == "work_completed" for e in w["events"]))
 
+    def test_verified_world_events_reenter_concordia_only_once(self):
+        root = self.make_root()
+        ack = root / "ack.json"
+        ack.write_text('{"ids":[]}')
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        path = root / "room" / bridge.CHECKPOINT
+        original = json.loads((root / "room" / "life.json").read_text())
+        started = original["events"][0]["id"]
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        after_first = json.loads(path.read_text())
+        self.assertIn(started, after_first["delivered_life_event_ids"])
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        world = json.loads((root / "room" / "life.json").read_text())
+        completed = [e["id"] for e in world["events"]
+                     if e["kind"] == "work_completed"]
+        self.assertTrue(completed)
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        after_second = json.loads(path.read_text())
+        self.assertIn(completed[-1], after_second["delivered_life_event_ids"])
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        after_third = json.loads(path.read_text())
+        self.assertEqual(
+            after_third["delivered_life_event_ids"].count(completed[-1]), 1)
+
     def test_one_time_context_reset_keeps_public_history(self):
         root = self.make_root()
         ack = root / "ack.json"
