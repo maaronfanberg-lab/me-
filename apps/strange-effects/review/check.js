@@ -41,13 +41,13 @@ function make(on,cfg){const D=N.makeDSP(R);D.V.forEach((v,i)=>v.on=on.includes(i
  Object.assign(D,rest);return D;}
 // listening run: 20 ms windows; silence = below -60 dBFS; notes = particle crossings; clipping = |sample| > .99
 function listen(on,cfg,sec){const D=make(on,cfg);D.process(2*R);const hk=Math.exp(-2*Math.PI*300/R);let h1=[0,0],h2=[0,0],hx=[0,0],hy=[0,0],pmn=0; // two one-pole high-passes at 300 Hz
- const dbs=[],AL=new Float32Array(Math.round(sec*R/W)*W),AR=new Float32Array(AL.length);let run=0,longest=0,sil=0,n=0,mn=0,up=0,clip=0,tot=0,nan=0;const notes=on.map(()=>0);
- for(let r=0;r<sec*R/W;r++){const ps=on.map(i=>[...D.V[i].Ps]);const o=D.process(W);AL.set(o.L,r*W);AR.set(o.R,r*W);let e=0,ep=0;
+ const pit=on.map(()=>0),cen=on.map(()=>[0,0,0]);let nt=0;const dbs=[],AL=new Float32Array(Math.round(sec*R/W)*W),AR=new Float32Array(AL.length);let run=0,longest=0,sil=0,n=0,mn=0,up=0,clip=0,tot=0,nan=0;const notes=on.map(()=>0);
+ for(let r=0;r<sec*R/W;r++){const ps=on.map(i=>[...D.V[i].Ps]);const o=D.process(W);AL.set(o.L,r*W);AR.set(o.R,r*W);nt++;on.forEach((vi,j)=>{const v=D.V[vi];pit[j]+=1200*Math.log2(v.fmul||1);const np=Math.min(v.np||0,16);for(let q=0;q<np;q++)for(let k=0;k<3;k++)cen[j][k]+=(v.P[v.dim*q+k]-v.c[k])/v.sc/np;});let e=0,ep=0;
   for(let i=0;i<W;i++){const a=o.L[i],b=o.R[i];if(!(a===a&&b===b))nan++;e+=a*a+b*b;
    for(let ch=0;ch<2;ch++){const x=ch?b:a,y1=hk*(h1[ch]+x-hx[ch]);hx[ch]=x;h1[ch]=y1;const y2=hk*(h2[ch]+y1-hy[ch]);hy[ch]=y1;h2[ch]=y2;ep+=y2*y2;}if(Math.abs(a)>.99||Math.abs(b)>.99)clip++;tot+=2;}
   on.forEach((v,j)=>{const P=D.V[v].Ps,both=D.V[v].def.sec[2];for(let q=0;q<P.length&&q<ps[j].length;q++)if(P[q]!==ps[j][q]&&ps[j][q]!==0&&(P[q]===1||both))notes[j]++;});
   const db=10*Math.log10(e/(2*W)+1e-20);dbs.push(db);pmn=Math.min(pmn,10*Math.log10(ep/(2*W)+1e-20));n++;mn=Math.min(mn,db);if(D.brGate&&D.brGate()>.5)up++;if(db<-60){sil++;run++;longest=Math.max(longest,run);}else run=0;}
- return{longestSilence:+(longest*W/R).toFixed(2),silentPct:+(100*sil/n).toFixed(1),quietestDb:+mn.toFixed(1),phoneQuietestDb:+pmn.toFixed(1),undertowPct:+(100*up/n).toFixed(1),heardPerSec:+heardOnsets(AL,AR,R).toFixed(2),...subShare(AL,AR,R),recv:D.recv,contrastDb:+(()=>{const q=dbs.slice().sort((x,y)=>x-y);return q[Math.floor(.9*q.length)]-q[Math.floor(.1*q.length)];})().toFixed(1),move:D.move,clipPct:+(100*clip/tot).toFixed(3),nan:nan+(D.bad||0),notesPerSec:notes.map(x=>+(x/sec).toFixed(2))};}
+ return{longestSilence:+(longest*W/R).toFixed(2),silentPct:+(100*sil/n).toFixed(1),quietestDb:+mn.toFixed(1),phoneQuietestDb:+pmn.toFixed(1),undertowPct:+(100*up/n).toFixed(1),pitchCents:pit.map(x=>+(x/nt).toFixed(1)),centre:cen.map(c=>c.map(x=>+(x/nt).toFixed(3))),heardPerSec:+heardOnsets(AL,AR,R).toFixed(2),...subShare(AL,AR,R),recv:D.recv,contrastDb:+(()=>{const q=dbs.slice().sort((x,y)=>x-y);return q[Math.floor(.9*q.length)]-q[Math.floor(.1*q.length)];})().toFixed(1),move:D.move,clipPct:+(100*clip/tot).toFixed(3),nan:nan+(D.bad||0),notesPerSec:notes.map(x=>+(x/sec).toFixed(2))};}
 const jobs=[];
 for(const t in TONES){for(let a=0;a<N.ATTR.length;a++)jobs.push({kind:'listen',tone:t,on:[a],cpl:0});
  for(const c of[0,1])for(const p of[[3,1],[4,8],[2,4],[0,7]])jobs.push({kind:'listen',tone:t,on:p,cpl:c});jobs.push({kind:'listen',tone:t,on:N.ATTR.map((_,i)=>i),cpl:1});}
@@ -59,6 +59,6 @@ jobs.push({kind:'determinism'});
 const[sh,shs]=process.argv.slice(2).map(Number);
 jobs.forEach((j,i)=>{if(i%shs!==sh)return;let r;
  if(j.kind==='listen')r=listen(j.on,{...TONES[j.tone],cpl:j.cpl,...(j.setting?SET[j.setting]:{})},45*K);
- else if(j.kind==='pull'){const base=listen(j.on,{gentle:true,cpl:0},10*K);r={apart:base.notesPerSec};for(const[c,k]of[[.3,'nudge'],[.65,'pull'],[1,'tangle']])r[k]=listen(j.on,{gentle:true,cpl:c},10*K).notesPerSec;}
+ else if(j.kind==='pull'){const pick=x=>({n:x.notesPerSec,p:x.pitchCents,c:x.centre});const base=listen(j.on,{gentle:true,cpl:0},20*K);r={apart:base.notesPerSec,A:pick(base)};for(const[c,k]of[[.3,'nudge'],[.65,'pull'],[1,'tangle']]){const x=listen(j.on,{gentle:true,cpl:c},20*K);r[k]=x.notesPerSec;r[k+'X']=pick(x);}}
  else{const h=()=>{const D=make([0,3,6],{gentle:false,cpl:.65});let x=0;for(let k=0;k<300;k++){const o=D.process(480);for(let i=0;i<480;i++)x=(x*31+Math.round(o.L[i]*1e9)+Math.round(o.R[i]*1e9))%2147483647;}return x;};r={same:h()===h()};}
  console.log(JSON.stringify({...j,names:j.on?j.on.map(nm):undefined,...r}));});
