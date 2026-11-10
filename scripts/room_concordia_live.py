@@ -18,6 +18,7 @@ import re
 from concordia.components.game_master import interrupt_response_parsing
 
 import room_concordia_native as native
+import room_life
 import room_engine_v5 as c
 from room_conversational_floor import audible_addressee
 
@@ -122,6 +123,16 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     checkpoint_path = room / CHECKPOINT
     checkpoint = _load(checkpoint_path, {}) if checkpoint_path.is_file() else {}
     new_input = _new_input(conversation, ack_path, checkpoint)
+    upcoming_cycle = int(state.get("cycle", 0)) + 1
+    life_path = room / "life.json"
+    life_world = (_load(life_path, {}) if life_path.is_file()
+                  else room_life.initial(c.CFG, upcoming_cycle))
+    room_life.validate(life_world, c.CFG)
+    # Native agents see the verified current environment BEFORE they choose.
+    world_contexts = {
+        who: room_life.context(life_world, who)
+        for who in native.PARTICIPANTS
+    }
     user_event = "\n".join(f"Allen: {m.get('text','')}" for m in new_input)
     # One-time transition away from the old repeated, abstract dialogue.
     # The public Room history and all existing relationships remain intact.
@@ -148,6 +159,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         state_out=checkpoint_path,
         bootstrap_context=(),
         recent_public=recent_public,
+        world_contexts=world_contexts,
         user_event=user_event,
     )
     checkpoint = _load(checkpoint_path, {})
@@ -159,7 +171,11 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     )[-300:]
     _save(checkpoint_path, checkpoint)
 
-    cycle = int(state.get("cycle", 0)) + 1
+    cycle = upcoming_cycle
+    # This referee never decides who speaks: Concordia already did that.
+    # It executes only verified structured work chosen by those agents and
+    # advances their existing commitments even in a silent beat.
+    room_life.advance(life_world, c.CFG, cycle, output.get("steps") or [])
     beat_id = f"beat-{c.BOOT}-{cycle:06d}"
     current_topic = state.get("topic_episode") or {}
     spoken = []
@@ -205,6 +221,13 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         "beat_message_count": len(spoken),
         "silence_cycles": 0 if spoken else int(state.get("silence_cycles") or 0) + 1,
         "conversational_floor": "native_concordia_interrupt_driven",
+        "independent_life": {
+            "cycle": life_world["processed_cycle"],
+            "active_tasks": sum(bool(v.get("task"))
+                                for v in life_world["lives"].values()),
+            "completed_tasks": sum(int(v.get("completed", 0))
+                                   for v in life_world["lives"].values()),
+        },
         "native_concordia": {
             "framework": output["framework"],
             "engine": output["engine_class"],
@@ -257,7 +280,9 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         "discourse": discourse,
         "topic_episode": state.get("topic_episode"),
         "network": network,
+        "room_life": room_life.public_snapshot(life_world),
     })
+    _save(life_path, life_world)
     _save(room / "conversation.json", conversation[-1000:])
     discourse["nodes"] = discourse.get("nodes", [])[-1200:]
     discourse["roots"] = discourse.get("roots", [])[-300:]

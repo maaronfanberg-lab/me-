@@ -176,10 +176,15 @@ class ScriptedModel(no_language_model.NoLanguageModel):
             action = "I check the notebook while the others work."
         else:
             action = ""
-        return action + '\n{"mask": [], "timer": {"time": "45m", "reason": "resume own work"}}'
+        work = (', "work": {"verb":"inspect","object":"notebook",'
+                '"goal":"Learn what the notebook actually contains"}'
+                if name == "Jules" else "")
+        return (action + '\n{"mask": [], "timer": '
+                '{"time": "45m", "reason": "resume own work"}' + work + '}')
 
 
-def build_agents(model: language_model.LanguageModel, config: Mapping[str, Any]):
+def build_agents(model: language_model.LanguageModel, config: Mapping[str, Any],
+                 world_contexts: Mapping[str, str] | None = None):
     """Instantiate four native Concordia entities from the existing Room cast."""
     sleeping = {str(x).lower() for x in config.get("sleeping_entities", [])}
     players = []
@@ -191,6 +196,10 @@ def build_agents(model: language_model.LanguageModel, config: Mapping[str, Any])
             sentence_embedder=embed,
         )
         components = {
+            "world": agent_components.constant.Constant(
+                state=str((world_contexts or {}).get(name, ""))[:3000],
+                pre_act_label="Verified world and personal current work",
+            ),
             "identity": agent_components.constant.Constant(
                 state=identity_text(name, config),
                 pre_act_label="Your identity and independent interests",
@@ -201,7 +210,7 @@ def build_agents(model: language_model.LanguageModel, config: Mapping[str, Any])
                 ),
             "observation_to_memory": agent_components.observation.ObservationToMemory(),
             "observations": agent_components.observation.LastNObservations(
-                history_length=24,
+                history_length=8,
             ),
         }
         actor = agent_components.concat_act_component.ConcatActComponent(
@@ -254,6 +263,7 @@ def run(
     user_event: str = "",
     bootstrap_context: Sequence[Mapping[str, str]] = (),
     recent_public: Sequence[Mapping[str, str]] = (),
+    world_contexts: Mapping[str, str] | None = None,
     llama_url: str = "http://127.0.0.1:18080/v1/chat/completions",
     state_in: Path | None = None,
     state_out: Path | None = None,
@@ -264,7 +274,7 @@ def run(
         if mode == "scripted"
         else LocalLlama(llama_url, os.getenv("ROOM_CHAT_MODEL_ID", "Llama-3.2-3B-Instruct"))
     )
-    players = build_agents(model, config)
+    players = build_agents(model, config, world_contexts=world_contexts)
     names = [p.name for p in players]
     # One-time migration of publicly witnessed Room interactions only.
     if state_in is None:
@@ -320,17 +330,26 @@ def run(
             "initial_events": initial_events,
             "initial_entity_states": {k: v for k, v in initial_states.items() if k in names},
             "call_to_action": (
-                "What does {name} independently choose to do next, given only their "
-                "own identity, memory and current observation? Give their exact "
-                "first-person speech or present action, if any, with no narration "
-                "about other minds. Silence is allowed: write no action text when "
-                "they prefer to remain occupied privately. Then finish with exactly "
-                "one JSON object: "
+                "What does {name} independently choose to do next? Respect your "
+                "own enduring goal and only the VERIFIED physical outcomes in "
+                "your context. You may work privately, listen, rest, or speak "
+                "only when you have a specific observation or consequence to "
+                "respond to. Do not talk about the mechanics or quality of "
+                "conversation. Do not announce plans as accomplished results. "
+                "The action text before the JSON is ONLY what you actually "
+                "say or physically do now, written in first person. It may be "
+                "empty when you work privately or remain quiet. End with ONE "
+                "JSON object, e.g. "
                 "{\"mask\":[\"chat.allen\",\"action.\"],"
-                "\"timer\":{\"time\":\"15m\",\"reason\":\"a personal reason\"}}. "
-                "Masks may be empty [] or selective, and timers should represent "
-                "the character's actual current interests, not mandatory chatter. "
-                "Do not write dialogue for other characters."
+                "\"timer\":{\"time\":\"15m\",\"reason\":\"my next check-in\"},"
+                "\"work\":{\"verb\":\"write\",\"object\":\"notebook\","
+                "\"goal\":\"my own specific project\"}}. "
+                "The work field is OPTIONAL and must use an available verb and "
+                "object in your verified world context. That selects a private "
+                "task; the world referee subsequently determines completion. "
+                "Use [] for mask when focusing on your own work. Timers are "
+                "about personal attention, NEVER compulsory conversation. "
+                "Never invent another character's speech or actions."
             ),
         },
     ).build(model=model, memory_bank=memory_bank)
@@ -356,6 +375,14 @@ def run(
         master.set_state(snapshot["game_master"])
         for player in players:
             player.set_state(snapshot["entities"][player.name])
+            # Avoid letting the last 24 repetitive utterances swamp every
+            # new goal and environmental observation.
+            player.get_component("observations").set_state({"history_length": 8})
+            # World context comes from the actual committed environment,
+            # never from the earlier checkpoint's obsolete constant.
+            player.get_component("world").set_state({
+                "state": str((world_contexts or {}).get(player.name.lower(), ""))[:3000]
+            })
         if scheduler.get_state() != saved_scheduler:
             raise ValueError("Concordia scheduler checkpoint was not restored")
         if user_event.strip():

@@ -5,6 +5,9 @@ on:
     paths:
       - 'scripts/room_concordia_native.py'
       - 'scripts/room_concordia_live.py'
+      - 'scripts/room_life.py'
+      - 'scripts/test_room_life.py'
+      - 'scripts/build_room_feed.py'
       - 'scripts/test_room_concordia_live.py'
       - 'scripts/test_room_concordia_native.py'
       - 'requirements-room-concordia.txt'
@@ -30,6 +33,7 @@ jobs:
         run: |
           python -m unittest discover -s scripts -p 'test_room_concordia_native.py' -v
           python -m unittest discover -s scripts -p 'test_room_concordia_live.py' -v
+          python -m unittest discover -s scripts -p 'test_room_life.py' -v
       - name: Run actual Concordia engine and save an execution receipt
         run: |
           python scripts/room_concordia_native.py --mode scripted --steps 5 --output /tmp/native-concordia-result.json
