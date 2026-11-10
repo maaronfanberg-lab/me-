@@ -194,6 +194,47 @@ def _finish(world: dict, cycle: int, actor: str, task: dict) -> None:
     world["lives"][actor]["task"] = None
 
 
+def _literal_work_from_action(action: str, actor: str) -> dict | None:
+    """Accept unambiguous agent action requests, never wishes or claimed outcomes.
+
+    Some local model actions contain a valid scheduler JSON control but omit
+    the optional work field. A direct action or definite first-person commitment can still be
+    treated as the agent's request to start work. The referee, not the utterance,
+    determines whether that work completes on a later beat.
+    """
+    line = str(action).strip()
+    line = re.sub(r"^" + re.escape(actor) + r"\s*:\s*", "", line, flags=re.I)
+    if len(line) > 110 or "\n" in line:
+        return None
+    match = re.fullmatch(
+        r"(?:I\s+(?:(?:choose|decide)\s+to\s+)?|I'll\s+|I'm\s+going\s+to\s+)(?:quietly\s+)?"
+        r"(inspect|measure|test|organize|prepare)\s+"
+        r"(?:(?:the|my)\s+)?"
+        r"(window|plant|bookshelf|samples|instruments|notebook|board|table)"
+        r"(?:\s+quietly)?[.!]?",
+        line, flags=re.I,
+    )
+    if match:
+        verb, obj = (v.lower() for v in match.groups())
+        if obj in AFFORDANCES[verb]:
+            return {"verb": verb, "object": obj}
+    match = re.fullmatch(
+        r"(?:I\s+(?:(?:choose|decide)\s+to\s+)?|I'll\s+|I'm\s+going\s+to\s+)(?:quietly\s+)?write\s+(?:in|on|at)\s+"
+        r"(?:(?:the|my)\s+)?(notebook|board)(?:\s+quietly)?[.!]?",
+        line, flags=re.I,
+    )
+    if match:
+        return {"verb": "write", "object": match.group(1).lower()}
+    match = re.fullmatch(
+        r"(?:I\s+(?:(?:choose|decide)\s+to\s+)?|I'll\s+|I'm\s+going\s+to\s+)(?:quietly\s+)?rest\s+in\s+"
+        r"(?:(?:the|my)\s+)?chair[.!]?",
+        line, flags=re.I,
+    )
+    if match:
+        return {"verb": "rest", "object": "chair"}
+    return None
+
+
 def advance(world: dict, config: Mapping, cycle: int, steps: list[dict]) -> dict:
     """Pure deterministic transition: existing commitments progress in quiet.
 
@@ -229,6 +270,11 @@ def advance(world: dict, config: Mapping, cycle: int, steps: list[dict]) -> dict
             if not isinstance(metadata, dict):
                 continue
             work = metadata.get("work")
+            # A missing optional work field does not nullify a clearly chosen
+            # action. Never infer from wishes, future plans, compound claims,
+            # malformed controls, or an explicitly invalid work field.
+            if "work" not in metadata:
+                work = _literal_work_from_action(_action, str(candidate))
             # A structurally incomplete model response cannot mutate the
             # environment even if it happens to contain a plausible work word.
             if not isinstance(metadata.get("mask"), list) or not isinstance(
