@@ -34,6 +34,28 @@ class LiveRoomTests(unittest.TestCase):
         (root / "room" / "conversation.json").write_text("[]", encoding="utf-8")
         return root
 
+    def test_semantic_paraphrases_rejected_across_characters(self):
+        history = [
+            {"speaker": "sarah", "text":
+             "I'll simplify the Koch curve algorithm to explore noise reduction on its structure."},
+            {"speaker": "mara", "text":
+             "I let the space between whispers and meaning unfold."},
+            {"speaker": "owen", "text":
+             "The space between whispers and meaning is interesting."},
+        ]
+        self.assertTrue(bridge._semantic_echo(
+            "Let's simplify the Koch curve algorithm to explore noise reduction on its structure.",
+            "sarah", history))
+        self.assertTrue(bridge._semantic_echo(
+            "I'll let the space between whispers and meaning unfold.",
+            "jules", history))
+        self.assertFalse(bridge._semantic_echo(
+            "I found a cracked cup on the windowsill and moved it away.",
+            "jules", history))
+        self.assertFalse(bridge._semantic_echo(
+            "I disagree with your conclusion because the measurements are inconsistent.",
+            "owen", history))
+
     def test_native_events_visible_in_existing_room_feed_schema(self):
         root = self.make_root()
         ack_path = root / "ack.json"

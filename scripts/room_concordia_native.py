@@ -253,6 +253,7 @@ def run(
     start_time: str = "2026-11-09T09:00:00",
     user_event: str = "",
     bootstrap_context: Sequence[Mapping[str, str]] = (),
+    recent_public: Sequence[Mapping[str, str]] = (),
     llama_url: str = "http://127.0.0.1:18080/v1/chat/completions",
     state_in: Path | None = None,
     state_out: Path | None = None,
@@ -362,6 +363,16 @@ def run(
                 timestamp=scheduler.get_current_time(), tag="chat.allen",
                 source="allen", description=user_event[:700],
             ))
+    # Give every agent the same genuinely witnessed public evidence. Native
+    # Concordia memory persists in the checkpoint; the caller supplies only
+    # turns not previously observed, so this does not re-prime stale loops.
+    for item in list(recent_public)[-8:]:
+        speaker = str(item.get("speaker") or "").strip().lower()
+        utterance = str(item.get("text") or "").strip()[:520]
+        if speaker in (*PARTICIPANTS, "allen") and utterance:
+            for player in players:
+                if player.name.lower() != speaker:
+                    player.observe(f"Publicly witnessed: {speaker.capitalize()} said: {utterance}")
     engine = simultaneous.Simultaneous()
     records: list[dict[str, Any]] = []
 

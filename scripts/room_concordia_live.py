@@ -76,6 +76,42 @@ def _message_from_concordia(raw: str, name: str, history: list) -> str:
     return text
 
 
+def _semantic_echo(text: str, speaker: str, history: list) -> bool:
+    """Reject recycled speech, including paraphrases and repeated promises.
+
+    The prior exact-string filter missed 'I'll simplify...' versus
+    'Let's simplify...' and repeated symbolic observations. This uses
+    lexical evidence rather than an LLM judging its own output.
+    """
+    def terms(value):
+        return set(re.findall(r"[a-z]{4,}", str(value).lower())) - {
+            "that", "this", "with", "from", "will", "would", "could",
+            "into", "about", "have", "your", "their", "there", "what",
+            "when", "where", "lets", "just", "some", "more", "very",
+            "then", "they", "them", "were", "been", "here", "also",
+        }
+    words = terms(text)
+    if len(words) < 3:
+        return False
+    recent = [item for item in history[-35:] if isinstance(item, dict)
+              and item.get("speaker") in native.PARTICIPANTS]
+    for item in recent:
+        old = terms(item.get("text", ""))
+        if len(old) < 3:
+            continue
+        similarity = len(words & old) / max(1, min(len(words), len(old)))
+        if similarity >= 0.85 and len(words & old) >= 3:
+            return True
+    # A short abstract phrase repeated across speakers is still an echo.
+    recurring = ("space between", "hidden harmonies", "subtle pattern",
+                 "gentle inquiry", "meaning and chaos", "whispers and meaning")
+    if any(phrase in text.lower() and sum(
+            phrase in str(item.get("text", "")).lower() for item in recent) >= 2
+           for phrase in recurring):
+        return True
+    return False
+
+
 def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     room = root / "room"
     conversation = _load(room / "conversation.json", [])
@@ -93,6 +129,15 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     bootstrap_policy = 2
     old_seen = list(checkpoint.get("seen_allen_messages", []))
     resume = checkpoint_path if checkpoint.get("bootstrap_policy") == bootstrap_policy else None
+    last_witnessed = str(checkpoint.get("last_witnessed_public_id") or "")
+    witnessed = [m for m in conversation if isinstance(m, dict)
+                 and m.get("id") and m.get("speaker") in ALLOWED]
+    if last_witnessed:
+        indices = [i for i, m in enumerate(witnessed)
+                   if str(m["id"]) == last_witnessed]
+        recent_public = witnessed[indices[-1] + 1:] if indices else witnessed[-4:]
+    else:
+        recent_public = witnessed[-4:]
     # This is a real Concordia engine tick, not a call to the legacy Room floor.
     output = native.run(
         mode=mode,
@@ -102,10 +147,13 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         state_in=resume,
         state_out=checkpoint_path,
         bootstrap_context=(),
+        recent_public=recent_public,
         user_event=user_event,
     )
     checkpoint = _load(checkpoint_path, {})
     checkpoint["bootstrap_policy"] = bootstrap_policy
+    if witnessed:
+        checkpoint["last_witnessed_public_id"] = str(witnessed[-1]["id"])
     checkpoint["seen_allen_messages"] = list(
         dict.fromkeys([*old_seen, *(str(m["id"]) for m in new_input)])
     )[-300:]
@@ -121,7 +169,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
             if speaker not in native.PARTICIPANTS:
                 continue
             text = _message_from_concordia(raw, candidate_name, conversation)
-            if not text:
+            if not text or _semantic_echo(text, speaker, [*conversation, *spoken]):
                 continue
             # Do not make conversation sound as if it is still about an old
             # stuck topic solely because the archival index says so.
