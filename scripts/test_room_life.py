@@ -61,6 +61,25 @@ class RoomLifeTests(unittest.TestCase):
         self.assertEqual(self.world["lives"]["owen"]["task"]["verb"], "measure")
         self.assertEqual(self.world["objects"]["board"]["written_pages"], 0)
 
+    def test_short_goal_is_not_mistaken_for_a_durable_project(self):
+        old = self.world["lives"]["owen"]["goal"]
+        room_life.advance(self.world, self.cfg, 100,
+                          self.act("owen", "inspect", "bookshelf", "reorganize"))
+        self.assertEqual(self.world["lives"]["owen"]["goal"], old)
+        room_life.advance(self.world, self.cfg, 101,
+                          self.act("owen", "prepare", "instruments",
+                                   "Make the instruments ready for our test"))
+        self.assertEqual(self.world["lives"]["owen"]["goal"], old)
+        self.assertEqual(self.world["lives"]["owen"]["task"]["verb"], "inspect")
+
+    def test_malformed_action_control_cannot_change_world(self):
+        payload = [{"actions": {
+            "Sarah": '\\n{"work":{"verb":"write","object":"notebook"}}'
+        }}]
+        room_life.advance(self.world, self.cfg, 100, payload)
+        self.assertIsNone(self.world["lives"]["sarah"]["task"])
+        self.assertEqual(self.world["events"], [])
+
     def test_reflections_are_private_tentative_and_require_real_evidence(self):
         room_life.advance(self.world, self.cfg, 100, self.act("sarah"))
         fake = [{"actions": {"Sarah": '\n{"mask":[],"timer":{"time":"5m"},'
