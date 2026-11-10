@@ -65,16 +65,28 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          request='${{ steps.request.outputs.file }}'
+          response='${{ steps.request.outputs.out }}'
           if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-            python3 bridge/claude_code_oracle.py '${{ steps.request.outputs.file }}' '${{ steps.request.outputs.out }}'
+            if python3 bridge/claude_code_oracle.py "$request" "$response"; then
+              exit 0
+            fi
+            # Only switch authorization paths for an explicit subscription quota failure.
+            if python3 -c 'import json,sys; e=str(json.load(open(sys.argv[1],encoding="utf-8")).get("error","")).casefold(); sys.exit(0 if any(s in e for s in ("5-hour limit","weekly limit","usage limit","rate limit","usage cap")) else 1)' "$response"; then
+              echo 'Subscription quota detected; trying separately entitled Copilot Claude route.'
+              npm install -g @github/copilot
+              # Do not leak OAuth or Anthropic API credentials into the Copilot process.
+              env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
+                python3 bridge/claude_bridge.py "$request" "$response"
+            else
+              echo 'Claude subscription failed for a non-quota reason; retaining its error.'
+              exit 1
+            fi
           else
-            # No subscription token: retain the old model-verified Copilot path.
-            # Deliberately do not expose ANTHROPIC_API_KEY here, so this workflow
-            # cannot silently create separately billed Anthropic API usage.
+            # No subscription token: retain the existing model-verified Copilot path.
             env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN \
-              python3 bridge/claude_bridge.py '${{ steps.request.outputs.file }}' '${{ steps.request.outputs.out }}'
+              python3 bridge/claude_bridge.py "$request" "$response"
           fi
-
       - name: Commit verified oracle result
         if: always()
         shell: bash
