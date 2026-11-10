@@ -133,6 +133,12 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         who: room_life.context(life_world, who)
         for who in native.PARTICIPANTS
     }
+    delivered_world_ids = list(checkpoint.get("delivered_life_event_ids") or [])
+    already_delivered = set(delivered_world_ids)
+    pending_world_events = [
+        e for e in life_world["events"][-12:]
+        if e.get("visibility") == "public" and e.get("id") not in already_delivered
+    ]
     user_event = "\n".join(f"Allen: {m.get('text','')}" for m in new_input)
     # One-time transition away from the old repeated, abstract dialogue.
     # The public Room history and all existing relationships remain intact.
@@ -160,10 +166,14 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         bootstrap_context=(),
         recent_public=recent_public,
         world_contexts=world_contexts,
+        world_events=pending_world_events,
         user_event=user_event,
     )
     checkpoint = _load(checkpoint_path, {})
     checkpoint["bootstrap_policy"] = bootstrap_policy
+    checkpoint["delivered_life_event_ids"] = list(dict.fromkeys([
+        *delivered_world_ids, *output.get("injected_world_events", [])
+    ]))[-120:]
     if witnessed:
         checkpoint["last_witnessed_public_id"] = str(witnessed[-1]["id"])
     checkpoint["seen_allen_messages"] = list(
@@ -234,6 +244,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
             "scheduler": output["scheduler_class"],
             "simulated_time": output["simulated_time"],
             "mode": mode,
+            "verified_world_interrupts": len(output.get("injected_world_events", [])),
         },
     })
     if spoken:
