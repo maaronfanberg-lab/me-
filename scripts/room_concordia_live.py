@@ -129,6 +129,15 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     bootstrap_policy = 2
     old_seen = list(checkpoint.get("seen_allen_messages", []))
     resume = checkpoint_path if checkpoint.get("bootstrap_policy") == bootstrap_policy else None
+    last_witnessed = str(checkpoint.get("last_witnessed_public_id") or "")
+    witnessed = [m for m in conversation if isinstance(m, dict)
+                 and m.get("id") and m.get("speaker") in ALLOWED]
+    if last_witnessed:
+        indices = [i for i, m in enumerate(witnessed)
+                   if str(m["id"]) == last_witnessed]
+        recent_public = witnessed[indices[-1] + 1:] if indices else witnessed[-4:]
+    else:
+        recent_public = witnessed[-4:]
     # This is a real Concordia engine tick, not a call to the legacy Room floor.
     output = native.run(
         mode=mode,
@@ -138,10 +147,13 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         state_in=resume,
         state_out=checkpoint_path,
         bootstrap_context=(),
+        recent_public=recent_public,
         user_event=user_event,
     )
     checkpoint = _load(checkpoint_path, {})
     checkpoint["bootstrap_policy"] = bootstrap_policy
+    if witnessed:
+        checkpoint["last_witnessed_public_id"] = str(witnessed[-1]["id"])
     checkpoint["seen_allen_messages"] = list(
         dict.fromkeys([*old_seen, *(str(m["id"]) for m in new_input)])
     )[-300:]
