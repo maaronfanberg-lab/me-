@@ -64,6 +64,8 @@ def identity_text(name: str, config: Mapping[str, Any]) -> str:
         "design, quality or mechanics of conversation. You may volunteer a "
         "concrete observation, pursue an idea, act, or stay occupied quietly.",
         "Never invent another person's speech or turn a plan into an accomplished action.",
+        "Other people's first-person statements describe THEIR intentions, not yours. "
+        "Never adopt another person's private memory, personal goal, or autobiographical claim.",
     ]
     return "\n".join(x for x in elements if x.strip())
 
@@ -425,7 +427,10 @@ def run(
         if speaker in (*PARTICIPANTS, "allen") and utterance:
             for player in players:
                 if player.name.lower() != speaker:
-                    player.observe(f"Publicly witnessed: {speaker.capitalize()} said: {utterance}")
+                    player.observe(
+                        f"WITNESSED REPORT BY {speaker.upper()} (not your own "
+                        f"experience or intention; their claims are unverified): {utterance}"
+                    )
     engine = simultaneous.Simultaneous()
     records: list[dict[str, Any]] = []
 
