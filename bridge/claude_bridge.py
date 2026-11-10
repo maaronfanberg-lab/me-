@@ -15,9 +15,9 @@ API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-opus-5"
 DEFAULT_COPILOT_CLAUDE_MODELS = (
-    "claude-sonnet-5",
-    "claude-opus-5",
-    "claude-haiku-4.5",
+    "claude-sonnet-5.5",
+    "claude-opus-5.5",
+    "claude-haiku-5.5",
 )
 
 
