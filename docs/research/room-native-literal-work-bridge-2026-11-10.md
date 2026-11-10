@@ -22,7 +22,7 @@ A direct present-tense physical action ("I inspect the notebook") is materially 
 
 Before: `room_life.advance` accepted only optional `work: {verb,object}` inside otherwise valid native JSON. An agent could choose and narrate a recognizable action without the optional work field; no task began, so there was nothing to complete and nothing new for other characters to witness.
 
-After: if, and only if, the control JSON is valid and its `work` field **absent**, parse a very small set of *complete*, literal, present-tense, first-person action sentences. This creates a referee-validated **work_started** request, not a completed outcome. Completion still requires ordinary elapsed cycles, verified affordances, and a vacant character task slot. No words are put into any character's mouth.
+After: if, and only if, the control JSON is valid and its `work` field **absent**, parse a very small set of *complete*, direct or definite first-person action-commitment sentences. This creates a referee-validated **work_started** request, not a completed outcome. Completion still requires ordinary elapsed cycles, verified affordances, and a vacant character task slot. No words are put into any character's mouth.
 
 ## 6. Competing explanations
 
@@ -30,7 +30,7 @@ Stagnation may also arise from repetitive model sampling, attention masks, inval
 
 ## 7. Replication and limitations
 
-The rule can miss natural-language variants (false negatives), and could interpret an unambiguous present action as intending to work when the agent omitted the optional explicit work command. We deliberately reject compound actions, future/hypothetical claims, other-speaker prefixes, incompatible affordances, and malformed controls. We do not assert that completion counters measure human-like autonomy.
+The rule can miss natural-language variants (false negatives), and could interpret an unambiguous present action as intending to work when the agent omitted the optional explicit work command. We deliberately reject compound actions, wishes, hypotheticals, unverified accomplishment claims, other-speaker prefixes, incompatible affordances, and malformed controls. A definite future commitment may begin a tracked task, but its completion still must be verified over subsequent cycles. We do not assert that completion counters measure human-like autonomy.
 
 ## 8. Context-transfer check
 
