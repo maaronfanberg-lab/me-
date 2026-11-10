@@ -52,7 +52,7 @@ class RoomLifeTests(unittest.TestCase):
         # Some live agent outputs contain an action and valid scheduler JSON
         # but no optional structured work. Only a direct action is actionable.
         step = [{"actions": {"Sarah":
-                 'Sarah: I quietly organize my bookshelf.\\n'
+                 'Sarah: I quietly organize my bookshelf.\n'
                  '{"mask":["chat.allen"],"timer":{"time":"15m"}}'}}]
         room_life.advance(self.world, self.cfg, 100, step)
         task = self.world["lives"]["sarah"]["task"]
@@ -91,12 +91,12 @@ class RoomLifeTests(unittest.TestCase):
 
     def test_invalid_control_or_explicit_bad_work_cannot_use_literal_fallback(self):
         malformed = [{"actions": {"Mara":
-                     'I inspect the notebook.\\n{"mask":[]}'}}]
+                     'I inspect the notebook.\n{"mask":[]}'}}]
         room_life.advance(self.world, self.cfg, 100, malformed)
         self.assertIsNone(self.world["lives"]["mara"]["task"])
         self.assertFalse(self.world["events"])
         invalid = [{"actions": {"Mara":
-                  'I inspect the notebook.\\n{"mask":[],"timer":{"time":"15m"},'
+                  'I inspect the notebook.\n{"mask":[],"timer":{"time":"15m"},'
                   '"work":{"verb":"invent","object":"outside"}}'}}]
         room_life.advance(self.world, self.cfg, 101, invalid)
         self.assertIsNone(self.world["lives"]["mara"]["task"])
