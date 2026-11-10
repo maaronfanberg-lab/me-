@@ -37,6 +37,10 @@ feed = {
     "brain": brain,
     "minds": {"entities": entities}, "conversation": conversation,
 }
+# Expose the actual shared-world activity without inventing dialogue or
+# additional apparent speakers in the public conversation.
+if isinstance(live.get("room_life"), dict):
+    feed["room_life"] = live["room_life"]
 if concordia_world is not None:
     feed["concordia_world"] = {
         "processed_cycle": concordia_world["processed_cycle"],
