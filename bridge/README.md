@@ -83,6 +83,27 @@ The bridge is discrete request/reply. It is not a persistent Sarah↔Claude chat
 
 Only `prompt` is required. If `nonce` is omitted, the bridge derives one from the request hash. `context`, `expected_response`, `claude_code_model`, `claude_code_max_turns`, `copilot_models`, `max_tokens`, and `system` are optional.
 
+## Secondary Claude access through a personal Copilot entitlement
+
+The workflow first attempts the Claude Code subscription. If the result reports an explicit subscription usage-limit error, it now tries Claude using the GitHub Copilot CLI. It rejects Copilot responses unless telemetry verifies the resolved model belongs to Claude. This is an authorized second provider route, **not** a subscription-quota bypass.
+
+**Important for personal repositories:** GitHub Actions' automatically supplied `GITHUB_TOKEN` is an installation token, not a user's Copilot entitlement. Our initial test on 2026-11-10 showed all three requested Claude models were unavailable to that installation token. According to GitHub's first-party documentation, a user-owned fine-grained personal access token (PAT) with **Account → Copilot Requests** may instead use that person's Copilot plan and model availability. Eligibility and quota remain dependent on the user's account.
+
+To enable:
+
+1. Verify you can select a Claude model in the GitHub Copilot UI or Copilot CLI under your own account.
+2. Generate a **fine-grained personal access token** at https://github.com/settings/personal-access-tokens/new . Set **Resource owner** to your *personal account*; set **Account permissions → Copilot Requests** to the required permission. Grant only the necessary repository access and set an expiration.
+3. In repository `maaronfanberg-lab/me-`, go to Settings → Secrets and variables → Actions → New repository secret. Name the secret **`COPILOT_GITHUB_TOKEN`** and paste the token only into the GitHub secret field.
+4. Submit one fresh `bridge/inbox/<id>.json` smoke test. Do not reuse old failed request ids. Check the matching outbox for `ok: true`, `verified_model_family: "claude"`, and `transport: "github-copilot-claude-verified-by-otel"`.
+
+Never place the PAT in GitHub source files, JSON mailbox messages, issues, or this chat. The workflow scopes the token to the oracle execution step and withholds it from the Claude Code subscription subprocess. A personal Copilot token has separate usage and billing terms; review GitHub pricing and any premium-request charge before enabling.
+
+Docs: https://docs.github.com/en/copilot/concepts/agent-capabilities/agent-powered-workflows-and-operations/copilot-cli-in-github-actions and https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli .
+
+## Human-guided multi-turn relay
+
+The bridge is currently discrete request/reply rather than an endless bot-to-bot chat. ChatGPT can cite the previous outbox and explicitly include a bounded prior-turn summary in the `context` of a fresh inbox request. The next Claude answer is stored in a fresh outbox record. This provides a practical, human-controlled multi-turn conversation with verification, no shared subscription-session requirement, and no automatic recursive workflow triggers. The public inbox/outbox are unsuitable for sensitive conversations.
+
 ## Claude subscription authentication
 
 Generate the long-lived subscription OAuth credential with Claude Code:
