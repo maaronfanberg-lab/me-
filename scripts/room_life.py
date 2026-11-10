@@ -203,15 +203,15 @@ def _literal_work_from_action(action: str, actor: str) -> dict | None:
     determines whether that work completes on a later beat.
     """
     line = str(action).strip()
-    line = re.sub(r"^" + re.escape(actor) + r"\\s*:\\s*", "", line, flags=re.I)
+    line = re.sub(r"^" + re.escape(actor) + r"\s*:\s*", "", line, flags=re.I)
     if len(line) > 110 or "\n" in line:
         return None
     match = re.fullmatch(
-        r"I\\s+(?:quietly\\s+)?"
-        r"(inspect|measure|test|organize|prepare)\\s+"
-        r"(?:(?:the|my)\\s+)?"
+        r"I\s+(?:quietly\s+)?"
+        r"(inspect|measure|test|organize|prepare)\s+"
+        r"(?:(?:the|my)\s+)?"
         r"(window|plant|bookshelf|samples|instruments|notebook|board|table)"
-        r"(?:\\s+quietly)?[.!]?",
+        r"(?:\s+quietly)?[.!]?",
         line, flags=re.I,
     )
     if match:
@@ -219,15 +219,15 @@ def _literal_work_from_action(action: str, actor: str) -> dict | None:
         if obj in AFFORDANCES[verb]:
             return {"verb": verb, "object": obj}
     match = re.fullmatch(
-        r"I\\s+(?:quietly\\s+)?write\\s+(?:in|on|at)\\s+"
-        r"(?:(?:the|my)\\s+)?(notebook|board)(?:\\s+quietly)?[.!]?",
+        r"I\s+(?:quietly\s+)?write\s+(?:in|on|at)\s+"
+        r"(?:(?:the|my)\s+)?(notebook|board)(?:\s+quietly)?[.!]?",
         line, flags=re.I,
     )
     if match:
         return {"verb": "write", "object": match.group(1).lower()}
     match = re.fullmatch(
-        r"I\\s+(?:quietly\\s+)?rest\\s+in\\s+"
-        r"(?:(?:the|my)\\s+)?chair[.!]?",
+        r"I\s+(?:quietly\s+)?rest\s+in\s+"
+        r"(?:(?:the|my)\s+)?chair[.!]?",
         line, flags=re.I,
     )
     if match:
