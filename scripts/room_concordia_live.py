@@ -96,7 +96,17 @@ def _semantic_echo(text: str, speaker: str, history: list) -> bool:
         return False
     recent = [item for item in history[-35:] if isinstance(item, dict)
               and item.get("speaker") in native.PARTICIPANTS]
+    def ngrams(value, n=9):
+        sequence = re.findall(r"[a-z0-9']+", str(value).lower())
+        return {tuple(sequence[i:i + n])
+                for i in range(max(0, len(sequence) - n + 1))}
+    new_phrases = ngrams(text)
     for item in recent:
+        # Copying nine successive words is not a new autobiographical
+        # experience, even when the rest of the sentence is rephrased.
+        # This is also more discriminating than blanket topic repetition.
+        if new_phrases and new_phrases & ngrams(item.get("text", "")):
+            return True
         old = terms(item.get("text", ""))
         if len(old) < 3:
             continue
