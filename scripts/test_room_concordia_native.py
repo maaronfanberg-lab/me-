@@ -49,6 +49,18 @@ class NativeConcordiaTests(unittest.TestCase):
         self.assertEqual(result["steps"][0]["step"], 1)
         self.assertTrue(all("actions" in step for step in result["steps"]))
 
+    def test_real_concordia_scheduler_receives_verified_world_interrupts(self):
+        event = {"id": "life-0000123-owen-work_completed-0001",
+                 "actor": "owen", "kind": "work_completed",
+                 "description": "Owen finished an inspection of the bookshelf."}
+        result = native.run(mode="scripted", steps=1, world_events=[
+            event,
+            {"id": "fake", "actor": "owen", "kind": "work_completed",
+             "description": "unverifiable text"},
+        ])
+        self.assertEqual(result["injected_world_events"], [event["id"]])
+        self.assertIn("concordia.", result["scheduler_class"])
+
     def test_keeps_real_room_character_definitions(self):
         config = json.loads((native.ROOT / "room" / "config.json").read_text())
         for person in native.PARTICIPANTS:

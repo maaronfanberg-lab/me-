@@ -64,6 +64,8 @@ def identity_text(name: str, config: Mapping[str, Any]) -> str:
         "design, quality or mechanics of conversation. You may volunteer a "
         "concrete observation, pursue an idea, act, or stay occupied quietly.",
         "Never invent another person's speech or turn a plan into an accomplished action.",
+        "Other people's first-person statements describe THEIR intentions, not yours. "
+        "Never adopt another person's private memory, personal goal, or autobiographical claim.",
     ]
     return "\n".join(x for x in elements if x.strip())
 
@@ -264,6 +266,7 @@ def run(
     bootstrap_context: Sequence[Mapping[str, str]] = (),
     recent_public: Sequence[Mapping[str, str]] = (),
     world_contexts: Mapping[str, str] | None = None,
+    world_events: Sequence[Mapping[str, str]] = (),
     llama_url: str = "http://127.0.0.1:18080/v1/chat/completions",
     state_in: Path | None = None,
     state_out: Path | None = None,
@@ -339,14 +342,18 @@ def run(
                 "The action text before the JSON is ONLY what you actually "
                 "say or physically do now, written in first person. It may be "
                 "empty when you work privately or remain quiet. End with ONE "
-                "JSON object, e.g. "
+                "JSON control object containing mask (a list of event prefixes) "
+                "and timer (a time duration and personal reason). A valid "
+                "minimal control object looks like "
                 "{\"mask\":[\"chat.allen\",\"action.\"],"
-                "\"timer\":{\"time\":\"15m\",\"reason\":\"my next check-in\"},"
-                "\"work\":{\"verb\":\"write\",\"object\":\"notebook\","
-                "\"goal\":\"my own specific project\"}}. "
-                "The work field is OPTIONAL and must use an available verb and "
-                "object in your verified world context. That selects a private "
-                "task; the world referee subsequently determines completion. "
+                "\"timer\":{\"time\":\"15m\",\"reason\":\"review my work\"}}. "
+                "The optional work field is an object whose two required keys are verb "
+                "and object, with values you select from your current world "
+                "affordances. No sample task, goal, or dialogue is prescribed. "
+                "Never copy generic placeholder goals: retain your existing "
+                "real personal goal unless you have a genuinely specific "
+                "new one. The world referee, not you, determines whether a "
+                "work action is actually completed. "
                 "Use [] for mask when focusing on your own work. Timers are "
                 "about personal attention, NEVER compulsory conversation. "
                 "Never invent another character's speech or actions."
@@ -390,6 +397,27 @@ def run(
                 timestamp=scheduler.get_current_time(), tag="chat.allen",
                 source="allen", description=user_event[:700],
             ))
+    # Physical consequences are actual native Concordia interrupts. Other
+    # agents may notice them without anyone being instructed to speak.
+    # Use the existing action.* subscription so persisted agent attention
+    # masks keep working; the source explicitly identifies the environment.
+    injected_world_events = []
+    for event in list(world_events)[-8:]:
+        event_id = str(event.get("id") or "")
+        kind = str(event.get("kind") or "")
+        actor = str(event.get("actor") or "").lower()
+        description = str(event.get("description") or "").strip()
+        if (not event_id.startswith("life-") or kind not in
+                {"work_started", "work_completed"} or actor not in PARTICIPANTS
+                or not description or len(description) > 280):
+            continue
+        scheduler.inject_event(interrupt_scheduling.Event(
+            timestamp=scheduler.get_current_time(),
+            tag="action.environment",
+            source="room_environment",
+            description=f"Verified event [{event_id}]: {description}",
+        ))
+        injected_world_events.append(event_id)
     # Give every agent the same genuinely witnessed public evidence. Native
     # Concordia memory persists in the checkpoint; the caller supplies only
     # turns not previously observed, so this does not re-prime stale loops.
@@ -399,7 +427,10 @@ def run(
         if speaker in (*PARTICIPANTS, "allen") and utterance:
             for player in players:
                 if player.name.lower() != speaker:
-                    player.observe(f"Publicly witnessed: {speaker.capitalize()} said: {utterance}")
+                    player.observe(
+                        f"WITNESSED REPORT BY {speaker.upper()} (not your own "
+                        f"experience or intention; their claims are unverified): {utterance}"
+                    )
     engine = simultaneous.Simultaneous()
     records: list[dict[str, Any]] = []
 
@@ -437,6 +468,7 @@ def run(
         "game_master_class": f"{type(master).__module__}.{type(master).__name__}",
         "scheduler_class": f"{type(scheduler).__module__}.{type(scheduler).__name__}",
         "mode": mode,
+        "injected_world_events": injected_world_events,
         "players": names,
         "simulated_time": scheduler.format_time(),
         "steps": records,

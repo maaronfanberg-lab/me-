@@ -57,6 +57,15 @@ class LiveRoomTests(unittest.TestCase):
             "I disagree with your conclusion because the measurements are inconsistent.",
             "owen", history))
 
+    def test_witnessed_intention_is_not_rewritten_as_another_persons_memory(self):
+        old = "I decide to inspect the bookshelf, searching for a title that resonates with my current goal of finding the mechanism or model that makes a confusing thing click."
+        copied = "I sit on the couch and inspect the bookshelf, searching for a title that resonates with my current goal of finding the mechanism or model that makes a confusing thing click."
+        self.assertTrue(bridge._semantic_echo(
+            copied, "mara", [{"speaker": "owen", "text": old}]))
+        independent = "I notice a tiny moth resting on the glass and ask Owen whether the window has been open all night."
+        self.assertFalse(bridge._semantic_echo(
+            independent, "mara", [{"speaker": "owen", "text": old}]))
+
     def test_native_events_visible_in_existing_room_feed_schema(self):
         root = self.make_root()
         ack_path = root / "ack.json"
@@ -121,6 +130,30 @@ class LiveRoomTests(unittest.TestCase):
         w = json.loads((root / "room" / "life.json").read_text())
         self.assertEqual(w["objects"]["notebook"]["observations"], 1)
         self.assertTrue(any(e["kind"] == "work_completed" for e in w["events"]))
+
+    def test_verified_world_events_reenter_concordia_only_once(self):
+        root = self.make_root()
+        ack = root / "ack.json"
+        ack.write_text('{"ids":[]}')
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        path = root / "room" / bridge.CHECKPOINT
+        original = json.loads((root / "room" / "life.json").read_text())
+        started = original["events"][0]["id"]
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        after_first = json.loads(path.read_text())
+        self.assertIn(started, after_first["delivered_life_event_ids"])
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        world = json.loads((root / "room" / "life.json").read_text())
+        completed = [e["id"] for e in world["events"]
+                     if e["kind"] == "work_completed"]
+        self.assertTrue(completed)
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        after_second = json.loads(path.read_text())
+        self.assertIn(completed[-1], after_second["delivered_life_event_ids"])
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        after_third = json.loads(path.read_text())
+        self.assertEqual(
+            after_third["delivered_life_event_ids"].count(completed[-1]), 1)
 
     def test_one_time_context_reset_keeps_public_history(self):
         root = self.make_root()
