@@ -57,6 +57,15 @@ class LiveRoomTests(unittest.TestCase):
             "I disagree with your conclusion because the measurements are inconsistent.",
             "owen", history))
 
+    def test_witnessed_intention_is_not_rewritten_as_another_persons_memory(self):
+        old = "I decide to inspect the bookshelf, searching for a title that resonates with my current goal of finding the mechanism or model that makes a confusing thing click."
+        copied = "I sit on the couch and inspect the bookshelf, searching for a title that resonates with my current goal of finding the mechanism or model that makes a confusing thing click."
+        self.assertTrue(bridge._semantic_echo(
+            copied, "mara", [{"speaker": "owen", "text": old}]))
+        independent = "I notice a tiny moth resting on the glass and ask Owen whether the window has been open all night."
+        self.assertFalse(bridge._semantic_echo(
+            independent, "mara", [{"speaker": "owen", "text": old}]))
+
     def test_native_events_visible_in_existing_room_feed_schema(self):
         root = self.make_root()
         ack_path = root / "ack.json"
