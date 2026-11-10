@@ -264,6 +264,7 @@ def run(
     bootstrap_context: Sequence[Mapping[str, str]] = (),
     recent_public: Sequence[Mapping[str, str]] = (),
     world_contexts: Mapping[str, str] | None = None,
+    world_events: Sequence[Mapping[str, str]] = (),
     llama_url: str = "http://127.0.0.1:18080/v1/chat/completions",
     state_in: Path | None = None,
     state_out: Path | None = None,
@@ -390,6 +391,27 @@ def run(
                 timestamp=scheduler.get_current_time(), tag="chat.allen",
                 source="allen", description=user_event[:700],
             ))
+    # Physical consequences are actual native Concordia interrupts. Other
+    # agents may notice them without anyone being instructed to speak.
+    # Use the existing action.* subscription so persisted agent attention
+    # masks keep working; the source explicitly identifies the environment.
+    injected_world_events = []
+    for event in list(world_events)[-8:]:
+        event_id = str(event.get("id") or "")
+        kind = str(event.get("kind") or "")
+        actor = str(event.get("actor") or "").lower()
+        description = str(event.get("description") or "").strip()
+        if (not event_id.startswith("life-") or kind not in
+                {"work_started", "work_completed"} or actor not in PARTICIPANTS
+                or not description or len(description) > 280):
+            continue
+        scheduler.inject_event(interrupt_scheduling.Event(
+            timestamp=scheduler.get_current_time(),
+            tag="action.environment",
+            source="room_environment",
+            description=f"Verified event [{event_id}]: {description}",
+        ))
+        injected_world_events.append(event_id)
     # Give every agent the same genuinely witnessed public evidence. Native
     # Concordia memory persists in the checkpoint; the caller supplies only
     # turns not previously observed, so this does not re-prime stale loops.
@@ -437,6 +459,7 @@ def run(
         "game_master_class": f"{type(master).__module__}.{type(master).__name__}",
         "scheduler_class": f"{type(scheduler).__module__}.{type(scheduler).__name__}",
         "mode": mode,
+        "injected_world_events": injected_world_events,
         "players": names,
         "simulated_time": scheduler.format_time(),
         "steps": records,
