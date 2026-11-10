@@ -200,13 +200,21 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     beat_id = f"beat-{c.BOOT}-{cycle:06d}"
     current_topic = state.get("topic_episode") or {}
     spoken = []
+    publication = {"actions": 0, "invalid_format": 0, "semantic_echo": 0,
+                   "published": 0, "new_allen_inputs": len(new_input),
+                   "new_witnessed_turns": len(recent_public)}
     for step in output.get("steps") or []:
         for candidate_name, raw in (step.get("actions") or {}).items():
             speaker = candidate_name.lower()
             if speaker not in native.PARTICIPANTS:
                 continue
+            publication["actions"] += 1
             text = _message_from_concordia(raw, candidate_name, conversation)
-            if not text or _semantic_echo(text, speaker, [*conversation, *spoken]):
+            if not text:
+                publication["invalid_format"] += 1
+                continue
+            if _semantic_echo(text, speaker, [*conversation, *spoken]):
+                publication["semantic_echo"] += 1
                 continue
             # Do not make conversation sound as if it is still about an old
             # stuck topic solely because the archival index says so.
@@ -225,6 +233,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
             message["cognition"]["processes"] = 1
             c.record(conversation, discourse, minds, message, node, cycle)
             spoken.append(message)
+            publication["published"] += 1
     if spoken:
         current_topic = c.update_topic(current_topic, spoken, cycle)
         current_topic["participants"] = [*native.PARTICIPANTS, "allen"]
@@ -240,6 +249,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         "last_beat_id": beat_id,
         "beat_contributors": [msg["speaker"] for msg in spoken],
         "beat_message_count": len(spoken),
+        "native_publication_diagnostics": publication,
         "silence_cycles": 0 if spoken else int(state.get("silence_cycles") or 0) + 1,
         "conversational_floor": "native_concordia_interrupt_driven",
         "independent_life": {
