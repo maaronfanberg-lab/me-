@@ -124,7 +124,7 @@ def context(world: dict, who: str) -> str:
         f"YOUR PERSISTENT LIFE, distinct from the public conversation:\n"
         f"Your current goal: {life['goal']} (chosen from your profile or your own subsequent work).\n"
         f"{activity}\n"
-        f"Actual shared physical state: {facts}\n"
+        f"Verified shared physical state: {facts}\n"
         f"Relevant witnessed outcomes: {memories}\n"
         f"Private interpretations: {inference}\n"
         f"Available independent work verbs/objects: "
