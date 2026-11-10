@@ -67,6 +67,36 @@ def validate(world: dict, config: Mapping) -> None:
         raise ValueError("Room life snapshot has invalid clock")
 
 
+def repair_profile_goals(world: dict, config: Mapping) -> int:
+    """Correct earlier live-model placeholder goals, never reset actual work.
+
+    This only repairs invalid *agent_chosen* goal labels from the original
+    single-example rollout; it leaves completed work, memories and all
+    meaningful existing goals untouched.
+    """
+    repaired = 0
+    for name in PEOPLE:
+        life = world["lives"][name]
+        if life.get("goal_source") != "agent_chosen":
+            continue
+        goal = str(life.get("goal") or "").strip()
+        boilerplate = {
+            "reorganize", "my own specific project", "my personal project",
+            "my next task", "something interesting",
+        }
+        if (goal.lower() not in boilerplate
+                and len(goal) >= 24 and len(goal.split()) >= 4):
+            continue
+        psyche = ((config.get("p") or {}).get(name) or {}).get("psychology_v2") or {}
+        motives = psyche.get("motives") or []
+        if not motives:
+            continue
+        life["goal"] = str(motives[0])[:140]
+        life["goal_source"] = "existing_character_profile"
+        repaired += 1
+    return repaired
+
+
 def tokenize(text: str) -> set[str]:
     return set(re.findall(r"[a-z]{4,}", str(text).lower())) - STOP
 

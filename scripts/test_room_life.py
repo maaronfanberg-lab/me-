@@ -116,6 +116,26 @@ class RoomLifeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             room_life.advance(self.world, self.cfg, 99, [])
 
+    def test_migrates_old_copied_boilerplate_without_erasing_work(self):
+        self.world["lives"]["sarah"].update(
+            {"goal": "my own specific project", "goal_source": "agent_chosen",
+             "completed": 7})
+        self.world["lives"]["owen"].update(
+            {"goal": "reorganize", "goal_source": "agent_chosen"})
+        self.world["lives"]["jules"].update(
+            {"goal": "Investigate a previously recorded adaptation in the specimens",
+             "goal_source": "agent_chosen"})
+        count = room_life.repair_profile_goals(self.world, self.cfg)
+        self.assertEqual(count, 2)
+        self.assertEqual(self.world["lives"]["sarah"]["goal"],
+                         "Understand real causal mechanisms")
+        self.assertEqual(self.world["lives"]["sarah"]["completed"], 7)
+        self.assertEqual(self.world["lives"]["owen"]["goal"],
+                         "Test a hypothesis")
+        self.assertEqual(self.world["lives"]["jules"]["goal"],
+                         "Investigate a previously recorded adaptation in the specimens")
+        self.assertEqual(room_life.repair_profile_goals(self.world, self.cfg), 0)
+
     def test_different_characters_have_distinct_profile_sourced_goals(self):
         goals = [self.world["lives"][name]["goal"] for name in room_life.PEOPLE]
         self.assertEqual(len(set(goals)), len(room_life.PEOPLE))

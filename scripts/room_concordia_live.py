@@ -138,6 +138,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     life_world = (_load(life_path, {}) if life_path.is_file()
                   else room_life.initial(c.CFG, upcoming_cycle))
     room_life.validate(life_world, c.CFG)
+    room_life.repair_profile_goals(life_world, c.CFG)
     # Native agents see the verified current environment BEFORE they choose.
     world_contexts = {
         who: room_life.context(life_world, who)
