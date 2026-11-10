@@ -71,8 +71,10 @@ class RoomLifeTests(unittest.TestCase):
         disallowed = (
             "I will inspect the notebook.",
             "I'd like to inspect the notebook.",
-            "I decide to inspect the notebook.",
             "I inspected the notebook.",
+            "I might inspect the notebook.",
+            "I wish I could inspect the notebook.",
+            "I\u0027ll inspect the notebook and discover a secret.",
             "I inspect the notebook and discover a secret.",
             "Mara: I inspect the notebook.",
             "I inspect the window and test the samples.",
@@ -83,6 +85,21 @@ class RoomLifeTests(unittest.TestCase):
         self.assertEqual(
             room_life._literal_work_from_action("I inspect the notebook.", "Sarah"),
             {"verb": "inspect", "object": "notebook"},
+        )
+        for commitment in (
+            "I choose to inspect the notebook quietly.",
+            "I decide to inspect the notebook quietly.",
+            "I'll quietly inspect my notebook.",
+            "I'm going to inspect the notebook quietly.",
+        ):
+            with self.subTest(commitment=commitment):
+                self.assertEqual(
+                    room_life._literal_work_from_action(commitment, "Sarah"),
+                    {"verb": "inspect", "object": "notebook"},
+                )
+        self.assertEqual(
+            room_life._literal_work_from_action("I'll quietly organize my bookshelf.", "Sarah"),
+            {"verb": "organize", "object": "bookshelf"},
         )
         self.assertEqual(
             room_life._literal_work_from_action("I write in my notebook.", "Sarah"),
