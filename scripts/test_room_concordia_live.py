@@ -7,6 +7,7 @@ import unittest
 
 import room_concordia_native as native
 import room_concordia_live as bridge
+import room_life
 import room_engine_v5 as core
 
 
@@ -79,6 +80,16 @@ class LiveRoomTests(unittest.TestCase):
         self.assertEqual(state["conversational_floor"],
                          "native_concordia_interrupt_driven")
         self.assertTrue((root / "room" / bridge.CHECKPOINT).exists())
+        life_path = root / "room" / "life.json"
+        self.assertTrue(life_path.exists())
+        world = json.loads(life_path.read_text())
+        self.assertEqual(world["processed_cycle"], 1)
+        self.assertEqual(world["lives"]["jules"]["task"]["verb"], "inspect")
+        self.assertEqual(world["lives"]["jules"]["task"]["object"], "notebook")
+        self.assertEqual(world["objects"]["notebook"]["observations"], 0)
+        self.assertIn("room_life", viewer)
+        self.assertEqual(viewer["room_life"]["cycle"], 1)
+        self.assertEqual(set(viewer["room_life"]["activities"]), set(native.PARTICIPANTS))
 
     def test_concordia_checkpoint_survives_real_runner_restart(self):
         root = self.make_root()
@@ -96,6 +107,20 @@ class LiveRoomTests(unittest.TestCase):
             restored["game_master"]["context_components"]["entity_scheduler"]["tick_count"],
             original["game_master"]["context_components"]["entity_scheduler"]["tick_count"],
         )
+
+    def test_public_silence_still_advances_existing_world_task(self):
+        root = self.make_root()
+        ack = root / "ack.json"
+        ack.write_text('{"ids":[]}')
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        # A quiet second cycle progresses Jules' previously accepted work.
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        w = json.loads((root / "room" / "life.json").read_text())
+        self.assertEqual(w["lives"]["jules"]["task"]["progress"], 1)
+        bridge.beat(root, mode="scripted", ack_path=ack)
+        w = json.loads((root / "room" / "life.json").read_text())
+        self.assertEqual(w["objects"]["notebook"]["observations"], 1)
+        self.assertTrue(any(e["kind"] == "work_completed" for e in w["events"]))
 
     def test_one_time_context_reset_keeps_public_history(self):
         root = self.make_root()
