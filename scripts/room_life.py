@@ -130,9 +130,11 @@ def context(world: dict, who: str) -> str:
         f"Available independent work verbs/objects: "
         + "; ".join(f"{v}({','.join(sorted(objects))})"
                     for v, objects in AFFORDANCES.items())
-        + ". Choose work only if you genuinely want it, via the optional "
-          'work JSON object {"verb":"write","object":"notebook","goal":"..."}. '
-          "Work is not completed just because it is proposed. A different "
+        + ". Optional work uses the JSON keys verb and object; choose "
+          "actual values independently from the affordances above, and "
+          "retain your current personal goal unless you have a meaningful "
+          "new one. Work is not completed merely because it is proposed. "
+          "A different "
           "actor's intention is not a fact. You may remain quietly occupied."
     )[:4400]
 
