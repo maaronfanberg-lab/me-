@@ -176,7 +176,11 @@ class ScriptedModel(no_language_model.NoLanguageModel):
             action = "I check the notebook while the others work."
         else:
             action = ""
-        return action + '\n{"mask": [], "timer": {"time": "45m", "reason": "resume own work"}}'
+        work = (', "work": {"verb":"inspect","object":"notebook",'
+                '"goal":"Learn what the notebook actually contains"}'
+                if name == "Jules" else "")
+        return (action + '\n{"mask": [], "timer": '
+                '{"time": "45m", "reason": "resume own work"}' + work + '}')
 
 
 def build_agents(model: language_model.LanguageModel, config: Mapping[str, Any],
