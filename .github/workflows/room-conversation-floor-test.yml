@@ -4,6 +4,71 @@ on:
   pull_request:
     paths:
       - 'scripts/room_conversational_floor.py'
+      - 'scripts/room_endogenous_preflight.py'
+      - 'scripts/test_room_endogenous_preflight.py'
+      - 'scripts/room_endogenous_shadow.py'
+      - 'scripts/test_room_endogenous_shadow.py'
+      - 'scripts/room_endogenous_goal_journal.py'
+      - 'scripts/test_room_endogenous_goal_journal.py'
+      - 'scripts/room_endogenous_private_step.py'
+      - 'scripts/test_room_endogenous_private_step.py'
+      - 'scripts/room_endogenous_reflection.py'
+      - 'scripts/room_endogenous_expression_v2.py'
+      - 'scripts/test_room_endogenous_expression_v2.py'
+      - 'scripts/room_endogenous_speech_option.py'
+      - 'scripts/test_room_endogenous_speech_option.py'
+      - 'scripts/room_endogenous_self_endorse.py'
+      - 'scripts/test_room_endogenous_self_endorse.py'
+      - 'scripts/room_endogenous_private_growth.py'
+      - 'scripts/test_room_endogenous_private_growth.py'
+      - 'scripts/room_endogenous_inner_tick.py'
+      - 'scripts/test_room_endogenous_inner_tick.py'
+      - 'scripts/room_endogenous_inner_cycle.py'
+      - 'scripts/test_room_endogenous_inner_cycle.py'
+      - 'scripts/room_endogenous_private_beats.py'
+      - 'scripts/test_room_endogenous_private_beats.py'
+      - 'scripts/room_endogenous_shadow_beat.py'
+      - 'scripts/room_endogenous_activity_world.py'
+      - 'scripts/test_room_endogenous_activity_world.py'
+      - 'scripts/room_endogenous_activity_society.py'
+      - 'scripts/test_room_endogenous_activity_society.py'
+      - 'scripts/room_endogenous_activity_menu.py'
+      - 'scripts/test_room_endogenous_activity_menu.py'
+      - 'scripts/room_endogenous_activity_compact.py'
+      - 'scripts/test_room_endogenous_activity_compact.py'
+      - 'scripts/room_endogenous_activity_long_3b_canary.py'
+      - 'scripts/test_room_endogenous_activity_long_3b_canary.py'
+      - 'scripts/room_endogenous_activity_evidence_aba_canary.py'
+      - 'scripts/test_room_endogenous_activity_evidence_aba_canary.py'
+      - 'scripts/room_endogenous_activity_goals.py'
+      - 'scripts/test_room_endogenous_activity_goals.py'
+      - 'scripts/room_endogenous_activity_goal_real3b_canary.py'
+      - 'scripts/test_room_endogenous_activity_goal_real3b_canary.py'
+      - 'scripts/room_endogenous_activity_compact_3b_canary.py'
+      - 'scripts/room_endogenous_activity_store.py'
+      - 'scripts/test_room_endogenous_activity_store.py'
+      - 'scripts/room_endogenous_activity_3b_canary.py'
+      - 'scripts/test_room_endogenous_activity_3b_canary.py'
+      - 'scripts/test_room_endogenous_shadow_beat.py'
+      - 'scripts/room_endogenous_public_hygiene.py'
+      - 'scripts/test_room_endogenous_public_hygiene.py'
+      - 'scripts/room_endogenous_behaviour_gate.py'
+      - 'scripts/test_room_endogenous_behaviour_gate.py'
+      - 'scripts/room_endogenous_public_context_canary.py'
+      - 'scripts/test_room_endogenous_public_context_canary.py'
+      - 'scripts/room_endogenous_multiturn_canary.py'
+      - 'scripts/test_room_endogenous_multiturn_canary.py'
+      - 'scripts/room_endogenous_schema_transport.py'
+      - 'scripts/test_room_endogenous_schema_transport.py'
+      - 'scripts/room_endogenous_transaction_store.py'
+      - 'scripts/test_room_endogenous_transaction_store.py'
+      - 'scripts/room_endogenous_research_delivery.py'
+      - 'scripts/test_room_endogenous_research_delivery.py'
+      - 'scripts/test_room_endogenous_git_atomic.py'
+      - 'scripts/test_room_endogenous_reflection.py'
+      - 'scripts/room_endogenous_baseline.py'
+      - 'scripts/test_room_endogenous_baseline.py'
+      - 'docs/research/room-endogenous-baseline-20261104.json'
       - 'scripts/room_hidden_world.py'
       - 'scripts/test_room_hidden_world.py'
       - 'scripts/test_room_followup_scene.py'
@@ -80,6 +145,70 @@ jobs:
         run: python3 scripts/test_room_capacity_guard.py
       - name: Compile real conversational opportunity path
         run: python3 -m py_compile scripts/room_conversational_floor.py scripts/room_conversation_project.py scripts/room_action_ledger.py scripts/room_conversational_candidate.py scripts/room_engine_v5.py scripts/room_engine_v5_core.py scripts/room_private_commit.py scripts/room_private_model_autonomy_legacy.py scripts/room_expression_quality_legacy.py scripts/test_room_conversational_pipeline.py
+      - name: Endogenous intentions preflight without live model calls
+        run: |
+          python3 -m py_compile scripts/room_endogenous_preflight.py scripts/test_room_endogenous_preflight.py
+          python3 scripts/test_room_endogenous_preflight.py
+          python3 -m py_compile scripts/room_endogenous_shadow.py scripts/test_room_endogenous_shadow.py
+          python3 scripts/test_room_endogenous_shadow.py
+          python3 -m py_compile scripts/room_endogenous_goal_journal.py scripts/test_room_endogenous_goal_journal.py
+          python3 scripts/test_room_endogenous_goal_journal.py
+          python3 -m py_compile scripts/room_endogenous_private_step.py scripts/test_room_endogenous_private_step.py
+          python3 scripts/test_room_endogenous_private_step.py
+          python3 -m py_compile scripts/room_endogenous_reflection.py scripts/test_room_endogenous_reflection.py
+          python3 scripts/test_room_endogenous_reflection.py
+          python3 -m py_compile scripts/room_endogenous_expression_v2.py scripts/test_room_endogenous_expression_v2.py
+          python3 scripts/test_room_endogenous_expression_v2.py
+          python3 -m py_compile scripts/room_endogenous_speech_option.py scripts/test_room_endogenous_speech_option.py
+          python3 scripts/test_room_endogenous_speech_option.py
+          python3 -m py_compile scripts/room_endogenous_self_endorse.py scripts/test_room_endogenous_self_endorse.py
+          python3 scripts/test_room_endogenous_self_endorse.py
+          python3 -m py_compile scripts/room_endogenous_private_growth.py scripts/test_room_endogenous_private_growth.py
+          python3 scripts/test_room_endogenous_private_growth.py
+          python3 -m py_compile scripts/room_endogenous_inner_tick.py scripts/test_room_endogenous_inner_tick.py
+          python3 scripts/test_room_endogenous_inner_tick.py
+          python3 -m py_compile scripts/room_endogenous_inner_cycle.py scripts/test_room_endogenous_inner_cycle.py
+          python3 scripts/test_room_endogenous_inner_cycle.py
+          python3 -m py_compile scripts/room_endogenous_private_beats.py scripts/test_room_endogenous_private_beats.py
+          python3 scripts/test_room_endogenous_private_beats.py
+          python3 -m py_compile scripts/room_endogenous_shadow_beat.py scripts/test_room_endogenous_shadow_beat.py
+          python3 scripts/test_room_endogenous_shadow_beat.py
+          python3 -m py_compile scripts/room_endogenous_activity_world.py scripts/room_endogenous_activity_society.py scripts/test_room_endogenous_activity_world.py scripts/test_room_endogenous_activity_society.py
+          python3 scripts/test_room_endogenous_activity_world.py
+          python3 scripts/test_room_endogenous_activity_society.py
+          python3 -m py_compile scripts/room_endogenous_activity_menu.py scripts/test_room_endogenous_activity_menu.py
+          python3 scripts/test_room_endogenous_activity_menu.py
+          python3 -m py_compile scripts/room_endogenous_activity_compact.py scripts/test_room_endogenous_activity_compact.py scripts/room_endogenous_activity_compact_3b_canary.py
+          python3 scripts/test_room_endogenous_activity_compact.py
+          python3 -m py_compile scripts/room_endogenous_activity_long_3b_canary.py scripts/test_room_endogenous_activity_long_3b_canary.py
+          python3 scripts/test_room_endogenous_activity_long_3b_canary.py
+          python3 -m py_compile scripts/room_endogenous_activity_evidence_aba_canary.py scripts/test_room_endogenous_activity_evidence_aba_canary.py
+          python3 scripts/test_room_endogenous_activity_evidence_aba_canary.py
+          python3 -m py_compile scripts/room_endogenous_activity_goals.py scripts/test_room_endogenous_activity_goals.py
+          python3 scripts/test_room_endogenous_activity_goals.py
+          python3 -m py_compile scripts/room_endogenous_activity_goal_real3b_canary.py scripts/test_room_endogenous_activity_goal_real3b_canary.py
+          python3 scripts/test_room_endogenous_activity_goal_real3b_canary.py
+          python3 -m py_compile scripts/room_endogenous_activity_store.py scripts/test_room_endogenous_activity_store.py scripts/room_endogenous_activity_3b_canary.py scripts/test_room_endogenous_activity_3b_canary.py
+          python3 scripts/test_room_endogenous_activity_store.py
+          python3 scripts/test_room_endogenous_activity_3b_canary.py
+          python3 -m py_compile scripts/room_endogenous_public_hygiene.py scripts/test_room_endogenous_public_hygiene.py
+          python3 scripts/test_room_endogenous_public_hygiene.py
+          python3 -m py_compile scripts/room_endogenous_behaviour_gate.py scripts/test_room_endogenous_behaviour_gate.py
+          python3 scripts/test_room_endogenous_behaviour_gate.py
+          python3 -m py_compile scripts/room_endogenous_public_context_canary.py scripts/test_room_endogenous_public_context_canary.py
+          python3 scripts/test_room_endogenous_public_context_canary.py
+          python3 -m py_compile scripts/room_endogenous_multiturn_canary.py scripts/test_room_endogenous_multiturn_canary.py
+          python3 scripts/test_room_endogenous_multiturn_canary.py
+          python3 -m py_compile scripts/room_endogenous_schema_transport.py scripts/test_room_endogenous_schema_transport.py
+          python3 scripts/test_room_endogenous_schema_transport.py
+          python3 -m py_compile scripts/room_endogenous_transaction_store.py scripts/test_room_endogenous_transaction_store.py
+          python3 scripts/test_room_endogenous_transaction_store.py
+          python3 -m py_compile scripts/room_endogenous_research_delivery.py scripts/test_room_endogenous_research_delivery.py
+          python3 scripts/test_room_endogenous_research_delivery.py
+          python3 -m py_compile scripts/test_room_endogenous_git_atomic.py
+          python3 scripts/test_room_endogenous_git_atomic.py
+          python3 -m py_compile scripts/room_endogenous_baseline.py scripts/test_room_endogenous_baseline.py
+          python3 scripts/test_room_endogenous_baseline.py
       - name: Verify conversational question, response, and repair sequence
         run: python3 scripts/test_room_sequence_uptake.py
       - name: Verify full-turn action gate on live echo regression
