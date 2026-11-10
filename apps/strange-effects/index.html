@@ -103,7 +103,7 @@ const REG=[1,1.26,.8,1.5,.67,1.12,.9,1.33,1,1.19];const STRETCH=[.18,.3,.7,.04,1
 const k1=[0,0,0],k2=[0,0,0],k3=[0,0,0],k4=[0,0,0],tp=[0,0,0];
 const RKB={};function rkLong(a,s,h){const n=s.length,B=RKB[n]||(RKB[n]=[0,1,2,3,4].map(()=>new Float64Array(n))),q1=B[0],q2=B[1],q3=B[2],q4=B[3],t=B[4],f=a.f,p=a.pv;f(s,p,q1);for(let i=0;i<n;i++)t[i]=s[i]+.5*h*q1[i];f(t,p,q2);for(let i=0;i<n;i++)t[i]=s[i]+.5*h*q2[i];f(t,p,q3);for(let i=0;i<n;i++)t[i]=s[i]+h*q3[i];f(t,p,q4);for(let i=0;i<n;i++)s[i]+=h*(q1[i]+2*q2[i]+2*q3[i]+q4[i])/6;}
 function rk4(a,s,h){if(s.length>3)return rkLong(a,s,h);const f=a.f,p=a.pv;f(s,p,k1);for(let i=0;i<3;i++)tp[i]=s[i]+.5*h*k1[i];f(tp,p,k2);for(let i=0;i<3;i++)tp[i]=s[i]+.5*h*k2[i];f(tp,p,k3);for(let i=0;i<3;i++)tp[i]=s[i]+h*k3[i];f(tp,p,k4);for(let i=0;i<3;i++)s[i]+=h*(k1[i]+2*k2[i]+2*k3[i]+k4[i])/6;}
-const CPK=1-Math.exp(-32/48000/1.5),KP=+(globalThis.SE_KP||.05),cl=x=>x<0?0:x>1?1:x,xp=(a,b,u)=>a*Math.pow(b/a,u);
+const cl=x=>x<0?0:x>1?1:x,xp=(a,b,u)=>a*Math.pow(b/a,u);
 function Delay(n){this.b=new Float64Array(n);this.n=n;this.w=0;}
 Delay.prototype.push=function(x){this.b[this.w]=x;this.w=(this.w+1)%this.n;};
 Delay.prototype.read=function(d){const n=this.n;let p=this.w-1-d;while(p<0)p+=n;const i=p|0,f=p-i,a=this.b[i%n],b=this.b[(i+1)%n];return a+(b-a)*f;};
@@ -391,10 +391,21 @@ function makeDSP(rate){
  const G=[];for(let i=0;i<14;i++)G.push({on:false,s:[0,0,0],v:null,h:0,e:0,d:1,g:[0,0,0,0,0],dr:1,buf:new Float64Array(Math.ceil(.07*rate)),w:0,taps:null,lp:0,a:1});const enc={hA:new Hilbert(129),hB:new Hilbert(129),dl:[new Delay(90),new Delay(90),new Delay(90)],lag:63,Lt:0,Rt:0};const bus=[0,0,0,0,0],bedG=[.2,.2,.2,.2,.2],bedT=[.2,.2,.2,.2,.2],tmpG=[0,0,0,0,0];let bassLp=0,wasAlive=false;
  const W=[];for(let i=0;i<16;i++)W.push({on:false,type:0,t:0,dur:1,wait:0,f0:0,f1:0,th0:0,th1:0,amp:1,ph:0,ph2:0,lp:0,nx:.3+i*.017,g:[0,0,0,0,0],dist:1,pd:0,x0:0,y0:0,vx:0,vy:0,doppler:1,send:.5,frac:0,ct:0});
  const dRw=new Delay(Math.ceil(.03*rate));const dT=new Delay(Math.ceil(.06*rate));const tearR=(x,t,d)=>{dT.push(x);if(t<=0)return x;const y=dT.read(t*.045*rate*(.5+.5*Math.tanh(d*2)));return x*(1-t)+y*t*(1+Math.tanh(d*3)*.6);};const pfNow=()=>S.pf||1;const pS=[0,0,0],PL=[];for(let q=0;q<10;q++)PL.push({on:false,t:0,dur:1,f:100,w:0,buf:null});
- const RING=new Uint8Array(24);for(const t of[10,11,13,14,17,18])RING[t]=1;const kick=v=>{if(!(S.cpl>0)||S.sync===false)return;S.kicks=(S.kicks||0)+1;let ns=0;for(const w of V)if(w.on&&w.dim===3)ns++;const nrm=4/Math.max(4,v.np||4)/Math.max(1,ns-1);for(const w of V){if(!w.on||w===v||!w.np||w.dim!==3)continue;if(S.kickLog.length<400)S.kickLog.push(w.idx);const ax=w.def.sec[0];for(let p=0;p<w.np;p++){const o=3*p,d=(w.P[o+ax]-w.Pp[o+ax])>=0?1:-1;w.P[o+ax]+=d*KP*S.cpl*nrm*w.sc*(w.cv?Math.sqrt(w.cv[ax])*2:1);}}};
+ const RING=new Uint8Array(24);for(const t of[10,11,13,14,17,18])RING[t]=1;// Rhythm coupling through time. A note from one attractor (a call) makes each partner surge forward along its OWN
+// orbit a moment later, so some of its particles cross their threshold and answer. Nothing is displaced: only the
+// partner's clock runs faster for an instant, so every system keeps its shape, its verified chaos and its notes.
+// (Pulse coupling by phase advance: Peskin 1975; Mirollo & Strogatz 1990. Delay: Yeung & Strogatz 1999. The surge
+// follows an alpha function, the standard synaptic kernel: 100 ms delay, 25 ms time constant.)
+// One call draws m answers on average, shared among all partners whatever their number or particle count
+// (m = .78*pull^.8: Nudge .30, Pull .55, Tangle .78; below 1, so answer chains die out, mean length 1/(1-m)).
+// Each system's clock is slowed by its own average surge, so its long-run note rate stays what it was at Apart.
+const CDL=Math.min(1000,Math.round(.1*rate/32)),CKT=32/rate/.025,CKB=32/rate/2,cplM=()=>.78*Math.pow(S.cpl,.8);S.calls=0;S.tk=0;S.kickLog=[];let cplLast=0;
+const call=v=>{if(!(S.cpl>0)||S.sync===false)return;let ns=0;for(const w of V)if(w.on&&w.np)ns++;if(ns<2)return;S.calls++;v.kN=(v.kN||4)+1;const m=cplM()/Math.max(.5,v.kN/(v.kP||4));
+ for(const w of V){if(!w.on||w===v||!w.np)continue;if(!w.dl){w.dl=new Float64Array(1024);w.b1=0;w.b=0;w.bb=m;}
+  w.dl[(S.tk+CDL)&1023]+=m/((ns-1)*w.np)*.75/(Math.max(.02,S.move*w.dens)*.025);}};
 S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(const z of PL){if(!z.on){k=z;break;}if(z.t/z.dur>k.t/k.dur)k=z;}
   const P=v.P,ax=v.def.sec[0],a1=(ax+1)%3,a2=(ax+2)%3,n1=(P[o+a1]-v.c[a1])/v.sc,n2=(P[o+a2]-v.c[a2])/v.sc,q1=cl((n1+1)/2),q2=cl((n2+1)/2);
-  const sp=Math.hypot(P[o]-v.Pp[o],P[o+1]-v.Pp[o+1],P[o+2]-v.Pp[o+2])/v.sc*rate/32/(S.move*v.dens*(S.pf||1)+1e-9),spd=(()=>{const H=v.spH||(v.spH=[]);let c=0;for(const x of H)if(x<sp)c++;const r=H.length>4?(c+.5)/(H.length+1):cl(Math.tanh(sp/8));H.push(sp);if(H.length>48)H.shift();return r;})();
+  const sp=Math.hypot(P[o]-v.Pp[o],P[o+1]-v.Pp[o+1],P[o+2]-v.Pp[o+2])/v.sc*rate/32/(S.move*v.dens*(S.pf||1)*(v.g||1)+1e-9),spd=(()=>{const H=v.spH||(v.spH=[]);let c=0;for(const x of H)if(x<sp)c++;const r=H.length>4?(c+.5)/(H.length+1):cl(Math.tanh(sp/8));H.push(sp);if(H.length>48)H.shift();return r;})();
   if(!k.buf)k.buf=new Float32Array(Math.ceil(rate/20));
   // fast crossings are picked; slow ones swell or slide
   const sb=spd>.62?2:spd>.32?1:0;const r2=(()=>{const H=(v.q2H||(v.q2H=[[],[],[]]))[sb];let c=0;for(const x of H)if(x<q2)c++;const r=H.length>4?(c+.5)/(H.length+1):q2;H.push(q2);if(H.length>48)H.shift();return r;})();
@@ -525,7 +536,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
    x=x*(1-E.rough*.65+E.rough*.65*(.5+.5*Math.sin(2*Math.PI*62*E.t)))*Math.min(1,E.t/.0012)+nz*E.ce*.22;x*=E.amp;
    for(let q=0;q<5;q++)bus[q]+=x*E.g[q]*.12;rkAL+=x*(E.g[0]+.7*E.g[1]+.75*E.g[4]+.35*E.g[3])*.7;rkAR+=x*(E.g[2]+.7*E.g[1]+.75*E.g[3]+.35*E.g[4])*.7;sum+=x;}
   return sum;};
- const hall=new Hall(rate);let brEnv=0,brG=0,mixMs=0,lowMs=0,bdNeed=0,bdAvg=.1;const mL1=[0,0],mL2=[0,0];const GBR=.05,BLP=1-Math.exp(-2*Math.PI*110/rate),BDC=1-Math.exp(-2*Math.PI*28/rate),BDK=Math.exp(-1/(.65*rate)),BMS=1-Math.exp(-1/(1.5*rate));S.bodyAmt=1;S.kickLog=[];const BT=+(globalThis.SE_BT||.13),BL8=1-Math.exp(-2*Math.PI*80/rate);S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
+ const hall=new Hall(rate);let brEnv=0,brG=0,mixMs=0,lowMs=0,bdNeed=0,bdAvg=.1;const mL1=[0,0],mL2=[0,0];const GBR=.05,BLP=1-Math.exp(-2*Math.PI*110/rate),BDC=1-Math.exp(-2*Math.PI*28/rate),BDK=Math.exp(-1/(.65*rate)),BMS=1-Math.exp(-1/(1.5*rate));S.bodyAmt=1;const BT=+(globalThis.SE_BT||.13),BL8=1-Math.exp(-2*Math.PI*80/rate);S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
  const voiceOf=e=>route[e]>=0?V[route[e]/3|0]:null;
  const on=e=>force[e]!==null||(route[e]>=0&&(route[e]>=100?S.rank:V[route[e]/3|0].on));
  const proc=(ch,inp,idx,chIdx)=>{
@@ -563,11 +574,11 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
   const a=(x[0]-v.c[0])/v.sc-fs[0],b=(x[1]-v.c[1])/v.sc-fs[1],d=(x[2]-v.c[2])/v.sc-fs[2],r=Math.sqrt(a*a+b*b+d*d)*zs;
   return r<=.8?1:r>=1.1?0:1-(r-.8)/.3;};
  function ctrl(){
-  let cpN=0;for(const w of V)if(w.on)cpN++;
+  let cpN=0;for(const w of V)if(w.on)cpN++;S.tk++;if(S.cpl!==cplLast){cplLast=S.cpl;const m=S.cpl>0?cplM():0;for(const w of V)if(w.dl)w.bb=m;}
   // each system's running average and spread over ~3 orbits, so its pull on partners is a two-way swing about
   // its own running median (lopsided, spiky systems such as the food chain otherwise give a constant one-way shove)
   for(const w of V){if(!w.on)continue;const al=Math.min(1,S.move/rate*32/(3*.75));if(!w.cm){w.cm=[0,0,0];w.cv=[.25,.25,.25];}
-   if(!w.isd){w.isd=[1,1,1];w.sd=[1,1,1];}for(let k=0;k<3;k++){w.sd[k]=Math.sqrt(w.cv[k]+1e-6);w.isd[k]=1/w.sd[k];}for(let k=0;k<3;k++){const u=(w.s[k]-w.c[k])/w.sc,e=u-w.cm[k];w.cm[k]+=4*al*Math.sqrt(w.cv[k])*Math.sign(e);w.cv[k]+=al*(Math.min(e*e,16*w.cv[k])-w.cv[k]);}}
+   for(let k=0;k<3;k++){const u=(w.s[k]-w.c[k])/w.sc,e=u-w.cm[k];w.cm[k]+=4*al*Math.sqrt(w.cv[k])*Math.sign(e);w.cv[k]+=al*(Math.min(e*e,16*w.cv[k])-w.cv[k]);}}
   // attractors play each other's knobs: each parameter of a system swings around its set value, inside its
   // verified range, by the other systems' current position (coordinate p mod 3, averaged over them), scaled by the pull
   for(const v of V){if(!v.on)continue;const d=v.def,pv=v.a.pv;
@@ -579,25 +590,24 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
    for(let p=0;p<v.sig.length;p++)v.sgS[p]+=(v.sig[p]-v.sgS[p])*.02;
    const q=v.sgS,ck=(x,m)=>x<-m?-m:x>m?m:x;v.fmul=v.reg*Math.pow(2,ck(1.6*q[0],2.5));v.dens=q.length>1?Math.pow(2,ck(2.2*q[1],2.5)):1;
    if(q.length>2)aB+=q[2];if(q.length>3&&Math.abs(q[3])>Math.abs(aTd)){aTd=q[3];aTr=4*Math.pow(2,ck(q[3],2.5));}if(q.length>4)aGr+=Math.abs(q[4]);if(q.length>5)aRot+=q[5];
+   let g=1;if(v.dl){const kx=S.tk&1023,a=v.dl[kx];if(a){v.b1+=a;v.dl[kx]=0;if(S.kickLog.length<600)S.kickLog.push(v.idx);}
+    if(v.b1>1e-7||v.b>1e-7){v.b+=(v.b1-v.b)*CKT;v.b1-=v.b1*CKT;}else{v.b1=0;v.b=0;}
+    if(S.cpl>0&&cpN>1&&S.sync!==false){v.bb+=(v.b-v.bb)*CKB;g=Math.min(40,1-Math.min(.9,v.bb)+v.b);}else g=Math.min(40,1+v.b);}
+   v.g=g;if(S.cpl>0&&cpN>1&&S.sync!==false&&v.np){const dk=32/rate/10;v.kP=(v.kP||4)*(1-dk)+v.np*S.move*v.dens/rate*32/.75*g;v.kN=(v.kN||4)*(1-dk);}
    if(S.swarm){if(v.np!==S.nP){for(let q=v.np;q<S.nP;q++){seedP(v,q);v.Ps[q]=0;}v.np=S.nP;}
-    const hT=S.move*v.dens/rate*32*(v.def.T/.75),nsub=Math.min(8,Math.ceil(hT/v.def.hMax)),h=hT/nsub,P=v.P,Q=v.Pp,ax=v.def.sec[0],th=v.def.sec[1],both=v.def.sec[2];
+    const hT0=S.move*v.dens/rate*32*(v.def.T/.75),hT=g===1?hT0:hT0*g,nsub=Math.min(g===1?8:24,Math.ceil(hT/v.def.hMax)),h=hT/nsub,P=v.P,Q=v.Pp,ax=v.def.sec[0],th=v.def.sec[1],both=v.def.sec[2];
     const D=v.dim,pX=D===3?pS:v.pS;for(let q=0;q<v.np;q++){const o=D*q;for(let k=0;k<D;k++){Q[o+k]=P[o+k];pX[k]=P[o+k];}for(let z=0;z<nsub;z++)rk4(v.a,pX,h);for(let k=0;k<D;k++)P[o+k]=pX[k];
-     if(S.cpl>0&&cpN>1){let t0=0,t1=0,t2=0,m=0,z0=0,z1=0,z2=0;for(const w of V){if(!w.on||w===v||!w.np)continue;const oo=w.dim*(q%w.np),W=w.P,a0=(W[oo]-w.c[0])/w.sc,a1=(W[oo+1]-w.c[1])/w.sc,a2=(W[oo+2]-w.c[2])/w.sc;t0+=a0;t1+=a1;t2+=a2;
-       if(w.isd){z0+=(a0-w.cm[0])*w.isd[0];z1+=(a1-w.cm[1])*w.isd[1];z2+=(a2-w.cm[2])*w.isd[2];}m++;}
+     if(S.cpl>0&&cpN>1){let t0=0,t1=0,t2=0,m=0;for(const w of V){if(!w.on||w===v||!w.np)continue;const oo=w.dim*(q%w.np),W=w.P;t0+=(W[oo]-w.c[0])/w.sc;t1+=(W[oo+1]-w.c[1])/w.sc;t2+=(W[oo+2]-w.c[2])/w.sc;m++;}
       if(m){t0/=m;t1/=m;t2/=m;const y0=(P[o]-v.c[0])/v.sc,y1=(P[o+1]-v.c[1])/v.sc,y2=(P[o+2]-v.c[2])/v.sc;
-       if(S.sync!==false&&v.sd){const al=CPK*S.cpl,T0=v.cm[0]+v.sd[0]*z0/m,T1=v.cm[1]+v.sd[1]*z1/m,T2=v.cm[2]+v.sd[2]*z2/m;P[o]+=al*(T0-y0)*v.sc;P[o+1]+=al*(T1-y1)*v.sc;P[o+2]+=al*(T2-y2)*v.sc;}
        // a meeting: this particle comes within .2 of where its partner particles are (leaves past .35) -> a chime
        const dm=Math.hypot(t0-y0,t1-y1,t2-y2),M=v.Mt||(v.Mt=new Uint8Array(128));if(!M[q]&&dm<.2){M[q]=1;S.meets++;const ft=S.forceTy;S.forceTy=18;ping(v,q,o);S.forceTy=ft;}else if(M[q]&&dm>.35)M[q]=0;}}
-     v.ph=h;v.nsub=nsub;const x=(P[o+ax]-v.c[ax])/v.sc,sd=v.Ps[q];v.Pc[q]+=32/rate;if(x>th&&sd<=0){if(sd!==0){ping(v,q,o);kick(v);v.Pc[q]=0;}v.Ps[q]=1;}else if(x<(both?-th:th-.2)&&sd>=0){if(sd!==0&&both){ping(v,q,o);kick(v);v.Pc[q]=0;}v.Ps[q]=-1;}
+     v.ph=h;v.nsub=nsub;const x=(P[o+ax]-v.c[ax])/v.sc,sd=v.Ps[q];v.Pc[q]+=32/rate;if(x>th&&sd<=0){if(sd!==0){ping(v,q,o);call(v);v.Pc[q]=0;}v.Ps[q]=1;}else if(x<(both?-th:th-.2)&&sd>=0){if(sd!==0&&both){ping(v,q,o);call(v);v.Pc[q]=0;}v.Ps[q]=-1;}
      if(v.Pc[q]>(6+(q%7)*.5)*.75/Math.max(.02,S.move*v.dens)){v.stirs++;seedP(v,q);v.Ps[q]=0;v.Pc[q]=0;}}}
    if(S.swarm&&v.np){const lim=v.lim;for(let q=0;q<v.np;q++){const o=v.dim*q,P=v.P;if(!(Math.abs(P[o])<lim&&Math.abs(P[o+1])<lim&&Math.abs(P[o+2])<lim)){v.resets++;seedP(v,q);}
      let w=1;if(zs>1.0001)w=v.idx===S.focus?S.regionOf(v,[P[o],P[o+1],P[o+2]]):1/(zs*zs);v.Pw[q]+=(w-v.Pw[q])*.3;}}
    v.stT+=32/rate;for(let k=0;k<3;k++){const x=v.s[k];if(x<v.sMin[k])v.sMin[k]=x;if(x>v.sMax[k])v.sMax[k]=x;}
    if(v.stT>=.5){let w=0;for(let k=0;k<3;k++){w=Math.max(w,v.sMax[k]-v.sMin[k]);v.sMin[k]=1e9;v.sMax[k]=-1e9;}v.stT=0;if(w<.02*v.sc0){v.stirs++;reseed(v);}}
-   rk4(v.a,v.m,S.move/rate*32*(v.def.T/.75));
-   if(S.cpl>0&&cpN>1&&S.sync!==false&&v.dim===3&&v.cm){let t=[0,0,0],m=0;for(const w of V){if(!w.on||w===v||w.dim!==3||!w.cm)continue;for(let k=0;k<3;k++)t[k]+=((w.m[k]-w.c[k])/w.sc-w.cm[k])/Math.sqrt(w.cv[k]+1e-6);m++;}
-    if(m){const al=CPK*S.cpl;for(let k=0;k<3;k++)v.m[k]+=al*(v.cm[k]+Math.sqrt(v.cv[k])*t[k]/m-(v.m[k]-v.c[k])/v.sc)*v.sc;}}
-   guard(v);
+   if(g===1)rk4(v.a,v.m,S.move/rate*32*(v.def.T/.75));else{const hm=S.move/rate*32*(v.def.T/.75)*g,nm=Math.min(24,Math.max(1,Math.ceil(hm/v.def.hMax)));for(let z=0;z<nm;z++)rk4(v.a,v.m,hm/nm);}guard(v);
    {const dk=S.cpl>0&&cpN>1?.0004:.00002; // pulled systems: the box forgets a partner's one-off kick in ~2 s, settling back to its verified shape (never smaller)
    const cp=dk>.0001;for(let k=0;k<3;k++){const x=v.m[k],xl=cp?Math.min(x,v.lo0[k]):x,xh=cp?Math.max(x,v.hi0[k]):x;if(x<v.lo[k])v.lo[k]=x;else v.lo[k]+=(xl-v.lo[k])*dk;if(x>v.hi[k])v.hi[k]=x;else v.hi[k]+=(xh-v.hi[k])*dk;}}
    bound(v);
@@ -779,7 +789,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
    L[i]=Math.tanh(l);R[i]=Math.tanh(r);if(S.mono){const mo=(L[i]+R[i])*.5;L[i]=mo;R[i]=mo;}
    if(!(L[i]===L[i])||!(R[i]===R[i])){L[i]=0;R[i]=0;S.bad=(S.bad||0)+1;}
   }
-  const hits=S.hitLog,ev=S.evLog,rk=S.rkLog,kk=S.kickLog;S.hitLog=[];S.evLog=[];S.rkLog=[];S.kickLog=[];let parts=null;if(S.swarm){parts=V.map(v=>{if(!v.on||!v.np)return null;const o=new Float32Array(v.np*3),D=v.dim;for(let q=0;q<v.np;q++)for(let k=0;k<3;k++)o[3*q+k]=(v.P[D*q+k]-v.c[k])/v.sc;return o;});}return{L,R,trail,hits,ev,rk,parts,kicks:kk};
+  const hits=S.hitLog,ev=S.evLog,rk=S.rkLog,kk=S.kickLog;S.hitLog=[];S.evLog=[];S.rkLog=[];S.kickLog=[];let parts=null;if(S.swarm){parts=V.map(v=>{if(!v.on||!v.np)return null;const o=new Float32Array(v.np*3),D=v.dim;for(let q=0;q<v.np;q++)for(let k=0;k<3;k++)o[3*q+k]=(v.P[D*q+k]-v.c[k])/v.sc;return o;});}return{L,R,trail,hits,ev,rk,parts,kicks:kk,surge:V.map(v=>v.on?(v.g||1):1)};
  };
  S.polGain=th=>{const sq=Math.sin(th)>=0?1:-1;let c=S.polDiv?Math.cos(Math.PI/6):Math.cos(th/6);if(Math.abs(c)<1/6)c=c<0?-1/6:1/6;return sq/c;};
  S.setParam=(vi,pi,x)=>{const d=V[vi].def;V[vi].a.pv[pi]=Math.max(d.lo[pi],Math.min(d.hi[pi],x));V[vi].base[pi]=V[vi].a.pv[pi];V[vi].sig[pi]=(V[vi].a.pv[pi]-d.p[pi])/Math.max(Math.abs(d.p[pi])*.21,(d.hi[pi]-d.lo[pi])*.084);};
@@ -792,7 +802,7 @@ let D;onmessage=e=>{const d=e.data;
  if(d.t==='init')D=makeDSP(d.rate);
  else if(d.t==='set'){if(d.route)d.route.forEach((v,i)=>D.route[i]=v);for(const k of['pitch','move','amount','zoom','focus','fc','spread','held','cine','hallRT','hallSize','impact','mono','alive','recv','holo','war','elec','rank','rkM','rkK','rkAlpha','rkSigma','rkEll','spk','pol','polHz','polDiv','swarm','nP','gentle','strange','hm','cpl','allT','synT'])if(k in d)D[k]=d[k];
   if(d.on)d.on.forEach((v,i)=>{D.V[i].on=v;});if(d.params)d.params.forEach(([vi,pi,x])=>D.setParam(vi,pi,x));if('reset' in d)D.V.forEach(v=>{if(v.on)D.resetParams(v.idx);});}
- else if(d.t==='gen'){const t0=performance.now(),o=D.process(d.frames);postMessage({L:o.L,R:o.R,trail:o.trail,parts:o.parts,kicks:o.kicks,hits:o.hits,ev:o.ev,rk:o.rk,ms:performance.now()-t0},[o.L.buffer,o.R.buffer]);}
+ else if(d.t==='gen'){const t0=performance.now(),o=D.process(d.frames);postMessage({L:o.L,R:o.R,trail:o.trail,parts:o.parts,kicks:o.kicks,surge:o.surge,hits:o.hits,ev:o.ev,rk:o.rk,ms:performance.now()-t0},[o.L.buffer,o.R.buffer]);}
 };`;
 new Function(DSP_SRC+";window.__EF={ND,compileFormula,formulaAttr,formulaSearch,EFFECTS,ATTR,DEFAULT_ROUTES,CINE_ROUTES,ALIVE_ROUTES,RANK_ROUTES,SWARM_ROUTES,RANK_VARS,makeDSP,rk4};")();
 const{ND,compileFormula,formulaAttr,formulaSearch,EFFECTS,ATTR,DEFAULT_ROUTES,CINE_ROUTES,ALIVE_ROUTES,RANK_ROUTES,SWARM_ROUTES,RANK_VARS,rk4}=window.__EF;
@@ -809,7 +819,7 @@ function ensureCtx(){if(au.ctx)return;const AC=window.AudioContext||window.webki
  if(au.ctx.sampleRate!==FS){rate=au.ctx.sampleRate;au.w.postMessage({t:'init',rate});send(Object.assign({route,on:onSet,zoom,focus,fc},sent));params.forEach((p,vi)=>p.forEach((x,pi)=>send({params:[[vi,pi,x]]})));}
  au.master=au.ctx.createGain();au.master.gain.value=au.vol;au.an=au.ctx.createAnalyser();au.an.fftSize=2048;au.master.connect(au.an);au.an.connect(au.ctx.destination);}
 au.w.onmessage=e=>{const d=e.data;au.busy=false;au.blocks++;au.slow=au.slow*.9+(d.ms/(d.L.length/rate*1000))*.1;
- d.trail.forEach((a,i)=>addTrail(i,a));if(d.parts)d.parts.forEach((a,i)=>{PT[i]=a;});if(d.kicks&&d.kicks.length){const lead=au.on&&au.ctx?Math.max(0,au.nextT-au.ctx.currentTime)*1000:0;const ks=[...new Set(d.kicks)];setTimeout(()=>{for(const vi of ks){const a=PT[vi];if(!a||!onSet[vi])continue;for(let q=0;q<a.length/3&&q<16;q++)sparks.push({i:vi,x:a[q*3],y:a[q*3+1],z:a[q*3+2],e:.35+.5*sent.cpl});}},lead);}if(d.rk&&d.rk.length){const lead=au.on&&au.ctx?Math.max(0,au.nextT-au.ctx.currentTime)*1000:0;d.rk.forEach(r=>setTimeout(()=>{if(r.ranks){ringNow={Ss:r.ranks,R:r.R,phi:r.phi,k:r.k,m:r.m,vi:r.vi,life:1};if(r.phi)flash[r.vi]=1.6;}else{constel.push(Object.assign({life:1},r));if(constel.length>10)constel.shift();}},lead));}if(d.ev&&d.ev.length){const lead=au.on&&au.ctx?Math.max(0,au.nextT-au.ctx.currentTime)*1000:0;for(let q=0;q<d.ev.length;q+=5){const ev=d.ev.slice(q,q+5);setTimeout(()=>{sparks.push({i:ev[0],x:ev[1],y:ev[2],z:ev[3],e:Math.min(1,ev[4]+.25)});if(sparks.length>40)sparks.shift();},lead);}}if(d.hits&&d.hits.length){const lead=au.on&&au.ctx?Math.max(0,au.nextT-au.ctx.currentTime)*1000:0;for(let q=0;q<d.hits.length;q+=3){const vi=d.hits[q+1],e=d.hits[q+2];setTimeout(()=>{flash[vi]=Math.max(flash[vi],e);},lead);}}
+ d.trail.forEach((a,i)=>addTrail(i,a));if(d.parts)d.parts.forEach((a,i)=>{PT[i]=a;});if(d.surge)SG=d.surge;if(d.kicks&&d.kicks.length&&sparks.length<400){const lead=au.on&&au.ctx?Math.max(0,au.nextT-au.ctx.currentTime)*1000:0,ks=[...new Set(d.kicks)];setTimeout(()=>{for(const vi of ks){const a=PT[vi];if(!a||!onSet[vi])continue;for(let q=0;q<a.length/3&&q<6;q++)sparks.push({i:vi,x:a[q*3],y:a[q*3+1],z:a[q*3+2],e:.3+.45*sent.cpl});}},lead);}if(d.rk&&d.rk.length){const lead=au.on&&au.ctx?Math.max(0,au.nextT-au.ctx.currentTime)*1000:0;d.rk.forEach(r=>setTimeout(()=>{if(r.ranks){ringNow={Ss:r.ranks,R:r.R,phi:r.phi,k:r.k,m:r.m,vi:r.vi,life:1};if(r.phi)flash[r.vi]=1.6;}else{constel.push(Object.assign({life:1},r));if(constel.length>10)constel.shift();}},lead));}if(d.ev&&d.ev.length){const lead=au.on&&au.ctx?Math.max(0,au.nextT-au.ctx.currentTime)*1000:0;for(let q=0;q<d.ev.length;q+=5){const ev=d.ev.slice(q,q+5);setTimeout(()=>{sparks.push({i:ev[0],x:ev[1],y:ev[2],z:ev[3],e:Math.min(1,ev[4]+.25)});if(sparks.length>40)sparks.shift();},lead);}}if(d.hits&&d.hits.length){const lead=au.on&&au.ctx?Math.max(0,au.nextT-au.ctx.currentTime)*1000:0;for(let q=0;q<d.hits.length;q+=3){const vi=d.hits[q+1],e=d.hits[q+2];setTimeout(()=>{flash[vi]=Math.max(flash[vi],e);},lead);}}
  if(!au.on||!au.ctx)return;const c=au.ctx,b=c.createBuffer(2,d.L.length,rate);b.copyToChannel(d.L,0);b.copyToChannel(d.R,1);const s=c.createBufferSource();s.buffer=b;s.connect(au.master);
  if(au.nextT<c.currentTime+.02){if(au.blocks>6)au.under++;au.nextT=c.currentTime+.06;}s.start(au.nextT);au.nextT+=b.duration;};
 setInterval(()=>{if(au.busy)return;const now=performance.now();
@@ -918,7 +928,7 @@ const FS_G=`precision mediump float;varying vec4 v;uniform float pt;void main(){
 function sh(t,s){const h=gl.createShader(t);gl.shaderSource(h,s);gl.compileShader(h);if(!gl.getShaderParameter(h,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(h));return h;}
 const pg=gl.createProgram();gl.attachShader(pg,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pg,sh(gl.FRAGMENT_SHADER,FS_G));gl.linkProgram(pg);gl.useProgram(pg);
 const bp=gl.createBuffer(),bc=gl.createBuffer(),U=n=>gl.getUniformLocation(pg,n),lp=gl.getAttribLocation(pg,'p'),lc=gl.getAttribLocation(pg,'c');
-let yaw=.5,pitchA=.3,spin=!matchMedia('(prefers-reduced-motion: reduce)').matches;
+let SG=[],yaw=.5,pitchA=.3,spin=!matchMedia('(prefers-reduced-motion: reduce)').matches;
 const P=new Float32Array(TN*3),C=new Float32Array(TN*4),HUE=[8,190,48,300,150,335,95,220,270,120];
 function hsl(h,s,l){h=((h%360)+360)%360;const a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1)));};return[f(0),f(8),f(4)];}
 function cells(w,h){const act=ATTR.map((_,i)=>i).filter(i=>onSet[i]),out=[];const zoomed=zoomV>1.01;
@@ -933,8 +943,8 @@ function drawA(c,w,h){
  gl.bindBuffer(gl.ARRAY_BUFFER,bc);gl.bufferData(gl.ARRAY_BUFFER,C.subarray(0,n*4),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(lc);gl.vertexAttribPointer(lc,4,gl.FLOAT,false,0,0);
  gl.uniform2f(U('off'),c.x,c.y);gl.uniform1f(U('sc'),sc);gl.uniform1f(U('cz'),1/Math.max(1,z*.6));gl.uniform1f(U('pt'),0);gl.drawArrays(gl.LINE_STRIP,0,n);
  gl.uniform1f(U('pt'),1);gl.uniform1f(U('ps'),Math.max(6,Math.min(w,h)/70));gl.drawArrays(gl.POINTS,n-1,1);
- if(PT[i]&&onSet[i]){const a=PT[i],m=a.length/3,PP=new Float32Array(a.length),CC=new Float32Array(m*4);for(let q=0;q<m;q++){PP[q*3]=a[q*3]-f[0];PP[q*3+1]=a[q*3+1]-f[1];PP[q*3+2]=a[q*3+2]-f[2];const ph=(()=>{if(!(sent.cpl>0))return hue+40;const o=ATTR.map((_,j)=>j).filter(j=>onSet[j]&&j!==i);if(!o.length)return hue+40;const h2=HUE[o[q%o.length]]??(o[q%o.length]*137.5+40)%360;let d=((h2-hue+540)%360)-180;return hue+40+d*.55*sent.cpl;})(),cc=hsl(ph,.9,.72);CC[q*4]=cc[0];CC[q*4+1]=cc[1];CC[q*4+2]=cc[2];CC[q*4+3]=.95;}
-  gl.bindBuffer(gl.ARRAY_BUFFER,bp);gl.bufferData(gl.ARRAY_BUFFER,PP,gl.DYNAMIC_DRAW);gl.vertexAttribPointer(lp,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,bc);gl.bufferData(gl.ARRAY_BUFFER,CC,gl.DYNAMIC_DRAW);gl.vertexAttribPointer(lc,4,gl.FLOAT,false,0,0);gl.uniform1f(U('pt'),1);gl.uniform1f(U('ps'),Math.max(4,Math.min(w,h)/(m>40?150:90)));gl.drawArrays(gl.POINTS,0,m);}
+ if(PT[i]&&onSet[i]){const a=PT[i],m=a.length/3,PP=new Float32Array(a.length),CC=new Float32Array(m*4);for(let q=0;q<m;q++){PP[q*3]=a[q*3]-f[0];PP[q*3+1]=a[q*3+1]-f[1];PP[q*3+2]=a[q*3+2]-f[2];const ph=(()=>{if(!(sent.cpl>0))return hue+40;const o=ATTR.map((_,j)=>j).filter(j=>onSet[j]&&j!==i);if(!o.length)return hue+40;const j=o[q%o.length],h2=HUE[j]??(j*137.5+40)%360,d=((h2-hue+540)%360)-180;return hue+40+d*.55*sent.cpl;})(),cc=hsl(ph,.9,.72);CC[q*4]=cc[0];CC[q*4+1]=cc[1];CC[q*4+2]=cc[2];CC[q*4+3]=.95;}
+  gl.bindBuffer(gl.ARRAY_BUFFER,bp);gl.bufferData(gl.ARRAY_BUFFER,PP,gl.DYNAMIC_DRAW);gl.vertexAttribPointer(lp,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,bc);gl.bufferData(gl.ARRAY_BUFFER,CC,gl.DYNAMIC_DRAW);gl.vertexAttribPointer(lc,4,gl.FLOAT,false,0,0);gl.uniform1f(U('pt'),1);gl.uniform1f(U('ps'),Math.max(4,Math.min(w,h)/(m>40?150:90))*(1+Math.max(0,Math.min(1.2,.4*((SG[i]||1)-1)))));gl.drawArrays(gl.POINTS,0,m);}
  const CS=constel.filter(q=>q.vi===i&&q.life>.03);
  if(CS.length){const lines=[],lc2=[],pts=[],pc=[];for(const q of CS){const col=[];for(let a=0;a<q.atoms.length;a++){const zz=Math.tanh(q.Z[a]*.7),cc=hsl(205+zz*150,.95,.62);col.push(cc);pts.push(q.atoms[a][0]-f[0],q.atoms[a][1]-f[1],q.atoms[a][2]-f[2]);pc.push(cc[0],cc[1],cc[2],Math.min(1,(.25+Math.sqrt(q.w[a])*1.4)*q.life*(q.last?1.3:1)));}
     for(const ed of q.edges){const A=q.atoms[ed[0]],Bt=q.atoms[ed[1]];lines.push(A[0]-f[0],A[1]-f[1],A[2]-f[2],Bt[0]-f[0],Bt[1]-f[1],Bt[2]-f[2]);const c1=col[ed[0]],c2=col[ed[1]],al=q.life*(q.last?1:.65);lc2.push(c1[0],c1[1],c1[2],al,c2[0],c2[1],c2[2],al);}}
