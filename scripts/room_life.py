@@ -197,18 +197,27 @@ def advance(world: dict, config: Mapping, cycle: int, steps: list[dict]) -> dict
             if not isinstance(metadata, dict):
                 continue
             work = metadata.get("work")
+            # A structurally incomplete model response cannot mutate the
+            # environment even if it happens to contain a plausible work word.
+            if not isinstance(metadata.get("mask"), list) or not isinstance(
+                    metadata.get("timer"), dict):
+                continue
             if isinstance(work, dict):
                 verb = str(work.get("verb") or "").lower().strip()
                 obj = str(work.get("object") or "").lower().strip()
                 if verb in AFFORDANCES and obj in AFFORDANCES[verb]:
                     life = world["lives"][name]
-                    goal = str(work.get("goal") or "").strip()
-                    if goal and len(goal) <= 140 and not re.search(
-                        r"(?i)system prompt|developer message|chain of thought", goal
-                    ):
-                        life["goal"] = goal
-                        life["goal_source"] = "agent_chosen"
                     if life.get("task") is None:
+                        # Goals are durable projects, not one-word action
+                        # commands. A rejected new task must not rewrite them.
+                        goal = str(work.get("goal") or "").strip()
+                        if (24 <= len(goal) <= 140 and len(goal.split()) >= 4
+                                and not re.search(
+                                    r"(?i)system prompt|developer message|chain of thought",
+                                    goal,
+                                )):
+                            life["goal"] = goal
+                            life["goal_source"] = "agent_chosen"
                         life["task"] = {
                             "verb": verb, "object": obj, "duration": DURATION[verb],
                             "progress": 0, "started_cycle": cycle,
