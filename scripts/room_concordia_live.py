@@ -20,6 +20,7 @@ from concordia.components.game_master import interrupt_response_parsing
 import room_concordia_native as native
 import room_life
 import room_engine_v5 as c
+import room_topic_bounded as bounded_topic
 from room_conversational_floor import audible_addressee
 
 CHECKPOINT = "native-concordia-state.json"
@@ -198,7 +199,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     # advances their existing commitments even in a silent beat.
     room_life.advance(life_world, c.CFG, cycle, output.get("steps") or [])
     beat_id = f"beat-{c.BOOT}-{cycle:06d}"
-    current_topic = state.get("topic_episode") or {}
+    current_topic = bounded_topic._normalize(state.get("topic_episode"), cycle)
     spoken = []
     publication = {"actions": 0, "invalid_format": 0, "semantic_echo": 0,
                    "published": 0, "new_allen_inputs": len(new_input),
@@ -220,7 +221,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
             # stuck topic solely because the archival index says so.
             words = c.toks(text)[:5]
             if not spoken:
-                current_topic = c.new_topic_from_terms(words or ["conversation"], cycle, None)
+                current_topic = bounded_topic.new_topic_from_terms(words or [], cycle, None)
             target = audible_addressee(speaker, text)
             previous = (spoken[-1] if spoken else (conversation[-1] if conversation else {}))
             message, node = c.emit(
@@ -235,9 +236,9 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
             spoken.append(message)
             publication["published"] += 1
     if spoken:
-        current_topic = c.update_topic(current_topic, spoken, cycle)
+        current_topic = bounded_topic.update_topic(current_topic, spoken, cycle)
         current_topic["participants"] = [*native.PARTICIPANTS, "allen"]
-        state["topic_episode"] = current_topic
+    state["topic_episode"] = current_topic
 
     at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     state.update({
