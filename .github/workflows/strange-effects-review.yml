@@ -34,6 +34,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Syntax check the review scripts
+        run: node --check apps/strange-effects/review/check.js && node --check apps/strange-effects/review/summarize.js
       - name: Extract the app's engine
         run: python3 apps/strange-effects/render/mkengine.py
       - name: Listen
@@ -76,7 +78,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add apps/strange-effects/review/index.html apps/strange-effects/review/report.md apps/strange-effects/review/results.jsonl
           git commit -q -m "Strange Effects listening review (run ${{ github.run_id }})" || exit 0
-          for i in 1 2 3 4 5; do git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0; sleep $((i * 4)); done
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0; sleep $((i * 3)); done
           exit 1
       - name: Fail loudly if any check failed
         if: steps.judge.outputs.code != '0'
