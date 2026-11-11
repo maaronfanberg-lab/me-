@@ -265,6 +265,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
             "engine": output["engine_class"],
             "scheduler": output["scheduler_class"],
             "simulated_time": output["simulated_time"],
+            "scheduler_diagnostics": output.get("scheduler_diagnostics", {}),
             "mode": mode,
             "verified_world_interrupts": len(output.get("injected_world_events", [])),
         },

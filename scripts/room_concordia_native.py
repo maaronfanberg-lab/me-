@@ -462,8 +462,20 @@ def run(
         temp = destination.with_name(destination.name + ".tmp")
         temp.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
         os.replace(temp, destination)
+    # Report only scheduler mechanics, never agent memory or private prompts.
+    scheduler_state = scheduler.get_state()
+    scheduler_diagnostics = {
+        "mask_sizes": {name: len(mask or []) for name, mask in
+                       (scheduler_state.get("masks") or {}).items()},
+        "timer_present": {name: bool(timer) for name, timer in
+                          (scheduler_state.get("timers") or {}).items()},
+        "queued_events": len(scheduler_state.get("event_queue") or []),
+        "exhausted": scheduler_is_exhausted(scheduler_state),
+        "acted_steps": sum(bool(item.get("actions")) for item in records),
+    }
     return {
         "framework": "google-deepmind/concordia",
+        "scheduler_diagnostics": scheduler_diagnostics,
         "engine_class": f"{type(engine).__module__}.{type(engine).__name__}",
         "game_master_class": f"{type(master).__module__}.{type(master).__name__}",
         "scheduler_class": f"{type(scheduler).__module__}.{type(scheduler).__name__}",
