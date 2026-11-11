@@ -315,13 +315,24 @@ def scene_common_ground(cycle: int, public_turns: list[dict]) -> str:
     effects = scene_action_ledger(cycle, public_turns)
     if not entries and not effects:
         return ""
+    # Evidence order matters for a small local model. Keep independently
+    # simulated consequences distinct from unverified character assertions:
+    # repeating an incorrect date does not make it a witnessed world fact.
     lines = ["PREVIOUSLY SPOKEN PUBLIC OBSERVATIONS ABOUT THIS SAME SITUATION "
-             "(CLAIMS SPOKEN ALOUD; NOT INDEPENDENTLY VERIFIED; not new dialogue):"]
-    for e in entries:
-        lines.append(e["speaker"].capitalize() + " said: " + e["public_text"])
-    for e in effects:
-        lines.append(e["actor"].capitalize() + " acted; the simulated result was: " + e["effect"])
-    lines.append("These statements and results are already in the group's conversational "
-                 "history. They may be questioned, compared, or tested; "
-                 "no observation proves an explanation by itself.")
+             "(not new dialogue; evidence is attributed below):"]
+    if effects:
+        lines.append("SOURCE-LINKED SIMULATED ENVIRONMENT CONSEQUENCES "
+                     "(these followed witnessed public actions):")
+        for e in effects:
+            lines.append(e["actor"].capitalize() + " acted [" + e["source_id"]
+                         + "]; the simulated result was: " + e["effect"])
+    if entries:
+        lines.append("PUBLIC CHARACTER CLAIMS (NOT INDEPENDENTLY VERIFIED):")
+        for e in entries:
+            lines.append(e["speaker"].capitalize() + " said: " + e["public_text"]
+                         + " [source " + e["source_id"] + "]")
+    lines.append("A character's claim may disagree with a simulated observation. "
+                 "Keep their provenance distinct; examine the discrepancy rather "
+                 "than treating repeated claims as independent confirmation. "
+                 "No observation alone proves an explanation.")
     return "\n".join(lines)
