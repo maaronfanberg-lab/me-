@@ -59,6 +59,10 @@ _TOPIC_NOISE = {
     # Evaluative stance verbs can become lexical attractors without naming a
     # concrete subject. Keep the object of the stance, not the stance verb.
     "appreciate", "appreciates", "appreciated", "appreciating", "appreciation",
+    # Native dialogue self-referential intentions are not subject matter.
+    "i'll", "i'm", "i've", "decide", "decides", "decided", "deciding",
+    "choose", "chooses", "choosing", "chosen", "intend", "intends",
+    "intended", "intending", "plan", "plans", "planned", "planning",
 }
 
 
