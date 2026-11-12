@@ -41,7 +41,7 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 <div id="top"><button id="snd" aria-pressed="false">Sound</button><button id="open">Adjust</button></div>
 <div id="zm"><button id="whole">Whole</button><button id="zo" class="st" aria-label="Zoom out">−</button><button id="zi" class="st" aria-label="Zoom in">+</button></div>
 <div id="sheet" hidden>
-  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 11 Nov · D</span></div>
+  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 12 Nov · physics</span></div>
   <div class="ctl"><span class="lab">Sound</span><div class="row"><button id="snd2" aria-pressed="false">Sound</button><button id="vm">Volume −</button><button id="vp">Volume +</button></div></div>
   <div class="ctl"><span class="lab">Output</span><div class="row" id="outs"></div></div>
   <div class="ctl"><span class="lab">Tone</span><div class="row" id="tones"></div></div>
@@ -399,8 +399,35 @@ function makeDSP(rate){
 // One call draws m answers on average, shared among all partners whatever their number or particle count
 // (m = .78*pull^.8: Nudge .30, Pull .55, Tangle .78; below 1, so answer chains die out, mean length 1/(1-m)).
 // Each system's clock is slowed by its own average surge, so its long-run note rate stays what it was at Apart.
-const GMX=4,CWIN=Math.round(.3*rate/32),CDL=Math.min(1000,Math.round(.1*rate/32)),CKT=32/rate/.025,CKB=32/rate/2,cplM=()=>.78*Math.pow(S.cpl,.8);S.calls=0;S.tk=0;S.kickLog=[];let cplLast=0;
-const call=v=>{if(!(S.cpl>0)||S.sync===false)return;let ns=0;for(const w of V)if(w.on&&w.np)ns++;if(ns<2)return;S.calls++;v.kN=(v.kN||4)+1;const m=cplM()/Math.max(.5,v.kN/(v.kP||4));
+const CK=+(globalThis.SE_CK||1),GR=3,GK=+(globalThis.SE_GK||.04),GMX=4,CWIN=Math.round(.3*rate/32),CDL=Math.min(1000,Math.round(.1*rate/32)),CKT=32/rate/.025,CKB=32/rate/2,cplM=()=>.78*Math.pow(S.cpl,.8);S.calls=0;S.tk=0;S.kickLog=[];let cplLast=0;
+// Shared space. Each attractor sits at its own place; the pull slides them together (Apart: apart, Tangle: one space).
+// Particles of different attractors that come within a contact radius collide: position-based contact (Muller et al. 2007),
+// each pushed apart along the line between them; their own flow then carries them back onto their attractor.
+// A new contact is an impact: both particles sound a struck note, harder for a faster closing speed, and spark.
+const CG=36,CL=8,cHead=new Int32Array(CG*CG*CG).fill(-1),cNext=new Int32Array(4096),cA=new Int16Array(4096),cQ=new Int16Array(4096),cW=new Float64Array(4096*3),cU=new Float64Array(4096*3),cV=new Float64Array(4096*3),usedC=[];
+function collide(){const L=[];for(const w of V)if(w.on&&w.np&&w.dim===3)L.push(w);const n=L.length;if(n<2)return;
+ let np=0;for(const w of L)np+=w.np;const r=Math.min(.45,.22*Math.sqrt(8/Math.max(8,np))),sep=(1-S.cpl)*1.1/Math.max(.5,n===2?1:Math.sin(Math.PI/n));
+ for(const c of usedC)cHead[c]=-1;usedC.length=0;let m=0;
+ L.forEach((w,k)=>{const ox=sep*Math.cos(2*Math.PI*k/n),oy=sep*Math.sin(2*Math.PI*k/n);
+  if(!w.cool)w.cool=new Float64Array(128);let ms=0;
+  for(let q=0;q<w.np&&m<4096;q++){const o=3*q;for(let d=0;d<3;d++){const u=(w.P[o+d]-w.c[d])/w.sc;cU[m*3+d]=u;cV[m*3+d]=u-(w.Pp[o+d]-w.c[d])/w.sc;}ms+=Math.hypot(cV[m*3],cV[m*3+1],cV[m*3+2]);
+   cW[m*3]=cU[m*3]+ox;cW[m*3+1]=cU[m*3+1]+oy;cW[m*3+2]=cU[m*3+2];cA[m]=k;cQ[m]=q;
+   const gx=Math.floor((cW[m*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[m*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[m*3+2]+CL)/(2*CL)*CG);
+   if(gx>=0&&gy>=0&&gz>=0&&gx<CG&&gy<CG&&gz<CG){const c=(gx*CG+gy)*CG+gz;if(cHead[c]===-1)usedC.push(c);cNext[m]=cHead[c];cHead[c]=m;}else cNext[m]=-2;m++;}
+  const mm=ms/Math.max(1,w.np);w.msp=w.msp===undefined?mm:w.msp+(mm-w.msp)*.01;});
+ const push=CK*S.cpl,r2=r*r,ct=32/rate,cell=2*CL/CG,RG=GR*r,RG2=RG*RG,reach=Math.ceil(RG/cell),gk=GK*S.cpl*ct;
+ for(let a=0;a<m;a++){if(cNext[a]===-2)continue;const gx=Math.floor((cW[a*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[a*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[a*3+2]+CL)/(2*CL)*CG);
+  for(let dx=-reach;dx<=reach;dx++)for(let dy=-reach;dy<=reach;dy++)for(let dz=-reach;dz<=reach;dz++){const X=gx+dx,Y=gy+dy,Z=gz+dz;if(X<0||Y<0||Z<0||X>=CG||Y>=CG||Z>=CG)continue;
+   for(let b=cHead[(X*CG+Y)*CG+Z];b>=0;b=cNext[b]){if(b<=a||cA[b]===cA[a])continue;const ex=cW[a*3]-cW[b*3],ey=cW[a*3+1]-cW[b*3+1],ez=cW[a*3+2]-cW[b*3+2],d2=ex*ex+ey*ey+ez*ez;if(d2>=RG2)continue;
+    if(d2>=r2){const A=L[cA[a]],B=L[cA[b]],qa=cQ[a],qb=cQ[b],dd=Math.sqrt(d2),f=gk/(d2+r2)*(1-dd/RG)/dd;A.P[3*qa]-=ex*f*A.sc;A.P[3*qa+1]-=ey*f*A.sc;A.P[3*qa+2]-=ez*f*A.sc;B.P[3*qb]+=ex*f*B.sc;B.P[3*qb+1]+=ey*f*B.sc;B.P[3*qb+2]+=ez*f*B.sc;continue;}
+    const d=Math.sqrt(d2)+1e-9,nx=ex/d,ny=ey/d,nz=ez/d,ov=(r-d)*.5*push,A=L[cA[a]],B=L[cA[b]],qa=cQ[a],qb=cQ[b];
+    A.P[3*qa]+=nx*ov*A.sc;A.P[3*qa+1]+=ny*ov*A.sc;A.P[3*qa+2]+=nz*ov*A.sc;B.P[3*qb]-=nx*ov*B.sc;B.P[3*qb+1]-=ny*ov*B.sc;B.P[3*qb+2]-=nz*ov*B.sc;
+    const cl=-((cV[a*3]-cV[b*3])*nx+(cV[a*3+1]-cV[b*3+1])*ny+(cV[a*3+2]-cV[b*3+2])*nz);
+    if(cl>0&&A.cool[qa]<=0&&B.cool[qb]<=0){const st=Math.tanh(1.5*cl/((A.msp||1e-3)+(B.msp||1e-3)+1e-9));A.cool[qa]=B.cool[qb]=.18;S.collisions=(S.collisions||0)+1;
+     const ft=S.forceTy;S.forceTy=S.gentle&&!S.strange?0:12;ping(A,qa,3*qa);ping(B,qb,3*qb);S.forceTy=ft;
+     if(S.evLog.length<600)S.evLog.push(A.idx,cU[a*3],cU[a*3+1],cU[a*3+2],.5+.5*st,B.idx,cU[b*3],cU[b*3+1],cU[b*3+2],.5+.5*st);}}}}
+ for(const w of L)for(let q=0;q<w.np;q++)if(w.cool[q]>0)w.cool[q]-=ct;}
+const call=v=>{if(!(S.cpl>0)||S.sync===false||!S.rhythm)return;let ns=0;for(const w of V)if(w.on&&w.np)ns++;if(ns<2)return;S.calls++;v.kN=(v.kN||4)+1;const m=cplM()/Math.max(.5,v.kN/(v.kP||4));
  for(const w of V){if(!w.on||w===v||!w.np)continue;if(!w.dl){w.dl=new Float64Array(1024);w.b1=0;w.b=0;w.bb=m;}
   if(v.lastF){const cq=w.cq||(w.cq=[]);cq.push(S.tk+CDL,v.lastF);if(cq.length>16)cq.splice(0,2);}w.dl[(S.tk+CDL)&1023]+=m/((ns-1)*w.np)*.75/(Math.max(.02,S.move*w.dens)*.025);}};
 S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(const z of PL){if(!z.on){k=z;break;}if(z.t/z.dur>k.t/k.dur)k=z;}
@@ -574,7 +601,8 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
   const a=(x[0]-v.c[0])/v.sc-fs[0],b=(x[1]-v.c[1])/v.sc-fs[1],d=(x[2]-v.c[2])/v.sc-fs[2],r=Math.sqrt(a*a+b*b+d*d)*zs;
   return r<=.8?1:r>=1.1?0:1-(r-.8)/.3;};
  function ctrl(){
-  let cpN=0;for(const w of V)if(w.on)cpN++;S.tk++;if(S.cpl!==cplLast){cplLast=S.cpl;const m=S.cpl>0?cplM():0;for(const w of V)if(w.dl)w.bb=m;}
+  let cpN=0;for(const w of V)if(w.on)cpN++;
+  if(S.cpl>0&&cpN>1&&S.bump!==false)collide();S.tk++;if(S.cpl!==cplLast){cplLast=S.cpl;const m=S.cpl>0?cplM():0;for(const w of V)if(w.dl)w.bb=m;}
   // each system's running average and spread over ~3 orbits, so its pull on partners is a two-way swing about
   // its own running median (lopsided, spiky systems such as the food chain otherwise give a constant one-way shove)
   for(const w of V){if(!w.on)continue;const al=Math.min(1,S.move/rate*32/(3*.75));if(!w.cm){w.cm=[0,0,0];w.cv=[.25,.25,.25];}
@@ -932,6 +960,7 @@ let SG=[],yaw=.5,pitchA=.3,spin=!matchMedia('(prefers-reduced-motion: reduce)').
 const P=new Float32Array(TN*3),C=new Float32Array(TN*4),HUE=[8,190,48,300,150,335,95,220,270,120];
 function hsl(h,s,l){h=((h%360)+360)%360;const a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1)));};return[f(0),f(8),f(4)];}
 function cells(w,h){const act=ATTR.map((_,i)=>i).filter(i=>onSet[i]),out=[];const zoomed=zoomV>1.01;
+ if(!zoomed&&sent.cpl>0&&act.length>1){const n=act.length,aw=w>=h?w/h:1,ah=h>w?h/w:1,s=Math.min(aw,ah)*(n===2?.46:.36),sep=(1-sent.cpl)*1.1/Math.max(.5,n===2?1:Math.sin(Math.PI/n));act.forEach((i,k)=>{const a=2*Math.PI*k/n;let x=sep*Math.cos(a)*s*.8,y=sep*Math.sin(a)*s*.8;if(w<h){const t=x;x=y;y=t;}out.push({i,x,y,s});});return out;}
  if(zoomed)return[{i:focus,x:0,y:0,s:1,fit:1}];
  const n=act.length,land=w>=h;let cols=land?Math.ceil(Math.sqrt(n)):Math.round(Math.sqrt(n)),rows=Math.ceil(n/cols);if(land&&n===2){cols=2;rows=1;}if(!land&&n===2){cols=1;rows=2;}
  const aw=w>=h?w/h:1,ah=h>w?h/w:1;act.forEach((i,k)=>{const cx=((k%cols)+.5)/cols*2-1,cy=1-((k/cols|0)+.5)/rows*2;out.push({i,x:cx*aw,y:cy*ah,s:Math.min(aw/cols,ah/rows)});});return out;}
