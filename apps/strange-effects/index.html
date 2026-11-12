@@ -41,7 +41,7 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 <div id="top"><button id="snd" aria-pressed="false">Sound</button><button id="open">Adjust</button></div>
 <div id="zm"><button id="whole">Whole</button><button id="zo" class="st" aria-label="Zoom out">−</button><button id="zi" class="st" aria-label="Zoom in">+</button></div>
 <div id="sheet" hidden>
-  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 12 Nov · morel</span></div>
+  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 12 Nov · morel attractor</span></div>
   <div class="ctl"><span class="lab">Sound</span><div class="row"><button id="snd2" aria-pressed="false">Sound</button><button id="vm">Volume −</button><button id="vp">Volume +</button></div></div>
   <div class="ctl"><span class="lab">Output</span><div class="row" id="outs"></div></div>
   <div class="ctl"><span class="lab">Tone</span><div class="row" id="tones"></div></div>
@@ -87,6 +87,21 @@ const RANK_ROUTES={rf:-1,rq:-1,et:105,ef:104,wet:107,vd:101,vs:-1,dr:-1,fo:-1,rm
 const SWARM_ROUTES={rf:-1,rq:-1,et:-1,ef:-1,wet:-1,vd:-1,vs:-1,dr:-1,fo:-1,rm:-1,cb:-1,dp:-1,sc:-1,st:-1,gr:-1,pt:-1,pb:-1,ws:3,il:-1,sw:-1,tr:-1,rg:-1,br:0,ds:-1,ld:-1,sd:-1,pr:-1,or:2,ht:5,dpt:4,sz:3};
 const ALIVE_ROUTES=Object.assign({},CINE_ROUTES,{et:-1,dp:-1});
 const DEFAULT_ROUTES={rf:1,rq:5,et:2,ef:4,wet:3,vd:-1,vs:-1,dr:5,fo:-1,rm:-1,cb:-1,dp:-1,sc:-1,st:-1,gr:-1,pt:-1,pb:-1,ws:3,il:-1,sw:-1,tr:-1,rg:-1,br:2,ds:-1,ld:-1,sd:-1,pr:-1,or:-1,ht:-1,dpt:-1,sz:-1};
+// Morel attractor (Alex's map, from his screenshots and key): s(n+1) = 4 s(1-s); theta(n+1) = (2 theta + 0.3 + Omega_n) mod 2 pi;
+// r(n+1) = 0.15 r + 0.85 R F(s(n+1)) (1 + Omega(n+1)) (1 - D P(n+1)); x = r cos theta, y = r sin theta, z = H s.
+// P from 168 staggered (hexagonal) cell centres u_ij = (i + (j mod 2)/2)/12, v_ij = (j + 1/2)/14, d_ij = sqrt((12 delta)^2 + (28/sqrt3 (s - v))^2).
+// A map has no flow, so it is played by its suspension: each copy travels in a straight line from one iterate to the next
+// (MA_TIT attractor-time per iteration) and the points it passes at whole steps are exactly the map's iterates.
+// Verified: Lyapunov exponents per iteration 0.693, 0.692, -1.897 (theory ln 2, ln 2, ln 0.15); Kaplan-Yorke dimension 2.73.
+const MA_TAU=2*Math.PI,MA_K=28/Math.sqrt(3),MA_TIT=.3,maF=s=>Math.pow(Math.max(0,Math.sin(Math.PI*(.18+.82*s))),.7)*(1-.1*s),maOm=(th,s)=>.025*Math.sin(3*th+2*Math.PI*s)+.015*Math.sin(7*th-5*Math.PI*s);
+function maP(th,s){const u=((th/MA_TAU)%1+1)%1;let d1=1e9,d2=1e9;const j0=Math.max(0,Math.floor(s*14)-2),j1=Math.min(13,Math.floor(s*14)+2);
+ for(let j=j0;j<=j1;j++){const ds=MA_K*(s-(j+.5)/14),ds2=ds*ds;for(let i=0;i<12;i++){let dl=((u-(i+.5*(j%2))/12+.5)%1+1)%1-.5;const d=Math.sqrt(144*dl*dl+ds2);if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}}
+ return 1-Math.exp(-8*Math.pow((d2-d1)/(d2+.01),2));}
+function maM(s,th,r,p){let s1=4*s*(1-s);if(!(s1>1e-12&&s1<1-1e-12))s1=.2137+((th*7.31)%.01);const th1=(((2*th+.3+maOm(th,s))%MA_TAU)+MA_TAU)%MA_TAU;
+ return[s1,th1,.15*r+.85*p[0]*maF(s1)*(1+maOm(th1,s1))*(1-p[2]*maP(th1,s1))];}
+function maStep(st,h,p){st[9]+=h/MA_TIT;let n=0;while(st[9]>=1&&n<64){st[3]=st[6];st[4]=st[7];st[5]=st[8];const q=maM(st[6],st[7],st[8],p);st[6]=q[0];st[7]=q[1];st[8]=q[2];st[9]-=1;n++;}if(st[9]>=1)st[9]=0;
+ const f=st[9],ax=st[5]*Math.cos(st[4]),ay=st[5]*Math.sin(st[4]),bx=st[8]*Math.cos(st[7]),by=st[8]*Math.sin(st[7]);st[0]=ax+(bx-ax)*f;st[1]=ay+(by-ay)*f;st[2]=p[1]*(st[3]+(st[6]-st[3])*f);}
+const MA_INIT=(()=>{const p=[3,6,.6],A=[.2137,1,.5],B=maM(A[0],A[1],A[2],p);return[A[2]*Math.cos(A[1]),A[2]*Math.sin(A[1]),p[1]*A[0],A[0],A[1],A[2],B[0],B[1],B[2],0];})();
 const ATTR=[
  {name:"Rabinovich–Fabrikant",fix:[0],field:"plasma",gs:1,dky:2.301,d2:2.182,lam:0.199,drP:0,drA:0,sec:[1,-0.019,0],p:[1.1,0.8],T:2.581,hMax:0.002,init:[-0.1888,-0.9817,-0.6652],f(s,p,o){const x=-1.122+0.7516*s[0],y=1.068+1.334*s[1],z=0.7208+0.634*s[2];o[0]=(y*(z-1+x*x)+p[1]*x)/0.7516;o[1]=(x*(3*z+1-x*x)+p[1]*y)/1.334;o[2]=(-2*z*(p[0]+x*y))/0.634;},lo:[1.05,0.7],hi:[1.15,0.88]},
  {name:"Lorenz-84",field:"climate",gs:1,dky:2.401,d2:2.284,lam:0.153,drP:0,drA:0,sec:[1,-0.052,0],p:[0.25,4,8,1],T:1.533,hMax:0.005,init:[0.5562,-0.5439,-0.1538],f(s,p,o){const x=0.9048+1.489*s[0],y=0.1053+2.178*s[1],z=0.03516+2.095*s[2];o[0]=(-y*y-z*z-p[0]*x+p[0]*p[2])/1.489;o[1]=(x*y-p[1]*x*z-y+p[3])/2.178;o[2]=(p[1]*x*y+x*z-z)/2.095;},lo:[0.15,2.4,4.8,0.6],hi:[0.4,6.4,12.8,1.35]},
@@ -98,12 +113,13 @@ const ATTR=[
  {name:"Moore–Spiegel",field:"stellar convection",gs:1,dky:2.075,d2:1.375,lam:0.083,drP:0,drA:0,sec:[1,0.012,0],p:[6,20],T:2.54,hMax:0.005,init:[0.1085,-0.05004,-0.07029],f(s,p,o){const x=-0.07384+2.393*s[0],y=-0.4306+6.252*s[1],z=5.712+51.92*s[2];o[0]=(y)/2.393;o[1]=(z)/6.252;o[2]=(-z-(p[0]-p[1]+p[1]*x*x)*y-p[0]*x)/51.92;},lo:[3.6,12],hi:[9.6,32]},
  {name:"Nosé–Hoover",field:"thermostat",gs:2,dky:3,d2:2.184,lam:0.015,drP:0,drA:0,sec:[2,-0.035,0],p:[1],T:8.421,hMax:0.01,init:[0.1022,0.1621,0.244],f(s,p,o){const x=-0.09255+4.098*s[0],y=-0.09525+4.381*s[1],z=0.1328+3.886*s[2];o[0]=(y)/4.098;o[1]=(-x+y*z)/4.381;o[2]=(p[0]-y*y)/3.886;},lo:[0.6],hi:[1.6]},
  {name:"Tumor–immune",field:"oncology",gs:1,dky:2.038,d2:1.242,lam:0.021,drP:0,drA:0,sec:[1,0.515,0],p:[2.5,1.5,4.5,0.5],T:45.2,hMax:0.01,init:[-0.8627,0.729,-0.9957],f(s,p,o){const x=0.4908+0.47*s[0],y=0.4727+0.4717*s[1],z=0.4375+0.4375*s[2];o[0]=(x*(1-x)-x*y-p[0]*x*z)/0.47;o[1]=(.6*y*(1-y)-p[1]*x*y)/0.4717;o[2]=(p[2]*x*z/(x+1)-.2*x*z-p[3]*z)/0.4375;},lo:[1.5,0.9,2.7,0.3],hi:[4,2.4,7.2,0.675]},
+ {name:"Morel attractor",field:"mycology (Alex)",gs:2,dky:2.73,d2:2.58,lam:2.31,drP:0,drA:0,sec:[2,0,0],p:[3,6,.6],T:1,hMax:.05,map:maStep,init:MA_INIT,f(s,p,o){o.fill(0);},lo:[2.4,4.8,.3],hi:[3.6,7.2,.9]}
 ];
 const IDX={};EFFECTS.forEach((e,i)=>IDX[e.id]=i);
-const REG=[1,1.26,.8,1.5,.67,1.12,.9,1.33,1,1.19];const STRETCH=[.18,.3,.7,.04,1.1,.09,1.6,.5,.25,.8],EVLEN=[1,1,3,.35,1.8,.5,3.5,1,1,1];
+const REG=[1,1.26,.8,1.5,.67,1.12,.9,1.33,1,1.19,1.06];const STRETCH=[.18,.3,.7,.04,1.1,.09,1.6,.5,.25,.8],EVLEN=[1,1,3,.35,1.8,.5,3.5,1,1,1];
 const k1=[0,0,0],k2=[0,0,0],k3=[0,0,0],k4=[0,0,0],tp=[0,0,0];
 const RKB={};function rkLong(a,s,h){const n=s.length,B=RKB[n]||(RKB[n]=[0,1,2,3,4].map(()=>new Float64Array(n))),q1=B[0],q2=B[1],q3=B[2],q4=B[3],t=B[4],f=a.f,p=a.pv;f(s,p,q1);for(let i=0;i<n;i++)t[i]=s[i]+.5*h*q1[i];f(t,p,q2);for(let i=0;i<n;i++)t[i]=s[i]+.5*h*q2[i];f(t,p,q3);for(let i=0;i<n;i++)t[i]=s[i]+h*q3[i];f(t,p,q4);for(let i=0;i<n;i++)s[i]+=h*(q1[i]+2*q2[i]+2*q3[i]+q4[i])/6;}
-function rk4(a,s,h){if(s.length>3)return rkLong(a,s,h);const f=a.f,p=a.pv;f(s,p,k1);for(let i=0;i<3;i++)tp[i]=s[i]+.5*h*k1[i];f(tp,p,k2);for(let i=0;i<3;i++)tp[i]=s[i]+.5*h*k2[i];f(tp,p,k3);for(let i=0;i<3;i++)tp[i]=s[i]+h*k3[i];f(tp,p,k4);for(let i=0;i<3;i++)s[i]+=h*(k1[i]+2*k2[i]+2*k3[i]+k4[i])/6;}
+function rk4(a,s,h){if(a.map)return a.map(s,h,a.pv);if(s.length>3)return rkLong(a,s,h);const f=a.f,p=a.pv;f(s,p,k1);for(let i=0;i<3;i++)tp[i]=s[i]+.5*h*k1[i];f(tp,p,k2);for(let i=0;i<3;i++)tp[i]=s[i]+.5*h*k2[i];f(tp,p,k3);for(let i=0;i<3;i++)tp[i]=s[i]+h*k3[i];f(tp,p,k4);for(let i=0;i<3;i++)s[i]+=h*(k1[i]+2*k2[i]+2*k3[i]+k4[i])/6;}
 const cl=x=>x<0?0:x>1?1:x,xp=(a,b,u)=>a*Math.pow(b/a,u);
 function Delay(n){this.b=new Float64Array(n);this.n=n;this.w=0;}
 Delay.prototype.push=function(x){this.b[this.w]=x;this.w=(this.w+1)%this.n;};
@@ -164,7 +180,7 @@ Hall.prototype.tick=function(inL,inR,wob){const pre=Math.round(.035*this.rate),y
  sum*=.25;let L=0,Rr=0;for(let i=0;i<8;i++){const inj=(i&1?m-side:m+side)*.35;this.d[i].push(inj+this.g[i]*(y[i]-sum));if(i&1){Rr+=y[i];L+=i&2?y[i]*.5:-y[i]*.5;}else{L+=y[i];Rr+=i&2?-y[i]*.5:y[i]*.5;}}
  this.outL=L*.5;this.outR=Rr*.5;};
 function makeVoice(def,idx){
- const a={f:def.f,pv:def.p.slice()},v={def,a,idx,dim:def.init.length,on:false,s:def.init.slice(),t:def.init.slice(),m:def.init.slice(),lo:[0,0,0],hi:[0,0,0],c:[0,0,0],sc:1,n:[0,0,0],vv:[.5,.5,.5],resets:0,g:0,ps:0,qs:0,pt:0,pq:0,vh:[[],[],[]],vr:[.5,.5,.5],sig:def.p.map(()=>0),sgS:def.p.map(()=>0),reg:REG[idx]??1,fmul:REG[idx],dens:1,stT:0,stirs:0,sMin:[1e9,1e9,1e9],sMax:[-1e9,-1e9,-1e9]};
+ const a={f:def.f,pv:def.p.slice(),map:def.map},v={def,a,idx,dim:def.init.length,on:false,s:def.init.slice(),t:def.init.slice(),m:def.init.slice(),lo:[0,0,0],hi:[0,0,0],c:[0,0,0],sc:1,n:[0,0,0],vv:[.5,.5,.5],resets:0,g:0,ps:0,qs:0,pt:0,pq:0,vh:[[],[],[]],vr:[.5,.5,.5],sig:def.p.map(()=>0),sgS:def.p.map(()=>0),reg:REG[idx]??1,fmul:REG[idx],dens:1,stT:0,stirs:0,sMin:[1e9,1e9,1e9],sMax:[-1e9,-1e9,-1e9]};
  const warm=()=>{const h=def.hMax*.5,WN=Math.min(150000,Math.max(9000,Math.ceil(30*def.T/h))),W3=WN/3|0;for(let i=0;i<WN;i++){rk4(a,v.m,h);rk4(a,v.s,h);if(i===W3){v.lo=v.m.slice();v.hi=v.m.slice();}if(i>W3)for(let k=0;k<3;k++){v.lo[k]=Math.min(v.lo[k],v.m[k]);v.hi[k]=Math.max(v.hi[k],v.m[k]);}}v.t=v.s.slice();v.t[0]+=1e-7;};
  v.warm=warm;const PRE=def.spec&&def.spec.pool&&def.spec.pool.length>=def.init.length?def.spec:null;
  if(PRE){const q=PRE.pool.slice(0,v.dim);v.m=q.slice();v.s=q.slice();v.t=q.slice();v.t[0]+=1e-7;v.lo=PRE.box.lo.slice();v.hi=PRE.box.hi.slice();}else warm();bound(v);v.sc0=v.sc;v.lo0=v.lo.slice();v.hi0=v.hi.slice();v.lim=50*v.sc+Math.max(Math.abs(v.c[0]),Math.abs(v.c[1]),Math.abs(v.c[2]));v.s2=v.s.slice();v.s4=v.s.slice();v.imp=v.s.slice();v.base=v.a.pv.slice();v.pool=[];if(PRE)v.pool=PRE.pool.slice();else{const q=v.m.slice();const PK=Math.max(4,Math.ceil(40*def.T/1500/(def.hMax*.5)));for(let i=0;i<1500;i++){for(let k=0;k<PK;k++)rk4(a,q,def.hMax*.5);for(let k=0;k<v.dim;k++)v.pool.push(q[k]);}}v.PMAX=256;v.P=new Float64Array(v.dim*v.PMAX);v.Pp=new Float64Array(v.dim*v.PMAX);v.pS=new Float64Array(v.dim);v.Pw=new Float64Array(v.PMAX).fill(1);v.Ps=new Int8Array(v.PMAX);v.Pc=new Float64Array(v.PMAX);v.np=0;v.pw=0;v.fm=v.s.slice();v.fp=0;v.fprev=[0,0,0];v.res=.5;v.side=0;v.ie=0;v.ih=0;v.it=9;v.hits=0;v.sL=0;return v;
@@ -406,22 +422,22 @@ const CK=+(globalThis.SE_CK||1),GR=3,GK=+(globalThis.SE_GK||.04),GMX=4,CWIN=Math
 // each pushed apart along the line between them; their own flow then carries them back onto their attractor.
 // A new contact is an impact: both particles sound a struck note, harder for a faster closing speed, and spark.
 const CG=64,CL=3,cHead=new Int32Array(CG*CG*CG).fill(-1),CM=8192,cNext=new Int32Array(CM),cA=new Int16Array(CM),cQ=new Int16Array(CM),cW=new Float64Array(CM*3),cU=new Float64Array(CM*3),cV=new Float64Array(CM*3),usedC=[],HN=48;
-function collide(){const L=[];for(const w of V)if(w.on&&w.np&&w.dim===3)L.push(w);const n=L.length;if(n<2)return;
+function collide(){const L=[];for(const w of V)if(w.on&&w.np&&(w.dim===3||w.def.map))L.push(w);const n=L.length;if(n<2)return;
  let np=0;for(const w of L)np+=w.np;const r=Math.min(.45,.22*Math.sqrt(8/Math.max(8,np))),sep=(1-S.cpl)*1.1/Math.max(.5,n===2?1:Math.sin(Math.PI/n));
  for(const c of usedC)cHead[c]=-1;usedC.length=0;let m=0;
  S.orbT=(S.orbT||0)+32/rate*S.move/.35;const orR=.5*S.cpl,orA=2*Math.PI*S.orbT/16;
  L.forEach((w,k)=>{const ph=orA+2*Math.PI*k/n,obx=orR*Math.cos(ph),oby=orR*Math.sin(ph),obz=.5*orR*Math.sin(2*ph+k),ox=sep*Math.cos(2*Math.PI*k/n)+obx,oy=sep*Math.sin(2*Math.PI*k/n)+oby;w.orb=[obx,oby,obz];
   if(!w.cool)w.cool=new Float64Array(128);let ms=0;
-  let mu=[0,0,0],m2=0;for(let q=0;q<w.np;q++)for(let d=0;d<3;d++){const u=(w.P[3*q+d]-w.c[d])/w.sc;mu[d]+=u/w.np;m2+=u*u/w.np;}const rho=Math.sqrt(Math.max(1e-6,m2-mu[0]*mu[0]-mu[1]*mu[1]-mu[2]*mu[2]));
+  let mu=[0,0,0],m2=0;for(let q=0;q<w.np;q++)for(let d=0;d<3;d++){const u=(w.P[w.dim*q+d]-w.c[d])/w.sc;mu[d]+=u/w.np;m2+=u*u/w.np;}const rho=Math.sqrt(Math.max(1e-6,m2-mu[0]*mu[0]-mu[1]*mu[1]-mu[2]*mu[2]));
   if(!w.mu){w.mu=mu.slice();w.rho=rho;}for(let d=0;d<3;d++)w.mu[d]+=(mu[d]-w.mu[d])*.002;w.rho+=(rho-w.rho)*.002;const ge=1+(.55/Math.max(.05,w.rho)-1)*S.cpl;w.ge=ge;const cm=[w.mu[0]*S.cpl,w.mu[1]*S.cpl,w.mu[2]*S.cpl];w.cmE=cm;
-  for(let q=0;q<w.np&&m<CM;q++){const o=3*q;for(let d=0;d<3;d++){const u=(w.P[o+d]-w.c[d])/w.sc;cU[m*3+d]=u;cV[m*3+d]=u-(w.Pp[o+d]-w.c[d])/w.sc;}for(let d=0;d<3;d++)cV[m*3+d]*=ge;ms+=Math.hypot(cV[m*3],cV[m*3+1],cV[m*3+2]);
+  for(let q=0;q<w.np&&m<CM;q++){const o=w.dim*q;for(let d=0;d<3;d++){const u=(w.P[o+d]-w.c[d])/w.sc;cU[m*3+d]=u;cV[m*3+d]=u-(w.Pp[o+d]-w.c[d])/w.sc;}for(let d=0;d<3;d++)cV[m*3+d]*=ge;ms+=Math.hypot(cV[m*3],cV[m*3+1],cV[m*3+2]);
    cW[m*3]=(cU[m*3]-cm[0])*ge+ox;cW[m*3+1]=(cU[m*3+1]-cm[1])*ge+oy;cW[m*3+2]=(cU[m*3+2]-cm[2])*ge+obz;cA[m]=k;cQ[m]=q;
    const gx=Math.floor((cW[m*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[m*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[m*3+2]+CL)/(2*CL)*CG);
    if(gx>=0&&gy>=0&&gz>=0&&gx<CG&&gy<CG&&gz<CG){const c=(gx*CG+gy)*CG+gz;if(cHead[c]===-1)usedC.push(c);cNext[m]=cHead[c];cHead[c]=m;}else cNext[m]=-2;m++;}
   const mm=ms/Math.max(1,w.np);w.msp=w.msp===undefined?mm:w.msp+(mm-w.msp)*.01;w.ox=ox;w.oy=oy;w.oz=obz;});
  const mP=m;S.bodyT=(S.bodyT||0)+1;
  if(np<=64)L.forEach((w,k)=>{const cm=w.cmE||[0,0,0],np=Math.min(w.np,16);if(!w.hist||w.hist.length!==HN*16*3){w.hist=new Float32Array(HN*16*3);w.hN=0;w.hW=0;}
-  if(S.bodyT%12===0){for(let q=0;q<np;q++){const o=3*q,b=(w.hW*16+q)*3;for(let d=0;d<3;d++)w.hist[b+d]=(w.P[o+d]-w.c[d])/w.sc-cm[d];}w.hW=(w.hW+1)%HN;if(w.hN<HN)w.hN++;}
+  if(S.bodyT%12===0){for(let q=0;q<np;q++){const o=w.dim*q,b=(w.hW*16+q)*3;for(let d=0;d<3;d++)w.hist[b+d]=(w.P[o+d]-w.c[d])/w.sc-cm[d];}w.hW=(w.hW+1)%HN;if(w.hN<HN)w.hN++;}
   for(let h=0;h<w.hN;h++)for(let q=0;q<np&&m<CM;q++){const b=(h*16+q)*3;cW[m*3]=w.hist[b]*w.ge+w.ox;cW[m*3+1]=w.hist[b+1]*w.ge+w.oy;cW[m*3+2]=w.hist[b+2]*w.ge+w.oz;cA[m]=k;cQ[m]=-1;
    const gx=Math.floor((cW[m*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[m*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[m*3+2]+CL)/(2*CL)*CG);
    if(gx>=0&&gy>=0&&gz>=0&&gx<CG&&gy<CG&&gz<CG){const c=(gx*CG+gy)*CG+gz;if(cHead[c]===-1)usedC.push(c);cNext[m]=cHead[c];cHead[c]=m;}else cNext[m]=-2;m++;}});
@@ -429,15 +445,15 @@ function collide(){const L=[];for(const w of V)if(w.on&&w.np&&w.dim===3)L.push(w
  for(let a=0;a<mP;a++){if(cNext[a]===-2)continue;const gx=Math.floor((cW[a*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[a*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[a*3+2]+CL)/(2*CL)*CG);
   for(let dx=-reach;dx<=reach;dx++)for(let dy=-reach;dy<=reach;dy++)for(let dz=-reach;dz<=reach;dz++){const X=gx+dx,Y=gy+dy,Z=gz+dz;if(X<0||Y<0||Z<0||X>=CG||Y>=CG||Z>=CG)continue;
    for(let b=cHead[(X*CG+Y)*CG+Z];b>=0;b=cNext[b]){if(cA[b]===cA[a])continue;
-    if(b>=mP){const ex=cW[a*3]-cW[b*3],ey=cW[a*3+1]-cW[b*3+1],ez=cW[a*3+2]-cW[b*3+2],d2=ex*ex+ey*ey+ez*ez;if(d2>=rb2)continue;const A=L[cA[a]],qa=cQ[a],d=Math.sqrt(d2)+1e-9,nx=ex/d,ny=ey/d,nz=ez/d,ov=(rb-d)*push;A.P[3*qa]+=nx*ov*A.sc/A.ge;A.P[3*qa+1]+=ny*ov*A.sc/A.ge;A.P[3*qa+2]+=nz*ov*A.sc/A.ge;
-     const cl=-(cV[a*3]*nx+cV[a*3+1]*ny+cV[a*3+2]*nz);if(cl>0&&A.cool[qa]<=0){A.cool[qa]=.25;S.collisions=(S.collisions||0)+1;S.bodyHits=(S.bodyHits||0)+1;const ft=S.forceTy;S.forceTy=S.gentle&&!S.strange?0:12;ping(A,qa,3*qa);S.forceTy=ft;if(S.evLog.length<600)S.evLog.push(A.idx,cU[a*3],cU[a*3+1],cU[a*3+2],.6);}continue;}
+    if(b>=mP){const ex=cW[a*3]-cW[b*3],ey=cW[a*3+1]-cW[b*3+1],ez=cW[a*3+2]-cW[b*3+2],d2=ex*ex+ey*ey+ez*ez;if(d2>=rb2)continue;const A=L[cA[a]],qa=cQ[a],d=Math.sqrt(d2)+1e-9,nx=ex/d,ny=ey/d,nz=ez/d,ov=(rb-d)*push;if(!A.def.map){A.P[A.dim*qa]+=nx*ov*A.sc/A.ge;}if(!A.def.map){A.P[A.dim*qa+1]+=ny*ov*A.sc/A.ge;}if(!A.def.map){A.P[A.dim*qa+2]+=nz*ov*A.sc/A.ge;}
+     const cl=-(cV[a*3]*nx+cV[a*3+1]*ny+cV[a*3+2]*nz);if(cl>0&&A.cool[qa]<=0){A.cool[qa]=.25;S.collisions=(S.collisions||0)+1;S.bodyHits=(S.bodyHits||0)+1;const ft=S.forceTy;S.forceTy=S.gentle&&!S.strange?0:12;ping(A,qa,A.dim*qa);S.forceTy=ft;if(S.evLog.length<600)S.evLog.push(A.idx,cU[a*3],cU[a*3+1],cU[a*3+2],.6);}continue;}
     if(b<=a)continue;const ex=cW[a*3]-cW[b*3],ey=cW[a*3+1]-cW[b*3+1],ez=cW[a*3+2]-cW[b*3+2],d2=ex*ex+ey*ey+ez*ez;if(d2>=RG2)continue;
-    if(d2>=r2){const A=L[cA[a]],B=L[cA[b]],qa=cQ[a],qb=cQ[b],dd=Math.sqrt(d2),f=gk/(d2+r2)*(1-dd/RG)/dd;A.P[3*qa]-=ex*f*A.sc/A.ge;A.P[3*qa+1]-=ey*f*A.sc/A.ge;A.P[3*qa+2]-=ez*f*A.sc/A.ge;B.P[3*qb]+=ex*f*B.sc/B.ge;B.P[3*qb+1]+=ey*f*B.sc/B.ge;B.P[3*qb+2]+=ez*f*B.sc/B.ge;continue;}
+    if(d2>=r2){const A=L[cA[a]],B=L[cA[b]],qa=cQ[a],qb=cQ[b],dd=Math.sqrt(d2),f=gk/(d2+r2)*(1-dd/RG)/dd;if(!A.def.map){A.P[A.dim*qa]-=ex*f*A.sc/A.ge;}if(!A.def.map){A.P[A.dim*qa+1]-=ey*f*A.sc/A.ge;}if(!A.def.map){A.P[A.dim*qa+2]-=ez*f*A.sc/A.ge;}if(!B.def.map){B.P[B.dim*qb]+=ex*f*B.sc/B.ge;}if(!B.def.map){B.P[B.dim*qb+1]+=ey*f*B.sc/B.ge;}if(!B.def.map){B.P[B.dim*qb+2]+=ez*f*B.sc/B.ge;}continue;}
     const d=Math.sqrt(d2)+1e-9,nx=ex/d,ny=ey/d,nz=ez/d,ov=(r-d)*.5*push,A=L[cA[a]],B=L[cA[b]],qa=cQ[a],qb=cQ[b];
-    A.P[3*qa]+=nx*ov*A.sc/A.ge;A.P[3*qa+1]+=ny*ov*A.sc/A.ge;A.P[3*qa+2]+=nz*ov*A.sc/A.ge;B.P[3*qb]-=nx*ov*B.sc/B.ge;B.P[3*qb+1]-=ny*ov*B.sc/B.ge;B.P[3*qb+2]-=nz*ov*B.sc/B.ge;
+    if(!A.def.map){A.P[A.dim*qa]+=nx*ov*A.sc/A.ge;}if(!A.def.map){A.P[A.dim*qa+1]+=ny*ov*A.sc/A.ge;}if(!A.def.map){A.P[A.dim*qa+2]+=nz*ov*A.sc/A.ge;}if(!B.def.map){B.P[B.dim*qb]-=nx*ov*B.sc/B.ge;}if(!B.def.map){B.P[B.dim*qb+1]-=ny*ov*B.sc/B.ge;}if(!B.def.map){B.P[B.dim*qb+2]-=nz*ov*B.sc/B.ge;}
     const cl=-((cV[a*3]-cV[b*3])*nx+(cV[a*3+1]-cV[b*3+1])*ny+(cV[a*3+2]-cV[b*3+2])*nz);
     if(cl>0&&A.cool[qa]<=0&&B.cool[qb]<=0){const st=Math.tanh(1.5*cl/((A.msp||1e-3)+(B.msp||1e-3)+1e-9));A.cool[qa]=B.cool[qb]=.18;S.collisions=(S.collisions||0)+1;
-     const ft=S.forceTy;S.forceTy=S.gentle&&!S.strange?0:12;ping(A,qa,3*qa);ping(B,qb,3*qb);S.forceTy=ft;
+     const ft=S.forceTy;S.forceTy=S.gentle&&!S.strange?0:12;ping(A,qa,A.dim*qa);ping(B,qb,B.dim*qb);S.forceTy=ft;
      if(S.evLog.length<600)S.evLog.push(A.idx,cU[a*3],cU[a*3+1],cU[a*3+2],.5+.5*st,B.idx,cU[b*3],cU[b*3+1],cU[b*3+2],.5+.5*st);}}}}
  for(const w of L)for(let q=0;q<w.np;q++)if(w.cool[q]>0)w.cool[q]-=ct;}
 const call=v=>{if(!(S.cpl>0)||S.sync===false||!S.rhythm)return;let ns=0;for(const w of V)if(w.on&&w.np)ns++;if(ns<2)return;S.calls++;v.kN=(v.kN||4)+1;const m=cplM()/Math.max(.5,v.kN/(v.kP||4));
@@ -827,13 +843,13 @@ function morelAt(th,s,tau,kap){if(mCache.tau!==tau){const R=mQ('R',tau),H=mQ('H'
    if(on(IDX.ds)){const g=1/(1+7*u[IDX.ds]);l*=g;r*=g;}
    if(S.breath!==false){ // the undertow: never silence. Each playing system's path breathes softly, and only into the gaps
     gH1[0]+=(l-gH1[0])*GHP;gH1[1]+=(r-gH1[1])*GHP;const pl=l-gH1[0],pr=r-gH1[1];gH2[0]+=(pl-gH2[0])*GHP;gH2[1]+=(pr-gH2[1])*GHP;const ql=pl-gH2[0],qr=pr-gH2[1];brEnv+=((ql*ql+qr*qr)*.5-brEnv)*.0012;const qt=brEnv<1e-5?1:brEnv>1e-4?0:1-Math.log10(brEnv/1e-5);brG+=(qt-brG)*(qt>brG?.0008:.00007);
-    if(brG>1e-4){let bl=0,br=0,nb=0;for(const v of V){if(!v.on||!v.br||v.dim!==3)continue;const b=v.br;if(!b.on){b.u=v.m.slice(0,3);b.on=true;}
-     const x0=b.u[0],av=b.av||(b.av={f:v.a.f,pv:v.base});av.pv=v.cplOn?v.base:v.a.pv;for(let z=0;z<b.ns;z++)rk4(av,b.u,b.h);let snap=false;if(!(Math.abs(b.u[0]-v.c[0])<8*v.sc)||!(b.u[1]===b.u[1])){b.u=v.m.slice(0,3);snap=true;}const dx=snap?0:(b.u[0]-x0)/v.sc;b.lp+=(dx-b.lp)*.35;b.ms+=(b.lp*b.lp-b.ms)*.00035;if((b.lp>0)!==(b.ps>0))b.zc++;b.ps=b.lp;if(++b.zt>=rate/4){if(b.zc<4){b.u=v.m.slice(0,3);b.stalls=(b.stalls||0)+1;}b.k=Math.max(.25,Math.min(8,b.k*Math.pow(440/Math.max(20,2*b.zc),.35)));b.zc=0;b.zt=0;}const y=b.lp*Math.min(1e3,1/Math.sqrt(b.ms+1e-30))*.35*b.a;bl+=y*Math.sqrt(1-b.pan);br+=y*Math.sqrt(b.pan);nb++;}
+    if(brG>1e-4){let bl=0,br=0,nb=0;for(const v of V){if(!v.on||!v.br||!(v.dim===3||v.def.map))continue;const b=v.br;if(!b.on){b.u=v.m.slice(0,v.dim);b.on=true;}
+     const x0=b.u[0],av=b.av||(b.av={f:v.a.f,pv:v.base,map:v.a.map});av.pv=v.cplOn?v.base:v.a.pv;for(let z=0;z<b.ns;z++)rk4(av,b.u,b.h);let snap=false;if(!(Math.abs(b.u[0]-v.c[0])<8*v.sc)||!(b.u[1]===b.u[1])){b.u=v.m.slice(0,v.dim);snap=true;}const dx=snap?0:(b.u[0]-x0)/v.sc;b.lp+=(dx-b.lp)*.35;b.ms+=(b.lp*b.lp-b.ms)*.00035;if((b.lp>0)!==(b.ps>0))b.zc++;b.ps=b.lp;if(++b.zt>=rate/4){if(b.zc<4){b.u=v.m.slice(0,v.dim);b.stalls=(b.stalls||0)+1;}b.k=Math.max(.25,Math.min(8,b.k*Math.pow(440/Math.max(20,2*b.zc),.35)));b.zc=0;b.zt=0;}const y=b.lp*Math.min(1e3,1/Math.sqrt(b.ms+1e-30))*.35*b.a;bl+=y*Math.sqrt(1-b.pan);br+=y*Math.sqrt(b.pan);nb++;}
      if(nb){const g=GBR*brG/Math.sqrt(nb);l+=bl*g;r+=br*g;}}else for(const v of V)if(v.br)v.br.on=false;}
-   if(S.body!==false){mixMs+=((l*l+r*r)*.5-mixMs)*BMS;mL1[0]+=(l-mL1[0])*BL8;mL2[0]+=(mL1[0]-mL2[0])*BL8;mL1[1]+=(r-mL1[1])*BL8;mL2[1]+=(mL1[1]-mL2[1])*BL8;lowMs+=((mL2[0]*mL2[0]+mL2[1]*mL2[1])*.5-lowMs)*BMS;let bs=0,bp=0,nb=0;for(const v of V){if(!v.on||v.dim!==3)continue;const b=v.bd||(v.bd={u:v.m.slice(0,3),e:0,l1:0,l2:0,d1:0,d2:0,ns:1,h:0,cnt:0,k:1,zc:0,zt:0,ps:0,ms:1e-4});
+   if(S.body!==false){mixMs+=((l*l+r*r)*.5-mixMs)*BMS;mL1[0]+=(l-mL1[0])*BL8;mL2[0]+=(mL1[0]-mL2[0])*BL8;mL1[1]+=(r-mL1[1])*BL8;mL2[1]+=(mL1[1]-mL2[1])*BL8;lowMs+=((mL2[0]*mL2[0]+mL2[1]*mL2[1])*.5-lowMs)*BMS;let bs=0,bp=0,nb=0;for(const v of V){if(!v.on||!(v.dim===3||v.def.map))continue;const b=v.bd||(v.bd={u:v.m.slice(0,3),e:0,l1:0,l2:0,d1:0,d2:0,ns:1,h:0,cnt:0,k:1,zc:0,zt:0,ps:0,ms:1e-4});
      if(b.cnt--<=0){b.cnt=31;const dA=v.def.T*45*b.k/rate;b.ns=Math.max(1,Math.ceil(dA/v.def.hMax));b.h=dA/b.ns;}
      if(v.bdHit){b.e=Math.max(b.e,v.bdHit);v.bdHit=0;}if(b.e<1e-4)continue;
-     for(let z=0;z<b.ns;z++)rk4(v.a,b.u,b.h);if(!(Math.abs(b.u[0]-v.c[0])<8*v.sc))b.u=v.m.slice(0,3);
+     for(let z=0;z<b.ns;z++)rk4(v.a,b.u,b.h);if(!(Math.abs(b.u[0]-v.c[0])<8*v.sc))b.u=v.m.slice(0,v.dim);
      const x=(b.u[0]-v.c[0])/v.sc;b.d1+=(x-b.d1)*BDC;const y1=x-b.d1;b.d2+=(y1-b.d2)*BDC;const y2=y1-b.d2;b.l1+=(y2-b.l1)*BLP;b.l2+=(b.l1-b.l2)*BLP;
      if((b.l2>0)!==(b.ps>0))b.zc++;b.ps=b.l2;if(++b.zt>=rate/2){const f=b.zc;b.k=Math.max(.2,Math.min(5,b.k*Math.pow(48/Math.max(4,f),.35)));b.zc=0;b.zt=0;}
      b.ms+=(b.l2*b.l2-b.ms)*BMS;const w=b.l2/Math.sqrt(b.ms+1e-9)*b.e;bs+=w;bp+=b.e*b.e;nb++;b.e*=BDK;}
