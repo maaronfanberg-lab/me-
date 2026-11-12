@@ -88,7 +88,8 @@ const SWARM_ROUTES={rf:-1,rq:-1,et:-1,ef:-1,wet:-1,vd:-1,vs:-1,dr:-1,fo:-1,rm:-1
 const ALIVE_ROUTES=Object.assign({},CINE_ROUTES,{et:-1,dp:-1});
 const DEFAULT_ROUTES={rf:1,rq:5,et:2,ef:4,wet:3,vd:-1,vs:-1,dr:5,fo:-1,rm:-1,cb:-1,dp:-1,sc:-1,st:-1,gr:-1,pt:-1,pb:-1,ws:3,il:-1,sw:-1,tr:-1,rg:-1,br:2,ds:-1,ld:-1,sd:-1,pr:-1,or:-1,ht:-1,dpt:-1,sz:-1};
 // Morel attractor (Alex's map, from his screenshots and key): s(n+1) = 4 s(1-s); theta(n+1) = (2 theta + 0.3 + Omega_n) mod 2 pi;
-// r(n+1) = 0.15 r + 0.85 R F(s(n+1)) (1 + Omega(n+1)) (1 - D P(n+1)); x = r cos theta, y = r sin theta, z = H s.
+// r(n+1) = 0.15 r + 0.85 R F(s(n+1)) (1 + Omega(n+1)) (1 - D P(n+1)); x = r cos theta, y = r sin theta, z = H s
+// (held in the app as (x, z, y) so the mushroom's height is the picture's vertical axis).
 // P from 168 staggered (hexagonal) cell centres u_ij = (i + (j mod 2)/2)/12, v_ij = (j + 1/2)/14, d_ij = sqrt((12 delta)^2 + (28/sqrt3 (s - v))^2).
 // A map has no flow, so it is played by its suspension: each copy travels in a straight line from one iterate to the next
 // (MA_TIT attractor-time per iteration) and the points it passes at whole steps are exactly the map's iterates.
@@ -100,8 +101,8 @@ function maP(th,s){const u=((th/MA_TAU)%1+1)%1;let d1=1e9,d2=1e9;const j0=Math.m
 function maM(s,th,r,p){let s1=4*s*(1-s);if(!(s1>1e-12&&s1<1-1e-12))s1=.2137+((th*7.31)%.01);const th1=(((2*th+.3+maOm(th,s))%MA_TAU)+MA_TAU)%MA_TAU;
  return[s1,th1,.15*r+.85*p[0]*maF(s1)*(1+maOm(th1,s1))*(1-p[2]*maP(th1,s1))];}
 function maStep(st,h,p){st[9]+=h/MA_TIT;let n=0;while(st[9]>=1&&n<64){st[3]=st[6];st[4]=st[7];st[5]=st[8];const q=maM(st[6],st[7],st[8],p);st[6]=q[0];st[7]=q[1];st[8]=q[2];st[9]-=1;n++;}if(st[9]>=1)st[9]=0;
- const f=st[9],ax=st[5]*Math.cos(st[4]),ay=st[5]*Math.sin(st[4]),bx=st[8]*Math.cos(st[7]),by=st[8]*Math.sin(st[7]);st[0]=ax+(bx-ax)*f;st[1]=ay+(by-ay)*f;st[2]=p[1]*(st[3]+(st[6]-st[3])*f);}
-const MA_INIT=(()=>{const p=[3,6,.6],A=[.2137,1,.5],B=maM(A[0],A[1],A[2],p);return[A[2]*Math.cos(A[1]),A[2]*Math.sin(A[1]),p[1]*A[0],A[0],A[1],A[2],B[0],B[1],B[2],0];})();
+ const f=st[9],ax=st[5]*Math.cos(st[4]),ay=st[5]*Math.sin(st[4]),bx=st[8]*Math.cos(st[7]),by=st[8]*Math.sin(st[7]);st[0]=ax+(bx-ax)*f;st[2]=ay+(by-ay)*f;st[1]=p[1]*(st[3]+(st[6]-st[3])*f);}
+const MA_INIT=(()=>{const p=[3,6,.6],A=[.2137,1,.5],B=maM(A[0],A[1],A[2],p);return[A[2]*Math.cos(A[1]),p[1]*A[0],A[2]*Math.sin(A[1]),A[0],A[1],A[2],B[0],B[1],B[2],0];})();
 const ATTR=[
  {name:"Rabinovich–Fabrikant",fix:[0],field:"plasma",gs:1,dky:2.301,d2:2.182,lam:0.199,drP:0,drA:0,sec:[1,-0.019,0],p:[1.1,0.8],T:2.581,hMax:0.002,init:[-0.1888,-0.9817,-0.6652],f(s,p,o){const x=-1.122+0.7516*s[0],y=1.068+1.334*s[1],z=0.7208+0.634*s[2];o[0]=(y*(z-1+x*x)+p[1]*x)/0.7516;o[1]=(x*(3*z+1-x*x)+p[1]*y)/1.334;o[2]=(-2*z*(p[0]+x*y))/0.634;},lo:[1.05,0.7],hi:[1.15,0.88]},
  {name:"Lorenz-84",field:"climate",gs:1,dky:2.401,d2:2.284,lam:0.153,drP:0,drA:0,sec:[1,-0.052,0],p:[0.25,4,8,1],T:1.533,hMax:0.005,init:[0.5562,-0.5439,-0.1538],f(s,p,o){const x=0.9048+1.489*s[0],y=0.1053+2.178*s[1],z=0.03516+2.095*s[2];o[0]=(-y*y-z*z-p[0]*x+p[0]*p[2])/1.489;o[1]=(x*y-p[1]*x*z-y+p[3])/2.178;o[2]=(p[1]*x*y+x*z-z)/2.095;},lo:[0.15,2.4,4.8,0.6],hi:[0.4,6.4,12.8,1.35]},
@@ -113,7 +114,7 @@ const ATTR=[
  {name:"Moore–Spiegel",field:"stellar convection",gs:1,dky:2.075,d2:1.375,lam:0.083,drP:0,drA:0,sec:[1,0.012,0],p:[6,20],T:2.54,hMax:0.005,init:[0.1085,-0.05004,-0.07029],f(s,p,o){const x=-0.07384+2.393*s[0],y=-0.4306+6.252*s[1],z=5.712+51.92*s[2];o[0]=(y)/2.393;o[1]=(z)/6.252;o[2]=(-z-(p[0]-p[1]+p[1]*x*x)*y-p[0]*x)/51.92;},lo:[3.6,12],hi:[9.6,32]},
  {name:"Nosé–Hoover",field:"thermostat",gs:2,dky:3,d2:2.184,lam:0.015,drP:0,drA:0,sec:[2,-0.035,0],p:[1],T:8.421,hMax:0.01,init:[0.1022,0.1621,0.244],f(s,p,o){const x=-0.09255+4.098*s[0],y=-0.09525+4.381*s[1],z=0.1328+3.886*s[2];o[0]=(y)/4.098;o[1]=(-x+y*z)/4.381;o[2]=(p[0]-y*y)/3.886;},lo:[0.6],hi:[1.6]},
  {name:"Tumor–immune",field:"oncology",gs:1,dky:2.038,d2:1.242,lam:0.021,drP:0,drA:0,sec:[1,0.515,0],p:[2.5,1.5,4.5,0.5],T:45.2,hMax:0.01,init:[-0.8627,0.729,-0.9957],f(s,p,o){const x=0.4908+0.47*s[0],y=0.4727+0.4717*s[1],z=0.4375+0.4375*s[2];o[0]=(x*(1-x)-x*y-p[0]*x*z)/0.47;o[1]=(.6*y*(1-y)-p[1]*x*y)/0.4717;o[2]=(p[2]*x*z/(x+1)-.2*x*z-p[3]*z)/0.4375;},lo:[1.5,0.9,2.7,0.3],hi:[4,2.4,7.2,0.675]},
- {name:"Morel attractor",field:"mycology (Alex)",gs:2,dky:2.73,d2:2.58,lam:2.31,drP:0,drA:0,sec:[2,0,0],p:[3,6,.6],T:1,hMax:.05,map:maStep,init:MA_INIT,f(s,p,o){o.fill(0);},lo:[2.4,4.8,.3],hi:[3.6,7.2,.9]}
+ {name:"Morel attractor",field:"mycology (Alex)",gs:1,dky:2.73,d2:2.58,lam:2.31,drP:0,drA:0,sec:[1,0,0],p:[3,6,.6],T:1,hMax:.05,map:maStep,init:MA_INIT,f(s,p,o){o.fill(0);},lo:[2.4,4.8,.3],hi:[3.6,7.2,.9]}
 ];
 const IDX={};EFFECTS.forEach((e,i)=>IDX[e.id]=i);
 const REG=[1,1.26,.8,1.5,.67,1.12,.9,1.33,1,1.19,1.06];const STRETCH=[.18,.3,.7,.04,1.1,.09,1.6,.5,.25,.8],EVLEN=[1,1,3,.35,1.8,.5,3.5,1,1,1];
@@ -743,7 +744,7 @@ function morelAt(th,s,tau,kap){if(mCache.tau!==tau){const R=mQ('R',tau),H=mQ('H'
   for(let i=0;i<n;i++){
    zs+=(S.zoom-zs)*.0007;for(let k=0;k<3;k++)fs[k]+=(S.fc[k]-fs[k])*.002;
    if(Math.abs(zs-1)<1e-6&&S.zoom===1)zs=1;
-   if(ctr%32===0){ctrl();if(ctr%256===0)for(const v of V)if(v.on)trail[v.idx].push(v.n[0],v.n[1],v.n[2]);}
+   if(ctr%32===0){ctrl();if(ctr%256===0)for(const v of V)if(v.on){if(v.def.map){const q=v.dq||(v.dq=[v.m[3],v.m[4],v.m[5]]),pv=v.a.pv;for(let k=0;k<12;k++){const n=maM(q[0],q[1],q[2],pv);q[0]=n[0];q[1]=n[1];q[2]=n[2];trail[v.idx].push((q[2]*Math.cos(q[1])-v.c[0])/v.sc,(pv[1]*q[0]-v.c[1])/v.sc,(q[2]*Math.sin(q[1])-v.c[2])/v.sc);}}else trail[v.idx].push(v.n[0],v.n[1],v.n[2]);}}
    ctr++;
    if((ctr&3)===0)for(let e=0;e<N;e++){let t;if(force[e]!==null)t=force[e];else if(route[e]>=100){if(!S.rank)continue;t=.5+(S.rkV[route[e]-100]-.5)*S.amount;}else if(route[e]>=0&&V[route[e]/3|0].on){const v=V[route[e]/3|0];t=.5+(v.vr[route[e]%3]-.5)*S.amount;}else continue;t=t<0?0:t>1?1:t;u[e]+=(t-u[e])*.0048;}
    const pf=S.pitch*(on(IDX.pt)?Math.pow(2,-3+6*u[IDX.pt]):1);S.pf=pf;
@@ -1065,7 +1066,7 @@ function drawA(c,w,h){
   const sp=q?Math.min(1,Math.hypot(x-px,y-py,zz-pz)*20):0;px=x;py=y;pz=zz;const age=q/n,cc=hsl(hue+sp*55,.88,.46+.28*sp);C[q*4]=cc[0];C[q*4+1]=cc[1];C[q*4+2]=cc[2];C[q*4+3]=Math.min(1,(.14+.84*age*age)*(1+flash[i]*1.6));}
  gl.bindBuffer(gl.ARRAY_BUFFER,bp);gl.bufferData(gl.ARRAY_BUFFER,P.subarray(0,n*3),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(lp);gl.vertexAttribPointer(lp,3,gl.FLOAT,false,0,0);
  gl.bindBuffer(gl.ARRAY_BUFFER,bc);gl.bufferData(gl.ARRAY_BUFFER,C.subarray(0,n*4),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(lc);gl.vertexAttribPointer(lc,4,gl.FLOAT,false,0,0);
- gl.uniform2f(U('off'),c.x,c.y);gl.uniform1f(U('sc'),sc);gl.uniform1f(U('cz'),1/Math.max(1,z*.6));gl.uniform1f(U('pt'),0);gl.drawArrays(gl.LINE_STRIP,0,n);
+ gl.uniform2f(U('off'),c.x,c.y);gl.uniform1f(U('sc'),sc);gl.uniform1f(U('cz'),1/Math.max(1,z*.6));if(ATTR[i]&&ATTR[i].map){gl.uniform1f(U('pt'),1);gl.uniform1f(U('ps'),Math.max(1.5,Math.min(w,h)/420));gl.drawArrays(gl.POINTS,0,n);}else{gl.uniform1f(U('pt'),0);gl.drawArrays(gl.LINE_STRIP,0,n);}
  gl.uniform1f(U('pt'),1);gl.uniform1f(U('ps'),Math.max(6,Math.min(w,h)/70));gl.drawArrays(gl.POINTS,n-1,1);
  if(PT[i]&&onSet[i]){const a=PT[i],m=a.length/3,PP=new Float32Array(a.length),CC=new Float32Array(m*4);for(let q=0;q<m;q++){PP[q*3]=a[q*3]-f[0];PP[q*3+1]=a[q*3+1]-f[1];PP[q*3+2]=a[q*3+2]-f[2];const ph=(()=>{if(!(sent.cpl>0))return hue+40;const o=ATTR.map((_,j)=>j).filter(j=>onSet[j]&&j!==i);if(!o.length)return hue+40;const j=o[q%o.length],h2=HUE[j]??(j*137.5+40)%360,d=((h2-hue+540)%360)-180;return hue+40+d*.55*sent.cpl;})(),cc=hsl(ph,.9,.72);CC[q*4]=cc[0];CC[q*4+1]=cc[1];CC[q*4+2]=cc[2];CC[q*4+3]=.95;}
   gl.bindBuffer(gl.ARRAY_BUFFER,bp);gl.bufferData(gl.ARRAY_BUFFER,PP,gl.DYNAMIC_DRAW);gl.vertexAttribPointer(lp,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,bc);gl.bufferData(gl.ARRAY_BUFFER,CC,gl.DYNAMIC_DRAW);gl.vertexAttribPointer(lc,4,gl.FLOAT,false,0,0);gl.uniform1f(U('pt'),1);gl.uniform1f(U('ps'),Math.max(4,Math.min(w,h)/(m>40?150:90))*(1+Math.max(0,Math.min(1.2,.4*((SG[i]||1)-1)))));gl.drawArrays(gl.POINTS,0,m);}
