@@ -399,7 +399,7 @@ function makeDSP(rate){
 // One call draws m answers on average, shared among all partners whatever their number or particle count
 // (m = .78*pull^.8: Nudge .30, Pull .55, Tangle .78; below 1, so answer chains die out, mean length 1/(1-m)).
 // Each system's clock is slowed by its own average surge, so its long-run note rate stays what it was at Apart.
-const CWIN=Math.round(.3*rate/32),CDL=Math.min(1000,Math.round(.1*rate/32)),CKT=32/rate/.025,CKB=32/rate/2,cplM=()=>.78*Math.pow(S.cpl,.8);S.calls=0;S.tk=0;S.kickLog=[];let cplLast=0;
+const GMX=4,CWIN=Math.round(.3*rate/32),CDL=Math.min(1000,Math.round(.1*rate/32)),CKT=32/rate/.025,CKB=32/rate/2,cplM=()=>.78*Math.pow(S.cpl,.8);S.calls=0;S.tk=0;S.kickLog=[];let cplLast=0;
 const call=v=>{if(!(S.cpl>0)||S.sync===false)return;let ns=0;for(const w of V)if(w.on&&w.np)ns++;if(ns<2)return;S.calls++;v.kN=(v.kN||4)+1;const m=cplM()/Math.max(.5,v.kN/(v.kP||4));
  for(const w of V){if(!w.on||w===v||!w.np)continue;if(!w.dl){w.dl=new Float64Array(1024);w.b1=0;w.b=0;w.bb=m;}
   if(v.lastF){const cq=w.cq||(w.cq=[]);cq.push(S.tk+CDL,v.lastF);if(cq.length>16)cq.splice(0,2);}w.dl[(S.tk+CDL)&1023]+=m/((ns-1)*w.np)*.75/(Math.max(.02,S.move*w.dens)*.025);}};
@@ -410,7 +410,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
   // fast crossings are picked; slow ones swell or slide
   const sb=spd>.62?2:spd>.32?1:0;const r2=(()=>{const H=(v.q2H||(v.q2H=[[],[],[]]))[sb];let c=0;for(const x of H)if(x<q2)c++;const r=H.length>4?(c+.5)/(H.length+1):q2;H.push(q2);if(H.length>48)H.shift();return r;})();
   const r3=r2<.34?0:r2<.67?1:2;const ty=S.forceTy!=null?S.forceTy:S.synT?[[22,23,21],[20,21,23],[21,20,23]][sb][r3]:S.allT?[[2,1,17,16,13],[0,5,14,10,18],[3,4,11,12,15]][sb][Math.min(4,Math.floor(r2*5))]:S.strange?[[16,17,18],[13,14,15],[10,11,12]][sb][r3]:S.gentle?(sb===2?0:sb===1?(r2>.5?1:0):(r2>.5?1:2)):sb===2?(r2>.5?3:4):sb===1?(r2>.5?5:0):(r2>.5?1:2);S.tech[ty]++;v.bdHit=Math.max(v.bdHit||0,.4+.6*spd);
-  let f=(S.strange||S.allT?82*Math.pow(2,4*q1)*(ty===11?(q2>.5?5:3):ty===18?(q2>.5?4:2):ty===17?.5:1):S.gentle?110*Math.pow(2,2.6*q1):82*Math.pow(2,4*q1))*S.pf*v.fmul;if(S.gentle&&!S.strange)f=Math.min(1200,f);if(ty===4)f*=q1>.5?2:3;if(ty===3)f=Math.max(f,600*S.pf);f=Math.max(48,Math.min(4000,f));let cF=0;if(S.cpl>0&&S.sync!==false&&S.echo!==false&&v.cq)for(let i=v.cq.length-2;i>=0;i-=2){const at=v.cq[i];if(at<=S.tk){if(S.tk-at<CWIN)cF=v.cq[i+1];break;}}if(cF){const be=cplM();f=Math.exp((1-be)*Math.log(f)+be*Math.log(cF));v.wasReply=1;}else v.wasReply=0;v.lastF=f;
+  let f=(S.strange||S.allT?82*Math.pow(2,4*q1)*(ty===11?(q2>.5?5:3):ty===18?(q2>.5?4:2):ty===17?.5:1):S.gentle?110*Math.pow(2,2.6*q1):82*Math.pow(2,4*q1))*S.pf*v.fmul;if(S.gentle&&!S.strange)f=Math.min(1200,f);if(ty===4)f*=q1>.5?2:3;if(ty===3)f=Math.max(f,600*S.pf);f=Math.max(48,Math.min(4000,f));v.rawF=f;let cF=0;if(S.cpl>0&&S.sync!==false&&S.echo!==false&&v.cq)for(let i=v.cq.length-2;i>=0;i-=2){const at=v.cq[i];if(at<=S.tk){if(S.tk-at<CWIN)cF=v.cq[i+1];break;}}if(cF){const be=cplM();f=Math.exp((1-be)*Math.log(f)+be*Math.log(cF));v.wasReply=1;}else v.wasReply=0;v.lastF=f;
   k.stA=(.25+.75*spd)*(S.gentle&&!S.strange?.35:1);k.stF=Math.min(.95,2*Math.sin(Math.PI*Math.min(rate*.45,(S.gentle&&!S.strange?900:1500)*Math.pow(2,2.2*q1))/rate));k.stQ=.25+.6*(1-q2);k.sLo=0;k.sBp=0;k.ttu=0;k.hm=0;k.apx=0;k.apy=0;k.sz=0;k.hs=0;k.a2=0;k.h2=0;k.vib=1;k.wg=.05;k.fd=[9,5,7,12,3,9][ty]*(.6+.8*q2)*(S.gentle?.2:1);k.fn=1/Math.tanh(k.fd*.3)*.35;Object.assign(k,{on:true,type:ty,t:0,v,q,n0:n1,f,f0:f,ft:f,vp:0,vr:4.6+1.6*q2,vd:ty===2?.004:.009,gr2:ty===2?.00025:.002,lp:0,s1:0,s2:0,
    dur:[.45+1.3*(1-spd),1.4+1.6*q1,1.3+1.4*q1,.18+.25*q1,.25+.5*(1-spd),.5+1*(1-spd)][ty],att:.35+.9*q1,cs:6+6*q1,
    br0:S.gentle?.3+.22*q2:ty===4?.97:ty===3?.92:.62+.33*q2,br:S.gentle?.3+.22*q2:ty===4?.97:ty===3?.92:.62+.33*q2,wah:ty===3?.9:ty===5?.75:0,wc:ty===3?700:450*Math.pow(2,3*q2),amp:(ty===1?.9:ty===3?.55:.7)*v.Pw[q]});
@@ -592,7 +592,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
    if(q.length>2)aB+=q[2];if(q.length>3&&Math.abs(q[3])>Math.abs(aTd)){aTd=q[3];aTr=4*Math.pow(2,ck(q[3],2.5));}if(q.length>4)aGr+=Math.abs(q[4]);if(q.length>5)aRot+=q[5];
    let g=1;if(v.dl){const kx=S.tk&1023,a=v.dl[kx];if(a){v.b1+=a;v.dl[kx]=0;if(S.kickLog.length<600)S.kickLog.push(v.idx);}
     if(v.b1>1e-7||v.b>1e-7){v.b+=(v.b1-v.b)*CKT;v.b1-=v.b1*CKT;}else{v.b1=0;v.b=0;}
-    if(S.cpl>0&&cpN>1&&S.sync!==false){v.bb+=(v.b-v.bb)*CKB;g=Math.min(40,1-Math.min(.9,v.bb)+v.b);}else g=Math.min(40,1+v.b);}
+    if(S.cpl>0&&cpN>1&&S.sync!==false){v.bb+=(v.b-v.bb)*CKB;g=1-Math.min(.7,v.bb)+v.b;}else g=1+v.b;g+=v.res||0;if(g>GMX){v.res=g-GMX;g=GMX;}else v.res=0;if(g<.05)g=.05;}
    v.g=g;if(S.cpl>0&&cpN>1&&S.sync!==false&&v.np){const dk=32/rate/10;v.kP=(v.kP||4)*(1-dk)+v.np*S.move*v.dens/rate*32/.75*g;v.kN=(v.kN||4)*(1-dk);}
    if(S.swarm){if(v.np!==S.nP){for(let q=v.np;q<S.nP;q++){seedP(v,q);v.Ps[q]=0;}v.np=S.nP;}
     const hT0=S.move*v.dens/rate*32*(v.def.T/.75),hT=g===1?hT0:hT0*g,nsub=Math.min(g===1?8:24,Math.ceil(hT/v.def.hMax)),h=hT/nsub,P=v.P,Q=v.Pp,ax=v.def.sec[0],th=v.def.sec[1],both=v.def.sec[2];
@@ -601,7 +601,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
       if(m){t0/=m;t1/=m;t2/=m;const y0=(P[o]-v.c[0])/v.sc,y1=(P[o+1]-v.c[1])/v.sc,y2=(P[o+2]-v.c[2])/v.sc;
        // a meeting: this particle comes within .2 of where its partner particles are (leaves past .35) -> a chime
        const dm=Math.hypot(t0-y0,t1-y1,t2-y2),M=v.Mt||(v.Mt=new Uint8Array(128));if(!M[q]&&dm<.2){M[q]=1;S.meets++;const ft=S.forceTy;S.forceTy=18;ping(v,q,o);S.forceTy=ft;}else if(M[q]&&dm>.35)M[q]=0;}}
-     v.ph=h;v.nsub=nsub;const x=(P[o+ax]-v.c[ax])/v.sc,sd=v.Ps[q];v.Pc[q]+=32/rate;if(x>th&&sd<=0){if(sd!==0){ping(v,q,o);call(v);v.Pc[q]=0;}v.Ps[q]=1;}else if(x<(both?-th:th-.2)&&sd>=0){if(sd!==0&&both){ping(v,q,o);call(v);v.Pc[q]=0;}v.Ps[q]=-1;}
+     v.ph=h;v.nsub=nsub;const x=(P[o+ax]-v.c[ax])/v.sc,sd=v.Ps[q];v.Pc[q]+=32/rate*(v.g||1);if(x>th&&sd<=0){if(sd!==0){ping(v,q,o);call(v);v.Pc[q]=0;}v.Ps[q]=1;}else if(x<(both?-th:th-.2)&&sd>=0){if(sd!==0&&both){ping(v,q,o);call(v);v.Pc[q]=0;}v.Ps[q]=-1;}
      if(v.Pc[q]>(6+(q%7)*.5)*.75/Math.max(.02,S.move*v.dens)){v.stirs++;seedP(v,q);v.Ps[q]=0;v.Pc[q]=0;}}}
    if(S.swarm&&v.np){const lim=v.lim;for(let q=0;q<v.np;q++){const o=v.dim*q,P=v.P;if(!(Math.abs(P[o])<lim&&Math.abs(P[o+1])<lim&&Math.abs(P[o+2])<lim)){v.resets++;seedP(v,q);}
      let w=1;if(zs>1.0001)w=v.idx===S.focus?S.regionOf(v,[P[o],P[o+1],P[o+2]]):1/(zs*zs);v.Pw[q]+=(w-v.Pw[q])*.3;}}
