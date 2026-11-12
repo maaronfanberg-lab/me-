@@ -960,7 +960,7 @@ let SG=[],yaw=.5,pitchA=.3,spin=!matchMedia('(prefers-reduced-motion: reduce)').
 const P=new Float32Array(TN*3),C=new Float32Array(TN*4),HUE=[8,190,48,300,150,335,95,220,270,120];
 function hsl(h,s,l){h=((h%360)+360)%360;const a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1)));};return[f(0),f(8),f(4)];}
 function cells(w,h){const act=ATTR.map((_,i)=>i).filter(i=>onSet[i]),out=[];const zoomed=zoomV>1.01;
- if(!zoomed&&sent.cpl>0&&act.length>1){const n=act.length,aw=w>=h?w/h:1,ah=h>w?h/w:1,s=Math.min(aw,ah)*(n===2?.46:.36),sep=(1-sent.cpl)*1.1/Math.max(.5,n===2?1:Math.sin(Math.PI/n));act.forEach((i,k)=>{const a=2*Math.PI*k/n;let x=sep*Math.cos(a)*s*.8,y=sep*Math.sin(a)*s*.8;if(w<h){const t=x;x=y;y=t;}out.push({i,x,y,s});});return out;}
+ if(!zoomed&&sent.cpl>0&&act.length>1){const n=act.length,aw=w>=h?w/h:1,ah=h>w?h/w:1,s=Math.min(aw,ah)*(n===2?.46:.36)*(1+.95*sent.cpl*sent.cpl),sep=(1-sent.cpl)*1.1/Math.max(.5,n===2?1:Math.sin(Math.PI/n));act.forEach((i,k)=>{const a=2*Math.PI*k/n;let x=sep*Math.cos(a)*s*.8,y=sep*Math.sin(a)*s*.8;if(w<h){const t=x;x=y;y=t;}out.push({i,x,y,s});});return out;}
  if(zoomed)return[{i:focus,x:0,y:0,s:1,fit:1}];
  const n=act.length,land=w>=h;let cols=land?Math.ceil(Math.sqrt(n)):Math.round(Math.sqrt(n)),rows=Math.ceil(n/cols);if(land&&n===2){cols=2;rows=1;}if(!land&&n===2){cols=1;rows=2;}
  const aw=w>=h?w/h:1,ah=h>w?h/w:1;act.forEach((i,k)=>{const cx=((k%cols)+.5)/cols*2-1,cy=1-((k/cols|0)+.5)/rows*2;out.push({i,x:cx*aw,y:cy*ah,s:Math.min(aw/cols,ah/rows)});});return out;}
