@@ -41,7 +41,7 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 <div id="top"><button id="snd" aria-pressed="false">Sound</button><button id="open">Adjust</button></div>
 <div id="zm"><button id="whole">Whole</button><button id="zo" class="st" aria-label="Zoom out">−</button><button id="zi" class="st" aria-label="Zoom in">+</button></div>
 <div id="sheet" hidden>
-  <div class="head"><button id="close">Close</button></div>
+  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 11 Nov · D</span></div>
   <div class="ctl"><span class="lab">Sound</span><div class="row"><button id="snd2" aria-pressed="false">Sound</button><button id="vm">Volume −</button><button id="vp">Volume +</button></div></div>
   <div class="ctl"><span class="lab">Output</span><div class="row" id="outs"></div></div>
   <div class="ctl"><span class="lab">Tone</span><div class="row" id="tones"></div></div>
@@ -399,10 +399,10 @@ function makeDSP(rate){
 // One call draws m answers on average, shared among all partners whatever their number or particle count
 // (m = .78*pull^.8: Nudge .30, Pull .55, Tangle .78; below 1, so answer chains die out, mean length 1/(1-m)).
 // Each system's clock is slowed by its own average surge, so its long-run note rate stays what it was at Apart.
-const CDL=Math.min(1000,Math.round(.1*rate/32)),CKT=32/rate/.025,CKB=32/rate/2,cplM=()=>.78*Math.pow(S.cpl,.8);S.calls=0;S.tk=0;S.kickLog=[];let cplLast=0;
+const CWIN=Math.round(.3*rate/32),CDL=Math.min(1000,Math.round(.1*rate/32)),CKT=32/rate/.025,CKB=32/rate/2,cplM=()=>.78*Math.pow(S.cpl,.8);S.calls=0;S.tk=0;S.kickLog=[];let cplLast=0;
 const call=v=>{if(!(S.cpl>0)||S.sync===false)return;let ns=0;for(const w of V)if(w.on&&w.np)ns++;if(ns<2)return;S.calls++;v.kN=(v.kN||4)+1;const m=cplM()/Math.max(.5,v.kN/(v.kP||4));
  for(const w of V){if(!w.on||w===v||!w.np)continue;if(!w.dl){w.dl=new Float64Array(1024);w.b1=0;w.b=0;w.bb=m;}
-  w.dl[(S.tk+CDL)&1023]+=m/((ns-1)*w.np)*.75/(Math.max(.02,S.move*w.dens)*.025);}};
+  if(v.lastF){const cq=w.cq||(w.cq=[]);cq.push(S.tk+CDL,v.lastF);if(cq.length>16)cq.splice(0,2);}w.dl[(S.tk+CDL)&1023]+=m/((ns-1)*w.np)*.75/(Math.max(.02,S.move*w.dens)*.025);}};
 S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(const z of PL){if(!z.on){k=z;break;}if(z.t/z.dur>k.t/k.dur)k=z;}
   const P=v.P,ax=v.def.sec[0],a1=(ax+1)%3,a2=(ax+2)%3,n1=(P[o+a1]-v.c[a1])/v.sc,n2=(P[o+a2]-v.c[a2])/v.sc,q1=cl((n1+1)/2),q2=cl((n2+1)/2);
   const sp=Math.hypot(P[o]-v.Pp[o],P[o+1]-v.Pp[o+1],P[o+2]-v.Pp[o+2])/v.sc*rate/32/(S.move*v.dens*(S.pf||1)*(v.g||1)+1e-9),spd=(()=>{const H=v.spH||(v.spH=[]);let c=0;for(const x of H)if(x<sp)c++;const r=H.length>4?(c+.5)/(H.length+1):cl(Math.tanh(sp/8));H.push(sp);if(H.length>48)H.shift();return r;})();
@@ -410,7 +410,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
   // fast crossings are picked; slow ones swell or slide
   const sb=spd>.62?2:spd>.32?1:0;const r2=(()=>{const H=(v.q2H||(v.q2H=[[],[],[]]))[sb];let c=0;for(const x of H)if(x<q2)c++;const r=H.length>4?(c+.5)/(H.length+1):q2;H.push(q2);if(H.length>48)H.shift();return r;})();
   const r3=r2<.34?0:r2<.67?1:2;const ty=S.forceTy!=null?S.forceTy:S.synT?[[22,23,21],[20,21,23],[21,20,23]][sb][r3]:S.allT?[[2,1,17,16,13],[0,5,14,10,18],[3,4,11,12,15]][sb][Math.min(4,Math.floor(r2*5))]:S.strange?[[16,17,18],[13,14,15],[10,11,12]][sb][r3]:S.gentle?(sb===2?0:sb===1?(r2>.5?1:0):(r2>.5?1:2)):sb===2?(r2>.5?3:4):sb===1?(r2>.5?5:0):(r2>.5?1:2);S.tech[ty]++;v.bdHit=Math.max(v.bdHit||0,.4+.6*spd);
-  let f=(S.strange||S.allT?82*Math.pow(2,4*q1)*(ty===11?(q2>.5?5:3):ty===18?(q2>.5?4:2):ty===17?.5:1):S.gentle?110*Math.pow(2,2.6*q1):82*Math.pow(2,4*q1))*S.pf*v.fmul;if(S.gentle&&!S.strange)f=Math.min(1200,f);if(ty===4)f*=q1>.5?2:3;if(ty===3)f=Math.max(f,600*S.pf);f=Math.max(48,Math.min(4000,f));
+  let f=(S.strange||S.allT?82*Math.pow(2,4*q1)*(ty===11?(q2>.5?5:3):ty===18?(q2>.5?4:2):ty===17?.5:1):S.gentle?110*Math.pow(2,2.6*q1):82*Math.pow(2,4*q1))*S.pf*v.fmul;if(S.gentle&&!S.strange)f=Math.min(1200,f);if(ty===4)f*=q1>.5?2:3;if(ty===3)f=Math.max(f,600*S.pf);f=Math.max(48,Math.min(4000,f));let cF=0;if(S.cpl>0&&S.sync!==false&&S.echo!==false&&v.cq)for(let i=v.cq.length-2;i>=0;i-=2){const at=v.cq[i];if(at<=S.tk){if(S.tk-at<CWIN)cF=v.cq[i+1];break;}}if(cF){const be=cplM();f=Math.exp((1-be)*Math.log(f)+be*Math.log(cF));v.wasReply=1;}else v.wasReply=0;v.lastF=f;
   k.stA=(.25+.75*spd)*(S.gentle&&!S.strange?.35:1);k.stF=Math.min(.95,2*Math.sin(Math.PI*Math.min(rate*.45,(S.gentle&&!S.strange?900:1500)*Math.pow(2,2.2*q1))/rate));k.stQ=.25+.6*(1-q2);k.sLo=0;k.sBp=0;k.ttu=0;k.hm=0;k.apx=0;k.apy=0;k.sz=0;k.hs=0;k.a2=0;k.h2=0;k.vib=1;k.wg=.05;k.fd=[9,5,7,12,3,9][ty]*(.6+.8*q2)*(S.gentle?.2:1);k.fn=1/Math.tanh(k.fd*.3)*.35;Object.assign(k,{on:true,type:ty,t:0,v,q,n0:n1,f,f0:f,ft:f,vp:0,vr:4.6+1.6*q2,vd:ty===2?.004:.009,gr2:ty===2?.00025:.002,lp:0,s1:0,s2:0,
    dur:[.45+1.3*(1-spd),1.4+1.6*q1,1.3+1.4*q1,.18+.25*q1,.25+.5*(1-spd),.5+1*(1-spd)][ty],att:.35+.9*q1,cs:6+6*q1,
    br0:S.gentle?.3+.22*q2:ty===4?.97:ty===3?.92:.62+.33*q2,br:S.gentle?.3+.22*q2:ty===4?.97:ty===3?.92:.62+.33*q2,wah:ty===3?.9:ty===5?.75:0,wc:ty===3?700:450*Math.pow(2,3*q2),amp:(ty===1?.9:ty===3?.55:.7)*v.Pw[q]});
