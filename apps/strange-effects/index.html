@@ -41,11 +41,12 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 <div id="top"><button id="snd" aria-pressed="false">Sound</button><button id="open">Adjust</button></div>
 <div id="zm"><button id="whole">Whole</button><button id="zo" class="st" aria-label="Zoom out">−</button><button id="zi" class="st" aria-label="Zoom in">+</button></div>
 <div id="sheet" hidden>
-  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 12 Nov · physics</span></div>
+  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 12 Nov · morel</span></div>
   <div class="ctl"><span class="lab">Sound</span><div class="row"><button id="snd2" aria-pressed="false">Sound</button><button id="vm">Volume −</button><button id="vp">Volume +</button></div></div>
   <div class="ctl"><span class="lab">Output</span><div class="row" id="outs"></div></div>
   <div class="ctl"><span class="lab">Tone</span><div class="row" id="tones"></div></div>
   <div class="ctl"><span class="lab">Attractors pull on each other</span><div class="row" id="cpls"></div></div>
+  <div class="ctl"><span class="lab">Morel (MGS-1): each note lands on the morel; pits darken and soften it, ridges ring</span><div class="row" id="morels"></div><div class="row" id="mkaps"></div></div>
   <div class="ctl"><span class="lab">Harmonic mean</span><div class="row" id="hms"></div></div>
   <div class="ctl"><span class="lab">Particles</span><div class="row" id="nps"></div></div>
   <div class="ctl" hidden><div class="row" id="styles"></div></div>
@@ -56,7 +57,7 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
   <div class="ctl"><span class="lab">Concentration α</span><div class="row" id="rkas"></div></div>
   <div class="ctl"><span class="lab">Atom spread</span><div class="row" id="rksg"></div></div>
   <div class="ctl"><span class="lab">Hologram</span><div class="row" id="holos"></div></div>
-  <div class="ctl"><span class="lab">Space</span><div class="row" id="halls"></div></div>
+  <div class="ctl"><span class="lab">Space</span><div class="row" id="halls"></div><div id="mroomCtl" hidden><div class="row" id="mws"></div><div class="row" id="mhs"></div><span id="mroomRead" class="nm" style="min-width:auto"></span></div></div>
   <div class="ctl"><span class="lab">Impact</span><div class="row" id="impacts"></div></div>
   <div class="ctl"><span class="lab">Attractors</span><div class="row" id="attrs"></div><span id="anote" class="nm" hidden></span></div>
   <div class="ctl"><span class="lab">Formula to attractor</span><input id="fname" placeholder="Name" maxlength="28" autocomplete="off"><textarea id="fsrc" rows="4" placeholder="A formula in x, like sin(3*x)*x, or a whole JavaScript function" spellcheck="false" autocapitalize="off"></textarea><div class="row"><button id="fgo">Make attractor</button><span id="fstat" class="nm"></span></div></div>
@@ -404,24 +405,36 @@ const CK=+(globalThis.SE_CK||1),GR=3,GK=+(globalThis.SE_GK||.04),GMX=4,CWIN=Math
 // Particles of different attractors that come within a contact radius collide: position-based contact (Muller et al. 2007),
 // each pushed apart along the line between them; their own flow then carries them back onto their attractor.
 // A new contact is an impact: both particles sound a struck note, harder for a faster closing speed, and spark.
-const CG=36,CL=8,cHead=new Int32Array(CG*CG*CG).fill(-1),cNext=new Int32Array(4096),cA=new Int16Array(4096),cQ=new Int16Array(4096),cW=new Float64Array(4096*3),cU=new Float64Array(4096*3),cV=new Float64Array(4096*3),usedC=[];
+const CG=64,CL=3,cHead=new Int32Array(CG*CG*CG).fill(-1),CM=8192,cNext=new Int32Array(CM),cA=new Int16Array(CM),cQ=new Int16Array(CM),cW=new Float64Array(CM*3),cU=new Float64Array(CM*3),cV=new Float64Array(CM*3),usedC=[],HN=48;
 function collide(){const L=[];for(const w of V)if(w.on&&w.np&&w.dim===3)L.push(w);const n=L.length;if(n<2)return;
  let np=0;for(const w of L)np+=w.np;const r=Math.min(.45,.22*Math.sqrt(8/Math.max(8,np))),sep=(1-S.cpl)*1.1/Math.max(.5,n===2?1:Math.sin(Math.PI/n));
  for(const c of usedC)cHead[c]=-1;usedC.length=0;let m=0;
- L.forEach((w,k)=>{const ox=sep*Math.cos(2*Math.PI*k/n),oy=sep*Math.sin(2*Math.PI*k/n);
+ S.orbT=(S.orbT||0)+32/rate*S.move/.35;const orR=.5*S.cpl,orA=2*Math.PI*S.orbT/16;
+ L.forEach((w,k)=>{const ph=orA+2*Math.PI*k/n,obx=orR*Math.cos(ph),oby=orR*Math.sin(ph),obz=.5*orR*Math.sin(2*ph+k),ox=sep*Math.cos(2*Math.PI*k/n)+obx,oy=sep*Math.sin(2*Math.PI*k/n)+oby;w.orb=[obx,oby,obz];
   if(!w.cool)w.cool=new Float64Array(128);let ms=0;
-  const cm=w.cm||[0,0,0];for(let q=0;q<w.np&&m<4096;q++){const o=3*q;for(let d=0;d<3;d++){const u=(w.P[o+d]-w.c[d])/w.sc;cU[m*3+d]=u;cV[m*3+d]=u-(w.Pp[o+d]-w.c[d])/w.sc;}ms+=Math.hypot(cV[m*3],cV[m*3+1],cV[m*3+2]);
-   cW[m*3]=cU[m*3]-cm[0]+ox;cW[m*3+1]=cU[m*3+1]-cm[1]+oy;cW[m*3+2]=cU[m*3+2]-cm[2];cA[m]=k;cQ[m]=q;
+  let mu=[0,0,0],m2=0;for(let q=0;q<w.np;q++)for(let d=0;d<3;d++){const u=(w.P[3*q+d]-w.c[d])/w.sc;mu[d]+=u/w.np;m2+=u*u/w.np;}const rho=Math.sqrt(Math.max(1e-6,m2-mu[0]*mu[0]-mu[1]*mu[1]-mu[2]*mu[2]));
+  if(!w.mu){w.mu=mu.slice();w.rho=rho;}for(let d=0;d<3;d++)w.mu[d]+=(mu[d]-w.mu[d])*.002;w.rho+=(rho-w.rho)*.002;const ge=1+(.55/Math.max(.05,w.rho)-1)*S.cpl;w.ge=ge;const cm=[w.mu[0]*S.cpl,w.mu[1]*S.cpl,w.mu[2]*S.cpl];w.cmE=cm;
+  for(let q=0;q<w.np&&m<CM;q++){const o=3*q;for(let d=0;d<3;d++){const u=(w.P[o+d]-w.c[d])/w.sc;cU[m*3+d]=u;cV[m*3+d]=u-(w.Pp[o+d]-w.c[d])/w.sc;}for(let d=0;d<3;d++)cV[m*3+d]*=ge;ms+=Math.hypot(cV[m*3],cV[m*3+1],cV[m*3+2]);
+   cW[m*3]=(cU[m*3]-cm[0])*ge+ox;cW[m*3+1]=(cU[m*3+1]-cm[1])*ge+oy;cW[m*3+2]=(cU[m*3+2]-cm[2])*ge+obz;cA[m]=k;cQ[m]=q;
    const gx=Math.floor((cW[m*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[m*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[m*3+2]+CL)/(2*CL)*CG);
    if(gx>=0&&gy>=0&&gz>=0&&gx<CG&&gy<CG&&gz<CG){const c=(gx*CG+gy)*CG+gz;if(cHead[c]===-1)usedC.push(c);cNext[m]=cHead[c];cHead[c]=m;}else cNext[m]=-2;m++;}
-  const mm=ms/Math.max(1,w.np);w.msp=w.msp===undefined?mm:w.msp+(mm-w.msp)*.01;});
- const push=CK*S.cpl,r2=r*r,ct=32/rate,cell=2*CL/CG,RG=GR*r,RG2=RG*RG,reach=Math.ceil(RG/cell),gk=GK*S.cpl*ct*S.move/.35;
- for(let a=0;a<m;a++){if(cNext[a]===-2)continue;const gx=Math.floor((cW[a*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[a*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[a*3+2]+CL)/(2*CL)*CG);
+  const mm=ms/Math.max(1,w.np);w.msp=w.msp===undefined?mm:w.msp+(mm-w.msp)*.01;w.ox=ox;w.oy=oy;w.oz=obz;});
+ const mP=m;S.bodyT=(S.bodyT||0)+1;
+ if(np<=64)L.forEach((w,k)=>{const cm=w.cmE||[0,0,0],np=Math.min(w.np,16);if(!w.hist||w.hist.length!==HN*16*3){w.hist=new Float32Array(HN*16*3);w.hN=0;w.hW=0;}
+  if(S.bodyT%12===0){for(let q=0;q<np;q++){const o=3*q,b=(w.hW*16+q)*3;for(let d=0;d<3;d++)w.hist[b+d]=(w.P[o+d]-w.c[d])/w.sc-cm[d];}w.hW=(w.hW+1)%HN;if(w.hN<HN)w.hN++;}
+  for(let h=0;h<w.hN;h++)for(let q=0;q<np&&m<CM;q++){const b=(h*16+q)*3;cW[m*3]=w.hist[b]*w.ge+w.ox;cW[m*3+1]=w.hist[b+1]*w.ge+w.oy;cW[m*3+2]=w.hist[b+2]*w.ge+w.oz;cA[m]=k;cQ[m]=-1;
+   const gx=Math.floor((cW[m*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[m*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[m*3+2]+CL)/(2*CL)*CG);
+   if(gx>=0&&gy>=0&&gz>=0&&gx<CG&&gy<CG&&gz<CG){const c=(gx*CG+gy)*CG+gz;if(cHead[c]===-1)usedC.push(c);cNext[m]=cHead[c];cHead[c]=m;}else cNext[m]=-2;m++;}});
+ const push=CK*S.cpl,r2=r*r,ct=32/rate,cell=2*CL/CG,RG=GR*r,RG2=RG*RG,reach=Math.ceil(RG/cell),gk=GK*S.cpl*ct*S.move/.35,rb=r*.6,rb2=rb*rb;
+ for(let a=0;a<mP;a++){if(cNext[a]===-2)continue;const gx=Math.floor((cW[a*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[a*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[a*3+2]+CL)/(2*CL)*CG);
   for(let dx=-reach;dx<=reach;dx++)for(let dy=-reach;dy<=reach;dy++)for(let dz=-reach;dz<=reach;dz++){const X=gx+dx,Y=gy+dy,Z=gz+dz;if(X<0||Y<0||Z<0||X>=CG||Y>=CG||Z>=CG)continue;
-   for(let b=cHead[(X*CG+Y)*CG+Z];b>=0;b=cNext[b]){if(b<=a||cA[b]===cA[a])continue;const ex=cW[a*3]-cW[b*3],ey=cW[a*3+1]-cW[b*3+1],ez=cW[a*3+2]-cW[b*3+2],d2=ex*ex+ey*ey+ez*ez;if(d2>=RG2)continue;
-    if(d2>=r2){const A=L[cA[a]],B=L[cA[b]],qa=cQ[a],qb=cQ[b],dd=Math.sqrt(d2),f=gk/(d2+r2)*(1-dd/RG)/dd;A.P[3*qa]-=ex*f*A.sc;A.P[3*qa+1]-=ey*f*A.sc;A.P[3*qa+2]-=ez*f*A.sc;B.P[3*qb]+=ex*f*B.sc;B.P[3*qb+1]+=ey*f*B.sc;B.P[3*qb+2]+=ez*f*B.sc;continue;}
+   for(let b=cHead[(X*CG+Y)*CG+Z];b>=0;b=cNext[b]){if(cA[b]===cA[a])continue;
+    if(b>=mP){const ex=cW[a*3]-cW[b*3],ey=cW[a*3+1]-cW[b*3+1],ez=cW[a*3+2]-cW[b*3+2],d2=ex*ex+ey*ey+ez*ez;if(d2>=rb2)continue;const A=L[cA[a]],qa=cQ[a],d=Math.sqrt(d2)+1e-9,nx=ex/d,ny=ey/d,nz=ez/d,ov=(rb-d)*push;A.P[3*qa]+=nx*ov*A.sc/A.ge;A.P[3*qa+1]+=ny*ov*A.sc/A.ge;A.P[3*qa+2]+=nz*ov*A.sc/A.ge;
+     const cl=-(cV[a*3]*nx+cV[a*3+1]*ny+cV[a*3+2]*nz);if(cl>0&&A.cool[qa]<=0){A.cool[qa]=.25;S.collisions=(S.collisions||0)+1;S.bodyHits=(S.bodyHits||0)+1;const ft=S.forceTy;S.forceTy=S.gentle&&!S.strange?0:12;ping(A,qa,3*qa);S.forceTy=ft;if(S.evLog.length<600)S.evLog.push(A.idx,cU[a*3],cU[a*3+1],cU[a*3+2],.6);}continue;}
+    if(b<=a)continue;const ex=cW[a*3]-cW[b*3],ey=cW[a*3+1]-cW[b*3+1],ez=cW[a*3+2]-cW[b*3+2],d2=ex*ex+ey*ey+ez*ez;if(d2>=RG2)continue;
+    if(d2>=r2){const A=L[cA[a]],B=L[cA[b]],qa=cQ[a],qb=cQ[b],dd=Math.sqrt(d2),f=gk/(d2+r2)*(1-dd/RG)/dd;A.P[3*qa]-=ex*f*A.sc/A.ge;A.P[3*qa+1]-=ey*f*A.sc/A.ge;A.P[3*qa+2]-=ez*f*A.sc/A.ge;B.P[3*qb]+=ex*f*B.sc/B.ge;B.P[3*qb+1]+=ey*f*B.sc/B.ge;B.P[3*qb+2]+=ez*f*B.sc/B.ge;continue;}
     const d=Math.sqrt(d2)+1e-9,nx=ex/d,ny=ey/d,nz=ez/d,ov=(r-d)*.5*push,A=L[cA[a]],B=L[cA[b]],qa=cQ[a],qb=cQ[b];
-    A.P[3*qa]+=nx*ov*A.sc;A.P[3*qa+1]+=ny*ov*A.sc;A.P[3*qa+2]+=nz*ov*A.sc;B.P[3*qb]-=nx*ov*B.sc;B.P[3*qb+1]-=ny*ov*B.sc;B.P[3*qb+2]-=nz*ov*B.sc;
+    A.P[3*qa]+=nx*ov*A.sc/A.ge;A.P[3*qa+1]+=ny*ov*A.sc/A.ge;A.P[3*qa+2]+=nz*ov*A.sc/A.ge;B.P[3*qb]-=nx*ov*B.sc/B.ge;B.P[3*qb+1]-=ny*ov*B.sc/B.ge;B.P[3*qb+2]-=nz*ov*B.sc/B.ge;
     const cl=-((cV[a*3]-cV[b*3])*nx+(cV[a*3+1]-cV[b*3+1])*ny+(cV[a*3+2]-cV[b*3+2])*nz);
     if(cl>0&&A.cool[qa]<=0&&B.cool[qb]<=0){const st=Math.tanh(1.5*cl/((A.msp||1e-3)+(B.msp||1e-3)+1e-9));A.cool[qa]=B.cool[qb]=.18;S.collisions=(S.collisions||0)+1;
      const ft=S.forceTy;S.forceTy=S.gentle&&!S.strange?0:12;ping(A,qa,3*qa);ping(B,qb,3*qb);S.forceTy=ft;
@@ -463,7 +476,25 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
   const n=k.buf.length,d=Math.min(n-2,Math.ceil(rate/f));k.buf.fill(0);let lp=0;for(let j=0;j<d;j++){S.nzs=(S.nzs*1103515245+12345)>>>0;const z=S.nzs/4294967296*2-1;lp+=(z-lp)*(ty===1?.2:.35+.6*spd);k.buf[(k.w-d+j+n)%n]=lp*(ty===1?.4:1);}k.exB=ty===1?.2:.35+.6*spd;
   if(!k.gt){k.gt=[0,0,0,0,0];k.gc=[0,0,0,0,0];k.ht5=[0,0,0,0,0];k.hc=[0,0,0,0,0];k.sh=[0,0,0];}
   if(!k.sh||k.sh.length!==v.dim)k.sh=new Float64Array(v.dim);for(let w=0;w<v.dim;w++)k.sh[w]=P[o+w]+6e-5;k.lsum=0;k.rel=0;k.det=0;k.w2=0;k.air=0;k.dop=1;k.pd=null;k.brT=k.br;k.dg=1;k.dist=.3;k.ht=0;
+  if(S.morel>0){const tau=S.morel===2?S.mTau:S.morel===1?S.mFix:0,cm=v.cm||[0,0,0],m1=n1-cm[a1],m2=n2-cm[a2],th=Math.atan2(m2,m1),sv=cl(Math.hypot(m1,m2)/1.1);
+   const M=morelAt((th+2*Math.PI)%(2*Math.PI),sv,tau,S.mKap),w=M.P*M.Dn;k.mP=M.P;k.mw=w;
+   const pm=1+M.Om;k.ft*=pm;k.f*=pm;k.f0*=pm;k.tapF=(k.tapF||k.f)*pm;          // the ripple bends the pitch
+   k.br*=1-.62*w;k.br0=(k.br0||k.br)*(1-.62*w);k.brT=k.br;                     // pits darken: the loop loses its highs
+   k.amp*=1-.55*w;k.stA=(k.stA||0)*(1-.85*w);k.dur*=1-.5*w;                     // pits absorb: softer, gently struck, shorter
+   k.dist=Math.min(.95,(k.dist||.3)*(.55+.9*M.Rn)*(1+.6*(1-M.P)*M.Dn));S.mHits=(S.mHits||0)+1;S.mPsum=(S.mPsum||0)+M.P;} // a wide cap, and ridges, ring into the room
   spatial(k);S.pings++;if(S.hm)hmMake(k);};
+// MGS-1 morel growth geometry (Alex's hypothetical model), evaluated exactly: r = R F(s)(1+Omega)(1-D P),
+// P = 1-exp(-kappa[(d2-d1)/(d2+eps)]^2) with d1,d2 the distances to the nearest two cell centres on the growing cap,
+// Q = Q0+(Qf-Q0)G_Q(tau) for Q in {R,H,D}. Constants the model leaves open are the same as on the MGS-1 page.
+const MQ={R:{q0:.12,qf:1.0,k:9,c:.35},H:{q0:.25,qf:2.4,k:7,c:.45},D:{q0:0,qf:.22,k:10,c:.62}},MEPS=.02;
+const msig=u=>1/(1+Math.exp(-u)),mG=(t,k,c)=>(msig(k*(t-c))-msig(-k*c))/(msig(k*(1-c))-msig(-k*c)),mQ=(n,t)=>MQ[n].q0+(MQ[n].qf-MQ[n].q0)*mG(t,MQ[n].k,MQ[n].c);
+const mF=s=>Math.pow(Math.max(0,Math.sin(Math.PI*(.18+.82*s))),.7)*(1-.1*s),mOm=(th,s)=>.025*Math.sin(3*th+2*Math.PI*s)+.015*Math.sin(7*th-5*Math.PI*s);
+const mSeeds=(()=>{const rnd=mulberry(1601+110),o=[];let t=0;while(o.length<110&&t<200000){t++;const s=rnd(),th=rnd()*2*Math.PI;if(rnd()<mF(s)/.95)o.push([th,s]);}return o;})();
+let mCache={tau:-1,R:0,H:0,D:0,sp:null};
+function morelAt(th,s,tau,kap){if(mCache.tau!==tau){const R=mQ('R',tau),H=mQ('H',tau),D=mQ('D',tau);mCache={tau,R,H,D,sp:mSeeds.map(([a,b])=>{const r=R*mF(b)*(1+mOm(a,b));return[r*Math.cos(a),r*Math.sin(a),b*H];})};}
+ const{R,H,D,sp}=mCache,Om=mOm(th,s),rb=R*mF(s)*(1+Om),x=rb*Math.cos(th),y=rb*Math.sin(th),z=s*H;let d1=1e9,d2=1e9;
+ for(const p of sp){const dx=x-p[0],dy=y-p[1],dz=z-p[2],d=dx*dx+dy*dy+dz*dz;if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}d1=Math.sqrt(d1);d2=Math.sqrt(d2);const q=(d2-d1)/(d2+MEPS);
+ return{Om,P:1-Math.exp(-kap*q*q),Dn:D/MQ.D.qf,Rn:R/MQ.R.qf,r:rb*(1-D*(1-Math.exp(-kap*q*q)))};}
  // where a note is and how big it is: direction from the particle's cross-plane position; size from the system's dimension
  // and from how fast nearby paths separate right where this note's particle is (a finite-time Lyapunov exponent)
  const spatial=k=>{if(S.spatialOff||k.hm)return;const v=k.v,o=v.dim*k.q,P=v.P,ax=v.def.sec[0],a1=(ax+1)%3,a2=(ax+2)%3,n0=(P[o+ax]-v.c[ax])/v.sc,n1=(P[o+a1]-v.c[a1])/v.sc,n2=(P[o+a2]-v.c[a2])/v.sc;
@@ -563,7 +594,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
    x=x*(1-E.rough*.65+E.rough*.65*(.5+.5*Math.sin(2*Math.PI*62*E.t)))*Math.min(1,E.t/.0012)+nz*E.ce*.22;x*=E.amp;
    for(let q=0;q<5;q++)bus[q]+=x*E.g[q]*.12;rkAL+=x*(E.g[0]+.7*E.g[1]+.75*E.g[4]+.35*E.g[3])*.7;rkAR+=x*(E.g[2]+.7*E.g[1]+.75*E.g[3]+.35*E.g[4])*.7;sum+=x;}
   return sum;};
- const hall=new Hall(rate);const GHP=1-Math.exp(-2*Math.PI*300/rate),gH1=[0,0],gH2=[0,0];let brEnv=0,brG=0,mixMs=0,lowMs=0,bdNeed=0,bdAvg=.1;const mL1=[0,0],mL2=[0,0];const GBR=.05,BLP=1-Math.exp(-2*Math.PI*110/rate),BDC=1-Math.exp(-2*Math.PI*28/rate),BDK=Math.exp(-1/(.65*rate)),BMS=1-Math.exp(-1/(1.5*rate));S.bodyAmt=1;const BT=+(globalThis.SE_BT||.13),BL8=1-Math.exp(-2*Math.PI*80/rate);S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
+ const hall=new Hall(rate);const GHP=1-Math.exp(-2*Math.PI*300/rate),gH1=[0,0],gH2=[0,0];const ERN=Math.ceil(rate*1.2),erB=new Float32Array(ERN);let erW=0,lastMR=null;let brEnv=0,brG=0,mixMs=0,lowMs=0,bdNeed=0,bdAvg=.1;const mL1=[0,0],mL2=[0,0];const GBR=.05,BLP=1-Math.exp(-2*Math.PI*110/rate),BDC=1-Math.exp(-2*Math.PI*28/rate),BDK=Math.exp(-1/(.65*rate)),BMS=1-Math.exp(-1/(1.5*rate));S.bodyAmt=1;S.morel=0;S.mFix=1;S.mTau=0;S.mKap=5;const BT=+(globalThis.SE_BT||.13),BL8=1-Math.exp(-2*Math.PI*80/rate);S.brGate=()=>brG;let tensS=.25,lastRT=0,lastSz=0,cineLp=[0,0],wob=0,hLp=[0,0,0],eLp=[0,0];S.hall=hall;
  const voiceOf=e=>route[e]>=0?V[route[e]/3|0]:null;
  const on=e=>force[e]!==null||(route[e]>=0&&(route[e]>=100?S.rank:V[route[e]/3|0].on));
  const proc=(ch,inp,idx,chIdx)=>{
@@ -601,7 +632,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
   const a=(x[0]-v.c[0])/v.sc-fs[0],b=(x[1]-v.c[1])/v.sc-fs[1],d=(x[2]-v.c[2])/v.sc-fs[2],r=Math.sqrt(a*a+b*b+d*d)*zs;
   return r<=.8?1:r>=1.1?0:1-(r-.8)/.3;};
  function ctrl(){
-  let cpN=0;for(const w of V)if(w.on)cpN++;
+  let cpN=0;for(const w of V)if(w.on)cpN++;if(S.morel===2){S.mTau+=32/rate/90;if(S.mTau>1)S.mTau=0;}
   if(S.cpl>0&&cpN>1&&S.bump!==false)collide();S.tk++;if(S.cpl!==cplLast){cplLast=S.cpl;const m=S.cpl>0?cplM():0;for(const w of V)if(w.dl)w.bb=m;}
   // each system's running average and spread over ~3 orbits, so its pull on partners is a two-way swing about
   // its own running median (lopsided, spiky systems such as the food chain otherwise give a constant one-way shove)
@@ -772,11 +803,12 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
     else{l=bus[0]+.7*bus[1]+.75*bus[4]+.35*bus[3];r=bus[2]+.7*bus[1]+.75*bus[3]+.35*bus[4];l*=.62;r*=.62;}
     // below 120 Hz stays pure mono for the sub
     const mo=(l+r)*.5,dif=(l-r)*.5*(on(IDX.ws)?1+6*u[IDX.ws]:1);bassLp+=(dif-bassLp)*(1-Math.exp(-2*Math.PI*120/rate));const hd=dif-bassLp;l=mo+hd;r=mo-hd;
-   }else if(S.swarm){if(S.hallRT!==lastRT||S.hallSize!==lastSz){hall.setRT(S.hallRT<2?.9:S.hallRT>8?14:S.hallRT,S.hallSize);lastRT=S.hallRT;lastSz=S.hallSize;}
+   }else if(S.swarm){if(S.mroom){if(S.mroom!==lastMR){lastMR=S.mroom;hall.setRT(S.mroom.rt,S.mroom.size);lastRT=-1;}}else if(S.hallRT!==lastRT||S.hallSize!==lastSz){hall.setRT(S.hallRT<2?.9:S.hallRT>8?14:S.hallRT,S.hallSize);lastRT=S.hallRT;lastSz=S.hallSize;lastMR=null;}
+    if(S.mroom){const T=S.mroom.taps;erB[erW]=(l+r)*.5;let eL=0,eR=0;for(let t=0;t<T.length;t+=3){let ix=erW-T[t];if(ix<0)ix+=ERN;const x=erB[ix];eL+=x*T[t+1];eR+=x*T[t+2];}erW=(erW+1)%ERN;l=l*.8+eL;r=r*.8+eR;}
     let rs=proc(2,swR[0],i,2),ls=proc(3,swR[1],i,3);
     if(sgB!==1){bLp[2]+=(rs-bLp[2])*.11;rs=bLp[2]+(rs-bLp[2])*sgB;bLp[3]+=(ls-bLp[3])*.11;ls=bLp[3]+(ls-bLp[3])*sgB;}
     if(sgTd>0){const m=1-sgTd*(.5+.5*Math.sin(sgPh));rs*=m;ls*=m;}
-    if(sgGr>0){const d=1+7*sgGr;rs=Math.tanh(rs*d);ls=Math.tanh(ls*d);}hall.tick((l+ls)*.5+swS*.6,(r+rs)*.5+swS*.6,wob);const hg=1.1*Math.sqrt(S.hallRT/1.8)*S.hallSize,hl=hall.outL*hg,hr=hall.outR*hg;
+    if(sgGr>0){const d=1+7*sgGr;rs=Math.tanh(rs*d);ls=Math.tanh(ls*d);}hall.tick((l+ls)*.5+swS*.6,(r+rs)*.5+swS*.6,wob);const hg=S.mroom?1.1*Math.sqrt(Math.min(9,S.mroom.rt)/1.8)*.85:1.1*Math.sqrt(S.hallRT/1.8)*S.hallSize,hl=hall.outL*hg,hr=hall.outR*hg;
     if(S.recv){encodeLtRt(enc,l*.8+hl*.3,0,r*.8+hr*.3,rs+hr*.8,ls+hl*.8);l=enc.Lt;r=enc.Rt;}else{l=l+.8*ls+.12*rs+hl*.6;r=r+.8*rs+.12*ls+hr*.6;}
     {const mo=(l+r)*.5,df=(l-r)*.5;bassLp+=(df-bassLp)*BK;l=mo+df-bassLp;r=mo-df+bassLp;}
    }else if(cin||S.swarm){if(S.swarm&&(S.hallRT!==lastRT||S.hallSize!==lastSz)){hall.setRT(S.hallRT<2?.9:S.hallRT>8?14:S.hallRT,S.hallSize);lastRT=S.hallRT;lastSz=S.hallSize;}if(S.swarm){const mo=(l+r)*.5,df=(l-r)*.5;bassLp+=(df-bassLp)*(1-Math.exp(-2*Math.PI*120/rate));l=mo+df-bassLp;r=mo-df+bassLp;}const dryL=l,dryR=r;hall.tick(dryL+impS*1.1,dryR+impS*1.1,wob);if(S.recv){encodeLtRt(enc,dryL*.72+impS*.8,0,dryR*.72+impS*.8,hall.outR*1.5,hall.outL*1.5);l=enc.Lt;r=enc.Rt;}else{l=dryL*.72+impS*.8+hall.outL*.85;r=dryR*.72+impS*.8+hall.outR*.85;}}
@@ -817,7 +849,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
    L[i]=Math.tanh(l);R[i]=Math.tanh(r);if(S.mono){const mo=(L[i]+R[i])*.5;L[i]=mo;R[i]=mo;}
    if(!(L[i]===L[i])||!(R[i]===R[i])){L[i]=0;R[i]=0;S.bad=(S.bad||0)+1;}
   }
-  const hits=S.hitLog,ev=S.evLog,rk=S.rkLog,kk=S.kickLog;S.hitLog=[];S.evLog=[];S.rkLog=[];S.kickLog=[];let parts=null;if(S.swarm){parts=V.map(v=>{if(!v.on||!v.np)return null;const o=new Float32Array(v.np*3),D=v.dim;for(let q=0;q<v.np;q++)for(let k=0;k<3;k++)o[3*q+k]=(v.P[D*q+k]-v.c[k])/v.sc;return o;});}return{L,R,trail,hits,ev,rk,parts,kicks:kk,surge:V.map(v=>v.on?(v.g||1):1),ctr:V.map(v=>v.on&&v.cm?v.cm.slice():[0,0,0])};
+  const hits=S.hitLog,ev=S.evLog,rk=S.rkLog,kk=S.kickLog;S.hitLog=[];S.evLog=[];S.rkLog=[];S.kickLog=[];let parts=null;if(S.swarm){parts=V.map(v=>{if(!v.on||!v.np)return null;const o=new Float32Array(v.np*3),D=v.dim;for(let q=0;q<v.np;q++)for(let k=0;k<3;k++)o[3*q+k]=(v.P[D*q+k]-v.c[k])/v.sc;return o;});}return{L,R,trail,hits,ev,rk,parts,kicks:kk,surge:V.map(v=>v.on?(v.g||1):1),ctr:V.map(v=>{if(!(v.on&&v.cmE&&S.cpl>0))return[0,0,0,1];const o=v.orb||[0,0,0],g=v.ge||1;return[v.cmE[0]-o[0]/g,v.cmE[1]-o[1]/g,v.cmE[2]-o[2]/g,g];})};
  };
  S.polGain=th=>{const sq=Math.sin(th)>=0?1:-1;let c=S.polDiv?Math.cos(Math.PI/6):Math.cos(th/6);if(Math.abs(c)<1/6)c=c<0?-1/6:1/6;return sq/c;};
  S.setParam=(vi,pi,x)=>{const d=V[vi].def;V[vi].a.pv[pi]=Math.max(d.lo[pi],Math.min(d.hi[pi],x));V[vi].base[pi]=V[vi].a.pv[pi];V[vi].sig[pi]=(V[vi].a.pv[pi]-d.p[pi])/Math.max(Math.abs(d.p[pi])*.21,(d.hi[pi]-d.lo[pi])*.084);};
@@ -828,7 +860,7 @@ const WORKER_SRC=DSP_SRC+`
 let D;onmessage=e=>{const d=e.data;
  if(d.t==='add'){const def=d.spec.nd?ND.attr(d.spec,d.name):formulaAttr(d.spec,d.name);ATTR.push(def);if(D)D.V.push(makeVoice(def,D.V.length));return;}
  if(d.t==='init')D=makeDSP(d.rate);
- else if(d.t==='set'){if(d.route)d.route.forEach((v,i)=>D.route[i]=v);for(const k of['pitch','move','amount','zoom','focus','fc','spread','held','cine','hallRT','hallSize','impact','mono','alive','recv','holo','war','elec','rank','rkM','rkK','rkAlpha','rkSigma','rkEll','spk','pol','polHz','polDiv','swarm','nP','gentle','strange','hm','cpl','allT','synT'])if(k in d)D[k]=d[k];
+ else if(d.t==='set'){if(d.route)d.route.forEach((v,i)=>D.route[i]=v);for(const k of['pitch','move','amount','zoom','focus','fc','spread','held','cine','hallRT','hallSize','impact','mono','alive','recv','holo','war','elec','rank','rkM','rkK','rkAlpha','rkSigma','rkEll','spk','pol','polHz','polDiv','swarm','nP','gentle','strange','hm','cpl','allT','synT','morel','mFix','mKap','mroom'])if(k in d)D[k]=d[k];
   if(d.on)d.on.forEach((v,i)=>{D.V[i].on=v;});if(d.params)d.params.forEach(([vi,pi,x])=>D.setParam(vi,pi,x));if('reset' in d)D.V.forEach(v=>{if(v.on)D.resetParams(v.idx);});}
  else if(d.t==='gen'){const t0=performance.now(),o=D.process(d.frames);postMessage({L:o.L,R:o.R,trail:o.trail,parts:o.parts,kicks:o.kicks,surge:o.surge,ctr:o.ctr,hits:o.hits,ev:o.ev,rk:o.rk,ms:performance.now()-t0},[o.L.buffer,o.R.buffer]);}
 };`;
@@ -838,10 +870,53 @@ const $=id=>document.getElementById(id);
 const FS=48000;let rate=FS;
 const route=EFFECTS.map(e=>SWARM_ROUTES[e.id]);
 const au={ctx:null,on:false,w:new Worker(URL.createObjectURL(new Blob([WORKER_SRC],{type:'text/javascript'}))),busy:false,nextT:0,lastGen:0,master:null,an:null,vol:.8,under:0,blocks:0,N:2048,slow:0};
-const sent={pitch:1,move:.35,amount:1,spread:3,held:.00015,cine:false,hallRT:1.8,hallSize:.7,impact:1,alive:false,recv:true,holo:true,war:false,elec:false,rank:false,swarm:true,nP:4,gentle:true,strange:false,hm:0,cpl:0,allT:false,synT:false,rkM:8,rkK:2,rkAlpha:1.5,rkSigma:.14,rkEll:.14,pol:0,polHz:2,polDiv:0,spk:0};
+const sent={pitch:1,move:.35,amount:1,spread:3,held:.00015,cine:false,hallRT:1.8,hallSize:.7,impact:1,alive:false,recv:true,holo:true,war:false,elec:false,rank:false,swarm:true,nP:4,gentle:true,strange:false,hm:0,morel:0,mFix:1,mKap:5,cpl:0,allT:false,synT:false,rkM:8,rkK:2,rkAlpha:1.5,rkSigma:.14,rkEll:.14,pol:0,polHz:2,polDiv:0,spk:0};
 const onSet=ATTR.map((_,i)=>i<2),params=ATTR.map(a=>a.p.slice());
 au.w.postMessage({t:'init',rate});
 const send=o=>au.w.postMessage(Object.assign({t:'set'},o));
+// ---- inside a giant morel: the MGS-1 cap scaled to metres, hollow, open at the base. Rays from the listener bounce off
+// its walls (ridges reflect like mirrors, pits scatter and absorb), giving the early echoes; the tail's decay comes
+// from the cavity's measured volume and wall area (Eyring: RT60 = 0.161 V / (-S ln(1 - mean absorption))).
+const MR=(()=>{const MQ={R:{q0:.12,qf:1.0,k:9,c:.35},H:{q0:.25,qf:2.4,k:7,c:.45},D:{q0:0,qf:.22,k:10,c:.62}},sg=u=>1/(1+Math.exp(-u)),G=(t,k,c)=>(sg(k*(t-c))-sg(-k*c))/(sg(k*(1-c))-sg(-k*c)),Qv=(n,t)=>MQ[n].q0+(MQ[n].qf-MQ[n].q0)*G(t,MQ[n].k,MQ[n].c);
+ const F=s=>Math.pow(Math.max(0,Math.sin(Math.PI*(.18+.82*s))),.7)*(1-.1*s),Om=(th,s)=>.025*Math.sin(3*th+2*Math.PI*s)+.015*Math.sin(7*th-5*Math.PI*s);
+ function mb(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+ const seeds=(()=>{const r=mb(1601+110),o=[];let t=0;while(o.length<110&&t<200000){t++;const s=r(),th=r()*2*Math.PI;if(r()<F(s)/.95)o.push([th,s]);}return o;})();
+ const GT=180,GS=120,c=343;
+ function build(Wm,Hm,tau,kap){const R=Qv('R',tau),H=Qv('H',tau),D=Qv('D',tau),sp=seeds.map(([a,b])=>{const r=R*F(b)*(1+Om(a,b));return[r*Math.cos(a),r*Math.sin(a),b*H];});
+  const Pg=new Float32Array(GT*GS),Rg=new Float32Array(GT*GS);
+  for(let j=0;j<GS;j++){const s=j/(GS-1);for(let i=0;i<GT;i++){const th=i/GT*2*Math.PI,rb=R*F(s)*(1+Om(th,s)),x=rb*Math.cos(th),y=rb*Math.sin(th),z=s*H;let d1=1e9,d2=1e9;
+    for(const p of sp){const dx=x-p[0],dy=y-p[1],dz=z-p[2],d=dx*dx+dy*dy+dz*dz;if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}d1=Math.sqrt(d1);d2=Math.sqrt(d2);const q=(d2-d1)/(d2+.02),P=1-Math.exp(-kap*q*q);
+    Pg[j*GT+i]=P;Rg[j*GT+i]=(Wm/2)*F(s)*(1+Om(th,s))*(1-D*P);}}
+  const at=(th,s)=>{const u=((th/(2*Math.PI))%1+1)%1*GT,v=Math.min(GS-1.001,Math.max(0,s*(GS-1))),i0=Math.floor(u),j0=Math.floor(v),fi=u-i0,fj=v-j0,i1=(i0+1)%GT;
+   const A=k=>k[j0*GT+i0]*(1-fi)*(1-fj)+k[j0*GT+i1]*fi*(1-fj)+k[(j0+1)*GT+i0]*(1-fi)*fj+k[(j0+1)*GT+i1]*fi*fj;return[A(Rg),A(Pg)];};
+  const f=(x,y,z)=>{const s=z/Hm;if(s>1)return 1;const[r]=at(Math.atan2(y,x),Math.max(0,s));return Math.hypot(x,y)-r;};
+  // volume and wall area from the surface itself
+  let V=0,S=0,aS=0;for(let j=0;j<GS-1;j++){const dz=Hm/(GS-1);for(let i=0;i<GT;i++){const r=Rg[j*GT+i],r2=Rg[(j+1)*GT+i],rn=Rg[j*GT+(i+1)%GT],dth=2*Math.PI/GT;V+=.5*r*r*dth*dz;
+    const ds=Math.hypot(r2-r,dz),dl=Math.hypot(rn-r,r*dth),A=ds*dl;S+=A;aS+=A*(.08+.35*Pg[j*GT+i]);}}
+  const base=Math.PI*Math.pow(Rg[0],2);S+=base;aS+=base*1;const am=aS/S,rt=Math.min(14,Math.max(.3,.161*V/(-S*Math.log(1-am)))),mfp=4*V/S;
+  // rays from the listener (on the axis, a third of the way up), receiver sphere at the same point
+  const rnd=mb(77),L=[0,0,Hm*.33],rr=Math.max(.35,Wm*.06),NB=Math.min(1100,Math.max(300,Math.ceil(3*Math.max(Wm,Hm)/c*1000))),eL=new Float64Array(NB),eR=new Float64Array(NB),NR=700;let first=1e9;
+  for(let n=0;n<NR;n++){let u=2*rnd()-1,ph=2*Math.PI*rnd(),sq=Math.sqrt(1-u*u);let d=[sq*Math.cos(ph),sq*Math.sin(ph),u],p=L.slice(),len=0,E=1/NR;
+   for(let b=0;b<40&&len<NB*.001*c&&E>1e-6;b++){const st=Math.max(Wm,Hm)*.004;let t=st,hit=false;
+    while(t<4*Math.max(Wm,Hm)){const q=[p[0]+d[0]*t,p[1]+d[1]*t,p[2]+d[2]*t];if(q[2]<0){E=0;break;}if(f(q[0],q[1],q[2])>0){let lo=t-st,hi=t;for(let k=0;k<12;k++){const m=(lo+hi)/2,w=[p[0]+d[0]*m,p[1]+d[1]*m,p[2]+d[2]*m];if(f(w[0],w[1],w[2])>0)hi=m;else lo=m;}t=lo;hit=true;break;}t+=st;}
+    if(!hit||E===0)break;
+    // does this segment pass the listener? (skip the very first leg: that is the direct sound)
+    if(b>0){const v=[L[0]-p[0],L[1]-p[1],L[2]-p[2]],pr=v[0]*d[0]+v[1]*d[1]+v[2]*d[2];if(pr>0&&pr<t){const cx=v[0]-pr*d[0],cy=v[1]-pr*d[1],cz=v[2]-pr*d[2];if(cx*cx+cy*cy+cz*cz<rr*rr){const tm=(len+pr)/c,bi=Math.floor(tm*1000);if(bi<NB){const pan=-d[0];eL[bi]+=E*(1-pan)*.5;eR[bi]+=E*(1+pan)*.5;first=Math.min(first,tm);}}}}
+    const q=[p[0]+d[0]*t,p[1]+d[1]*t,p[2]+d[2]*t];len+=t;
+    const e=1e-3*Math.max(Wm,Hm),g=[(f(q[0]+e,q[1],q[2])-f(q[0]-e,q[1],q[2])),(f(q[0],q[1]+e,q[2])-f(q[0],q[1]-e,q[2])),(f(q[0],q[1],q[2]+e)-f(q[0],q[1],q[2]-e))],gn=Math.hypot(...g)||1,nv=g.map(x=>-x/gn);
+    const[,P]=at(Math.atan2(q[1],q[0]),Math.min(1,Math.max(0,q[2]/Hm)));E*=1-(.08+.35*P);
+    if(rnd()<P){let w;do{w=[2*rnd()-1,2*rnd()-1,2*rnd()-1];}while(Math.hypot(...w)>1||Math.hypot(...w)<.1);const wl=Math.hypot(...w);w=w.map(x=>x/wl);if(w[0]*nv[0]+w[1]*nv[1]+w[2]*nv[2]<0)w=w.map(x=>-x);d=w;}
+    else{const k=d[0]*nv[0]+d[1]*nv[1]+d[2]*nv[2];d=[d[0]-2*k*nv[0],d[1]-2*k*nv[1],d[2]-2*k*nv[2]];}
+    p=[q[0]+nv[0]*e*2,q[1]+nv[1]*e*2,q[2]+nv[2]*e*2];}}
+  // the strongest arrivals become echo taps (at least 2 ms apart), scaled so the echoes carry about as much energy as the dry sound
+  const bins=[];for(let i=1;i<NB;i++)if(eL[i]+eR[i]>0)bins.push(i);bins.sort((a,b)=>(eL[b]+eR[b])-(eL[a]+eR[a]));const pick=[];for(const i of bins){if(pick.every(j=>Math.abs(j-i)>=2))pick.push(i);if(pick.length>=28)break;}pick.sort((a,b)=>a-b);
+  let tot=0;for(const i of pick)tot+=eL[i]+eR[i];const nrm=tot>0?Math.sqrt(.9/tot):0,taps=[];for(const i of pick)taps.push(Math.round(i*.001*FS),Math.sqrt(eL[i])*nrm,Math.sqrt(eR[i])*nrm);
+  return{taps,rt,size:Math.min(1.55,Math.max(.15,(mfp/c*1000)/130)),V,S,am,first:first<1e9?first:null,n:pick.length};}
+ return{build};})();
+let roomW=20,roomH=40;
+function morelRoom(){const tau=sent.morel===1?sent.mFix:1,t0=performance.now(),m=MR.build(roomW,roomH,tau,sent.mKap);send({mroom:{taps:m.taps,rt:m.rt,size:m.size}});
+ $('mroomRead').textContent=`${Math.round(m.V).toLocaleString()} m³ · RT60 ${m.rt.toFixed(1)} s · first echo ${m.first?Math.round(m.first*1000)+' ms':'—'} · ${m.n} echoes traced`;}
+
 send(Object.assign({route},sent));
 function ensureCtx(){if(au.ctx)return;const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;au.ctx=new AC({sampleRate:FS});
  if(au.ctx.sampleRate!==FS){rate=au.ctx.sampleRate;au.w.postMessage({t:'init',rate});send(Object.assign({route,on:onSet,zoom,focus,fc},sent));params.forEach((p,vi)=>p.forEach((x,pi)=>send({params:[[vi,pi,x]]})));}
@@ -898,9 +973,13 @@ const pickMove=v=>{sent.move=v;send({move:v});[...$('moves').children].forEach(c
 chips('styles',[['k','Rank'],['e','Electric'],['w','War'],['a','Alive'],['c','Cinematic'],['r','Raw']],'k',k=>{const c=k!=='r',wr=k==='w',el=k==='e',rk=k==='k',al=k==='a'||wr||el||rk;sent.cine=c;sent.alive=al;sent.war=wr;sent.elec=el;sent.rank=rk;sent.style=k;send({cine:c,alive:al,war:wr,elec:el,rank:rk});if((el||rk)&&sent.hallRT>1.8)$('halls-1.8').click();else if(!el&&!rk&&sent.hallRT<=1.8)$('halls-4.5').click();useRoutes(rk?RANK_ROUTES:al?ALIVE_ROUTES:c?CINE_ROUTES:DEFAULT_ROUTES);pickMove(k==='c'?.12:.35);showFor();});
 chips('tones',[['g','Gentle'],['f','Gilmour'],['s','Strange'],['a','Everything'],['m','Space synth']],'g',k=>{sent.gentle=k==='g';sent.strange=k==='s';sent.allT=k==='a';sent.synT=k==='m';send({gentle:sent.gentle,strange:sent.strange,allT:sent.allT,synT:sent.synT});});
 chips('cpls',[[0,'Apart'],[.3,'Nudge'],[.65,'Pull'],[1,'Tangle']],0,k=>{sent.cpl=+k;send({cpl:+k});});
+chips('morels',[['off','Off'],['bud','Bud'],['young','Young'],['mature','Mature'],['grow','Growing']],'off',k=>{const fx={bud:.25,young:.55,mature:1}[k];sent.morel=k==='off'?0:k==='grow'?2:1;if(fx)sent.mFix=fx;send({morel:sent.morel,mFix:sent.mFix});if(sent.mroomOn)morelRoom();});
+chips('mws',[[6,'Width 6 m'],[20,'Width 20 m'],[60,'Width 60 m'],[150,'Width 150 m']],20,k=>{roomW=+k;if(sent.mroomOn)morelRoom();});
+chips('mhs',[[12,'Height 12 m'],[40,'Height 40 m'],[120,'Height 120 m'],[300,'Height 300 m']],40,k=>{roomH=+k;if(sent.mroomOn)morelRoom();});
+chips('mkaps',[[2,'Soft pits'],[5,'Medium pits'],[12,'Sharp pits']],5,k=>{sent.mKap=+k;send({mKap:+k});if(sent.mroomOn)morelRoom();});
 chips('hms',[[0,'Off'],[1,'Pair'],[2,'Swarm']],0,k=>{sent.hm=+k;send({hm:+k});});
 chips('nps',[[1,'1'],[4,'4'],[8,'8'],[32,'32'],[128,'128']],4,k=>{sent.nP=+k;send({nP:+k});});
-chips('halls',[['1.8','Room'],['4.5','Hall'],['9','Cathedral']],'1.8',k=>{const rt=+k,sz=rt>8?1.5:rt>3?1:.7;sent.hallRT=rt;sent.hallSize=sz;send({hallRT:rt,hallSize:sz});});
+chips('halls',[['1.8','Room'],['4.5','Hall'],['9','Cathedral'],['m','Inside a morel']],'1.8',k=>{$('mroomCtl').hidden=k!=='m';if(k==='m'){sent.mroomOn=1;morelRoom();return;}if(sent.mroomOn){sent.mroomOn=0;send({mroom:null});}const rt=+k,sz=rt>8?1.5:rt>3?1:.7;sent.hallRT=rt;sent.hallSize=sz;send({hallRT:rt,hallSize:sz});});
 chips('outs',[['v','Receiver'],['s','Stereo'],['m','Mono']],'v',k=>{sent.recv=k==='v';send({mono:k==='m',recv:k==='v'});});
 chips('rkms',[[4,'4'],[8,'8'],[16,'16'],[32,'32']],8,k=>{sent.rkM=+k;if(sent.rkK>sent.rkM){sent.rkK=sent.rkM;}send({rkM:sent.rkM,rkK:sent.rkK});});
 chips('rkks',[[1,'1'],[2,'2'],[4,'4'],[8,'8']],2,k=>{sent.rkK=Math.min(+k,sent.rkM);send({rkK:sent.rkK});});
@@ -965,7 +1044,7 @@ function cells(w,h){const act=ATTR.map((_,i)=>i).filter(i=>onSet[i]),out=[];cons
  const n=act.length,land=w>=h;let cols=land?Math.ceil(Math.sqrt(n)):Math.round(Math.sqrt(n)),rows=Math.ceil(n/cols);if(land&&n===2){cols=2;rows=1;}if(!land&&n===2){cols=1;rows=2;}
  const aw=w>=h?w/h:1,ah=h>w?h/w:1;act.forEach((i,k)=>{const cx=((k%cols)+.5)/cols*2-1,cy=1-((k/cols|0)+.5)/rows*2;out.push({i,x:cx*aw,y:cy*ah,s:Math.min(aw/cols,ah/rows)});});return out;}
 function drawA(c,w,h){
- const i=c.i,n=tN[i],B=T[i],z=i===focus?zoomV:1,f=(()=>{const b=i===focus?fcV:[0,0,0],k=(!(zoomV>1.01)&&sent.cpl>0&&CTR[i])?sent.cpl:0;return k?[b[0]+CTR[i][0]*k,b[1]+CTR[i][1]*k,b[2]+CTR[i][2]*k]:b;})(),sc=c.s*.8*z,hue=HUE[i]??(i*137.5+40)%360;let px=0,py=0,pz=0;
+ const i=c.i,n=tN[i],B=T[i],z=i===focus?zoomV:1,f=(()=>{const b=i===focus?fcV:[0,0,0],k=(!(zoomV>1.01)&&sent.cpl>0&&CTR[i])?1:0;return k?[b[0]+CTR[i][0],b[1]+CTR[i][1],b[2]+CTR[i][2]]:b;})(),sc=c.s*.8*z*((!(zoomV>1.01)&&sent.cpl>0&&CTR[i]&&CTR[i][3])?CTR[i][3]:1),hue=HUE[i]??(i*137.5+40)%360;let px=0,py=0,pz=0;
  for(let q=0;q<n;q++){const j=(tW[i]-n+q+TN)%TN,x=B[j*3],y=B[j*3+1],zz=B[j*3+2];P[q*3]=x-f[0];P[q*3+1]=y-f[1];P[q*3+2]=zz-f[2];
   const sp=q?Math.min(1,Math.hypot(x-px,y-py,zz-pz)*20):0;px=x;py=y;pz=zz;const age=q/n,cc=hsl(hue+sp*55,.88,.46+.28*sp);C[q*4]=cc[0];C[q*4+1]=cc[1];C[q*4+2]=cc[2];C[q*4+3]=Math.min(1,(.14+.84*age*age)*(1+flash[i]*1.6));}
  gl.bindBuffer(gl.ARRAY_BUFFER,bp);gl.bufferData(gl.ARRAY_BUFFER,P.subarray(0,n*3),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(lp);gl.vertexAttribPointer(lp,3,gl.FLOAT,false,0,0);
@@ -992,7 +1071,7 @@ function draw(){
 }
 /* tap chooses the point; pinch or the buttons choose how close to listen */
 function pick(cx,cy){const r=cv.getBoundingClientRect(),w=r.width,h=r.height,mx=(cx-r.left)/w*2-1,my=1-(cy-r.top)/h*2,ax=Math.min(1,h/w),ay=Math.min(1,w/h),R=rot();let best=null,bd=.02;
- for(const c of cells(w,h)){const i=c.i,n=tN[i],B=T[i],z=i===focus?zoomV:1,f=(()=>{const b=i===focus?fcV:[0,0,0],k=(!(zoomV>1.01)&&sent.cpl>0&&CTR[i])?sent.cpl:0;return k?[b[0]+CTR[i][0]*k,b[1]+CTR[i][1]*k,b[2]+CTR[i][2]*k]:b;})(),sc=c.s*.8*z,cz=1/Math.max(1,z*.6);
+ for(const c of cells(w,h)){const i=c.i,n=tN[i],B=T[i],z=i===focus?zoomV:1,f=(()=>{const b=i===focus?fcV:[0,0,0],k=(!(zoomV>1.01)&&sent.cpl>0&&CTR[i])?1:0;return k?[b[0]+CTR[i][0],b[1]+CTR[i][1],b[2]+CTR[i][2]]:b;})(),sc=c.s*.8*z*((!(zoomV>1.01)&&sent.cpl>0&&CTR[i]&&CTR[i][3])?CTR[i][3]:1),cz=1/Math.max(1,z*.6);
   for(let q=0;q<n;q+=2){const j=(tW[i]-n+q+TN)%TN,x=B[j*3]-f[0],y=B[j*3+1]-f[1],zz=B[j*3+2]-f[2],a=R[0]*x+R[3]*y+R[6]*zz,b=R[1]*x+R[4]*y+R[7]*zz,d=R[2]*x+R[5]*y+R[8]*zz,wq=1/(1+.28*d*cz),sx=(a*sc*wq+c.x)*ax,sy=(b*sc*wq+c.y)*ay,e=(sx-mx)**2+(sy-my)**2;if(e<bd){bd=e;best=[i,B[j*3],B[j*3+1],B[j*3+2]];}}}
  if(best){focus=best[0];fc=best.slice(1);send({focus,fc});}
 }

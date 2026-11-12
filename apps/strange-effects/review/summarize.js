@@ -21,7 +21,7 @@ const iv=pu.map(x=>{const A=x.A,T=x.tangleX;if(!A||!T)return null;const dp=Math.
 const ivw=iv.slice().sort((a,b)=>(a.ok-b.ok)||(Math.max(a.dp/50,a.dn/.25,a.fl/.2)+a.fl)-(Math.max(b.dp/50,b.dn/.25,b.fl/.2)+b.fl))[0];
 add('Interaction you can hear and see','at Tangle, every pair shares one space with its partner and changes audibly against Apart (pitch moves ≥ 50¢, note rate ≥ 25%, or ≥ 0.2 collisions a second, each a struck note) and visibly (≥ 0.1 collisions a second, each a spark)',ivw?`${iv.filter(y=>y.ok).length}/${iv.length} pairs · weakest: pitch ${ivw.dp.toFixed(0)}¢, notes ${(100*ivw.dn).toFixed(0)}%, ${ivw.fl.toFixed(2)} collisions/s`:'no data',iv.length>0&&iv.every(y=>y.ok),ivw?ivw.x.names.join(' + '):'');
 /* 'Replies echo the call' retired: rhythm surges are off by default since the attractors now meet physically */
-add('Deterministic','same settings twice → bit-identical sound',de&&de.same?'identical':'differs',!!(de&&de.same),'');
+add('Deterministic','same settings twice → bit-identical sound',!de?'not run':de.same?'identical':'differs',!!(de&&de.same),'');
 const ok=C.every(c=>c.pass);const when=new Date().toISOString().slice(0,16).replace('T',' ')+' UTC';
 const md=`# Strange Effects listening review\n\n${when} · commit ${process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):'local'} · **${ok?'ALL PASS':'FAIL'}**\n\n| Check | Pass condition | Result | | Worst case |\n|---|---|---|---|---|\n`+C.map(c=>`| ${c.name} | ${c.cond} | ${c.value} | ${c.pass?'✅':'❌'} | ${c.worst} |`).join('\n')+'\n';
 fs.writeFileSync('report.md',md);

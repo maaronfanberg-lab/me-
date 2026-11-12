@@ -51,7 +51,10 @@ function listen(on,cfg,sec){const D=make(on,cfg);D.process(2*R);const col0=D.col
 const jobs=[];
 for(const t in TONES){for(let a=0;a<N.ATTR.length;a++)jobs.push({kind:'listen',tone:t,on:[a],cpl:0});
  for(const c of[0,1])for(const p of[[3,1],[4,8],[2,4],[0,7]])jobs.push({kind:'listen',tone:t,on:p,cpl:c});jobs.push({kind:'listen',tone:t,on:N.ATTR.map((_,i)=>i),cpl:1});}
-const SET={'Slow':{move:.06},'Fast':{move:1.6},'1 particle':{nP:1},'32 particles':{nP:32},'128 particles':{nP:128},'Hall':{hallRT:4.5,hallSize:1},'Cathedral':{hallRT:9,hallSize:1.5},'Stereo':{recv:false},'Mono':{recv:false,mono:true},
+// the page's morel room tracer, taken from the app itself so the review hears exactly what the page sends
+const MR=(()=>{const src=require('fs').readFileSync(__dirname+'/../index.html','utf8');const a=src.indexOf('const MR=(()=>{'),b=src.indexOf('let roomW=',a);return new Function('FS',src.slice(a,b)+';return MR;')(48000);})();
+const room=(w,h)=>{const m=MR.build(w,h,1,5);return{taps:m.taps,rt:m.rt,size:m.size};};
+const SET={'Morel notes (mature)':{morel:1,mFix:1},'Morel notes (growing)':{morel:2},'Inside a morel 20x40 m':{mroom:room(20,40)},'Inside a morel 150x300 m':{mroom:room(150,300)},'Slow':{move:.06},'Fast':{move:1.6},'1 particle':{nP:1},'32 particles':{nP:32},'128 particles':{nP:128},'Hall':{hallRT:4.5,hallSize:1},'Cathedral':{hallRT:9,hallSize:1.5},'Stereo':{recv:false},'Mono':{recv:false,mono:true},
  /* styles (Rank, Electric, War, Alive, Cinematic, Raw) are hidden in the app and never switched on, so they are not tested */'Pair harmonic':{hm:1},'Swarm harmonic':{hm:2}};
 for(const s in SET)for(const on of[[0],[4,8],N.ATTR.map((_,i)=>i)])jobs.push({kind:'listen',tone:'Gentle',setting:s,on,cpl:on.length>2?1:0});
 for(let a=0;a<N.ATTR.length;a++)for(let b=a+1;b<N.ATTR.length;b++)jobs.push({kind:'pull',on:[a,b]});
