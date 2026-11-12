@@ -59,6 +59,6 @@ jobs.push({kind:'determinism'});
 const[sh,shs]=process.argv.slice(2).map(Number);
 jobs.forEach((j,i)=>{if(i%shs!==sh)return;let r;
  if(j.kind==='listen')r=listen(j.on,{...TONES[j.tone],cpl:j.cpl,...(j.setting?SET[j.setting]:{})},45*K);
- else if(j.kind==='pull'){const pick=x=>({n:x.notesPerSec,p:x.pitchCents,c:x.centre,f:x.flashesPerSec,a:x.replies,e:x.echoGap});const base=listen(j.on,{gentle:true,cpl:0},20*K);r={apart:base.notesPerSec,A:pick(base)};for(const[c,k]of[[.3,'nudge'],[.65,'pull'],[1,'tangle']]){const x=listen(j.on,{gentle:true,cpl:c},20*K);r[k]=x.notesPerSec;r[k+'X']=pick(x);}}
+ else if(j.kind==='pull'){const pick=x=>({n:x.notesPerSec,p:x.pitchCents,c:x.centre,f:x.flashesPerSec,a:x.replies,e:x.echoGap});const base=listen(j.on,{gentle:true,cpl:0},30*K);r={apart:base.notesPerSec,A:pick(base)};for(const[c,k]of[[.3,'nudge'],[.65,'pull'],[1,'tangle']]){const x=listen(j.on,{gentle:true,cpl:c},30*K);r[k]=x.notesPerSec;r[k+'X']=pick(x);}}
  else{const h=()=>{const D=make([0,3,6],{gentle:false,cpl:.65});let x=0;for(let k=0;k<300;k++){const o=D.process(480);for(let i=0;i<480;i++)x=(x*31+Math.round(o.L[i]*1e9)+Math.round(o.R[i]*1e9))%2147483647;}return x;};r={same:h()===h()};}
  console.log(JSON.stringify({...j,names:j.on?j.on.map(nm):undefined,...r}));});
