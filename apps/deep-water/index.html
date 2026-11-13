@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Deep Water</title>
+<style>
+:root{--bg:#020a14;--ink:#d9ecf5;--dim:#7fa3b8;--chip:#0d2234;--on:#7cc6e6}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,system-ui,"Segoe UI",sans-serif}
+header{padding:14px 16px 2px;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px}h1{font-size:20px;margin:0;white-space:nowrap}header span{color:var(--dim);font-size:13px}
+#cv{display:block;width:100%;height:52vh;max-height:560px;touch-action:pan-y}
+#live{padding:4px 16px 0;color:var(--dim);font-size:12.5px}#last{padding:2px 16px 8px;font-size:13.5px;min-height:2.8em}
+.row{display:flex;gap:10px;padding:0 16px 10px}
+button.big{flex:1;padding:14px;border:0;border-radius:14px;font-size:17px;font-weight:600;background:var(--on);color:#04121c}
+.ctl{padding:4px 16px 8px}.ctl b{display:block;font-size:12px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chips button{border:0;border-radius:999px;padding:8px 13px;background:var(--chip);color:var(--ink);font-size:14px}
+.chips button.on{background:var(--on);color:#04121c;font-weight:600}
+details{margin:8px 16px 28px;background:#071827;border-radius:14px;padding:4px 14px}summary{padding:10px 0;font-weight:600;cursor:pointer}details li{margin:6px 0;color:#c4dbe6}
+#ver{display:block;color:var(--dim);font-size:12px;margin:8px 0 12px}
+</style></head><body>
+<header><h1>Deep Water</h1><span>bubbles in the deep ocean, released by live data</span></header>
+<canvas id="cv"></canvas>
+<div id="live">Not listening yet</div>
+<div id="last">Tap Start. Every bubble comes from something happening in the world right now.</div>
+<div class="row"><button class="big" id="go">Start</button></div>
+<div class="ctl"><b>Released by</b><div class="chips" data-k="src"></div></div>
+<div class="ctl"><b>How many bubbles</b><div class="chips" data-k="dens"></div></div>
+<div class="ctl"><b>Deep hum</b><div class="chips" data-k="hum"></div></div>
+<div class="ctl"><b>Volume</b><div class="chips" data-k="vol"></div></div>
+<details><summary>What you're hearing</summary><ul>
+<li>Every sound is an air bubble deep under the sea, heard from underwater. Its pitch is the Minnaert resonance: f = (1/2πa)·√(3γP/ρ). Bigger bubbles are lower; deeper water (more pressure) raises the pitch.</li>
+<li>As a bubble rises it swells, so its note slowly sinks, and its wake keeps it murmuring. Big ones rise at 0.711·√(g·2a) (Davies &amp; Taylor).</li>
+<li><b>Wikipedia edits</b> from all languages, live: the size of the change sets the bubble size (a 10-byte fix is a 2 cm bubble, a big new section is 20 cm). New pages release a chain of bubbles, bots a small cluster. Each language wiki has its own place and depth in the water.</li>
+<li><b>Earthquakes</b> worldwide (US Geological Survey, checked every minute): each new quake releases a giant bubble far below, its size from the magnitude, its depth from the quake's depth, left or right from where on Earth it was.</li>
+<li>The deep hum swells a little when the world is busier.</li>
+<li>If the data can't be reached, Alex's Morel attractor releases the bubbles instead.</li>
+<li>No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 13 Nov · first dive</span></details>
+<script src="engine.js"></script>
+<script>
+const S={src:0,dens:0,hum:0,vol:1};
+const OPT={src:['Wikipedia + earthquakes','Wikipedia edits','Earthquakes','Morel attractor'],dens:['Calm','Medium','Lots'],hum:['On','Off'],vol:['Whisper','Soft','Medium','Loud']};
+const DENS=[.25,.6,1.5],VOL=[.25,.5,.8,1.15];
+const $=id=>document.getElementById(id);
+document.querySelectorAll('.chips').forEach(el=>{const k=el.dataset.k;OPT[k].forEach((n,i)=>{const b=document.createElement('button');b.textContent=n;b.onclick=()=>{S[k]=i;paint();apply(k);};el.appendChild(b);});});
+function paint(){document.querySelectorAll('.chips').forEach(el=>{const k=el.dataset.k;[...el.children].forEach((b,i)=>b.classList.toggle('on',S[k]===i));});}
+function apply(k){if(k==='vol'&&au.g)au.g.gain.setTargetAtTime(VOL[S.vol],au.ctx.currentTime,.1);if(k==='hum')post({hum:S.hum===0?1:0});if(k==='src')connect();}
+// ---------- audio
+const au={ctx:null,node:null,g:null,on:false};const post=m=>{if(au.node)au.node.port.postMessage(m);};
+async function start(){if(!au.ctx){au.ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'});
+  const src=DEEP.toString()+`
+const D=DEEP();class P extends AudioWorkletProcessor{constructor(){super();this.e=new D.Eng(sampleRate);this.port.onmessage=m=>{const d=m.data;if(d.ev)this.e.event(d.ev);if(d.hum!==undefined)this.e.hum=d.hum;if(d.rate!==undefined)this.e.rateLvl=d.rate;};}
+ process(i,o){const L=o[0][0],R=o[0][1]||o[0][0];this.e.process(L,R,L.length);return true;}}registerProcessor('deep-water',P);`;
+  await au.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+  au.node=new AudioWorkletNode(au.ctx,'deep-water',{numberOfInputs:0,outputChannelCount:[2]});au.g=au.ctx.createGain();au.g.gain.value=VOL[S.vol];au.node.connect(au.g).connect(au.ctx.destination);post({hum:S.hum===0?1:0});}
+ await au.ctx.resume();au.on=true;$('go').textContent='Stop';connect();}
+$('go').onclick=async()=>{if(au.on){await au.ctx.suspend();au.on=false;$('go').textContent='Start';disconnect();}else start();};
+// ---------- live data -> bubbles
+const D=DEEP();const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0)/4294967296;};
+let es=null,quakeT=null,seenQ=new Set(),tokens=1,lastTok=performance.now(),rawCount=0,rawRate=0,lastData=0,lastQuake='',morel=[.2137,1,.5],morelT=null;
+function release(ev,txt){post({ev});addVis(ev);const f=D.minnaert(ev.a,ev.h);$('last').textContent=txt+' → '+(ev.a*100).toFixed(ev.a<.1?1:0)+' cm bubble, '+Math.round(ev.h)+' m down, '+f.toFixed(0)+' Hz'+(ev.kind==='train'?' (a chain)':ev.kind==='cluster'?' (a cluster)':ev.kind==='giant'?' (giant)':'');}
+function onWiki(m){let d;try{d=JSON.parse(m.data);}catch(e){return;}rawCount++;lastData=performance.now();if(d.type!=='edit'&&d.type!=='new')return;
+ const now=performance.now();tokens=Math.min(2,tokens+(now-lastTok)/1000*DENS[S.dens]);lastTok=now;if(tokens<1)return;tokens-=1;
+ const len=d.length||{},dl=Math.abs((len.new||0)-(len.old||0)),a=Math.min(.22,Math.max(.012,.012*Math.pow(1+dl,.32))),wk=d.wiki||'wiki',hw=hash(wk),ht=hash(d.title||'');
+ const ev={kind:d.type==='new'?'train':d.bot?'cluster':'single',n:d.type==='new'?5+Math.floor(ht*5):4+Math.floor(ht*4),a:d.bot?a*.6:a,h:8+70*hw,pan:(hw*2-1)*.8+(ht-.5)*.3,dist:3+42*hash(wk+'d')};
+ release(ev,(dl?(len.new>=len.old?'+':'−')+dl+' bytes':'an edit')+' on '+(d.server_name||wk)+(d.title?' · “'+d.title.slice(0,40)+'”':'')+(d.bot?' (bot)':'')+(d.type==='new'?' · new page':''));}
+async function pollQuakes(first){try{const r=await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson',{cache:'no-store'});const j=await r.json();
+  const F=(j.features||[]).slice().sort((a,b)=>a.properties.time-b.properties.time);let fresh=F.filter(f=>!seenQ.has(f.id));F.forEach(f=>seenQ.add(f.id));if(first)fresh=fresh.slice(-1);
+  fresh.forEach((f,i)=>{const p=f.properties,c=(f.geometry||{}).coordinates||[0,0,10],mag=Math.max(0,p.mag||0);lastQuake='M'+mag.toFixed(1)+' '+(p.place||'');
+   setTimeout(()=>{if(!au.on)return;release({kind:'giant',a:Math.min(.5,.12+.08*mag),h:Math.min(250,Math.max(60,60+2*(c[2]||0))),pan:Math.max(-1,Math.min(1,(c[0]||0)/180)),dist:20+40*hash(f.id)},'Earthquake '+lastQuake);},i*4000+500);});
+  liveLine();}catch(e){lastQuake='(earthquake feed not reachable)';liveLine();}}
+function morelTick(){if(!au.on)return;const needed=S.src===3||(S.src<2&&performance.now()-lastData>15000)||(S.src===2&&!seenQ.size);
+ if(needed){morel=mM(morel);const [s,th,r]=morel;release({kind:s>.9?'train':s<.1?'cluster':'single',n:5,a:.015+.07*r/3,h:6+60*s,pan:Math.cos(th)*.8,dist:5+30*(r/3)},'Morel attractor s='+s.toFixed(3));}
+ morelT=setTimeout(morelTick,(S.src===3?1:3)*1000/(DENS[S.dens]/.6));}
+// Alex's Morel attractor map (MGS-1): s → 4s(1−s), θ → 2θ+0.3+Ω, r → 0.15r + 0.85·3·F(s)(1+Ω)(1−0.6P)  (pits P simplified to 0 here)
+function mM([s,th,r]){const F=x=>Math.pow(Math.max(0,Math.sin(Math.PI*(.18+.82*x))),.7)*(1-.1*x),Om=(t,x)=>.025*Math.sin(3*t+2*Math.PI*x)+.015*Math.sin(7*t-5*Math.PI*x);let s1=4*s*(1-s);if(!(s1>1e-12&&s1<1-1e-12))s1=.2137+((th*7.31)%.01);const th1=(((2*th+.3+Om(th,s))%(2*Math.PI))+2*Math.PI)%(2*Math.PI);return[s1,th1,.15*r+.85*3*F(s1)*(1+Om(th1,s1))];}
+function liveLine(){const w=S.src<=1?(es&&es.readyState===1?'Wikipedia live · '+Math.round(rawRate)+' changes/s worldwide':'Wikipedia: connecting…'):'';const q=S.src===0||S.src===2?'Earthquakes: '+(lastQuake||'none in the last hour yet'):'';
+ $('live').textContent=[w,q,S.src===3?'Morel attractor':''].filter(Boolean).join(' · ');}
+function connect(){disconnect();if(!au.on)return;if(S.src<=1){es=new EventSource('https://stream.wikimedia.org/v2/stream/recentchange');es.onmessage=onWiki;es.onopen=liveLine;es.onerror=liveLine;}
+ if(S.src===0||S.src===2){pollQuakes(true);quakeT=setInterval(()=>pollQuakes(false),60000);}morelT=setTimeout(morelTick,4000);liveLine();}
+function disconnect(){if(es){es.close();es=null;}clearInterval(quakeT);clearTimeout(morelT);}
+setInterval(()=>{rawRate=rawRate*.7+rawCount/2*.3;rawCount=0;post({rate:Math.min(1,rawRate/60)});liveLine();},2000);
+// ---------- picture: bubbles rising through dark water
+const cv=$('cv'),cx=cv.getContext('2d');let vis=[],last=performance.now();
+function addVis(ev){const n=ev.kind==='train'?(ev.n||6):ev.kind==='cluster'?(ev.n||5):ev.kind==='giant'?5:1;for(let j=0;j<n;j++){if(vis.length>160)vis.shift();vis.push({x:.5+ev.pan*.42+(Math.random()-.5)*(ev.kind==='single'?0:.06),h:ev.h+(Math.random()-.5)*(n>1?4:0),a:ev.a*(j?(.3+.6*Math.random()):1),d:j*(ev.kind==='train'?.3:.15),born:performance.now(),giant:ev.kind==='giant',far:ev.dist});}}
+function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;const w=cv.clientWidth,h=cv.clientHeight,dpr=Math.min(2,devicePixelRatio||1);if(cv.width!==w*dpr){cv.width=w*dpr;cv.height=h*dpr;}
+ cx.setTransform(dpr,0,0,dpr,0,0);const g=cx.createLinearGradient(0,0,0,h);g.addColorStop(0,'#06263c');g.addColorStop(1,'#01060c');cx.fillStyle=g;cx.fillRect(0,0,w,h);
+ const Y=hm=>h*(.04+.96*Math.min(1,hm/130));
+ vis=vis.filter(b=>b.h>0&&now-b.born<40000);for(const b of vis){if((now-b.born)/1000<b.d)continue;const U=.711*Math.sqrt(9.81*2*b.a);b.h-=U*dt*1.6;const px=Math.max(1.5,b.a*(b.giant?110:220))*(1-.4*Math.min(1,b.far/50));
+  const al=Math.max(.15,.8-b.far/70);cx.beginPath();cx.arc(b.x*w+Math.sin(now/700+b.born)*3,Y(b.h),px,0,2*Math.PI);cx.strokeStyle=`rgba(170,225,250,${al})`;cx.lineWidth=b.giant?2:1.2;cx.stroke();cx.fillStyle=`rgba(120,200,240,${al*.18})`;cx.fill();}
+ requestAnimationFrame(frame);}
+paint();requestAnimationFrame(frame);
+</script></body></html>
