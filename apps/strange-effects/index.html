@@ -41,9 +41,10 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 <div id="top"><button id="snd" aria-pressed="false">Sound</button><button id="open">Adjust</button></div>
 <div id="zm"><button id="whole">Whole</button><button id="zo" class="st" aria-label="Zoom out">−</button><button id="zi" class="st" aria-label="Zoom in">+</button></div>
 <div id="sheet" hidden>
-  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 13 Nov · evolve + deep water</span></div>
+  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 13 Nov · faster with several attractors</span></div>
   <div class="ctl"><span class="lab">Sound</span><div class="row"><button id="snd2" aria-pressed="false">Sound</button><button id="vm">Volume −</button><button id="vp">Volume +</button></div></div>
-  <div class="ctl"><span class="lab">Output</span><div class="row" id="outs"></div></div>
+  <div class="ctl"><span class="lab">Engine quality</span><div class="row" id="quals"></div><span id="qualRead" class="nm" style="min-width:auto"></span></div>
+<div class="ctl"><span class="lab">Output</span><div class="row" id="outs"></div></div>
   <div class="ctl"><span class="lab">Evolve on its own</span><div class="row" id="evos"></div><span id="evoRead" class="nm" style="min-width:auto"></span></div>
 <div class="ctl"><span class="lab">Deep water: big bubbles rising (subwoofer)</span><div class="row" id="deeps"></div></div>
 <div class="ctl"><span class="lab">Tone</span><div class="row" id="tones"></div></div>
@@ -424,7 +425,7 @@ const CK=+(globalThis.SE_CK||1),GR=3,GK=+(globalThis.SE_GK||.04),GMX=4,CWIN=Math
 // Particles of different attractors that come within a contact radius collide: position-based contact (Muller et al. 2007),
 // each pushed apart along the line between them; their own flow then carries them back onto their attractor.
 // A new contact is an impact: both particles sound a struck note, harder for a faster closing speed, and spark.
-const CG=64,CL=3,cHead=new Int32Array(CG*CG*CG).fill(-1),CM=8192,cNext=new Int32Array(CM),cA=new Int16Array(CM),cQ=new Int16Array(CM),cW=new Float64Array(CM*3),cU=new Float64Array(CM*3),cV=new Float64Array(CM*3),usedC=[],HN=48;
+const CG=64,CL=3,cHead=new Int32Array(CG*CG*CG).fill(-1),CM=8192,cNext=new Int32Array(CM),cA=new Int16Array(CM),cQ=new Int16Array(CM),cW=new Float64Array(CM*3),cU=new Float64Array(CM*3),cV=new Float64Array(CM*3),usedC=[],usedS=[],HN=48;
 function collide(){const L=[];for(const w of V)if(w.on&&w.np&&(w.dim===3||w.def.map))L.push(w);const n=L.length;if(n<2)return;
  let np=0;for(const w of L)np+=w.np;const r=Math.min(.45,.22*Math.sqrt(8/Math.max(8,np))),sep=(1-S.cpl)*1.1/Math.max(.5,n===2?1:Math.sin(Math.PI/n));
  for(const c of usedC)cHead[c]=-1;usedC.length=0;let m=0;
@@ -445,9 +446,11 @@ function collide(){const L=[];for(const w of V)if(w.on&&w.np&&(w.dim===3||w.def.
    const gx=Math.floor((cW[m*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[m*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[m*3+2]+CL)/(2*CL)*CG);
    if(gx>=0&&gy>=0&&gz>=0&&gx<CG&&gy<CG&&gz<CG){const c=(gx*CG+gy)*CG+gz;if(cHead[c]===-1)usedC.push(c);cNext[m]=cHead[c];cHead[c]=m;}else cNext[m]=-2;m++;}});
  const push=CK*S.cpl,r2=r*r,ct=32/rate,cell=2*CL/CG,RG=GR*r,RG2=RG*RG,reach=Math.ceil(RG/cell),gk=GK*S.cpl*ct*S.move/.35,rb=r*.6,rb2=rb*rb;
+ // visit only occupied cells, in the same order the full (2·reach+1)^3 scan would (ascending cell index = X,Y,Z order)
+ usedS.length=0;for(const c of usedC)usedS.push(c);usedS.sort((x,y)=>x-y);
  for(let a=0;a<mP;a++){if(cNext[a]===-2)continue;const gx=Math.floor((cW[a*3]+CL)/(2*CL)*CG),gy=Math.floor((cW[a*3+1]+CL)/(2*CL)*CG),gz=Math.floor((cW[a*3+2]+CL)/(2*CL)*CG);
-  for(let dx=-reach;dx<=reach;dx++)for(let dy=-reach;dy<=reach;dy++)for(let dz=-reach;dz<=reach;dz++){const X=gx+dx,Y=gy+dy,Z=gz+dz;if(X<0||Y<0||Z<0||X>=CG||Y>=CG||Z>=CG)continue;
-   for(let b=cHead[(X*CG+Y)*CG+Z];b>=0;b=cNext[b]){if(cA[b]===cA[a])continue;
+  for(let ui=0;ui<usedS.length;ui++){const c=usedS[ui],X=(c/(CG*CG))|0,Y=((c/CG)|0)%CG,Z=c%CG;if(X<gx-reach||X>gx+reach||Y<gy-reach||Y>gy+reach||Z<gz-reach||Z>gz+reach)continue;
+   for(let b=cHead[c];b>=0;b=cNext[b]){if(cA[b]===cA[a])continue;
     if(b>=mP){const ex=cW[a*3]-cW[b*3],ey=cW[a*3+1]-cW[b*3+1],ez=cW[a*3+2]-cW[b*3+2],d2=ex*ex+ey*ey+ez*ez;if(d2>=rb2)continue;const A=L[cA[a]],qa=cQ[a],d=Math.sqrt(d2)+1e-9,nx=ex/d,ny=ey/d,nz=ez/d,ov=(rb-d)*push;if(!A.def.map){A.P[A.dim*qa]+=nx*ov*A.sc/A.ge;}if(!A.def.map){A.P[A.dim*qa+1]+=ny*ov*A.sc/A.ge;}if(!A.def.map){A.P[A.dim*qa+2]+=nz*ov*A.sc/A.ge;}
      const cl=-(cV[a*3]*nx+cV[a*3+1]*ny+cV[a*3+2]*nz);if(cl>0&&A.cool[qa]<=0){A.cool[qa]=.25;S.collisions=(S.collisions||0)+1;S.bodyHits=(S.bodyHits||0)+1;const ft=S.forceTy;S.forceTy=S.gentle&&!S.strange?0:12;ping(A,qa,A.dim*qa);S.forceTy=ft;if(S.evLog.length<600)S.evLog.push(A.idx,cU[a*3],cU[a*3+1],cU[a*3+2],.6);}continue;}
     if(b<=a)continue;const ex=cW[a*3]-cW[b*3],ey=cW[a*3+1]-cW[b*3+1],ez=cW[a*3+2]-cW[b*3+2],d2=ex*ex+ey*ey+ez*ez;if(d2>=RG2)continue;
@@ -1021,6 +1024,16 @@ const useRoutes=T=>{const L=varList();EFFECTS.forEach((e,i)=>{const d=T[e.id];ro
 const pickMove=v=>{sent.move=v;send({move:v});[...$('moves').children].forEach(c=>c.setAttribute('aria-pressed',c.id==='moves-'+v));};
 chips('styles',[['k','Rank'],['e','Electric'],['w','War'],['a','Alive'],['c','Cinematic'],['r','Raw']],'k',k=>{const c=k!=='r',wr=k==='w',el=k==='e',rk=k==='k',al=k==='a'||wr||el||rk;sent.cine=c;sent.alive=al;sent.war=wr;sent.elec=el;sent.rank=rk;sent.style=k;send({cine:c,alive:al,war:wr,elec:el,rank:rk});if((el||rk)&&sent.hallRT>1.8)$('halls-1.8').click();else if(!el&&!rk&&sent.hallRT<=1.8)$('halls-4.5').click();useRoutes(rk?RANK_ROUTES:al?ALIVE_ROUTES:c?CINE_ROUTES:DEFAULT_ROUTES);pickMove(k==='c'?.12:.35);showFor();});
 chips('tones',[['g','Gentle'],['f','Gilmour'],['s','Strange'],['a','Everything'],['m','Space synth']],'g',k=>{sent.gentle=k==='g';sent.strange=k==='s';sent.allT=k==='a';sent.synT=k==='m';send({gentle:sent.gentle,strange:sent.strange,allT:sent.allT,synT:sent.synT});});
+/* Engine quality. Full runs the engine at the device rate; Light runs it at half rate (24 kHz) and lets the browser
+   resample, which costs about half as much. Auto switches to Light when this device can't keep up (engine busy over
+   75% of real time for 3 s, or 2 playback gaps), since lag is worse than losing the top octave. */
+const qual={mode:'a',light:false,hot:0,gaps0:0,t0:0};
+function setLight(on,why){if(qual.light===on)return;qual.light=on;const base=au.ctx?au.ctx.sampleRate:FS;rate=on?Math.round(base/2):base;au.w.postMessage({t:'init',rate});
+ send(Object.assign({route,on:onSet,zoom,focus,fc},sent));params.forEach((p,vi)=>p.forEach((x,pi)=>send({params:[[vi,pi,x]]})));if($('halls-m')&&$('halls-m').getAttribute('aria-pressed')==='true')morelRoom();
+ au.nextT=0;au.slow=0;$('qualRead').textContent=on?'Light: '+(rate/1000).toFixed(rate%1000?1:0)+' kHz engine'+(why?' (switched by itself to keep up)':''):'';}
+setInterval(()=>{if(qual.mode!=='a'||qual.light||!au.on)return;const now=performance.now();if(au.slow>.75)qual.hot++;else qual.hot=0;
+ if(now-qual.t0>10000){qual.t0=now;qual.gaps0=au.under;}if(qual.hot>=3||au.under-qual.gaps0>=2)setLight(true,1);},1000);
+chips('quals',[['a','Auto'],['f','Full'],['l','Light']],'a',k=>{qual.mode=k;qual.hot=0;qual.gaps0=au.under;if(k==='l')setLight(true);else if(k==='f')setLight(false);else $('qualRead').textContent=qual.light?$('qualRead').textContent:'';});
 chips('deeps',[[0,'Off'],[1,'Bubbles'],[2,'Plunges']],0,k=>{sent.deep=+k;send({deep:+k});});
 /* Evolve: every so often one setting changes by itself. Which setting and which choice come from iterating the
    Morel attractor map (height s picks the setting, angle θ picks the choice, radius r stretches the wait). */
@@ -1101,6 +1114,8 @@ const pg=gl.createProgram();gl.attachShader(pg,sh(gl.VERTEX_SHADER,VS));gl.attac
 const bp=gl.createBuffer(),bc=gl.createBuffer(),U=n=>gl.getUniformLocation(pg,n),lp=gl.getAttribLocation(pg,'p'),lc=gl.getAttribLocation(pg,'c');
 let SG=[],yaw=.5,pitchA=.3,spin=!matchMedia('(prefers-reduced-motion: reduce)').matches;
 let CTR=ATTR.map(()=>[0,0,0]);const P=new Float32Array(TN*3),C=new Float32Array(TN*4),HUE=[8,190,48,300,150,335,95,220,270,120];
+/* colour by speed, looked up from 65 steps per hue instead of computed per point per frame */
+const HLUT={};function hslLUT(h,sp){let T=HLUT[h];if(!T){T=HLUT[h]=[];for(let k=0;k<=64;k++){const v=k/64;T.push(hsl(h+v*55,.88,.46+.28*v));}}return T[Math.round(Math.min(1,Math.max(0,sp))*64)];}
 function hsl(h,s,l){h=((h%360)+360)%360;const a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1)));};return[f(0),f(8),f(4)];}
 function cells(w,h){const act=ATTR.map((_,i)=>i).filter(i=>onSet[i]),out=[];const zoomed=zoomV>1.01;
  if(!zoomed&&sent.cpl>0&&act.length>1){const n=act.length,aw=w>=h?w/h:1,ah=h>w?h/w:1,s=Math.min(aw,ah)*(n===2?.46:.36)*(1+.65*sent.cpl*sent.cpl),sep=(1-sent.cpl)*1.1/Math.max(.5,n===2?1:Math.sin(Math.PI/n));act.forEach((i,k)=>{const a=2*Math.PI*k/n;let x=sep*Math.cos(a)*s*.8,y=sep*Math.sin(a)*s*.8;if(w<h){const t=x;x=y;y=t;}out.push({i,x,y,s});});return out;}
@@ -1110,7 +1125,7 @@ function cells(w,h){const act=ATTR.map((_,i)=>i).filter(i=>onSet[i]),out=[];cons
 function drawA(c,w,h){
  const i=c.i,n=ATTR[i]&&ATTR[i].map?Math.min(tN[i],1800):tN[i],B=T[i],z=i===focus?zoomV:1,f=(()=>{const b=i===focus?fcV:[0,0,0],k=(!(zoomV>1.01)&&sent.cpl>0&&CTR[i])?1:0;return k?[b[0]+CTR[i][0],b[1]+CTR[i][1],b[2]+CTR[i][2]]:b;})(),sc=c.s*.8*z*((!(zoomV>1.01)&&sent.cpl>0&&CTR[i]&&CTR[i][3])?CTR[i][3]:1),hue=HUE[i]??(i*137.5+40)%360;let px=0,py=0,pz=0;
  for(let q=0;q<n;q++){const j=(tW[i]-n+q+TN)%TN,x=B[j*3],y=B[j*3+1],zz=B[j*3+2];P[q*3]=x-f[0];P[q*3+1]=y-f[1];P[q*3+2]=zz-f[2];
-  const sp=q?Math.min(1,Math.hypot(x-px,y-py,zz-pz)*20):0;px=x;py=y;pz=zz;const age=q/n,cc=hsl(hue+sp*55,.88,.46+.28*sp);C[q*4]=cc[0];C[q*4+1]=cc[1];C[q*4+2]=cc[2];C[q*4+3]=Math.min(1,(.14+.84*age*age)*(1+flash[i]*1.6));}
+  const sp=q?Math.min(1,Math.hypot(x-px,y-py,zz-pz)*20):0;px=x;py=y;pz=zz;const age=q/n,cc=hslLUT(hue,sp);C[q*4]=cc[0];C[q*4+1]=cc[1];C[q*4+2]=cc[2];C[q*4+3]=Math.min(1,(.14+.84*age*age)*(1+flash[i]*1.6));}
  gl.bindBuffer(gl.ARRAY_BUFFER,bp);gl.bufferData(gl.ARRAY_BUFFER,P.subarray(0,n*3),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(lp);gl.vertexAttribPointer(lp,3,gl.FLOAT,false,0,0);
  gl.bindBuffer(gl.ARRAY_BUFFER,bc);gl.bufferData(gl.ARRAY_BUFFER,C.subarray(0,n*4),gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(lc);gl.vertexAttribPointer(lc,4,gl.FLOAT,false,0,0);
  gl.uniform2f(U('off'),c.x,c.y);gl.uniform1f(U('sc'),sc);gl.uniform1f(U('cz'),1/Math.max(1,z*.6));if(ATTR[i]&&ATTR[i].map){gl.uniform1f(U('pt'),1);gl.uniform1f(U('ps'),Math.max(1.5,Math.min(w,h)/420));gl.drawArrays(gl.POINTS,0,n);}else{gl.uniform1f(U('pt'),0);gl.drawArrays(gl.LINE_STRIP,0,n);}
