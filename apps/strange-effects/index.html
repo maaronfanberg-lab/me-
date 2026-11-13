@@ -41,10 +41,12 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 <div id="top"><button id="snd" aria-pressed="false">Sound</button><button id="open">Adjust</button></div>
 <div id="zm"><button id="whole">Whole</button><button id="zo" class="st" aria-label="Zoom out">−</button><button id="zi" class="st" aria-label="Zoom in">+</button></div>
 <div id="sheet" hidden>
-  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 12 Nov · morel grains</span></div>
+  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 13 Nov · evolve + deep water</span></div>
   <div class="ctl"><span class="lab">Sound</span><div class="row"><button id="snd2" aria-pressed="false">Sound</button><button id="vm">Volume −</button><button id="vp">Volume +</button></div></div>
   <div class="ctl"><span class="lab">Output</span><div class="row" id="outs"></div></div>
-  <div class="ctl"><span class="lab">Tone</span><div class="row" id="tones"></div></div>
+  <div class="ctl"><span class="lab">Evolve on its own</span><div class="row" id="evos"></div><span id="evoRead" class="nm" style="min-width:auto"></span></div>
+<div class="ctl"><span class="lab">Deep water: big bubbles rising (subwoofer)</span><div class="row" id="deeps"></div></div>
+<div class="ctl"><span class="lab">Tone</span><div class="row" id="tones"></div></div>
   <div class="ctl"><span class="lab">Attractors pull on each other</span><div class="row" id="cpls"></div></div>
   <div class="ctl"><span class="lab">Morel (MGS-1): each note lands on the morel; pits darken and soften it, ridges ring</span><div class="row" id="morels"></div><div class="row" id="mkaps"></div></div>
   <div class="ctl"><span class="lab">Harmonic mean</span><div class="row" id="hms"></div></div>
@@ -464,6 +466,7 @@ S.pings=0;S.tech=new Array(24).fill(0);const ping=(v,q,o)=>{let k=PL[0];for(cons
   const P=v.P,ax=v.def.sec[0],a1=(ax+1)%3,a2=(ax+2)%3,n1=(P[o+a1]-v.c[a1])/v.sc,n2=(P[o+a2]-v.c[a2])/v.sc,q1=cl((n1+1)/2),q2=cl((n2+1)/2);
   const sp=Math.hypot(P[o]-v.Pp[o],P[o+1]-v.Pp[o+1],P[o+2]-v.Pp[o+2])/v.sc*rate/32/(S.move*v.dens*(S.pf||1)*(v.g||1)+1e-9),spd=(()=>{const H=v.spH||(v.spH=[]);let c=0;for(const x of H)if(x<sp)c++;const r=H.length>4?(c+.5)/(H.length+1):cl(Math.tanh(sp/8));H.push(sp);if(H.length>48)H.shift();return r;})();
   if(!k.buf)k.buf=new Float32Array(Math.ceil(rate/20));
+  if(S.deep)S.deepHit(spd,q1);
   // fast crossings are picked; slow ones swell or slide
   const sb=spd>.62?2:spd>.32?1:0;const r2=(()=>{const H=(v.q2H||(v.q2H=[[],[],[]]))[sb];let c=0;for(const x of H)if(x<q2)c++;const r=H.length>4?(c+.5)/(H.length+1):q2;H.push(q2);if(H.length>48)H.shift();return r;})();
   const r3=r2<.34?0:r2<.67?1:2;const ty=S.forceTy!=null?S.forceTy:S.synT?[[22,23,21],[20,21,23],[21,20,23]][sb][r3]:S.allT?[[2,1,17,16,13],[0,5,14,10,18],[3,4,11,12,15]][sb][Math.min(4,Math.floor(r2*5))]:S.strange?[[16,17,18],[13,14,15],[10,11,12]][sb][r3]:S.gentle?(sb===2?0:sb===1?(r2>.5?1:0):(r2>.5?1:2)):sb===2?(r2>.5?3:4):sb===1?(r2>.5?5:0):(r2>.5?1:2);S.tech[ty]++;v.bdHit=Math.max(v.bdHit||0,.4+.6*spd);
@@ -856,6 +859,7 @@ function morelAt(th,s,tau,kap){if(mCache.tau!==tau){const R=mQ('R',tau),H=mQ('H'
      b.ms+=(b.l2*b.l2-b.ms)*BMS;const w=b.l2/Math.sqrt(b.ms+1e-9)*b.e;bs+=w;bp+=b.e*b.e;nb++;b.e*=BDK;}
     bdNeed+=((Math.max(0,BT*(S.gentle&&!S.strange?.8:1)*mixMs-lowMs))-bdNeed)*BMS;bdAvg+=(bp/Math.max(1,nb)-bdAvg)*BMS;
     const g=Math.sqrt(bdNeed/Math.max(.02,bdAvg))*S.bodyAmt/Math.sqrt(Math.max(1,nb));l+=bs*g;r+=bs*g;}
+   if(S.deep||S.deepB.length||S.deepQ.length){const dw=S.deepTick();l+=dw;r+=dw;}
    if(S.spk!==0||spkS!==0||S.pol!==0||on(IDX.sd)||on(IDX.pr)){
     // bass stays mono and undelayed; only sound above about 120 Hz is shifted or flipped
     const k=1-Math.exp(-2*Math.PI*120/rate);oLp[0]+=(l-oLp[0])*k;oLp[1]+=(r-oLp[1])*k;let hl=l-oLp[0],hr=r-oLp[1];
@@ -868,6 +872,34 @@ function morelAt(th,s,tau,kap){if(mCache.tau!==tau){const R=mQ('R',tau),H=mQ('H'
   }
   const hits=S.hitLog,ev=S.evLog,rk=S.rkLog,kk=S.kickLog;S.hitLog=[];S.evLog=[];S.rkLog=[];S.kickLog=[];let parts=null;if(S.swarm){parts=V.map(v=>{if(!v.on||!v.np)return null;const o=new Float32Array(v.np*3),D=v.dim;for(let q=0;q<v.np;q++)for(let k=0;k<3;k++)o[3*q+k]=(v.P[D*q+k]-v.c[k])/v.sc;return o;});}return{L,R,trail,hits,ev,rk,parts,kicks:kk,surge:V.map(v=>v.on?(v.g||1):1),ctr:V.map(v=>{if(!(v.on&&v.cmE&&S.cpl>0))return[0,0,0,1];const o=v.orb||[0,0,0],g=v.ge||1;return[v.cmE[0]-o[0]/g,v.cmE[1]-o[1]/g,v.cmE[2]-o[2]/g,g];})};
  };
+  // Deep water: big air bubbles in water. Minnaert resonance f=(1/2 pi a)sqrt(3 gamma P/rho); a rising bubble expands
+ // (a ~ P^-1/3) and its pitch falls as the pressure drops; it rises at Davies-Taylor speed 0.711 sqrt(g d).
+ // Damping = radiation (omega a/c) + thermal/viscous (~0.03). Radiated pressure ~ a^3 * radial acceleration.
+ // Bubbles: the fastest crossings (top 7%) release one; size from how fast, depth from where it crossed.
+ // Plunges: something drops in: a muffled splash, the cavity pinches off into a big bubble, a cloud of small ones.
+ S.deepB=[];S.deepQ=[];S.deepCd=0;S.deepSeed=777;
+ {const RHO=1000,GAM=1.4,P0=101325,G=9.81,CW=1480;
+  const rnd=()=>{S.deepSeed=(S.deepSeed*1664525+1013904223)>>>0;return S.deepSeed/4294967296;};
+  const press=h=>P0+RHO*G*Math.max(0,h),omega=(a,h)=>Math.sqrt(3*GAM*press(h)/RHO)/a;
+  const KD=.3/(Math.pow(.2,3)*.06*Math.pow(omega(.2,0),2));
+  const lp=[0,0],hp=[0,0,0,0],wl=1-Math.exp(-2*Math.PI*500/rate),hw=Math.tan(Math.PI*18/rate),hk=1/(1+Math.SQRT2*hw+hw*hw),sk=1-Math.exp(-2*Math.PI*400/rate);
+  let splE=0;const splL=[0,0];
+  const add=(a,h,x0,rise,life)=>{if(S.deepB.length>=40)return;S.deepB.push({a0:a,h0:h,h,a,x:x0,v:0,w:omega(a,h),be:0,wake:0,rise,life,t:0,n:0});};
+  const small=a=>Math.min(a/3,.012*Math.pow(1-rnd()*.97,-1/2.3));
+  S.deepHit=(spd,q1)=>{if(spd<.93||S.deepCd>0)return;const u=Math.min(1,(spd-.93)/.07),a=.08+.22*u,h=3+12*q1;
+   if(S.deep===2){S.deepCd=3*rate;splE+=.25*(.5+u);S.deepQ.push({t:Math.round(.12*rate),a:a*1.2,h:Math.min(h,6),sm:0});
+    const nc=12+Math.floor(12*u);for(let j=0;j<nc;j++)S.deepQ.push({t:Math.round((.1+.5*rnd())*rate),a:small(a),h:1+rnd(),sm:1});}
+   else{S.deepCd=5*rate;add(a,h,.06,1,1e12);const nc=3+Math.floor(3*rnd());for(let j=0;j<nc;j++)add(small(a),h,.25,0,1.5*rate);}};
+  S.deepTick=()=>{if(S.deepCd>0)S.deepCd--;const Q=S.deepQ,B=S.deepB;
+   for(let j=Q.length-1;j>=0;j--){const e=Q[j];if(--e.t<=0){add(e.a,e.h,e.sm?.25:.08,e.sm?0:1,e.sm?1.5*rate:1e12);Q.splice(j,1);}}
+   let y=0;
+   for(let j=B.length-1;j>=0;j--){const b=B[j];
+    if((b.n++&63)===0){if(b.rise)b.h-=.711*Math.sqrt(G*2*b.a)*64/rate;b.a=b.a0*Math.cbrt(press(b.h0)/press(b.h));b.w=omega(b.a,b.h);b.be=(b.w*b.a/CW+.03)*b.w/2;b.wake=b.rise?S.deepWake*b.w*b.w:0;}
+    const acc=-b.w*b.w*b.x-2*b.be*b.v+(b.wake?(rnd()*2-1)*b.wake:0);b.v+=acc/rate;b.x+=b.v/rate;y-=KD*b.a*b.a*b.a*b.w*b.w*b.x;b.t++;
+    if(b.rise&&b.h<=.3){splE+=.05;B.splice(j,1);}else if(b.t>b.life)B.splice(j,1);}
+   if(splE>1e-6){splE*=Math.exp(-1/(.12*rate));const n=(rnd()*2-1)*splE;splL[0]+=(n-splL[0])*sk;splL[1]+=(splL[0]-splL[1])*sk;y+=splL[1]*3;}
+   lp[0]+=(y-lp[0])*wl;lp[1]+=(lp[0]-lp[1])*wl;const x=lp[1],o=hk*(x-2*hp[0]+hp[1])-2*(hw*hw-1)*hk*hp[2]-(1-Math.SQRT2*hw+hw*hw)*hk*hp[3];hp[1]=hp[0];hp[0]=x;hp[3]=hp[2];hp[2]=o;return o;};}
+ S.deepWake=.024;
  S.polGain=th=>{const sq=Math.sin(th)>=0?1:-1;let c=S.polDiv?Math.cos(Math.PI/6):Math.cos(th/6);if(Math.abs(c)<1/6)c=c<0?-1/6:1/6;return sq/c;};
  S.setParam=(vi,pi,x)=>{const d=V[vi].def;V[vi].a.pv[pi]=Math.max(d.lo[pi],Math.min(d.hi[pi],x));V[vi].base[pi]=V[vi].a.pv[pi];V[vi].sig[pi]=(V[vi].a.pv[pi]-d.p[pi])/Math.max(Math.abs(d.p[pi])*.21,(d.hi[pi]-d.lo[pi])*.084);};
  S.resetParams=vi=>{V[vi].a.pv=V[vi].def.p.slice();V[vi].base=V[vi].def.p.slice();V[vi].sig.fill(0);};
@@ -877,17 +909,17 @@ const WORKER_SRC=DSP_SRC+`
 let D;onmessage=e=>{const d=e.data;
  if(d.t==='add'){const def=d.spec.nd?ND.attr(d.spec,d.name):formulaAttr(d.spec,d.name);ATTR.push(def);if(D)D.V.push(makeVoice(def,D.V.length));return;}
  if(d.t==='init')D=makeDSP(d.rate);
- else if(d.t==='set'){if(d.route)d.route.forEach((v,i)=>D.route[i]=v);for(const k of['pitch','move','amount','zoom','focus','fc','spread','held','cine','hallRT','hallSize','impact','mono','alive','recv','holo','war','elec','rank','rkM','rkK','rkAlpha','rkSigma','rkEll','spk','pol','polHz','polDiv','swarm','nP','gentle','strange','hm','cpl','allT','synT','morel','mFix','mKap','mroom'])if(k in d)D[k]=d[k];
+ else if(d.t==='set'){if(d.route)d.route.forEach((v,i)=>D.route[i]=v);for(const k of['deep','pitch','move','amount','zoom','focus','fc','spread','held','cine','hallRT','hallSize','impact','mono','alive','recv','holo','war','elec','rank','rkM','rkK','rkAlpha','rkSigma','rkEll','spk','pol','polHz','polDiv','swarm','nP','gentle','strange','hm','cpl','allT','synT','morel','mFix','mKap','mroom'])if(k in d)D[k]=d[k];
   if(d.on)d.on.forEach((v,i)=>{D.V[i].on=v;});if(d.params)d.params.forEach(([vi,pi,x])=>D.setParam(vi,pi,x));if('reset' in d)D.V.forEach(v=>{if(v.on)D.resetParams(v.idx);});}
  else if(d.t==='gen'){const t0=performance.now(),o=D.process(d.frames);postMessage({L:o.L,R:o.R,trail:o.trail,parts:o.parts,kicks:o.kicks,surge:o.surge,ctr:o.ctr,hits:o.hits,ev:o.ev,rk:o.rk,ms:performance.now()-t0},[o.L.buffer,o.R.buffer]);}
 };`;
-new Function(DSP_SRC+";window.__EF={ND,compileFormula,formulaAttr,formulaSearch,EFFECTS,ATTR,DEFAULT_ROUTES,CINE_ROUTES,ALIVE_ROUTES,RANK_ROUTES,SWARM_ROUTES,RANK_VARS,makeDSP,rk4};")();
+new Function(DSP_SRC+";window.__EF={maM,ND,compileFormula,formulaAttr,formulaSearch,EFFECTS,ATTR,DEFAULT_ROUTES,CINE_ROUTES,ALIVE_ROUTES,RANK_ROUTES,SWARM_ROUTES,RANK_VARS,makeDSP,rk4};")();
 const{ND,compileFormula,formulaAttr,formulaSearch,EFFECTS,ATTR,DEFAULT_ROUTES,CINE_ROUTES,ALIVE_ROUTES,RANK_ROUTES,SWARM_ROUTES,RANK_VARS,rk4}=window.__EF;
 const $=id=>document.getElementById(id);
 const FS=48000;let rate=FS;
 const route=EFFECTS.map(e=>SWARM_ROUTES[e.id]);
 const au={ctx:null,on:false,w:new Worker(URL.createObjectURL(new Blob([WORKER_SRC],{type:'text/javascript'}))),busy:false,nextT:0,lastGen:0,master:null,an:null,vol:.8,under:0,blocks:0,N:2048,slow:0};
-const sent={pitch:1,move:.35,amount:1,spread:3,held:.00015,cine:false,hallRT:1.8,hallSize:.7,impact:1,alive:false,recv:true,holo:true,war:false,elec:false,rank:false,swarm:true,nP:4,gentle:true,strange:false,hm:0,morel:0,mFix:1,mKap:5,cpl:0,allT:false,synT:false,rkM:8,rkK:2,rkAlpha:1.5,rkSigma:.14,rkEll:.14,pol:0,polHz:2,polDiv:0,spk:0};
+const sent={pitch:1,move:.35,amount:1,spread:3,held:.00015,cine:false,hallRT:1.8,hallSize:.7,impact:1,alive:false,recv:true,holo:true,war:false,elec:false,rank:false,swarm:true,nP:4,gentle:true,strange:false,hm:0,deep:0,morel:0,mFix:1,mKap:5,cpl:0,allT:false,synT:false,rkM:8,rkK:2,rkAlpha:1.5,rkSigma:.14,rkEll:.14,pol:0,polHz:2,polDiv:0,spk:0};
 const onSet=ATTR.map((_,i)=>i<2),params=ATTR.map(a=>a.p.slice());
 au.w.postMessage({t:'init',rate});
 const send=o=>au.w.postMessage(Object.assign({t:'set'},o));
@@ -989,6 +1021,21 @@ const useRoutes=T=>{const L=varList();EFFECTS.forEach((e,i)=>{const d=T[e.id];ro
 const pickMove=v=>{sent.move=v;send({move:v});[...$('moves').children].forEach(c=>c.setAttribute('aria-pressed',c.id==='moves-'+v));};
 chips('styles',[['k','Rank'],['e','Electric'],['w','War'],['a','Alive'],['c','Cinematic'],['r','Raw']],'k',k=>{const c=k!=='r',wr=k==='w',el=k==='e',rk=k==='k',al=k==='a'||wr||el||rk;sent.cine=c;sent.alive=al;sent.war=wr;sent.elec=el;sent.rank=rk;sent.style=k;send({cine:c,alive:al,war:wr,elec:el,rank:rk});if((el||rk)&&sent.hallRT>1.8)$('halls-1.8').click();else if(!el&&!rk&&sent.hallRT<=1.8)$('halls-4.5').click();useRoutes(rk?RANK_ROUTES:al?ALIVE_ROUTES:c?CINE_ROUTES:DEFAULT_ROUTES);pickMove(k==='c'?.12:.35);showFor();});
 chips('tones',[['g','Gentle'],['f','Gilmour'],['s','Strange'],['a','Everything'],['m','Space synth']],'g',k=>{sent.gentle=k==='g';sent.strange=k==='s';sent.allT=k==='a';sent.synT=k==='m';send({gentle:sent.gentle,strange:sent.strange,allT:sent.allT,synT:sent.synT});});
+chips('deeps',[[0,'Off'],[1,'Bubbles'],[2,'Plunges']],0,k=>{sent.deep=+k;send({deep:+k});});
+/* Evolve: every so often one setting changes by itself. Which setting and which choice come from iterating the
+   Morel attractor map (height s picks the setting, angle θ picks the choice, radius r stretches the wait). */
+const evo={T:0,next:0,q:[.2137,1,.5]};
+const EVO_CATS=[['tones','Tone'],['attrs','Attractor'],['cpls','Pull'],['moves','Movement'],['halls','Space'],['nps','Particles'],['fx','Effect'],['deeps','Deep water'],['morels','Morel notes'],['hms','Harmonic mean'],['fx2','Effect'],['attrs2','Attractor']];
+function evoToast(t){let d=$('evoToast');if(!d){d=document.createElement('div');d.id='evoToast';d.style.cssText='position:fixed;left:14px;top:14px;z-index:50;pointer-events:none;font:13px ui-monospace,monospace;color:#e8e6df;background:rgba(10,12,20,.7);padding:6px 10px;border-radius:8px;transition:opacity 1.2s';document.body.appendChild(d);}d.textContent='Evolving · '+t;d.style.opacity='1';clearTimeout(d.tm);d.tm=setTimeout(()=>d.style.opacity='0',4000);$('evoRead').textContent=t;}
+function evoStep(d=0){if(d>8)return;const q=window.__EF.maM(evo.q[0],evo.q[1],evo.q[2],[3,6,.6]);evo.q=q;const s=q[0],th=((q[1]%(2*Math.PI))+2*Math.PI)%(2*Math.PI),fr=th/(2*Math.PI);
+ const [id,name]=EVO_CATS[Math.min(EVO_CATS.length-1,Math.floor(s*EVO_CATS.length))];
+ if(id.startsWith('attrs')){const B=[...$('attrs').querySelectorAll('button')].slice(0,11),j=Math.floor(fr*B.length),onN=onSet.slice(0,11).filter(Boolean).length;
+  if(onSet[j]){if(onN<2)return evoStep(d+1);B[j].click();evoToast(name+' − '+ATTR[j].name);}else{if(onN>=3){const k=onSet.findIndex((x,i)=>x&&i<11);B[k].click();}B[j].click();evoToast(name+' + '+ATTR[j].name);}return;}
+ if(id.startsWith('fx')){const B=[...document.querySelectorAll('#rA button,#rP button')],j=Math.floor(fr*B.length);const onN=route.filter(x=>x>=0).length;
+  if(route[j]>=0){route[j]=-1;paintRoutes();send({route});evoToast(name+' off · '+EFFECTS[j].name);}else if(onN<6){B[j].click();evoToast(name+' on · '+EFFECTS[j].name);}else return evoStep(d+1);return;}
+ const B=[...$(id).querySelectorAll('button')].filter(b=>!(id==='nps'&&b.textContent==='128')),j=Math.floor(fr*B.length);if(!B[j]||B[j].getAttribute('aria-pressed')==='true')return evoStep(d+1);B[j].click();evoToast(name+' → '+B[j].textContent);}
+setInterval(()=>{if(!evo.T||!au.on)return;const now=performance.now();if(now<evo.next)return;let n=0;try{evoStep();}catch(e){}evo.next=now+evo.T*1000*(.6+.8*Math.min(1,evo.q[2]/3));},1000);
+chips('evos',[[0,'Off'],[40,'Slow'],[15,'Fast']],0,k=>{evo.T=+k;evo.next=performance.now()+(+k)*500;$('evoRead').textContent=+k?'next change in about '+Math.round(+k/2)+' s':'';});
 chips('cpls',[[0,'Apart'],[.3,'Nudge'],[.65,'Pull'],[1,'Tangle']],0,k=>{sent.cpl=+k;send({cpl:+k});});
 chips('morels',[['off','Off'],['bud','Bud'],['young','Young'],['mature','Mature'],['grow','Growing']],'off',k=>{const fx={bud:.25,young:.55,mature:1}[k];sent.morel=k==='off'?0:k==='grow'?2:1;if(fx)sent.mFix=fx;send({morel:sent.morel,mFix:sent.mFix});if(sent.mroomOn)morelRoom();});
 chips('mws',[[6,'Width 6 m'],[20,'Width 20 m'],[60,'Width 60 m'],[150,'Width 150 m']],20,k=>{roomW=+k;if(sent.mroomOn)morelRoom();});
