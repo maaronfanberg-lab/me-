@@ -41,7 +41,7 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 <div id="top"><button id="snd" aria-pressed="false">Sound</button><button id="open">Adjust</button></div>
 <div id="zm"><button id="whole">Whole</button><button id="zo" class="st" aria-label="Zoom out">−</button><button id="zi" class="st" aria-label="Zoom in">+</button></div>
 <div id="sheet" hidden>
-  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 13 Nov · faster with several attractors</span></div>
+  <div class="head"><button id="close">Close</button><span id="ver" class="nm" style="min-width:auto;margin-left:10px">Version 13 Nov · evolve eases off when busy</span></div>
   <div class="ctl"><span class="lab">Sound</span><div class="row"><button id="snd2" aria-pressed="false">Sound</button><button id="vm">Volume −</button><button id="vp">Volume +</button></div></div>
   <div class="ctl"><span class="lab">Engine quality</span><div class="row" id="quals"></div><span id="qualRead" class="nm" style="min-width:auto"></span></div>
 <div class="ctl"><span class="lab">Output</span><div class="row" id="outs"></div></div>
@@ -1043,11 +1043,22 @@ function evoToast(t){let d=$('evoToast');if(!d){d=document.createElement('div');
 function evoStep(d=0){if(d>8)return;const q=window.__EF.maM(evo.q[0],evo.q[1],evo.q[2],[3,6,.6]);evo.q=q;const s=q[0],th=((q[1]%(2*Math.PI))+2*Math.PI)%(2*Math.PI),fr=th/(2*Math.PI);
  const [id,name]=EVO_CATS[Math.min(EVO_CATS.length-1,Math.floor(s*EVO_CATS.length))];
  if(id.startsWith('attrs')){const B=[...$('attrs').querySelectorAll('button')].slice(0,11),j=Math.floor(fr*B.length),onN=onSet.slice(0,11).filter(Boolean).length;
-  if(onSet[j]){if(onN<2)return evoStep(d+1);B[j].click();evoToast(name+' − '+ATTR[j].name);}else{if(onN>=3){const k=onSet.findIndex((x,i)=>x&&i<11);B[k].click();}B[j].click();evoToast(name+' + '+ATTR[j].name);}return;}
+  if(onSet[j]){if(onN<2)return evoStep(d+1);B[j].click();evoToast(name+' − '+ATTR[j].name);}else{if(au.slow>.5&&onN>=1)return evoStep(d+1);if(onN>=3){const k=onSet.findIndex((x,i)=>x&&i<11);B[k].click();}B[j].click();evoToast(name+' + '+ATTR[j].name);}return;}
  if(id.startsWith('fx')){const B=[...document.querySelectorAll('#rA button,#rP button')],j=Math.floor(fr*B.length);const onN=route.filter(x=>x>=0).length;
   if(route[j]>=0){route[j]=-1;paintRoutes();send({route});evoToast(name+' off · '+EFFECTS[j].name);}else if(onN<6){B[j].click();evoToast(name+' on · '+EFFECTS[j].name);}else return evoStep(d+1);return;}
- const B=[...$(id).querySelectorAll('button')].filter(b=>!(id==='nps'&&b.textContent==='128')),j=Math.floor(fr*B.length);if(!B[j]||B[j].getAttribute('aria-pressed')==='true')return evoStep(d+1);B[j].click();evoToast(name+' → '+B[j].textContent);}
+ const B=[...$(id).querySelectorAll('button')].filter(b=>!(id==='nps'&&b.textContent==='128')),j=Math.floor(fr*B.length);if(!B[j]||B[j].getAttribute('aria-pressed')==='true')return evoStep(d+1);
+ if(au.slow>.5&&((id==='nps'&&+B[j].textContent>sent.nP)||(id==='cpls'&&j>0)))return evoStep(d+1);B[j].click();evoToast(name+' → '+B[j].textContent);}
 setInterval(()=>{if(!evo.T||!au.on)return;const now=performance.now();if(now<evo.next)return;let n=0;try{evoStep();}catch(e){}evo.next=now+evo.T*1000*(.6+.8*Math.min(1,evo.q[2]/3));},1000);
+/* While Evolve runs unattended, keep the load within what this device can do (measured here, not assumed):
+   engine busy over 80% of real time for 3 s, or new playback gaps -> ease off one step: Light engine, then
+   fewer particles, then a gentler pull, then drop the costliest attractor (relative costs measured offline). */
+const ACOST={'Rabinovich–Fabrikant':.54,'Lorenz-84':.23,'Hindmarsh–Rose':.22,'Hastings–Powell':.13,'Willamowski–Rössler':.12,'Finance':.12,'Rikitake dynamo':.17,'Moore–Spiegel':.09,'Nosé–Hoover':.12,'Tumor–immune':.22,'Morel attractor':.14};
+const shed={hot:0,g0:0,cool:0};
+setInterval(()=>{if(!evo.T||!au.on)return;if(shed.cool>0){shed.cool--;shed.g0=au.under;return;}if(au.slow>.8)shed.hot++;else shed.hot=0;const gaps=au.under-shed.g0;shed.g0=au.under;if(shed.hot<3&&gaps<1)return;shed.hot=0;shed.cool=6;
+ if(!qual.light&&qual.mode!=='f'){setLight(true,1);evoToast('easing off · Light engine');return;}
+ if(sent.nP>4){$('nps-4').click();evoToast('easing off · Particles → 4');return;}
+ if(sent.cpl>.3){$('cpls-0.3').click();evoToast('easing off · Pull → Nudge');return;}
+ const act=ATTR.map((a,i)=>i).filter(i=>onSet[i]);if(act.length>1){const k=act.reduce((m,i)=>(ACOST[ATTR[i].name]??.3)>(ACOST[ATTR[m].name]??.3)?i:m,act[0]);[...$('attrs').querySelectorAll('button')][k].click();evoToast('easing off · '+ATTR[k].name+' off');}},1000);
 chips('evos',[[0,'Off'],[40,'Slow'],[15,'Fast']],0,k=>{evo.T=+k;evo.next=performance.now()+(+k)*500;$('evoRead').textContent=+k?'next change in about '+Math.round(+k/2)+' s':'';});
 chips('cpls',[[0,'Apart'],[.3,'Nudge'],[.65,'Pull'],[1,'Tangle']],0,k=>{sent.cpl=+k;send({cpl:+k});});
 chips('morels',[['off','Off'],['bud','Bud'],['young','Young'],['mature','Mature'],['grow','Growing']],'off',k=>{const fx={bud:.25,young:.55,mature:1}[k];sent.morel=k==='off'?0:k==='grow'?2:1;if(fx)sent.mFix=fx;send({morel:sent.morel,mFix:sent.mFix});if(sent.mroomOn)morelRoom();});
