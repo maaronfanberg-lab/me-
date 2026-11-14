@@ -29,3 +29,11 @@ forcing whose broadband leakage summed into a hiss (-39.7 dB in 300-1800 Hz afte
 the first ~4 s of the rise (physically, wake shedding is low-frequency, St·U/d ~ 1 Hz, so white forcing was too broad);
 hum now 4-pole low-pass at 45 Hz, ~10 dB quieter, off by default. **Result:** 300-1800 Hz tail energy -61.7 dB
 (22 dB lower); single-bubble murmur at 10 s -53 dB (was -36); Minnaert pitch check still exact.
+
+## Update (2026-11-14): the seismogram plays the bubbles
+Alex chose to have the ground motion drive the bubbles, with pitch matching the graph. The ungated trace now (a) is the
+external force on each bubble oscillator (ẍ + 2βẋ + ω²x = k·ω²·y(t)), (b) creates a bubble wherever its 10 ms
+envelope exceeds 1.8× its 2 s envelope (or every 3 s of steady motion), and (c) sets pitch from the trace height:
+f = 40·10^((u+1)/2) Hz, u = clamp(y/0.5, −1, 1), which the bubble keeps following while it rings. Quake-catalogue
+bubbles are used only when no seismogram is available. Check: correlation between bubble pitch (log) and trace height at
+release = 1.000 on a synthetic trace; engine 1.4% of real time; browser test with real miniSEED, no errors.
