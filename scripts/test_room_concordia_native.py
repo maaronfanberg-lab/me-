@@ -75,5 +75,43 @@ class NativeConcordiaTests(unittest.TestCase):
         native.LocalLlama("http://127.0.0.1:18080/v1/chat/completions", "local")
 
 
+    def test_local_llama_request_timeout_can_cover_queued_agent_calls(self):
+        """Never alter the default unless the workflow explicitly opts in."""
+        import io
+        import os
+        from unittest import mock
+
+        class FakeResponse:
+            def __enter__(self):
+                return io.BytesIO(json.dumps({
+                    "choices": [{"message": {"content":
+                        'I check the notebook.\\n{"mask":[],"timer":{"time":"15m"}}'}}
+                }).encode())
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        observed = []
+
+        def fake_open(request, timeout):
+            observed.append(timeout)
+            return FakeResponse()
+
+        model = native.LocalLlama(
+            "http://127.0.0.1:18080/v1/chat/completions", "local")
+        with mock.patch.object(native.urllib.request, "urlopen",
+                               side_effect=fake_open):
+            with mock.patch.dict(os.environ, {}, clear=True):
+                model.sample_text("Choose an action", timeout=60)
+            with mock.patch.dict(
+                    os.environ, {"ROOM_NATIVE_LLM_TIMEOUT_SECONDS": "195"}):
+                model.sample_text("Choose an action", timeout=60)
+            with mock.patch.dict(
+                    os.environ, {"ROOM_NATIVE_LLM_TIMEOUT_SECONDS": "900"}):
+                model.sample_text("Choose an action", timeout=60)
+        self.assertEqual(observed, [60, 195, 240])
+
+
+
 if __name__ == "__main__":
     unittest.main()
