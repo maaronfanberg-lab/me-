@@ -29,14 +29,14 @@ details{margin:8px 16px 28px;background:#071827;border-radius:14px;padding:4px 1
 <li>Every sound is an air bubble deep under the sea, heard from underwater. Its pitch is the Minnaert resonance: f = (1/2πa)·√(3γP/ρ). Bigger bubbles are lower; deeper water (more pressure) raises the pitch.</li>
 <li>As a bubble rises it swells, so its note slowly sinks, and its wake keeps it murmuring. Big ones rise at 0.711·√(g·2a) (Davies &amp; Taylor).</li>
 <li><b>Wikipedia edits</b> from all languages, live: the size of the change sets the bubble size (a 10-byte fix is a 2 cm bubble, a big new section is 20 cm). New pages release a chain of bubbles, bots a small cluster. Each language wiki has its own place and depth in the water.</li>
-<li><b>Earthquakes</b> worldwide (US Geological Survey, checked every minute): each new quake releases a giant bubble far below, its size from the magnitude, its depth from the quake's depth, left or right from where on Earth it was.</li>
+<li><b>Earthquakes</b> worldwide, live from the US Geological Survey (checked every minute): every quake of the last 24 hours is a vent on the sea floor. Each new quake opens with a giant bubble, then its vent keeps releasing bubbles the way aftershocks fade (Omori's law), so a big recent quake keeps bubbling for hours while small old ones fall quiet. Bigger magnitude, bigger bubbles; deeper quake, deeper bubbles; west/east of the globe, left/right.</li>
 <li>The deep hum swells a little when the world is busier.</li>
 <li>If the data can't be reached, Alex's Morel attractor releases the bubbles instead.</li>
-<li>No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 13 Nov · first dive</span></details>
+<li>No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 14 Nov · global earthquakes</span></details>
 <script src="engine.js"></script>
 <script>
-const S={src:0,dens:0,hum:0,vol:1};
-const OPT={src:['Wikipedia + earthquakes','Wikipedia edits','Earthquakes','Morel attractor'],dens:['Calm','Medium','Lots'],hum:['On','Off'],vol:['Whisper','Soft','Medium','Loud']};
+const S={src:0,dens:0,hum:0,vol:1};const QON=()=>S.src<=1,WON=()=>S.src===1||S.src===2;
+const OPT={src:['Earthquakes','Earthquakes + Wikipedia','Wikipedia edits','Morel attractor'],dens:['Calm','Medium','Lots'],hum:['On','Off'],vol:['Whisper','Soft','Medium','Loud']};
 const DENS=[.25,.6,1.5],VOL=[.25,.5,.8,1.15];
 const $=id=>document.getElementById(id);
 document.querySelectorAll('.chips').forEach(el=>{const k=el.dataset.k;OPT[k].forEach((n,i)=>{const b=document.createElement('button');b.textContent=n;b.onclick=()=>{S[k]=i;paint();apply(k);};el.appendChild(b);});});
@@ -61,21 +61,39 @@ function onWiki(m){let d;try{d=JSON.parse(m.data);}catch(e){return;}rawCount++;l
  const len=d.length||{},dl=Math.abs((len.new||0)-(len.old||0)),a=Math.min(.22,Math.max(.012,.012*Math.pow(1+dl,.32))),wk=d.wiki||'wiki',hw=hash(wk),ht=hash(d.title||'');
  const ev={kind:d.type==='new'?'train':d.bot?'cluster':'single',n:d.type==='new'?5+Math.floor(ht*5):4+Math.floor(ht*4),a:d.bot?a*.6:a,h:8+70*hw,pan:(hw*2-1)*.8+(ht-.5)*.3,dist:3+42*hash(wk+'d')};
  release(ev,(dl?(len.new>=len.old?'+':'−')+dl+' bytes':'an edit')+' on '+(d.server_name||wk)+(d.title?' · “'+d.title.slice(0,40)+'”':'')+(d.bot?' (bot)':'')+(d.type==='new'?' · new page':''));}
-async function pollQuakes(first){try{const r=await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson',{cache:'no-store'});const j=await r.json();
-  const F=(j.features||[]).slice().sort((a,b)=>a.properties.time-b.properties.time);let fresh=F.filter(f=>!seenQ.has(f.id));F.forEach(f=>seenQ.add(f.id));if(first)fresh=fresh.slice(-1);
-  fresh.forEach((f,i)=>{const p=f.properties,c=(f.geometry||{}).coordinates||[0,0,10],mag=Math.max(0,p.mag||0);lastQuake='M'+mag.toFixed(1)+' '+(p.place||'');
-   setTimeout(()=>{if(!au.on)return;release({kind:'giant',a:Math.min(.5,.12+.08*mag),h:Math.min(250,Math.max(60,60+2*(c[2]||0))),pan:Math.max(-1,Math.min(1,(c[0]||0)/180)),dist:20+40*hash(f.id)},'Earthquake '+lastQuake);},i*4000+500);});
-  liveLine();}catch(e){lastQuake='(earthquake feed not reachable)';liveLine();}}
-function morelTick(){if(!au.on)return;const needed=S.src===3||(S.src<2&&performance.now()-lastData>15000)||(S.src===2&&!seenQ.size);
+/* Global earthquakes (USGS, every quake on Earth it records). Each quake of the last 24 h becomes a vent on the sea
+   floor that keeps releasing bubbles the way aftershocks decay: rate ∝ 10^(0.8·M) / (c + t)^p, Omori–Utsu law with
+   c = 0.05 h, p = 1.1, productivity exponent 0.8. New quakes arrive each minute and open with a giant bubble.
+   Vent bubble size grows with magnitude, depth follows the quake's depth, left/right its longitude, distance its latitude. */
+const QURL='https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';let vents=[],qErr='',newest=null,dayT=0,ventT=null,ventCarry=0;
+function ventOf(f){const p=f.properties||{},c=(f.geometry||{}).coordinates||[0,0,10];return{id:f.id,mag:Math.max(0,p.mag||0),t:p.time||Date.now(),place:p.place||'somewhere',lon:c[0]||0,lat:c[1]||0,dep:Math.max(0,c[2]||0),n:0};}
+const lam=v=>{const th=Math.max(0,(Date.now()-v.t)/3.6e6);return Math.pow(10,.8*v.mag)/Math.pow(.05+th,1.1);};
+const ago=t=>{const m=(Date.now()-t)/60000;return m<1?'just now':m<60?Math.round(m)+' min ago':Math.round(m/60)+' h ago';};
+// a giant bubble is kept at or above 24 Hz so the subwoofer can still play it (Minnaert: a = 3.26·sqrt(P/P0)/f)
+const vEv=(v,kind,a0)=>{const h=Math.min(220,20+1.5*v.dep),a=kind==='giant'?Math.min(a0,3.26*Math.sqrt(1+h/10.33)/24):a0;return vEv2(v,kind,a,h);};
+const vEv2=(v,kind,a,h)=>({kind,a,h,pan:Math.max(-1,Math.min(1,v.lon/180)),dist:5+45*Math.abs(v.lat)/90,n:4+(v.n%4)});
+async function pollQuakes(first){try{
+  if(first||Date.now()-dayT>30*60000){const r=await fetch(QURL+'all_day.geojson',{cache:'no-store'});const j=await r.json();dayT=Date.now();
+   const keep=new Map(vents.map(v=>[v.id,v]));vents=(j.features||[]).map(f=>keep.get(f.id)||ventOf(f));vents.forEach(v=>seenQ.add(v.id));
+   if(first&&vents.length){newest=vents.reduce((m,v)=>v.t>m.t?v:m,vents[0]);setTimeout(()=>au.on&&release(vEv(newest,'giant',Math.min(.5,.12+.08*newest.mag)),'Most recent earthquake · M'+newest.mag.toFixed(1)+' '+newest.place+' ('+ago(newest.t)+')'),600);}}
+  const r=await fetch(QURL+'all_hour.geojson',{cache:'no-store'});const j=await r.json();
+  const fresh=(j.features||[]).filter(f=>!seenQ.has(f.id)).sort((a,b)=>a.properties.time-b.properties.time);
+  fresh.forEach((f,i)=>{seenQ.add(f.id);const v=ventOf(f);vents.push(v);newest=v;setTimeout(()=>{if(au.on)release(vEv(v,'giant',Math.min(.5,.12+.08*v.mag)),'New earthquake · M'+v.mag.toFixed(1)+' '+v.place);},i*5000+400);});
+  vents=vents.filter(v=>Date.now()-v.t<26*3.6e6);qErr='';lastData=performance.now();}catch(e){qErr='earthquake feed not reachable, retrying each minute';}liveLine();}
+function ventTick(){if(!au.on||!QON()||!vents.length)return;ventCarry+=DENS[S.dens]*.25;while(ventCarry>=1){ventCarry-=1;
+  const L=vents.map(lam),tot=L.reduce((a,b)=>a+b,0);let u=Math.random()*tot,k=0;while(k<L.length-1&&u>L[k]){u-=L[k];k++;}const v=vents[k];v.n++;
+  const z=hash(v.id+':'+v.n),a=Math.min(.25,Math.max(.01,.015*Math.pow(10,.12*v.mag)*(.5+z)));const kind=z<.1?'train':z<.25?'cluster':'single';
+  release(vEv(v,kind,a),'From the M'+v.mag.toFixed(1)+' quake '+v.place+' ('+ago(v.t)+')');}}
+function morelTick(){if(!au.on)return;const needed=S.src===3||(S.src===2&&performance.now()-lastData>15000)||(QON()&&!vents.length&&(S.src===0||performance.now()-lastData>15000));
  if(needed){morel=mM(morel);const [s,th,r]=morel;release({kind:s>.9?'train':s<.1?'cluster':'single',n:5,a:.015+.07*r/3,h:6+60*s,pan:Math.cos(th)*.8,dist:5+30*(r/3)},'Morel attractor s='+s.toFixed(3));}
  morelT=setTimeout(morelTick,(S.src===3?1:3)*1000/(DENS[S.dens]/.6));}
 // Alex's Morel attractor map (MGS-1): s → 4s(1−s), θ → 2θ+0.3+Ω, r → 0.15r + 0.85·3·F(s)(1+Ω)(1−0.6P)  (pits P simplified to 0 here)
 function mM([s,th,r]){const F=x=>Math.pow(Math.max(0,Math.sin(Math.PI*(.18+.82*x))),.7)*(1-.1*x),Om=(t,x)=>.025*Math.sin(3*t+2*Math.PI*x)+.015*Math.sin(7*t-5*Math.PI*x);let s1=4*s*(1-s);if(!(s1>1e-12&&s1<1-1e-12))s1=.2137+((th*7.31)%.01);const th1=(((2*th+.3+Om(th,s))%(2*Math.PI))+2*Math.PI)%(2*Math.PI);return[s1,th1,.15*r+.85*3*F(s1)*(1+Om(th1,s1))];}
-function liveLine(){const w=S.src<=1?(es&&es.readyState===1?'Wikipedia live · '+Math.round(rawRate)+' changes/s worldwide':'Wikipedia: connecting…'):'';const q=S.src===0||S.src===2?'Earthquakes: '+(lastQuake||'none in the last hour yet'):'';
+function liveLine(){const w=WON()?(es&&es.readyState===1?'Wikipedia live · '+Math.round(rawRate)+' changes/s worldwide':'Wikipedia: connecting…'):'';const q=QON()?(qErr?'Earthquakes: '+qErr:vents.length?'Earthquakes: '+vents.length+' in the last day'+(newest?' · newest M'+newest.mag.toFixed(1)+' '+newest.place+', '+ago(newest.t):''):'Earthquakes: connecting…'):'';
  $('live').textContent=[w,q,S.src===3?'Morel attractor':''].filter(Boolean).join(' · ');}
-function connect(){disconnect();if(!au.on)return;if(S.src<=1){es=new EventSource('https://stream.wikimedia.org/v2/stream/recentchange');es.onmessage=onWiki;es.onopen=liveLine;es.onerror=liveLine;}
- if(S.src===0||S.src===2){pollQuakes(true);quakeT=setInterval(()=>pollQuakes(false),60000);}morelT=setTimeout(morelTick,4000);liveLine();}
-function disconnect(){if(es){es.close();es=null;}clearInterval(quakeT);clearTimeout(morelT);}
+function connect(){disconnect();if(!au.on)return;if(WON()){es=new EventSource('https://stream.wikimedia.org/v2/stream/recentchange');es.onmessage=onWiki;es.onopen=liveLine;es.onerror=liveLine;}
+ if(QON()){pollQuakes(true);quakeT=setInterval(()=>pollQuakes(false),60000);ventT=setInterval(ventTick,250);}morelT=setTimeout(morelTick,4000);liveLine();}
+function disconnect(){if(es){es.close();es=null;}clearInterval(quakeT);clearInterval(ventT);clearTimeout(morelT);}
 setInterval(()=>{rawRate=rawRate*.7+rawCount/2*.3;rawCount=0;post({rate:Math.min(1,rawRate/60)});liveLine();},2000);
 // ---------- picture: bubbles rising through dark water
 const cv=$('cv'),cx=cv.getContext('2d');let vis=[],last=performance.now();
