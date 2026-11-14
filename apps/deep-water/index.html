@@ -19,13 +19,18 @@ details{margin:8px 16px 28px;background:#071827;border-radius:14px;padding:4px 1
 #qlist{font-size:13px;margin-top:8px}#qlist .q{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #0e2a40}#qlist .m{min-width:42px;font-weight:700}
 #qlist .bar{height:6px;border-radius:3px;background:#7cc6e6;min-width:2px}#qlist .pl{flex:1;line-height:1.3}#qlist .ag{color:var(--dim);font-size:12px;white-space:nowrap}
 #qmore{margin-top:8px;border:0;border-radius:999px;padding:8px 13px;background:var(--chip);color:var(--ink);font-size:14px}#szCap{color:var(--dim);font-size:12px;margin-top:4px}
+body{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+#bar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:10px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(2,10,20,.92);backdrop-filter:blur(6px);z-index:10}
+#bar button{flex:1;padding:13px;border:0;border-radius:14px;font-size:16px;font-weight:600}#go{background:var(--on);color:#04121c}#tog{background:var(--chip);color:var(--ink)}
+body.min #panel{display:none}body.min #cv{height:calc(100dvh - 250px - env(safe-area-inset-bottom));max-height:none;min-height:240px}
 #ver{display:block;color:var(--dim);font-size:12px;margin:8px 0 12px}
 </style></head><body>
 <header><h1>Deep Water</h1><span>bubbles in the deep ocean, released by live data</span></header>
 <canvas id="cv"></canvas>
 <div id="live">Not listening yet</div>
 <div id="last">Tap Start. Every bubble comes from something happening in the world right now.</div>
-<div class="row"><button class="big" id="go">Start</button></div>
+<div id="bar"><button id="go">Start</button><button id="tog">Hide controls</button></div>
+<div id="panel">
 <div id="qp"><h2>Earthquakes, last 24 hours</h2><canvas id="map"></canvas><div id="qsum" style="color:var(--dim);font-size:12px;margin-top:4px"></div>
 <h2 style="margin-top:12px">The ground at the seismometer</h2><canvas id="seis"></canvas><div id="szCap">Tap Start to load the seismometer.</div>
 <h2 style="margin-top:12px">Which quakes are bubbling now</h2><div id="qlist">Tap Start to load the earthquakes.</div><button id="qmore">Show all</button></div>
@@ -43,7 +48,8 @@ details{margin:8px 16px 28px;background:#071827;border-radius:14px;padding:4px 1
 <li><b>Hear the Earth move:</b> a real seismometer's record of the ground's vertical motion, the last 20 minutes played 20 times faster as a one-minute loop that refreshes every minute (1 Hz shaking becomes a 20 Hz rumble). When an earthquake's waves reach the station you hear them, see them in the trace at the bottom, and more bubbles rise while the ground shakes.</li>
 <li>The deep hum swells a little when the world is busier.</li>
 <li>If the data can't be reached, Alex's Morel attractor releases the bubbles instead.</li>
-<li>No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 14 Nov · earthquake map and list</span></details>
+<li>No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 14 Nov · fold-away controls</span></details>
+</div>
 <script src="engine.js"></script><script src="mseed.js"></script>
 <script>
 const S={src:0,dens:0,hum:0,vol:1,sta:0,szl:0};const QON=()=>S.src<=1,WON=()=>S.src===1||S.src===2;
@@ -158,5 +164,8 @@ function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;const w=cv.cl
  vis=vis.filter(b=>b.h>0&&now-b.born<40000);for(const b of vis){if((now-b.born)/1000<b.d)continue;const U=.711*Math.sqrt(9.81*2*b.a);b.h-=U*dt*1.6;const px=Math.max(1.5,b.a*(b.giant?110:220))*(1-.4*Math.min(1,b.far/50));
   const al=Math.max(.15,.8-b.far/70);cx.beginPath();cx.arc(b.x*w+Math.sin(now/700+b.born)*3,Y(b.h),px,0,2*Math.PI);cx.strokeStyle=`rgba(170,225,250,${al})`;cx.lineWidth=b.giant?2:1.2;cx.stroke();cx.fillStyle=`rgba(120,200,240,${al*.18})`;cx.fill();}
  drawMap(now);drawSeis();requestAnimationFrame(frame);}
+/* controls panel can be folded away so the water fills the screen; the choice is remembered on this device */
+function setMin(on){document.body.classList.toggle('min',on);$('tog').textContent=on?'Show controls':'Hide controls';try{localStorage.setItem('dwMin',on?'1':'0');}catch(e){}}
+$('tog').onclick=()=>setMin(!document.body.classList.contains('min'));try{if(localStorage.getItem('dwMin')==='1')setMin(true);}catch(e){}
 paint();requestAnimationFrame(frame);
 </script></body></html>
