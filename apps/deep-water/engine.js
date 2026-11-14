@@ -2,6 +2,7 @@
 // Physics: Minnaert resonance  f = (1/2πa)·sqrt(3γP/ρ), P = P0 + ρgh  (Minnaert 1933)
 //          a rising bubble expands as the pressure drops: a = a0·(P0'/P)^(1/3), so its pitch slides down
 //          rise speed of a large spherical-cap bubble: U = 0.711·sqrt(g·2a)  (Davies & Taylor 1950)
+//          wake murmur only for big bubbles (scaled by (a/12 cm)^3); small bubbles ring once, then rise quietly
 //          damping: radiation δ = ωa/c plus thermal/viscous ≈ 0.03 (Devin 1959, order of magnitude for big bubbles)
 //          radiated pressure ∝ a³·(radial acceleration) ≈ a³·ω²·x
 // No surface, no splashes, no flowing water: the listener is deep, everything is bubbles plus the faint deep hum.
@@ -29,13 +30,13 @@ class Eng{
  start(q){if(this.B.length>=28){let k=0;for(let i=1;i<this.B.length;i++)if(this.B[i].env<this.B[k].env)k=i;this.B.splice(k,1);}
   const g=1/(1+q.dist/12),cut=Math.min(.9,1-Math.exp(-TAU*Math.max(250,2400/(1+q.dist/15))/this.SR));
   this.B.push({a0:q.a,h0:q.h,a:q.a,h:q.h,x:q.x0,v:0,w:omega(q.a,q.h),be:0,wake:0,rise:q.rise,n:0,age:0,env:1,
-   gl:g*Math.sqrt(.5*(1-Math.max(-1,Math.min(1,q.pan)))),gr:g*Math.sqrt(.5*(1+Math.max(-1,Math.min(1,q.pan)))),rv:Math.min(.8,.15+q.dist/60),cut,lp:0,life:Math.round(Math.min(30,8+q.h/3)*this.SR)});}
+   gl:g*Math.sqrt(.5*(1-Math.max(-1,Math.min(1,q.pan)))),gr:g*Math.sqrt(.5*(1+Math.max(-1,Math.min(1,q.pan)))),rv:Math.min(.8,.15+q.dist/60),cut,lp:0,life:Math.round((q.a<.05?3:Math.min(30,8+q.h/3))*this.SR)});}
  process(L,R,N){const SR=this.SR,KD=this.KD,F=this.fdn,hc=this.hc;
   for(let j=0;j<N;j++){
    for(let i=this.Q.length-1;i>=0;i--)if(this.Q[i].t<=this.t){this.start(this.Q[i]);this.Q.splice(i,1);}
    let l=0,r=0,wet=0;const B=this.B;
    for(let i=B.length-1;i>=0;i--){const b=B[i];
-    if((b.n++&63)===0){if(b.rise)b.h=Math.max(0,b.h-.711*Math.sqrt(G*2*b.a)*64/SR);b.a=b.a0*Math.cbrt(press(b.h0)/press(b.h));b.w=omega(b.a,b.h);b.be=(b.w*b.a/CW+.03)*b.w/2;b.wake=b.rise?.024*b.w*b.w*Math.exp(-b.age/(4*SR)):0;b.nk=1-Math.exp(-1.5*b.w/SR);
+    if((b.n++&63)===0){if(b.rise)b.h=Math.max(0,b.h-.711*Math.sqrt(G*2*b.a)*64/SR);b.a=b.a0*Math.cbrt(press(b.h0)/press(b.h));b.w=omega(b.a,b.h);b.be=(b.w*b.a/CW+.03)*b.w/2;b.wake=b.rise?.024*b.w*b.w*Math.exp(-b.age/(4*SR))*Math.min(1,Math.pow(b.a/.12,3)):0;b.nk=1-Math.exp(-1.5*b.w/SR);
      const left=b.life-b.age;b.env=left<SR*3?Math.max(0,left/(SR*3)):1;}
     // wake turbulence: noise band-limited to just above the bubble's own note, fading over the first seconds of the rise
     let fw=0;if(b.wake>1e-6){b.n1=(b.n1||0)+((this.rnd()*2-1)-(b.n1||0))*b.nk;b.n2=(b.n2||0)+(b.n1-(b.n2||0))*b.nk;fw=b.n2*b.wake*3;}
