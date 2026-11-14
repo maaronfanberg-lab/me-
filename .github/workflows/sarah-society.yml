@@ -58,6 +58,7 @@ jobs:
           ROOM_CAUSAL_WORLD_EXPERIMENT: '1' # time-limited 36480-36599 canary, following earlier scene trial
           ROOM_CONCORDIA_WORLD_ENABLE: '0' # replaced by actual DeepMind Concordia referee
           ROOM_NATIVE_CONCORDIA: ${{ vars.ROOM_NATIVE_CONCORDIA_DISABLE == '1' && '0' || '1' }}
+          ROOM_NATIVE_LLM_TIMEOUT_SECONDS: '195' # bounded queue tolerance; beat still capped at 300s
           ROOM_NATIVE_3B_DISABLE: ${{ vars.ROOM_NATIVE_3B_DISABLE == '1' && '1' || '0' }}
         run: |
           set -uo pipefail
