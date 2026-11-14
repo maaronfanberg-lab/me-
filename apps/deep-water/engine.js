@@ -14,7 +14,7 @@ class Eng{
   // master: underwater low-pass, 18 Hz high-pass (receiver/sub protection), small 4-line FDN for the open water
   this.lp=[0,0,0,0];this.hpS=[[0,0,0,0],[0,0,0,0]];const w=Math.tan(Math.PI*18/SR),k=1/(1+Math.SQRT2*w+w*w);this.hc=[k,-2*k,k,2*(w*w-1)*k,(1-Math.SQRT2*w+w*w)*k];
   this.fdn=[2399,3119,3793,4447].map(n=>({b:new Float32Array(Math.round(n*SR/48000)),w:0,lp:0}));this.fdnG=Math.pow(10,-3*(3119/48000)/4.5);
-  this.brown=0;this.humLP=[0,0];this.sz=null;this.szNext=null;this.szPos=0;this.szRate=800;this.szLvl=0;this.szG=0;this.szEnv=0;this.szHP=[0,0];this.mod=0;this.KD=.25/(Math.pow(.1,3)*.06*Math.pow(omega(.1,0),2));this.vol=.6;}
+  this.brown=0;this.humLP=[0,0,0,0];this.sz=null;this.szNext=null;this.szPos=0;this.szRate=800;this.szLvl=0;this.szG=0;this.szEnv=0;this.szHP=[0,0];this.mod=0;this.KD=.25/(Math.pow(.1,3)*.06*Math.pow(omega(.1,0),2));this.vol=.6;}
  // real seismometer trace (already sped up and normalised by the page), looped; swapped in at the loop boundary
  seis(d){if(!d){this.szNext=null;this.sz=null;return;}if(!this.sz){this.sz=d.data;this.szRate=d.rate;this.szPos=0;}else{this.szNext=d.data;this.szRate=d.rate;}}
  rnd(){this.seed=(this.seed*1664525+1013904223)>>>0;return this.seed/4294967296;}
@@ -35,17 +35,19 @@ class Eng{
    for(let i=this.Q.length-1;i>=0;i--)if(this.Q[i].t<=this.t){this.start(this.Q[i]);this.Q.splice(i,1);}
    let l=0,r=0,wet=0;const B=this.B;
    for(let i=B.length-1;i>=0;i--){const b=B[i];
-    if((b.n++&63)===0){if(b.rise)b.h=Math.max(0,b.h-.711*Math.sqrt(G*2*b.a)*64/SR);b.a=b.a0*Math.cbrt(press(b.h0)/press(b.h));b.w=omega(b.a,b.h);b.be=(b.w*b.a/CW+.03)*b.w/2;b.wake=b.rise?.024*b.w*b.w:0;
+    if((b.n++&63)===0){if(b.rise)b.h=Math.max(0,b.h-.711*Math.sqrt(G*2*b.a)*64/SR);b.a=b.a0*Math.cbrt(press(b.h0)/press(b.h));b.w=omega(b.a,b.h);b.be=(b.w*b.a/CW+.03)*b.w/2;b.wake=b.rise?.024*b.w*b.w*Math.exp(-b.age/(4*SR)):0;b.nk=1-Math.exp(-1.5*b.w/SR);
      const left=b.life-b.age;b.env=left<SR*3?Math.max(0,left/(SR*3)):1;}
-    const acc=-b.w*b.w*b.x-2*b.be*b.v+(b.wake?(this.rnd()*2-1)*b.wake:0);b.v+=acc/SR;b.x+=b.v/SR;
+    // wake turbulence: noise band-limited to just above the bubble's own note, fading over the first seconds of the rise
+    let fw=0;if(b.wake>1e-6){b.n1=(b.n1||0)+((this.rnd()*2-1)-(b.n1||0))*b.nk;b.n2=(b.n2||0)+(b.n1-(b.n2||0))*b.nk;fw=b.n2*b.wake*3;}
+    const acc=-b.w*b.w*b.x-2*b.be*b.v+fw;b.v+=acc/SR;b.x+=b.v/SR;
     const y=-KD*b.a*b.a*b.a*b.w*b.w*b.x*b.env;b.lp+=(y-b.lp)*b.cut;l+=b.lp*b.gl;r+=b.lp*b.gr;wet+=b.lp*b.rv;
     if(++b.age>=b.life||b.h<=0)B.splice(i,1);}
    if(this.sz){const n=this.sz.length,p=this.szPos,i=p|0,f=p-i,y0=this.sz[(i-1+n)%n],y1=this.sz[i%n],y2=this.sz[(i+1)%n],y3=this.sz[(i+2)%n];
     const y=y1+.5*f*(y2-y0+f*(2*y0-5*y1+4*y2-y3+f*(3*(y1-y2)+y3-y0)));this.szG+=(this.szLvl-this.szG)*.0005;const g=y*this.szG;l+=g;r+=g;wet+=g*.4;this.szEnv+=(Math.abs(y)-this.szEnv)*.0002;
     this.szPos+=this.szRate/SR;if(this.szPos>=n){this.szPos-=n;if(this.szNext){this.sz=this.szNext;this.szNext=null;this.szPos=0;}}}
    // deep hum: brown noise below ~90 Hz, slowly breathing; its level follows how busy the live data is
-   this.brown=(this.brown+(this.rnd()*2-1)*.02)*.998;const hk=1-Math.exp(-TAU*90/SR);this.humLP[0]+=(this.brown-this.humLP[0])*hk;this.humLP[1]+=(this.humLP[0]-this.humLP[1])*hk;
-   this.mod+=TAU*.031/SR;this.humLvl+=((this.hum?(.35+.25*this.rateLvl)*(1+.3*Math.sin(this.mod)):0)-this.humLvl)*.00002;const hm=this.humLP[1]*this.humLvl*2.2;l+=hm;r+=hm*.92;
+   this.brown=(this.brown+(this.rnd()*2-1)*.02)*.998;const hk=1-Math.exp(-TAU*45/SR),H=this.humLP;H[0]+=(this.brown-H[0])*hk;H[1]+=(H[0]-H[1])*hk;H[2]+=(H[1]-H[2])*hk;H[3]+=(H[2]-H[3])*hk;
+   this.mod+=TAU*.031/SR;this.humLvl+=((this.hum?(.35+.25*this.rateLvl)*(1+.3*Math.sin(this.mod)):0)-this.humLvl)*.00002;const hm=this.humLP[3]*this.humLvl*1.2;l+=hm;r+=hm*.92;
    // open-water reverb: 4-line Householder FDN, darkened
    let s=0;const o=[0,0,0,0];for(let k=0;k<4;k++){const d=F[k];o[k]=d.b[d.w];s+=o[k];}s*=.5;
    for(let k=0;k<4;k++){const d=F[k];let v=(o[k]-s)*this.fdnG+wet*.35;d.lp+=(v-d.lp)*.25;d.b[d.w]=d.lp;d.w=(d.w+1)%d.b.length;}

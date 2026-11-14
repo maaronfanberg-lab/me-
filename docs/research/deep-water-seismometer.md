@@ -20,3 +20,12 @@ request URL formed correctly, trace drawn with playhead, envelope reported, Off 
 **Limits.** CORS on the EarthScope service could not be tested from the build machine (network-restricted); the page
 says "not reachable" plainly if the browser blocks it. Data latency is typically minutes. With 20x compression a
 quake's waves enter the loop within ~1-2 minutes of reaching the station, then repeat each minute for ~20 minutes.
+
+## 2026-11-14 follow-up: steady hiss
+**Observed:** Alex hears a prolonged hiss/static even after refresh. **Measured (engine alone):** the noise-based deep
+hum sat at -22 to -29 dB with energy into the hundreds of Hz, and rising bubbles were driven by white-noise "wake"
+forcing whose broadband leakage summed into a hiss (-39.7 dB in 300-1800 Hz after bubbles stopped starting).
+**Change:** wake forcing band-limited to just above each bubble's own note (2-pole low-pass at 1.5·ω) and fading over
+the first ~4 s of the rise (physically, wake shedding is low-frequency, St·U/d ~ 1 Hz, so white forcing was too broad);
+hum now 4-pole low-pass at 45 Hz, ~10 dB quieter, off by default. **Result:** 300-1800 Hz tail energy -61.7 dB
+(22 dB lower); single-bubble murmur at 10 s -53 dB (was -36); Minnaert pitch check still exact.
