@@ -109,7 +109,15 @@ class LocalLlama(language_model.LanguageModel):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=min(90, max(5, timeout))) as reply:
+        # Concordia may issue several requests concurrently, while the Room's
+        # local llama-server has one inference slot. Permit a bounded, explicit
+        # workflow override so queued requests do not expire at the upstream
+        # default of 60 seconds. The outer beat timeout remains unchanged.
+        request_timeout = min(90, max(5, timeout))
+        configured_timeout = os.environ.get("ROOM_NATIVE_LLM_TIMEOUT_SECONDS")
+        if configured_timeout:
+            request_timeout = min(240, max(5, float(configured_timeout)))
+        with urllib.request.urlopen(request, timeout=request_timeout) as reply:
             result = json.load(reply)
         choices = result.get("choices") or []
         output = str((choices[0].get("message") or {}).get("content") or "") if choices else ""
