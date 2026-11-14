@@ -85,7 +85,7 @@ class NativeConcordiaTests(unittest.TestCase):
             def __enter__(self):
                 return io.BytesIO(json.dumps({
                     "choices": [{"message": {"content":
-                        'I check the notebook.\n{"mask":[],"timer":{"time":"15m"}}'}}
+                        'I check the notebook.\n{"mask":[],"timer":{"time":"15m"}}'}}]
                 }).encode())
 
             def __exit__(self, exc_type, exc, tb):
