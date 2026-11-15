@@ -182,6 +182,18 @@ class LiveRoomTests(unittest.TestCase):
         )
         self.assertEqual(public_after[:len(public_before)], public_before)
 
+    def test_stray_empty_control_list_is_not_public_speech(self):
+        raw = ('I sit beside the plant and record a new observation.\n\n[]\n'
+               '{"mask": [], "timer": {"time": "15m", "reason": "continue work"}}')
+        text = bridge._message_from_concordia(raw, "Jules", [])
+        self.assertEqual(text, "I sit beside the plant and record a new observation.")
+        self.assertEqual(
+            bridge._message_from_concordia(
+                '\n[]\n{"mask": [], "timer": {"time": "15m"}}',
+                "Jules", [],
+            ), "",
+        )
+
     def test_invalid_model_scaffolding_not_published(self):
         history = [{"text": "Hi there"}]
         self.assertEqual(
