@@ -42,7 +42,7 @@ def _recipients(item: Mapping, text: str) -> set[str]:
 
 def _can_witness(item: Mapping, person: str) -> bool:
     speaker = str(item.get("speaker") or "").lower()
-    visibility = str(item.get("visibility") or "public").lower()
+    visibility = str(item.get("visibility") or "public")
     witnesses = item.get("witnesses")
     known = (
         {x.lower() for x in witnesses if isinstance(x, str)}
