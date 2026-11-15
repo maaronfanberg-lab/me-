@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/room_social_memory.py'
       - 'scripts/test_room_social_memory.py'
+      - 'scripts/room_social_eval.py'
+      - 'scripts/test_room_social_eval.py'
       - '.github/workflows/room-social-memory-test.yml'
   workflow_dispatch:
 
@@ -21,4 +23,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Verify witnessed memory and relationship evidence
-        run: python -m unittest discover -s scripts -p 'test_room_social_memory.py' -v
+        run: |
+          python -m unittest discover -s scripts -p 'test_room_social_memory.py' -v
+          python -m unittest discover -s scripts -p 'test_room_social_eval.py' -v
