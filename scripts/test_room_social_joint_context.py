@@ -69,6 +69,28 @@ class SocialJointContextTests(unittest.TestCase):
         self.assertEqual([b["source_id"] for b in result["open_bids"]], ["same"])
         self.assertEqual(result["open_bids"][0]["text"], "Sarah, a public question.")
 
+
+    def test_explicit_unknown_visibility_cannot_retire_public_bid(self):
+        # A linked private-looking response with malformed visibility must
+        # not count as delivered to the original speaker.
+        question = {"id": "q", "speaker": "sarah",
+                    "text": "Mara, did you finish?"}
+        for bad in ("", "unknown", None):
+            reply = {"id": "r", "speaker": "mara", "text": "Yes.",
+                     "reply_to": "q", "visibility": bad,
+                     "witnesses": ["mara", "sarah"]}
+            result = joint_context([question, reply], "mara")
+            self.assertEqual([x["source_id"] for x in result["open_bids"]], ["q"])
+            self.assertEqual(result["linked_reply_ids"], [])
+
+    def test_legacy_missing_visibility_can_retire_public_bid(self):
+        events = [
+            {"id": "q", "speaker": "sarah", "text": "Mara, is it ready?"},
+            {"id": "r", "speaker": "mara", "text": "Yes.",
+             "reply_to": "q"},
+        ]
+        self.assertEqual(joint_context(events, "mara")["linked_reply_ids"], ["q"])
+
     def test_limits_empty_and_unknown(self):
         self.assertEqual(joint_context([], "owen")["open_bids"], [])
         self.assertEqual(joint_context([], "owen", limit=0)["open_bids"], [])
