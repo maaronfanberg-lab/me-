@@ -174,3 +174,42 @@ Experiment design:
 A module importing, a scheduler running or a feed cycle advancing does not
 demonstrate useful friendships, conversation continuity or genuine agency.
 Prototype quality and production behavior must be reported separately.
+
+## 2026-11-15 16:16 UTC operational audit and hypothesis
+
+Live feed/state agreed at cycle 68,021, last run 16:16:57 UTC.
+Last published utterance was Sarah at 16:14:31 UTC, "I decide to
+inspect(bookshelf)." The last 160 public turns contained 75 instances of
+"decide", 50 "inspect", 40 "notebook", 50 "quietly", zero question marks,
+and zero Allen mentions. These counts are descriptive. The current state
+reported two consecutive silent cycles, 877 completed world tasks, zero
+active tasks, and zero verified world interrupts. Scheduler had no queued
+events, no acted steps, was not exhausted, and Sarah had a timer.
+No new Allen inputs were recorded; no inference of ignored user messages.
+The prior 15:21 audit showed cycle 67,969 and zero silence cycles; this
+is continued activity without conversational recovery.
+
+**Falsifiable causal hypothesis:** A proposed work decision can be
+published as if it were meaningful progress without an explicit,
+verifiable link to a referee-confirmed completion event. This permits
+repeated 'I decide to ...' claims to appear productive even when no
+specific action is proven. The existing referee records work completion,
+but the legacy ledger does not carry the decision ID and exact
+verb/object needed for a trustworthy causal join.
+
+**Isolated repair:** scripts/room_social_receipts.py defines a
+fail-closed join requiring exact actor, decision ID, verb, object, and
+a later referee cycle. Tests include no completion, forged text claim,
+mismatched actor/object/cause, duplicate receipts, invalid work and
+private witness boundaries. It deliberately does NOT retrofit old
+events by inferring provenance from natural language. Next step is a
+trusted world-referee adapter to write these provenance fields and
+compare matched scenarios. Until then no newly verified live action
+is claimed and no social-behavior improvement is demonstrated.
+
+**Operational blocker:** GitHub's production job log download still
+returns BlobNotFound (404); job-step summaries remain accessible.
+Both The Room and The Room Pulse production jobs were in progress
+when checked. No new runner was started. This branch's unrelated
+Cloudflare room-live-mirror check is failing; the isolated new
+receipt-test commit must obtain a passing CI result before merge.
