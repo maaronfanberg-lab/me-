@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import unittest
-from room_social_eval import audit
+from room_social_eval import audit, proposed_work_signature
 
 
 class SocialEvalTests(unittest.TestCase):
@@ -21,6 +21,26 @@ class SocialEvalTests(unittest.TestCase):
         result = audit([])
         self.assertEqual(result["turns"], 0)
         self.assertEqual(result["same_speaker_near_duplicates"], 0)
+
+    def test_recurrent_work_promises_are_not_missed_as_identical_text(self):
+        # Distinct sentences, same unverified proposal. No need for a ban.
+        trace = [
+            {"speaker": "mara", "text": "I decide to inspect the notebook."},
+            {"speaker": "jules", "text": "I will test the instruments."},
+            {"speaker": "mara", "text": "I'll quietly inspect the notebook for another clue."},
+        ]
+        result = audit(trace)
+        self.assertEqual(result["same_speaker_near_duplicates"], 0)
+        self.assertEqual(result["repeated_intended_work_turns_within_80"], 1)
+        self.assertEqual(result["distinct_intended_work_signatures"], 2)
+        self.assertEqual(result["repeated_intended_work_examples"][0]["speaker"], "mara")
+
+    def test_work_proposal_is_not_verified_work_and_requires_affordance(self):
+        self.assertEqual(proposed_work_signature("I'll inspect the notebook."), ("inspect", "notebook"))
+        self.assertEqual(proposed_work_signature("I decide to write(board, notebook)"), ("write", "board"))
+        self.assertIsNone(proposed_work_signature("The plant might need inspecting."))
+        self.assertIsNone(proposed_work_signature("I'll write on the plant."))
+        self.assertEqual(audit([{"speaker": "sarah", "text": "I'll inspect the notebook."}])["repeated_intended_work_turns_within_80"], 0)
 
     def test_does_not_label_intentions_as_verified_actions(self):
         result = audit([{"speaker": "owen", "text": "I will measure the glass today."}])
