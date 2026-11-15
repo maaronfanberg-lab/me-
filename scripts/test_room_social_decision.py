@@ -32,7 +32,11 @@ class SocialDecisionTests(unittest.TestCase):
     def test_unanswered_address_takes_priority_without_inventing_reply(self):
         event = {"id": "a", "speaker": "jules", "visibility": "public", "addresses": ["mara"]}
         work = [{"kind": "work", "verb": "inspect", "object": "notebook"}]
-        self.assertEqual(decide("mara", [event], proposals=work).reason, "awaiting_grounded_reply")
+        result = decide("mara", [event], proposals=work)
+        self.assertEqual((result.kind, result.verb, result.object), ("work", "inspect", "notebook"))
+        self.assertEqual(decide("mara", [event], proposals=work, active_task={"verb": "measure"}).reason,
+                         "continuing_unfinished_task")
+        self.assertEqual(decide("mara", [event]).source_event_id, "a")
 
     def test_malformed_proposals_do_not_crash_or_hide_valid_options(self):
         event = {"id": "u1", "speaker": "allen", "visibility": "public",
