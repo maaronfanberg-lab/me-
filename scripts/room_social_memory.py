@@ -75,10 +75,10 @@ def relationship_evidence(events: Sequence[Experience], person: str) -> dict:
     for event in events:
         if event.speaker == person:
             for other in PEOPLE - {person}:
-                if re.search(r"\\b" + re.escape(other) + r"\\b", event.text.lower()):
+                if re.search(r"\b" + re.escape(other) + r"\b", event.text.lower()):
                     counts[other] += 1
         elif event.speaker in PEOPLE:
-            if re.search(r"\\b" + re.escape(person) + r"\\b", event.text.lower()):
+            if re.search(r"\b" + re.escape(person) + r"\b", event.text.lower()):
                 counts[event.speaker] += 1
     return dict(counts)
 
