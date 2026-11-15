@@ -35,6 +35,14 @@ class ReceiptTests(unittest.TestCase):
     def test_duplicate_receipts_fail_closed(self):
         self.assertIsNone(self.receipt([self.event, dict(self.event)]))
 
+    def test_colliding_event_id_cannot_certify_completion(self):
+        # Even a different decision/actor using the same world ID invalidates
+        # the evidence; one matching row must not mask a contradictory row.
+        conflicting = dict(self.event, actor="owen", source_decision_id="other")
+        self.assertIsNone(self.receipt([self.event, conflicting]))
+        self.assertIsNone(self.receipt([conflicting, self.event]))
+        self.assertIsNotNone(self.receipt([self.event, dict(conflicting, id="other")]))
+
     def test_private_receipt_stays_private(self):
         event = dict(self.event, visibility="private", witnesses=["mara", "owen"])
         receipt = self.receipt([event])
