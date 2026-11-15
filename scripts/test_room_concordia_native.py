@@ -84,7 +84,7 @@ class NativeConcordiaTests(unittest.TestCase):
         with patch.object(model, "_sample_raw_text", return_value="1"):
             self.assertEqual(
                 model.sample_text("What does Mara independently choose to do next?"),
-                '\\n{"mask": [], "timer": {"time": "15m", "reason": "reflect quietly"}}',
+                chr(10) + '{"mask": [], "timer": {"time": "15m", "reason": "reflect quietly"}}',
             )
 
     def test_llama_adapter_refuses_remote_upload_of_room_prompts(self):
