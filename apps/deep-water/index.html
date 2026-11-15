@@ -172,7 +172,7 @@ async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGen
    let peak=0;for(let i=0;i<N;i++){x[i]-=mean;peak=Math.max(peak,Math.abs(x[i]));}
    if(!(peak>0))throw new Error('no measurable samples');
    const scale=.78/peak;for(let i=0;i<N;i++)x[i]*=scale;
-   waveSource={x,rate,startT,endT,name,peak};waveSections=WAVES.analyze(x,rate,startT,{limit:7});
+   waveSource={x,rate,startT,endT,name,peak};waveSections=WAVES.analyze(x,rate,startT);
    if(!waveSections.length)throw new Error('no measurable waveform sections');
    selectSection(0);
   }else{
