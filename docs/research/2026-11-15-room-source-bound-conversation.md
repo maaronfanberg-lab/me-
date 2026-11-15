@@ -82,4 +82,4 @@ against comparable live snapshots. Do not publish or migrate until a
 longitudinal pilot shows causal action follow-through and preserved history.
 
 **Production post-change outcome:** not applicable; no production change.
-**Sandbox test result:** to be recorded after PR CI runs on the new code.
+**Sandbox test result:** CI run 43722561139 at 2026-11-15 14:07 UTC passed all 21 tests (8 witnessed-memory, 5 trace-audit, 8 joint-context). This verifies source and boundary fixtures, not conversational performance. The pilot has not yet produced an independently generated matched 160-turn trace or exercised an alternative LLM scheduler.
