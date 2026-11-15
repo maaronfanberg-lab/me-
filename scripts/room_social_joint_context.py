@@ -42,13 +42,19 @@ def _recipients(item: Mapping, text: str) -> set[str]:
 
 def _can_witness(item: Mapping, person: str) -> bool:
     speaker = str(item.get("speaker") or "").lower()
-    visibility = str(item.get("visibility") or "public")
+    # Mirror witnessed_history exactly: absent legacy visibility is public,
+    # but an explicit unknown/empty classification never grants access.
+    visibility = item["visibility"] if "visibility" in item else "public"
+    if visibility == "public":
+        return True
+    if visibility != "private":
+        return False
     witnesses = item.get("witnesses")
     known = (
         {x.lower() for x in witnesses if isinstance(x, str)}
         if isinstance(witnesses, (list, tuple)) else set()
     )
-    return visibility == "public" or person == speaker or person in known
+    return person == speaker or person in known
 
 
 def joint_context(events: Sequence[Mapping], person: str, *, limit: int = 6) -> dict:
