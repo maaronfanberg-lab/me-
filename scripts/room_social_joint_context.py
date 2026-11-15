@@ -75,7 +75,11 @@ def joint_context(events: Sequence[Mapping], person: str, *, limit: int = 6) -> 
     for item in events:
         if isinstance(item, Mapping):
             event_id = str(item.get("id") or "")
-            if event_id:
+            # Match the accessible first occurrence chosen by witnessed_history.
+            # A hidden collision must never supply someone else's metadata.
+            if (event_id and _can_witness(item, person)
+                    and str(item.get("speaker") or "").lower() in PEOPLE
+                    and str(item.get("text") or "").strip()):
                 original_by_id.setdefault(event_id, item)
 
     witnessed_ids = {entry.event_id for entry in history}
