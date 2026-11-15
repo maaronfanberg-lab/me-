@@ -9,6 +9,8 @@ on:
       - 'scripts/test_room_social_eval.py'
       - 'scripts/room_social_decision.py'
       - 'scripts/test_room_social_decision.py'
+      - 'scripts/room_social_receipts.py'
+      - 'scripts/test_room_social_receipts.py'
       - 'scripts/room_social_joint_context.py'
       - 'scripts/test_room_social_joint_context.py'
       - '.github/workflows/room-social-memory-test.yml'
@@ -32,5 +34,6 @@ jobs:
           python -m unittest discover -s scripts -p 'test_room_social_eval.py' -v
           python -m unittest discover -s scripts -p 'test_room_social_decision.py' -v
           python -m unittest discover -s scripts -p 'test_room_social_joint_context.py' -v
+          python -m unittest discover -s scripts -p 'test_room_social_receipts.py' -v
       - name: Produce reproducible snapshot audit (not an agent-quality verdict)
         run: python scripts/room_social_eval.py --feed room/feed.json --last 160
