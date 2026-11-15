@@ -150,11 +150,20 @@ $('scanMode').onclick=()=>{autoScan=!autoScan;$('scanMode').textContent='Auto ex
 $('reloadWave').onclick=()=>{waveSections=[];waveSource=null;post({seis:null});seisPoll();};
 const iso=t=>new Date(t).toISOString().slice(0,19);
 async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGeneration;if(S.sta>=STA.length){post({seis:null});szData=null;$('szRead').textContent='';return;}
- const [net,sta,loc,cha,name]=STA[S.sta],t1=Date.now(),t0=t1-22*60000;
- try{const r=await fetch(`https://service.iris.edu/fdsnws/dataselect/1/query?net=${net}&sta=${sta}&loc=${loc}&cha=${cha}&starttime=${iso(t0)}&endtime=${iso(t1)}&nodata=404`,{cache:'no-store'});
-  if(!r.ok)throw new Error(r.status===404?'no recent data from this station':'HTTP '+r.status);
-  const bytes=await r.arrayBuffer();if(req!==seisGeneration||!au.on)return;const recs=MS.parse(bytes).filter(x=>x.rate>0&&x.samples.length).sort((a,b)=>a.start-b.start);if(!recs.length)throw new Error('empty');
-  const rate=recs[0].rate,startT=recs[0].start,last=recs[recs.length-1],endT=last.start+last.samples.length/rate*1000,N=Math.round((endT-startT)/1000*rate),x=new Float32Array(N);
+ const [net,sta,loc,cha,name]=STA[S.sta],t1=Date.now();
+ try{let bytes=null;
+  // Longer real recording for contrasting waveforms; fall back if archive rejects request.
+  for(const minutes of (S.src===4?[75,22]:[22])){
+   try{const t0=t1-minutes*60000;
+    const url=`https://service.iris.edu/fdsnws/dataselect/1/query?net=${net}&sta=${sta}&loc=${loc}&cha=${cha}&starttime=${iso(t0)}&endtime=${iso(t1)}&nodata=404`;
+    const r=await fetch(url,{cache:'no-store'});
+    if(!r.ok)throw new Error(r.status===404?'no recent data from this station':'HTTP '+r.status);
+    bytes=await r.arrayBuffer();break;
+   }catch(e){if(minutes===22)throw e;}
+  }
+  if(req!==seisGeneration||!au.on)return;
+  const recs=MS.parse(bytes).filter(x=>x.rate>0&&x.samples.length).sort((a,b)=>a.start-b.start);if(!recs.length)throw new Error('empty');
+  const rate=recs[0].rate,startT=recs[0].start,last=recs[recs.length-1],endT=last.start+last.samples.length/rate*1000,N=Math.round((endT-startT)/1000*rate);if(N<2||N>1200000)throw new Error('invalid recording length');const x=new Float32Array(N);
   for(const q of recs){const o=Math.round((q.start-startT)/1000*rate);for(let i=0;i<q.samples.length&&o+i<N;i++)if(o+i>=0)x[o+i]=q.samples[i];}
   // No waves are synthesized in direct mode. One gain factor applies across the entire recording.
   // Center the ADC trace and peak-normalize without saturation, gating, filtering or per-event shaping.
@@ -163,8 +172,9 @@ async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGen
    let peak=0;for(let i=0;i<N;i++){x[i]-=mean;peak=Math.max(peak,Math.abs(x[i]));}
    if(!(peak>0))throw new Error('no measurable samples');
    const scale=.78/peak;for(let i=0;i<N;i++)x[i]*=scale;
-   szData={x,xd:x,rate,startT,endT,name,peak};
-   post({seis:{data:x,rate}});
+   waveSource={x,rate,startT,endT,name,peak};waveSections=WAVES.analyze(x,rate,startT,{limit:7});
+   if(!waveSections.length)throw new Error('no measurable waveform sections');
+   selectSection(0);
   }else{
    let m=0;for(let i=0;i<N;i++)m+=x[i]/N;const a=[];for(let i=0;i<N;i++){x[i]-=m;}const hp=Math.exp(-2*Math.PI*.05/rate);let pv=0,py=0;for(let i=0;i<N;i++){const y=hp*(py+x[i]-pv);pv=x[i];py=y;x[i]=y;}
    for(let i=0;i<N;i+=7)a.push(Math.abs(x[i]));a.sort((p,q)=>p-q);const sc=3*(a[Math.floor(a.length*.9)]||1);for(let i=0;i<N;i++)x[i]=Math.tanh(x[i]/sc);
@@ -175,9 +185,9 @@ async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGen
     for(let i=0;i<N;i++){const t=Math.max(0,Math.min(1,(env[i]/med-2)/2));g+=(t-g)*(t>g?.05:.002);x[i]*=g;}}
    szData={x,xd,rate,startT,endT,name,peak:a[a.length-1]/sc*3};post({seis:{data:x,drive:xd,rate:rate*20}});post({szl:[0,.22,.5][S.szl]});
   }
-  szErr='';szInfo=`${name} (${net}.${sta}) · last ${Math.round((endT-startT)/60000)} min up to ${Math.max(0,Math.round((Date.now()-endT)/60000))} min ago · ${S.src===4?SPEED[S.speed]:20}× replay`;}
- catch(e){if(req!==seisGeneration||!au.on)return;szData=null;post({seis:null});szErr='Seismometer not reachable ('+(e.message||'network')+'), retrying each minute';}
- $('szRead').textContent=szErr||szInfo;$('szCap').textContent=szErr||(szData?szData.name+' · vertical seismogram · gold line = playback position · recorded wave goes directly to the speakers':'');szT=setTimeout(seisPoll,60000);}
+  szErr='';szInfo=`${name} (${net}.${sta}) · ${Math.round((endT-startT)/60000)} min recorded · ${S.src===4?waveSections.length+' measured sections':'continuous trace'} · recording ends ${Math.max(0,Math.round((Date.now()-endT)/60000))} min ago · ${S.src===4?SPEED[S.speed]:20}×`;}
+ catch(e){if(req!==seisGeneration||!au.on)return;waveSections=[];waveSource=null;szData=null;post({seis:null});szErr='Seismometer not reachable ('+(e.message||'network')+'), retrying each minute';}
+ $('szRead').textContent=szErr||szInfo;$('szCap').textContent=szErr||(szData?szData.name+' · vertical seismogram · gold line = playback position · recorded wave goes directly to the speakers':'');szT=setTimeout(seisPoll,10*60000);}
 
 // ---------- earthquake panel: world map (longitude/latitude, dots by magnitude, glow by how much each is bubbling now),
 // full seismometer trace with time marks, and the list of quakes ranked by their current (Omori) share of the bubbles
