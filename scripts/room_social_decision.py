@@ -49,6 +49,7 @@ def decide(person: str, events: Sequence[Mapping], *,
     if person not in PEOPLE:
         raise ValueError("Unknown Room participant")
     seen = set(acknowledged)
+    pending_address_id = None
     for event in reversed(events):
         if not isinstance(event, Mapping) or not visible(event, person):
             continue
@@ -68,10 +69,11 @@ def decide(person: str, events: Sequence[Mapping], *,
                         isinstance(proposal.get("text"), str) and
                         proposal["text"].strip()):
                     return Decision("reply", "grounded_unanswered_address", event_id)
-            # Never pretend a reply exists; preserve pending event.
-            return Decision("observe", "awaiting_grounded_reply", event_id)
+            # Preserve the unanswered address without blocking valid independent work.
+            pending_address_id = event_id
+            break
     if active_task:
-        return Decision("observe", "continuing_unfinished_task")
+        return Decision("observe", "continuing_unfinished_task", pending_address_id)
     for proposal in proposals:
         if not isinstance(proposal, Mapping):
             continue
@@ -82,4 +84,6 @@ def decide(person: str, events: Sequence[Mapping], *,
                 verb in AFFORDANCES and obj in AFFORDANCES[verb]):
             return Decision("work", "valid_independent_proposal",
                             verb=verb, object=obj)
+    if pending_address_id:
+        return Decision("observe", "awaiting_grounded_reply", pending_address_id)
     return Decision("observe", "no_grounded_proposal")
