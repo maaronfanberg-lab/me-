@@ -29,9 +29,9 @@ _VERB = "|".join(sorted(map(re.escape, AFFORDANCES), key=len, reverse=True))
 _OBJ = "|".join(sorted((re.escape(obj) for objs in AFFORDANCES.values()
                         for obj in objs), key=len, reverse=True))
 _EXPLICIT_WORK = re.compile(
-    rf"\\b(?P<verb>{_VERB})\\s*\\(\\s*(?P<obj>{_OBJ})\\b", re.I)
+    rf"\b(?P<verb>{_VERB})\s*\(\s*(?P<obj>{_OBJ})\b", re.I)
 _NATURAL_WORK = re.compile(
-    rf"\\b(?P<verb>{_VERB})\\b[^.!?\\n]{{0,52}}?\\b(?P<obj>{_OBJ})\\b", re.I)
+    rf"\b(?P<verb>{_VERB})\b[^.!?\n]{{0,52}}?\b(?P<obj>{_OBJ})\b", re.I)
 
 
 def proposed_work_signature(text: str) -> tuple[str, str] | None:
