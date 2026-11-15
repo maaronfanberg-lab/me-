@@ -34,6 +34,17 @@ class SocialDecisionTests(unittest.TestCase):
         work = [{"kind": "work", "verb": "inspect", "object": "notebook"}]
         self.assertEqual(decide("mara", [event], proposals=work).reason, "awaiting_grounded_reply")
 
+    def test_malformed_proposals_do_not_crash_or_hide_valid_options(self):
+        event = {"id": "u1", "speaker": "allen", "visibility": "public",
+                 "addresses": ["sarah"], "text": "Can you help?"}
+        reply = {"kind": "reply", "source_event_id": "u1", "text": "Yes."}
+        self.assertEqual(decide("sarah", [event], proposals=[None, 4, [], reply]).kind, "reply")
+        self.assertEqual(decide("sarah", [event], proposals=[None, 4]).reason,
+                         "awaiting_grounded_reply")
+        work = {"kind": "work", "verb": "inspect", "object": "notebook"}
+        self.assertEqual(decide("owen", [], proposals=[None, 4, work]).kind, "work")
+        self.assertEqual(decide("owen", [], proposals=[None, 4]).kind, "observe")
+
     def test_unknown_participant(self):
         with self.assertRaises(ValueError):
             decide("visitor", [])
