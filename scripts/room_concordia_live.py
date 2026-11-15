@@ -61,7 +61,7 @@ def _message_from_concordia(raw: str, name: str, history: list) -> str:
     text = text.strip()
     # Some local model replies append a bare control-list fragment after
     # valid speech. It is not dialogue and must not reach the public feed.
-    text = re.sub(r"\\s*\\[\\s*\\]\\s*$", "", text).strip()
+    text = re.sub(r"\s*\[\s*\]\s*$", "", text).strip()
     if not isinstance(meta.get("mask"), list) or not isinstance(meta.get("timer"), dict):
         return ""
     if not text or len(text) > 520:
