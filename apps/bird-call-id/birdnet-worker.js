@@ -339,12 +339,23 @@ async function handlePredict(data) {
   }
 
   // 2. Run Inference
-  const audioTensor = tf.tensor2d(framed, [numFrames, WINDOW_SAMPLES]);
-  const resTensor = birdModel.predict(audioTensor);
-  let predictionList = await resTensor.array(); // [numFrames, numClasses]
-  
-  resTensor.dispose(); 
-  audioTensor.dispose();
+  // Use small batches to avoid exhausting iPhone GPU memory on longer clips.
+  let predictionList = [];
+  for (let base = 0; base < numFrames; base += 2) {
+    const size = Math.min(2, numFrames - base);
+    const audioTensor = tf.tensor2d(
+      framed.subarray(base * WINDOW_SAMPLES, (base + size) * WINDOW_SAMPLES),
+      [size, WINDOW_SAMPLES]
+    );
+    let resTensor;
+    try {
+      resTensor = birdModel.predict(audioTensor);
+      predictionList.push(...await resTensor.array());
+    } finally {
+      resTensor?.dispose();
+      audioTensor.dispose();
+    }
+  }
 
   // 3. Apply Sensitivity
   const sensitivity = parseFloat(data.sensitivity || 1.0);
@@ -359,7 +370,7 @@ async function handlePredict(data) {
   lastWindowSize = WINDOW_SAMPLES;
 
   // 5. Emit Segment Results
-  emitSegments(predictionList, hopSamples, WINDOW_SAMPLES);
+  // Per-window results are not required by this UI; avoid sending large arrays.
 
   // 6. Pool Results (Log-Mean-Exp) & Emit
   emitPooled(predictionList);
