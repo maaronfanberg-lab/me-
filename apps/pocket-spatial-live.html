@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#080b12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pocket Spatial Live">
+<title>Pocket Spatial Live</title>
+<style>
+:root{--bg:#080b12;--panel:#111722;--line:#293347;--text:#edf2fb;--dim:#94a1b5;--accent:#8f83ff;--good:#5ddbc7;--warn:#e0bb65;--bad:#ff7f8f}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+body{padding:22px 14px 40px;max-width:760px;margin:auto}
+h1{font-size:28px;line-height:1;margin:3px 0 7px;letter-spacing:.02em}.sub{color:var(--dim);font-size:12px;line-height:1.45;margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:15px;margin:10px 0}
+.badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.badge.on{color:var(--good);border-color:var(--good)}
+button,input{font:inherit}button{min-height:48px;border-radius:14px;border:1px solid var(--line);background:#171f2d;color:var(--text);padding:11px 13px;font-weight:650}button.primary{background:#5147c8;border-color:#756cf2}button:disabled{opacity:.45}.row{display:flex;gap:8px}.row>*{flex:1}.searchRow{display:grid;grid-template-columns:1fr auto;gap:8px}
+input[type=search],input[type=text]{width:100%;min-height:48px;border-radius:14px;border:1px solid var(--line);background:#0b1018;color:var(--text);padding:0 13px;font-size:16px}input::placeholder{color:#66748a}
+audio{width:100%;margin-top:10px}.status{font-size:12px;color:var(--dim);line-height:1.5;margin-top:9px}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.ctrl{margin:15px 0}.ctrl label{display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}.ctrl b{color:var(--text);font-weight:650}input[type=range]{width:100%;height:35px}
+.track{border-top:1px solid var(--line);padding:12px 0}.track:first-child{border-top:0}.trackTitle{font-size:15px;font-weight:700}.trackArtist{font-size:12px;color:var(--dim);margin:3px 0 8px}.trackMeta{font-size:10px;color:var(--dim);margin-left:8px}.track button{width:100%;min-height:42px}.now{font-weight:700;margin-top:7px}.mini{font-size:10.5px;color:var(--dim);line-height:1.55}.metricGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric{background:#0b1018;border:1px solid var(--line);border-radius:12px;padding:10px}.metric span{display:block;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.06em}.metric b{display:block;margin-top:4px;font-size:14px}
+details{margin-top:10px}summary{color:var(--dim);font-size:12px;cursor:pointer}.settings{margin-top:10px}.presetRow{display:flex;gap:8px}.presetRow button{flex:1}
+@media(max-width:430px){h1{font-size:25px}.row,.presetRow{display:grid;grid-template-columns:1fr 1fr}.metricGrid{grid-template-columns:1fr 1fr}.searchRow{grid-template-columns:1fr}.searchRow button{width:100%}}
+</style>
+</head>
+<body>
+<h1>POCKET SPATIAL LIVE</h1>
+<div class="sub">Audius live streams → speaker-safe spatial processing → your home-theater receiver</div>
+
+<div class="card">
+  <div class="searchRow">
+    <input id="query" type="search" placeholder="Search Audius artists or tracks" autocomplete="off">
+    <button id="searchBtn" class="primary" type="button">SEARCH</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="trendingBtn" type="button">TRENDING</button>
+    <button id="nextBtn" type="button" disabled>NEXT PLAYABLE</button>
+  </div>
+  <div id="catalogStatus" class="status">No downloads. Pocket Spatial asks Audius for live, streamable tracks and skips tracks that refuse playback.</div>
+  <div id="results"></div>
+</div>
+
+<div class="card">
+  <div id="badge" class="badge on">Theater spatial on</div>
+  <div id="now" class="now">Nothing playing</div>
+  <div id="artist" class="status"></div>
+  <audio id="audio" controls preload="metadata" crossorigin="anonymous" playsinline></audio>
+  <button id="spatialBtn" class="primary" type="button" style="width:100%;margin-top:8px">TURN THEATER SPATIAL OFF</button>
+  <div id="playStatus" class="status">Choose a track above. Failed or gated streams are skipped automatically.</div>
+</div>
+
+<div class="card">
+  <div class="ctrl">
+    <label><span>STAGE WIDTH</span><b id="widthRead">135%</b></label>
+    <input id="width" type="range" min="70" max="175" step="1" value="135">
+  </div>
+  <div class="ctrl">
+    <label><span>ROOM DEPTH</span><b id="depthRead">38%</b></label>
+    <input id="depth" type="range" min="0" max="100" step="1" value="38">
+  </div>
+  <div class="presetRow">
+    <button class="preset" data-width="110" data-depth="16">NATURAL</button>
+    <button class="preset" data-width="135" data-depth="38">WIDE</button>
+    <button class="preset" data-width="155" data-depth="58">DEEP</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="metricGrid">
+    <div class="metric"><span>Audio engine</span><b id="engine">off</b></div>
+    <div class="metric"><span>Browser max output</span><b id="channels">unknown</b></div>
+    <div class="metric"><span>Playable successes</span><b id="successes">0</b></div>
+    <div class="metric"><span>Auto-skipped</span><b id="skips">0</b></div>
+  </div>
+  <div class="mini" style="margin-top:10px">This first theater build creates a processed stereo feed designed to preserve the center while increasing side information and adding subtle decorrelated ambience. Your receiver can then distribute that feed with its Dolby Surround / DTS Neural:X / other surround mode. If iOS exposes more than two Web Audio output channels, the diagnostic above will tell us and we can test a discrete multichannel build next.</div>
+
+  <details>
+    <summary>Optional Audius API key</summary>
+    <div class="settings">
+      <input id="apiKey" type="text" placeholder="Optional free Audius API key">
+      <div class="mini" style="margin-top:7px">Public read/stream requests are attempted without a key. If Audius rate-limits the app, a free API key can be stored only in this browser.</div>
+    </div>
+  </details>
+</div>
+
+<script>
+(function(){
+'use strict';
+var API='https://api.audius.co/v1';
+var audio=document.getElementById('audio');
+var query=document.getElementById('query');
+var results=document.getElementById('results');
+var catalogStatus=document.getElementById('catalogStatus');
+var playStatus=document.getElementById('playStatus');
+var width=document.getElementById('width');
+var depth=document.getElementById('depth');
+var apiKey=document.getElementById('apiKey');
+var tracks=[]; var index=-1; var playToken=0; var playTimer=null; var successes=0; var skips=0;
+var AC=window.AudioContext||window.webkitAudioContext;
+var ctx=null,source=null,splitter=null,merger=null,compressor=null,master=null;
+var lSelf=null,lCross=null,rSelf=null,rCross=null,ambLDelay=null,ambRDelay=null,ambLHP=null,ambRHP=null,ambLLP=null,ambRLP=null,ambLGain=null,ambRGain=null;
+var spatialOn=true;
+try{apiKey.value=localStorage.getItem('pocket_spatial_audius_key')||'';}catch(e){}
+apiKey.addEventListener('change',function(){try{localStorage.setItem('pocket_spatial_audius_key',apiKey.value.trim());}catch(e){}});
+
+function text(id,v){document.getElementById(id).textContent=v;}
+function esc(s){return String(s==null?'':s).replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c];});}
+function params(){var p=new URLSearchParams();p.set('app_name','PocketSpatial');var k=apiKey.value.trim();if(k)p.set('api_key',k);return p;}
+async function get(path,extra){var p=params();if(extra)Object.keys(extra).forEach(function(k){if(extra[k]!==''&&extra[k]!=null)p.set(k,extra[k]);});var r=await fetch(API+path+'?'+p.toString(),{mode:'cors',cache:'no-store'});if(!r.ok)throw new Error('Audius returned '+r.status);return r.json();}
+function streamable(t){var v=t.is_streamable;if(v==null)v=t.isStreamable;if(v==null)return true;if(typeof v==='boolean')return v;return String(v).toLowerCase()!=='false';}
+function artistName(t){return (t.user&&(t.user.name||t.user.handle))||t.artist_name||'Unknown artist';}
+function durationText(sec){sec=Number(sec)||0;if(!sec)return '';var m=Math.floor(sec/60),s=Math.floor(sec%60);return m+':'+String(s).padStart(2,'0');}
+function render(){
+ results.innerHTML='';
+ tracks.forEach(function(t,i){
+   var d=document.createElement('div');d.className='track';
+   var gate=streamable(t)?'':' · not publicly streamable';
+   d.innerHTML='<div class="trackTitle">'+esc(t.title||'Untitled')+'</div><div class="trackArtist">'+esc(artistName(t))+' <span class="trackMeta">'+esc(durationText(t.duration))+esc(gate)+'</span></div><button type="button" data-i="'+i+'">PLAY SPATIAL</button>';
+   d.querySelector('button').addEventListener('click',function(){playTrack(i,false);});
+   results.appendChild(d);
+ });
+ document.getElementById('nextBtn').disabled=!tracks.length;
+}
+async function doSearch(){var q=query.value.trim();if(!q)return;catalogStatus.textContent='Searching Audius…';results.innerHTML='';try{var j=await get('/tracks/search',{query:q,limit:25,sort_method:'relevant'});tracks=j.data||[];index=-1;render();catalogStatus.textContent=tracks.length?tracks.length+' results. Tap any track; failures will skip forward automatically.':'No Audius tracks found.';}catch(e){catalogStatus.textContent=e.message;catalogStatus.className='status bad';}}
+async function trending(){catalogStatus.textContent='Loading Audius trending tracks…';results.innerHTML='';try{var j=await get('/tracks/trending',{limit:25,time:'week'});tracks=j.data||[];index=-1;render();catalogStatus.textContent=tracks.length?'Loaded '+tracks.length+' trending tracks.':'No trending tracks returned.';}catch(e){catalogStatus.textContent=e.message;catalogStatus.className='status bad';}}
+
+function buildAudio(){
+ if(ctx)return true;
+ if(!AC){playStatus.textContent='This browser does not expose Web Audio.';playStatus.className='status bad';return false;}
+ try{
+   ctx=new AC(); source=ctx.createMediaElementSource(audio); splitter=ctx.createChannelSplitter(2); merger=ctx.createChannelMerger(2); compressor=ctx.createDynamicsCompressor(); master=ctx.createGain();
+   lSelf=ctx.createGain();lCross=ctx.createGain();rSelf=ctx.createGain();rCross=ctx.createGain();
+   ambLDelay=ctx.createDelay(.05);ambRDelay=ctx.createDelay(.05);ambLHP=ctx.createBiquadFilter();ambRHP=ctx.createBiquadFilter();ambLLP=ctx.createBiquadFilter();ambRLP=ctx.createBiquadFilter();ambLGain=ctx.createGain();ambRGain=ctx.createGain();
+   ambLHP.type=ambRHP.type='highpass';ambLLP.type=ambRLP.type='lowpass';ambLHP.frequency.value=180;ambRHP.frequency.value=180;ambLLP.frequency.value=5200;ambRLP.frequency.value=5200;ambLDelay.delayTime.value=.017;ambRDelay.delayTime.value=.023;
+   source.connect(splitter);
+   splitter.connect(lSelf,0);lSelf.connect(merger,0,0);splitter.connect(lCross,1);lCross.connect(merger,0,0);
+   splitter.connect(rSelf,1);rSelf.connect(merger,0,1);splitter.connect(rCross,0);rCross.connect(merger,0,1);
+   splitter.connect(ambLHP,0);ambLHP.connect(ambLLP);ambLLP.connect(ambLDelay);ambLDelay.connect(ambLGain);ambLGain.connect(merger,0,1);
+   splitter.connect(ambRHP,1);ambRHP.connect(ambRLP);ambRLP.connect(ambRDelay);ambRDelay.connect(ambRGain);ambRGain.connect(merger,0,0);
+   compressor.threshold.value=-3;compressor.knee.value=8;compressor.ratio.value=3;compressor.attack.value=.004;compressor.release.value=.12;
+   merger.connect(compressor);compressor.connect(master);master.connect(ctx.destination);
+   text('engine','ready');var mc=ctx.destination.maxChannelCount||ctx.destination.channelCount||2;text('channels',String(mc));applySpatial();return true;
+ }catch(e){playStatus.textContent='Could not start spatial audio: '+e.message;playStatus.className='status bad';return false;}
+}
+function setParam(p,v){if(!ctx)return;try{p.setTargetAtTime(v,ctx.currentTime,.025);}catch(e){p.value=v;}}
+function applySpatial(){
+ text('widthRead',width.value+'%');text('depthRead',depth.value+'%');
+ if(!ctx)return;
+ var w=spatialOn?(Number(width.value)/100):1;var d=spatialOn?(Number(depth.value)/100):0;
+ var a=(1+w)/2,b=(1-w)/2;setParam(lSelf.gain,a);setParam(lCross.gain,b);setParam(rSelf.gain,a);setParam(rCross.gain,b);setParam(ambLGain.gain,d*.115);setParam(ambRGain.gain,d*.115);setParam(master.gain,spatialOn?.82:.94);
+ document.getElementById('badge').textContent=spatialOn?'Theater spatial on':'Theater spatial off';document.getElementById('badge').className='badge'+(spatialOn?' on':'');document.getElementById('spatialBtn').textContent=spatialOn?'TURN THEATER SPATIAL OFF':'TURN THEATER SPATIAL ON';
+}
+function resume(){if(!buildAudio())return false;if(ctx.state==='suspended'&&ctx.resume)ctx.resume();text('engine',ctx.state||'ready');return true;}
+function makeStreamUrl(t){var p=params();p.set('skip_play_count','false');return API+'/tracks/'+encodeURIComponent(t.id)+'/stream?'+p.toString();}
+function markSkip(reason){skips++;text('skips',String(skips));playStatus.textContent=reason+' Trying next playable track…';playStatus.className='status warn';}
+function nextPlayable(){if(!tracks.length)return;var start=index+1;for(var i=start;i<tracks.length;i++){if(streamable(tracks[i])){playTrack(i,true);return;}}playStatus.textContent='No more publicly streamable tracks in this result set.';playStatus.className='status warn';}
+function playTrack(i,auto){
+ if(i<0||i>=tracks.length)return;index=i;var t=tracks[i];if(!streamable(t)){markSkip('Audius marks this track as unavailable for public streaming.');nextPlayable();return;}
+ if(!resume())return;var token=++playToken;if(playTimer)clearTimeout(playTimer);audio.pause();audio.removeAttribute('src');audio.load();
+ text('now',t.title||'Untitled');text('artist',artistName(t)+(auto?' · auto-selected':''));
+ playStatus.textContent='Opening live Audius stream…';playStatus.className='status';audio.src=makeStreamUrl(t);audio.load();
+ var p=audio.play();if(p&&p.catch)p.catch(function(err){if(token!==playToken)return;markSkip('Playback was rejected or the stream failed.');nextPlayable();});
+ playTimer=setTimeout(function(){if(token!==playToken||!audio.paused)return;markSkip('This stream did not start in time.');nextPlayable();},8500);
+}
+audio.addEventListener('playing',function(){if(playTimer)clearTimeout(playTimer);successes++;text('successes',String(successes));playStatus.textContent='Live stream playing through Pocket Spatial.';playStatus.className='status good';});
+audio.addEventListener('error',function(){if(index<0)return;var token=playToken;setTimeout(function(){if(token!==playToken)return;markSkip('Audius stream error.');nextPlayable();},80);});
+audio.addEventListener('ended',function(){nextPlayable();});
+audio.addEventListener('play',function(){resume();});
+
+width.addEventListener('input',applySpatial);depth.addEventListener('input',applySpatial);document.getElementById('spatialBtn').addEventListener('click',function(){resume();spatialOn=!spatialOn;applySpatial();});
+document.querySelectorAll('.preset').forEach(function(b){b.addEventListener('click',function(){width.value=b.getAttribute('data-width');depth.value=b.getAttribute('data-depth');applySpatial();});});
+document.getElementById('searchBtn').addEventListener('click',doSearch);document.getElementById('trendingBtn').addEventListener('click',trending);document.getElementById('nextBtn').addEventListener('click',nextPlayable);query.addEventListener('keydown',function(e){if(e.key==='Enter')doSearch();});
+applySpatial();
+})();
+</script>
+</body>
+</html>

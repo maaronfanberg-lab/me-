@@ -1,0 +1,41 @@
+name: MCP Simulator Smoke Test
+
+on:
+  push:
+    paths:
+      - 'mcp_server.py'
+      - '.mcp.json'
+      - 'scripts/cluster_worker.py'
+      - 'scripts/aggregate_cluster.py'
+      - '.github/workflows/mcp-simulator-smoke.yml'
+  pull_request:
+    paths:
+      - 'mcp_server.py'
+      - '.mcp.json'
+      - 'scripts/cluster_worker.py'
+      - 'scripts/aggregate_cluster.py'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install MCP SDK
+        run: python -m pip install 'mcp[cli]'
+      - name: Compile MCP server
+        run: python -m py_compile mcp_server.py
+      - name: Run simulator through MCP wrapper core
+        run: |
+          python - <<'PY'
+          import mcp_server
+          result = mcp_server._execute('montecarlo', 1, 2)
+          assert result['workload'] == 'montecarlo'
+          assert result['workers'] == 2
+          assert result['scale'] == 1
+          assert 'pi_estimate' in result['result']
+          print(result['result'])
+          PY

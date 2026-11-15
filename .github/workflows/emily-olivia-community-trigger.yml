@@ -1,0 +1,96 @@
+name: Trigger Emily Olivia Community
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/emily-olivia-community-trigger.yml'
+      - '.github/workflows/emily-olivia-community-run.yml'
+      - 'experiments/emily-olivia-society/bitnet_server.py'
+      - 'experiments/emily-olivia-society/bootstrap_upstreams.sh'
+      - 'experiments/emily-olivia-society/checkpoint_attractor_guard.py'
+      - 'experiments/emily-olivia-society/community_cycle.py'
+      - 'experiments/emily-olivia-society/community_cycle_base.py'
+      - 'experiments/emily-olivia-society/community_session.py'
+      - 'experiments/emily-olivia-society/controlled_social_space.py'
+      - 'experiments/emily-olivia-society/dialogue_attractor.py'
+      - 'experiments/emily-olivia-society/dialogue_boundary_guard.py'
+      - 'experiments/emily-olivia-society/external_reality_guard.py'
+      - 'experiments/emily-olivia-society/first_exchange.py'
+      - 'experiments/emily-olivia-society/init_cognition.py'
+      - 'experiments/emily-olivia-society/paper_act_adapter.py'
+      - 'experiments/emily-olivia-society/paper_plan_adapter.py'
+      - 'experiments/emily-olivia-society/paper_react_adapter.py'
+      - 'experiments/emily-olivia-society/paper_reflection_adapter.py'
+      - 'experiments/emily-olivia-society/patch_stanford_local.py'
+      - 'experiments/emily-olivia-society/persistence_reflection.py'
+      - 'experiments/emily-olivia-society/reflection_hygiene.py'
+      - 'experiments/emily-olivia-society/restore_latest_checkpoint.sh'
+      - 'experiments/emily-olivia-society/sitecustomize.py'
+      - 'experiments/emily-olivia-society/social_bridge.py'
+      - 'experiments/emily-olivia-society/stanford_native_cycle.py'
+      - 'experiments/emily-olivia-society/agents.json'
+      - 'experiments/emily-olivia-society/upstreams.json'
+  schedule:
+    - cron: '*/5 * * * *'
+
+concurrency:
+  group: emily-olivia-community-trigger
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-community:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep exactly one Community runtime alive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs_api="repos/${GITHUB_REPOSITORY}/actions/workflows/emily-olivia-community-run.yml/runs?per_page=30"
+          active="$(
+            gh api --method GET "$runs_api" \
+              --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending") | "\(.id) \(.head_sha) \(.status)"'
+          )"
+
+          if [ -n "$active" ]; then
+            if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+              outdated="$(printf '%s\n' "$active" | awk -v sha="$GITHUB_SHA" '$2 != sha {print $1}')"
+              if [ -n "$outdated" ]; then
+                echo "Community code changed; cancelling outdated Community runtime(s) so the repair is actually loaded:"
+                printf '%s\n' "$active"
+                while read -r run_id; do
+                  [ -n "$run_id" ] || continue
+                  gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" || true
+                done <<< "$outdated"
+                for _ in $(seq 1 30); do
+                  still_active="$(
+                    gh api --method GET "$runs_api" \
+                      --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "pending") | .id'
+                  )"
+                  [ -z "$still_active" ] && break
+                  sleep 2
+                done
+              else
+                echo "Emily + Olivia already have a Community runtime on this exact revision; preserving it."
+                printf '%s\n' "$active"
+                exit 0
+              fi
+            else
+              echo "Emily + Olivia already have a Community runtime; preserving it without cancellation:"
+              printf '%s\n' "$active"
+              exit 0
+            fi
+          fi
+
+          echo "Dispatching Emily + Olivia Community on current main."
+          gh workflow run emily-olivia-community-run.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f opener=""

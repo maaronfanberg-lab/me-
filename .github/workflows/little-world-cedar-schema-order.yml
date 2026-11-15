@@ -1,0 +1,236 @@
+name: Cedar Falcon schema-order diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/little-world-lab/runtime/schema-order-request.json'
+
+permissions:
+  contents: read
+
+jobs:
+  schema-order-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Test Little World schema-order diagnostic
+        working-directory: experiments/little-world-lab
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Start isolated Falcon llama.cpp server
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/ggml-org/llama.cpp:server
+          docker run -d --name little-world-falcon \
+            -p 8080:8080 \
+            ghcr.io/ggml-org/llama.cpp:server \
+            -hf bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M \
+            --host 0.0.0.0 \
+            --port 8080 \
+            -c 2048 \
+            -np 1
+
+      - name: Wait for Falcon readiness
+        run: |
+          set -euo pipefail
+          ready=0
+          for i in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:8080/health >/tmp/cedar-schema-order-health.json 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -qx 'little-world-falcon'; then
+              echo 'Falcon container exited before becoming healthy.'
+              docker logs little-world-falcon || true
+              exit 1
+            fi
+            sleep 5
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'Falcon server did not become healthy in time.'
+            docker logs little-world-falcon || true
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:8080/v1/models > /tmp/cedar-schema-order-models.json
+          python - <<'PY' > /tmp/cedar-schema-order-model-id.txt
+          import json
+          data = json.load(open('/tmp/cedar-schema-order-models.json', encoding='utf-8'))
+          rows = data.get('data') or []
+          if not rows or not rows[0].get('id'):
+              raise SystemExit('llama.cpp returned no model id')
+          print(rows[0]['id'])
+          PY
+          echo "Resolved model id: $(cat /tmp/cedar-schema-order-model-id.txt)"
+
+      - name: Run baseline schema order
+        working-directory: experiments/little-world-lab
+        run: |
+          set -euo pipefail
+          MODEL_ID="$(cat /tmp/cedar-schema-order-model-id.txt)"
+          for SEED in 7 19 31; do
+            OUT="runs/schema-order-baseline-seed-${SEED}"
+            rm -rf "$OUT"
+            python falcon_live.py \
+              --ticks 12 \
+              --actors-per-tick 2 \
+              --seed "$SEED" \
+              --temperature 0.1 \
+              --max-tokens 256 \
+              --timeout 300 \
+              --model "$MODEL_ID" \
+              --output "$OUT"
+          done
+
+      - name: Run move-first schema order
+        working-directory: experiments/little-world-lab
+        run: |
+          set -euo pipefail
+          MODEL_ID="$(cat /tmp/cedar-schema-order-model-id.txt)"
+          for SEED in 7 19 31; do
+            OUT="runs/schema-order-move-first-seed-${SEED}"
+            rm -rf "$OUT"
+            python falcon_schema_order.py \
+              --branch-order 'move,rest,observe,talk,help,work' \
+              --ticks 12 \
+              --actors-per-tick 2 \
+              --seed "$SEED" \
+              --temperature 0.1 \
+              --max-tokens 256 \
+              --timeout 300 \
+              --model "$MODEL_ID" \
+              --output "$OUT"
+          done
+
+      - name: Run move-last schema order
+        working-directory: experiments/little-world-lab
+        run: |
+          set -euo pipefail
+          MODEL_ID="$(cat /tmp/cedar-schema-order-model-id.txt)"
+          for SEED in 7 19 31; do
+            OUT="runs/schema-order-move-last-seed-${SEED}"
+            rm -rf "$OUT"
+            python falcon_schema_order.py \
+              --branch-order 'rest,observe,talk,help,work,move' \
+              --ticks 12 \
+              --actors-per-tick 2 \
+              --seed "$SEED" \
+              --temperature 0.1 \
+              --max-tokens 256 \
+              --timeout 300 \
+              --model "$MODEL_ID" \
+              --output "$OUT"
+          done
+
+      - name: Summarize schema-order diagnostic
+        working-directory: experiments/little-world-lab
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import collections
+          import json
+          from pathlib import Path
+
+          seeds = [7, 19, 31]
+          actions = ['move', 'talk', 'help', 'work', 'rest', 'observe']
+          conditions = [
+              ('baseline', ['rest', 'observe', 'move', 'talk', 'help', 'work']),
+              ('move-first', ['move', 'rest', 'observe', 'talk', 'help', 'work']),
+              ('move-last', ['rest', 'observe', 'talk', 'help', 'work', 'move']),
+          ]
+          comparison = []
+
+          for label, order in conditions:
+              chosen = collections.Counter()
+              resolved = collections.Counter()
+              feasible = collections.Counter()
+              decisions = 0
+              backend_errors = 0
+              proposal_rejections = 0
+              per_seed = []
+              for seed in seeds:
+                  out = Path(f'runs/schema-order-{label}-seed-{seed}')
+                  metrics = json.loads((out / 'metrics.json').read_text(encoding='utf-8'))
+                  decisions += metrics['decision_count']
+                  backend_errors += metrics['backend_errors']
+                  proposal_rejections += metrics['proposal_rejections']
+                  resolved.update(metrics['action_counts'])
+                  seed_chosen = {}
+                  for action in actions:
+                      row = metrics['action_feasibility_breakdown'][action]
+                      chosen[action] += row['chosen_ticks']
+                      feasible[action] += row['feasible_ticks']
+                      seed_chosen[action] = row['chosen_ticks']
+                  per_seed.append({
+                      'seed': seed,
+                      'chosen_action_counts': seed_chosen,
+                      'resolved_action_counts': metrics['action_counts'],
+                      'backend_errors': metrics['backend_errors'],
+                      'proposal_rejections': metrics['proposal_rejections'],
+                  })
+
+              row = {
+                  'label': label,
+                  'branch_order': order,
+                  'decisions': decisions,
+                  'chosen_action_counts': dict(chosen),
+                  'resolved_action_counts': dict(resolved),
+                  'feasible_action_ticks': dict(feasible),
+                  'backend_errors': backend_errors,
+                  'proposal_rejections': proposal_rejections,
+                  'per_seed': per_seed,
+              }
+              comparison.append(row)
+
+          summary = {
+              'experiment': 'cedar-schema-order-diagnostic',
+              'model': 'bartowski/Falcon3-1B-Instruct-GGUF:Q4_K_M',
+              'temperature': 0.1,
+              'seeds': seeds,
+              'ticks_per_seed': 12,
+              'actors_per_tick': 2,
+              'comparison': comparison,
+              'interpretation': {
+                  'position_bias_signal': 'Dominant chosen action changes when only oneOf branch position changes.',
+                  'model_bias_signal': 'Move remains dominant across baseline, move-first, and move-last orders.',
+              },
+              'note': 'No action mix is gated or forced. WorldEngine still validates and resolves every proposal.',
+          }
+          Path('runs/cedar-schema-order-summary.json').write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(summary, indent=2, sort_keys=True))
+
+          assert all(row['decisions'] == 72 for row in comparison), summary
+          assert all(row['backend_errors'] == 0 for row in comparison), summary
+          PY
+
+      - name: Capture Falcon server logs
+        if: always()
+        run: |
+          mkdir -p experiments/little-world-lab/runs/schema-order-evidence
+          docker logs little-world-falcon > experiments/little-world-lab/runs/schema-order-evidence/server.log 2>&1 || true
+          free -h > experiments/little-world-lab/runs/schema-order-evidence/runner-memory.txt || true
+          df -h / > experiments/little-world-lab/runs/schema-order-evidence/runner-disk.txt || true
+
+      - name: Upload schema-order evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cedar-falcon-schema-order-diagnostic
+          path: |
+            experiments/little-world-lab/runs/schema-order-*
+            experiments/little-world-lab/runs/cedar-schema-order-summary.json
+          if-no-files-found: warn
+          retention-days: 14

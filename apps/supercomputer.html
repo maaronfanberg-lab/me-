@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05070b">
+<title>Supercomputer Cluster</title>
+<style>
+:root{--bg:#05070b;--panel:#0c121b;--panel2:#111a26;--line:#26354b;--text:#f4f7fb;--muted:#8c9ab0;--accent:#9ee8ff;--good:#8df0bb;--warn:#ffd56d}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{background:radial-gradient(1000px 700px at 50% -10%,#132841 0,transparent 60%),var(--bg)}main{width:min(100%,980px);margin:auto;padding:max(20px,env(safe-area-inset-top)) 14px max(34px,env(safe-area-inset-bottom))}.eyebrow{font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.17em;text-transform:uppercase;color:var(--accent)}h1{font-size:clamp(44px,13vw,92px);line-height:.82;letter-spacing:-.065em;margin:12px 0 12px}.sub{color:var(--muted);font-size:14px;line-height:1.45;max-width:700px}.cluster{margin:18px 0;border:1px solid var(--line);border-radius:26px;background:linear-gradient(180deg,#0d1520,#080c12);padding:15px}.nodes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.node{min-height:68px;border:1px solid #26364c;border-radius:15px;background:#0a111a;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px}.node b{font:800 18px ui-monospace,SFMono-Regular,Menlo,monospace}.node span{font:700 8px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.1em;color:var(--muted)}.node.live{border-color:#5bb8d2;background:#102634;box-shadow:0 0 20px rgba(104,211,241,.12)}.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}.metric{padding:13px;border:1px solid #223146;border-radius:15px;background:#091019}.metric b{display:block;font-size:clamp(22px,7vw,34px);letter-spacing:-.045em}.metric span{font:700 9px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.panel{margin-top:10px;border:1px solid var(--line);border-radius:20px;padding:15px;background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.012))}.launch{display:block;width:100%;text-decoration:none;text-align:center;color:#eafaff;font-weight:800;font-size:17px;min-height:58px;line-height:58px;border-radius:16px;border:1px solid #64cce8;background:linear-gradient(180deg,#14364e,#0f2637);margin-top:11px}.launch:active{transform:scale(.987)}.row{display:flex;justify-content:space-between;gap:10px;align-items:center}.label{font-weight:800}.small{font-size:12px;color:var(--muted);margin-top:3px}.pill{font:800 10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--good);border:1px solid #285b48;padding:7px 9px;border-radius:999px}.result{font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;color:#a8b7ca;background:#060a0f;border:1px solid #1c293a;border-radius:14px;padding:12px;margin-top:10px;min-height:92px}.refresh{border:1px solid var(--line);border-radius:12px;background:#0b121b;color:var(--text);padding:9px 12px;font-weight:700}.truth{margin:12px 4px 0;color:#69778a;font-size:11px;line-height:1.45;text-align:center}@media(min-width:720px){.nodes{grid-template-columns:repeat(12,1fr)}.node{min-height:90px}.metrics{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">Distributed compute instrument</div>
+<h1>SUPER<br>COMPUTER</h1>
+<div class="sub">Twelve independent GitHub runners attack one workload at the same time, then a thirteenth runner combines the result. This is cluster computing: the work is spread across multiple machines instead of pretending one browser has impossible horsepower.</div>
+
+<section class="cluster">
+<div class="nodes" id="nodes"></div>
+<div class="metrics">
+<div class="metric"><b>12</b><span>compute nodes</span></div>
+<div class="metric"><b id="units">0</b><span>total units</span></div>
+<div class="metric"><b id="speed">—</b><span>aggregate rate</span></div>
+<div class="metric"><b id="job">READY</b><span>last workload</span></div>
+</div>
+</section>
+
+<section class="panel">
+<div class="row"><div><div class="label">Launch the cluster</div><div class="small">GitHub opens the workflow controls. Choose workload + intensity, then tap Run workflow.</div></div><span class="pill">12 NODES</span></div>
+<a class="launch" href="https://github.com/maaronfanberg-lab/me-/actions/workflows/supercomputer-cluster.yml" target="_blank" rel="noopener">OPEN CLUSTER LAUNCHER</a>
+</section>
+
+<section class="panel">
+<div class="row"><div><div class="label">Latest combined result</div><div class="small">The panel reads the output published by the aggregator.</div></div><button class="refresh" id="refresh">REFRESH</button></div>
+<div class="result" id="result">Loading cluster state…</div>
+</section>
+<div class="truth">For workloads that split cleanly across nodes, this can deliver more total parallel CPU throughput than a single gaming PC. It is not guaranteed to beat every gaming PC on every task, and it is not one giant shared-memory machine.</div>
+</main>
+<script>
+const nodes=document.getElementById('nodes');for(let i=0;i<12;i++){const d=document.createElement('div');d.className='node';d.innerHTML=`<b>${String(i+1).padStart(2,'0')}</b><span>NODE</span>`;nodes.appendChild(d)}
+const fmt=n=>{n=Number(n||0);if(n>=1e9)return(n/1e9).toFixed(2)+'B';if(n>=1e6)return(n/1e6).toFixed(2)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(Math.round(n))};
+async function load(){const box=document.getElementById('result');try{const r=await fetch('../cluster/latest.json?v='+Date.now(),{cache:'no-store'});const j=await r.json();document.getElementById('units').textContent=fmt(j.total_units);document.getElementById('speed').textContent=j.aggregate_rate?fmt(j.aggregate_rate)+'/s':'—';document.getElementById('job').textContent=(j.workload||'READY').toUpperCase();[...nodes.children].forEach((n,i)=>n.classList.toggle('live',i<(j.workers||0)&&j.generated_at>0));let lines=[];if(!j.generated_at){lines.push(j.message||'No completed cluster run yet.');}else{lines.push('WORKLOAD  '+j.workload);lines.push('NODES     '+j.workers);lines.push('UNITS     '+Number(j.total_units||0).toLocaleString());lines.push('RATE      '+Math.round(j.aggregate_rate||0).toLocaleString()+' units/sec');lines.push('SLOWEST   '+Number(j.slowest_worker_seconds||0).toFixed(2)+' sec');if(j.result)lines.push('RESULT    '+JSON.stringify(j.result));lines.push('UPDATED   '+new Date(j.generated_at*1000).toLocaleString());}box.textContent=lines.join('\n');}catch(e){box.textContent='Could not read cluster result yet.\n'+e.message}}
+document.getElementById('refresh').onclick=load;load();setInterval(load,20000);
+</script></body></html>

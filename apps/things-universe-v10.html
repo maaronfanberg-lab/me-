@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#08131d">
+<title>Things Universe v10</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#08131d;color:#eef4ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.loading{height:100%;display:grid;place-items:center;text-align:center;padding:24px;box-sizing:border-box;background:radial-gradient(800px 600px at 0 0,#122b43,transparent 58%),radial-gradient(800px 600px at 100% 100%,#18142d,transparent 60%),#08131d}.loading b{display:block;font-size:22px;margin-bottom:7px}.loading span{color:#91a3bb;font-size:12px;line-height:1.4}
+</style>
+</head>
+<body><div class="loading"><div><b>Things Universe v10</b><span>Loading branching territories…</span></div></div>
+<script>
+(async()=>{
+  const source='things-universe-v9.html?v=20260816i';
+  try{
+    let html=await (await fetch(source,{cache:'no-store'})).text();
+    html=html.replace('<title>Things Universe v9</title>','<title>Things Universe v10</title>')
+             .replace('<span class="v">v9</span>','<span class="v">v10</span>');
+
+    const newLayout=String.raw`function layout(){
+  if(!N.length)return;
+  let w=$('#stage').clientWidth,h=$('#stage').clientHeight,g={A:[],B:[],both:[],o:[]};
+  for(const n of N)g[side(n)==='A'?'A':side(n)==='B'?'B':side(n)==='both'?'both':'o'].push(n);
+
+  function buildParentMap(arr, which){
+    const set=new Set(arr.map(n=>n.id));
+    const root=which==='A'?A:B;
+    const parent=new Map(), kids=new Map();
+    for(const n of arr)kids.set(n.id,[]);
+    if(root&&set.has(root.id))parent.set(root.id,null);
+    const ordered=[...arr].sort((p,q)=>p.d-q.d||p.id.localeCompare(q.id));
+    for(const n of ordered){
+      if(root&&n.id===root.id)continue;
+      let pick=null,best=1e9;
+      for(const e of E){
+        const oid=e.a===n.id?e.b:e.b===n.id?e.a:null;
+        if(!oid||!set.has(oid))continue;
+        const m=nid(oid);if(!m||m.id===n.id||m.d>=n.d)continue;
+        const score=(n.d-m.d)*100;
+        if(score<best){best=score;pick=m;}
+      }
+      if(!pick&&root&&set.has(root.id))pick=root;
+      if(pick)parent.set(n.id,pick.id);
+    }
+    for(const [child,par] of parent){if(par&&kids.has(par)){const n=nid(child);if(n)kids.get(par).push(n)}}
+    for(const list of kids.values())list.sort((a,b)=>a.l.localeCompare(b.l));
+    return {kids,root};
+  }
+
+  function placeTree(arr,which,cx,cy,direction){
+    if(!arr.length)return;
+    const {kids,root}=buildParentMap(arr,which);
+    const actualRoot=root&&arr.some(n=>n.id===root.id)?root:[...arr].sort((a,b)=>a.d-b.d)[0];
+    actualRoot.x=cx;actualRoot.y=cy;
+    const baseStep=Math.max(92,Math.min(w,h)*.13);
+    const firstSpread=Math.PI*1.15;
+    const used=new Set([actualRoot.id]);
+    function branch(n,angle,spread,depth){
+      const children=kids.get(n.id)||[];
+      if(!children.length)return;
+      children.forEach((ch,i)=>{
+        used.add(ch.id);
+        const t=children.length===1?.5:i/(children.length-1);
+        const a=angle-spread/2+t*spread+(Math.sin((i+1)*2.37+n.id.length)*.055);
+        const step=baseStep*(1+Math.min(depth,4)*.12);
+        ch.x=n.x+Math.cos(a)*step;
+        ch.y=n.y+Math.sin(a)*step*.82;
+        branch(ch,a,Math.max(.38,spread*.62),depth+1);
+      });
+    }
+    branch(actualRoot,direction,firstSpread,0);
+
+    const loose=arr.filter(n=>!used.has(n.id));
+    loose.forEach((n,i)=>{
+      const ring=1+Math.floor(i/8),slot=i%8;
+      const a=direction-Math.PI*.55+(slot/7)*Math.PI*1.1+ring*.12;
+      const r=baseStep*(1.1+ring*.7);
+      n.x=cx+Math.cos(a)*r;n.y=cy+Math.sin(a)*r*.82;
+    });
+  }
+
+  function placeMiddle(arr,cx,cy){
+    arr.forEach((n,i)=>{
+      const ring=Math.floor(i/7),slot=i%7,count=Math.min(7,arr.length-ring*7);
+      const r=28+ring*48,a=-Math.PI/2+(Math.PI*2)*(slot/Math.max(1,count))+ring*.29;
+      n.x=cx+Math.cos(a)*r;n.y=cy+Math.sin(a)*r;
+    });
+  }
+
+  placeTree(g.A,'A',w*.20,h*.52,0);
+  placeTree(g.B,'B',w*.80,h*.52,Math.PI);
+  placeMiddle(g.both,w*.50,h*.50);
+  placeMiddle(g.o,w*.50,h*.64);
+}`;
+
+    const re=/function layout\(\)\{[\s\S]*?\n\}\nconst c=\$\('#g'\),ctx=c\.getContext\('2d'\);/;
+    if(!re.test(html))throw new Error('Could not locate v9 layout block');
+    html=html.replace(re,newLayout+"\nconst c=$('#g'),ctx=c.getContext('2d');");
+    document.open();document.write(html);document.close();
+  }catch(err){
+    document.body.innerHTML='<div class="loading"><div><b>Could not load v10</b><span>'+String(err.message||err)+'</span></div></div>';
+  }
+})();
+</script>
+</body>
+</html>

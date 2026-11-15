@@ -1,0 +1,81 @@
+name: ROOM 2 Keeper
+
+on:
+  schedule:
+    - cron: '17 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-2-keeper
+  cancel-in-progress: true
+
+jobs:
+  restart-room-2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: vault-room-dynamics
+          fetch-depth: 30
+      - name: Check ROOM 2 heartbeat
+        id: heartbeat
+        run: |
+          set -euo pipefail
+          fresh=0
+          if [ -f vault/runtime/heartbeat.json ]; then
+            fresh=$(python3 - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          try:
+              h=json.load(open('vault/runtime/heartbeat.json'))
+              stamp=datetime.fromisoformat(str(h.get('at') or '').replace('Z','+00:00'))
+              if stamp.tzinfo is None:
+                  stamp=stamp.replace(tzinfo=timezone.utc)
+              age=(datetime.now(timezone.utc)-stamp.astimezone(timezone.utc)).total_seconds()
+              run_id=str(h.get('run_id') or '')
+              size=h.get('conversation_size')
+              healthy=(
+                  h.get('health') == 'ok'
+                  and h.get('llm_active') is True
+                  and h.get('feedback_loop') is True
+                  and run_id.isdigit()
+                  and isinstance(size, int)
+                  and 0 <= size <= 120
+              )
+              print(1 if healthy and -15 <= age <= 600 else 0)
+          except Exception:
+              print(0)
+          PY
+            )
+          fi
+          echo "fresh=$fresh" >> "$GITHUB_OUTPUT"
+          if [ "$fresh" -eq 1 ]; then
+            echo 'ROOM 2 heartbeat is verified fresh and healthy; keeper will not interrupt it.'
+          fi
+      - name: Kick isolated ROOM 2 session
+        if: steps.heartbeat.outputs.fresh != '1'
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "vault-room-dynamics"
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          printf 'keeper-%s-%s\n' "$GITHUB_RUN_ID" "$(date -u +%Y%m%dT%H%M%SZ)" > vault/live-kick.txt
+          git add vault/live-kick.txt
+          git commit -m 'Keeper restart ROOM 2'
+          pushed=0
+          for attempt in 1 2 3 4; do
+            if timeout 35s git push origin HEAD:vault-room-dynamics; then pushed=1; break; fi
+            git fetch origin vault-room-dynamics --depth=30 || true
+            if ! git rebase origin/vault-room-dynamics; then
+              git rebase --abort || true
+              git reset --hard origin/vault-room-dynamics
+              printf 'keeper-%s-%s\n' "$GITHUB_RUN_ID" "$(date -u +%Y%m%dT%H%M%SZ)" > vault/live-kick.txt
+              git add vault/live-kick.txt
+              git commit -m 'Keeper restart ROOM 2 after conflict'
+            fi
+            sleep $((attempt * 2))
+          done
+          test "$pushed" -eq 1

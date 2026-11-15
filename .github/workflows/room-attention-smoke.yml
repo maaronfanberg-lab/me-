@@ -1,0 +1,24 @@
+name: Room Attention Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/room_skill_exec.py'
+      - 'scripts/test_room_skill_router.py'
+      - 'skills/room/**'
+      - '.github/workflows/sarah-society.yml'
+      - '.github/workflows/room-attention-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  router-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test attention routing
+        run: |
+          python3 -m py_compile scripts/room_skill_exec.py scripts/test_room_skill_router.py
+          python3 scripts/test_room_skill_router.py

@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/bridge-healthcheck-20260907-0913.json",
+  "request_sha256": "2e7fa6228695c44761ded9bb77a4f18a37e66cb5294b89e3d18a53d2b714a0f4",
+  "request_nonce": "bridge-healthcheck-20260907-0913",
+  "completed_at": "2026-09-07T14:21:45.814378Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "**PASS** — `bridge/README.md`'s \"Cross-chat quickstart\" (lines 7–43) gives a fresh assistant everything needed in one place: the target repo (`maaronfanberg-lab/me-`), the exact inbox path/schema, the triggering workflow name, the outbox path, the acceptance-field checklist, and an explicit read-only/advisory statement (line 36, corroborated by `claude_code_oracle.py`'s `--tools Read,Glob,Grep --permission-mode dontAsk --safe-mode` invocation at lines 138–146, which structurally enforces read-only Claude access).\n\nRemaining operational ambiguity:\n\n- **\"Wait for the workflow run to complete\" is undefined** (README step 4): no instructions on how to locate the run (by commit SHA, by workflow name, via `gh run list`/API) or how long to poll before declaring failure — the workflow's own 8-minute `timeout-minutes` (line 26) isn't surfaced to the caller as a wait budget.\n- **Multi-file push ambiguity**: the workflow only replies to the *last* inbox file per `git diff-tree ... | tail -n 1` (line 44), but the README quickstart never warns against including more than one inbox file in a single push, risking silent request drops.\n- **No collision/overwrite guidance**: neither README nor the workflow states what happens if an outbox file for a chosen request id already exists (e.g., reused id) — could silently overwrite or be misread as a stale response.\n- **`workflow_dispatch` path undocumented for the assistant**: the workflow supports a manual `request_file` input (lines 8–13) as an alternate trigger, but the quickstart only describes the push-based flow, leaving unclear when/why an assistant should use dispatch instead.\n- **Write-access precondition unstated**: the quickstart assumes the calling assistant's GitHub tooling can commit directly to `main` (no branch-protection/PR path is described), but this permission prerequisite is never called out as something to verify first.",
+  "session_id": "11666866-d514-47cf-b457-f2d2bed216f6",
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 9018,
+    "cache_read_input_tokens": 15113,
+    "output_tokens": 2175,
+    "output_tokens_details": {
+      "thinking_tokens": 938
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 9018,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1576,
+        "cache_read_input_tokens": 4344,
+        "cache_creation_input_tokens": 7857,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 7857
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.0619406,
+  "num_turns": 10
+}

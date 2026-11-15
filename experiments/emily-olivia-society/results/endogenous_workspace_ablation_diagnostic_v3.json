@@ -1,0 +1,39 @@
+{
+  "evidence_version": 3,
+  "experiment": "prediction_error_ablation_diagnostic_v3",
+  "workflow_run_id": 33536159206,
+  "workflow_job_id": 99950860235,
+  "result_artifact_id": 9811726033,
+  "result_artifact_sha256": "f293b070bf1d40f1f4df69c528467586eafe9d8daef86891e55e866588ed886d",
+  "produced_dialogue": false,
+  "wrote_live_memory": false,
+  "activated_live_workspace": false,
+  "selected_artifact_count": 1,
+  "minimum_replication_artifacts_required": 3,
+  "base_median_effect": 0.109893,
+  "variant_median_effects": {
+    "no_prediction_learning": 0.496871,
+    "shuffle_surprise_identity": 0.026276,
+    "scramble_temporal_order": -0.013565,
+    "absence_decay_zero": 0.496871,
+    "absence_decay_one": -0.036845,
+    "retrieval_only": 0.496871
+  },
+  "degradation_from_base": {
+    "no_prediction_learning": -0.386978,
+    "shuffle_surprise_identity": 0.083617,
+    "scramble_temporal_order": 0.123458,
+    "absence_decay_zero": -0.386978,
+    "absence_decay_one": 0.146738,
+    "retrieval_only": -0.386978
+  },
+  "core_ablation_pass": {
+    "no_prediction_learning": false,
+    "shuffle_surprise_identity": true,
+    "scramble_temporal_order": true
+  },
+  "core_ablation_pass_count": 2,
+  "mechanism_specificity_diagnostic": true,
+  "shadow_mode_permitted": false,
+  "interpretation": "On the one available independent replica, temporal scrambling and surprise-identity shuffling materially damaged the base effect, but disabling prediction learning substantially improved it. The data support a temporally ordered, identity-specific novelty/surprise signal more clearly than a learned prediction-error mechanism. Because independent replication is incomplete, this remains diagnostic only and does not permit shadow mode."
+}

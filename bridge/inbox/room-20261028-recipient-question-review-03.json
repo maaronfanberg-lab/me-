@@ -1,0 +1,12 @@
+{
+  "nonce": "room-20261028-recipient-question-review-03",
+  "prompt": "Perform an independent, read-only engineering review of Room conversational integrity work. Inspect merged PR #333 and current unmerged PR #334 in repository maaronfanberg-lab/me-. PR333: public audible addressee wins over contradictory private target, named question response routed to the named recipient, published target reconciled. PR334: question echo detector compares the final full interrogative clause of consecutive public turns, not arbitrary overlapping words; first repair may quote once, subsequent identical repair rejected. Critique semantics and edge cases, especially ambiguous/multiple addressees, sleeping recipients, short meaningful repetition, prefaced questions, false positives, model-smallness, and availability/safety of the publication path. Find specific overlooked bugs and minimal falsification tests. No file modifications. Mark uncertain findings clearly.",
+  "context": [
+    "Observed public episode: Jules said 'Hey Sarah, can you tell me about the new exercise idea you want to explore?' but cognition.target was Mara.",
+    "Observed public episode: Sarah said 'You want to be coherent and mutual understanding. Can you help me achieve that by being helpful and supportive?' and Jules and Mara echoed only the final question.",
+    "PR333 merged with CI green. PR334 is still in progress; do not assume passing CI or deployment. Reference scripts/room_conversational_floor.py, room_conversation_project.py, room_private_commit.py, room_sequence_uptake.py, room_private_model_autonomy_legacy.py and tests."
+  ],
+  "expected_response": "Rank up to six concrete defects with file/function references; give exact regression fixtures and merge/no-merge criteria, distinguish confidence and uncertainty.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 4
+}

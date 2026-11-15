@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>EVH Comb Lab — Fixed Audio</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0c0f;--panel:#151820;--ink:#f5f2e8;--muted:#a5abb7;--line:#323742;--hot:#ff7043;--ok:#72e69b;--warn:#ffd166;--cool:#6bd5ff}
+*{box-sizing:border-box} body{margin:0;background:linear-gradient(#11131a,#090a0d);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink)}
+main{max-width:980px;margin:auto;padding:18px}.hero{padding:6px 0 18px;border-bottom:1px solid var(--line);margin-bottom:16px}h1{margin:0;font-size:clamp(30px,7vw,64px);letter-spacing:-.06em;line-height:.95}.sub{color:var(--muted);margin-top:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}.wide{grid-column:1/-1}.row{display:grid;grid-template-columns:140px 1fr 78px;gap:10px;align-items:center;margin:12px 0}.value{text-align:right;color:var(--cool)}input[type=range]{width:100%}button{font:inherit;color:var(--ink);background:#222733;border:1px solid #3c4350;border-radius:12px;padding:12px 14px;min-height:46px}button:active{transform:translateY(1px)}button.primary{background:var(--hot);border-color:#ff8d68;color:#1c0a05;font-weight:900}.controls{display:flex;gap:8px;flex-wrap:wrap}.touches{display:flex;gap:8px;flex-wrap:wrap}.touches button.active{outline:2px solid var(--cool);background:#263746}.status{display:flex;gap:8px;align-items:center;margin:8px 0 12px}.dot{width:11px;height:11px;border-radius:50%;background:#666}.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:#ff6b6b}.msg{font-size:12px;color:var(--muted);white-space:pre-wrap;word-break:break-word}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.stat{background:#0c0e12;border:1px solid var(--line);border-radius:12px;padding:10px}.stat span{font-size:11px;color:var(--muted)}.stat b{display:block;font-size:20px;margin-top:3px}canvas{width:100%;height:170px;background:#08090b;border:1px solid var(--line);border-radius:12px}.note{font-size:12px;color:var(--muted);line-height:1.45}.danger{color:#ffd0bd}
+@media(max-width:720px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.row{grid-template-columns:105px 1fr 62px}.stats{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body><main>
+<div class="hero"><div class="note">PINCH HARMONIC / FEEDBACK / SAG</div><h1>EVH COMB LAB</h1><div class="sub">Hosted over HTTPS so iPhone Safari can grant Web Audio correctly.</div></div>
+<div class="grid">
+<section class="card wide">
+  <h3>AUDIO ENGINE</h3>
+  <div class="status"><span id="statusDot" class="dot warn"></span><strong id="statusText">OFF — tap POWER ON</strong></div>
+  <div class="controls">
+    <button class="primary" id="power">POWER ON</button>
+    <button id="test">TEST TONE</button>
+    <button id="pluck">PLUCK / PINCH</button>
+    <button id="stop">STOP / PANIC</button>
+  </div>
+  <p id="diag" class="msg">No audio context created yet.</p>
+</section>
+<section class="card">
+  <h3>STRING / TOUCH</h3>
+  <div class="row"><label>Fundamental</label><input id="f0" type="range" min="55" max="220" step="1" value="110"><span class="value" id="f0v"></span></div>
+  <div class="note">Virtual touch position:</div><div class="touches" id="touches"></div>
+  <div class="row"><label>Brightness</label><input id="bright" type="range" min="0.6" max="2.8" step="0.05" value="1.25"><span class="value" id="brightv"></span></div>
+</section>
+<section class="card">
+  <h3>FEEDBACK LOOP</h3>
+  <div class="row"><label>Resonance</label><input id="fc" type="range" min="160" max="6000" step="1" value="880"><span class="value" id="fcv"></span></div>
+  <div class="row"><label>Q</label><input id="q" type="range" min="0.6" max="6" step="0.1" value="2.3"><span class="value" id="qv"></span></div>
+  <div class="row"><label>Loop gain</label><input id="loop" type="range" min="0" max="0.92" step="0.005" value="0.72"><span class="value" id="loopv"></span></div>
+</section>
+<section class="card">
+  <h3>SAG / DRIVE</h3>
+  <div class="row"><label>Drive</label><input id="drive" type="range" min="1" max="9" step="0.1" value="4.5"><span class="value" id="drivev"></span></div>
+  <div class="row"><label>Sag depth</label><input id="sag" type="range" min="0" max="0.8" step="0.01" value="0.5"><span class="value" id="sagv"></span></div>
+  <div class="row"><label>Output</label><input id="out" type="range" min="0.03" max="0.85" step="0.01" value="0.36"><span class="value" id="outv"></span></div>
+</section>
+<section class="card"><h3>PREDICTION</h3><div class="stats"><div class="stat"><span>touch family</span><b id="family">—</b></div><div class="stat"><span>lowest survivor</span><b id="survivor">—</b></div><div class="stat"><span>favored partial</span><b id="winner">—</b></div><div class="stat"><span>favored pitch</span><b id="pitch">—</b></div></div></section>
+<section class="card wide"><h3>SPECTRUM</h3><canvas id="scope" width="920" height="180"></canvas></section>
+</div></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id); const AC=window.AudioContext||window.webkitAudioContext;
+let ctx=null,analyser=null,master=null,compressor=null,feedbackDelay=null,feedbackFilter=null,feedbackGain=null,dryBus=null,raf=0,active=[],beta=1/4;
+const touchOptions=[{beta:0,label:'none',family:'open'},{beta:1/2,label:'1/2',family:'×2'},{beta:1/3,label:'1/3',family:'×3'},{beta:1/4,label:'1/4',family:'×4'},{beta:1/5,label:'1/5',family:'×5'}];
+function setStatus(kind,text,diag){$('statusDot').className='dot '+kind;$('statusText').textContent=text;if(diag!==undefined)$('diag').textContent=diag}
+window.addEventListener('error',e=>setStatus('bad','SCRIPT ERROR',String(e.message||e.error||e)));window.addEventListener('unhandledrejection',e=>setStatus('bad','AUDIO ERROR',String(e.reason||e)));
+function bindRange(id,fmt=v=>v){const el=$(id),out=$(id+'v');const u=()=>{out.textContent=fmt(+el.value);updatePrediction();if(ctx){const t=ctx.currentTime;if(id==='fc'&&feedbackFilter)feedbackFilter.frequency.setTargetAtTime(+el.value,t,.02);if(id==='q'&&feedbackFilter)feedbackFilter.Q.setTargetAtTime(+el.value,t,.02);if(id==='loop'&&feedbackGain)feedbackGain.gain.setTargetAtTime(+el.value,t,.02);if(id==='out'&&master)master.gain.setTargetAtTime(+el.value,t,.02)}};el.addEventListener('input',u);u()}
+bindRange('f0',v=>v.toFixed(0)+' Hz');bindRange('bright',v=>v.toFixed(2));bindRange('fc',v=>v<1000?v.toFixed(0)+' Hz':(v/1000).toFixed(2)+' kHz');bindRange('q',v=>v.toFixed(1));bindRange('loop',v=>v.toFixed(3));bindRange('drive',v=>v.toFixed(1)+'×');bindRange('sag',v=>(v*100).toFixed(0)+'%');bindRange('out',v=>(v*100).toFixed(0)+'%');
+const touchWrap=$('touches');touchOptions.forEach(o=>{const b=document.createElement('button');b.textContent=o.label;b.dataset.beta=String(o.beta);b.addEventListener('click',()=>{beta=o.beta;[...touchWrap.children].forEach(x=>x.classList.toggle('active',+x.dataset.beta===beta));updatePrediction()});touchWrap.appendChild(b)});[...touchWrap.children].forEach(x=>x.classList.toggle('active',+x.dataset.beta===beta));
+function dampingWeight(n){if(beta===0)return 1;const displacement=Math.abs(Math.sin(Math.PI*n*beta));return Math.pow(Math.max(0,1-displacement),1.6)} function bpMag(f,fc,q){const w=f/fc;return 1/Math.sqrt(1+Math.pow(q*(w-1/w),2))}
+function predictedWinner(){const f0=+$('f0').value,fc=+$('fc').value,q=+$('q').value;let best={n:1,g:-1};for(let n=1;n<=32;n++){const g=bpMag(n*f0,fc,q)*(.25+.75*dampingWeight(n));if(g>best.g)best={n,g}}return best.n}
+function noteName(hz){const midi=69+12*Math.log2(hz/440),m=Math.round(midi),names=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];return names[(m%12+12)%12]+(Math.floor(m/12)-1)}
+function updatePrediction(){const opt=touchOptions.find(o=>o.beta===beta);$('family').textContent=opt?opt.family:'—';$('survivor').textContent=beta===0?'all':String(Math.round(1/beta));const n=predictedWinner(),hz=n*(+$('f0').value);$('winner').textContent=String(n);$('pitch').textContent=noteName(hz)+' '+Math.round(hz)+'Hz'} updatePrediction();
+async function powerOn(){try{if(!AC)throw new Error('Web Audio is unavailable in this browser.');if(!ctx){ctx=new AC();analyser=ctx.createAnalyser();analyser.fftSize=2048;master=ctx.createGain();master.gain.value=+$('out').value;compressor=ctx.createDynamicsCompressor();compressor.threshold.value=-18;compressor.knee.value=12;compressor.ratio.value=10;compressor.attack.value=.003;compressor.release.value=.16;dryBus=ctx.createGain();dryBus.gain.value=.9;feedbackDelay=ctx.createDelay(.2);feedbackDelay.delayTime.value=1/(+$('f0').value);feedbackFilter=ctx.createBiquadFilter();feedbackFilter.type='bandpass';feedbackFilter.frequency.value=+$('fc').value;feedbackFilter.Q.value=+$('q').value;feedbackGain=ctx.createGain();feedbackGain.gain.value=+$('loop').value;dryBus.connect(compressor);feedbackDelay.connect(feedbackFilter);feedbackFilter.connect(feedbackGain);feedbackGain.connect(feedbackDelay);feedbackFilter.connect(compressor);compressor.connect(analyser);analyser.connect(master);master.connect(ctx.destination);draw()}if(ctx.state!=='running')await ctx.resume();setStatus(ctx.state==='running'?'ok':'warn','AUDIO '+ctx.state.toUpperCase(),`sampleRate=${ctx.sampleRate} Hz\nstate=${ctx.state}\nTap TEST TONE.`);return ctx.state==='running'}catch(err){setStatus('bad','POWER FAILED',String(err&&err.stack||err));return false}}
+function track(node){active.push(node);node.addEventListener?.('ended',()=>{active=active.filter(x=>x!==node)},{once:true});return node}
+async function testTone(){if(!(await powerOn()))return;try{const o=track(ctx.createOscillator()),g=ctx.createGain(),t=ctx.currentTime;o.type='sine';o.frequency.value=440;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.35,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+.8);o.connect(g);g.connect(master);o.start(t);o.stop(t+.85);setStatus('ok','TEST TONE SENT',`AudioContext=${ctx.state}\n440 Hz direct output.`)}catch(err){setStatus('bad','TEST FAILED',String(err&&err.stack||err))}}
+function makeWave(){const fs=ctx.sampleRate,dur=1.8,N=Math.floor(fs*dur),buf=ctx.createBuffer(1,N,fs),y=buf.getChannelData(0),f0=+$('f0').value,bright=+$('bright').value,drive=+$('drive').value,sagDepth=+$('sag').value;let envFollower=0;const atk=Math.exp(-1/(.004*fs)),rel=Math.exp(-1/(.07*fs)),phases=Array.from({length:32},()=>Math.random()*Math.PI*2);for(let i=0;i<N;i++){const t=i/fs;let raw=0;for(let n=1;n<=32;n++){const f=n*f0;if(f>fs*.42)break;raw+=dampingWeight(n)*Math.pow(n,-bright)*Math.exp(-t*(2+.06*n))*Math.sin(2*Math.PI*f*t+phases[n-1])}raw*=.55*Math.exp(-t*.2);const r=Math.abs(raw),a=r>envFollower?atk:rel;envFollower=a*envFollower+(1-a)*r;const supply=Math.max(.22,1-sagDepth*Math.min(1,envFollower));y[i]=supply*Math.tanh(drive*raw/supply)/Math.tanh(drive)}return buf}
+async function pluck(){if(!(await powerOn()))return;try{const t=ctx.currentTime;feedbackDelay.delayTime.setTargetAtTime(1/(+$('f0').value),t,.01);const src=track(ctx.createBufferSource()),g=ctx.createGain();src.buffer=makeWave();g.gain.setValueAtTime(.75,t);g.gain.exponentialRampToValueAtTime(.35,t+1.6);src.connect(g);g.connect(dryBus);g.connect(feedbackDelay);src.start(t);src.stop(t+1.8);setStatus('ok','PLUCK SENT',`Dry + feedback active.\nContext=${ctx.state}`)}catch(err){setStatus('bad','PLUCK FAILED',String(err&&err.stack||err))}}
+function stopAll(){if(!ctx)return;for(const n of [...active]){try{n.stop()}catch{}}active=[];setStatus('warn','STOPPED','Active sources stopped.')}
+$('power').addEventListener('click',powerOn);$('test').addEventListener('click',testTone);$('pluck').addEventListener('click',pluck);$('stop').addEventListener('click',stopAll);
+function draw(){cancelAnimationFrame(raf);const c=$('scope'),g=c.getContext('2d'),data=new Uint8Array(analyser.frequencyBinCount);function frame(){raf=requestAnimationFrame(frame);analyser.getByteFrequencyData(data);g.clearRect(0,0,c.width,c.height);g.fillStyle='#08090b';g.fillRect(0,0,c.width,c.height);const maxHz=Math.min(8000,ctx.sampleRate/2),bins=Math.max(2,Math.floor(maxHz/(ctx.sampleRate/2)*data.length));g.strokeStyle='#6bd5ff';g.beginPath();for(let i=0;i<bins;i++){const x=i/(bins-1)*c.width,y=c.height-(data[i]/255)*c.height;i?g.lineTo(x,y):g.moveTo(x,y)}g.stroke()}frame()}
+</script></body></html>

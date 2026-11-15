@@ -1,0 +1,160 @@
+name: Room Allen live relay probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-allen-live-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Probe deployed relay and persisted Allen state
+        env:
+          ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+        run: |
+          set -u
+          token_json=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror")
+          relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))')
+          pending_body=$(mktemp)
+          pending_status=$(curl -sS -o "$pending_body" -w '%{http_code}' -H "Authorization: Bearer ${relay_token}" "${ROOM_RELAY_URL%/}/api/participant/pending" || true)
+          auth_body=$(mktemp)
+          auth_status=$(curl -sS -o "$auth_body" -w '%{http_code}' "${ROOM_RELAY_URL%/}/api/allen/auth" || true)
+          python3 - "$pending_status" "$auth_status" "$pending_body" "$auth_body" <<'PY'
+          import json,re,sys
+          from datetime import datetime,timezone
+          ps,as_,pb,ab=sys.argv[1:]
+          def text(path):
+              try:return open(path).read()[:500]
+              except:return ''
+          def load(path, default):
+              try:return json.load(open(path))
+              except:return default
+          minds=load('room/cognitive_state.json',{})
+          state=load('room/state.json',{})
+          conv=load('room/conversation.json',[])
+          entities=(minds.get('entities') or {}) if isinstance(minds,dict) else {}
+          ai=('sarah','mara','owen','jules')
+          relationships={
+              e: ('allen' in ((entities.get(e) or {}).get('people') or {}))
+              for e in ai
+          }
+          relationship_stats={}
+          for e in ai:
+              rel=((entities.get(e) or {}).get('people') or {}).get('allen') or {}
+              relationship_stats[e]={
+                  'observed_turns':int(rel.get('observed_turns') or 0),
+                  'direct_turns':int(rel.get('direct_turns') or 0),
+                  'last_direct_cycle':rel.get('last_direct_cycle'),
+              }
+          topic=((state.get('topic_episode') or {}) if isinstance(state,dict) else {})
+          recent_allen=[m for m in conv[-1000:] if isinstance(m,dict) and m.get('speaker')=='allen'] if isinstance(conv,list) else []
+
+          allen_indices=[i for i,m in enumerate(conv) if isinstance(m,dict) and m.get('speaker')=='allen'] if isinstance(conv,list) else []
+          first_reply_count=0
+          first_reply_target_allen=0
+          windows_with_target_allen=0
+          windows_with_name_mention=0
+          ai_target_allen_total=0
+          ai_name_mentions_total=0
+          for m in conv if isinstance(conv,list) else []:
+              if not isinstance(m,dict) or m.get('speaker') not in ai: continue
+              if ((m.get('cognition') or {}).get('target')=='allen'):
+                  ai_target_allen_total+=1
+              if re.search(r'\ballen\b',str(m.get('text') or ''),re.I):
+                  ai_name_mentions_total+=1
+          for idx in allen_indices:
+              following=[]
+              for m in conv[idx+1:]:
+                  if not isinstance(m,dict): continue
+                  if m.get('speaker')=='allen': break
+                  if m.get('speaker') in ai:
+                      following.append(m)
+                      if len(following)>=4: break
+              if not following: continue
+              first_reply_count+=1
+              if ((following[0].get('cognition') or {}).get('target')=='allen'):
+                  first_reply_target_allen+=1
+              if any(((m.get('cognition') or {}).get('target')=='allen') for m in following):
+                  windows_with_target_allen+=1
+              if any(re.search(r'\ballen\b',str(m.get('text') or ''),re.I) for m in following):
+                  windows_with_name_mention+=1
+
+          def compact_turn(m):
+              cog=(m.get('cognition') or {}) if isinstance(m,dict) else {}
+              return {
+                  'id':m.get('id'),
+                  'at':m.get('at'),
+                  'speaker':m.get('speaker'),
+                  'text':m.get('text'),
+                  'target':cog.get('target'),
+                  'move_type':cog.get('move_type'),
+                  'parent_discourse_id':m.get('parent_discourse_id'),
+                  'derived_from':m.get('derived_from'),
+                  'beat_id':m.get('beat_id') or cog.get('beat_id'),
+              }
+          latest_windows=[]
+          for idx in allen_indices[-8:]:
+              following=[]
+              for m in conv[idx+1:]:
+                  if not isinstance(m,dict): continue
+                  if m.get('speaker')=='allen': break
+                  if m.get('speaker') in ai:
+                      following.append(compact_turn(m))
+                      if len(following)>=4: break
+              latest_windows.append({
+                  'allen':compact_turn(conv[idx]),
+                  'following_ai':following,
+                  'any_target_allen':any(m.get('target')=='allen' for m in following),
+                  'any_name_mention':any(re.search(r'\ballen\b',str(m.get('text') or ''),re.I) for m in following),
+              })
+
+          out={
+              'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+              'pending_status':int(ps or 0),
+              'pending_body':text(pb),
+              'allen_auth_status':int(as_ or 0),
+              'allen_auth_body':text(ab),
+              'topic_participants':list(topic.get('participants') or []),
+              'allen_relationship_present':relationships,
+              'allen_relationship_present_for_all':all(relationships.values()),
+              'allen_relationship_stats':relationship_stats,
+              'participant_observation_id_count':len(list(minds.get('participant_observation_ids') or [])) if isinstance(minds,dict) else 0,
+              'retained_allen_turn_count':len(recent_allen),
+              'latest_allen_turn':recent_allen[-1] if recent_allen else None,
+              'latest_allen_windows':latest_windows,
+              'response_baseline':{
+                  'allen_turns_with_following_ai':first_reply_count,
+                  'first_ai_reply_targeted_allen':first_reply_target_allen,
+                  'allen_turn_windows_with_any_target_allen':windows_with_target_allen,
+                  'allen_turn_windows_with_any_name_mention':windows_with_name_mention,
+                  'ai_messages_targeting_allen_total':ai_target_allen_total,
+                  'ai_messages_mentioning_allen_total':ai_name_mentions_total,
+              },
+              'room_cycle':state.get('cycle') if isinstance(state,dict) else None,
+              'room_last_run':state.get('last_run') if isinstance(state,dict) else None,
+          }
+          open('room/private-allen-live-probe.json','w').write(json.dumps(out,indent=2)+'\n')
+          PY
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add room/private-allen-live-probe.json
+          git commit -m "Record Allen relay live probe" || exit 0
+          for attempt in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 0; }
+            sleep $attempt
+          done
+
+# fresh-spoken-name-trigger: 2026-08-20T03:00Z

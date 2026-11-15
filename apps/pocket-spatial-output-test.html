@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#080b12">
+<title>Pocket Spatial Output Test</title>
+<style>
+:root{--bg:#080b12;--panel:#111722;--line:#293347;--text:#edf2fb;--dim:#94a1b5;--accent:#8f83ff;--good:#5ddbc7;--warn:#e0bb65}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+body{padding:24px 14px 40px;max-width:680px;margin:auto}
+h1{font-size:26px;line-height:1.05;margin:4px 0 7px;letter-spacing:.02em}.sub{color:var(--dim);font-size:12px;line-height:1.5;margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:15px;margin:10px 0}
+button{display:block;width:100%;min-height:56px;border-radius:14px;border:1px solid #756cf2;background:#5147c8;color:var(--text);padding:13px;font-size:16px;font-weight:700;margin:10px 0}
+.metricGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric{background:#0b1018;border:1px solid var(--line);border-radius:12px;padding:11px}.metric span{display:block;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.06em}.metric b{display:block;margin-top:4px;font-size:16px;word-break:break-word}
+.status{font-size:12px;color:var(--dim);line-height:1.55;margin-top:9px}.good{color:var(--good)}.warn{color:var(--warn)}.legal{font-size:10.5px;color:var(--dim);line-height:1.55}.legal b{color:var(--text)}
+.result{font-size:20px;font-weight:750;line-height:1.25;margin-top:5px}.result.good{color:var(--good)}.result.warn{color:var(--warn)}
+@media(max-width:380px){.metricGrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>POCKET SPATIAL</h1>
+<div class="sub">Multichannel output probe · Safari / Web Audio route test</div>
+
+<div class="card">
+  <div class="status"><b>WHAT THIS TEST DOES:</b> asks Safari what the current physical audio route can accept, then safely tries a silent 8-channel and 6-channel Web Audio graph. It does not play a test tone.</div>
+  <button id="run" type="button">CHECK OUTPUT CHANNELS</button>
+  <div id="result" class="result">Not tested yet</div>
+  <div id="detail" class="status">Run it once with your current connection. If you later connect Lightning → HDMI → receiver, run it again and compare the result.</div>
+</div>
+
+<div class="card">
+  <div class="metricGrid">
+    <div class="metric"><span>Maximum reported</span><b id="max">—</b></div>
+    <div class="metric"><span>Current destination</span><b id="current">—</b></div>
+    <div class="metric"><span>8-channel request</span><b id="eight">—</b></div>
+    <div class="metric"><span>6-channel request</span><b id="six">—</b></div>
+    <div class="metric"><span>Sample rate</span><b id="rate">—</b></div>
+    <div class="metric"><span>Context state</span><b id="state">—</b></div>
+  </div>
+</div>
+
+<div class="card legal"><b>How to read it:</b> 2 channels means the current Safari output route is stereo. 6 or more means Safari is exposing a 5.1-sized output path. 8 or more means it is exposing a 7.1-sized path. Even an 8-channel result is a capability signal, not yet proof that a particular receiver mapping is correct. We would do a separate silent-to-audible channel-identification test before changing Pocket Spatial to true discrete output.</div>
+
+<script>
+(function(){
+'use strict';
+var AC=window.AudioContext||window.webkitAudioContext;
+function byId(id){return document.getElementById(id);}
+function set(id,value){var n=byId(id);if(n)n.textContent=value;}
+function requestChannels(ctx,count){
+  var dest=ctx.destination;
+  var merger=null,source=null,gain=null;
+  try{
+    dest.channelInterpretation='discrete';
+    dest.channelCountMode='explicit';
+    dest.channelCount=count;
+    merger=ctx.createChannelMerger(count);
+    gain=ctx.createGain();gain.gain.value=0;
+    source=ctx.createOscillator();source.frequency.value=440;source.connect(gain);
+    for(var i=0;i<count;i++)gain.connect(merger,0,i);
+    merger.connect(dest);
+    source.start();source.stop(ctx.currentTime+.02);
+    return dest.channelCount===count?{ok:true,value:dest.channelCount}:{ok:false,value:dest.channelCount,reason:'destination stayed at '+dest.channelCount};
+  }catch(e){
+    return {ok:false,value:dest.channelCount,reason:e&&e.name?e.name:String(e)};
+  }finally{
+    try{if(source)source.disconnect();}catch(e1){}
+    try{if(gain)gain.disconnect();}catch(e2){}
+    try{if(merger)merger.disconnect();}catch(e3){}
+  }
+}
+async function run(){
+  var button=byId('run'),result=byId('result'),detail=byId('detail');
+  if(!AC){result.textContent='WEB AUDIO UNAVAILABLE';result.className='result warn';detail.textContent='This browser is not exposing AudioContext, so the output route cannot be measured here.';return;}
+  button.disabled=true;button.textContent='CHECKING…';
+  var ctx=null;
+  try{
+    ctx=new AC();
+    if(ctx.state==='suspended'&&ctx.resume)await ctx.resume();
+    var dest=ctx.destination;
+    var max=Number(dest.maxChannelCount)||0;
+    var original=Number(dest.channelCount)||0;
+    set('max',max?String(max):'unknown');set('current',original?String(original):'unknown');set('rate',Math.round(ctx.sampleRate)+' Hz');set('state',ctx.state||'unknown');
+
+    var r8=max>=8?requestChannels(ctx,8):{ok:false,reason:'max '+max};
+    try{dest.channelCount=original||Math.min(2,max||2);}catch(reset1){}
+    var r6=max>=6?requestChannels(ctx,6):{ok:false,reason:'max '+max};
+    try{dest.channelCount=original||Math.min(2,max||2);}catch(reset2){}
+
+    set('eight',r8.ok?'ACCEPTED':'NO');set('six',r6.ok?'ACCEPTED':'NO');
+    if(r8.ok||max>=8){
+      result.textContent='7.1-SIZED PATH EXPOSED';result.className='result good';
+      detail.textContent=r8.ok?'Safari accepted an 8-channel destination on this route. That is the result we wanted before attempting a real discrete 7.1 channel map.':'Safari reports at least 8 output channels, although the explicit 8-channel request did not stick ('+(r8.reason||'unknown reason')+'). Still worth a deeper test.';
+    }else if(r6.ok||max>=6){
+      result.textContent='5.1-SIZED PATH EXPOSED';result.className='result good';
+      detail.textContent=r6.ok?'Safari accepted a 6-channel destination on this route. True discrete 5.1 may be testable from the web app.':'Safari reports at least 6 output channels, although the explicit 6-channel request did not stick ('+(r6.reason||'unknown reason')+').';
+    }else if(max===2||original===2){
+      result.textContent='STEREO ROUTE';result.className='result warn';
+      detail.textContent='Safari currently exposes only two output channels. That is expected for Bluetooth and the phone speaker. If you later attach Lightning → HDMI → receiver, rerun this exact test.';
+    }else{
+      result.textContent='INCONCLUSIVE';result.className='result warn';
+      detail.textContent='Safari did not report a clear multichannel capability on this route. Maximum reported: '+(max||'unknown')+'.';
+    }
+  }catch(e){
+    result.textContent='TEST FAILED';result.className='result warn';detail.textContent='Safari returned: '+(e&&e.message?e.message:String(e));
+  }finally{
+    if(ctx&&ctx.close){try{await ctx.close();}catch(e4){}}
+    button.disabled=false;button.textContent='CHECK OUTPUT CHANNELS AGAIN';
+  }
+}
+byId('run').addEventListener('click',run);
+})();
+</script>
+</body>
+</html>

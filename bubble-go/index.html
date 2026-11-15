@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#02060b">
+<title>Bubble Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#02060b;--panel:#08121d;--panel2:#0b1b2a;--line:#1d3b54;--text:#f1f9ff;--muted:#819aaf;--cyan:#62eaff;--mint:#79efbd;--amber:#ffd36f;--rose:#ff82b8;--danger:#ff788a;--canvas:#02070d;--ink:98,234,255}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}body.light{--bg:#eaf1f5;--panel:#f8fbfd;--panel2:#edf4f8;--line:#b8c9d5;--text:#102333;--muted:#587084;--canvas:#f7fbfd;--ink:15,117,156}body.color{--bg:#070511;--panel:#120d22;--panel2:#1a1031;--line:#3b2860;--text:#faf7ff;--muted:#aa91c2;--canvas:#080512;--ink:255,130,184}button,input,select{font:inherit}.app{max-width:980px;margin:auto;padding:18px 12px 52px}header{padding:4px 2px 13px}h1{margin:0;font-size:34px;letter-spacing:-.045em}header .sub{color:var(--muted);font-size:11px;margin-top:4px}.stage{position:relative;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--canvas);box-shadow:0 24px 70px rgba(0,0,0,.32)}#cv{display:block;width:100%;height:min(62vh,620px);min-height:410px;background:var(--canvas);touch-action:manipulation}.badge,.status{position:absolute;top:10px;border:1px solid var(--line);background:color-mix(in srgb,var(--panel) 82%,transparent);backdrop-filter:blur(8px);border-radius:999px;padding:6px 9px;font-size:9px;font-weight:800}.badge{left:10px}.status{right:10px;color:var(--cyan)}.stageRead{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}.read{background:color-mix(in srgb,var(--panel) 82%,transparent);border:1px solid var(--line);border-radius:999px;padding:6px 8px;font-size:9px;color:var(--muted)}.read b{color:var(--text)}.panel{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.panel section{border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),color-mix(in srgb,var(--panel) 76%,#000));border-radius:16px;padding:12px}.panel h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px}.tileGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.tile,.grid2 button,.grid3 button{border:1px solid var(--line);background:var(--panel2);color:var(--muted);border-radius:10px;padding:9px 6px;font-size:9px;font-weight:850;cursor:pointer}.tile.active,.grid3 button.active{color:#021a27;background:var(--cyan);border-color:var(--cyan)}.row{display:grid;grid-template-columns:82px minmax(0,1fr) 68px;gap:8px;align-items:center;margin:8px 0}.row label{font-size:9px;color:var(--muted)}.row input[type=range]{width:100%;accent-color:var(--cyan)}.row select{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:8px;font-size:10px}.value{text-align:right;font-size:9px;color:var(--cyan);font-variant-numeric:tabular-nums}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.secondary{color:var(--text)!important}.danger{color:#ffd8de!important;border-color:#633040!important;background:#271019!important}.formula{display:none;margin-top:8px;border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:9px;white-space:pre-wrap;color:var(--muted);font:10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}.small{font-size:8px;color:var(--muted);line-height:1.45;margin:8px 0 0}.goBar{margin-top:12px;display:grid;grid-template-columns:190px 1fr;gap:8px}.go{border:0;border-radius:14px;padding:15px;background:linear-gradient(135deg,#99efff,#59d0f0 55%,#81efc7);color:#042232;font-size:20px;font-weight:950;letter-spacing:.15em}.go:disabled{opacity:.45}.goInfo{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:10px 12px;font-size:9px;color:var(--muted);line-height:1.45}.goInfo b{display:block;color:var(--text);font-size:10px;margin-bottom:2px}.error{display:none;margin-top:5px;color:#ffb8c2;white-space:pre-wrap}.error.show{display:block}
+@media(max-width:760px){.panel{grid-template-columns:1fr}.tileGrid{grid-template-columns:repeat(3,1fr)}#cv{height:54vh;min-height:390px}.goBar{grid-template-columns:1fr}.app{padding:12px 9px 42px}h1{font-size:30px}}@media(max-width:420px){.tileGrid{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:72px minmax(0,1fr) 60px}.panel section{padding:10px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header><h1>Bubble Lab</h1><div class="sub">single-bubble dynamics · live parameters · visible nonlinear behavior</div></header>
+
+<div class="stage">
+<canvas id="cv" width="1000" height="760"></canvas>
+<div class="badge" id="count">trajectory points: 0</div>
+<div class="status" id="status">booting</div>
+<div class="stageRead"><div class="read">R <b id="rNow">—</b></div><div class="read">R/R₀ <b id="ratioNow">—</b></div><div class="read">wall speed <b id="uNow">—</b></div><div class="read">natural f <b id="f0Now">—</b></div></div>
+</div>
+
+<div class="goBar"><button id="go" class="go" disabled>LOADING</button><div class="goInfo"><b id="goTitle">Scientific engine starting</b><span id="goText">Loading Python, NumPy, SciPy, and the validated bubble equations.</span><div id="errorBox" class="error"></div></div></div>
+
+<div class="panel">
+<section>
+<h2>Bubble Modes</h2>
+<div class="tileGrid">
+<button class="tile active" data-mode="acoustic">Acoustic</button>
+<button class="tile" data-mode="resonance">Resonance</button>
+<button class="tile" data-mode="collapse">Collapse</button>
+<button class="tile" data-mode="nonlinear">Nonlinear</button>
+<button class="tile" data-mode="micro">Microbubble</button>
+<button class="tile" data-mode="macro">Large bubble</button>
+<button class="tile" data-mode="viscous">Viscous</button>
+<button class="tile" data-mode="surface">Surface tension</button>
+</div>
+<div class="row"><label>Model:</label><select id="model"><option value="km">Keller–Miksis</option><option value="rp">Rayleigh–Plesset</option></select><span></span></div>
+</section>
+
+<section>
+<h2>Parameters</h2>
+<div class="row"><label>Radius</label><input id="radius" type="range" min="2" max="80" step="1" value="10"><div id="radiusv" class="value">10 µm</div></div>
+<div class="row"><label>Pressure</label><input id="pressure" type="range" min="0" max="120" step="1" value="8"><div id="pressurev" class="value">8 kPa</div></div>
+<div class="row"><label>Frequency</label><input id="frequency" type="range" min="2" max="600" step="1" value="20"><div id="frequencyv" class="value">20 kHz</div></div>
+<div class="row"><label>Start size</label><input id="initial" type="range" min="0.55" max="3" step="0.01" value="1"><div id="initialv" class="value">1.00 R₀</div></div>
+<div class="row"><label>Viscosity</label><input id="viscosity" type="range" min="0.1" max="20" step="0.1" value="0.89"><div id="viscosityv" class="value">0.89 mPa·s</div></div>
+<div class="row"><label>Surface σ</label><input id="surface" type="range" min="10" max="100" step="1" value="72"><div id="surfacev" class="value">72 mN/m</div></div>
+<div class="row"><label>Gas κ</label><input id="kappa" type="range" min="1" max="1.67" step="0.01" value="1.4"><div id="kappav" class="value">1.40</div></div>
+<div class="row"><label>Cycles</label><input id="cycles" type="range" min="0.25" max="8" step="0.25" value="3"><div id="cyclesv" class="value">3.00</div></div>
+<div class="grid2"><button id="random">Random interesting</button><button id="mutate">Mutate slightly</button><button id="preset" class="secondary">Reset preset</button><button id="replay" class="secondary">Replay</button></div>
+<p class="small">Slider changes rerun the physical model automatically, just like changing attractor parameters redraws the attractor.</p>
+</section>
+
+<section>
+<h2>Rendering</h2>
+<div class="row"><label>Motion gain</label><input id="gain" type="range" min="1" max="80" step="1" value="18"><div id="gainv" class="value">18×</div></div>
+<div class="row"><label>Wave rings</label><input id="rings" type="range" min="0" max="100" step="1" value="72"><div id="ringsv" class="value">72</div></div>
+<div class="row"><label>Trail</label><input id="trail" type="range" min="0" max="100" step="1" value="58"><div id="trailv" class="value">58</div></div>
+<div class="row"><label>Formula</label><input id="showFormula" type="checkbox"><span></span></div>
+<div id="formula" class="formula">Keller–Miksis radial dynamics
+(1−Ṙ/c)R R̈ + 3/2(1−Ṙ/3c)Ṙ² = pressure + compressibility terms</div>
+</section>
+
+<section>
+<h2>Composition</h2>
+<div class="grid3"><button data-theme="dark" class="active">Dark</button><button data-theme="light">Light</button><button data-theme="color">Color</button></div>
+<div class="grid2"><button id="save">Save frame</button><button id="pause" class="danger">Pause</button></div>
+<div style="height:8px"></div>
+<div class="row"><label>Min radius</label><div></div><div id="minR" class="value">—</div></div>
+<div class="row"><label>Max radius</label><div></div><div id="maxR" class="value">—</div></div>
+<div class="row"><label>Max Mach</label><div></div><div id="mach" class="value">—</div></div>
+<div class="row"><label>Solver</label><div></div><div id="solver" class="value">—</div></div>
+</section>
+</div>
+</div>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d');
+let worker=null,ready=false,result=null,frame=0,playing=true,raf=0,timer=0,currentMode='acoustic',token=0;
+const presets={
+ acoustic:{radius:10,pressure:8,frequency:20,initial:1,viscosity:.89,surface:72,kappa:1.4,cycles:3,model:'km'},
+ resonance:{radius:10,pressure:5,frequency:325,initial:1,viscosity:.89,surface:72,kappa:1.4,cycles:6,model:'km'},
+ collapse:{radius:30,pressure:0,frequency:20,initial:2.4,viscosity:.89,surface:72,kappa:1.4,cycles:.75,model:'km'},
+ nonlinear:{radius:15,pressure:80,frequency:30,initial:1,viscosity:.89,surface:72,kappa:1.4,cycles:3,model:'km'},
+ micro:{radius:3,pressure:18,frequency:220,initial:1,viscosity:.89,surface:72,kappa:1.4,cycles:5,model:'km'},
+ macro:{radius:55,pressure:16,frequency:8,initial:1,viscosity:.89,surface:72,kappa:1.4,cycles:3,model:'km'},
+ viscous:{radius:18,pressure:28,frequency:55,initial:1.2,viscosity:8,surface:72,kappa:1.4,cycles:4,model:'km'},
+ surface:{radius:5,pressure:25,frequency:180,initial:1.15,viscosity:.89,surface:95,kappa:1.4,cycles:5,model:'km'}
+};
+const ids=['radius','pressure','frequency','initial','viscosity','surface','kappa','cycles'];
+function setStatus(s){$('status').textContent=s}
+function badgeError(t){$('errorBox').textContent=t;$('errorBox').classList.add('show');setStatus('error');$('go').disabled=false;$('go').textContent='RUN'}
+function apply(p){Object.entries(p).forEach(([k,v])=>{if($(k))$(k).value=v});vals()}
+function vals(){
+ $('radiusv').textContent=(+$('radius').value).toFixed(0)+' µm';$('pressurev').textContent=(+$('pressure').value).toFixed(0)+' kPa';$('frequencyv').textContent=(+$('frequency').value).toFixed(0)+' kHz';$('initialv').textContent=(+$('initial').value).toFixed(2)+' R₀';$('viscosityv').textContent=(+$('viscosity').value).toFixed(2)+' mPa·s';$('surfacev').textContent=(+$('surface').value).toFixed(0)+' mN/m';$('kappav').textContent=(+$('kappa').value).toFixed(2);$('cyclesv').textContent=(+$('cycles').value).toFixed(2);$('gainv').textContent=$('gain').value+'×';$('ringsv').textContent=$('rings').value;$('trailv').textContent=$('trail').value;
+}
+function config(){return{R0:+$('radius').value*1e-6,drive_amplitude:+$('pressure').value*1000,drive_frequency:+$('frequency').value*1000,initial_scale:+$('initial').value,mu:+$('viscosity').value/1000,sigma:+$('surface').value/1000,kappa:+$('kappa').value,cycles:+$('cycles').value,model:$('model').value,samples:560}}
+function schedule(){clearTimeout(timer);timer=setTimeout(run,260)}
+function run(){if(!ready)return;token++;$('errorBox').classList.remove('show');$('go').disabled=true;$('go').textContent='SOLVING';$('goTitle').textContent='Integrating trajectory';$('goText').textContent='The canvas will replay as soon as the solver finishes.';setStatus('solving');worker.postMessage({type:'run',config:config()})}
+function finish(r){result=r;frame=0;playing=true;$('go').disabled=false;$('go').textContent='RUN';$('goTitle').textContent=r.collapsed?'Collapse reached':'Trajectory complete';$('goText').textContent='Drag any parameter to rerun automatically. Replay or mutate whenever you like.';setStatus(r.status);$('count').textContent='trajectory points: '+r.t_s.length.toLocaleString();$('f0Now').textContent=(r.natural_frequency_hz/1000).toFixed(1)+' kHz';$('minR').textContent=(r.min_radius_m*1e6).toFixed(3)+' µm';$('maxR').textContent=(r.max_radius_m*1e6).toFixed(3)+' µm';$('mach').textContent=r.max_wall_mach.toExponential(2);$('solver').textContent=r.solver;drawStatic();animate()}
+function rand(a,b){return a+Math.random()*(b-a)}function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function randomInteresting(){const p={radius:Math.round(rand(3,60)),pressure:Math.round(rand(3,105)),frequency:Math.round(rand(5,500)),initial:+rand(.75,2.2).toFixed(2),viscosity:+rand(.3,6).toFixed(2),surface:Math.round(rand(35,95)),kappa:+rand(1.05,1.6).toFixed(2),cycles:+rand(1,6).toFixed(2),model:Math.random()<.75?'km':'rp'};apply(p);run()}
+function mutate(){ids.forEach(id=>{const e=$(id),min=+e.min,max=+e.max,v=+e.value,span=max-min;e.value=clamp(v+rand(-.08,.08)*span,min,max)});vals();run()}
+function selectMode(name){currentMode=name;document.querySelectorAll('.tile').forEach(b=>b.classList.toggle('active',b.dataset.mode===name));apply(presets[name]);run()}
+function project(){if(!result)return null;const n=result.radius_m.length,i=Math.min(frame,n-1),R=result.radius_m[i],R0=result.R0,U=result.velocity_m_s[i],P=result.drive_pressure_pa[i];return{i,R,R0,U,P,t:result.t_s[i],ratio:R/R0}}
+function drawStatic(){ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--canvas');ctx.fillRect(0,0,cv.width,cv.height)}
+function draw(){
+ const bg=getComputedStyle(document.body).getPropertyValue('--canvas'),ink=getComputedStyle(document.body).getPropertyValue('--ink').trim(),trail=+$('trail').value/100;ctx.fillStyle=bg;ctx.globalAlpha=Math.max(.06,1-trail*.88);ctx.fillRect(0,0,cv.width,cv.height);ctx.globalAlpha=1;
+ if(!result){ctx.fillStyle='rgba('+ink+',.16)';ctx.beginPath();ctx.arc(cv.width/2,cv.height/2,86,0,Math.PI*2);ctx.fill();return}
+ const q=project(),gain=+$('gain').value,cx=cv.width/2,cy=cv.height*.47,base=88,visualRatio=clamp(1+(q.ratio-1)*gain,.22,3.4),rr=base*visualRatio;
+ const rings=+$('rings').value/100,phase=(frame/result.radius_m.length)*Math.PI*2*4,amp=Math.min(1,Math.abs(q.P)/(Math.max(1,result.config.drive_amplitude||1)));
+ for(let k=0;k<8;k++){const rad=rr+28+k*48+((phase*18)%48);ctx.strokeStyle='rgba('+ink+','+((.035+.13*amp)*rings*(1-k/10))+')';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.stroke()}
+ const g=ctx.createRadialGradient(cx-rr*.35,cy-rr*.38,4,cx,cy,rr);g.addColorStop(0,'rgba(255,255,255,.96)');g.addColorStop(.14,'rgba('+ink+',.96)');g.addColorStop(.58,'rgba('+ink+',.33)');g.addColorStop(1,'rgba('+ink+',.05)');ctx.fillStyle=g;ctx.strokeStyle='rgba('+ink+',.95)';ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.fill();ctx.stroke();
+ ctx.strokeStyle='rgba('+ink+',.58)';ctx.lineWidth=2;ctx.beginPath();const N=result.radius_m.length,start=Math.max(0,q.i-180);for(let j=start;j<=q.i;j++){const x=80+(cv.width-160)*(j-start)/Math.max(1,q.i-start),ratio=result.radius_m[j]/result.R0,y=cv.height-88-(ratio-1)*150; j===start?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke();
+ $('rNow').textContent=(q.R*1e6).toFixed(3)+' µm';$('ratioNow').textContent=q.ratio.toFixed(5);$('uNow').textContent=q.U.toExponential(2)+' m/s';
+}
+function animate(){cancelAnimationFrame(raf);let last=0;function loop(t){if(!playing||!result)return;if(!last||t-last>42){last=t;frame=(frame+1)%result.radius_m.length;draw()}raf=requestAnimationFrame(loop)}raf=requestAnimationFrame(loop)}
+function wire(){
+ ids.forEach(id=>$(id).addEventListener('input',()=>{vals();schedule()}));$('model').addEventListener('change',schedule);['gain','rings','trail'].forEach(id=>$(id).addEventListener('input',()=>{vals();draw()}));
+ document.querySelectorAll('.tile').forEach(b=>b.onclick=()=>selectMode(b.dataset.mode));$('random').onclick=randomInteresting;$('mutate').onclick=mutate;$('preset').onclick=()=>{apply(presets[currentMode]);run()};$('replay').onclick=()=>{frame=0;playing=true;drawStatic();animate()};$('go').onclick=run;
+ $('showFormula').onchange=function(){$('formula').style.display=this.checked?'block':'none'};document.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-theme]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.body.className=b.dataset.theme==='dark'?'':b.dataset.theme;drawStatic();draw()});$('save').onclick=()=>{const a=document.createElement('a');a.download='bubble-lab.png';a.href=cv.toDataURL('image/png');a.click()};$('pause').onclick=()=>{playing=!playing;$('pause').textContent=playing?'Pause':'Play';if(playing)animate()};
+}
+worker=new Worker('./engine-worker.js',{type:'module'});worker.onmessage=e=>{const d=e.data;if(d.type==='status'){setStatus(d.text);$('goText').textContent=d.text}else if(d.type==='ready'){ready=true;$('go').disabled=false;$('go').textContent='RUN';$('goTitle').textContent='Engine ready';$('goText').textContent='Choose a mode, move a slider, or press RUN.';setStatus('ready');run()}else if(d.type==='running'){setStatus('solving')}else if(d.type==='result'){try{finish(JSON.parse(d.payload))}catch(err){badgeError(String(err))}}else if(d.type==='error'){badgeError(d.text)}};worker.onerror=e=>badgeError(e.message||'Worker failed');
+wire();vals();drawStatic();draw();
+})();
+</script>
+</body>
+</html>

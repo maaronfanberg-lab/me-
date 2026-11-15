@@ -1,0 +1,118 @@
+name: Deploy Earth Signal
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cloudflare/gods-eye-view-mobile/**'
+      - '.github/workflows/deploy-gods-eye-view-mobile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-gods-eye-view-mobile
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN_RAW: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Normalize Cloudflare credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="${CLOUDFLARE_API_TOKEN_RAW:-}"
+          test -n "$raw" || { echo 'Missing CLOUDFLARE_API_TOKEN/CF_API_TOKEN'; exit 1; }
+          token="$raw"
+          token="${token#Bearer }"
+          token="${token#bearer }"
+          token="$(printf '%s' "$token" | tr -d '\r\n')"
+          test -n "$token" || { echo 'Cloudflare token became empty after normalization'; exit 1; }
+          printf 'CLOUDFLARE_API_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+          echo 'Cloudflare token normalized. Google credentials are not required.'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+
+      - name: Check Cloudflare credential
+        id: cf_auth
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest whoami
+
+      - name: Build live-only Earth Signal
+        working-directory: cloudflare/gods-eye-view-mobile
+        run: npm run build
+
+      - name: Ensure Pages project exists
+        if: steps.cf_auth.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npx --yes wrangler@latest pages project list 2>&1 | tee /tmp/pages-list.txt | grep -q 'gods-eye-view-mobile'; then
+            echo 'Cloudflare Pages project already exists.'
+          else
+            npx --yes wrangler@latest pages project create gods-eye-view-mobile --production-branch main
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.cf_auth.outcome == 'success'
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest pages deploy cloudflare/gods-eye-view-mobile/dist \
+            --project-name gods-eye-view-mobile \
+            --branch main \
+            --commit-dirty=true 2>&1 | tee /tmp/gev-deploy.txt
+          url=$(grep -Eo 'https://[^[:space:]]+\.pages\.dev' /tmp/gev-deploy.txt | tail -1)
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed URL: $url"
+
+      - name: Verify live Earth Signal app
+        if: steps.cf_auth.outcome == 'success'
+        env:
+          APP_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 8 --retry-delay 2 "$APP_URL/" -o /tmp/index.html
+          grep -q 'apple-mobile-web-app-capable' /tmp/index.html
+          grep -q 'manifest.webmanifest' /tmp/index.html
+          grep -q 'Earth Signal' /tmp/index.html
+          grep -q 'USGS · ADSB.lol' /tmp/index.html
+          curl -fsS --retry 5 --retry-delay 2 "$APP_URL/mobile.css" -o /tmp/mobile.css
+          test -s /tmp/mobile.css
+          grep -Fq '[data-layer-id="traffic"]' /tmp/mobile.css
+          echo "Verified live Earth Signal shell and live-only traffic policy at $APP_URL"
+
+      - name: Summary
+        env:
+          APP_URL: ${{ steps.deploy.outputs.url }}
+          CF_AUTH_OUTCOME: ${{ steps.cf_auth.outcome }}
+        shell: bash
+        run: |
+          echo "### Earth Signal" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build: verified" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verified public feeds: USGS earthquakes + ADSB.lol aircraft" >> "$GITHUB_STEP_SUMMARY"
+          echo "Synthetic street traffic: disabled" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CF_AUTH_OUTCOME" = 'success' ]; then
+            echo "Cloudflare deployment: verified" >> "$GITHUB_STEP_SUMMARY"
+            echo "URL: $APP_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Cloudflare deployment: skipped because the repository credential is not accepted by Cloudflare" >> "$GITHUB_STEP_SUMMARY"
+            echo "GitHub Pages remains the credential-free production path." >> "$GITHUB_STEP_SUMMARY"
+          fi

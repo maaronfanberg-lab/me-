@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>OMEF 26-Page Seed Calculator v2</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Mono",Menlo,monospace}body{min-height:100vh}main{width:min(94vw,760px);margin:auto;padding:34px 18px 60px}h1{font-size:30px;margin:0 0 8px}.sub,.status,.note{color:#999;line-height:1.5}.sub{font-size:13px;margin-bottom:28px}.label{font-size:12px;letter-spacing:.14em;color:#aaa;margin:18px 0 8px}input{width:100%;background:#0d0d0d;border:1px solid #666;border-radius:14px;color:#fff;padding:18px;font:inherit;font-size:42px}button{width:100%;margin-top:14px;padding:17px;border:0;border-radius:14px;background:#fff;color:#000;font:inherit;font-weight:800;font-size:18px}.out{border-top:1px solid #333;margin-top:34px;padding-top:26px}#answer{font-size:clamp(40px,10vw,70px);word-break:break-word}.status{font-size:13px;margin-top:10px}details{border-top:1px solid #222;margin-top:28px;padding-top:18px}summary{color:#aaa}.audit{white-space:pre-wrap;font-size:12px;line-height:1.55;color:#aaa;margin-top:14px}.note{font-size:11px;margin-top:24px}
+</style>
+</head>
+<body>
+<main>
+<h1>OMEF — 26-Page Seed Calculator</h1>
+<div class="sub">One seed in → all 26 page/modules participate → one number out.</div>
+<div class="label">SEED IN</div>
+<input id="seed" value="0.5" inputmode="decimal" autocomplete="off">
+<button id="compute" type="button">COMPUTE</button>
+<section class="out">
+<div class="label">ONE NUMBER OUT</div>
+<div id="answer">—</div>
+<div id="status" class="status">Starting engine…</div>
+</section>
+<details><summary>Audit — show all 26 page/module outputs</summary><div id="audit" class="audit"></div></details>
+<div class="note">OMEF leaves many coefficients, histories, matrices, observations and stochastic draws unspecified. This calculator deterministically expands the single seed into type-appropriate numerical inputs, runs a scalarized implementation of every page/module, and collapses to one number only at the end.</div>
+</main>
+<script src="omef-seed-v2.js?v=20260813b"></script>
+</body>
+</html>

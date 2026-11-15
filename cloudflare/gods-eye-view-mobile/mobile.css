@@ -1,0 +1,250 @@
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overscroll-behavior: none;
+  background: #080b0e;
+}
+
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  color: #d7dee4;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+button,
+[role="button"],
+input,
+select {
+  min-height: 44px;
+}
+
+canvas {
+  touch-action: none;
+}
+
+/* Earth Signal: retain the data engine and remove the spy-simulator chrome. */
+#title-bar,
+#style-indicator,
+#safe-frame-overlay,
+#scope-mask,
+#scope-toggle,
+#scope-slider-row,
+#cockpit-entry,
+#cockpit-hud,
+#style-buttons,
+#param-slider-panel,
+.title-glow,
+.title-logo,
+.cockpit-reticle,
+.cockpit-visor-shell,
+.dock-label-icon-presets {
+  display: none !important;
+}
+
+/* The static wrapper cannot provide TomTom's private server proxy. The build
+   also replaces this module with an inert UNAVAILABLE layer, so the UI never
+   offers synthetic vehicle dots as if they were observations. */
+[data-layer-id="traffic"] {
+  display: none !important;
+}
+
+/* A deliberately plain identity strip. The information is the interesting part. */
+#earth-signal-header {
+  position: fixed;
+  z-index: 190;
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid rgba(205, 216, 225, 0.22);
+  border-radius: 10px;
+  background: rgba(8, 11, 14, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: none;
+  color: #eef2f4;
+}
+
+#earth-signal-header .earth-signal-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#earth-signal-header strong {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+#earth-signal-header small {
+  color: rgba(220, 228, 234, 0.66);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+#earth-signal-header .earth-signal-live {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 12px;
+  border-left: 1px solid rgba(205, 216, 225, 0.16);
+  color: rgba(231, 237, 241, 0.82);
+  font-size: 11px;
+}
+
+/* Source names, not an ornamental blinking/pulsing "LIVE" light. */
+#earth-signal-header .earth-signal-live::before {
+  display: none;
+}
+
+/* Neutralize the remaining command surfaces without touching their behavior. */
+#command-dock,
+.dock-popover-content,
+.global-context-panel,
+.hud-panel,
+.panel,
+.drawer,
+.sidebar,
+.hud,
+[class*="panel"],
+[class*="sidebar"],
+[class*="popover"] {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border-color: rgba(190, 205, 216, 0.20) !important;
+}
+
+#command-dock,
+.dock-popover-content,
+.global-context-panel {
+  background-color: rgba(8, 11, 14, 0.88) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.title-accent {
+  color: inherit !important;
+  text-shadow: none !important;
+}
+
+.subtitle,
+.panel-title,
+.indicator-label,
+.btn-label,
+.pp-slider-mini-label {
+  letter-spacing: 0.02em !important;
+  text-shadow: none !important;
+}
+
+button,
+[role="button"] {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.pp-toggle-btn,
+.dock-toggle,
+.dock-popover-content,
+.global-context-panel,
+.hud-panel {
+  border-color: rgba(190, 205, 216, 0.22) !important;
+}
+
+/* Kill the theatrical visual modes in this wrapper. The upstream code remains untouched. */
+button[data-style="retro"],
+button[data-style="surveillance"],
+button[data-style="thermal"],
+button[data-style="anime"] {
+  display: none !important;
+}
+
+@media (max-width: 820px) {
+  body {
+    font-size: 14px;
+  }
+
+  #earth-signal-header {
+    top: calc(8px + env(safe-area-inset-top));
+    left: calc(8px + env(safe-area-inset-left));
+    min-height: 44px;
+    padding: 7px 10px;
+  }
+
+  .hud,
+  .panel,
+  .drawer,
+  .sidebar,
+  [class*="panel"],
+  [class*="sidebar"] {
+    max-width: min(92vw, 420px) !important;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+
+  button,
+  [role="button"] {
+    min-width: 44px;
+  }
+
+  .cesium-viewer-bottom {
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .cesium-widget-credits {
+    font-size: 9px !important;
+    max-width: 70vw !important;
+    overflow: hidden;
+  }
+
+  .cesium-viewer-toolbar {
+    top: calc(8px + env(safe-area-inset-top)) !important;
+    right: calc(8px + env(safe-area-inset-right)) !important;
+  }
+
+  .cesium-navigation-help-button-wrapper,
+  .cesium-viewer-fullscreenContainer {
+    display: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #earth-signal-header small {
+    display: none;
+  }
+
+  .hud,
+  .panel,
+  .drawer,
+  .sidebar,
+  [class*="panel"],
+  [class*="sidebar"] {
+    max-width: 94vw !important;
+    max-height: 56vh !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal,
+  [role="dialog"] {
+    max-width: 94vw !important;
+    max-height: 80vh !important;
+    overflow: auto !important;
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "nonce": "pocket-spatial-profound-sliders-20260907",
+  "prompt": "Review the current Pocket Spatial browser DSP and propose concrete changes so the sliders produce profound, unmistakable perceptual changes, with the top 20-30% intentionally capable of sounding excessive or unnatural. The design goal is the strongest convincing 3D illusion possible from stereo playback through two physical speakers/home-theater front channels, not merely wider stereo. Inspect the current implementation in apps/pocket-spatial.html and apps/pocket-spatial-core.js. Focus especially on making Angle, Spatial Amount, Depth, Room Wrap, and related controls perceptually much stronger.",
+  "context": [
+    "Pocket Spatial streams Audius live into an HTMLAudioElement, then processes it in Web Audio before output.",
+    "Current controls include Spatial Amount, Virtual Speaker Angle, Interaural Delay Stretch, Head-Shadow Cutoff, Cross-Ear Polarity, Early Reflection Depth, Room Time Scale, Room Wrap/Immersion, and Reflection Tone.",
+    "Several controls already use exponential mappings and the graph includes direct, cross-ear delayed/filtered paths, early reflections, later cross-fed room-wrap arrivals, automatic master trim, and a limiter.",
+    "The user reports that Angle still feels weak and that the overall result still does not feel profoundly present in the room or deeply immersive.",
+    "The listening target is stereo speakers/home theater, so transaural/crosstalk-cancellation ideas are welcome if they can be implemented in Web Audio without requiring measured HRTFs.",
+    "Keep output safety: extreme settings should become spatially bizarre or excessive, not merely much louder."
+  ],
+  "expected_response": "Give a prioritized engineering review with specific Web Audio node-topology changes, formulas or mappings, concrete delay/gain/filter ranges, recommended defaults and extreme values, and any transaural/crosstalk-cancellation strategy that could materially deepen the 3D illusion. Identify why the current sliders feel weak and propose the smallest high-impact changes first. Include implementation cautions for physical speakers and iPhone/Web Audio.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 6
+}

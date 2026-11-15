@@ -1,0 +1,53 @@
+name: Room liveness watchdog
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: room-liveness-watchdog
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Restore only if live Room has no runner and is stale
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          stale=$(python3 - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          feed = json.loads(Path('room/feed.json').read_text())
+          stamp = feed.get('generated_at') or ''
+          try:
+              last = datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+              age = (datetime.now(timezone.utc) - last).total_seconds()
+          except (ValueError, TypeError):
+              age = float('inf')
+          print('yes' if age > 40 * 60 else 'no')
+          PY
+          )
+          if [ "$stale" != yes ]; then
+            echo "Room is fresh; no restart needed"
+            exit 0
+          fi
+          running=$(gh run list --workflow sarah-society.yml --status in_progress --json databaseId --jq 'length')
+          queued=$(gh run list --workflow sarah-society.yml --status queued --json databaseId --jq 'length')
+          if [ "$running" -gt 0 ] || [ "$queued" -gt 0 ]; then
+            echo "Room has an active or queued runner; do not interrupt startup"
+            exit 0
+          fi
+          echo "::warning::Room feed stale >40 minutes and no runner active; dispatching recovery"
+          gh workflow run sarah-society.yml --ref main -f entity=auto

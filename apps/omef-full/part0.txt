@@ -6,23 +6,69 @@
 <meta name="theme-color" content="#050608">
 <title>OMEF FULL — Total-State Attractor</title>
 <style>
-:root{--bg:#050608;--panel:#0d1015;--line:#252b35;--text:#f4f2eb;--muted:#8e98a7;--accent:#d8c68d;--stage:#020304}
-*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-body{min-height:100vh}.app{max-width:1100px;margin:auto;padding:0 0 60px}header{padding:22px 18px 17px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#10141b,#0a0c10)}
-.eyebrow{font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;color:var(--accent);text-transform:uppercase}h1{font-size:clamp(32px,8vw,66px);line-height:.93;letter-spacing:-.055em;margin:8px 0 10px}.sub{color:var(--muted);max-width:760px;line-height:1.45;font-size:14px}
-.stage{position:relative;background:var(--stage);border-bottom:1px solid var(--line);aspect-ratio:1/1;overflow:hidden}canvas{display:block;width:100%;height:100%;touch-action:none}
-.hud{position:absolute;left:10px;top:10px;max-width:72%;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.12);border-radius:11px;padding:8px 10px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.hud b{color:#fff}.hud span{color:#aab3c1}.focus{position:absolute;right:10px;top:10px;width:auto;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:rgba(0,0,0,.64);color:white;padding:8px 12px;font-weight:700}
-.panel{margin:16px;border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden}.section{padding:16px;border-bottom:1px solid var(--line)}.section:last-child{border:0}h2{font-size:18px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-button,select,input{font:inherit}button{border:1px solid var(--line);border-radius:10px;background:#171c24;color:var(--text);padding:10px;font-weight:750}button.primary{background:#d8c68d;color:#111;border-color:#d8c68d}button.active{outline:2px solid #d8c68d}.row{display:grid;grid-template-columns:110px 1fr 56px;gap:9px;align-items:center;margin:10px 0}.row label{color:var(--muted);font-size:13px}.value{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;color:#cfd5df}.row input[type=range]{width:100%;accent-color:#d8c68d}.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.check{display:flex;align-items:center;gap:8px;color:#cfd5df;font-size:13px}.check input{width:18px;height:18px;accent-color:#d8c68d}
-.audit{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.chip{border:1px solid var(--line);border-radius:11px;padding:9px;background:#0a0d12}.chip strong{display:block;font:700 15px ui-monospace,SFMono-Regular,Menlo,monospace}.chip span{font-size:10px;color:var(--muted)}.note{font-size:12px;line-height:1.45;color:var(--muted);margin-top:10px}.tests{font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:#8bd9bd;white-space:pre-wrap}.warn{color:#e7bc83}
-body.focusMode{overflow:hidden}body.focusMode header,body.focusMode .panel{display:none}body.focusMode .stage{position:fixed;inset:0;width:100vw;height:100svh;aspect-ratio:auto;z-index:999}.focusMode .focus{z-index:1000}
-@media(max-width:700px){header{padding:14px 12px 11px}.sub{font-size:12px}.stage{position:sticky;top:0;z-index:20;height:52svh;aspect-ratio:auto}.panel{margin:0;border-left:0;border-right:0;border-radius:0}.section{padding:13px 12px}.row{grid-template-columns:82px 1fr 44px}.audit{grid-template-columns:repeat(3,minmax(0,1fr))}.hud{font-size:9px}.grid3{grid-template-columns:1fr 1fr}.grid3 button:last-child{grid-column:1/-1}}
+:root{--bg:#030405;--panel:#090b0f;--panel2:#11151c;--line:#222832;--text:#f4f2eb;--muted:#8e98a7;--accent:#d8c68d;--stage:#010203}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{min-height:100svh;overflow-x:hidden}
+.app{max-width:1100px;margin:auto;min-height:100svh;padding:0}
+header{display:none}
+.stage{position:relative;height:calc(100svh - 88px);min-height:480px;max-height:900px;background:radial-gradient(circle at 50% 44%,#090b0f 0,#030405 48%,#010203 100%);overflow:hidden;border:0}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.hud{position:absolute;left:18px;top:max(18px,env(safe-area-inset-top));width:8px;height:8px;padding:0;border:0;border-radius:999px;background:rgba(216,198,141,.88);box-shadow:0 0 18px rgba(216,198,141,.72);overflow:hidden;font-size:0;color:transparent}
+.hud *{display:none}
+.focus,.tune{position:absolute;top:max(14px,env(safe-area-inset-top));width:48px;height:48px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.13);border-radius:999px;background:rgba(7,9,12,.68);color:#f7f4ec;font:700 22px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 8px 30px rgba(0,0,0,.28);cursor:pointer;z-index:5}
+.focus{right:14px}
+.tune{right:72px}
+#panelToggle{position:absolute;opacity:0;pointer-events:none}
+.panel{margin:0;border:0;border-top:1px solid var(--line);border-radius:24px 24px 0 0;background:linear-gradient(180deg,rgba(14,17,23,.98),rgba(6,8,11,.99));overflow:hidden;box-shadow:0 -18px 60px rgba(0,0,0,.25)}
+.section{padding:14px 16px;border-bottom:1px solid var(--line)}
+.section:last-child{border-bottom:0}
+.section h2{display:none}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+button,select,input{font:inherit}
+button{border:1px solid rgba(255,255,255,.10);border-radius:16px;background:#151a22;color:var(--text);padding:11px;font-weight:760;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.025)}
+button.primary{background:var(--accent);color:#111;border-color:var(--accent)}
+button.active{outline:1px solid var(--accent)}
+.dock{padding:12px 14px calc(12px + env(safe-area-inset-bottom))}
+.dock .grid3 button{min-height:62px;font-size:29px;line-height:1}
+.dock .row{display:none}
+#panelToggle:not(:checked)+.panel .section:not(.dock){display:none}
+#panelToggle:checked+.panel{max-height:68svh;overflow:auto;-webkit-overflow-scrolling:touch}
+#panelToggle:checked+.panel .section{display:block}
+#panelToggle:checked+.panel .dock .row{display:grid}
+#panelToggle:checked+.panel .dock .grid3 button{min-height:48px;font-size:21px}
+.row{display:grid;grid-template-columns:108px 1fr 48px;gap:9px;align-items:center;margin:10px 0}
+.row label{color:var(--muted);font-size:12px}
+.value{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;color:#cfd5df}
+.row input[type=range]{width:100%;accent-color:var(--accent)}
+.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.check{display:flex;align-items:center;gap:8px;color:#cfd5df;font-size:12px}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+.audit,.note{display:none!important}
+.tests{font:10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:#8bd9bd;white-space:pre-wrap;max-height:180px;overflow:auto}
+.warn{color:#e7bc83}
+body.focusMode{overflow:hidden}
+body.focusMode header,body.focusMode .panel,body.focusMode .tune,body.focusMode #panelToggle{display:none}
+body.focusMode .stage{position:fixed;inset:0;width:100vw;height:100svh;max-height:none;aspect-ratio:auto;z-index:999}
+.focusMode .focus{z-index:1000}
+@media(max-width:700px){
+  .stage{height:calc(100svh - 86px);min-height:430px;max-height:none}
+  .focus,.tune{top:max(12px,env(safe-area-inset-top));width:44px;height:44px;font-size:20px}
+  .focus{right:12px}.tune{right:64px}
+  .hud{left:14px;top:max(16px,env(safe-area-inset-top))}
+  .section{padding:13px 12px}
+  .dock{padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+  .dock .grid3 button{min-height:58px}
+  .row{grid-template-columns:86px 1fr 42px;gap:8px}
+  .checks{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body data-selftest="PENDING">
 <div class="app">
-<header><div class="eyebrow">OMEF FULL · 123-D VISUAL ORGANISM</div><h1>Total-State Attractor</h1><div class="sub">A structural visualization of the full OMEF architecture. The geometry is generated by a closed 123-dimensional state built from organs, regimes, golden cycles, drivers, factors, learning/memory, particle moments and diagnostics. It is an art/research visualization — not a forecasting implementation.</div></header>
-<div class="stage"><canvas id="cv" width="1400" height="1400"></canvas><div class="hud" id="hud"><b>building organism…</b></div><button class="focus" id="focus">Focus</button></div>
+<header aria-hidden="true"></header>
+<div class="stage"><canvas id="cv" width="1400" height="1400"></canvas><div class="hud" id="hud" aria-live="polite"><b>building organism…</b></div><button class="focus" id="focus" aria-label="Focus" title="Focus">⤢</button><label class="tune" for="panelToggle" aria-label="Controls" title="Controls">⌁</label></div>
+<input type="checkbox" id="panelToggle" aria-label="Show controls">
 <div class="panel">
-<div class="section"><h2>Organism</h2><div class="grid3"><button class="primary" id="regen">Regenerate</button><button id="mutate">Mutate species</button><button id="fold">Unfold</button></div><div class="row"><label>Orbit density</label><input id="density" type="range" min="4000" max="26000" step="1000" value="14000"><div class="value" id="densityV">
+<div class="section dock"><h2>Organism</h2><div class="grid3"><button class="primary" id="regen" aria-label="Regenerate" title="Regenerate">↻</button><button id="mutate" aria-label="Mutate species" title="Mutate species">✦</button><button id="fold" aria-label="Unfold" title="Unfold">◇</button></div><div class="row"><label>Orbit density</label><input id="density" type="range" min="4000" max="26000" step="1000" value="14000"><div class="value" id="densityV">

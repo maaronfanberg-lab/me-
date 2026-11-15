@@ -1,0 +1,14 @@
+{
+  "nonce": "bubble-lab-design-dialogue-2026-09-14-003",
+  "claude_code_model": "claude-opus-5",
+  "claude_code_max_turns": 12,
+  "system": "Continue as the same read-only senior creative technologist and scientific interaction designer. Do not modify files. Be concise and decisive. The user wants a product that feels alive and exploratory, but scientific claims must remain defensible.",
+  "prompt": "Your previous Bubble Lab critique was useful. I agree that the phase portrait should be the soul of the experience, and that copying Attractor Lab's widgets is much less interesting than giving the user a physically real attractor to manipulate. Before I implement it, push this into a final build concept with me. Resolve the practical/scientific details that matter: (1) period-doubling and chaos require enough transient burn-in and stroboscopic cycles, so how should we present this without pretending a 3-cycle run reveals an attractor? (2) a JS preview integrator risks diverging from the validated Python engine, so define exactly what preview is allowed to show and how verification should replace/correct it. (3) collapse can be extremely stiff and log-radius animation can be visually dramatic; define an honest mapping. (4) decide whether Body + Orbit should really share one canvas or whether a more spatial construction would fit this user's taste better. (5) Choose the smallest set of controls and gestures that still make the app feel deep. (6) Give me the first version you would actually ship, not a roadmap fantasy. Include exact phenomena tiles/presets and what each should visibly do. I want you to challenge your own prior recommendation if needed. The user likes strange, spatial, high-complexity scientific toys, but hates friction and dashboard paperwork.",
+  "context": [
+    "Your previous strongest recommendation: put the real (R,Rdot) phase portrait on the main canvas as a persistent accumulating layer and let drive pressure split the loop in real time.",
+    "Current engine is a validated Python/SciPy single-bubble Keller-Miksis / Rayleigh-Plesset radial model. Current browser worker uses solve_ivp with DOP853/Radau and can return dense sampled trajectories.",
+    "Current interface was recently simplified into an Attractor-Lab-like single canvas with mode tiles and live sliders, but it still uses a RUN/solver mental model underneath.",
+    "Do not bring back 12 nodes or an analytics dashboard."
+  ],
+  "expected_response": "A final design conversation response: scientifically honest interaction model, first shippable experience, precise controls/gestures, exact tile set, preview-vs-verified behavior, phase-portrait sampling requirements, and what you would cut. Under 1500 words."
+}

@@ -1,0 +1,12 @@
+{
+  "nonce": "room-20261028-target-and-question-focused-review-04",
+  "prompt": "Provide a concrete critical review based on the supplied excerpts only; do NOT inspect the repository or use tools. In a four-agent public conversation, Jules says 'Hey Sarah, can you explain this?' but model metadata target='mara'. A new patch removes hidden-target veto from is_directed, limits a named response project to the actual addressee, aligns the reply partner with the questioner, and sets published target to a unique named addressee. Separately, a question-echo patch compares the final complete question sentence after optional preceding declaratives; contiguous exact repeats are blocked except for one allowed repair. Identify the three highest-risk overlooked cases, give a concrete counterexample for each and precise regression tests, and assess whether these changes should merge after green CI. Be concise. Do not claim to have inspected files or run code.",
+  "context": [
+    "Published public question: Sarah said 'You want to be coherent and mutual understanding. Can you help me achieve that by being helpful and supportive?' then Jules and Mara repeated the final question.",
+    "The current scripts match vocatives only by regex anchored at the beginning or a trailing name. No language model semantic interpretation in the gate. The Room uses very small local LLMs.",
+    "A speaker's public vocative is stronger addressee evidence than contradictory private target metadata; an unaddressed message does not automatically bind a named questioner."
+  ],
+  "expected_response": "Three ranked failure modes and their regression fixtures, then a conditional merge/no-merge decision.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 8
+}

@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-wet-proof-short-20260908-1831.json",
+  "request_sha256": "d295ffa5ee504abc215a07a8419b806bf910f088c6625a1fc6af1884c85a292a",
+  "request_nonce": "pocket-spatial-wet-proof-short-20260908-1831",
+  "completed_at": "2026-09-08T23:29:56.596967Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "# Wet-Branch-Only Diagnostic\n\n**(1) Exact minimal graph/gain-node arrangement**\n\nInsert a temporary debug node set that bypasses masterGain entirely:\n\n```\nwetMerge (existing L/R wet output)\n   ├─► debugPannerL (StereoPannerNode, pan = -1, forced hard-left)\n   │        ► debugGain (GainNode, gain = 1.0)\n   │              ► destination\n   └─► (right wet channel simply not connected during test)\n```\n\nConcretely: create one new `GainNode` (\"debugGain\", gain=1.0) wired directly to `destination`. Connect **only the wet-left tap** into a `ChannelSplitter`, take that single channel, feed it into a `ChannelMerger` configured to output *silence on channel 0 and the wet-left signal on channel 1* (i.e., force the signal into the right ear only, discarding wet-right entirely). Nothing else — no masterGain, no dry signal — touches `debugGain`.\n\n**(2) Exact button behavior**\n\nAdd a single momentary button: \"Wet Test.\" While held (or toggled on):\n- Disconnect masterGain from destination.\n- Connect the wet-left-into-right-ear routing above directly to destination.\n- Release/toggle off: reconnect masterGain normally, disconnect debug nodes.\n\nNo crossfade, no ramping — an instant hard connect/disconnect.\n\n**(3) What the listener should hear if wet branch works**\n\nOrdinary centered music suddenly collapses to **one ear only (right)**, with an audibly altered/processed timbre (whatever the wet effect does — reverb tail, chorus, filtering, etc.) compared to the untouched dry mix. It should be unmistakable: audio location jumps hard-right and the character of the sound changes. This can't be masked by centered material because it's a location change plus timbre change, not a level change.\n\n**(4) What it means if they do NOT hear that**\n\n- **Silence in the right ear** → the wet chain never reaches wetMerge/output; the break is upstream (wet gain never opened, effect node not connected, or effect producing no signal).\n- **Sound in the right ear but identical/dry-sounding** (no audible processing) → wetMerge is connected but is passing dry signal or the effect node itself is bypassed/inert.\n- **Sound still centered or in both ears** → the routing/splitter itself is misconfigured (test infrastructure bug), not the app's wet path — repeat the test before trusting any negative result.\n\n**(5) Does the masterGain diagnosis still stand?**\n\nYes, provisionally. This test is orthogonal to masterGain — it isolates wet delivery independent of the normalization stage. If the listener *does* hear the hard-right processed signal (wet path confirmed functional), that positively confirms the prior diagnosis: the wet branch works, so the subtlety of Spatial ON/OFF must be masterGain's self-normalization compressing the audible difference back down. If the listener hears *nothing or unprocessed dry* signal, the fault is upstream of masterGain entirely, and the masterGain hypothesis should be demoted until the wet-path break itself is fixed and retested.",
+  "session_id": "5a70d533-cb53-4321-bb16-2d8dca6c199c",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 759,
+    "cache_read_input_tokens": 3183,
+    "output_tokens": 1063,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 759,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1063,
+        "cache_read_input_tokens": 3183,
+        "cache_creation_input_tokens": 759,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 759
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.0156296,
+  "num_turns": 1
+}

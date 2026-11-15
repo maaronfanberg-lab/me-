@@ -1,0 +1,319 @@
+# Emily + Olivia unbounded-handoff community runtime
+name: Emily Olivia Community Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      opener:
+        description: "Optional explicit Emily opening message; blank lets the Stanford chain open autonomously"
+        required: false
+        default: ""
+
+concurrency:
+  group: emily-olivia-community
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  id-token: write
+
+jobs:
+  community-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      AGENTSOCIETY_LLM_API_KEY: local-bitnet-unused
+      COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
+      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_PORT: '8080'
+      COMMUNITY_BITNET_START_TIMEOUT: '1200'
+      COMMUNITY_GENERATION_TIMEOUT: '90'
+      COMMUNITY_SOCIAL_RPC_TIMEOUT: '60'
+      COMMUNITY_MAX_TOKENS: '64'
+      THINGS_RELAY_BASE: 'https://room-live-mirror.dfp6k69dw5.workers.dev'
+      THINGS_OIDC_AUDIENCE: 'room-live-mirror'
+      GH_TOKEN: ${{ github.token }}
+      TZ: America/Chicago
+    steps:
+      - name: Check out triggering Community runtime
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Community Python before expensive work
+        working-directory: experiments/emily-olivia-society
+        run: >-
+          python3 -m py_compile
+          bitnet_server.py patch_stanford_local.py community_cycle.py community_cycle_base.py
+          stanford_native_cycle.py paper_act_adapter.py paper_plan_adapter.py paper_react_adapter.py
+          paper_reflection_adapter.py community_session.py controlled_social_space.py first_exchange.py
+          social_bridge.py alex_bridge.py persistence_reflection.py observer.py dialogue_boundary_guard.py
+          external_reality_guard.py things_falcon_bridge.py
+
+      - name: Restore Community runtime and BitNet
+        id: bitnet-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v12
+          key: community-runtime-bitnet-v12-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+          restore-keys: |
+            community-runtime-bitnet-v12-${{ runner.os }}-py311-
+            community-runtime-bitnet-v11-${{ runner.os }}-py311-
+
+      - name: Bootstrap pinned research code and Falcon3 10B BitNet
+        working-directory: experiments/emily-olivia-society
+        run: timeout 65m bash bootstrap_upstreams.sh
+
+      - name: Verify build artifacts before caching
+        working-directory: experiments/emily-olivia-society
+        run: |
+          test -x vendor/BitNet/build/bin/llama-cli
+          test -x vendor/BitNet/build/bin/llama-server
+          test -s models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf
+          test -f .bootstrap-ready-v12
+          echo 'e37945ee82693a6541b5fa5484f0e24787c04a9ce95e6e377f68a6b15f139c1f  models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf' | sha256sum -c -
+          grep -q 'COMMUNITY_BITNET_HTTP_V4' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+
+      - name: Save runtime cache
+        if: steps.bitnet-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v12
+          key: ${{ steps.bitnet-cache.outputs.cache-primary-key }}
+
+      - name: Start and probe BitNet
+        working-directory: experiments/emily-olivia-society
+        run: |
+          timeout 20m python3 bitnet_server.py start
+          python3 bitnet_server.py status
+          timeout 16m python3 bitnet_server.py probe
+
+      - name: Restore latest successful memory checkpoint
+        working-directory: experiments/emily-olivia-society
+        env:
+          COMMUNITY_WORKFLOW_FILE: 'emily-olivia-community-run.yml'
+          COMMUNITY_ARTIFACT_NAME: emily-olivia-community-results
+        run: bash restore_latest_checkpoint.sh
+
+      - name: Validate restore evidence
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('replay/checkpoint_restore.json')
+          if not p.exists(): raise SystemExit('checkpoint_restore.json missing')
+          data = json.loads(p.read_text())
+          if not isinstance(data, dict): raise SystemExit('checkpoint restore evidence must be an object')
+          print(json.dumps(data, indent=2))
+          PY
+
+      - name: Initialize or preserve cognition
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python init_cognition.py
+
+      - name: Keep Emily and Olivia talking continuously
+        id: session
+        working-directory: experiments/emily-olivia-society
+        run: |
+          set -euo pipefail
+          OPENER="${{ github.event.inputs.opener }}"
+          mkdir -p replay
+          .venv-stanford/bin/python things_falcon_bridge.py > replay/things-falcon-bridge.log 2>&1 &
+          THINGS_BRIDGE_PID=$!
+          cleanup_things_bridge() {
+            kill "$THINGS_BRIDGE_PID" 2>/dev/null || true
+            wait "$THINGS_BRIDGE_PID" 2>/dev/null || true
+          }
+          trap cleanup_things_bridge EXIT
+          .venv-stanford/bin/python community_session.py \
+            --run \
+            --continuous-seconds 17400 \
+            --turn-delay-seconds 0 \
+            --opener "$OPENER"
+
+      - name: Verify session integrity and grounded natural dialogue
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from community_cycle import _is_usable_utterance
+          p = Path('replay/community_session.json')
+          if not p.is_file(): raise SystemExit('community_session.json missing')
+          d = json.loads(p.read_text())
+          if d.get('status') != 'completed': raise SystemExit('community session did not complete cleanly')
+          completed = int(d.get('completed_reply_turns', 0))
+          if completed < 1: raise SystemExit('no completed reply turns')
+          session_id = str(d.get('session_id', '')).strip()
+          if not session_id: raise SystemExit('community session id missing')
+          if not d.get('resumed_social_state') and not d.get('autonomous_opening'):
+              raise SystemExit('clean state did not create an autonomous Stanford opening')
+          if d.get('autonomous_opening'):
+              opening = d.get('opening_turn') or {}
+              action = opening.get('action', {})
+              content = str(action.get('content', ''))
+              if action.get('type') != 'message' or not _is_usable_utterance(content):
+                  raise SystemExit(f'unusable autonomous opening: {opening!r}')
+              if opening.get('action_result', {}).get('success') is not True:
+                  raise SystemExit('autonomous opening was not delivered')
+              cognition = action.get('cognition', {})
+              if cognition.get('act_research_source') != 'fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4':
+                  raise SystemExit('autonomous opening did not use pinned paper act source')
+
+          if d.get('mode') == 'continuous_persistent_community_session':
+              stream = Path('replay/community_session.jsonl')
+              if not stream.is_file(): raise SystemExit('continuous session JSONL missing')
+              candidates=[]
+              for raw in stream.read_text().splitlines():
+                  raw=raw.strip()
+                  if not raw: continue
+                  row=json.loads(raw)
+                  if row.get('type') != 'turn' or str(row.get('session_id','')) != session_id:
+                      continue
+                  turn=row.get('turn')
+                  if not isinstance(turn,dict): raise SystemExit('malformed turn record in current session')
+                  candidates.append(turn)
+              if len(candidates) != completed:
+                  raise SystemExit(f'current-session turn count mismatch: summary={completed} jsonl={len(candidates)}')
+          else:
+              candidates=d.get('turns') or []
+              if len(candidates) != completed:
+                  raise SystemExit(f'bounded turn count mismatch: summary={completed} turns={len(candidates)}')
+
+          if not candidates: raise SystemExit('no turn evidence persisted')
+          outputs=[]
+          for t in candidates:
+              action=t.get('action',{})
+              if action.get('type') != 'message': raise SystemExit(f'non-message turn: {t!r}')
+              inbox=t.get('observation',{}).get('inbox',[])
+              if not isinstance(inbox,list) or not inbox: raise SystemExit(f'missing inbound evidence: {t!r}')
+              inbound=str(inbox[-1].get('content',''))
+              content=str(action.get('content',''))
+              if not _is_usable_utterance(content,inbound): raise SystemExit(f'ungrounded or unnatural dialogue: inbound={inbound[:180]!r} reply={content[:240]!r}')
+              if action.get('cognition', {}).get('act_research_source') != 'fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4':
+                  raise SystemExit('reply did not use pinned paper act source')
+              if t.get('action_result',{}).get('success') is not True: raise SystemExit('undelivered message in replay')
+              if t.get('consumed_inbound') is not True: raise SystemExit('delivered reply did not consume inbound')
+              outputs.append(' '.join(content.lower().split()))
+          if len(set(outputs)) != len(outputs): raise SystemExit('duplicate reply detected')
+          if Path('replay/community_session_error.json').exists(): raise SystemExit('community session error evidence exists')
+          print(json.dumps(d, indent=2))
+          PY
+
+      - name: Verify persistence and reflection
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python persistence_reflection.py --run
+
+      - name: Verify handoff evidence exists
+        working-directory: experiments/emily-olivia-society
+        run: |
+          test -s replay/social_state.json
+          test -s replay/checkpoint_restore.json
+          test -s replay/community_session.json
+          test -d workspaces/emily
+          test -d workspaces/olivia
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          state=json.loads(Path('replay/social_state.json').read_text())
+          if state.get('version') != 1 or not isinstance(state.get('inboxes'),dict): raise SystemExit('invalid persisted social state')
+          for who in ('emily','olivia'):
+              root=Path('workspaces')/who
+              for rel in ('scratch.json','meta.json','memory_stream/nodes.json','memory_stream/embeddings.json'):
+                  p=root/rel
+                  if not p.is_file() or p.stat().st_size==0: raise SystemExit(f'missing cognition file: {p}')
+                  json.loads(p.read_text())
+          PY
+          python3 bitnet_server.py status
+
+      - name: Generate observer report
+        if: always()
+        working-directory: experiments/emily-olivia-society
+        run: python3 observer.py --summary > replay/observer.json || true
+
+      - name: Upload community results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-community-results
+          retention-days: 14
+          path: |
+            experiments/emily-olivia-society/replay/
+            experiments/emily-olivia-society/workspaces/
+            experiments/emily-olivia-society/vendor/BitNet/logs/
+          if-no-files-found: warn
+
+      - name: Publish real replay to viewer
+        if: always()
+        env:
+          SESSION_OUTCOME: ${{ steps.session.outcome }}
+        run: |
+          if [ "$SESSION_OUTCOME" != "success" ]; then
+            echo "Community session outcome is $SESSION_OUTCOME; refusing to publish a failed or skipped replay."
+            exit 0
+          fi
+          if [ ! -s experiments/emily-olivia-society/replay/community_session.json ] || \
+             [ ! -s experiments/emily-olivia-society/replay/community_session.jsonl ]; then
+            echo "No valid replay stream exists for this run; skipping publish."
+            exit 0
+          fi
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add -f \
+            experiments/emily-olivia-society/replay/*.json \
+            experiments/emily-olivia-society/replay/*.jsonl
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Update Emily Olivia live replay [skip ci]"
+          for attempt in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then exit 0; fi
+            git rebase --abort || true
+            sleep $((attempt*5))
+          done
+          echo "Failed to publish replay after retries" >&2
+          exit 1
+
+      - name: Stop BitNet server
+        if: always()
+        working-directory: experiments/emily-olivia-society
+        run: python3 bitnet_server.py stop || true
+
+      - name: Queue next Community handoff
+        if: always() && steps.session.outcome != 'skipped' && steps.session.outcome != 'cancelled'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs_api="repos/${GITHUB_REPOSITORY}/actions/workflows/emily-olivia-community-run.yml/runs?per_page=30"
+          successor="$(
+            gh api --method GET "$runs_api" \
+              --jq '.workflow_runs[] | select((.status == "in_progress" or .status == "queued" or .status == "pending") and .id != (env.GITHUB_RUN_ID | tonumber)) | .id' \
+              | head -n 1
+          )"
+          if [ -n "$successor" ]; then
+            echo "Community successor already exists as run $successor; not dispatching a duplicate."
+            exit 0
+          fi
+          echo "Queueing the next Emily + Olivia handoff; total conversation has no turn ceiling."
+          gh workflow run emily-olivia-community-run.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f opener=""

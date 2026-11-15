@@ -1,0 +1,89 @@
+name: Room supervisor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: room-supervisor-main
+  cancel-in-progress: true
+
+jobs:
+  supervise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+
+      - name: Check published Room liveness
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+
+          # The pulse chain is the sole Room launch authority. The supervisor
+          # observes and records liveness, but never starts a competing Room run.
+          # This avoids launch races with the pulse chain and Room self-handoff.
+          room_runs="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow sarah-society.yml \
+            --limit 10 \
+            --json databaseId,status,createdAt 2>/dev/null || printf '[]')"
+          active_room="$(printf '%s' "$room_runs" | jq -r '[.[] | select(.status == "in_progress" or .status == "queued" or .status == "pending" or .status == "waiting" or .status == "requested")] | first | .databaseId // empty')"
+          if [ -n "$active_room" ]; then
+            echo "Room run $active_room is already queued/active; supervisor will not interfere"
+            exit 0
+          fi
+
+          action=$(python3 scripts/room_supervisor.py check)
+          echo "Room supervisor action: $action"
+
+          if [ "$action" = "healthy" ]; then
+            exit 0
+          fi
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path('.github/room-supervisor-decision.json').read_text())
+          Path('.github/room-supervisor-state.json').write_text(json.dumps(result['control'],indent=2,sort_keys=True)+'\n')
+          PY
+
+          git add .github/room-supervisor-state.json
+          git commit -m "Record Room supervisor decision" || true
+
+          published=0
+          for attempt in 1 2 3 4; do
+            if git push origin HEAD:main; then
+              published=1
+              break
+            fi
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              break
+            fi
+            sleep "$attempt"
+          done
+          [ "$published" -eq 1 ] || exit 1
+
+          case "$action" in
+            restart|probe_restart)
+              echo "Supervisor recorded '$action'; pulse chain owns restart dispatch"
+              ;;
+            circuit_open)
+              echo "Room replacement circuit is open; pulse chain remains authoritative"
+              ;;
+          esac

@@ -1,0 +1,134 @@
+name: Pocket Spatial Native iOS
+
+on:
+  push:
+    paths:
+      - 'ios/PocketSpatialNative/**'
+      - '.github/workflows/pocket-spatial-native-ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios/PocketSpatialNative
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator
+        working-directory: ios/PocketSpatialNative
+        run: |
+          xcodebuild \
+            -project PocketSpatialNative.xcodeproj \
+            -scheme PocketSpatialNative \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+  falcon-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
+      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_PORT: '8080'
+      COMMUNITY_BITNET_START_TIMEOUT: '1200'
+      COMMUNITY_GENERATION_TIMEOUT: '180'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Community Falcon runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v12
+          key: community-runtime-bitnet-v12-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+          restore-keys: |
+            community-runtime-bitnet-v12-${{ runner.os }}-py311-
+
+      - name: Bootstrap same Falcon 10B runtime used by Community
+        working-directory: experiments/emily-olivia-society
+        run: timeout 65m bash bootstrap_upstreams.sh
+
+      - name: Start Falcon 10B BitNet server
+        working-directory: experiments/emily-olivia-society
+        run: |
+          timeout 20m python3 bitnet_server.py start
+          python3 bitnet_server.py status
+
+      - name: Ask Falcon three constrained questions
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from bitnet_server import request_chat
+
+          root = Path('../..')
+          system = (
+              'You are Falcon3-10B-Instruct, the same local BitNet model used by the Community. '
+              'Answer only the exact question. Never invent a repository, package, Apple entitlement, signing method, or product. '
+              'If uncertain, say UNKNOWN. Keep the answer under 170 words.'
+          )
+
+          questions = [
+              (
+                  '1-signing',
+                  'For a custom native iOS app on a stock U.S. iPhone, answer only these five items: '
+                  '(1) Can a free Apple ID Personal Team install a development build on its own iPhone? '
+                  '(2) Does that normal free route require Xcode on a Mac at provisioning/install time? '
+                  '(3) Does TestFlight require membership in the paid Apple Developer Program? '
+                  '(4) Can an unsigned IPA from GitHub Actions be installed normally on stock iOS? '
+                  '(5) Can GitHub Actions create a properly signed device IPA without being given valid Apple signing credentials/profiles? '
+                  'Use one line per item: YES, NO, or UNKNOWN plus one short sentence.'
+              ),
+              (
+                  '2-no-computer',
+                  'User has an iPhone SE on iOS 26.6.1 in the United States and wants to install a custom native app with no Mac or PC. '
+                  'Name only legitimate stock-iOS paths you are confident about. Exclude jailbreaks, stolen/enterprise certificates, unsigned-IPAs, '
+                  'and services whose legality or signing provenance you cannot establish. If there is no dependable no-computer path without a paid '
+                  'developer distribution mechanism, say that plainly. Maximum 120 words.'
+              ),
+              (
+                  '3-ci',
+                  'Pocket Spatial already compiles for the iOS Simulator in GitHub Actions with CODE_SIGNING_ALLOWED=NO. '
+                  'To build for a physical iPhone, list only the additional CI ingredients that are actually required for a signed development/ad-hoc/App Store build. '
+                  'Do not discuss Python, BitNet, Safari, or audio DSP. Maximum 140 words.'
+              ),
+          ]
+
+          answers = []
+          for label, question in questions:
+              answer = request_chat(system, question, max_tokens=220, temperature=0.0, timeout=180)
+              answers.append(f'## {label}\n\n{answer.strip()}\n')
+              print(f'===== {label} =====')
+              print(answer)
+          (root / 'falcon-pocket-spatial-native-review.md').write_text(
+              '# Falcon 10B constrained Pocket Spatial review\n\n' + '\n'.join(answers),
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Upload Falcon review
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocket-spatial-falcon-native-review
+          path: falcon-pocket-spatial-native-review.md
+          if-no-files-found: error
+          retention-days: 14

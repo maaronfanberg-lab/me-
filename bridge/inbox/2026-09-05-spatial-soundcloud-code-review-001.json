@@ -1,0 +1,13 @@
+{
+  "nonce": "spatial-soundcloud-code-review-20260905-001",
+  "prompt": "Perform a read-only engineering review of the new iOS 27 Spatial SoundCloud proof-of-concept on branch feature/spatial-soundcloud-ios27-poc. Inspect the files under experiments/spatial-soundcloud-ios27/ and cloudflare/spatial-soundcloud-auth/. Focus on likely Xcode 27 / Swift 6 compile errors, incorrect use of the new AVAudioMixInputParametersTrackID.mixID and MTAudioProcessingTapCreateWithPreferredFormat APIs, C callback lifetime/realtime-safety problems, PKCE/OAuth mistakes, Keychain mistakes, SoundCloud API model/URL mistakes, and any audio-DSP correctness bug that would invalidate the proof. Do not modify files. Do not spend time on styling or future features.",
+  "context": [
+    "Apple 2026 HLS docs say whole-mix streaming taps use AVAudioMixInputParametersTrackMixID / Swift AVAudioMixInputParametersTrackID.mixID and recommend MTAudioProcessingTapCreateWithPreferredFormat.",
+    "SoundCloud current docs require OAuth 2.1 PKCE but still require client_secret for token exchange/refresh, so the repo uses a Cloudflare Worker broker.",
+    "SoundCloud /tracks/{track_urn}/streams remains authenticated; the app preflights the chosen AAC HLS URL with URLSession and expects a final signed CDN redirect before giving it to AVPlayer.",
+    "The first DSP intentionally implements simple non-individualized ITD plus frequency-dependent contralateral filtering, with deterministic tests; it is not claiming measured HRTF accuracy."
+  ],
+  "expected_response": "Return only actionable findings, ordered by severity. For each finding give file, problem, why it matters, and a concrete fix. Explicitly state if a suspected issue cannot be confirmed without Xcode 27. Keep under 1600 words.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 12
+}

@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/cedar-behavior-instrumentation-review-20260905.json",
+  "request_sha256": "cefb71bb495601aadcb578b5e4ea8a6f249b379e3f5b5a22f4c962ed4ae2dc88",
+  "request_nonce": "cefb71bb495601aadcb578b5",
+  "completed_at": "2026-09-06T00:09:25.560880Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## RECOMMENDATION\n\nDo not run a temperature sweep yet. Add one new engine-owned event kind (`decision`) that logs feasibility, the model's raw proposal, the validated outcome, and the local incident/resource context for **every** natural actor-turn — not just rejected ones. This requires no changes to `falcon_live.py`'s prompt, schema, or feasibility logic (so it cannot bias what the model is offered or how it decodes), and no new rules that push agents toward talk/help/work. It's a pure logging addition inside `WorldEngine.step()`/`compute_metrics()` in `living_world.py`. Once this is in place, re-run the existing natural command (`falcon_live.py`, seeds 7/19/31, current temperature 0.1) to get a labeled baseline, then run the temperature sweep on top of the same instrumentation so any shift in behavior can be attributed to decoding temperature rather than guessed at.\n\n---\n\n### (1) Exact instrumentation fields and where to emit them\n\nAdd one new event kind, `decision`, emitted in `WorldEngine.step()` (`living_world.py`), immediately after `self._validate(agent, proposed)` and before `self._resolve(...)`. This reuses the existing `self._event(...)` helper, so it lands in the same append-only `events.jsonl` — no new files, no new persistence format.\n\nFields per decision event:\n\n```json\n{\n  \"kind\": \"decision\",\n  \"tick\": 12,\n  \"seq\": 41,\n  \"actor\": \"Mira\",\n  \"location\": \"greenhouse\",\n  \"feasible_action_types\": [\"help\", \"observe\", \"rest\", \"talk\", \"work\"],\n  \"resources_visible\": {\"food\": 3},\n  \"recent_local_incidents\": [\"Strong wind damaged part of the greenhouse crop.\"],\n  \"co_located_agents\": [\"Ivo\"],\n  \"energy\": 63.2,\n  \"proposed_type\": \"move\",\n  \"proposed_action\": {\"type\": \"move\", \"location\": \"square\"},\n  \"chosen_type\": \"move\",\n  \"accepted\": true,\n  \"rejection_reason\": null\n}\n```\n\n- `feasible_action_types`: computed **engine-side**, from the same observation the agent received (`neighbor_locations`, `co_located_agents`, `resources`), independent of any adapter's prompt/schema. This makes it ground truth valid for stub, BitNet, or Falcon backends alike.\n- `proposed_type` / `proposed_action`: the model's raw output (or `null` + `rejection_reason=\"backend_error:<ExceptionType>\"` if the backend raised).\n- `chosen_type`: the actually-applied action after `_validate` (may differ from `proposed_type` on rejection).\n- `accepted` / `rejection_reason`: mirror the existing `validation_note` used in `proposal_rejected`, but now attached to every turn, accepted or not, so no join across event kinds is needed.\n\nExisting `action`, `proposal_rejected`, and `backend_error` events are left untouched — this is additive only.\n\n### (2) Smallest files/functions to change\n\n`experiments/little-world-lab/living_world.py`:\n- Add `WorldEngine._feasible_action_types(observation) -> list[str]` (~8 lines): `rest`/`observe` always; `move` if `neighbor_locations`; `talk`/`help` if `co_located_agents`; `work` if `resources`.\n- In `step()`, after computing `action, validation_note`, call `_feasible_action_types` and emit the `decision` event (~15 lines).\n- Extend `compute_metrics()` to scan `decision` events and produce an `action_feasibility_breakdown` block (see metrics below, ~20–25 lines).\n\n`experiments/little-world-lab/tests/test_living_world.py`:\n- Add tests asserting: a `decision` event is emitted per actor-turn; `feasible_action_types` correctly excludes `talk`/`help` when no co-located agents and excludes `work` when no resources; `chosen_type` falls back to `observe` with a non-null `rejection_reason` when a fixed backend proposes an infeasible target; `proposed_type` still reflects the model's original intent even when rejected.\n\nNo changes to `falcon_live.py`, `falcon_live_contract.py`, `world.json`, or the run command — the existing natural-run invocation automatically gains this logging.\n\n### (3) Exact metrics / tests to distinguish the three cases\n\nPer action type `X` in `{move, talk, help, work, rest, observe}`, computed from `decision` events in `compute_metrics()`:\n\n- `feasible_ticks[X]` = count of decisions where `X ∈ feasible_action_types` → denominator for \"was it even on the table.\"\n- `unavailable_ticks[X]` = `total_decisions - feasible_ticks[X]` → **branch unavailable**.\n- `chosen_ticks[X]` = count of decisions where `proposed_type == X` (only meaningful when `X` was feasible, since constrained decoding shouldn't let the model propose an infeasible type — flag any such case separately as `schema_violation_ticks[X]`, which should be exactly 0 for `FalconBackend` and is itself a useful sanity check).\n- `feasible_unchosen_ticks[X] = feasible_ticks[X] - chosen_ticks[X]` → **branch available but unchosen**.\n- `chosen_and_accepted_ticks[X]` / `chosen_and_rejected_ticks[X]` (split of `chosen_ticks[X]` by `accepted`) → **model chose it but engine rejected it**, with `rejection_reason` histogram per type for causal detail (e.g. `repeated_utterance`, `repeated_action_loop`, `empty_utterance`).\n\nThis turns the current flat `action_counts` metric into a per-type funnel: unavailable → available-unchosen → chosen-rejected → chosen-accepted, which directly answers \"why does Falcon pick move/observe\" — e.g. if `feasible_ticks[talk]` is high but `chosen_ticks[talk]` is near zero, the cause is model preference, not opportunity; if `chosen_ticks[work]` is nontrivial but `chosen_and_rejected_ticks[work]` dominates, the cause is engine rejection (e.g. resource churn from repeated-action guard), not model avoidance.\n\nTests: assert the breakdown is internally consistent (`feasible = unavailable's complement`, `chosen = accepted + rejected`, sums match `total_actions` from the existing metric) using `FixedBackend`/`TalkBackend` fixtures already in `test_living_world.py`.\n\n### (4) Temperature sweep timing\n\nAfter instrumentation, not before. Reasoning: without the per-branch feasible/chosen/rejected split, a temperature sweep only tells you the marginal action-type distribution shifted — it can't tell you whether that shift came from the model actually favoring talk/help/work more, or from more rejections turning attempted talk/work into observe (which would look identical in the current coarse `action_counts` metric). Also worth noting for the record: `falcon_live.py`'s default `temperature=0.1` is near-greedy, and the response schema's `oneOf` branch order is fixed (`rest, observe, move, talk, help, work`) with move/observe/rest being the shortest completions — a plausible confound for move/observe dominance that the sweep should test for, not something to \"fix\" preemptively. Once instrumentation lands: rerun seeds 7/19/31 at current temperature (0.1) as the labeled baseline, then repeat at 2–3 higher temperatures (e.g. 0.5, 1.0) with identical seeds/ticks/actors-per-tick, comparing `feasible_unchosen_ticks` and `chosen_and_rejected_ticks` per type across temperatures.\n\n### (5) Risk of accidentally biasing behavior\n\n- All new fields are written only after `backend.choose_action()` returns and only to the append-only event log — never fed back into `observation_for()`, the prompt payload, the response schema, or `agent.memories`. The model never sees its own feasibility/rejection history through this channel.\n- `_feasible_action_types` is a read-only, engine-side function computed from data the engine already exposes; it does not alter `_validate`, `_resolve`, incident application, or the repeat/loop guards.\n- `falcon_live.py`'s `_feasibility_constraints`, `_response_schema`, and `_prompt` are untouched, so the set of branches the model can be shown and select from is unchanged — no new affordance and no new restriction.\n- Main residual risk is definitional drift: if the instrumentation's `_feasible_action_types` logic and `FalconBackend._feasibility_constraints` ever diverge (e.g. one is edited later without the other), metrics could misreport \"unavailable\" vs \"available-unchosen.\" Mitigate by adding a test that cross-checks both functions agree on the same observation fixtures, without merging them into one shared function (keeping engine-side ground truth independent of the adapter is deliberate — it lets this metric apply unchanged if the adapter's schema logic ever changes).",
+  "session_id": "3342d443-a089-493d-847c-1c1b14de54e2",
+  "usage": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 43454,
+    "cache_read_input_tokens": 139104,
+    "output_tokens": 11728,
+    "output_tokens_details": {
+      "thinking_tokens": 7592
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 43454,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3216,
+        "cache_read_input_tokens": 36661,
+        "cache_creation_input_tokens": 9805,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 9805
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.3203328,
+  "num_turns": 15
+}

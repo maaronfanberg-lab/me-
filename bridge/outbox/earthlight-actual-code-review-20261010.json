@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/earthlight-actual-code-review-20261010.json",
+  "request_sha256": "1429bb50d16fad63acfb538586b069f30e3d4944e81f91a823c9a73b618f2bef",
+  "request_nonce": "earthlight-actual-code-review-20261010",
+  "completed_at": "2026-10-10T12:48:19.513266Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "I read the three JS files in one parallel call. I did not read `apps/earthlight.html` or the workflow file, because you capped me at three tool calls. Nothing was run, so every finding comes from reading the source.\n\n## Critical\n\n1. **Presets detach the engine from the live parameters.** `deep-earth-ambient.js:54` does `P={...presets[...]}`, which creates a new object. The engine and voices still hold the old `P` that was passed at line 42.\n   - After any preset click, the sliders write to the new `P` while `voices.update()` keeps reading the old one.\n   - `update()` runs every 300 ms, so it overwrites `padDensity` and `padBrightness` with stale values.\n   - `width`, `orbit`, `motion`, `dwell` and `glide` become dead controls, because `panUpdate` and `chord` read the old `P`.\n   - Patch: `Object.assign(P, presets[name])`. Declare `P` as `const`.\n   - A CI test that clicks a preset and then calls `setParam('width', …)` should catch this.\n\n2. **Moving the master slider or clicking a preset un-mutes the output.**\n   - `stop()` fades `master` to 0 and sets `playing=false`.\n   - The `master` slider and every preset (line 54) then call `engine.apply('master', …)`, which ramps the gain back up.\n   - This happens while the UI says MUTED and before any resume.\n   - Presets also reset `master` to 0.22 mid-session, which can be a loud jump.\n   - Patch: in the app, skip `engine.apply('master', …)` unless `playing`. Exclude `master` from the preset loop.\n\n## Mono and phase\n\n3. **There is no real bass cancellation path.**\n   - The root, 2f and 3f sources are mono and feed `mix` directly.\n   - The `StereoPanner` only applies amplitude, so the L+R fold-down is safe.\n   - The 0.5/0.5 fold plus the crossfade gains is complementary for coherent bass.\n\n4. **HRTF mode does cause mono comb filtering above 205 Hz.**\n   - Interaural delay on a pad voice that shares a frequency with a centred source gives nulls near 1/(2·ITD), roughly 0.8–1.6 kHz.\n   - Pad 0 is exactly 4×root, the same as `bo2`. Pad 2 is exactly 8×root, the same as the shimmer.\n   - That interference is not audible as bass loss, but a mono check in headphone mode will not match speaker mode.\n   - Patch: offset the pad frequencies by a small ratio, or drop the shimmer and `bo2` when the same pitch is in the chord.\n\n5. **`lowCorrelation()` cannot detect problems.**\n   - It measures a 2nd-order 105 Hz low-pass on the post-limiter signal.\n   - The bass is mono by construction, so it returns about 1 regardless.\n   - It returns `null` below 1e-9 total energy, so CI must treat `null` as quiet and not as a failure.\n   - It also ignores the `mono` fold, so it cannot verify that path.\n   - For a real mono test, render offline and compare `(L+R)/2` against the stereo energy.\n\n6. **HRTF positions ignore `panPositions`.**\n   - Speaker mode uses `panPositions` (line 48), but HRTF mode (line 50) uses only `sin(theta)*width*orbit*3`.\n   - At `orbit=0` or `width=0`, all five headphone voices collapse to dead centre.\n   - Patch: `x = width*(panPositions[i]*3 + sin(theta)*orbit*1.5)`.\n\n## Web Audio startup and mobile\n\n7. **Mute does not suspend the context.** The oscillators, five HRTF panners, convolver and delay keep running while \"MUTED\", which drains the battery. Patch: in `stop()`, after the fade, call `setTimeout(() => c.suspend(), 120)` if still not playing.\n\n8. **HRTF panners are always processing.** They run in speaker mode too, with the gate gain at 0. Connect and disconnect them in `spatial()` instead. This is the largest avoidable CPU cost on mobile.\n\n9. **There is no `statechange` handler.** iOS can move the context to `interrupted` (for example on a phone call) while the UI still says SOUND LIVE. Patch: add `c.onstatechange` and update the status from it.\n\n10. **Chord evolution runs from `requestAnimationFrame`.** `engine.update()` is called from the rAF loop, which is throttled or paused in background tabs and on a locked screen. Chords stop advancing while audio keeps playing. The call is also skipped whenever the canvas is smaller than 1 px, because of the early `return` at line 56. Patch: drive `update()` from a `setInterval` or from the audio clock.\n\n11. **The startup order itself is fine.** The context is created in the click handler, the oscillators start at +0.035 s, and master starts at 0 and ramps in.\n\n## Automation bugs\n\n12. **The `gliss` offset in `chord()` never takes effect.**\n    - `setValueAtTime(...currentTime)` is scheduled, then `sm()` immediately calls `cancelScheduledValues(currentTime)`. That removes the event just scheduled.\n    - Patch: in `sm`, use `cancelAndHoldAtTime` where it exists. Otherwise add a flag that skips the cancel.\n\n13. **`cancelScheduledValues` plus `setTargetAtTime` is not a smooth restart on every browser.** Retargeting every 300 ms from `update()`, and on every slider input, can jump on engines that restart from the intrinsic value. Use `cancelAndHoldAtTime` or `setValueAtTime(param.value, t)` before the retarget.\n\n14. **The `glide` label does not match the behaviour.** The time constant is `glide/3`, so the transition takes about 1.67× the slider value (5τ).\n\n## Slider mapping and sub-30 Hz content\n\n15. **`lowcut` can reach 38 Hz while the root can be 40 Hz.**\n    - Each section is a Q=0.707 high-pass, so the pair is not a Butterworth 4th order.\n    - At fc=38 and f=40 that is about −5 dB, plus phase shift, so the fundamental is attenuated on a \"sub protection\" control.\n    - At the default 29 Hz the cost is about −2 dB on a 40 Hz root.\n    - Patch: cap `lowcut` at 30–32, or clamp it to `root*0.7`. Also update `lowcut` when `root` changes.\n\n16. **Sub-30 Hz energy is limited to the controls.**\n    - The only sub-30 Hz element is the 0.036 Hz LFO, which is a control signal. The 2×29 Hz high-pass handles anything else.\n    - There is no DC blocker.\n    - Fast `subAmp` gain steps at τ=0.07 s are mostly removed by the high-pass.\n\n17. **`subSwell` is nearly inaudible.** The modulation amplitude is `0.055*0.2 = 0.011` against a 0.34 base gain, about 0.3 dB at the slider maximum. The LFO also ignores `sub`, so at `sub=0` it still emits ±0.0055 (the gain goes slightly negative). Patch: scale it as `subAmp.gain * (1 + depth*lfo)` with the LFO routed through a gain scaled by `.45*sub`.\n\n18. **Minor mapping inconsistencies.**\n    - `air` maps −4.5 to +5.5 dB, so the centre is not at 0.5.\n    - The `h2` high-pass at 82 Hz sits above 2×40 Hz, so the second harmonic is cut by about 3.5 dB at the low end.\n\n## Distortion and clipping\n\n19. **Compressor makeup gain is unaccounted for.**\n    - Chrome's `DynamicsCompressor` applies automatic makeup gain.\n    - For `comp` (−20 dB, 3:1) I estimate about +8 dB, and for `lim` (−4.5 dB, 20:1) about +2.5 dB.\n    - That puts the limiter after `master`, so it sits near −20 dBFS at the 0.22 default and never engages.\n    - At `master` 0.5 with `sub` 1 and the body and pad layers up, the sum can exceed 0 dBFS. The destination then hard-clips, because a 3 ms attack on a 43 Hz wave is not a true limiter.\n    - Patch: cap `master` at about 0.3, or add a final tanh `WaveShaper` before the destination. Have CI assert peak ≤ 0.98 at maximum settings.\n\n20. **`bodyDrive` at 6× into a tanh shaper creates intermodulation.** The inputs are 3f and 4f, so it produces f and 2f products. The two 180 Hz high-passes (about −50 dB at f) remove them, so this is acceptable. Aliasing from `oversample='2x'` at high drive is audible only on bright settings.\n\n## Offline viability\n\n21. **`simulate()` is limited.**\n    - It builds the engine and renders, but `update()` never runs. Chords and pan motion are static, so the harmonic motion is untested.\n    - Analysers do not work offline, so `coherence` is invalid. CI must analyse the returned `AudioBuffer`.\n    - `subOnly` zeros the layers through `setTargetAtTime`, so the first 0.3–0.5 s still contains non-sub content. Set the gains with `.value` before rendering, or discard the first 0.5 s.\n    - It has no `mono` option and hardcodes 44100 Hz.\n    - Patch: have `simulate` call `g.update()` at intervals via `suspend()`, or schedule the chord changes. Add a mono render option.\n\n## Unverified\n\nI did not check these. In `earthlight.html`, confirm that every ID used in the JS exists, and that the script loads as `type=\"module\"`. Those IDs are `#c-*`, `#v-*`, `#freqRead`, `#nowNote`, `#spatialMode`, `#mono`, `#panic`, `#power`, `#monoStatus`, `#orb`, `#scope`, `#controls`, `#controlCount`, `#live`, `#engineStatus`, `#activity` and `#message`. A missing ID makes `sync()` or `status()` throw at load. I also did not read the CI workflow.",
+  "session_id": "f5ad9886-8879-4333-bec8-6df694f1bffe",
+  "usage": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 11502,
+    "cache_read_input_tokens": 5977,
+    "output_tokens": 17424,
+    "output_tokens_details": {
+      "thinking_tokens": 13690
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 11502,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 17208,
+        "cache_read_input_tokens": 3373,
+        "cache_creation_input_tokens": 10733,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 10733
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.22085370000000001,
+  "num_turns": 4
+}

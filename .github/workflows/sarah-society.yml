@@ -1,0 +1,382 @@
+name: The Room
+
+on:
+  workflow_dispatch:
+    inputs:
+      entity:
+        description: Legacy pulse compatibility; ignored because all four entities process every beat
+        required: true
+        default: auto
+        type: choice
+        options: [auto, sarah, mara, owen, jules]
+  push:
+    branches: [main]
+    paths:
+      - 'society/pulse-kick.txt'
+
+permissions:
+  contents: write
+  actions: write
+  id-token: write
+
+concurrency:
+  group: the-room-world-main
+  cancel-in-progress: true
+
+jobs:
+  beat:
+    name: continuous 12-node shared cognition
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 20
+
+      - name: Restore pinned local Llama 3.2 3B inference cache
+        if: vars.ROOM_NATIVE_3B_DISABLE != '1'
+        uses: actions/cache@v4
+        with:
+          path: .room_model/llama-3.2-3b-instruct-q4_k_m.gguf
+          key: room-native-llama32-3b-q4km-6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff
+
+      - name: Keep all 12 cognitive nodes hot and publish every beat
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+          ROOM_PROMPT_PERCEPTION: ${{ secrets.ROOM_PROMPT_PERCEPTION }}
+          ROOM_PROMPT_DELIBERATION: ${{ secrets.ROOM_PROMPT_DELIBERATION }}
+          ROOM_PROMPT_EXPRESSION: ${{ secrets.ROOM_PROMPT_EXPRESSION }}
+          ROOM_CONVERSATIONAL_FLOOR: ${{ vars.ROOM_CONVERSATIONAL_FLOOR_DISABLE == '1' && '0' || '1' }}
+          ROOM_CHAT_SPEECH_MODE: ${{ vars.ROOM_CHAT_SPEECH_MODE_DISABLE == '1' && '0' || '1' }}
+          ROOM_HIDDEN_WORLD_EXPERIMENT: '1' # guarded by finite public-cycle window in room_hidden_world.py
+          ROOM_WORLD_ACTIONS: '1' # further bounded by second scene onset and witnessed action
+          ROOM_SCENE_RELEVANCE_FLOOR: '1' # second-scene-only response opportunity, never quotas
+          ROOM_SCENE_PUBLIC_LEDGER: '1' # later half of separate 24-turn replication only
+          ROOM_PLAN_FOLLOWTHROUGH: '1' # finite greenhouse interval 36328-36363 only
+          ROOM_CAUSAL_WORLD_EXPERIMENT: '1' # time-limited 36480-36599 canary, following earlier scene trial
+          ROOM_CONCORDIA_WORLD_ENABLE: '0' # replaced by actual DeepMind Concordia referee
+          ROOM_NATIVE_CONCORDIA: ${{ vars.ROOM_NATIVE_CONCORDIA_DISABLE == '1' && '0' || '1' }}
+          ROOM_NATIVE_LLM_TIMEOUT_SECONDS: '195' # bounded queue tolerance; beat still capped at 300s
+          ROOM_NATIVE_3B_DISABLE: ${{ vars.ROOM_NATIVE_3B_DISABLE == '1' && '1' || '0' }}
+        run: |
+          set -uo pipefail
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+
+          # Preserve the proven liveness repair if a later merge regresses it.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/room_engine_v5.py')
+          s = p.read_text()
+          old = 'attempts = 5 if role == "expression" else 2'
+          new = 'attempts = 9 if role == "expression" else 2'
+          if old in s:
+              assert s.count(old) == 1
+              p.write_text(s.replace(old, new))
+          else:
+              assert new in s, 'Room expression retry setting is neither known-good nor known regression'
+          PY
+          if ! git diff --quiet -- scripts/room_engine_v5.py; then
+            python3 -m py_compile scripts/room_engine_v5.py scripts/room_private_model.py scripts/room_expression_quality.py || exit 1
+            git add scripts/room_engine_v5.py
+            git commit -m "Restore proven Room expression retry budget"
+            retry_patch_pushed=0
+            for patch_attempt in 1 2 3 4; do
+              if git push origin HEAD:main; then retry_patch_pushed=1; break; fi
+              git fetch origin main || { sleep $((patch_attempt * 2)); continue; }
+              if ! git rebase origin/main; then git rebase --abort || true; exit 1; fi
+              sleep 1
+            done
+            [ "$retry_patch_pushed" -eq 1 ] || exit 1
+          fi
+
+          ROOM_NODE_TIMEOUT_SECONDS=60
+          ROOM_NODE_KILL_GRACE_SECONDS=5
+          ROOM_RELAY_CONNECT_TIMEOUT_SECONDS=3
+          ROOM_RELAY_MAX_TIME_SECONDS=8
+          ROOM_BEAT_FAILURE_LIMIT=4
+
+          export ROOM_MODEL_URL=""
+          export ROOM_BRAIN_ACTIVE="none"
+          export ROOM_CHAT_MODEL_ID="Llama-3.2-1B-Instruct"
+          model_pid=""
+          if [ -n "${ROOM_PROMPT_PERCEPTION:-}" ] && [ -n "${ROOM_PROMPT_DELIBERATION:-}" ] && [ -n "${ROOM_PROMPT_EXPRESSION:-}" ]; then
+            mkdir -p .room_model/runtime
+            gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'society-brain-q4_0.gguf' --dir .room_model
+            gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_model
+            echo '7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  .room_model/society-brain-q4_0.gguf' | sha256sum -c -
+            echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+            tar -xzf .room_model/llama-runtime-linux-x64.tar.gz -C .room_model/runtime
+            server_bin=$(find .room_model/runtime -type f -name 'llama-server' | head -1)
+
+            brain_probe() {
+              python3 - <<'PY'
+          import json
+          import urllib.request
+          schema = {
+              "type": "object",
+              "properties": {"ok": {"type": "boolean"}},
+              "required": ["ok"],
+              "additionalProperties": False,
+          }
+          body = {
+              "prompt": "Return a structured object with ok=true.",
+              "n_predict": 24,
+              "temperature": 0.0,
+              "json_schema": schema,
+          }
+          req = urllib.request.Request(
+              "http://127.0.0.1:18080/completion",
+              data=json.dumps(body).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=20) as response:
+              payload = json.loads(response.read().decode("utf-8", "replace"))
+          result = json.loads(str(payload.get("content", "")))
+          if result.get("ok") is not True:
+              raise SystemExit(1)
+          PY
+            }
+
+            native_brain_probe() {
+              python3 - <<'PY'
+          import json
+          import urllib.request
+          body = {
+              "model": "Llama-3.2-3B-Instruct",
+              "messages": [
+                  {"role": "system", "content": "Local readiness check only."},
+                  {"role": "user", "content": "Answer READY."},
+              ],
+              "max_tokens": 16,
+              "temperature": 0.0,
+              "stream": False,
+          }
+          request = urllib.request.Request(
+              "http://127.0.0.1:18080/v1/chat/completions",
+              data=json.dumps(body).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=25) as response:
+              result = json.loads(response.read().decode("utf-8", "replace"))
+          choices = result.get("choices") or []
+          content = str((choices[0].get("message") or {}).get("content") or "").strip() if choices else ""
+          if not content:
+              raise SystemExit(1)
+          PY
+            }
+
+            stop_model() {
+              if [ -n "${model_pid:-}" ] && kill -0 "$model_pid" 2>/dev/null; then
+                kill "$model_pid" 2>/dev/null || true
+                wait "$model_pid" 2>/dev/null || true
+              fi
+              model_pid=""
+              export ROOM_MODEL_URL=""
+              export ROOM_BRAIN_ACTIVE="none"
+              export ROOM_CHAT_MODEL_ID="Llama-3.2-1B-Instruct"
+            }
+
+            start_model() {
+              label="$1"; model_path="$2"; context_size="$3"
+              stop_model
+              [ -n "${server_bin:-}" ] || return 1
+              chmod +x "$server_bin"
+              env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION -u ROOM_NODE_PROMPT \
+                "$server_bin" -m "$model_path" --host 127.0.0.1 --port 18080 -c "$context_size" -np 1 >".room_model/server-${label}.log" 2>&1 &
+              model_pid=$!
+              ready=0
+              for attempt in $(seq 1 120); do
+                if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18080/health >/dev/null 2>&1; then ready=1; break; fi
+                if ! kill -0 "$model_pid" 2>/dev/null; then break; fi
+                sleep 1
+              done
+              probe_ok=0
+              if [ "$ready" -eq 1 ]; then
+                if [ "$label" = 'llama3.2-3b' ]; then
+                  if native_brain_probe; then probe_ok=1; fi
+                elif brain_probe; then
+                  probe_ok=1
+                fi
+              fi
+              if [ "$probe_ok" -eq 1 ]; then
+                export ROOM_MODEL_URL='http://127.0.0.1:18080/completion'
+                export ROOM_BRAIN_ACTIVE="$label"
+                if [ "$label" = 'llama3.2-3b' ]; then
+                  export ROOM_CHAT_MODEL_ID='Llama-3.2-3B-Instruct'
+                else
+                  export ROOM_CHAT_MODEL_ID='Llama-3.2-1B-Instruct'
+                fi
+                echo "ROOM_BRAIN_ACTIVE=$ROOM_BRAIN_ACTIVE"
+                return 0
+              fi
+              echo "Room brain candidate failed startup/probe: $label"
+              stop_model
+              return 1
+            }
+
+            llama_ready=0
+            if [ "${ROOM_NATIVE_3B_DISABLE:-0}" != "1" ]; then
+              model_3b_path=.room_model/llama-3.2-3b-instruct-q4_k_m.gguf
+              model_3b_hash='6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff'
+              if ! echo "$model_3b_hash  $model_3b_path" | sha256sum -c - >/dev/null 2>&1; then
+                echo "Pinned Llama 3.2 3B cache miss; downloading verified model"
+                curl --fail --location --retry 3 --retry-delay 5 \
+                  'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true' \
+                  --output "$model_3b_path" || true
+              fi
+              if echo "$model_3b_hash  $model_3b_path" | sha256sum -c -; then
+                if start_model 'llama3.2-3b' "$model_3b_path" 8192; then llama_ready=1; fi
+              else
+                echo "Llama 3.2 3B integrity unavailable; retaining 1B fallback"
+              fi
+            fi
+
+            if [ "$llama_ready" -ne 1 ]; then
+              if curl --fail --location --retry 4 --retry-delay 5 \
+                'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true' \
+                --output .room_model/llama-3.2-1b-instruct-q4_k_m.gguf && \
+                echo '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83  .room_model/llama-3.2-1b-instruct-q4_k_m.gguf' | sha256sum -c -; then
+                if start_model 'llama3.2-1b' .room_model/llama-3.2-1b-instruct-q4_k_m.gguf 8192; then llama_ready=1; fi
+              else
+                echo "Llama 3.2 1B download or checksum failed; preserving Qwen fallback"
+              fi
+            fi
+
+            if [ "$llama_ready" -ne 1 ]; then
+              echo "Starting known-good Qwen fallback"
+              start_model 'qwen2.5-0.5b-fallback' .room_model/society-brain-q4_0.gguf 16384 || true
+            fi
+            if [ -z "$ROOM_MODEL_URL" ]; then echo "Private local model unavailable; prompted Room beats will fail closed and retry"; fi
+          fi
+
+          stop_at=$((SECONDS + 19800)); beat_seq=0; consecutive_failures=0; runner_exit_reason="warm_expiry"; relay_token=""; relay_token_refresh_at=0; floor_action_integrity_pending=0
+          refresh_relay_token() { [ -n "${ROOM_RELAY_URL:-}" ] || return 1; now=$(date +%s); if [ -n "$relay_token" ] && [ "$now" -lt "$relay_token_refresh_at" ]; then return 0; fi; token_json=$(curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror") || return 1; relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))'); [ -n "$relay_token" ] || return 1; relay_token_refresh_at=$((now + 240)); }
+          publish_relay() { [ -n "${ROOM_RELAY_URL:-}" ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room/feed.json "${ROOM_RELAY_URL%/}/api/ingest" >/dev/null || true; }
+          fetch_allen_turns() { printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json; [ -n "${ROOM_RELAY_URL:-}" ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -H "Authorization: Bearer ${relay_token}" "${ROOM_RELAY_URL%/}/api/participant/pending" > room_work/allen-inbox.json || printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json; }
+          ack_allen_turns() { [ -s room_work/allen-ack.json ] || return 0; ack_count=$(python3 -c 'import json; print(len(json.load(open("room_work/allen-ack.json")).get("ids", [])))' 2>/dev/null || echo 0); [ "$ack_count" -gt 0 ] || return 0; refresh_relay_token || return 0; curl -fsS --connect-timeout "${ROOM_RELAY_CONNECT_TIMEOUT_SECONDS}" --max-time "${ROOM_RELAY_MAX_TIME_SECONDS}" -X POST -H "Authorization: Bearer ${relay_token}" -H "Content-Type: application/json" --data-binary @room_work/allen-ack.json "${ROOM_RELAY_URL%/}/api/participant/ack" >/dev/null || true; }
+          wait_batch() { failed=0; for pid in "$@"; do wait "$pid" || failed=1; done; [ "$failed" -eq 0 ]; }
+
+          if [ "${ROOM_NATIVE_CONCORDIA:-0}" = "1" ]; then
+            python3 -m pip install --disable-pip-version-check -r requirements-room-concordia.txt || exit 1
+            python3 -m py_compile scripts/room_concordia_native.py scripts/room_concordia_live.py || exit 1
+            echo "LIVE ROOM: DeepMind native Concordia engine selected"
+          fi
+
+          # Desired behavior is separate from the temporary technical
+          # fallback. A single bad model period must not condemn a whole
+          # multi-hour Room session to the old repetitive engine.
+          ROOM_FLOOR_DESIRED="${ROOM_CONVERSATIONAL_FLOOR:-0}"
+          floor_recovery_after_seq=0
+          floor_rollback_count=0
+          ROOM_FLOOR_FALLBACK_REASON=""
+          export ROOM_FLOOR_DESIRED ROOM_FLOOR_FALLBACK_REASON
+          run_beat() {
+            beat_seq=$((beat_seq + 1)); export ROOM_CYCLE_KEY="${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${beat_seq}"; rm -rf room_parts room_work; mkdir -p room_parts room_work
+            fetch_allen_turns
+            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" python3 scripts/room_participant.py room_work/allen-inbox.json room_work/allen-ack.json || return 1
+            if [ "${ROOM_NATIVE_CONCORDIA:-0}" = "1" ]; then
+              [ "${ROOM_BRAIN_ACTIVE:-none}" != "none" ] || { echo "Native Room requires a working Llama brain"; return 1; }
+              timeout -k 15s 300s python3 scripts/room_concordia_live.py --mode llama --ack-path room_work/allen-ack.json || return 1
+              python3 scripts/build_room_feed.py || return 1
+              return 0
+            fi
+            pids=(); for n in 1 2 4 5 7 8 10 11; do (timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase sense) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1
+            for n in 0 3 6 9; do timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_PERCEPTION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase sense || return 1; done
+            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_engine_v5.py bus || return 1
+            pids=(); for n in 0 3 6 9; do (timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="" ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json) & pids+=("$!"); done; wait_batch "${pids[@]}" || return 1
+            for n in 1 4 7 10; do timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_DELIBERATION:-}" ROOM_NODE_ID="$n" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json || return 1; done
+            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_engine_v5.py bus2 --bus room_work/bus-sense.json || return 1
+            if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ]; then
+              ROOM_FLOOR_LAST_FAILURE="pre_expression"
+              committed=0
+              for candidate_rank in 0 1; do
+                python3 scripts/room_conversational_floor.py --bus room_work/bus-recurrent.json --out room_work/floor.json --rank "$candidate_rank" || { ROOM_FLOOR_LAST_FAILURE="floor_selection"; return 1; }
+                selected_node=$(python3 -c 'import json; print(json.load(open("room_work/floor.json"))["node"])') || return 1
+                selected_speaker=$(python3 -c 'import json; print(json.load(open("room_work/floor.json"))["speaker"])') || return 1
+                selected_part=$(printf 'room_parts/recurrent-%02d.json' "$selected_node")
+                rm -f room_parts/recurrent-02.json room_parts/recurrent-05.json room_parts/recurrent-08.json room_parts/recurrent-11.json
+                if ! timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_EXPRESSION:-}" ROOM_NODE_ID="$selected_node" ROOM_EXPRESSION_RANK="0" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json; then
+                  ROOM_FLOOR_LAST_FAILURE="model_generation"
+                  echo "Selected model failed for $selected_speaker; offering next opportunity"
+                  continue
+                fi
+                if ! python3 scripts/room_conversational_candidate.py --part "$selected_part" --speaker "$selected_speaker"; then
+                  ROOM_FLOOR_LAST_FAILURE="candidate_preflight"
+                  echo "Unusable candidate from $selected_speaker; offering next opportunity"
+                  continue
+                fi
+                timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_private_commit.py commit || { ROOM_FLOOR_LAST_FAILURE="commit_integrity"; return 1; }
+                committed=1
+                break
+              done
+              [ "$committed" -eq 1 ] || { ROOM_FLOOR_LAST_FAILURE="${ROOM_FLOOR_LAST_FAILURE:-all_candidates_unusable}"; return 1; }
+            else
+              expr_nodes=(2 5 8 11); shift=$((beat_seq % 4)); for rank in 0 1 2 3; do idx=$(((rank + shift) % 4)); n=${expr_nodes[$idx]}; timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION ROOM_NODE_PROMPT="${ROOM_PROMPT_EXPRESSION:-}" ROOM_NODE_ID="$n" ROOM_EXPRESSION_RANK="$rank" python3 scripts/room_skill_exec.py scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json || return 1; done
+              timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION python3 scripts/room_private_commit.py commit || return 1
+            fi
+            timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" python3 scripts/build_room_feed.py || return 1
+          }
+
+          while [ "$SECONDS" -lt "$stop_at" ]; do
+            if [ "$ROOM_FLOOR_DESIRED" = "1" ] && [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" != "1" ] && [ "$beat_seq" -ge "$floor_recovery_after_seq" ]; then
+              echo "Room selected-floor re-probe after temporary technical fallback"
+              export ROOM_CONVERSATIONAL_FLOOR=1
+              ROOM_FLOOR_FALLBACK_REASON=""
+              export ROOM_FLOOR_FALLBACK_REASON
+            fi
+            if ! run_beat; then
+              consecutive_failures=$((consecutive_failures + 1))
+              echo "A Room beat failed internally (${consecutive_failures}/${ROOM_BEAT_FAILURE_LIMIT})"
+              case "${ROOM_FLOOR_LAST_FAILURE:-}" in
+                candidate_preflight|commit_integrity|floor_selection)
+                  floor_action_integrity_pending=1 ;;
+              esac
+              if [ "${ROOM_NATIVE_CONCORDIA:-0}" = "1" ] && [ "$consecutive_failures" -ge 2 ]; then
+                runner_exit_reason="native_concordia_failure"
+                echo "Native Concordia failed twice; not publishing compulsory legacy dialogue"
+                break
+              elif [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ] && [ "$consecutive_failures" -ge 2 ] && [ "$floor_action_integrity_pending" -eq 1 ]; then
+                runner_exit_reason="unrealized_conversational_action"
+                echo "Room action integrity unresolved; refusing legacy publication fallback"
+                break
+              elif [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ] && [ "$consecutive_failures" -ge 2 ]; then
+                floor_rollback_count=$((floor_rollback_count + 1))
+                # Increase technical retry spacing after repeated model
+                # failures; this is never a speaker quota or topic schedule.
+                recovery_gap=$((4 * floor_rollback_count))
+                if [ "$recovery_gap" -gt 24 ]; then recovery_gap=24; fi
+                floor_recovery_after_seq=$((beat_seq + recovery_gap))
+                ROOM_FLOOR_FALLBACK_REASON="${ROOM_FLOOR_LAST_FAILURE:-unknown_failure}"
+                export ROOM_FLOOR_FALLBACK_REASON ROOM_FLOOR_RECOVERY_ATTEMPTS="$floor_rollback_count"
+                echo "Selected-floor failed twice; temporary legacy recovery ($ROOM_FLOOR_FALLBACK_REASON), re-probe after $recovery_gap committed beats"
+                export ROOM_CONVERSATIONAL_FLOOR=0
+                consecutive_failures=0
+              elif [ "$consecutive_failures" -ge "$ROOM_BEAT_FAILURE_LIMIT" ]; then runner_exit_reason="repeated_beat_failure"; break; fi
+              echo "Resync after internal beat failure before retrying"
+              git fetch origin main || true
+              git reset --hard origin/main || true
+              sleep 3
+              continue
+            fi
+            consecutive_failures=0; floor_action_integrity_pending=0; git add room society/live.json; if git diff --cached --quiet; then continue; fi; git commit -m "Room cognition v5 attention-routed skills beat"
+            pushed=0; for attempt in 1 2 3 4; do if git push origin HEAD:main; then pushed=1; publish_relay; ack_allen_turns; break; fi; git fetch origin main || { sleep $((attempt * 2)); continue; }; if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ] && ! git diff --quiet HEAD^ origin/main -- room/conversation.json room/state.json room/discourse.json room/cognitive_state.json room/config.json; then echo "Authoritative conversation advanced; discard stale local selected reply"; break; fi; if ! git rebase origin/main; then git rebase --abort || true; break; fi; sleep 1; done
+            if [ "$pushed" -eq 0 ]; then
+              echo "Room publish lost its race; discard unpublished local beat and resync to authoritative main"
+              git fetch origin main || true
+              git reset --hard origin/main || true
+              sleep 8
+            fi
+          done
+          if [ -n "$model_pid" ]; then kill "$model_pid" 2>/dev/null || true; fi
+          if [ "$runner_exit_reason" = "repeated_beat_failure" ] || [ "$runner_exit_reason" = "native_concordia_failure" ] || [ "$runner_exit_reason" = "unrealized_conversational_action" ]; then
+            echo "::error::Room runner stopped abnormally: $runner_exit_reason"
+            exit 1
+          fi
+          # The Room Pulse is the single normal handoff authority. Do not dispatch
+          # another Room here or race the pulse chain with a duplicate replacement.
+          exit 0

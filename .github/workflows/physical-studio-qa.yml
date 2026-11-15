@@ -1,0 +1,54 @@
+name: Physical Studio QA
+
+on:
+  push:
+    paths:
+      - 'apps/physical-studio-v2/**'
+      - '.github/workflows/physical-studio-qa.yml'
+  pull_request:
+    paths:
+      - 'apps/physical-studio-v2/**'
+      - '.github/workflows/physical-studio-qa.yml'
+  workflow_dispatch:
+
+jobs:
+  browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/physical-studio-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install QA dependencies
+        run: npm install
+      - name: Run source/dependency integrity audit
+        run: npm run qa:audit
+        continue-on-error: true
+      - name: Run deterministic physics fuzzer
+        run: npm run qa:physics
+        continue-on-error: true
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+      - name: Run browser QA
+        run: npm run qa
+        continue-on-error: true
+      - name: Build machine-readable release gate
+        run: npm run qa:report
+        continue-on-error: true
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-studio-qa-${{ github.sha }}
+          path: |
+            apps/physical-studio-v2/qa-results/
+            apps/physical-studio-v2/test-results/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Enforce automated gate
+        run: |
+          node -e "const fs=require('fs');const files=['qa-results/release-gate.json','qa-results/physics-fuzz.json','qa-results/source-audit.json'];if(files.some(f=>!fs.existsSync(f)))process.exit(1);const r=JSON.parse(fs.readFileSync(files[0])),q=JSON.parse(fs.readFileSync(files[1])),a=JSON.parse(fs.readFileSync(files[2]));if(a.status!=='PASS'||q.status!=='PASS'||r.suites.browser!=='PASS'||r.unresolvedCodes.length)process.exit(1);console.log('Automated source + browser + physics gate PASS; manual simulator/device gates remain required.')"

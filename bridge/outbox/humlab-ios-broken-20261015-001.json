@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/humlab-ios-broken-20261015-001.json",
+  "request_sha256": "58e783fbbb069da55cbf6fd2913ab4498af307f3d28bb8d6e8720c9bc00f6fcb",
+  "request_nonce": "humlab-ios-safari-20261015-verified-review-001",
+  "completed_at": "2026-10-15T02:33:07.843362Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "I inspected only the repo file list. `HumLab_Fixed.html` is not in the repo, so it isn't published. Existing apps live under `apps/*.html`, and the launcher is `index.html`. I have not run the app, seen the HTML, or tested on an iPhone. Everything below about the code comes from your description.\n\n## 1. Diagnosis, ranked by likelihood\n\n**A. Delivery failure (most likely, about 80%).** \"Nothing works\" after tapping a downloaded file fits a non-browser viewer.\n- Files/Quick Look and the ChatGPT preview are not Safari. They often block or limit scripts, file pickers, mic access, and blob playback.\n- A downloaded `.html` has no HTTPS origin. Opening it from Files gives `file://` or a Quick Look container, where `getUserMedia` is unavailable. `MediaRecorder` and the file picker can also behave unpredictably there.\n- It cannot run inline in ChatGPT in a reliable way. Sandboxed iframes usually lack `allow=\"microphone\"`, and downloads and `target=_blank` are often blocked. Don't promise inline use.\n- Fix: serve the file over HTTPS from the existing GitHub Pages site and open it in Safari. You can also use Share → Add to Home Screen afterward.\n\n**B. Secure context and permissions (about 10%).**\n- `navigator.mediaDevices` is `undefined` on non-HTTPS pages. That matches your \"access denied\" fallback message, which is misleading because the real cause is a missing API, not a denial.\n- On Pages (HTTPS), Safari prompts for the mic once per page load or per site setting. It must be requested from a user tap.\n\n**C. Web Audio and iOS Safari quirks (about 7%).**\n- `AudioContext` must be created or `resume()`d inside a tap handler. Use `webkitAudioContext` as a fallback.\n- Your code calls `audioContext().decodeAudioData(...)` after `await f.arrayBuffer()`. The user activation may be consumed or stale by then. Create and resume the context synchronously at the top of the handler, then await.\n- Older Safari `decodeAudioData` only accepts the callback form. The promise form is fine on modern iOS.\n- Recorded `audio/mp4` (AAC) decodes on iOS. WebM/Opus decode is unreliable on older iOS.\n- The mute switch can silence Web Audio but not `<audio>` elements. Play through the `<audio>` elements, as you already do, and tell the user.\n- The iOS file picker with `accept='audio/*,.wav,...'` can hide Voice Memos items. Voice Memos must be saved to Files first or shared. Consider relaxing `accept` or dropping it.\n- A 35 MB, 180 s decode is heavy but feasible. Memory pressure can kill the tab on older devices.\n\n**D. DSP weaknesses (do not cause \"nothing works,\" but affect quality).**\n- **Sample-rate mismatch (a real bug).** The profile is measured at the reference rate and applied at the source rate with no resampling. The bin to Hz mapping is wrong whenever the rates differ. Typical case: the recorded mic reference is 48 kHz or 44.1 kHz and the imported file is 44.1 kHz or 48 kHz. Notch frequencies are also computed on the wrong basis if they use the wrong rate.\n  - Fix: resample both buffers to one rate (for example 44.1 kHz) with `OfflineAudioContext` before analysis. Or interpolate the profile onto the source's bin frequencies.\n- **Demo mismatch.** The demo runs at 24 kHz, and the iPhone's `AudioContext` may run at 44.1 or 48 kHz. Resample here too.\n- **Spectral subtraction artifacts.** Gain is `max(.12, 1-1.55*strength*scale*p/mag)`. This causes musical noise and over-suppression of program material that overlaps the hum bins. The 0.12 floor leaves audible residual.\n  - Fix: use a longer window for a hum-only reference, or keep it, but expose a \"gentle\" default.\n- **Frequency resolution.** N=2048 at 44.1 kHz gives about 21.5 Hz per bin. 50/60 Hz and harmonics are poorly resolved by the mask alone, which is why notches are added.\n- **Notch Q=38 on harmonics 1–6.** This is reasonable, but check that all six harmonics stay below Nyquist. Also check that the 50 vs 60 Hz estimate is robust. Estimate it from the reference spectrum peaks, and let the user override it.\n- **Hum-removal ordering.** Applying both STFT masking and the notches is probably redundant. Test each alone.\n- **Overlap-add normalization.** With a sin analysis window and a sin synthesis window at hop 512, the sum of squared windows is constant at 4× overlap (sin² sums to 2 at 75% overlap). Verify the normalization, or the output level is wrong.\n- **Clipping.** Peak-normalize or limit before 16-bit WAV encoding.\n\n## 2. Minimal corrective actions (in order)\n\n1. Publish the file at `apps/humlab.html` in the Pages repo and link it from `index.html`. Test that URL in Safari, not in Files or ChatGPT.\n2. Add a visible diagnostics line showing `isSecureContext`, `!!navigator.mediaDevices`, `!!window.MediaRecorder`, `AudioContext.sampleRate`, and the supported MIME type. Report real errors, not a generic \"access denied.\"\n3. Make the audio context creation synchronous inside the tap handler. Call `resume()` and play a silent buffer if needed.\n4. Resample everything to one rate before analysis (see D).\n5. Make the demo path work first: demo → process → play before/after → save. Do this before any recording or import work.\n6. Make the download path robust. iOS ignores the `download` attribute on blob URLs in some cases. Offer \"Open cleaned WAV\" in a new tab, where the user can use the Share sheet to save to Files. Also offer `navigator.share({files:[...]})` where `canShare` is true.\n7. Keep import and record as secondary tested paths. For recording, prefer `audio/mp4` and fall back cleanly. Add a \"pick an audio file\" fallback via `<input capture>` or plain file input.\n8. Remove optional chaining only if you need to support old iOS (before 13.4). Otherwise leave it.\n\n## 3. Delivery on existing GitHub Pages (no Replit)\n\n- Commit `apps/humlab.html` through the GitHub web UI or the Files app via GitHub's mobile site (the \"Add file → Upload files\" option). It deploys at `https://maaronfanberg-lab.github.io/me-/apps/humlab.html` after the Pages build finishes (usually 1–2 minutes). Check the Actions tab or the Pages deployment status.\n- Linking to the downloaded artifact does not publish it. A ChatGPT sandbox URL or download link is not a site. The file must be in the repo's published branch or folder.\n- Watch for case sensitivity (`HumLab_Fixed.html` vs `humlab.html`), caching (add a `?v=2` query when retesting), and the repo name `me-` with its trailing hyphen in URLs.\n- After the page loads in Safari, use Share → Add to Home Screen. A service worker for offline use is optional. Stage it later, since service worker bugs can make a broken version stick.\n\n## 4. Acceptance-test matrix (iPhone Safari, from the Pages URL)\n\n| # | Test | Pass condition |\n|---|------|----------------|\n| 1 | Load the HTTPS URL in Safari. Read the diagnostics line. | `isSecureContext` is true and the API availability lines show true. |\n| 2 | Tap demo → Process → play Before and After. | Audible hum in Before, and a clearly reduced hum in After. The tone is preserved. Works with the mute switch on (via `<audio>`). |\n| 3 | Import a 44.1 kHz and a 48 kHz clip (for example from Files). Select a noise-only segment, Learn, Process. | No decode error. Hum is reduced at the right frequency in both cases, which checks the sample-rate fix. |\n| 4 | Record 5 s of hum through the mic (play 60 Hz hum from another speaker). Learn, process the imported file. | The mic permission prompt appears. The recording decodes. If it fails, the error message names the real cause. |\n| 5 | Save: tap Download or Share on the result. | A WAV reaches Files or the share sheet, and it plays back in the Music or Files app with the cleaned audio, not silence. |\n\nAdd as optional negative tests: open the same file from Files Quick Look and from the ChatGPT preview. Expect failures or limits there. This confirms the delivery diagnosis (A).\n\nTo falsify diagnosis A: if the Pages URL in Safari also fails on test 2 (demo), the cause is code, most likely the audio context or the `<audio>` blob handling. Then check the Safari Web Inspector from a Mac, or the on-page diagnostics.\n\n## 5. Unverified assumptions\n\n- I haven't seen the HTML. Everything about its code comes from your summary.\n- I haven't run anything on an iPhone, so the Safari quirks above come from general knowledge. Behavior varies by iOS version.\n- I assumed Pages publishes from the `me-` repo root or default branch. I didn't check the Pages settings.\n- I assumed that the cause of \"nothing works\" is the Quick Look or ChatGPT viewer. That is a likely guess, not an observation.",
+  "session_id": "34db1fb4-ac5e-4721-a5b9-5964b896527f",
+  "usage": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 6090,
+    "cache_read_input_tokens": 4797,
+    "output_tokens": 3382,
+    "output_tokens_details": {
+      "thinking_tokens": 55
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 6090,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3273,
+        "cache_read_input_tokens": 4797,
+        "cache_creation_input_tokens": 1293,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1293
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.058667699999999996,
+  "num_turns": 2
+}

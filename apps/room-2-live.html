@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090611">
+<title>ROOM 2 LIVE</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#07050b;color:#f5f0fb;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{background:radial-gradient(circle at 15% -10%,#261238 0,#0a0610 36%,#050307 100%);padding:0 14px 54px}.wrap{max-width:1120px;margin:auto}.top{position:sticky;top:0;z-index:10;padding:calc(14px + env(safe-area-inset-top)) 0 12px;background:#08050ddd;backdrop-filter:blur(18px);border-bottom:1px solid #30213b}.title{font-size:27px;font-weight:950;letter-spacing:-.045em}.sub{margin-top:3px;font-size:11px;color:#a993b6}.pills{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.pill{border:1px solid #443052;background:#15101c;border-radius:999px;padding:5px 9px;font-size:11px;color:#c8b7d3}.live{border-color:#26664e;color:#8ff7ca}.warn{border-color:#75501e;color:#ffd08a}.dead{border-color:#6a2833;color:#ff9aa8}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:5px}.live .dot{animation:pulse 1.3s infinite}@keyframes pulse{50%{transform:scale(1.8);opacity:.35}}.entities{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.entity,.panel{background:#100b16;border:1px solid #32223f;border-radius:18px}.entity{padding:12px}.ename{font-size:11px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#d6b4e8}.mode{font-size:20px;font-weight:850;margin-top:5px}.meta{font-size:10px;color:#9785a2;margin-top:4px}.barrow{display:grid;grid-template-columns:72px 1fr 34px;gap:6px;align-items:center;margin-top:6px;font-size:9px;color:#a896b4}.track{height:5px;background:#261a30;border-radius:99px;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,#687cff,#ea6cf4);transition:width .5s;border-radius:99px}.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:14px}.panel{overflow:hidden}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-bottom:1px solid #2b1d36}.head b{font-size:13px}.head span{font-size:10px;color:#8f7d9b}.activity{padding:9px 13px;border-bottom:1px solid #291b34;background:#120a19;font-size:11px;color:#b9a5c6}.activity strong{color:#f1dcff}.chat{padding:10px;max-height:720px;overflow:auto}.msg{padding:11px 12px;margin-bottom:9px;border:1px solid #4c2a5f;border-radius:14px;background:#170c20}.who{font-size:9px;letter-spacing:.12em;text-transform:uppercase;font-weight:900;color:#df91ff}.text{font-size:16px;line-height:1.45;margin-top:5px}.when{font-size:9px;color:#776783;margin-top:6px}.side{padding:12px}.facts{display:grid;grid-template-columns:1fr auto;gap:8px 10px;font-size:11px}.good{color:#86efbf}.bad{color:#ffb37a}.section{border-top:1px solid #2a1c34;margin-top:13px;padding-top:12px}.section:first-child{border-top:0;margin-top:0;padding-top:0}.section h3{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#cbb4d7;margin:0 0 8px}.gate{font-size:12px;line-height:1.45;color:#c5b4ce}.tiny{font-size:10px;line-height:1.5;color:#907d9c}.empty{padding:34px 20px;text-align:center;color:#927f9e;font-size:12px}@media(max-width:800px){.entities{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.chat{max-height:none}}@media(max-width:460px){.entities{grid-template-columns:1fr}.title{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+<div class="title">ROOM 2 LIVE</div>
+<div class="sub">Sarah · Mara · Owen · Jules · autonomous isolated dynamics and speech</div>
+<div class="pills">
+<span id="runner" class="pill"><span class="dot"></span>runner connecting</span>
+<span id="firewall" class="pill">firewall connecting</span>
+<span id="dynamics" class="pill">dynamics connecting</span>
+<span id="speech" class="pill">speech connecting</span>
+</div>
+</header>
+<section id="entities" class="entities"></section>
+<section class="grid">
+<div class="panel">
+<div class="head"><b>ROOM 2 CONVERSATION</b><span id="count">connecting</span></div>
+<div id="activity" class="activity">Connecting to ROOM 2 runtime…</div>
+<div id="chat" class="chat"><div class="empty">Waiting for accepted speech.</div></div>
+</div>
+<aside class="panel">
+<div class="head"><b>LIVE SYSTEM</b><span>production sealed off</span></div>
+<div class="side">
+<div class="section"><div id="facts" class="facts"></div></div>
+<div class="section"><h3>Last speech gate</h3><div id="gate" class="gate">Connecting…</div></div>
+<div class="section"><h3>What the lights mean</h3><div class="tiny">Runner shows whether the autonomous process is alive. Firewall means the latest published bundle passed the runtime safety and consistency checks. Dynamics can move even when no sentence passes the speech gate.</div></div>
+</div>
+</aside>
+</section>
+</div>
+<script>
+(()=>{
+const BASE='https://raw.githubusercontent.com/maaronfanberg-lab/me-/vault-room-dynamics/vault/runtime/';
+const files={hb:'heartbeat.json',fw:'firewall-report.json',report:'report.json',chat:'vault-conversation.json',result:'last-speech-result.json'};
+const names=['sarah','mara','owen','jules'];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const age=s=>{const n=Date.parse(s||'');return Number.isFinite(n)?Math.max(0,Math.floor((Date.now()-n)/1000)):999999};
+const time=s=>{try{return new Date(s).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',second:'2-digit'})}catch{return''}};
+const pct=v=>Math.max(0,Math.min(100,Number(v||0)*100));
+let state={hb:null,fw:null,report:null,chat:[],result:null};
+async function get(name){const ac=new AbortController(),t=setTimeout(()=>ac.abort(),5500);try{const r=await fetch(BASE+files[name]+'?v='+Date.now(),{cache:'no-store',signal:ac.signal,headers:{Accept:'application/json'}});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(t)}}
+function pill(id,cls,text){const e=$(id);e.className='pill '+cls;e.innerHTML=(id==='runner'?'<span class="dot"></span>':'')+esc(text)}
+function render(){
+ const h=state.hb,a=h?age(h.at):999999; pill('runner',a<100?'live':a<240?'warn':'dead',h?(a<100?'RUNNER LIVE · '+a+'s':'RUNNER STALE · '+a+'s'):'RUNNER OFFLINE');
+ const fw=state.fw; pill('firewall',fw?.ok?'live':fw?'dead':'warn',fw?.ok?'FIREWALL '+fw.passed+' / 0':fw?'FIREWALL FAILED '+fw.failed:'FIREWALL UNKNOWN');
+ const r=state.report,ra=r?age(r.source_generated_at):999999; pill('dynamics',ra<100?'live':ra<240?'warn':'dead',r?'DYNAMICS · '+ra+'s · '+(r.source_cycle??'—'):'DYNAMICS OFFLINE');
+ const c=Array.isArray(state.chat)?state.chat:[],last=c.at(-1),sa=last?age(last.at):999999; pill('speech',last&&sa<240?'live':last?'warn':'warn',last?(sa<240?'SPEECH · '+sa+'s':'LAST SPEECH · '+sa+'s'):'WAITING FOR SPEECH');
+ $('count').textContent=c.length+' accepted utterance'+(c.length===1?'':'s');
+ $('activity').innerHTML=h?'run <strong>#'+esc(h.run_id||'—')+'</strong> · heartbeat '+a+'s ago · source cycle '+esc(h.source_cycle??'—')+' · '+esc(h.conversation_size??0)+' accepted utterances':'No current heartbeat.';
+ $('chat').innerHTML=c.length?c.slice(-80).map(x=>'<div class="msg"><div class="who">'+esc(x.speaker)+'</div><div class="text">'+esc(x.text)+'</div><div class="when">'+esc(time(x.at))+' · '+age(x.at)+'s ago · cycle '+esc(x.source_cycle??'—')+'</div></div>').join(''):'<div class="empty">ROOM 2 is alive, but no sentence has passed the quality gate yet.</div>';
+ const ents=r?.entities||{};$('entities').innerHTML=names.map(n=>{const x=ents[n]||{},p=Array.isArray(x.regime_probabilities)?x.regime_probabilities:[0,0,0,0],rn=x.regime_names||['settled','exploratory','social','transition'];return '<article class="entity"><div class="ename">'+n+'</div><div class="mode">'+esc(x.dominant_regime||'—')+'</div><div class="meta">Δ '+Number(x.regime_l1_change||0).toFixed(4)+' · entropy '+Number(x.entropy||0).toFixed(4)+'</div>'+rn.map((z,i)=>'<div class="barrow"><span>'+esc(z)+'</span><span class="track"><span class="fill" style="display:block;width:'+pct(p[i])+'%"></span></span><span>'+Math.round(pct(p[i]))+'%</span></div>').join('')+'</article>'}).join('');
+ const anomalies=r?.health?.anomalies||{},an=Object.values(anomalies).reduce((s,v)=>s+(typeof v==='number'?v:(v?1:0)),0);$('facts').innerHTML='<span>runtime health</span><b class="'+(r?.health?.status==='ok'?'good':'bad')+'">'+esc(r?.health?.status||'—')+'</b><span>firewall checks</span><b class="'+(fw?.ok?'good':'bad')+'">'+esc(fw?.passed??'—')+'</b><span>firewall failures</span><b class="'+(fw?.failed?'bad':'good')+'">'+esc(fw?.failed??'—')+'</b><span>feedback loop</span><b class="'+(h?.feedback_loop?'good':'bad')+'">'+(h?.feedback_loop?'ON':'—')+'</b><span>LLM active</span><b class="'+(h?.llm_active?'good':'bad')+'">'+(h?.llm_active?'YES':'—')+'</b><span>production writes</span><b class="good">OFF</b><span>anomalies</span><b class="'+(an?'bad':'good')+'">'+an+'</b>';
+ const g=state.result;if(!g){$('gate').textContent='No result yet.'}else if(g.spoke){$('gate').innerHTML='<b class="good">ACCEPTED</b> · '+esc(g.entity||'')+' spoke after '+esc(g.attempts||1)+' attempt(s).'}else{const rej=g.rejections?Object.entries(g.rejections).map(([k,v])=>k+' ×'+v).join(', '):g.reason;$('gate').innerHTML='<b class="bad">WAITING</b> · '+esc(rej||g.reason||'no accepted speech this cycle');}
+}
+async function refresh(){const entries=Object.keys(files);await Promise.all(entries.map(async k=>{try{state[k]=await get(k)}catch{state[k]=null}}));render()}
+refresh();setInterval(refresh,4000);setInterval(render,1000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh()});window.addEventListener('online',refresh);
+})();
+</script>
+</body>
+</html>

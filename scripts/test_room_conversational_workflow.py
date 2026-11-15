@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Static syntax and rollback checks on the actual GitHub Actions runner."""
+from __future__ import annotations
+from pathlib import Path
+import subprocess
+
+root = Path(__file__).resolve().parents[1]
+workflow = (root / ".github/workflows/sarah-society.yml").read_text()
+start = workflow.index("        run: |\n") + len("        run: |\n")
+shell_lines = []
+for line in workflow[start:].splitlines():
+    if line.startswith("          "):
+        shell_lines.append(line[10:])
+    elif not line.strip():
+        shell_lines.append("")
+    else:
+        break
+script = "\n".join(shell_lines) + "\n"
+if not script.strip():
+    raise AssertionError("Room shell runner empty")
+proc = subprocess.run(("bash", "-n"), input=script, text=True, capture_output=True)
+if proc.returncode:
+    raise AssertionError("Room bash syntax: " + proc.stderr[:1000])
+checks = (
+    'if [ "${ROOM_CONVERSATIONAL_FLOOR:-0}" = "1" ]; then',
+    'ROOM_EXPRESSION_RANK="0"',
+    'scripts/room_conversational_candidate.py',
+    'expr_nodes=(2 5 8 11)',
+    'export ROOM_CONVERSATIONAL_FLOOR=0',
+    'ROOM_FLOOR_DESIRED=',
+    'floor_recovery_after_seq=',
+    'Room selected-floor re-probe after temporary technical fallback',
+    'ROOM_FLOOR_LAST_FAILURE="model_generation"',
+    'ROOM_FLOOR_LAST_FAILURE="candidate_preflight"',
+    'ROOM_FLOOR_FALLBACK_REASON=',
+    'git diff --quiet HEAD^ origin/main',
+)
+for snippet in checks:
+    if snippet not in script:
+        raise AssertionError("missing Room selection or rollback path: " + snippet)
+# Live conversational floor starts enabled; the independently named
+# emergency switch explicitly disables new runs without code changes.
+if "vars.ROOM_CONVERSATIONAL_FLOOR_DISABLE == '1' && '0' || '1'" not in workflow:
+    raise AssertionError("conversational activation/disable expression changed")
+if 'ROOM_FLOOR_DESIRED="${ROOM_CONVERSATIONAL_FLOOR:-0}"' not in script:
+    raise AssertionError("runtime retry must recognize desired live mode")
+# A failed social action may not be reintroduced through the old generator.
+# The original technical-outage fallback remains available.
+if "floor_action_integrity_pending=1" not in script:
+    raise AssertionError("missing semantic-action integrity evidence")
+if 'runner_exit_reason="unrealized_conversational_action"' not in script:
+    raise AssertionError("semantic-action failure incorrectly reaches legacy fallback")
+if "floor_action_integrity_pending=0" not in script:
+    raise AssertionError("semantic-action failure must reset on valid publication")
+print("PASS: Room workflow shell syntax and both selected/legacy routes")

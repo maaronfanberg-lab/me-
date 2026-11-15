@@ -1,0 +1,11 @@
+{
+  "nonce": "claude-consult-20261028-context-loss-34681-02",
+  "prompt": "Read-only design review. Please answer directly without repository file tools; all evidence supplied below. In a 4-agent Room, expression_project(latest,entity,context,profile,self) returns {'event':None,'context':[],'interaction_project':{'kind':'self_initiated_contribution'}} whenever previous speech is an undirected statement instead of a question or invitation. _autonomy_compact then sets compact['event']=None for that kind. Meanwhile choose_next selects a responding speaker as an open-floor-uptake opportunity from the latest public statement. This apparently removes precisely the utterance that could be acknowledged or developed. Live sample: 160 turns, six adjacent identical messages, 15 messages <=3 words; dialogue 'Hey what's next?' 'Hey what's the next point?' etc. Given conversation-analysis research on adjacency, sequence, repair and grounding, evaluate whether this mismatch causes off-topic replies, propose minimum safe contextual retention change, what to do about topic attractors, counterexamples (deliberate new topics, privacy, old contamination), 12 exact tests and rollout conditions. Existing rules: do not ban vocabulary, no speaker quotas, no canned dialogue, no forced topic novelty, no production changes before tests. Cite relevant literature if you know it. Answer in 800 words or less.",
+  "context": [
+    "Repository maaronfanberg-lab/me-, code paths scripts/room_conversation_project.py and scripts/room_private_model_autonomy_legacy.py; no need to inspect repository files.",
+    "Previous bridge request exceeded max turns 4, so do not invoke file tools."
+  ],
+  "expected_response": "Direct brief verified Claude review, no tool invocations required.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 8
+}

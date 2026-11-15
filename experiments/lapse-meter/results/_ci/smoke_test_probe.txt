@@ -1,0 +1,18 @@
+PASS tanh: probe deltas equal MLP.backward
+PASS tanh: probe T* equals geometry T*  -0.015965 vs -0.015965
+PASS tanh: three parts add to T*  sum -0.015965
+PASS relu: probe deltas equal MLP.backward
+PASS relu: probe T* equals geometry T*  0.208543 vs 0.208543
+PASS relu: three parts add to T*  sum 0.208543
+6/6 probe checks passed
+PASS branch_sign: probe deltas equal MLP.backward
+PASS branch_sign: gradient matches finite difference  2.851e-03 vs 2.851e-03
+PASS branch_sign leaves the initial weights unchanged
+9/9 probe checks passed (with branch_sign)
+PASS branch_sign = 1.0 is plain ReLU bit for bit
+10/10 probe checks passed (all)
+PASS Momentum with mu = 0 is SGD bit for bit
+11/11 probe checks passed (all, with optimizers)
+PASS z-loss gradient matches finite differences  worst relative error 8.6e-10
+PASS z-loss off by default
+13/13 probe checks passed (all, with z-loss)

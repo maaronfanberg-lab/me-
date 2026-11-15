@@ -1,0 +1,215 @@
+name: The Room Pulse
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'society/pulse-kick.txt'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: the-room-pulse-chain
+  cancel-in-progress: true
+
+jobs:
+  pulse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 20
+
+      - name: Keep The Room running and persist Oracle history
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+
+          # One Room beat at a time. A successful beat is followed immediately
+          # by the next. GitHub 429/5xx errors are treated as temporary pressure,
+          # never as a reason for the conversation to die.
+          stop_at=$((SECONDS + 19800))
+          api_backoff=15
+          last_cooled_failure=""
+          queued_timeout=90
+          startup_grace=240
+          # room/state.json intentionally does not mutate when every candidate
+          # expression is quarantined. Allow several complete beats before
+          # treating unchanged public state as a dead runner.
+          publish_stale_timeout=900
+          next_oracle_at=0
+          oracle_pid=""
+
+          record_oracle() {
+            echo "Recording synchronized Fast Oracle snapshot"
+            git fetch origin main || return 0
+            git reset --hard origin/main || return 0
+            node scripts/log_fast_oracle_snapshot.mjs || { echo "Oracle snapshot failed; Room pulse continues"; return 0; }
+
+            if [ -z "$(git status --porcelain -- room/oracle-history)" ]; then
+              echo "Oracle snapshot already current"
+              return 0
+            fi
+
+            git add room/oracle-history
+            git commit -m "Log Fast Oracle snapshot" || return 0
+            for attempt in 1 2 3; do
+              if git push origin HEAD:main; then
+                echo "Oracle snapshot persisted"
+                return 0
+              fi
+              git fetch origin main || { sleep $((attempt * 2)); continue; }
+              if ! git rebase origin/main; then
+                git rebase --abort || true
+                git reset --hard origin/main || true
+                return 0
+              fi
+              sleep $((attempt * 2))
+            done
+            echo "Oracle snapshot push lost its race; next pulse will retry"
+            git reset --hard origin/main || true
+          }
+
+          launch_oracle() {
+            now_epoch="$(date -u +%s)"
+            [ "$now_epoch" -ge "$next_oracle_at" ] || return 0
+            if [ -n "$oracle_pid" ] && kill -0 "$oracle_pid" 2>/dev/null; then
+              return 0
+            fi
+            # Retry the persisted-history gate frequently. The recorder itself
+            # enforces the real five-minute interval from the last saved row, so
+            # runner restarts can never postpone an eligible sample for 5 minutes.
+            next_oracle_at=$((now_epoch + 30))
+            record_oracle &
+            oracle_pid=$!
+          }
+
+          while [ "$SECONDS" -lt "$stop_at" ]; do
+            launch_oracle
+
+            runs="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow sarah-society.yml \
+              --limit 1 \
+              --json databaseId,status,conclusion,createdAt 2>/tmp/room-gh-error)"
+            rc=$?
+
+            if [ "$rc" -ne 0 ]; then
+              echo "GitHub Actions API is temporarily unavailable; retrying in ${api_backoff}s"
+              cat /tmp/room-gh-error || true
+              sleep "$api_backoff"
+              api_backoff=$((api_backoff * 2))
+              [ "$api_backoff" -gt 120 ] && api_backoff=120
+              continue
+            fi
+
+            api_backoff=15
+            latest_id="$(printf '%s' "$runs" | jq -r '.[0].databaseId // empty')"
+            latest_status="$(printf '%s' "$runs" | jq -r '.[0].status // "none"')"
+            latest_conclusion="$(printf '%s' "$runs" | jq -r '.[0].conclusion // ""')"
+            latest_created="$(printf '%s' "$runs" | jq -r '.[0].createdAt // empty')"
+
+            case "$latest_status" in
+              in_progress)
+                now_epoch="$(date -u +%s)"
+                created_epoch="$(date -u -d "$latest_created" +%s 2>/dev/null || echo "$now_epoch")"
+                run_age=$((now_epoch - created_epoch))
+                last_run_iso="$(gh api "repos/$GITHUB_REPOSITORY/contents/room/state.json?ref=main" --jq '.content' 2>/tmp/room-state-error | tr -d '\n' | base64 -d 2>/dev/null | jq -r '.last_run // empty' 2>/dev/null || true)"
+                publish_age=0
+                if [ -n "$last_run_iso" ]; then
+                  last_run_epoch="$(date -u -d "$last_run_iso" +%s 2>/dev/null || echo "$now_epoch")"
+                  publish_age=$((now_epoch - last_run_epoch))
+                fi
+
+                if [ "$run_age" -ge "$startup_grace" ] && [ "$publish_age" -ge "$publish_stale_timeout" ]; then
+                  echo "Room run $latest_id is alive but has not published for ${publish_age}s; replacing stale runner"
+                  if gh run cancel "$latest_id" --repo "$GITHUB_REPOSITORY"; then
+                    last_cooled_failure="$latest_id"
+                    sleep 8
+                  else
+                    echo "GitHub did not accept stale-run cancellation yet; retrying shortly"
+                    sleep "$api_backoff"
+                    api_backoff=$((api_backoff * 2))
+                    [ "$api_backoff" -gt 120 ] && api_backoff=120
+                  fi
+                else
+                  echo "Room run $latest_id healthy enough: run_age=${run_age}s publish_age=${publish_age}s"
+                  sleep 8
+                fi
+                continue
+                ;;
+              queued|pending|waiting|requested)
+                now_epoch="$(date -u +%s)"
+                created_epoch="$(date -u -d "$latest_created" +%s 2>/dev/null || echo "$now_epoch")"
+                queued_age=$((now_epoch - created_epoch))
+
+                if [ "$queued_age" -ge "$queued_timeout" ]; then
+                  echo "Room beat $latest_id has been '$latest_status' for ${queued_age}s; replacing the stuck run"
+                  if gh run cancel "$latest_id" --repo "$GITHUB_REPOSITORY"; then
+                    last_cooled_failure="$latest_id"
+                    sleep 8
+                  else
+                    echo "GitHub did not accept cancellation yet; retrying shortly"
+                    sleep "$api_backoff"
+                    api_backoff=$((api_backoff * 2))
+                    [ "$api_backoff" -gt 120 ] && api_backoff=120
+                  fi
+                else
+                  echo "Room beat $latest_id is '$latest_status' (${queued_age}s); checking again shortly"
+                  sleep 8
+                fi
+                continue
+                ;;
+            esac
+
+            # If GitHub itself caused a beat to fail (runner/action download/etc.),
+            # give the platform room to recover once before retrying.
+            if [ -n "$latest_id" ] && [ "$latest_conclusion" != "success" ] && [ "$latest_id" != "$last_cooled_failure" ]; then
+              echo "Room beat $latest_id ended '$latest_conclusion'; cooling down for 90s before retry"
+              last_cooled_failure="$latest_id"
+              sleep 90
+              continue
+            fi
+
+            echo "Room is free; dispatching the next conversational beat"
+            if gh workflow run sarah-society.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f entity=auto; then
+              # Give the new run enough time to become visible in the Actions API.
+              sleep 12
+            else
+              echo "GitHub refused the dispatch temporarily; backing off for ${api_backoff}s"
+              sleep "$api_backoff"
+              api_backoff=$((api_backoff * 2))
+              [ "$api_backoff" -gt 120 ] && api_backoff=120
+            fi
+          done
+
+          if [ -n "$oracle_pid" ] && kill -0 "$oracle_pid" 2>/dev/null; then
+            wait "$oracle_pid" || true
+          fi
+
+          echo "Handing The Room pulse to a fresh GitHub runner"
+          for attempt in 1 2 3 4 5; do
+            if gh workflow run sarah-society-pulse.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main; then
+              exit 0
+            fi
+            echo "Pulse handoff attempt $attempt failed; retrying in 30s"
+            sleep 30
+          done
+
+          # The 5-minute watchdog is the final safety net if GitHub rejects
+          # every handoff attempt during an outage.
+          echo "Pulse handoff unavailable; watchdog will restart the chain"
+          exit 0

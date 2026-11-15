@@ -1,0 +1,14 @@
+{
+  "nonce": "pocket-spatial-headphones-20260908-1732",
+  "prompt": "Review the existing Pocket Spatial web-audio code in this repository and propose the best first implementation of a GitHub-Pages-hosted binaural spatial headphone mode for ordinary stereo headphones on iPhone/Safari. Preserve the existing Audius/live-stream playback path. We want the headphones themselves to be the final output; no AV receiver or multichannel hardware. Inspect apps/pocket-spatial.html, apps/pocket-spatial-core.js, apps/pocket-spatial-audius-catalog.js and related Pocket Spatial files. Recommend an architecture and concrete DSP changes that are likely to produce convincing externalization/width/depth while remaining stable on mobile Safari. Pay special attention to: what to reuse from the current ITD/head-shadow/reflection system; whether to use PannerNode HRTF, custom crossfeed/decorrelation, or a hybrid; mono/bass preservation; gain/headroom; CORS/Audius source constraints; avoiding fragile monkey-patches; and a minimal first version that can be tested immediately in headphones. Distinguish what is psychoacoustically plausible from marketing overclaim. Give exact file-level recommendations and practical falsification/listening tests.",
+  "context": [
+    "Repository: maaronfanberg-lab/me-.",
+    "Existing Pocket Spatial core already has ITD, head-shadow filtering, crossfeed polarity, reflections, room scale, room wrap, and master-gain calculations.",
+    "The current pocket-spatial-core.js also contains receiver-specific Hilbert/matrix code that monkey-patches DynamicsCompressorNode.connect; the new headphone mode should not depend on a surround receiver.",
+    "The project already has Audius/catalog/buffer playback helpers under apps/ and should remain GitHub-Pages friendly with no dedicated always-on server.",
+    "Primary target is ordinary stereo wired or Bluetooth headphones from an iPhone browser."
+  ],
+  "expected_response": "A concrete engineering review with a prioritized DSP architecture, specific file-level changes, Safari/iPhone risks, and a minimum viable listening test. Prefer changes that can be implemented in a static GitHub Pages app using existing project code.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 4
+}

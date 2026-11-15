@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-06-pocket-spatial-own-upload-hls-001.json",
+  "request_sha256": "653248d127293e05a922d2670e3cd32d362515f65d8b602fb9000097161c7fba",
+  "request_nonce": "pocket-spatial-own-upload-hls-20260906-001",
+  "completed_at": "2026-09-06T14:12:08.913402Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Recommendation\n\n**Don't start with A/B/C/D as posed — start one layer earlier.** The context states the DSP graph itself has \"not yet [been] physically tested on Alex's iPhone 6\" with *any* source. That's the actual first unknown, and it's cheaper and more informative than anything SoundCloud-specific. Confirmed from `apps/pocket-spatial-soundcloud.js`: the connector currently only lists tracks (\"Spatial stream bridge: next layer\" is a literal placeholder string in the UI) — no stream resolution exists yet, so this is greenfield, not a regression to debug.\n\nSecond-fastest real win, confirmed from `cloudflare/pocket-spatial-soundcloud/src/index.js`: the Worker never calls `/tracks/{urn}/streams` at all yet. SoundCloud's streams endpoint often returns **multiple** stream families for a track (progressive MP3/AAC alongside HLS variants), depending on that specific upload's transcoding profile. If a progressive URL exists for this track, the entire \"HLS on Safari 12\" problem is moot — a progressive `<audio src>` is exactly what `MediaElementAudioSourceNode` has reliably supported on iOS Safari for years. This is a capability question about *this specific account/track*, not a browser-engine question, and it's answerable in ~30 minutes of Worker code with no device needed to write it (only to verify audibly).\n\n## Exact first experiment (in order)\n\n1. **Baseline control (device, no SoundCloud):** Load the existing spatializer with a local audio file on the physical iPhone 6, verify audible, spatialized output. This isolates \"does WebAudio+MediaElementAudioSourceNode work on this device/OS at all\" from \"does HLS specifically break it.\" Skipping this risks misattributing an unrelated device bug to HLS.\n2. **Worker probe (no device):** Add a Worker endpoint that calls `/tracks/{urn}/streams` with the real access token for one of Alex's own uploads and returns the *raw* field set (don't pre-filter to HLS). Inspect whether a progressive URL is present.\n3. **Branch on result:**\n   - Progressive URL present → wire it into the existing graph exactly like a local file. Done, no HLS problem to solve.\n   - HLS-only → proceed to the device HLS feature test below.\n\n## Feature-testing HLS-tap success/failure on iOS 12\n\n\"It played\" is not sufficient evidence — Safari can play HLS audibly through the raw `<audio>` element while silently failing to route PCM into Web Audio once tapped. A truthful test needs three checkpoints, in order:\n1. Confirm native playback works untapped: `audio.play()` resolves, `currentTime` advances, sound is audible from the device speaker with no Web Audio node attached.\n2. Attach `MediaElementAudioSourceNode → AnalyserNode → destination` and call `getByteTimeDomainData()` repeatedly during playback. If every sample reads 128 (flat line), no PCM is flowing — this is the classic reported failure mode, not device silence. If values vary, PCM is flowing.\n3. Confirm the *processed* signal (through the existing splitter/delay/biquad/gain chain) also shows in the analyser and is audibly spatialized, not just passed through.\n\nThis should be gated by a runtime check baked into the app (not a claim in code comments) so the app degrades to \"dry\" playback rather than silently pretending to process audio it can't actually touch.\n\nI cannot verify the outcome without the device — the well-known WebKit HLS/Web-Audio limitation is documented historically for older iOS Safari builds, but iOS 12.5.x's exact behavior needs direct confirmation, not inference from newer Safari versions.\n\n## Does signed-CDN pre-resolution (B) help?\n\nYes, but not by fixing decode capability — it helps operationally: it keeps the client secret/tokens server-side (already the design), lets the `<audio>` element fetch straight from SoundCloud's CDN instead of routing bytes through the Worker (no proxying of media, consistent with the stated constraint), and it's the mechanism that surfaces whether a progressive URL exists at all (step 2 above). If the resolved stream is still HLS, pre-resolution does nothing to change whether Safari exposes its PCM. Also note: these signed URLs are typically short-lived (order of an hour), so plan for re-resolution, not caching.\n\n## What absolutely cannot work in Safari 12 (facts, not guesses)\n\n- **MediaSource Extensions (MSE) is not present in iOS Safari 12** — Apple only shipped MSE to Safari starting iOS 17. Any approach requiring `SourceBuffer` is categorically ruled out, not merely risky. This eliminates the standard/only realistic implementation of option (C).\n- Manually demuxing fragmented-MP4 HLS segments and feeding raw AAC into `decodeAudioData` is not a supported, reliable path on this WebKit vintage and is a large, fragile engineering effort even if partially possible — not \"fastest,\" so I rule it out on cost grounds regardless of theoretical feasibility.\n\n## Native fallback if the browser path fails\n\nIf step 3 shows silence: don't attempt (C). Native iOS 12.5 has a first-class, long-supported answer to exactly this problem — `AVPlayer` playing the HLS asset with an `MTAudioProcessingTap` (available since iOS 6) to pull PCM, fed into `AVAudioEngine`/`AVAudioPlayerNode` with equivalent delay/biquad/gain audio units mirroring the existing splitter→delay→biquad→gain→merger graph. The pure math in `pocket-spatial-core.js` (`calculate`, `calculateDepth`, `appliedTargets`) is framework-agnostic and portable to Swift essentially unchanged. Keep a `WKWebView` for the existing local-file web player; the Worker's OAuth/token logic is reused unchanged — only the media-fetch client changes from `fetch()`+`<audio>` to native URLSession/AVPlayer calling the same `/api/stream` endpoint.\n\n## Sequence\n\n1. Device baseline test (local file, existing graph) — today.\n2. Worker `/tracks/{urn}/streams` probe against Alex's real account — reveals if progressive exists.\n3. If progressive exists: ship immediately via existing graph.\n4. If HLS-only: run the three-checkpoint AnalyserNode test on-device.\n5. Pass → ship with the same runtime silent-PCM guard baked in as a permanent capability check, not a one-time test.\n6. Fail → scope native `AVPlayer`+`MTAudioProcessingTap`+`AVAudioEngine` shell as a separate multi-day milestone; web player remains the local-file path.\n\n## Caveats requiring outside verification\n\nSoundCloud's Developer Terms around authenticated own-content playback are treated here as consistent with \"own-account streaming via the official API for personal use,\" which matches this design (own uploads only, no scraping, no persistence of streamed audio). I have not fetched or re-read SoundCloud's current published Terms in this session — that text should be checked directly before shipping, particularly any clause on caching/buffering duration and on any future feature that records or exports the tapped PCM (which would be a materially different use than real-time playback DSP).",
+  "session_id": "bf9515ee-af33-4945-8a39-2e286be341f9",
+  "usage": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 18905,
+    "cache_read_input_tokens": 46197,
+    "output_tokens": 9111,
+    "output_tokens_details": {
+      "thinking_tokens": 5632
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 18905,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 7771,
+        "cache_read_input_tokens": 15610,
+        "cache_creation_input_tokens": 6478,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 6478
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.17759640000000002,
+  "num_turns": 13
+}

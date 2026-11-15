@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Internal Device Browser</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;background:#101114;color:#eee;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}body{padding:12px}.toolbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.toolbar input{min-width:280px;flex:1;background:#181a20;border:1px solid #3a3d45;color:#eee;border-radius:8px;padding:8px}.toolbar button,.actions button{background:#20232a;border:1px solid #454955;color:#eee;border-radius:8px;padding:8px 10px;font:inherit}.layout{display:grid;grid-template-columns:auto minmax(300px,1fr);gap:12px;align-items:start}.deviceWrap{background:#08090b;border:1px solid #353842;border-radius:26px;padding:8px;box-shadow:0 14px 50px #0009}.device{width:390px;height:844px;max-width:calc(100vw - 40px);position:relative;overflow:hidden;border-radius:20px;background:#000}.device iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}.side{display:grid;gap:10px}.panel{background:#17191e;border:1px solid #32353e;border-radius:12px;padding:10px}.panel h3{margin:0 0 8px;font-size:12px}.actions{display:flex;gap:6px;flex-wrap:wrap}.log{height:270px;overflow:auto;white-space:pre-wrap;background:#0c0d10;border:1px solid #292c34;border-radius:8px;padding:8px}.shots{display:grid;grid-template-columns:1fr 1fr;gap:8px}.shots canvas{width:100%;background:#000;border:1px solid #333;border-radius:8px}.ok{color:#87e39a}.bad{color:#ff8c8c}.warn{color:#ffd27a}.meta{opacity:.7;margin-top:6px}@media(max-width:900px){.layout{grid-template-columns:1fr}.deviceWrap{width:max-content;max-width:100%;margin:auto}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <strong>INTERNAL DEVICE BROWSER</strong>
+  <input id="url" value="./index.html?devbrowser=1" aria-label="App URL">
+  <button id="load">LOAD</button>
+  <button id="reload">RELOAD</button>
+  <button id="clear">CLEAR LOG</button>
+</div>
+<div class="layout">
+  <div class="deviceWrap"><div class="device" id="device"><iframe id="frame" src="./index.html?devbrowser=1"></iframe></div></div>
+  <div class="side">
+    <section class="panel">
+      <h3>GESTURES</h3>
+      <div class="actions">
+        <button data-drag="140,0">→ DRAG</button><button data-drag="-140,0">← DRAG</button>
+        <button data-drag="0,-170">↑ DRAG</button><button data-drag="0,170">↓ DRAG</button>
+        <button id="h360">HORIZONTAL ×4</button><button id="v360">VERTICAL ×4</button>
+        <button id="tap">CENTER TAP</button><button id="pinchIn">PINCH IN</button><button id="pinchOut">PINCH OUT</button>
+      </div>
+      <div class="meta">All gestures are dispatched into the real app canvas using repeatable coordinates.</div>
+    </section>
+    <section class="panel">
+      <h3>VISUAL CHECK</h3>
+      <div class="actions"><button id="captureBefore">CAPTURE BEFORE</button><button id="captureAfter">CAPTURE AFTER + DIFF</button></div>
+      <div class="shots"><canvas id="before" width="195" height="422"></canvas><canvas id="after" width="195" height="422"></canvas></div>
+      <div id="diffText" class="meta">No comparison yet.</div>
+    </section>
+    <section class="panel">
+      <h3>RUNTIME / ERROR LOG</h3>
+      <div id="log" class="log"></div>
+    </section>
+  </div>
+</div>
+<script>
+const frame=document.getElementById('frame'),url=document.getElementById('url'),logEl=document.getElementById('log'),device=document.getElementById('device');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function log(msg,kind=''){const d=document.createElement('div');d.className=kind;d.textContent=`${new Date().toLocaleTimeString()}  ${msg}`;logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight}
+function doc(){try{return frame.contentDocument||frame.contentWindow.document}catch(e){log('QA-B001 cross-origin frame access blocked: '+e.message,'bad');return null}}
+function canvas(){const d=doc();return d&&d.querySelector('canvas')}
+function dispatch(c,type,x,y,id=1,primary=true){const r=c.getBoundingClientRect();c.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType:'touch',isPrimary:primary,clientX:r.left+x,clientY:r.top+y,buttons:type==='pointerup'||type==='pointercancel'?0:1,pressure:type==='pointerup'?0:.5}))}
+async function drag(dx,dy){const c=canvas();if(!c){log('QA-B002 no canvas found','bad');return false}const r=c.getBoundingClientRect(),sx=r.width*.5,sy=r.height*.52;dispatch(c,'pointerdown',sx,sy);for(let i=1;i<=16;i++){dispatch(c,'pointermove',sx+dx*i/16,sy+dy*i/16);await sleep(10)}dispatch(c,'pointerup',sx+dx,sy+dy);await sleep(300);log(`gesture drag dx=${dx} dy=${dy}`,'ok');return true}
+async function tap(){const c=canvas();if(!c){log('QA-B002 no canvas found','bad');return}const r=c.getBoundingClientRect(),x=r.width*.5,y=r.height*.5;dispatch(c,'pointerdown',x,y);await sleep(50);dispatch(c,'pointerup',x,y);log('center tap','ok')}
+async function pinch(scale){const c=canvas();if(!c){log('QA-B002 no canvas found','bad');return}const r=c.getBoundingClientRect(),cx=r.width*.5,cy=r.height*.52,start=80,end=start*scale;dispatch(c,'pointerdown',cx-start,cy,1,true);dispatch(c,'pointerdown',cx+start,cy,2,false);for(let i=1;i<=14;i++){const d=start+(end-start)*i/14;dispatch(c,'pointermove',cx-d,cy,1,true);dispatch(c,'pointermove',cx+d,cy,2,false);await sleep(12)}dispatch(c,'pointerup',cx-end,cy,1,true);dispatch(c,'pointerup',cx+end,cy,2,false);await sleep(300);log(`pinch scale=${scale}`,'ok')}
+function capture(target){const c=canvas();if(!c)throw Error('QA-B002 no canvas');const x=target.getContext('2d',{willReadFrequently:true});x.clearRect(0,0,target.width,target.height);try{x.drawImage(c,0,0,target.width,target.height)}catch(e){throw Error('QA-B003 canvas capture failed: '+e.message)}return x.getImageData(0,0,target.width,target.height)}
+function difference(a,b){let s=0,n=0;for(let i=0;i<a.data.length;i+=24){s+=Math.abs(a.data[i]-b.data[i])+Math.abs(a.data[i+1]-b.data[i+1])+Math.abs(a.data[i+2]-b.data[i+2]);n+=3}return s/Math.max(1,n)}
+let beforeData=null;
+document.querySelectorAll('[data-drag]').forEach(b=>b.onclick=()=>{const [x,y]=b.dataset.drag.split(',').map(Number);drag(x,y)});
+document.getElementById('h360').onclick=async()=>{for(let i=0;i<4;i++)await drag(140,0)};
+document.getElementById('v360').onclick=async()=>{for(let i=0;i<4;i++)await drag(0,-140)};
+document.getElementById('tap').onclick=tap;document.getElementById('pinchIn').onclick=()=>pinch(.55);document.getElementById('pinchOut').onclick=()=>pinch(1.65);
+document.getElementById('captureBefore').onclick=()=>{try{beforeData=capture(document.getElementById('before'));log('captured BEFORE frame','ok')}catch(e){log(e.message,'bad')}};
+document.getElementById('captureAfter').onclick=()=>{try{const a=capture(document.getElementById('after'));if(!beforeData){log('QA-B004 capture BEFORE first','warn');return}const d=difference(beforeData,a);document.getElementById('diffText').textContent=`Frame delta: ${d.toFixed(3)} ${d>1.2?'(visible change)':'(little/no change)'}`;log(`${d>1.2?'PASS':'FAIL'} QA-B005 frame delta ${d.toFixed(3)}`,d>1.2?'ok':'bad')}catch(e){log(e.message,'bad')}};
+document.getElementById('load').onclick=()=>{frame.src=url.value+(url.value.includes('?')?'&':'?')+'t='+Date.now();log('loading '+url.value)};
+document.getElementById('reload').onclick=()=>{try{frame.contentWindow.location.reload()}catch(e){frame.src=frame.src}log('reloading app')};document.getElementById('clear').onclick=()=>logEl.innerHTML='';
+frame.addEventListener('load',()=>{log('frame loaded');setTimeout(()=>{const d=doc(),c=canvas();if(!d){log('QA-B001 frame document inaccessible','bad');return}if(!c){log('QA-B002 canvas missing','bad');return}const r=c.getBoundingClientRect();log(`canvas ready ${Math.round(r.width)}×${Math.round(r.height)}`,'ok');const els=[...d.querySelectorAll('button,input,section,nav')];const overflow=els.filter(el=>{const q=el.getBoundingClientRect();return q.width&&q.height&&(q.left<0||q.top<0||q.right>390||q.bottom>844)});log(overflow.length?`QA-B006 UI overflow: ${overflow.length} element(s)`:'UI bounds look contained',overflow.length?'bad':'ok')},700)});
+window.addEventListener('error',e=>log('QA-B900 harness error: '+e.message,'bad'));
+window.addEventListener('unhandledrejection',e=>log('QA-B901 harness rejection: '+String(e.reason),'bad'));
+</script>
+</body>
+</html>

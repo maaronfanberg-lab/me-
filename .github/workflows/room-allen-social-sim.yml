@@ -1,0 +1,114 @@
+name: Allen social boundary simulator
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'scripts/room_allen_response_sim.py'
+      - 'scripts/room_allen_observation_sim.py'
+      - 'scripts/room_participant.py'
+      - 'scripts/room_social_v5.py'
+      - 'scripts/room_engine_v5.py'
+      - 'scripts/room_private_model.py'
+      - 'scripts/room_private_model_autonomy.py'
+      - 'scripts/room_private_commit.py'
+      - 'scripts/room_research_architecture.py'
+      - 'scripts/room_topic_bounded.py'
+      - '.github/workflows/room-allen-social-sim.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+      - name: Run Allen simulators and Room architecture self-tests
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/room_allen_response_sim.py > /tmp/allen-response.txt 2>&1
+          response_status=$?
+          python3 scripts/room_allen_observation_sim.py > /tmp/allen-observation.txt 2>&1
+          observation_status=$?
+          python3 scripts/room_engine_v5.py selftest > /tmp/engine-selftest.txt 2>&1
+          engine_status=$?
+          python3 scripts/room_research_architecture.py > /tmp/research-selftest.txt 2>&1
+          research_status=$?
+          PYTHONPATH=scripts python3 - <<'PY' > /tmp/topic-selftest.txt 2>&1
+          import room_topic_bounded as t
+          assert not t._valid_term('despite')
+          assert not t._valid_term('however')
+          assert not t._valid_term('appreciation')
+          assert t._valid_term('photography')
+          dirty={
+              'semantic_schema':8,'id':'topic-000102','root':'progress','current_facet':'despite',
+              'facets':['despite'],'visited_facets':['progress','despite'],'recent_terms':['despite'],
+              'shared_references':['despite'],'branches':[], 'turns':2,
+          }
+          cleaned=t._normalize(dirty,103)
+          assert cleaned['root']=='progress'
+          assert cleaned['current_facet']=='progress'
+          assert 'despite' not in cleaned['facets']
+          assert 'despite' not in cleaned['recent_terms']
+          prior=t.new_topic_from_terms(['photography'],103,None)
+          next_topic=t.new_topic_from_terms(['music'],104,prior)
+          assert 'photography' in next_topic['retired_terms']
+          assert next_topic['retired_until_cycle']==108
+          print('PASS: discourse markers cannot persist as topics; retirement state survives')
+          PY
+          topic_status=$?
+          set -e
+          python3 - "$response_status" "$observation_status" "$engine_status" "$research_status" "$topic_status" <<'PY'
+          import json,sys
+          from datetime import datetime,timezone
+          response_status,observation_status,engine_status,research_status,topic_status=map(int,sys.argv[1:])
+          def read(path):
+              try:return open(path).read()[-6000:]
+              except Exception:return ''
+          payload={
+              'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+              'pass':all(x==0 for x in (response_status,observation_status,engine_status,research_status,topic_status)),
+              'response_sim_exit_code':response_status,
+              'observation_sim_exit_code':observation_status,
+              'engine_selftest_exit_code':engine_status,
+              'research_selftest_exit_code':research_status,
+              'topic_selftest_exit_code':topic_status,
+              'response_sim_output':read('/tmp/allen-response.txt'),
+              'observation_sim_output':read('/tmp/allen-observation.txt'),
+              'engine_selftest_output':read('/tmp/engine-selftest.txt'),
+              'research_selftest_output':read('/tmp/research-selftest.txt'),
+              'topic_selftest_output':read('/tmp/topic-selftest.txt'),
+              'tested_sha':'${{ github.sha }}',
+          }
+          open('room/allen-social-sim-diagnostic.json','w').write(json.dumps(payload,indent=2)+'\n')
+          print(json.dumps(payload,indent=2))
+          PY
+      - name: Record diagnostic on authoritative main only
+        # Never let a simulator push generated snapshots into pull-request
+        # branches. Such pushes changed the PR head mid-review and broke
+        # evidence that a specific checked SHA was the one being merged.
+        if: ${{ always() && github.ref == 'refs/heads/main' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add room/allen-social-sim-diagnostic.json
+          git commit -m 'Record Allen social boundary simulator' || exit 0
+          branch="${GITHUB_REF_NAME}"
+          for n in 1 2 3 4 5; do
+            if git push origin "HEAD:${branch}"; then exit 0; fi
+            git fetch origin "$branch"
+            git rebase "origin/$branch" || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
+      - name: Enforce simulator result
+        if: always()
+        run: python3 -c 'import json; d=json.load(open("room/allen-social-sim-diagnostic.json")); raise SystemExit(0 if d.get("pass") else 1)'

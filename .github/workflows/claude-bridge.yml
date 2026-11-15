@@ -1,0 +1,114 @@
+name: Verified oracle mailbox
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bridge/inbox/*.json'
+  workflow_dispatch:
+    inputs:
+      request_file:
+        description: 'Path under bridge/inbox/'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  copilot-requests: write
+
+concurrency:
+  group: verified-oracle-bridge
+  cancel-in-progress: false
+
+jobs:
+  reply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
+      COPILOT_CLAUDE_MODELS: claude-sonnet-5.5,claude-opus-5.5,claude-haiku-5.5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Resolve oracle task
+        id: request
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            f='${{ inputs.request_file }}'
+          else
+            f=$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^bridge/inbox/.*\.json$' | tail -n 1 || true)
+          fi
+          case "$f" in
+            bridge/inbox/*.json) ;;
+            *) echo "No valid oracle inbox request found: $f" >&2; exit 1 ;;
+          esac
+          test -f "$f"
+          base=$(basename "$f" .json)
+          echo "file=$f" >> "$GITHUB_OUTPUT"
+          echo "out=bridge/outbox/${base}.json" >> "$GITHUB_OUTPUT"
+
+      - name: Install Claude Code subscription transport
+        if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Install verified Copilot fallback
+        if: env.CLAUDE_CODE_OAUTH_TOKEN == ''
+        run: npm install -g @github/copilot
+
+      - name: Run verified oracle
+        id: oracle
+        continue-on-error: true
+        shell: bash
+        env:
+          # For personal repositories, use a user-owned fine-grained PAT with Account: Copilot Requests.
+          COPILOT_GITHUB_TOKEN: ${{ secrets.CLAUDE_GITHUB }}
+        run: |
+          request='${{ steps.request.outputs.file }}'
+          response='${{ steps.request.outputs.out }}'
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            if env -u COPILOT_GITHUB_TOKEN python3 bridge/claude_code_oracle.py "$request" "$response"; then
+              exit 0
+            fi
+            # Only switch authorization paths for an explicit subscription quota failure.
+            if python3 -c 'import json,sys; e=str(json.load(open(sys.argv[1],encoding="utf-8")).get("error","")).casefold(); sys.exit(0 if any(s in e for s in ("5-hour limit","weekly limit","usage limit","rate limit","usage cap")) else 1)' "$response"; then
+              echo 'Subscription quota detected; trying separately entitled Copilot Claude route.'
+              npm install -g @github/copilot
+              # Do not leak OAuth or Anthropic API credentials into the Copilot process.
+              env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
+                python3 bridge/claude_bridge.py "$request" "$response"
+            else
+              echo 'Claude subscription failed for a non-quota reason; retaining its error.'
+              exit 1
+            fi
+          else
+            # No subscription token: retain the existing model-verified Copilot path.
+            env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN \
+              python3 bridge/claude_bridge.py "$request" "$response"
+          fi
+      - name: Commit verified oracle result
+        if: always()
+        shell: bash
+        run: |
+          test -f '${{ steps.request.outputs.out }}' || { echo 'No oracle result file produced'; exit 1; }
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add '${{ steps.request.outputs.out }}'
+          git commit -m "Oracle response: $(basename '${{ steps.request.outputs.out }}' .json)" || exit 0
+          for n in 1 2 3 4 5; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
+
+      - name: Surface oracle failure
+        if: steps.oracle.outcome != 'success'
+        run: |
+          cat '${{ steps.request.outputs.out }}'
+          exit 1

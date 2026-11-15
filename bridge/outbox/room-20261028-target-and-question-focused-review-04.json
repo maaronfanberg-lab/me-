@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/room-20261028-target-and-question-focused-review-04.json",
+  "request_sha256": "b72140e64e40d5ce7dca10a393793099647bc3ccc7ffd46680e20ebcb16a996f",
+  "request_nonce": "room-20261028-target-and-question-focused-review-04",
+  "completed_at": "2026-10-28T13:04:19.895299Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "Review based only on the supplied excerpts. I did not inspect the repository or run anything, so these are risks inferred from the description, not confirmed bugs.\n\n## Ranked failure modes\n\n**1. Vocative regex false positives: a name that isn't an address becomes the addressee (highest risk).**\nThe patch makes the public vocative override the hidden target, and the matcher is only a regex anchored at the start or end. With tiny local LLMs, a name often shows up as a mention, not an address.\n- Counterexample: Jules says \"Sarah, I think Mara was right about that. Can you explain, Mara?\" In a different case, Jules says \"Can you explain this to me and Sarah?\" The trailing-name rule reads \"Sarah\" as the addressee, and the published target becomes Sarah. Metadata said Mara, and in the first case Mara was the real addressee.\n- Other shapes: \"Thanks, Sarah\" (a closing, not a question), and \"Is that what Sarah said?\" (a mention). Each can bind a target and suppress the correct responder.\n- Regression tests:\n  - A trailing mention, \"Can you explain this to Sarah?\", with metadata target=mara. It must not override the target, or at least must be flagged as ambiguous.\n  - A leading name followed by a mention of another name. Assert the leading vocative wins, and that only one name is bound.\n  - Two different names, one leading and one trailing. Assert there is no unique addressee, so the metadata target is kept and \"unique named addressee\" is not triggered.\n  - A name inside a quoted or reported speech span.\n  - Case and punctuation variants: \"sarah:\", \"Sarah—\", and \"Sarahs\".\n\n**2. Question-echo gate: it compares only the final question sentence, so it blocks legitimate replies and misses real echoes.**\nThis is the gap shown by the published incident. The final question was \"Can you help me achieve that by being helpful and supportive?\" and was repeated verbatim.\n- False negative: the echo is lightly paraphrased or has a changed prefix. Mara says \"Sarah, can you help me achieve that by being helpful and supportive?\" The vocative prefix, or a small model's tiny edit, breaks exact matching. The loop continues.\n- False positive: a legitimate clarification is blocked. Jules asks \"Can you explain this?\", then Sarah answers and asks \"Can you explain this?\" back, meaning \"explain what?\". The single allowed repair may already be spent. Also, when the final question sentence is a short generic one like \"Why?\" or \"Really?\", it repeats legitimately.\n- Sentence-splitting bugs: abbreviations, \"?!\", or a question with no terminal \"?\" make the \"final complete question sentence\" wrong. A trailing declarative after the question may mean no question is found at all.\n- \"Contiguous\" is also undefined across speakers: A, B, A, B alternation is not contiguous exact repeat for any one speaker.\n- Regression tests:\n  - Reproduce the published case: Sarah's two-sentence message, then Jules and Mara repeating the question. The second repeat must be blocked.\n  - The same question with different case, whitespace or punctuation, and with a vocative prefix added. Decide whether it is blocked and assert that decision.\n  - A \"Why?\" repeated legitimately.\n  - A message with a declarative after the question.\n  - An A/B/A/B alternating repeat.\n  - Repair accounting: exactly one repeat is allowed per question, and the allowance resets on a new question.\n\n**3. Reply-partner and projection alignment when there is no unique addressee or the questioner isn't the target.**\nThe patch aligns the reply partner with the questioner and limits the named response project to the addressee. The supplied context says an unaddressed message does not automatically bind a named questioner. That conflicts with the change if the code fills partner/target from the questioner by default.\n- Counterexample: Sarah (unaddressed, a broadcast) asks a question in a four-agent room. Jules replies, and the partner is set to Sarah. The room's turn is then claimed by Jules and Mara in sequence, each treating itself as the named responder. Alternatively, Jules says \"Sarah, can you explain?\" and metadata says mara. Mara's private-target reply now sees is_directed false, so Mara is silenced. If Sarah is a slow or absent agent, nobody answers and the question stalls.\n- Related case: the published target is \"unique named addressee\", but the name may not match any room participant (e.g. \"Sara\", or a human name in the text). That produces a target with no agent.\n- Regression tests:\n  - Jules says \"Hey Sarah, …\" with metadata target=mara. Assert is_directed is true for Sarah and false for Mara and Dana, the published target is Sarah, and the reply partner is Jules.\n  - An unaddressed question from Sarah. Assert there is no target binding, and the published target is unset or the metadata fallback.\n  - A name not in the roster. Assert it is ignored.\n  - The four-agent room: exactly one agent responds to a directed question.\n  - The vocative-vs-metadata conflict logged for audit.\n\n## Merge decision\n\nDo not merge on green CI alone. CI only shows that the existing tests pass, and none of the cases above are likely covered, because the matcher is regex-only and the echo check is exact-string.\n\nMerge conditionally, if all of these hold:\n1. The tests above exist and pass, with failure mode 1 and the published incident included.\n2. The vocative override applies only to a roster-matched name in leading or clearly vocative position. Otherwise it falls back to the metadata target.\n3. The echo comparison normalizes case, whitespace and a vocative prefix, and the repair allowance is documented.\n4. Both changes ship behind a flag, or are split into two PRs, so one can be rolled back independently.",
+  "session_id": "97af5021-020a-453e-8c9f-dd94cb0d6e2d",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 907,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 1920,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 907,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1920,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 907,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 907
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.0231095,
+  "num_turns": 1
+}

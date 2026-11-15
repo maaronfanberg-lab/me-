@@ -1,0 +1,102 @@
+name: Fast live Room relay verifier
+# kick: 2026-08-19 15:38 CDT
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-relay-fast-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: fast-live-room-relay-verifier
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+    steps:
+      - name: Fetch current Room feed
+        run: |
+          curl -fsS --connect-timeout 3 --max-time 8 \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/room/feed.json?fresh=$(date +%s)" \
+            -o /tmp/local-feed.json
+          python3 -m json.tool /tmp/local-feed.json >/dev/null
+
+      - name: Authenticate and ingest current feed
+        run: |
+          token_json=$(curl -fsS --connect-timeout 3 --max-time 8 \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror")
+          relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))')
+          test -n "$relay_token"
+          curl -fsS --connect-timeout 3 --max-time 8 \
+            -X POST \
+            -H "Authorization: Bearer ${relay_token}" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/local-feed.json \
+            "${ROOM_RELAY_URL}/api/ingest" \
+            -o /tmp/ingest.json
+          cat /tmp/ingest.json
+
+      - name: Read relay after ingest
+        run: |
+          curl -fsS --connect-timeout 3 --max-time 8 \
+            -H 'Origin: https://maaronfanberg-lab.github.io' \
+            "${ROOM_RELAY_URL}/api/feed?fresh=$(date +%s)" \
+            -o /tmp/relay-feed.json
+          python3 -m json.tool /tmp/relay-feed.json >/dev/null
+
+      - name: Build verification status
+        run: |
+          python3 - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          local=json.load(open('/tmp/local-feed.json'))
+          ingest=json.load(open('/tmp/ingest.json'))
+          raw=json.load(open('/tmp/relay-feed.json'))
+          remote=raw.get('feed',raw) if isinstance(raw,dict) else {}
+          ls=local.get('state',{}); rs=remote.get('state',{})
+          lb=str(ls.get('boot_id') or ''); rb=str(rs.get('boot_id') or '')
+          lc=ls.get('cycle'); rc=rs.get('cycle')
+          accepted=bool(ingest.get('accepted'))
+          same_boot=bool(lb and lb==rb)
+          pass_ok=accepted and same_boot and rc==lc
+          out={
+            'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+            'pass':pass_ok,
+            'ingest_accepted':accepted,
+            'ingest_reason':ingest.get('reason'),
+            'local_boot_id':lb,
+            'relay_boot_id':rb,
+            'same_boot':same_boot,
+            'local_cycle':lc,
+            'relay_cycle':rc,
+            'state':'live-cloudflare-current' if pass_ok else 'live-cloudflare-not-current',
+          }
+          open('/tmp/status.json','w').write(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Publish status through GitHub Contents API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          content=$(base64 -w0 /tmp/status.json)
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/contents/room/relay-fast-status.json?ref=main" --jq .sha 2>/dev/null || true)
+          if [ -n "$sha" ]; then
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/room/relay-fast-status.json" \
+              -f message='Record fast live Room relay status' \
+              -f content="$content" -f sha="$sha" -f branch=main >/dev/null
+          else
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/room/relay-fast-status.json" \
+              -f message='Record fast live Room relay status' \
+              -f content="$content" -f branch=main >/dev/null
+          fi

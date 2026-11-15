@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-consult-20260907-1842-pocket-spatial-subtle-adaptive.json",
+  "request_sha256": "9dc21136d99b4cb9a26ad36e765f5f420eaeed1da5662dc2179a04a1d819f5de",
+  "request_nonce": "pocket-spatial-subtle-adaptive-20260907-1842",
+  "completed_at": "2026-09-07T23:42:43.216163Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Diagnosis\n\nTracing the actual graph in `pocket-spatial.html`:\n\n- **Tap point (confirmed the concern is correct).** `setupAdaptiveAnalyzer()` does `source.connect(analysisNode)` (line ~165), where `source` is the raw `MediaElementAudioSourceNode` — before the immersion delay/reflection/room-wrap network, before `master`, and before the pre-matrix `limiter`. But the matrix encoder is fed from `limiter.connect(matrixSplit)` (line 178), i.e. the **post-immersion, post-compression** signal. The immersion stage adds cross-feed, filtered delays, and reflections that change correlation and mid/side energy substantially, and the limiter (threshold -4dB, ratio 20:1) reshapes dynamics further. So the analyzer is steering off a signal that no longer matches what's actually being matrix-encoded — a real mismatch, not just noise.\n\n- **A second, probably larger cause: the auto-trim actively cancels the effect.** `matrixWorst()`/`applyMatrix()` computes `trim = .64 * clamp(baseWorst/dynamicWorst, .84, 1)`. Because `dynamicWorst` grows whenever center/rear/sep are pushed up by the adaptive multipliers, `ratio` drops below 1 and **trim is reduced precisely when the steering intensifies** — i.e. every time the adaptive path tries to make the surround/center effect stronger, the code quietly turns the overall matrix output down by up to ~16% to protect headroom. This directly fights the perceptual salience of the steering change, on top of the already-narrow multiplier ranges.\n\n- **Ranges are conservative relative to what a real AVR matrix decoder needs.** center 0.82–1.28×, rear 0.62–1.35×, sep 0.85–1.25× are all centered near 1.0 with narrow spread, and they multiply already-small base values (`center` base is only `.28×centerAnchor`). Combined with the trim cancellation above and fairly slow release smoothing (up to 650 ms via `asym()`), transient surround/dialogue swings get averaged away before they reach an audible magnitude.\n\n## Recommended fix (all implementable directly in `pocket-spatial.html`)\n\n**1. Move the tap.** In `setupAdaptiveAnalyzer`, connect the analyzer after the immersion chain and pre-matrix limiter instead of at `source`:\n```js\n// was: source.connect(analysisNode)\nlimiter.connect(analysisNode);\n```\nThis is a parallel tap (`analysisNode -> analysisSink(gain=0) -> destination`), so it doesn't touch the audio path — it just makes the control signal match the actual pre-matrix stereo image.\n\n**2. Stop the trim from undoing the steering.** Narrow its compensation window so it only guards against real clipping, not perceived loudness:\n```js\ntrim = .64 * clamp(ratio, .96, 1.04); // was .84, 1\n```\nLet `matrixLimiter` (already 2ms attack, 20:1 ratio) catch the rare peak instead of the pre-limiter gain doing continuous loudness ducking.\n\n**3. Widen the multiplier ranges (bigger spread, more asymmetric):**\n```js\nvar centerMul = clamp(.75 + .70*steer.center - .18*steer.surround, .55, 1.55);\nvar rearMul   = clamp(.45 + 1.15*steer.surround - .35*lateral,      .30, 1.85);\nvar sepMul    = clamp(.70 + .70*steer.surround,                     .55, 1.55);\n```\n\n**4. Make direct-path weighting react to surround content, not just L/R balance:**\n```js\nvar directMul = clamp(1 - .35*steer.surround, .55, 1);\ndL *= directMul; dR *= directMul;\nif(steer.balance>0){dL=.68*directMul*(1+.30*frontLock);dR=.68*directMul*(1-.12*frontLock);}\nelse if(steer.balance<0){dR=.68*directMul*(1+.30*frontLock);dL=.68*directMul*(1-.12*frontLock);}\n```\nThis pulls energy out of the direct bus and into the matrix-decoded buses exactly when surround content is detected, giving the receiver's decoder a stronger cue to steer on.\n\n**5. Faster attack, still-safe release** (edit the `asym()` calls in `handleAnalysis`):\n```js\nsteer.surround = asym(steer.surround, surroundTarget, dt, .020, .35); // was .045/.65\nsteer.center   = asym(steer.center,   centerTarget,   dt, .035, .25); // was .07/.40\nsteer.balance  = asym(steer.balance,  bal,            dt, .04,  .12); // was .08/.18\n```\nAlso tighten the applied-gain smoothing (`setParam` tau in `applyMatrix`) from `.055` to `.035` for `matrixCenterL/R`, `matrixLL/LR/RL/RR` so the wider swings land audibly instead of being smeared.\n\n## Safety guards (keep exactly two)\n\n1. **Downstream peak guard, not upstream loudness guard:** with the wider ranges, verify `matrixLimiter.threshold` (currently -2dB) still has ~1dB of margin below true peak under `matrixWorst()` at the new maxima; if not, drop it to -3dB and shorten release to ~0.08s so it only shaves rare peaks rather than pumping continuously.\n2. **Mono anti-pumping clamp:** when `steer.corr > 0.92` and `steer.sideRatio < 0.05` (near-mono dialogue), hard-clamp `rearMul`/`sepMul` to ≤0.5 regardless of the transient surround estimate, so dry mono passages aren't falsely widened/rear-boosted — preserves stereo/mono compatibility and avoids audible flapping on dialogue-heavy content.\n\n## Tests to falsify this diagnosis\n- Log `steer.surround/center/balance` before vs. after the tap-point change on identical program material — if the values barely move, the tap wasn't the bottleneck.\n- A/B the trim change alone (revert range to `.84,1`) with everything else fixed — if loudness matches your subjective \"no difference\" complaint, that confirms the trim was the dominant suppressor.\n- Feed a known decorrelated (wide) test tone vs. a mono dialogue clip through the receiver and confirm rear-channel SPL delta grows materially with the new ranges without triggering audible limiter pumping.",
+  "session_id": "0c879a70-2ebd-4b27-abd0-1ca0eb06142e",
+  "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 15336,
+    "cache_read_input_tokens": 24888,
+    "output_tokens": 8803,
+    "output_tokens_details": {
+      "thinking_tokens": 5880
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 15336,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 8013,
+        "cache_read_input_tokens": 7606,
+        "cache_creation_input_tokens": 10913,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 10913
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.1557976,
+  "num_turns": 7
+}

@@ -1,0 +1,108 @@
+{
+  "name": "Cedar Hollow",
+  "locations": {
+    "square": {
+      "neighbors": ["kitchen", "workshop", "greenhouse"],
+      "resources": {"water": 4}
+    },
+    "kitchen": {
+      "neighbors": ["square", "clinic"],
+      "resources": {"food": 5}
+    },
+    "workshop": {
+      "neighbors": ["square", "water_tower"],
+      "resources": {"parts": 3}
+    },
+    "greenhouse": {
+      "neighbors": ["square", "clinic"],
+      "resources": {"food": 6}
+    },
+    "clinic": {
+      "neighbors": ["kitchen", "greenhouse", "water_tower"],
+      "resources": {"medicine": 3}
+    },
+    "water_tower": {
+      "neighbors": ["workshop", "clinic"],
+      "resources": {"water": 7}
+    }
+  },
+  "agents": [
+    {
+      "name": "Mira",
+      "location": "greenhouse",
+      "traits": ["patient", "curious"],
+      "goals": ["keep the greenhouse productive", "learn what neighbors need"]
+    },
+    {
+      "name": "Theo",
+      "location": "workshop",
+      "traits": ["practical", "reserved"],
+      "goals": ["keep shared equipment working", "avoid wasting scarce parts"]
+    },
+    {
+      "name": "Jun",
+      "location": "square",
+      "traits": ["observant", "sociable"],
+      "goals": ["understand what is changing around town", "connect people who can help each other"]
+    },
+    {
+      "name": "Nia",
+      "location": "clinic",
+      "traits": ["steady", "careful"],
+      "goals": ["keep basic supplies available", "notice when someone needs assistance"]
+    },
+    {
+      "name": "Sol",
+      "location": "kitchen",
+      "traits": ["inventive", "direct"],
+      "goals": ["keep meals possible with available food", "trade information for useful help"]
+    },
+    {
+      "name": "Arden",
+      "location": "water_tower",
+      "traits": ["independent", "methodical"],
+      "goals": ["keep water available", "inspect problems before acting"]
+    },
+    {
+      "name": "Ivo",
+      "location": "square",
+      "traits": ["energetic", "competitive"],
+      "goals": ["be useful during disruptions", "earn others' trust through visible work"]
+    },
+    {
+      "name": "Lena",
+      "location": "kitchen",
+      "traits": ["reflective", "cooperative"],
+      "goals": ["reduce waste", "maintain reliable relationships across the town"]
+    }
+  ],
+  "incidents": [
+    {
+      "id": "wind-1",
+      "tick": 3,
+      "type": "weather_damage",
+      "location": "greenhouse",
+      "resource": "food",
+      "delta": -3,
+      "description": "Strong wind damaged part of the greenhouse crop."
+    },
+    {
+      "id": "pump-1",
+      "tick": 7,
+      "type": "equipment_failure",
+      "location": "water_tower",
+      "resource": "water",
+      "delta": -4,
+      "description": "The water-tower pump began failing and the usable reserve dropped."
+    },
+    {
+      "id": "delivery-1",
+      "tick": 11,
+      "type": "supply_delivery",
+      "location": "workshop",
+      "resource": "parts",
+      "delta": 2,
+      "description": "A small delivery of repair parts arrived at the workshop."
+    }
+  ]
+}

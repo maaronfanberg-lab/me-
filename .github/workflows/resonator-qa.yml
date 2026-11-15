@@ -1,0 +1,131 @@
+name: RESONATOR QA
+
+# Runs the RESONATOR proofs on every change to the instrument or its tests. Every check runs even if
+# an earlier one fails, and each check's full output is pushed to the branch qa-results/qa (the
+# workspace that builds RESONATOR cannot download Actions logs). Pushes made with GITHUB_TOKEN start
+# no other workflow.
+# Since Stage I the preview is the Tank only. The suites for the features it removed (Stages 2-5, F, G,
+# H, the old tap tools, the preview's learning-path claims) are retired from CI; the scripts stay in
+# qa-resonator/ and run against the preview as it was before Stage I (git fe0393fc).
+on:
+  push:
+    paths:
+      - 'apps/resonator.html'
+      - 'apps/resonator-next.html'
+      - 'qa-resonator/**'
+      - '.github/workflows/resonator-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: resonator-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash   # -eo pipefail: a check piped through tee still fails when it fails
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Playwright (Python) and Chromium
+        run: |
+          python -m pip install --quiet playwright==1.56.0
+          python -m playwright install --with-deps chromium
+          mkdir -p qa-out
+          git fetch -q --depth=1 origin 4d9404e8d63176c1e1e8ee5e50c494bc4a1fa84f fe0393fca33d313f138246fa465ad5cbb659e643 || true
+      - name: Learning-path claims — live page
+        id: claims_live
+        continue-on-error: true
+        run: node qa-resonator/learn_claims.mjs 2>&1 | tee qa-out/claims_live.txt
+      - name: Stage 1 engine proofs (bit-identical audio, async tuning, octave trap)
+        id: s1v
+        continue-on-error: true
+        run: node qa-resonator/stage1_verify.mjs 2>&1 | tee qa-out/stage1_verify.txt
+      - name: Stage 1 browser checks on the Tank (audio-thread stalls with real new bodies, octave trap by sliding the circles, fallbacks, Copy report)
+        id: s1b
+        continue-on-error: true
+        run: python qa-resonator/stage1_browser.py . 2>&1 | tee qa-out/stage1_browser.txt
+      - name: P1 engine proofs (sleep off bit-identical, sleep bound, governor, CPU estimate)
+        id: p1v
+        continue-on-error: true
+        run: P1_SKIP_COST=1 node qa-resonator/p1_verify.mjs 2>&1 | tee qa-out/p1_verify.txt
+      - name: P1 browser checks (CPU shown, governor, sleeping voices, Copy report)
+        id: p1b
+        continue-on-error: true
+        run: python qa-resonator/p1_browser.py . 2>&1 | tee qa-out/p1_browser.txt
+      - name: Stage I engine checks on the Tank (Sustain ring times, worst case under the ceiling, deterministic)
+        id: i1e
+        continue-on-error: true
+        run: node qa-resonator/i1_engine.mjs 2>&1 | tee qa-out/i1_engine.txt
+      - name: Stage J1 proof (the stripped engine is the old engine for everything the Tank page can do)
+        id: j1v
+        continue-on-error: true
+        run: |
+          git fetch -q --depth=1 origin e3010d51298f79982a0e2cc1f960cb3824784764 || true
+          node qa-resonator/j1_verify.mjs 2>&1 | tee qa-out/j1_verify.txt
+      - name: Stage I browser checks (Tank only, bit-identical to before, Sustain, slide the circles, presets)
+        id: i1b
+        continue-on-error: true
+        run: python qa-resonator/i1_browser.py . 2>&1 | tee qa-out/i1_browser.txt
+      - name: 'Stage T1 proofs (the water tower — the Tank unchanged, modes vs research and FE, padded mallet, loudness, ceiling, cost)'
+        id: t1v
+        continue-on-error: true
+        run: |
+          python -m pip install --quiet numpy scipy
+          TOWER_FE_OUT=qa-out/tower_fe_modes.json python qa-resonator/tower_fe.py 12 2>&1 | tee qa-out/tower_fe.txt
+          # the committed FE numbers (which t1_verify reads) are what the script gives here, within 0.5%
+          python -c "import json; a=json.load(open('qa-resonator/tower_fe_modes.json'))['12mm']; b=json.load(open('qa-out/tower_fe_modes.json'))['12mm']; bad=[k for k in ('breathing','m2_lowest') if abs(a[k]/b[k]-1)>0.005]+[m for m in a['cluster_by_mmax'] if abs(a['cluster_by_mmax'][m][1]/b['cluster_by_mmax'][m][1]-1)>0.005]; print('FE numbers', 'match' if not bad else 'DIFFER: '+str(bad)); exit(1 if bad else 0)"
+          git fetch -q --depth=1 origin f8e9a3de8c443327589e91c11c6eb9bb8d591b28 || true
+          node qa-resonator/t1_verify.mjs 2>&1 | tee qa-out/t1_verify.txt
+      - name: Stage T1 browser checks (the water tower by taps)
+        id: t1b
+        continue-on-error: true
+        run: python qa-resonator/t1_browser.py . 2>&1 | tee qa-out/t1_browser.txt
+      - name: Stage U1 browser checks (scrolling over the controls moves nothing; drag, tap, hold, reset still work)
+        id: u1b
+        continue-on-error: true
+        run: python qa-resonator/u1_browser.py . 2>&1 | tee qa-out/u1_browser.txt
+      - name: Publish results to branch qa-results/qa
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOMES: >-
+            claims_live=${{ steps.claims_live.outcome }}
+            s1v=${{ steps.s1v.outcome }} s1b=${{ steps.s1b.outcome }}
+            p1v=${{ steps.p1v.outcome }} p1b=${{ steps.p1b.outcome }}
+            i1e=${{ steps.i1e.outcome }} i1b=${{ steps.i1b.outcome }}
+            j1v=${{ steps.j1v.outcome }} t1v=${{ steps.t1v.outcome }} t1b=${{ steps.t1b.outcome }} u1b=${{ steps.u1b.outcome }}
+        run: |
+          mkdir -p qa-out
+          echo "${{ github.sha }}" > qa-out/commit.txt
+          echo "$OUTCOMES" | tr ' ' '\n' | grep . > qa-out/outcomes.txt
+          cd qa-out
+          git init -q
+          git checkout -q -b results
+          git add -A
+          git -c user.name=Claude -c user.email=noreply@anthropic.com commit -qm "QA ${{ github.sha }}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" HEAD:refs/heads/qa-results/qa
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resonator-qa-out
+          path: qa-out/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Enforce the result (every check must pass)
+        if: always()
+        run: |
+          cat qa-out/outcomes.txt
+          ! grep -q '=failure' qa-out/outcomes.txt

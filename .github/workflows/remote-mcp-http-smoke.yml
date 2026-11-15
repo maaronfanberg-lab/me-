@@ -1,0 +1,52 @@
+name: Remote MCP HTTP Smoke Test
+
+on:
+  push:
+    paths:
+      - 'mcp_server.py'
+      - 'remote_mcp_server.py'
+      - 'requirements-mcp.txt'
+      - 'Dockerfile.mcp'
+      - '.github/workflows/remote-mcp-http-smoke.yml'
+      - 'scripts/cluster_worker.py'
+      - 'scripts/aggregate_cluster.py'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r requirements-mcp.txt httpx
+      - name: Compile
+        run: python -m py_compile mcp_server.py remote_mcp_server.py
+      - name: Start MCP server
+        run: |
+          uvicorn remote_mcp_server:app --host 127.0.0.1 --port 8765 > /tmp/mcp.log 2>&1 &
+          echo $! > /tmp/mcp.pid
+          sleep 3
+      - name: MCP initialize and tool call
+        run: |
+          python - <<'PY'
+          import asyncio
+          from mcp import Client
+
+          async def main():
+              async with Client('http://127.0.0.1:8765/mcp') as client:
+                  tools_result = await client.list_tools()
+                  names = {t.name for t in tools_result.tools}
+                  assert 'simulator_info' in names, names
+                  assert 'run_simulation' in names, names
+                  result = await client.call_tool('run_simulation', {'workload':'montecarlo','scale':1,'workers':2})
+                  assert not result.is_error, result
+                  assert result.structured_content['workload'] == 'montecarlo', result.structured_content
+                  print(result.structured_content['result'])
+          asyncio.run(main())
+          PY
+      - name: Server log on failure
+        if: failure()
+        run: cat /tmp/mcp.log || true

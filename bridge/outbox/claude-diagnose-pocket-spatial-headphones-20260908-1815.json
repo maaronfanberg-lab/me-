@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-diagnose-pocket-spatial-headphones-20260908-1815.json",
+  "request_sha256": "96bc91808c0eb897f8268b8dfd084727e3f13dece5f0de769ec45f60cc1d14fa",
+  "request_nonce": "pocket-spatial-headphones-diagnose-20260908-1815",
+  "completed_at": "2026-09-08T23:16:26.206712Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Root‑cause diagnosis: Pocket Spatial Headphones (headphones.js / headphones‑core.js)\n\nI traced the full dry/wet signal path node‑by‑node in `buildGraph()`/`apply()` (headphones.js) against the gain law in `calculate()` (core.js). I found **no outright sign‑flip or dry/wet‑swap bug** — the width polarity, crossfeed routing, and the dry↔wet crossfade are all algebraically correct. The problem is structural gain‑staging plus (possibly) source content, not a wiring typo.\n\n### Evidence trail\n\n**1. The dry/wet switch is a full crossfade, not additive mixing — confirmed correct.**\n`headphones.js:110`\n```js\nsetParam(dryGain.gain, enabled?0:.78, .015);\nsetParam(wetGain.gain, enabled?p.masterGain:0, .015);\n```\nOFF = 100% dry at level `.78`. ON = 100% wet at level `p.masterGain`. No dry bleed-through. This rules out \"wet is being summed with dry and cancels/averages out.\"\n\n**2. `masterGain` is a self‑normalizing budget, not headroom on top of a fixed direct level.**\n`core.js:30‑36`\n```js\nvar directGain=.72;\nvar crossGain=.025+.145*e;      // ≈0.025–0.17\nvar widthGain=.165*w;           // ≈0–0.165\nvar refl1Gain=.095*d; var refl2Gain=.060*d;\nvar worstCaseSum=directGain+crossGain+widthGain+refl1Gain+refl2Gain;\nvar masterGain=Math.min(.90,.78/Math.max(.78,worstCaseSum));\n```\nAt the shipped default preset (externalize 58, width 38, depth 42) this evaluates to `worstCaseSum≈0.98`, `masterGain≈0.79`. That means:\n- Wet **direct** level = `.72*.79 ≈ .57` — i.e. the dominant, broadband, obviously audible part of the mix gets ~2.7 dB *quieter* the instant you turn Spatial ON (vs `.78` dry).\n- Each individual cue tap after `masterGain` is small and split across **four separate, narrowband, filtered/delayed paths** (cross L, cross R, width L/R, refl1, refl2), each landing around ‑20 dB to ‑30 dB relative to unity.\n- Increasing `crossGain`/`widthGain`/`reflGain` in the \"v2, much stronger\" edit *also* increases `worstCaseSum`, which proportionally *shrinks* `masterGain`. So \"make the core stronger\" partially cannibalizes itself: the direct signal gets quieter, and the cues, while relatively larger as a fraction, remain individually low‑level, time/phase‑domain effects (ITD crossfeed + MS width + early reflections) that are inherently subtle on program material, doubly so through closed‑back ANC headphones (PXC 550‑II) that physically prevent externalization. This is fully consistent with \"DSP PROOF (broadband LP) is dramatically audible, but spatial cues are not\" — those are two very different effect magnitudes, not comparable tests of the same mechanism.\n\n**3. DSP PROOF does not actually prove the *wet* graph is functioning.**\n`headphones.js:84`: `proofFilter` sits **after** `outputBus` (i.e. after both dry and wet paths have already been summed and after mono/limiter). It proves the Web Audio pipeline as a whole is live — it does **not** prove `wetMerge`/`wetGain` is contributing anything distinguishable. If the wet branch were silently broken, DSP PROOF would still work identically.\n\n**4. Possible mono/low-correlation source — explicitly worth checking, and it's a clean kill‑switch for the width path.**\n`sideL.gain=.5; sideR.gain=-.5;` (`headphones.js:59`) forms `side = .5*(L−R)`. If the Audius stream or local file is mono, or has near‑zero interaural difference (common with UGC masters/mono uploads), then `side ≈ 0` and `widthGain` — the single largest wet cue term (`.165*w`) — contributes **exactly nothing**, no matter how large you make it. Crossfeed and reflections would still exist but would become near‑identical delayed duplicates of the same content in both ears, which is a very weak effect on its own. Audius is a UGC platform; the app doesn't verify channel independence anywhere before applying spatial DSP (`pocket-spatial-audius-catalog.js` just sets `crossOrigin` and streams — no channel check).\n\n### Ranked hypotheses\n\n1. **(Most likely) Gain‑staging architecture defeats its own goal.** `masterGain = .78/worstCaseSum` couples the \"boost the cues\" edits to an automatic, proportional shrink of total wet output, so the direct signal gets quieter as cues get \"stronger\" while each individual cue tap stays a small, split, narrowband, delayed signal below common audibility thresholds on real music/closed headphones. This is a coherent, code‑verifiable explanation for \"no appreciable difference even after making it much stronger\" — the architecture caps how loud/salient the effect can ever become.\n2. **(Plausible, track‑dependent) Source is mono or near‑mono.** If true, `widthGain` mathematically zeroes and crossfeed/reflections become near‑duplicate signals — collapsing most of the intended cue diversity regardless of gain tuning.\n3. **(Least likely, unconfirmed) A genuine Safari ChannelSplitter/Merger quirk.** I traced every `connectMono`/merger fan‑in and found consistent, non‑cancelling channel arithmetic under both possible Safari down‑mix interpretations (discrete vs. speakers). No evidence of an actual bug here — ranked lowest because it's unproven, not because it's ruled out with certainty (WebKit has had historical ChannelMerger bugs, but nothing in this code specifically triggers one).\n\n### Recommended action — ONE decisive diagnostic that discriminates all three hypotheses at once\n\nDo **not** touch `crossGain`/`widthGain` numbers again. Instead add a single new toggle, **WIDTH PROOF**, mirroring the existing `dspProof` pattern but forcing an *extreme, non‑subtle, non‑normalized* stereo manipulation that bypasses `masterGain` entirely and sits **only in the wet branch**. Its result cleanly falsifies/confirms the hypotheses:\n\n- WIDTH PROOF clearly audible (violent hard-panning/ping-pong) → wet routing is fine; Hypothesis #1 confirmed (subtlety/gain‑law problem) → redesign the gain law (fixed small dry attenuation + one concentrated, unnormalized wet cue, loudness‑matched, no worst‑case‑sum coupling).\n- WIDTH PROOF inaudible **and** MONO CHECK also produces no audible change from normal OFF playback → Hypothesis #2 confirmed (source is mono/near‑mono for this track); test a different, verified‑stereo track before touching any code.\n- WIDTH PROOF inaudible **but** MONO CHECK *does* audibly change the sound vs. normal OFF playback → Hypothesis #3 (real routing bug in the wet chain) is now the leading explanation; escalate to inspecting Safari-specific ChannelMerger behavior.\n\n### Exact implementation (single pass, headphones.js)\n\nInsert a hard stereo‑swap gain block between `wetMerge` and `wetGain`, controlled by a new `widthProof` flag, using the same architecture pattern as `proofFilter`:\n\n```js\n// after wetGain=ctx.createGain(); (near line 50)\nwidthProofSwap = ctx.createChannelMerger(2); // new module var\nwidthProofSplit = ctx.createChannelSplitter(2);\n\n// after wetMerge is built and wired (after line 79, before line 81's wetMerge.connect(wetGain))\nwetMerge.connect(widthProofSplit);\nwidthProofSplit.connect(widthProofSwap, 0, 1); // L -> R (swap)\nwidthProofSplit.connect(widthProofSwap, 1, 0); // R -> L (swap)\nwidthProofSwap.connect(wetGain);\n// (remove the old direct wetMerge.connect(wetGain) line so all wet signal routes through this swap stage)\n```\nThen gate it exactly like `proof`:\n```js\nvar widthProof=false;\nfunction applyWidthProof(){\n  if(!ctx)return;\n  // when off, bypass swap by connecting wetMerge straight through instead;\n  // simplest: toggle widthProofSwap gain vs a parallel unity passthrough,\n  // or just always swap and use widthProof to force enabled=true at max width for the test.\n}\nif(widthProofButton) widthProofButton.addEventListener('click', function(){\n  if(!buildGraph())return;\n  widthProof=!widthProof;\n  setEnabled(true); // force spatial on so the swapped wet path is what's heard\n  status.textContent = widthProof ? 'WIDTH PROOF: hard L/R swap active on the wet path only. If this sounds identical to normal playback, the source channels are effectively identical (mono) or the wet graph is not reaching the output distinctly.' : 'WIDTH PROOF off.';\n});\n```\nAdd one button in the HTML next to `dspProof`:\n```html\n<button id=\"widthProof\" type=\"button\">WIDTH PROOF: OFF</button>\n```\n\nThis is a single, one‑time, non‑iterative change: run it once, listen once, and the three-way outcome above tells you definitively which of the ranked hypotheses is correct — without another blind gain increase.",
+  "session_id": "655c4569-bd9c-47f5-a783-bf16962cd5b8",
+  "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 27222,
+    "cache_read_input_tokens": 30977,
+    "output_tokens": 24974,
+    "output_tokens_details": {
+      "thinking_tokens": 21045
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 27222,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 18575,
+        "cache_read_input_tokens": 12839,
+        "cache_creation_input_tokens": 17566,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 17566
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.36643440000000005,
+  "num_turns": 9
+}

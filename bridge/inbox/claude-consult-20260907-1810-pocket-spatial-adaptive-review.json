@@ -1,0 +1,12 @@
+{
+  "nonce": "pocket-spatial-adaptive-review-20260907-1810",
+  "prompt": "Review the just-implemented Pocket Spatial adaptive steering for correctness and regressions. Read only apps/pocket-spatial.html, apps/pocket-spatial-steering-analyzer.js, and apps/pocket-spatial-core.js unless one directly referenced file is essential. Focus on: JavaScript syntax/runtime errors, Web Audio graph wiring mistakes, AudioWorklet compatibility on modern iPhone Safari, accidental interaction with the existing DynamicsCompressorNode.connect receiver-matrix shim in pocket-spatial-core.js, whether the post-matrix limiter is really after the matrix, whether the adaptive detector can run without creating audible duplicate audio, and whether toggling ADAPTIVE STEERING OFF truly restores the known-good fixed coefficients. Also flag any math mistake in the correlation/width/center/surround logic that would obviously steer hard-panned material to rears. Do not edit files. Return only concrete issues, severity, and exact fix recommendations. If no blocking issue exists, say so plainly.",
+  "context": [
+    "The adaptive design was added after a prior Claude review recommended short-window mid/side energy, L/R correlation, asymmetric steering smoothing, bounded modulation around the fixed matrix, and predictive headroom control.",
+    "The current app deliberately connects the post-matrix DynamicsCompressorNode into an intermediate GainNode before the AudioContext destination so the old core shim should not intercept that connection.",
+    "The user needs the existing fixed receiver calibration preserved as the fallback and A/B baseline."
+  ],
+  "expected_response": "A bounded read-only implementation audit with blocking/non-blocking issues and exact fixes grounded in the current files.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 8
+}

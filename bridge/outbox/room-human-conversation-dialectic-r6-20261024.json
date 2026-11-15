@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/room-human-conversation-dialectic-r6-20261024.json",
+  "request_sha256": "e71f871e10c0f871d290af50ec2c37223aa89cb5dc95108efc6555f2570e0284",
+  "request_nonce": "room-human-conversation-dialectic-r6-20261024",
+  "completed_at": "2026-10-24T16:22:28.115152Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "**Verdict: v6 is ready to START OFFLINE, isolated implementation and adversarial fault-injection. I count 0 high/critical spec blockers and 0 new blockers.** This is a design-level judgment based only on the summary you supplied. I did not inspect the document or any code, and I ran no tests.\n\n**Why the four pins hold together**\n\n1. **Feed generation.** The (epoch, generation_n) ordering is total under a single writer. Heartbeat updates count toward n, and unrelated Git commits don't. Rebase can change the staged n, but decision_id, speech bytes and source IDs stay fixed while the Room parent is unchanged. That keeps idempotency tied to content, not position. The rules are consistent: same version and digest is accepted, same version with a different digest is rejected, and only an operator-authorized rollback bumps the epoch.\n2. **Protected resync.** It verifies OIDC claims and the current main head, not an old run's SHA, and it fails closed with relay pending persisted. I see no contradiction between failing closed and \"no lost events.\" Unavailability delays events but doesn't drop them.\n3. **Delivery.** Returning 202 and acking after the authoritative Git commit, without waiting for the mirror, removes the queue deadlock. The mirror journal is replayed before new speech, which preserves ordering. Soft pause at 1000 unmirrored events or 24h lag, still accepting Allen, and a hard 429 are layered and don't conflict. The (epoch, generation, ordinal) cursor extends the pin 1 ordering.\n4. **Healthy silence.** Stage attestations separate chosen silence from model failure. The failure ratio is independent of the 300s heartbeat coalescing. The A/B unit is the annotated sequence, which is the correct unit.\n\n**Residual risks (implementation-time, not spec blockers)**\n- **Ack/commit crash window.** A crash between the Git commit and the queue deletion must replay idempotently by source ID.\n- **Cursor stability across epoch bump.** Cursors issued before a rollback must be rejected or remapped deterministically.\n- **Rebase renumbering.** Consumers must key on decision_id, not n, when n shifts.\n- **Soft-pause and hard-429 thresholds.** The two limits must be tested at their boundaries, since they are stated in different units (events vs. hours).\n- **Clock skew.** OIDC token validity and the 24h lag metric both depend on time.\n- **Behavioral goals.** \"Human conversation\" quality and the absence of de facto phrase censorship can't be proven by design. Only the preregistered annotation study can address them.\n\n**Remaining tests to write**\n- 500-event outage, then recovery: no duplicates, no reordering, and a backlog larger than the last-160 feed is fully paginated at 50 per request.\n- Crash injection at every step of the accept, commit, ack, mirror sequence, with replay before new speech.\n- Same version and same digest returns idempotent success. Same version and a different digest is rejected.\n- Rebase changes n while decision_id, bytes and source IDs stay identical.\n- Epoch bump: old cursors are handled deterministically, and a non-operator bump is refused.\n- Resync with a stale 200 response, clock skew, a wrong audience, a wrong ref, a wrong workflow, and a stale SHA. Also test GitHub being unavailable (fail closed, relay persists).\n- Heartbeat-only updates increment n for the viewer, and unrelated Git commits do not.\n- Silence classification for each case: valid chosen_silence, missing stage, all-invalid output, model down. Check that the failure ratio is independent of heartbeat coalescing and that no speech is forced.\n- Arm isolation: runner, model, cache, state and credentials are separate.\n- Capacity: the 1000-event and 24h soft pause keeps accepting Allen, and the hard-capacity 429 loses nothing silently.\n- Fuzz the first-parent line and the journal replay order.\n\n**Caveat**\nDesign agreement can't guarantee the implementation is bug-free. Treat this as permission to build and attack the design offline, not as evidence it works. Nothing here supports merging PR #313 or touching main Room. Any promotion needs passing fault-injection results, a review of the actual code, and operator sign-off.",
+  "session_id": "caf21903-bbab-439d-9285-9c08d26a512a",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1668,
+    "cache_read_input_tokens": 2604,
+    "output_tokens": 1446,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 1668,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1446,
+        "cache_read_input_tokens": 2604,
+        "cache_creation_input_tokens": 1668,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1668
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.0213964,
+  "num_turns": 1
+}

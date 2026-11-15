@@ -1,0 +1,11 @@
+{
+  "id": "2026-09-06-pocket-spatial-iphone6-cache-repro-001",
+  "task": "Review the Pocket Spatial iPhone 6 Wikimedia Commons catalog-button failure after a merged closure fix still appears to do nothing on-device. Focus on old Safari/iOS 12 caching and dynamic script loading. Current architecture: pocket-spatial.html loads pocket-spatial-core.js by stable relative URL; core dynamically appends pocket-spatial-commons.js, then SoundCloud scripts, also by stable relative URLs. We gave the user a cache-busted HTML URL query, but the dynamically loaded JS URLs themselves were unchanged. The Commons closure bug was fixed and CI now literally triggers the catalog button in a fake DOM, but the physical iPhone 6 still shows no visible response. Please assess whether stale script cache is the most likely explanation, identify other iOS 12-specific failure modes that could produce a silent tap, and recommend the smallest robust fix plus a way to make future deployed builds self-identifying and cache-safe. Do not suggest user account setup. Preserve ES5/iOS 12 compatibility and the existing DSP architecture.",
+  "context": {
+    "target": "iPhone 6 / iOS 12.5.x Safari",
+    "observed": "Wikimedia Commons card renders; tapping LOAD FREE MUSIC TEST CATALOG produces no visible change even after closure fix deployed",
+    "known_fix": "createUI now constructs ui before binding click handler",
+    "deployment": "GitHub Pages deployment succeeded",
+    "suspect": "HTML URL was cache-busted, dynamically loaded JS files were not"
+  }
+}

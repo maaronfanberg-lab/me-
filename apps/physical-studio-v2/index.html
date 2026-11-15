@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#b4866c">
+<title>Physical Studio</title>
+<link rel="stylesheet" href="./app.css?v=1">
+</head>
+<body>
+<div id="viewport"></div>
+<div id="ui">
+  <div class="topbar">
+    <div class="brand">PHYSICAL STUDIO</div>
+    <div id="status">ready</div>
+  </div>
+
+  <section id="inspector" class="panel hidden" aria-label="Inspector">
+    <div class="panel-head">
+      <div><strong id="inspector-title">BODY</strong><span id="selection-count">1 selected</span></div>
+      <button id="close-inspector" class="mini">×</button>
+    </div>
+    <div id="body-fields" class="fields">
+      <label>Mass<input id="mass" type="range" min="0.1" max="8" step="0.05"><output id="mass-out"></output></label>
+      <label>Damping<input id="damping" type="range" min="0" max="1.5" step="0.01"><output id="damping-out"></output></label>
+    </div>
+    <div id="spring-fields" class="fields hidden">
+      <label>Stiffness<input id="stiffness" type="range" min="10" max="1800" step="5"><output id="stiffness-out"></output></label>
+      <label>Length<input id="rest-length" type="range" min="0.1" max="4" step="0.01"><output id="rest-length-out"></output></label>
+      <label>Damping<input id="spring-damping" type="range" min="0" max="20" step="0.1"><output id="spring-damping-out"></output></label>
+    </div>
+    <div id="mic-fields" class="fields hidden">
+      <label>Gain<input id="mic-gain" type="range" min="-60" max="12" step="1"><output id="mic-gain-out"></output></label>
+      <label>Spread<input id="mic-spread" type="range" min="0" max="1" step="0.01"><output id="mic-spread-out"></output></label>
+    </div>
+    <div id="exciter-fields" class="fields hidden">
+      <label>Impulse<input id="impulse" type="range" min="0.05" max="6" step="0.05"><output id="impulse-out"></output></label>
+      <label>Hardness<input id="hardness" type="range" min="0" max="1" step="0.01"><output id="hardness-out"></output></label>
+    </div>
+  </section>
+
+  <div id="spring-progress" class="toast hidden">Select another body</div>
+  <div id="hint">drag empty space to orbit · pinch to zoom · two fingers to pan</div>
+
+  <div class="transport">
+    <button id="audio" class="round" aria-label="Audio">♪</button>
+    <button id="pause" class="round" aria-label="Pause">Ⅱ</button>
+    <button id="reset" class="round" aria-label="Reset">↺</button>
+    <button id="delete" class="round danger" aria-label="Delete">⌫</button>
+  </div>
+
+  <nav id="palette" aria-label="Objects">
+    <button data-tool="select" class="tool active"><span>⌁</span><small>Select</small></button>
+    <button data-tool="body" class="tool"><span>●</span><small>Body</small></button>
+    <button data-tool="anchor" class="tool"><span>◆</span><small>Anchor</small></button>
+    <button data-tool="spring" class="tool"><span>╱</span><small>Spring</small></button>
+    <button data-tool="exciter" class="tool"><span>✦</span><small>Exciter</small></button>
+    <button data-tool="mic" class="tool"><span>◎</span><small>Mic</small></button>
+  </nav>
+</div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+</script>
+<script type="module" src="./app.js?v=1"></script>
+</body>
+</html>

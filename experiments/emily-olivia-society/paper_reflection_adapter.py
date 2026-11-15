@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""Reflection adapter following the original Generative Agents architecture.
+
+Upstream research source:
+  joonspk-research/generative_agents
+  commit fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4
+  Apache-2.0
+
+The paper implementation triggers reflection after accumulated importance,
+creates focal points, retrieves memories around those focal points, and stores
+higher-level thoughts. In this smaller environment we preserve that structure
+while delegating retrieval and reflection storage to Stanford HCI genagents.
+"""
+from __future__ import annotations
+
+from reflection_generation import install_natural_reflection_parser
+from reflection_hygiene import sanitize_memory_stream
+
+_RESEARCH_COMMIT = "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4"
+_TWO_PERSON_THRESHOLD = 24.0
+_THRESHOLD_PROFILE = "two-person-v1"
+_EMPTY_EMBEDDING_ERROR = "Input text must be a non-empty string."
+_MAX_REFLECTION_ATTEMPTS = 1
+
+
+def _latest_nodes(agent, count: int = 12):
+    nodes = list(agent.brain.memory_stream.seq_nodes)
+    return nodes[-max(1, count):]
+
+
+def _importance(node) -> float:
+    """Return paper-scale (0-10) importance for a Stanford memory node."""
+    for attr in ("poignancy", "importance"):
+        value = getattr(node, attr, None)
+        try:
+            if value is not None:
+                score = max(0.0, float(value))
+                if score > 10.0:
+                    score /= 10.0
+                return min(10.0, score)
+        except (TypeError, ValueError):
+            pass
+    return 1.0
+
+
+def _reflection_count(agent) -> int:
+    return sum(
+        1
+        for node in agent.brain.memory_stream.seq_nodes
+        if getattr(node, "node_type", None) == "reflection"
+    )
+
+
+def maybe_reflect(agent, time_step: int) -> bool:
+    """Run Stanford reflection at a cadence scaled for a two-agent world.
+
+    The original paper's large-environment accumulation threshold is too sparse
+    here because each persona receives only a narrow stream of social events.
+    We preserve the same importance-accumulation mechanism but scale its trigger
+    to this environment. Reflection remains strictly non-blocking: failure to
+    produce a clean insight never prevents the current dialogue turn.
+    """
+    scratch = agent.brain.scratch
+    last_step = int(scratch.get("reflection_last_step", 0) or 0)
+
+    # Migrate existing large-world threshold state once, instead of letting a
+    # persisted 150-point value suppress reflection indefinitely in this toy.
+    if scratch.get("reflection_threshold_profile") != _THRESHOLD_PROFILE:
+        threshold = _TWO_PERSON_THRESHOLD
+    else:
+        try:
+            threshold = float(
+                scratch.get("reflection_importance_threshold", _TWO_PERSON_THRESHOLD)
+            )
+        except (TypeError, ValueError):
+            threshold = _TWO_PERSON_THRESHOLD
+        if threshold <= 0:
+            threshold = _TWO_PERSON_THRESHOLD
+
+    fresh = [
+        node for node in _latest_nodes(agent, 32)
+        if int(getattr(node, "created", 0) or 0) > last_step
+    ]
+    accumulated = sum(_importance(node) for node in fresh)
+    if not fresh or accumulated < threshold:
+        agent.brain.update_scratch(
+            {
+                "reflection_importance_threshold": threshold,
+                "reflection_threshold_profile": _THRESHOLD_PROFILE,
+                "reflection_research_source": _RESEARCH_COMMIT,
+            }
+        )
+        return False
+
+    anchor_parts = [str(getattr(node, "content", "")).strip() for node in fresh[-10:]]
+    anchor_parts = [part for part in anchor_parts if part]
+    if not anchor_parts:
+        return False
+
+    anchor = (
+        f"Higher-level understanding for {agent.name} based on these recent experiences: "
+        + " | ".join(anchor_parts)
+    )
+    before_reflections = _reflection_count(agent)
+    total_memories = len(list(agent.brain.memory_stream.seq_nodes))
+    install_natural_reflection_parser()
+    succeeded = False
+
+    for _attempt in range(_MAX_REFLECTION_ATTEMPTS):
+        try:
+            agent.brain.memory_stream.reflect(
+                anchor=anchor,
+                reflection_count=1,
+                retrieval_count=min(12, max(1, total_memories)),
+                time_step=time_step,
+            )
+        except (ValueError, RuntimeError):
+            # Reflection is enrichment, never a liveness gate. Hygiene below
+            # still removes malformed partial output before the turn continues.
+            succeeded = False
+        finally:
+            sanitize_memory_stream(agent.brain.memory_stream)
+
+        if _reflection_count(agent) > before_reflections:
+            succeeded = True
+            break
+
+    scratch_update = {
+        "reflection_importance_threshold": threshold,
+        "reflection_threshold_profile": _THRESHOLD_PROFILE,
+        "reflection_research_source": _RESEARCH_COMMIT,
+    }
+    if succeeded:
+        scratch_update["reflection_last_step"] = time_step
+    agent.brain.update_scratch(scratch_update)
+    agent.brain.save(str(agent.workspace))
+    return succeeded

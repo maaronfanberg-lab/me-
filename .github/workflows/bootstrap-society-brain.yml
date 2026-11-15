@@ -1,0 +1,75 @@
+name: Bootstrap Society Brain
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/bootstrap-society-brain.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-society-brain
+  cancel-in-progress: true
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check whether brain already lives in this repository
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: society-brain-v1
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download the one-time source model
+        if: steps.existing.outputs.exists != 'true'
+        run: |
+          curl --fail --location --retry 4 --retry-delay 5 \
+            'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf?download=true' \
+            --output society-brain-q4_0.gguf
+          echo '7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  society-brain-q4_0.gguf' | sha256sum -c -
+
+      - name: Copy the inference runtime from GitHub
+        if: steps.existing.outputs.exists != 'true'
+        run: |
+          curl --fail --location --retry 4 --retry-delay 5 \
+            'https://github.com/ggml-org/llama.cpp/releases/download/b10441/llama-b10441-bin-ubuntu-x64.tar.gz' \
+            --output llama-runtime-linux-x64.tar.gz
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+
+      - name: Store the brain and runtime in this GitHub repository
+        if: steps.existing.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: society-brain-v1
+        run: |
+          cat > release-notes.txt <<'EOF'
+          Self-contained society brain for the Sarah Society experiment.
+
+          Model: Qwen2.5-0.5B-Instruct GGUF q4_0
+          Model SHA256: 7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed
+          Model license: Apache-2.0
+          Runtime: llama.cpp Ubuntu x64 release b10441
+          Runtime SHA256: 360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94
+
+          Ordinary society runs load both assets from this GitHub repository only.
+          EOF
+          gh release create "$TAG" \
+            society-brain-q4_0.gguf \
+            llama-runtime-linux-x64.tar.gz \
+            --repo "$GITHUB_REPOSITORY" \
+            --title 'Society Brain v1' \
+            --notes-file release-notes.txt
+
+      - name: Confirm GitHub-held brain
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view society-brain-v1 --repo "$GITHUB_REPOSITORY"

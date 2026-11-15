@@ -1,0 +1,92 @@
+name: Sterilize The Room
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'society/maintenance-kick.txt'
+
+permissions:
+  contents: write
+  actions: write
+  id-token: write
+
+concurrency:
+  group: the-room-world-main
+  cancel-in-progress: true
+
+jobs:
+  sterilize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Purge all conversational history reservoirs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+        run: |
+          set -euo pipefail
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+
+          python3 scripts/room_sterilize.py
+          python3 scripts/build_room_feed.py
+
+          git add -A room society
+          if ! git diff --cached --quiet; then
+            git commit -m "Sterilize Room historical cognition"
+            pushed=0
+            for attempt in 1 2 3 4 5; do
+              if git push origin HEAD:main; then
+                pushed=1
+                break
+              fi
+              git fetch origin main
+              git rebase origin/main || { git rebase --abort || true; exit 1; }
+              sleep "$attempt"
+            done
+            test "$pushed" -eq 1
+          fi
+
+          token_json=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror")
+          relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))')
+          test -n "$relay_token"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${relay_token}" \
+            -H "Content-Type: application/json" \
+            --data-binary @room/feed.json \
+            "${ROOM_RELAY_URL%/}/api/ingest" >/dev/null
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('.')
+          marker=json.loads((root/'room/sterilization.json').read_text())
+          assert marker['sterilization_version'] >= 4
+          boot=marker['boot_id']
+          assert boot.startswith('room-sterile-v4-')
+          state=json.loads((root/'room/state.json').read_text())
+          assert state['boot_id'] == boot and state['cycle'] == 0 and state['messages'] == 0
+          assert json.loads((root/'room/conversation.json').read_text()) == []
+          discourse=json.loads((root/'room/discourse.json').read_text())
+          assert discourse.get('nodes') == [] and discourse.get('roots') == []
+          minds=json.loads((root/'room/cognitive_state.json').read_text())
+          for ent in minds.get('entities',{}).values():
+              assert ent.get('room_memories') == []
+              assert ent.get('self_history') == []
+              for rel in ent.get('people',{}).values():
+                  assert rel.get('shared_references') == []
+                  assert rel.get('events') == []
+                  assert rel.get('reports') == []
+          assert not list((root/'society/archive').glob('*.json'))
+          assert json.loads((root/'society/conversation.json').read_text()) == []
+          print('STERILE_V4_VALIDATION_OK', boot)
+          PY
+
+          echo "Room remains quarantined after sterilization; no cognition restart from this workflow"

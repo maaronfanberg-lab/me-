@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: alex-repo-simulator-mcp
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./Dockerfile.mcp
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass

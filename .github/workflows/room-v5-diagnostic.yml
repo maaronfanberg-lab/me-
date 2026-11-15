@@ -1,0 +1,56 @@
+name: Room v5 one-beat diagnostic
+
+on:
+  push:
+    paths:
+      - '.github/workflows/room-v5-diagnostic.yml'
+
+permissions:
+  contents: read
+
+# exact sequential perception -> deliberation -> expression diagnostic
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Compile and self-test v5
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/room_engine_v5.py scripts/room_social_v5.py scripts/room_private_model.py
+          python3 scripts/room_engine_v5.py selftest
+      - name: Run exactly one sequential v5 beat without publishing
+        run: |
+          set -euxo pipefail
+          export ROOM_CYCLE_KEY="diagnostic:${GITHUB_RUN_ID}"
+          rm -rf room_parts room_work
+          mkdir -p room_parts room_work
+          for n in $(seq 0 11); do
+            ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase sense
+          done
+          python3 scripts/room_engine_v5.py bus
+          for n in 0 1 3 4 6 7 9 10; do
+            ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-sense.json
+          done
+          python3 scripts/room_engine_v5.py bus2 --bus room_work/bus-sense.json
+          for n in 2 5 8 11; do
+            ROOM_NODE_ID="$n" python3 scripts/room_engine_v5.py node --phase recurrent --bus room_work/bus-recurrent.json
+          done
+          python3 scripts/room_engine_v5.py commit
+          python3 scripts/build_room_feed.py
+          python3 - <<'PY'
+          import json
+          s=json.load(open('room/state.json'))
+          assert s['version']=='room-cognition-v5'
+          assert s['beat_message_count']==4
+          assert set(s['beat_contributors'])=={'sarah','mara','owen','jules'}
+          t=s['topic_episode']
+          assert t.get('semantic_schema')==2
+          assert t.get('root')
+          assert t.get('current_facet')
+          assert t.get('current_facet') in t.get('facets',[]) or t.get('current_facet')==t.get('root')
+          print('DIAGNOSTIC PASS',s['cycle'],t.get('root'),t.get('current_facet'))
+          PY

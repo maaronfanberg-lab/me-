@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Flow Field Plotter — Mobile Fix</title>
+<style>
+  html,body{height:100%;margin:0;background:#14181b;color:#cdd6d9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  body{display:grid;place-items:center}
+  .load{max-width:28rem;padding:24px;text-align:center}
+  .load b{display:block;margin-bottom:8px;letter-spacing:.08em;text-transform:uppercase}
+  .load small{color:#7f8b90}
+</style>
+</head>
+<body>
+<div class="load"><b>Opening Flow Field Plotter…</b><small>Applying the mobile preview fix.</small></div>
+<script>
+(async()=>{
+  const urls=[
+    'https://raw.githubusercontent.com/snicker02/FlowFieldsPlotter/main/index.html',
+    'https://cdn.jsdelivr.net/gh/snicker02/FlowFieldsPlotter@main/index.html'
+  ];
+
+  let html='', lastErr;
+  for(const url of urls){
+    try{
+      const r=await fetch(url,{cache:'no-store'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      html=await r.text();
+      if(html.includes('<canvas id="view"')) break;
+      throw new Error('Unexpected source document');
+    }catch(e){lastErr=e;html='';}
+  }
+  if(!html) throw lastErr||new Error('Could not load source');
+
+  const mobileFix=`
+<style id="alex-mobile-preview-fix">
+@media (max-width:820px){
+  html,body{
+    width:100% !important;
+    min-height:100% !important;
+    height:auto !important;
+    overflow:visible !important;
+    overscroll-behavior-y:none;
+  }
+  body{
+    display:flex !important;
+    flex-direction:column !important;
+    min-width:0 !important;
+  }
+
+  /* Put the artwork FIRST and keep it visible while controls scroll. */
+  main{
+    order:-1 !important;
+    position:sticky !important;
+    top:0 !important;
+    z-index:1000 !important;
+    width:100% !important;
+    height:48svh !important;
+    min-height:300px !important;
+    max-height:520px !important;
+    flex:0 0 auto !important;
+    background:var(--mat) !important;
+    border-bottom:1px solid var(--line) !important;
+    box-shadow:0 8px 24px rgba(0,0,0,.45) !important;
+  }
+  .stage{
+    flex:1 1 auto !important;
+    height:auto !important;
+    min-height:0 !important;
+    padding:4px 0 !important;
+  }
+  #view{
+    max-width:calc(100vw - 20px) !important;
+    max-height:100% !important;
+  }
+
+  /* Compact the status/export bar so it fits an iPhone. */
+  .readout{
+    flex:0 0 auto !important;
+    width:100% !important;
+    overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .readout::-webkit-scrollbar{display:none}
+  .stat{padding:6px 9px !important;flex:0 0 auto !important}
+  .stat .v{font-size:12px !important}
+  .exports{padding:0 7px !important;gap:5px !important;flex:0 0 auto !important}
+  .exports button{padding:7px 9px !important;font-size:11px !important;white-space:nowrap}
+  .hint{display:none !important}
+
+  /* Controls live below the sticky preview. */
+  aside{
+    order:1 !important;
+    width:100% !important;
+    height:auto !important;
+    flex:0 0 auto !important;
+    border-right:0 !important;
+    border-bottom:0 !important;
+  }
+  aside .scroll{
+    overflow:visible !important;
+    flex:none !important;
+  }
+  .brand{padding:12px 16px 10px !important}
+  .tabbar{
+    position:sticky !important;
+    top:48svh !important;
+    z-index:900 !important;
+  }
+  .sidefoot{
+    position:sticky !important;
+    bottom:0 !important;
+    z-index:850 !important;
+    padding-bottom:max(10px,env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width:430px){
+  main{height:46svh !important;min-height:270px !important}
+  .tabbar{top:46svh !important}
+  .stat:nth-child(3),.stat:nth-child(4){display:none !important}
+}
+</style>`;
+
+  html=html.replace('</head>',mobileFix+'\n</head>');
+  document.open();
+  document.write(html);
+  document.close();
+})().catch(err=>{
+  document.body.innerHTML='<div class="load"><b>Could not open the plotter</b><small>'+String(err.message||err)+'</small></div>';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,264 @@
+name: Emily Olivia Falcon 7B Experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/emily-olivia-7b-experiment.yml'
+
+concurrency:
+  group: emily-olivia-falcon-7b-experiment
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      AGENTSOCIETY_LLM_API_KEY: local-bitnet-unused
+      COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
+      COMMUNITY_BITNET_PORT: '8080'
+      COMMUNITY_BITNET_START_TIMEOUT: '900'
+      COMMUNITY_GENERATION_TIMEOUT: '900'
+      COMMUNITY_SOCIAL_RPC_TIMEOUT: '60'
+      COMMUNITY_MAX_TOKENS: '64'
+      TZ: America/Chicago
+    steps:
+      - name: Check out current Emily Olivia runtime
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore pinned Community runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models/Falcon3-1B-Instruct-1.58bit
+            experiments/emily-olivia-society/.bootstrap-ready-v11
+          key: community-runtime-bitnet-v11-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+          restore-keys: |
+            community-runtime-bitnet-v11-${{ runner.os }}-py311-
+
+      - name: Bootstrap pinned Stanford and BitNet runtime
+        working-directory: experiments/emily-olivia-society
+        run: timeout 55m bash bootstrap_upstreams.sh
+
+      - name: Verify V8 peer-to-peer Stanford boundary
+        working-directory: experiments/emily-olivia-society
+        run: |
+          test -x vendor/BitNet/build/bin/llama-server
+          test -s models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
+          grep -q 'COMMUNITY_BITNET_CHAT_V8' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+          grep -q 'COMMUNITY_PEER_UTTERANCE_V1' vendor/stanford-genagents/simulation_engine/prompt_template/generative_agent/interaction/utternace/utterance_v1.txt
+
+      - name: Download pinned official Falcon3 7B 1.58-bit GGUF
+        working-directory: experiments/emily-olivia-society
+        run: |
+          mkdir -p models/Falcon3-7B-Instruct-1.58bit
+          .venv-stanford/bin/huggingface-cli download \
+            tiiuae/Falcon3-7B-Instruct-1.58bit-GGUF \
+            ggml-model-i2_s.gguf \
+            --revision e477bf04a5c42934a42096cde56a7dd62d2f9ac4 \
+            --local-dir models/Falcon3-7B-Instruct-1.58bit
+          test -s models/Falcon3-7B-Instruct-1.58bit/ggml-model-i2_s.gguf
+
+      - name: Benchmark 1B and 7B on the same Stanford conversation task
+        working-directory: experiments/emily-olivia-society
+        shell: bash
+        run: |
+          set -u -o pipefail
+          rm -rf benchmark-results
+          mkdir -p benchmark-results
+
+          benchmark_one() {
+            label="$1"
+            model="$2"
+            out="benchmark-results/$label"
+            mkdir -p "$out"
+
+            python3 bitnet_server.py stop >/dev/null 2>&1 || true
+            rm -rf replay workspaces .bitnet-server.pid
+            mkdir -p replay
+            export COMMUNITY_BITNET_MODEL="$model"
+
+            .venv-stanford/bin/python init_cognition.py > "$out/init.txt" 2>&1
+
+            start_ms="$(python3 - <<'PY'
+          import time
+          print(int(time.time() * 1000))
+          PY
+          )"
+
+            set +e
+            python3 bitnet_server.py start > "$out/start.txt" 2>&1 &
+            start_driver_pid=$!
+            server_pid=""
+            for _ in $(seq 1 600); do
+              if [ -s .bitnet-server.pid ]; then
+                server_pid="$(cat .bitnet-server.pid)"
+                break
+              fi
+              if ! kill -0 "$start_driver_pid" 2>/dev/null; then break; fi
+              sleep 0.1
+            done
+
+            sampler_pid=""
+            if [ -n "$server_pid" ]; then
+              (
+                while kill -0 "$server_pid" 2>/dev/null; do
+                  rss="$(awk '/^VmRSS:/ {print $2}' "/proc/$server_pid/status" 2>/dev/null || true)"
+                  if [ -n "$rss" ]; then printf '%s\n' "$rss"; fi
+                  sleep 0.2
+                done
+              ) > "$out/rss_kb.txt" &
+              sampler_pid=$!
+            fi
+
+            wait "$start_driver_pid"
+            start_rc=$?
+            set -e
+
+            ready_ms="$(python3 - <<'PY'
+          import time
+          print(int(time.time() * 1000))
+          PY
+          )"
+            startup_ms=$((ready_ms - start_ms))
+
+            probe_rc=999
+            session_rc=999
+            if [ "$start_rc" -eq 0 ]; then
+              set +e
+              python3 bitnet_server.py probe > "$out/probe.txt" 2>&1
+              probe_rc=$?
+              .venv-stanford/bin/python community_session.py \
+                --run \
+                --turns 4 \
+                --opener "Hey Olivia. How's your day going?" \
+                > "$out/session_stdout.txt" 2>&1
+              session_rc=$?
+              set -e
+            fi
+
+            sleep 0.5
+            cp replay/bitnet-server.log "$out/bitnet-server.log" 2>/dev/null || true
+            cp replay/community_session.json "$out/community_session.json" 2>/dev/null || true
+            cp replay/community_session_error.json "$out/community_session_error.json" 2>/dev/null || true
+            cp replay/social_state.json "$out/social_state.json" 2>/dev/null || true
+
+            if [ -n "$sampler_pid" ]; then
+              kill "$sampler_pid" 2>/dev/null || true
+              wait "$sampler_pid" 2>/dev/null || true
+            fi
+            python3 bitnet_server.py stop >/dev/null 2>&1 || true
+
+            LABEL="$label" MODEL="$model" START_RC="$start_rc" PROBE_RC="$probe_rc" SESSION_RC="$session_rc" STARTUP_MS="$startup_ms" OUT="$out" python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+
+          out = Path(os.environ['OUT'])
+          rss = []
+          rss_path = out / 'rss_kb.txt'
+          if rss_path.exists():
+              for line in rss_path.read_text(errors='replace').splitlines():
+                  try: rss.append(int(line.strip()))
+                  except ValueError: pass
+
+          timing = []
+          log_path = out / 'bitnet-server.log'
+          if log_path.exists():
+              text = log_path.read_text(errors='replace')
+              timing = [float(x) for x in re.findall(r'\(\s*([0-9]+(?:\.[0-9]+)?)\s+tokens per second\s*\)', text)]
+
+          session = None
+          session_path = out / 'community_session.json'
+          if session_path.exists():
+              try: session = json.loads(session_path.read_text())
+              except Exception: session = None
+
+          dialogue = []
+          completed = 0
+          if isinstance(session, dict):
+              completed = int(session.get('completed_reply_turns', 0) or 0)
+              for turn in session.get('turns') or []:
+                  action = turn.get('action') or {}
+                  obs = turn.get('observation') or {}
+                  inbox = obs.get('inbox') or []
+                  dialogue.append({
+                      'speaker': turn.get('agent_name'),
+                      'inbound': str(inbox[-1].get('content', '')) if inbox else '',
+                      'reply': str(action.get('content', '')),
+                  })
+
+          err = ''
+          err_path = out / 'community_session_error.json'
+          if err_path.exists():
+              err = err_path.read_text(errors='replace')[:8000]
+          elif (out / 'session_stdout.txt').exists() and int(os.environ['SESSION_RC']) != 0:
+              err = (out / 'session_stdout.txt').read_text(errors='replace')[-8000:]
+
+          result = {
+              'label': os.environ['LABEL'],
+              'model': os.environ['MODEL'],
+              'startup_seconds': round(int(os.environ['STARTUP_MS']) / 1000, 3),
+              'peak_server_rss_mb': round(max(rss, default=0) / 1024, 1),
+              'tokens_per_second_samples': timing,
+              'tokens_per_second_mean': round(sum(timing) / len(timing), 3) if timing else None,
+              'start_exit_code': int(os.environ['START_RC']),
+              'probe_exit_code': int(os.environ['PROBE_RC']),
+              'session_exit_code': int(os.environ['SESSION_RC']),
+              'stable_for_bounded_session': int(os.environ['START_RC']) == 0 and int(os.environ['PROBE_RC']) == 0 and int(os.environ['SESSION_RC']) == 0,
+              'completed_reply_turns': completed,
+              'dialogue': dialogue,
+              'error_tail': err,
+          }
+          (out / 'metrics.json').write_text(json.dumps(result, indent=2) + '\n')
+          print(json.dumps(result, indent=2))
+          PY
+          }
+
+          benchmark_one \
+            1b \
+            "$GITHUB_WORKSPACE/experiments/emily-olivia-society/models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf"
+          benchmark_one \
+            7b \
+            "$GITHUB_WORKSPACE/experiments/emily-olivia-society/models/Falcon3-7B-Instruct-1.58bit/ggml-model-i2_s.gguf"
+
+      - name: Build comparison report
+        if: always()
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('benchmark-results')
+          results = {}
+          for label in ('1b', '7b'):
+              p = root / label / 'metrics.json'
+              results[label] = json.loads(p.read_text()) if p.exists() else {'label': label, 'missing': True}
+          (root / 'comparison.json').write_text(json.dumps(results, indent=2) + '\n')
+          print(json.dumps(results, indent=2))
+          PY
+
+      - name: Upload 1B vs 7B benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-falcon-7b-benchmark
+          retention-days: 14
+          path: experiments/emily-olivia-society/benchmark-results/
+          if-no-files-found: warn

@@ -1,0 +1,54 @@
+name: Room Worker ingest simulator
+# reboot-ingest baseline kick: 2026-08-19
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/room-worker/src/index.js'
+      - 'scripts/room_worker_ingest_sim.mjs'
+      - '.github/workflows/room-worker-ingest-simulator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-worker-ingest-simulator
+  cancel-in-progress: true
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Clear previous diagnostic
+        run: rm -f room/worker-ingest-simulator-diagnostic.json
+      - name: Execute actual RoomState.putLatest
+        id: simulator
+        continue-on-error: true
+        run: node scripts/room_worker_ingest_sim.mjs
+      - name: Publish diagnostic
+        if: always()
+        run: |
+          test -f room/worker-ingest-simulator-diagnostic.json || printf '%s\n' '{"pass":false,"error":"worker ingest simulator produced no diagnostic"}' > room/worker-ingest-simulator-diagnostic.json
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add room/worker-ingest-simulator-diagnostic.json
+          git commit -m "Record Room Worker ingest simulator diagnostic" || exit 0
+          for n in 1 2 3 4 5; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; }
+            sleep "$n"
+          done
+          exit 1
+      - name: Enforce simulator result
+        if: always()
+        env:
+          SIMULATOR_OUTCOME: ${{ steps.simulator.outcome }}
+        run: test "$SIMULATOR_OUTCOME" = success

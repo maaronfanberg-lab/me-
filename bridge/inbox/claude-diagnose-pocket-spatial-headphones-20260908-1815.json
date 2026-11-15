@@ -1,0 +1,14 @@
+{
+  "nonce": "pocket-spatial-headphones-diagnose-20260908-1815",
+  "prompt": "Diagnose the CURRENT Pocket Spatial Headphones implementation in this repository. Do not propose generic tuning first. Inspect apps/pocket-spatial-headphones.html, apps/pocket-spatial-headphones.js, apps/pocket-spatial-headphones-core.js, and any Audius helper they depend on. The user is testing on iPhone/Safari with Sennheiser PXC 550-II headphones. Two observations are established: (1) DSP PROOF, which low-passes the whole output to about 400 Hz, is dramatically audible, proving Web Audio is in the playback path; (2) Headphone Spatial ON versus OFF has no appreciable audible difference, even after the spatial core was made much stronger. Identify the most likely structural/coding reason the wet spatial graph is not producing an audible change. Carefully trace the exact dry/wet routing, ChannelSplitter/ChannelMerger semantics in Safari, channelCount/channelCountMode/channelInterpretation, polarity of the L-R width path, gain staging/masterGain, whether wetMerge can collapse or cancel toward the direct signal, and whether setParam/apply/setEnabled can leave dry/wet effectively equivalent. Also inspect whether the media element might already be mono or whether Audius playback enters the graph in a way that defeats the stereo assumptions. Give a ranked diagnosis with concrete evidence from the code, and recommend ONE minimal code fix or one decisive diagnostic experiment that would falsify your leading hypothesis. Do not recommend another blind gain increase. If the architecture itself is flawed, say so and propose the smallest replacement graph that should be unmistakably audible while preserving stereo and bass. End with exact file-level edits or pseudocode sufficient to implement the next step once, not iteratively.",
+  "context": [
+    "Repo: maaronfanberg-lab/me-",
+    "Current stronger core uses directGain=.72, crossGain=.025+.145*e, widthGain=.165*w, refl1Gain=.095*d, refl2Gain=.060*d with masterGain=.78/worstCaseSum capped at .90.",
+    "DSP PROOF was added after routing uncertainty and is definitely audible to the user.",
+    "Spatial ON/OFF remains perceptually identical on the same track/headphones.",
+    "The user explicitly asked us to stop doing fix-after-fix and consult Claude before making another change."
+  ],
+  "expected_response": "A concise but rigorous root-cause analysis, ranked hypotheses tied to the current code, and one minimal next action with exact implementation guidance. No generic 'make it stronger' advice.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 10
+}

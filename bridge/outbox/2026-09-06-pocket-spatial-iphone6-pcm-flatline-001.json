@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-06-pocket-spatial-iphone6-pcm-flatline-001.json",
+  "request_sha256": "2a598e18c03a6a4d311b15e49f6f3ff3dc44887884913c0bf95ca942b4eb880f",
+  "request_nonce": "pocket-spatial-iphone6-pcm-flatline-20260906-001",
+  "completed_at": "2026-09-06T20:03:53.417787Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Diagnosis\n\nEvidence in `apps/pocket-spatial-commons.js` (`probeStream`, lines 166–241) points to a specific, well-documented WebKit/iOS-12 failure mode, not a CORS or network problem:\n\n- CI proves bytes + `Access-Control-Allow-Origin` are correct for the exact same URL, so the resource itself is not tainted at the HTTP layer.\n- `tappedMedia` (crossOrigin=anonymous, unmuted) audibly plays and its `currentTime` advances — the browser's own AVFoundation-backed media pipeline is decoding and outputting real audio.\n- The **same element**, tapped via `createMediaElementSource(tappedMedia) -> AnalyserNode`, reads a flat 128 (silence) for 2s of polling.\n\nThis is the classic iOS 12 Safari bug where a cross-origin `<audio>`/`<video>` element continues to route audio through the OS media pipeline (AVPlayer/hardware decode path) to the speakers while the WebAudio software tap silently receives zero samples. It typically triggers when: (a) the resource is delivered via HTTP range/streaming rather than fully buffered before `createMediaElementSource` is called, or (b) the CORS mode used by the browser's internal media loader doesn't propagate identically into the WebAudio node graph, even though `crossOrigin` is set correctly. The key diagnostic fact is that **the media element itself is not the failure** (it plays, clock advances) — the failure is isolated to the `MediaElementAudioSourceNode → AnalyserNode` bridge on this device/OS combination. That is a narrower, previously reported class of bug than a \"Web Audio doesn't work at all\" failure.\n\n## Smallest next physical-device experiment\n\nBefore building anything new, run a **zero-code sanity check**: apply the identical analyser tap (fftSize 256, same polling loop) to the *existing local-file* `<audio> → MediaElementAudioSourceNode` DSP graph on this same iPhone 6. If local-file PCM also flatlines, the bug is broader than \"remote,\" and the reflection DSP graph currently in production may be silently doing nothing useful even for local files — that would be the more urgent finding.\n\nAssuming local-file PCM is confirmed non-flat (which the existing shipped DSP effect suggests, but hasn't been independently proven with an analyser), the next real experiment is:\n\n**XHR/fetch → ArrayBuffer → `decodeAudioData` → `AudioBufferSourceNode` → AnalyserNode**, using the same Commons MP3 URL, gated behind the same user tap.\n\n## Evaluating the XHR+decodeAudioData path for iOS 12\n\nThis is the correct minimal probe, for three reasons:\n\n1. It removes the `<audio>` element and its OS-level media pipeline entirely from the chain — CORS is enforced only at the `fetch`/`XHR` layer (already proven by CI), and PCM is produced entirely in-process by WebKit's software decoder, bypassing whatever hardware-decode/tap disconnect causes the flatline.\n2. It isolates variables cleanly: if `decodeAudioData` succeeds and the resulting `AudioBufferSourceNode → AnalyserNode` shows non-flat data, you've proven real remote PCM can enter Web Audio on this device — full stop, no ambiguity.\n3. It's compatible with ES5/iOS 12: `XMLHttpRequest` with `responseType='arraybuffer'`, and `decodeAudioData(buffer, successCb, errorCb)` (old two-callback form, since iOS 12 WebKit's promise-based `decodeAudioData` is inconsistent) are both supported since iOS 6–9 era.\n\n**Memory/UX limits on iPhone 6 (1GB RAM):** Keep the probe to a short clip — a few seconds to ~30s, not a multi-minute track. A decoded 30s mono 44.1kHz Float32 buffer is roughly 5MB; even a minute of stereo is well under Safari's WebContent process ceiling on iOS 12. Since Pocket Spatial must not persist audio, keep the ArrayBuffer and AudioBuffer as local variables only, `null` them out and `close()` the AudioContext immediately after the probe window (mirrors the existing `cleanup()` pattern) — no IndexedDB/localStorage/Cache API writes.\n\n**User-gesture requirement:** `AudioContext` creation/`resume()` must still happen synchronously inside the button-tap handler, exactly as the current probe already does (line 200). The `fetch`/`decodeAudioData` work can happen asynchronously after that, since the context is already unlocked; only call `source.start()` after decode resolves.\n\n## Success/failure signals\n\n- **Success:** `decodeAudioData` resolves, `buffer.duration > 0`, and analyser `maxDeviation > 2` while the `AudioBufferSourceNode` plays. This proves remote PCM can enter Web Audio on this device via this path.\n- **Failure A — fetch/CORS layer:** XHR/fetch itself errors or returns 0 bytes on-device despite CI success → points to a device-specific network/TLS/CORS discrepancy (rare given CI parity), not a WebAudio bug.\n- **Failure B — decode layer:** fetch succeeds but `decodeAudioData` errors → codec/container quirk in WebKit's decoder for this specific MP3 encoding (e.g., VBR/Xing header), distinct from the media-element bug.\n- **Failure C — even AudioBufferSourceNode analyser is flat:** points to a broader, device-wide Web Audio/AnalyserNode failure (not specific to media elements or remote content) — this is the case where you should also re-check a plain oscillator→analyser as a control.\n\n## Pivot point\n\nIf the local-file analyser also flatlines, or the AudioBufferSourceNode probe also flatlines after a working oscillator control, stop browser-based work — this is an OS/WebKit-level Web Audio limitation on this iOS 12.5.x build, not something fixable in JS, and warrants a native (AVAudioEngine) spatial-audio implementation instead.",
+  "session_id": "2224b3e2-018d-471b-af65-9c965222c528",
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 14108,
+    "cache_read_input_tokens": 15198,
+    "output_tokens": 6388,
+    "output_tokens_details": {
+      "thinking_tokens": 3761
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 14108,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 5757,
+        "cache_read_input_tokens": 5609,
+        "cache_creation_input_tokens": 8499,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 8499
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.12493959999999998,
+  "num_turns": 7
+}

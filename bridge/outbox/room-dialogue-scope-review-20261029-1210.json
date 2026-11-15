@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/room-dialogue-scope-review-20261029-1210.json",
+  "request_sha256": "237580eb54f38877b11c90fc954c46c157b77b9282f77e4a1f8c6164c436ee94",
+  "request_nonce": "room-dialogue-scope-review-20261029-1210",
+  "completed_at": "2026-10-29T12:09:07.702336Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "**Observations (from the two files)**\n\n- `messages()` puts the scene clue in the system prompt (`context_for`). It says \"OPTIONAL… free to… remain on a more interesting real conversational thread\". The user turn is mostly the last three utterances.\n- The event only appears in the user prompt when `event_at(cycle)` is true. That is cycle 35175, then every multiple of 60, so about 1–2 turns in a 100-cycle trial. After that turn the event is gone. Only the static clue remains, and it is explicitly optional.\n- `witnessed_context` keeps `out[-3:]`. Once the abstract drift starts, three abstract lines fill the whole context, so the transcript is the strongest signal. The event is an `append`, but it is dropped if its `id` already exists in the context.\n- The user prompt says \"Use its meaning… as your starting point\". That pulls the model toward the previous turn, and the 3B model's own recent abstract turns reinforce it.\n- The retry path calls `validate_uptake` against the last turn only. It checks uptake of the *abstract* turn, so it can reject a grounded reply that doesn't echo that turn.\n- Environment event data is never persisted into speaker memory, so the event is \"forgotten\" by the next turn.\n\nI couldn't verify `validate_uptake` or `autonomous_text_issue` behavior because I didn't open them. The causal story below is a hypothesis.\n\n**Likeliest cause:** the concrete material is optional and transient, while the abstract transcript is mandatory and self-reinforcing. The model follows the transcript.\n\n**Fix: a persistent, per-agent \"open thread\" ledger rendered as a transcript line, not as an instruction**\n\n1. In `room_hidden_world.py`, add `scene_state(cycle)` that returns the scene and `age = cycle - onset`. Also add a per-agent boolean `voiced[entity]`, stored in the room state, meaning \"I have already said my observation aloud.\"\n2. In `messages()`, for the whole scene window (not only onset cycles), insert the event and the agent's observation into `history`, immediately before the final line. Use a stable `id`, for example `world:{scene_id}`, with `speaker=\"world\"` and the text \"[Scene: …]\". Add `\"world\"` as an allowed speaker. This is a small change in `witnessed_context`. Reserve one of the three slots so abstract turns can't push it out, for example `out[-2:] + [world_line]`.\n3. Until `voiced[entity]` is true, render the agent's own observation as a line it hasn't acted on. Set the flag when the generated text shares a content word with its observation. Use a lemma overlap check on the observation's nouns, applied only for bookkeeping and never to ban or script anything.\n4. Drop the \"remain on a more interesting thread\" permission while the scene is within N turns of onset. Replace it with a neutral constraint: \"Your next line should connect to the scene or to what was just said about it.\"\n5. Make the uptake validator two-sided during the scene window. A reply passes if it takes up the previous turn **or** the scene facts. This stops retries from forcing a return to the abstract line.\n\n**Falsifiable tests**\n\n- **20 turns (single scene, fixed seeds, A/B against current code):**\n  - Prediction: at least 12 of 20 turns contain a scene-specific noun or mechanism, such as \"pressure\", \"FM\", or \"breaker\".\n  - Prediction: all four agents voice their own observation at least once.\n  - Prediction: the fraction of abstract narrative or metaphor turns falls below 3/10, from the observed 8/10.\n  - Falsified if the gain is under 30 percentage points, or if agents only restate the scene line.\n- **100 turns (crossing the cycle 35235 scene change):**\n  - Prediction: after each onset, concrete-reference rate stays at or above 50% for the first 15 turns.\n  - Prediction: the old scene's nouns drop to near zero within 10 turns after the change.\n  - Prediction: at least two turns per scene answer a *different* agent's observation with a question or comparison. Raters score this blind.\n  - Prediction: validator rejection rate does not rise by more than 10 points.\n  - Falsified if concreteness decays within about 10 turns regardless of the ledger. That would show that the transcript, and not the prompt layout, is the dominant cause.\n\n**Failure risk:** the scene line can become a topic lock. Agents repeat the scene's facts or circle one clue, which gives concrete but stagnant dialogue. The 3B model may also copy the line's wording, which would fail the \"don't just repeat\" rule. Mitigate by expiring the world line once all four have voiced, and measure n-gram repetition in the 100-turn test.",
+  "session_id": "f7204aed-716c-45bf-8a0e-3c4d00bf1bb9",
+  "usage": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 9559,
+    "cache_read_input_tokens": 6376,
+    "output_tokens": 1741,
+    "output_tokens_details": {
+      "thinking_tokens": 20
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 9559,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1575,
+        "cache_read_input_tokens": 3601,
+        "cache_creation_input_tokens": 8733,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 8733
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.0562916,
+  "num_turns": 3
+}

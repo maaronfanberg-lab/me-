@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#06080d">
+<title>Room Attention</title>
+<style>
+:root{--bg:#06080d;--panel:#0d121b;--line:#27344a;--text:#f4f6f8;--muted:#8f9bad;--accent:#9ce8ff;--good:#9ce3be;--warm:#e6cf91;--ref:#c7b6ff}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{background:radial-gradient(900px 600px at 50% -10%,#162b42 0,transparent 62%),var(--bg)}main{width:min(100%,1080px);margin:auto;padding:max(22px,env(safe-area-inset-top)) 14px max(40px,env(safe-area-inset-bottom))}.eyebrow{font:800 10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.16em;color:var(--accent);text-transform:uppercase}h1{font-size:clamp(48px,12vw,88px);line-height:.9;letter-spacing:-.065em;margin:12px 0}.lede{max-width:760px;color:var(--muted);font-size:14px;line-height:1.55}.tiers{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}.tier{font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;padding:7px 9px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}.tier b{color:var(--text)}.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:20px 0}.metric,.node{border:1px solid var(--line);background:linear-gradient(160deg,#0d151f,#090d13);border-radius:18px}.metric{padding:15px}.metric b{display:block;font-size:clamp(24px,6vw,38px);letter-spacing:-.04em}.metric span{font:800 9px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.09em}.nodes{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.node{min-height:175px;padding:13px}.top{display:flex;align-items:center;gap:8px}.num{font:900 18px ui-monospace,SFMono-Regular,Menlo,monospace}.who{font-weight:850}.role{margin-left:auto;font:800 8px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.skills{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}.skill{border:1px solid #35576c;background:#102332;color:#d9f6ff;border-radius:999px;padding:6px 8px;font:750 9px ui-monospace,SFMono-Regular,Menlo,monospace}.skill.reference{border-color:#5a4f7b;background:#211c31;color:#e6deff}.core{color:var(--good);border-color:#2e5746;background:#0d1e18}.empty{color:#647083;font-size:11px;margin-top:14px}.meta{margin-top:12px;color:#778599;font:10px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-word}.confidence{color:var(--warm)}.foot{margin-top:18px;color:#657286;font-size:11px;line-height:1.55}.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.links a{color:#eafaff;text-decoration:none;border:1px solid var(--line);background:#0a1018;border-radius:12px;padding:10px 12px;font-weight:800;font-size:11px}@media(min-width:760px){.metrics{grid-template-columns:repeat(5,1fr)}.nodes{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">The Room · selective cognition</div>
+<h1>LIVE<br>ATTENTION</h1>
+<div class="lede">The resident core stays small. Project skills may be summoned automatically when evidence is strong enough; reference skills are explicit-only. Every temporary procedure disappears after that inference.</div>
+<div class="tiers"><span class="tier"><b>RESIDENT</b> core only</span><span class="tier"><b>PROJECT</b> relevance-routed</span><span class="tier"><b>REFERENCE</b> explicit-only</span></div>
+<div class="metrics">
+<div class="metric"><b id="project">—</b><span>project skills</span></div>
+<div class="metric"><b id="reference">—</b><span>reference skills</span></div>
+<div class="metric"><b id="loaded">—</b><span>loaded this snapshot</span></div>
+<div class="metric"><b id="chars">—</b><span>temporary chars</span></div>
+<div class="metric"><b>0</b><span>resident project chars</span></div>
+</div>
+<div class="nodes" id="nodes"></div>
+<div class="links"><a href="sarah-room.html">OPEN THE ROOM</a><a href="sarah-ai.html">SARAH</a><a href="supercomputer.html">SUPERCOMPUTER</a></div>
+<div class="foot" id="status">Waiting for live attention telemetry…</div>
+</main>
+<script>
+const names=['Sarah','Sarah','Sarah','Mara','Mara','Mara','Owen','Owen','Owen','Jules','Jules','Jules'];
+const roles=['comprehension','thought','expression'];
+const RAW='https://raw.githubusercontent.com/maaronfanberg-lab/me-/main/room/attention/';
+const box=document.getElementById('nodes');
+const pct=n=>Number.isFinite(Number(n))?Math.round(Number(n)*100)+'%':'—';
+function card(i,d){const el=document.createElement('div');el.className='node';const skills=(d?.selected_skills||[]),budget=d?.budget||{};el.innerHTML=`<div class="top"><span class="num">${String(i).padStart(2,'0')}</span><span class="who">${names[i]}</span><span class="role">${roles[i%3]}</span></div><div class="skills"><span class="skill core">RESIDENT CORE</span>${skills.map(s=>`<span class="skill ${s.tier==='reference'?'reference':''}">${(s.tier||'project').toUpperCase()} · ${s.name}</span>`).join('')}</div>${skills.length?'':`<div class="empty">No temporary skill cleared the relevance threshold.</div>`}<div class="meta">${skills.map(s=>`${s.name} · <span class="confidence">${pct(s.confidence)}</span> · ${(s.matched_triggers||[]).join(', ')||'explicit'}`).join('<br>')}${d?`<br>budget: ≤${budget.max_skills??'—'} skill(s), ≤${budget.max_chars??'—'} chars<br>used: ${d.temporary_skill_chars||0} chars · ~${d.approx_added_tokens||0} tokens`:''}</div>`;return el}
+async function get(i){const name=`node-${String(i).padStart(2,'0')}.json`;const fresh=`fresh=${Date.now()}-${Math.random()}`;for(const p of [`${RAW}${name}?${fresh}`,`../room/attention/${name}?${fresh}`]){try{const r=await fetch(p,{cache:'no-store'});if(r.ok)return await r.json()}catch{}}throw new Error('unavailable')}
+async function refresh(){const data=await Promise.all(Array.from({length:12},async(_,i)=>{try{return await get(i)}catch{return null}}));box.innerHTML='';data.forEach((d,i)=>box.appendChild(card(i,d)));const valid=data.filter(Boolean),selected=valid.flatMap(d=>d.selected_skills||[]),first=valid[0]||{};document.getElementById('project').textContent=first.available_project_skills??first.tiers?.project?.available??'—';document.getElementById('reference').textContent=first.available_reference_skills??first.tiers?.reference?.available??0;document.getElementById('loaded').textContent=selected.length;document.getElementById('chars').textContent=valid.reduce((n,d)=>n+(d.temporary_skill_chars||0),0).toLocaleString();const latest=valid.map(d=>Date.parse(d.generated_at||0)).filter(Number.isFinite).sort((a,b)=>b-a)[0];const versions=[...new Set(valid.map(d=>d.version).filter(Boolean))].join(', ');document.getElementById('status').textContent=valid.length?`${valid.length}/12 live node records · ${versions||'attention telemetry'} · latest ${latest?new Date(latest).toLocaleString():'unknown'}`:'Live telemetry is not reachable yet.'}
+refresh();setInterval(refresh,5000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh()});
+</script></body></html>

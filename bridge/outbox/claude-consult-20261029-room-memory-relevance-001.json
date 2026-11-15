@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-consult-20261029-room-memory-relevance-001.json",
+  "request_sha256": "140b5ebf9c80c4fa4fdd1ad7a369fa674886dcf203b040d6f86b7d4b0349db15",
+  "request_nonce": "claude-consult-20261029-room-memory-relevance-001",
+  "completed_at": "2026-10-29T00:18:11.960180Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "# Review: speaker-alone retrieval in `model_context`\n\nI haven't opened the repo. This rests only on the snippet you supplied.\n\n## Diagnosis\n\n**Is speaker-alone retrieval enough evidence of topical relevance? No.** The retrieval predicate is `topic_overlap OR speaker==partner OR target==partner`. The partner clause admits every memory involving that partner, whatever its topic.\n\nThe ranking then makes this worse:\n- The partner bonus is 3. Overlap is capped at `min(3, …)`.\n- A partner-only memory therefore scores 3, the same as a memory with three topic terms and no partner link.\n- Recency breaks the ties.\n\nSo when topic overlap is thin, the newest partner memory about random variable X can win. It then goes into the payload as a raw 180-character quotation. A 1B model tends to treat in-context text as something to continue, so it recalls X.\n\n**Likeliest cause (a guess I can test):** The topic window is `context[-3:]`. In a cycling conversation it is repetitive and may have only 0–2 distinct terms after `_terms` filtering. Partner-only admission then dominates. I have not seen `_terms` itself, so stopword handling and stemming are unknown.\n\n**Alternative explanations:**\n- The 1B model may drift even without the memory, as the earlier clinic and repetition failures suggest. Retrieval may be only one contributor.\n- The \"X\" memory may share a term with the topic, such as \"probability\" or \"random\" in an evolution context. That would be legitimate lexical overlap and a `_terms` problem, not a retrieval problem.\n- The prompt may frame memories as something to be mentioned, which would invite callbacks.\n- Context repetition may be the main driver of the loop.\n\n## Minimal backward-compatible change\n\nKeep the scoring. Change only the admission rule, and make the partner clause conditional:\n\n1. Admit a memory if it overlaps the topic. This is unchanged.\n2. Admit a partner-only memory (zero overlap) only under a bounded **relationship quota**:\n   - at most 1 such memory;\n   - only when the topic is thin (fewer than 2 topic terms) or the context is empty;\n   - only when it is not stale (a recency window or rank cutoff);\n   - sent with a distinct label, such as `relationship_context_not_topical`, and shortened. Optionally send speaker, target and a topic-free summary instead of the raw quotation.\n3. When topic terms are ≥2, topical overlap memories fill the slots first. A partner-only memory can take a slot only if fewer than 3 topical ones exist, and then only within the quota of 1.\n4. Keep `remembered_speech_not_verified_fact` on all of them. Add an instruction that these are not to be continued as the current topic.\n\nNothing is deleted, no vocabulary is blacklisted, and the stored memories are unchanged. Only the payload selection is gated.\n\n**Risks:**\n- **Lost implicit callbacks.** A callback with no shared words gets dropped. The quota keeps one relationship memory, which reduces this.\n- **Fewer memories can cut hallucination or increase it.** Less irrelevant text should reduce drift. But an empty context may leave the model to invent shared history. The relationship slot helps there, and the test below checks it.\n- **1-term topics are fragile.** One shared common word is weak evidence. Require 2 terms of overlap, or one rare term, for the \"strong\" tier. Rarity needs corpus statistics, which adds complexity, so I'd defer it.\n\n## 10 tests\n\n1. Topic \"species evolution selection\", partner-only memory \"random variable X, P(X=0.1)\": not retrieved when 3 topical memories exist.\n2. Same setup with 0 topical memories: at most 1 partner-only memory, labelled relationship context.\n3. Memory with 2 overlapping terms and no partner: still retrieved (unchanged).\n4. 1-term topic, partner memory with 0 overlap: at most 1 admitted. A partner memory with overlap outranks it.\n5. Empty context: at most 1 recent partner memory, and no topical retrieval crash.\n6. Stale partner-only memory (older than the cutoff), thin topic: excluded. A stale memory with overlap is still included.\n7. Total memories ≤ 3, each text ≤180 chars, each with the provenance marker.\n8. Backward compatibility: with 3 or more overlapping memories, output is byte-identical to the old behavior.\n9. Stored memory list is unchanged after `model_context` (no mutation, no deletion).\n10. Partner-only memory text containing blocklist-like words (\"clinic\") is treated identically to any other: no vocabulary special-casing. Also check that the target==entity bonus ordering is preserved.\n\n## Falsification strategy\n\n**Offline, with replay (cheap):**\n- Replay logged contexts and memory stores through the old and new selectors.\n- Measure the share of payload memories with zero overlap, and flag the exact Owen/X case.\n- Prediction: the old selector includes X, and the new one drops it.\n- If X still appears, my diagnosis is wrong. Check whether `_terms` finds a spurious overlap.\n\n**Live, with controls (the real test):**\n- Run the same seeded rooms with the old and new selectors, with the same model and temperature.\n- Add a no-memory arm to isolate how much the memories contribute at all.\n- Blind-rate off-topic turns and invented-history turns. Also count repeated n-grams.\n- Include a deliberate callback scenario where the partner earlier said something relevant. Check that it is still recalled.\n- If the no-memory arm shows the same drift, retrieval is not the main cause.\n- Use enough seeds to see variance. A 1B model is noisy, so a single run proves little.\n\n## Research context (from memory, not verified here)\n\nConversation-analysis and psycholinguistic work supports partner-specific memory:\n- Clark & Brennan on grounding.\n- Brennan & Clark (1996) on conceptual pacts, where terms are tied to a specific partner.\n\nPacts are tied to the shared referent and the ongoing activity, though. They are not reactivated unprompted on unrelated topics. Human callbacks are normally marked (\"as we said earlier…\") and usually relevant to the current turn. So the evidence supports keeping partner memory but gating it by relevance. It doesn't support injecting it as raw text. Whether this transfers to 1B LLM agents is untested, so treat the claim as a hypothesis.",
+  "session_id": "dda981a6-e75e-4d5a-a526-78e1af8bd9ca",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1116,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 2175,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 1116,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2175,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 1116,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1116
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.026495499999999998,
+  "num_turns": 1
+}

@@ -1,0 +1,229 @@
+name: Emily Olivia BitNet Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/emily-olivia-local-smoke.yml'
+      - 'experiments/emily-olivia-society/**/*.py'
+      - 'experiments/emily-olivia-society/**/*.sh'
+      - 'experiments/emily-olivia-society/upstreams.json'
+
+concurrency:
+  group: emily-olivia-bitnet-smoke
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AGENTSOCIETY_LLM_API_KEY: local-bitnet-unused
+      COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
+      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_PORT: '8080'
+      COMMUNITY_BITNET_START_TIMEOUT: '900'
+      COMMUNITY_GENERATION_TIMEOUT: '900'
+      COMMUNITY_MAX_TOKENS: '128'
+      TZ: America/Chicago
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Community Python before expensive work
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 -m py_compile bitnet_server.py patch_stanford_local.py community_cycle.py community_session.py controlled_social_space.py first_exchange.py social_bridge.py paper_act_adapter.py paper_plan_adapter.py paper_react_adapter.py paper_reflection_adapter.py persistence_reflection.py stanford_native_cycle.py
+
+      - name: Restore Community runtime and BitNet
+        id: community-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v11
+          key: community-runtime-bitnet-v11-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+          restore-keys: |
+            community-runtime-bitnet-v11-${{ runner.os }}-py311-
+
+      - name: Bootstrap BitNet build without inference probe
+        working-directory: experiments/emily-olivia-society
+        run: timeout 55m bash bootstrap_upstreams.sh
+
+      - name: Verify build artifacts before caching
+        working-directory: experiments/emily-olivia-society
+        run: |
+          test -x vendor/BitNet/build/bin/llama-cli
+          test -x vendor/BitNet/build/bin/llama-server
+          test -s models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf
+          test -f .bootstrap-ready-v11
+          grep -q 'COMMUNITY_BITNET_HTTP_V4' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+
+      - name: Save Community runtime and BitNet immediately after bootstrap
+        if: ${{ steps.community-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v11
+          key: ${{ steps.community-cache.outputs.cache-primary-key }}
+
+      - name: Record runner diagnostics
+        working-directory: experiments/emily-olivia-society
+        run: |
+          mkdir -p replay
+          { uname -a; echo; lscpu; echo; vendor/BitNet/build/bin/llama-server --version || true; } > replay/runner-diagnostics.txt 2>&1
+
+      - name: Start one persistent BitNet server
+        working-directory: experiments/emily-olivia-society
+        run: timeout 20m python3 bitnet_server.py start
+
+      - name: Confirm persistent BitNet server and timed inference
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 bitnet_server.py status
+          timeout 16m python3 bitnet_server.py probe
+
+      - name: Confirm Stanford is routed to local HTTP
+        working-directory: experiments/emily-olivia-society
+        run: grep -q 'COMMUNITY_BITNET_HTTP_V4' vendor/stanford-genagents/simulation_engine/gpt_structure.py
+
+      - name: Reset smoke-only cognition and social state
+        working-directory: experiments/emily-olivia-society
+        run: |
+          rm -rf workspaces
+          rm -f replay/social_state.json replay/community_session.json replay/community_session.jsonl replay/community_session_error.json replay/layer6_reflection.json
+
+      - name: Initialize cognition
+        working-directory: experiments/emily-olivia-society
+        run: timeout 5m .venv-stanford/bin/python init_cognition.py
+
+      - name: Six-turn autonomous real BitNet dialogue
+        working-directory: experiments/emily-olivia-society
+        run: timeout 50m .venv-stanford/bin/python community_session.py --run --turns 6
+
+      - name: Verify natural non-rut dialogue and persisted evidence
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json, math
+          from pathlib import Path
+          from paper_act_adapter import _is_recent_echo, is_usable_spoken_action
+
+          PAPER_COMMIT = 'fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4'
+          replay = Path('replay')
+          session = json.loads((replay / 'community_session.json').read_text())
+          assert session.get('status') == 'completed', session
+          assert session.get('resumed_social_state') is False, session
+          assert session.get('autonomous_opening') is True, session
+          assert session.get('discarded_pending_message_ids') == [], session
+          assert session['completed_reply_turns'] == 6, session
+          turns = session.get('turns', [])
+          assert len(turns) == 6, turns
+
+          opening = session.get('opening_turn') or {}
+          opening_action = opening.get('action', {})
+          opening_text = str(opening_action.get('content', '')).strip()
+          assert opening_text, opening
+          assert opening_action.get('cognition', {}).get('act_research_source') == PAPER_COMMIT, opening
+          history = [('Emily', opening_text)]
+
+          for turn in turns:
+              action = turn.get('action', {})
+              assert action.get('type') == 'message', turn
+              assert action.get('cognition', {}).get('act_research_source') == PAPER_COMMIT, turn
+              inbox = turn.get('observation', {}).get('inbox', [])
+              assert isinstance(inbox, list) and inbox, turn
+              inbound = str(inbox[-1].get('content', ''))
+              content = str(action.get('content', '')).strip()
+              agent_name = str(turn.get('agent', '')).strip()
+              other_name = str(inbox[-1].get('from_name', '')).strip()
+              assert is_usable_spoken_action(content, inbound, agent_name, other_name), (inbound, content)
+              assert not _is_recent_echo(content, history), (history, content)
+              assert turn.get('action_result', {}).get('success') is True, turn
+              assert turn.get('consumed_inbound') is True, turn
+              history.append((agent_name, content))
+
+          social = json.loads((replay / 'social_state.json').read_text())
+          assert social.get('version') == 1, social
+          assert isinstance(social.get('inboxes'), dict), social
+          state = json.loads((replay / 'bitnet-server-state.json').read_text())
+          seconds = state.get('probe_seconds')
+          assert state.get('ready') is True, state
+          assert isinstance(seconds, (int, float)) and math.isfinite(seconds) and seconds >= 0, state
+          print(json.dumps(session, indent=2))
+          print('Verified autonomous Stanford-paper dialogue with six delivered replies and no recent-line rut.')
+          PY
+          test -d workspaces/emily
+          test -d workspaces/olivia
+          timeout 2m python3 observer.py --summary > replay/observer.json
+          test -s replay/observer.json
+
+      - name: Verify Stanford reflection persistence
+        working-directory: experiments/emily-olivia-society
+        run: |
+          timeout 20m .venv-stanford/bin/python persistence_reflection.py --run
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('replay/layer6_reflection.json').read_text())
+          agents = report.get('agents', [])
+          assert len(agents) == 2, report
+          for agent in agents:
+              assert agent.get('status') == 'reflected', agent
+              assert agent.get('persisted') is True, agent
+              reflections = agent.get('new_reflections') or []
+              assert reflections, agent
+              for item in reflections:
+                  text = str(item).strip()
+                  assert text, agent
+                  assert '```' not in text, text
+                  assert not text.startswith(('{', '[')), text
+          print(json.dumps(report, indent=2))
+          print('Verified non-empty Stanford reflections persist and reload without JSON-fence contamination.')
+          PY
+
+      - name: Show BitNet build and server logs on failure
+        if: failure()
+        working-directory: experiments/emily-olivia-society
+        run: |
+          echo '===== generate_build_files.log ====='
+          tail -n 250 vendor/BitNet/logs/generate_build_files.log 2>/dev/null || true
+          echo '===== compile.log ====='
+          tail -n 250 vendor/BitNet/logs/compile.log 2>/dev/null || true
+          echo '===== bitnet-server.log ====='
+          tail -n 200 replay/bitnet-server.log 2>/dev/null || true
+          echo '===== community_session_error.json ====='
+          cat replay/community_session_error.json 2>/dev/null || true
+
+      - name: Upload BitNet smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-bitnet-smoke
+          retention-days: 7
+          path: |
+            experiments/emily-olivia-society/replay/
+            experiments/emily-olivia-society/workspaces/
+            experiments/emily-olivia-society/vendor/BitNet/logs/
+          if-no-files-found: warn
+
+      - name: Stop BitNet server
+        if: always()
+        working-directory: experiments/emily-olivia-society
+        run: python3 bitnet_server.py stop || true

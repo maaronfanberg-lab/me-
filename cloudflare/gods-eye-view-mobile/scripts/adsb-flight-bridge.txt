@@ -1,0 +1,46 @@
+function _flightApiUrl(viewer) {
+  const cartographic = viewer?.camera?.positionCartographic;
+  const latitude = cartographic ? Cesium.Math.toDegrees(cartographic.latitude) : 37.7749;
+  const longitude = cartographic ? Cesium.Math.toDegrees(cartographic.longitude) : -122.4194;
+  const lat = Number.isFinite(latitude) ? latitude : 37.7749;
+  const lon = Number.isFinite(longitude) ? longitude : -122.4194;
+  return API_URL + '/point/' + lat.toFixed(4) + '/' + lon.toFixed(4) + '/250';
+}
+
+function _adsbLolToStateVectorSnapshot(data) {
+  if (!data || !Array.isArray(data.ac)) return data;
+  const nowSec = Date.now() / 1000;
+  const ftToM = (v) => Number.isFinite(Number(v)) ? Number(v) * 0.3048 : null;
+  const fpmToMps = (v) => Number.isFinite(Number(v)) ? Number(v) * 0.00508 : null;
+  const ktToMps = (v) => Number.isFinite(Number(v)) ? Number(v) * 0.514444 : null;
+  const states = [];
+  for (const ac of data.ac) {
+    const lat = Number(ac?.lat);
+    const lon = Number(ac?.lon);
+    const hex = String(ac?.hex || '').trim().toLowerCase().replace(/^~/, '');
+    if (!hex || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const onGround = ac?.alt_baro === 'ground';
+    const baroAlt = onGround ? 0 : ftToM(ac?.alt_baro);
+    const geomAlt = ftToM(ac?.alt_geom);
+    const seenPos = Number(ac?.seen_pos);
+    const seen = Number(ac?.seen);
+    const timePosition = Number.isFinite(seenPos) ? nowSec - Math.max(0, seenPos) : nowSec;
+    const lastContact = Number.isFinite(seen) ? nowSec - Math.max(0, seen) : timePosition;
+    const state = new Array(18).fill(null);
+    state[0] = hex;
+    state[1] = String(ac?.flight || ac?.r || '').trim();
+    state[2] = '';
+    state[3] = timePosition;
+    state[4] = lastContact;
+    state[5] = lon;
+    state[6] = lat;
+    state[7] = baroAlt;
+    state[8] = onGround;
+    state[9] = ktToMps(ac?.gs);
+    state[10] = Number.isFinite(Number(ac?.track)) ? Number(ac.track) : null;
+    state[11] = fpmToMps(ac?.baro_rate ?? ac?.geom_rate);
+    state[13] = geomAlt;
+    states.push(state);
+  }
+  return { time: Math.floor(nowSec), states };
+}

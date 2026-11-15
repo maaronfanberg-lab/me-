@@ -1,0 +1,49 @@
+name: Room viewer fast simulator
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'room/index.html'
+      - 'scripts/room_viewer_network_simulator.mjs'
+      - '.github/workflows/room-viewer-fast-simulator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-viewer-fast-simulator
+  cancel-in-progress: true
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Execute actual Room viewer script against deterministic transports
+        id: simulator
+        continue-on-error: true
+        run: node scripts/room_viewer_network_simulator.mjs
+      - name: Publish fast simulator result
+        if: always()
+        run: |
+          test -f room/viewer-fast-simulator-diagnostic.json || printf '%s\n' '{"pass":false,"error":"fast simulator produced no diagnostic"}' > room/viewer-fast-simulator-diagnostic.json
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add room/viewer-fast-simulator-diagnostic.json
+          git commit -m "Record Room viewer fast simulator diagnostic" || exit 0
+          for n in 1 2 3 4 5; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; }
+            sleep "$n"
+          done
+          exit 1
+      - name: Enforce fast simulator result
+        if: steps.simulator.outcome != 'success'
+        run: exit 1

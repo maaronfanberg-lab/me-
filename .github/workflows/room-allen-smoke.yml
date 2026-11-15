@@ -1,0 +1,33 @@
+name: Room Allen participation smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/room_participant.py'
+      - 'cloudflare/room-worker/src/index.js'
+      - '.github/workflows/sarah-society.yml'
+      - '.github/workflows/room-allen-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate Allen injector and relay worker syntax
+        run: |
+          python3 -m py_compile scripts/room_participant.py
+          node --check cloudflare/room-worker/src/index.js
+          mkdir -p room_work
+          printf '%s\n' '{"messages":[]}' > room_work/allen-inbox.json
+          python3 scripts/room_participant.py room_work/allen-inbox.json room_work/allen-ack.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('room_work/allen-ack.json'))
+          assert data == {'ids': []}, data
+          print('PASS: Allen participation path is syntactically valid and empty-queue safe')
+          PY

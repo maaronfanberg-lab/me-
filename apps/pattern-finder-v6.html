@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b12">
+<title>Pattern Finder</title>
+<style>
+:root{
+  --bg:#090b12;--panel:#111723;--panel2:#151d2b;--line:#2a354a;
+  --text:#f3f6fc;--muted:#9aa6ba;--accent:#85e6da;--gold:#e3c983;
+  --violet:#b8a5ff;--good:#9be3b0;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{background:radial-gradient(850px 520px at 12% -8%,#182541 0,transparent 58%),radial-gradient(720px 500px at 100% 100%,#161126 0,transparent 58%),var(--bg)}
+button,textarea{font:inherit}
+main{width:min(94vw,760px);margin:auto;padding:max(26px,env(safe-area-inset-top)) 0 calc(70px + env(safe-area-inset-bottom))}
+.top{display:flex;align-items:flex-start;gap:12px;margin-bottom:24px}
+.title{min-width:0;margin-right:auto}
+.eyebrow{font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+h1{font-size:clamp(38px,9vw,64px);line-height:.95;letter-spacing:-.055em;margin:9px 0 10px}
+.sub{color:var(--muted);font-size:15px;line-height:1.45;max-width:590px}
+.reset{border:0;background:none;color:#7f8ba0;font-size:12px;padding:8px 0;cursor:pointer}
+.box{border:1px solid var(--line);border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.015));padding:12px;box-shadow:0 18px 55px rgba(0,0,0,.18)}
+textarea{width:100%;min-height:180px;resize:vertical;border:0;outline:0;border-radius:14px;background:#0d1320;color:var(--text);padding:16px;font-size:16px;line-height:1.45}
+textarea::placeholder{color:#637087}
+.go{width:100%;margin-top:10px;border:0;border-radius:15px;background:linear-gradient(135deg,#8cebe0,#d9c783);color:#071013;font-weight:900;padding:15px 16px;cursor:pointer;font-size:16px}
+.go:disabled{opacity:.55;cursor:default}
+.hint{text-align:center;color:#778398;font-size:11px;margin:9px 4px 0}
+.status{display:none;margin:20px 2px 10px;color:var(--muted);font-size:12px}
+.status.show{display:block}
+.spark{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--good);margin-right:7px;box-shadow:0 0 10px rgba(155,227,176,.65)}
+.results{display:grid;gap:10px;margin-top:12px}
+.card{border:1px solid var(--line);border-radius:19px;background:rgba(17,23,35,.88);padding:17px;animation:rise .24s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.cardTop{display:flex;align-items:flex-start;gap:12px}
+.pair{font-size:18px;font-weight:800;letter-spacing:-.025em;line-height:1.18;min-width:0;margin-right:auto}
+.score{flex:0 0 auto;border:1px solid #3b4b64;border-radius:999px;padding:6px 9px;color:var(--accent);font:800 12px ui-monospace,SFMono-Regular,Menlo,monospace}
+.kind{display:inline-block;margin-top:10px;border-radius:999px;padding:5px 8px;background:#1a2436;color:#d5c48b;font:750 10px ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.06em}
+.why{margin:10px 0 0;color:#d3dbea;font-size:14px;line-height:1.48}
+.shared{margin-top:9px;color:var(--muted);font-size:12px;line-height:1.45}
+.caveat{margin-top:9px;color:#69768b;font-size:10px;line-height:1.4}
+.empty{margin-top:18px;padding:18px;border:1px dashed #28344a;border-radius:17px;color:var(--muted);font-size:13px;line-height:1.5;display:none}
+@media(max-width:560px){
+  main{padding-top:max(18px,env(safe-area-inset-top))}
+  .top{margin-bottom:18px}
+  h1{font-size:42px}
+  textarea{min-height:160px}
+  .pair{font-size:16px}
+  .card{padding:15px}
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div class="title">
+      <div class="eyebrow">cross-domain pattern finder</div>
+      <h1>Pattern Finder</h1>
+      <div class="sub">Type anything. Put different things on separate lines. It looks for strange structural similarities — including reversed, inverse and rhythmic ones.</div>
+    </div>
+    <button class="reset" id="resetBtn">Start over</button>
+  </div>
+
+  <div class="box">
+    <textarea id="input">Finnish
+prime numbers
+C_n(t)=((1+t^4)e^{i(2πn/9+.1 sin n)}, 3t-t^2)</textarea>
+    <button class="go" id="goBtn">Find weird relationships</button>
+    <div class="hint">One thing is enough. The finder adds comparison patterns automatically.</div>
+  </div>
+
+  <div class="status" id="status"><span class="spark"></span><span id="statusText">Looking…</span></div>
+  <section class="results" id="results"></section>
+  <div class="empty" id="empty">I couldn't get a useful comparison from that yet. Try a language name, a paragraph, an equation, or a number sequence.</div>
+</main>
+
+<script src="pattern-finder-v6-core.js?v=1"></script>
+<script src="pattern-finder-v6-relations.js?v=1"></script>
+<script src="pattern-finder-v6-app.js?v=1"></script>
+</body>
+</html>

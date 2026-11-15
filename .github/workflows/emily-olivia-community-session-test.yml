@@ -1,0 +1,86 @@
+name: Emily Olivia Community Session Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      opener:
+        description: "Emily's opening message"
+        required: false
+        default: "Hello, Olivia."
+      turns:
+        description: "Maximum reply turns (2-10)"
+        required: false
+        default: "8"
+  push:
+    paths:
+      - ".community-session-test-trigger"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  bounded-session-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      AGENTSOCIETY_LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out isolated community branch
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/emily-olivia-society
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Require model secret
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY repository secret is missing."
+            exit 1
+          fi
+
+      - name: Bootstrap pinned research code
+        working-directory: experiments/emily-olivia-society
+        run: bash bootstrap_upstreams.sh
+
+      - name: Restore proven community checkpoint
+        working-directory: experiments/emily-olivia-society
+        env:
+          COMMUNITY_WORKFLOW_FILE: emily-olivia-community-run.yml
+          COMMUNITY_ARTIFACT_NAME: emily-olivia-community-results
+        run: bash restore_latest_checkpoint.sh
+
+      - name: Preserve restored cognition workspaces
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python init_cognition.py
+
+      - name: Run bounded persistent community session
+        working-directory: experiments/emily-olivia-society
+        run: |
+          OPENER="${{ github.event.inputs.opener }}"
+          TURNS="${{ github.event.inputs.turns }}"
+          if [ -z "$OPENER" ]; then OPENER="Hello, Olivia."; fi
+          if [ -z "$TURNS" ]; then TURNS="8"; fi
+          .venv-stanford/bin/python community_session.py --run --turns "$TURNS" --opener "$OPENER"
+
+      - name: Verify persistence and reflection
+        working-directory: experiments/emily-olivia-society
+        run: .venv-stanford/bin/python persistence_reflection.py --run
+
+      - name: Generate read-only observer report
+        working-directory: experiments/emily-olivia-society
+        run: python3 observer.py > replay/observer.json
+
+      - name: Upload session test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-community-session-results
+          path: |
+            experiments/emily-olivia-society/replay/
+            experiments/emily-olivia-society/workspaces/
+          if-no-files-found: error

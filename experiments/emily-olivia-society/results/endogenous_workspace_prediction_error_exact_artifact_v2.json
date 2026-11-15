@@ -1,0 +1,57 @@
+{
+  "evidence_version": 2,
+  "workflow_run_id": 33534936046,
+  "workflow_job_id": 99946826004,
+  "result_artifact_id": 9811218826,
+  "result_artifact_sha256": "8a1fa7cf62dc70c693a367bed3624f18639593aee730f6555fd615e13b55026b",
+  "source_community_run_id": 33533326825,
+  "source_community_run_number": 118,
+  "source_artifact_id": 9810957121,
+  "source_artifact_sha256": "fdab00caf21df61e63802c33e7d2cd63c7e213cb463a3e81a780a719e0803c1f",
+  "experiment": "endogenous_workspace_prediction_error_exact_artifact_v2",
+  "primary_metric": "discounted_future_retrieval_rank_delta_pe_minus_yoked",
+  "produced_dialogue": false,
+  "wrote_live_memory": false,
+  "activated_live_workspace": false,
+  "tape": {
+    "exact_node_metadata": true,
+    "tick_count": 14,
+    "time_step_start": 62,
+    "time_step_end": 75,
+    "importance_mode": "actual_stanford_node_importance",
+    "recency_mode": "derived_from_actual_stanford_created_time",
+    "retrieval_score_mode": "rank_proxy_from_recorded_stanford_retrieval_order",
+    "rejected_nonexact_turns": 676
+  },
+  "preregistered_thresholds": {
+    "minimum_effect_size": 0.05,
+    "future_horizon_ticks": 4,
+    "future_discount": 0.8,
+    "prediction_alpha": 0.35,
+    "prediction_absence_decay": 0.9,
+    "seeds": [13, 29, 43, 61, 79, 97, 113, 137],
+    "minimum_positive_seeds": 6,
+    "k": 4,
+    "minimum_tape_ticks": 12,
+    "maximum_yoke_fallback_rate": 0.25
+  },
+  "result": {
+    "status": "SUPPORTED_FOR_NEXT_OFFLINE_STAGE",
+    "median_primary_effect": 0.466644,
+    "minimum_effect_required": 0.05,
+    "positive_seed_count": 8,
+    "minimum_positive_seeds_required": 6,
+    "structural_invalid": false,
+    "yoke_invalid": false
+  },
+  "per_seed": {
+    "prediction_error_score": 0.57619,
+    "yoked_score": 0.109546,
+    "delta": 0.466644,
+    "credits_each": 14,
+    "nonzero_future_matches_each": 12,
+    "yoke_fallback_rate": 0.0,
+    "all_8_locked_seeds_identical": true
+  },
+  "interpretation": "The prediction-error selector passed the preregistered exact-artifact v2 gate by a large margin under the pinned 14-tick exact Stanford block. It chose credited memories that returned sooner and/or at substantially better future retrieval ranks than distribution-matched yoked selections. This earns permission for another offline causal stage only. It does not justify live activation. The identical seed outcomes indicate the current matching problem had no seed-sensitive tie resolution on this tape and should not be mistaken for eight independent stochastic replications."
+}

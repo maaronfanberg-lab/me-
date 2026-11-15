@@ -1,0 +1,30 @@
+// Reads all shards, applies fixed pass conditions, writes report.md and report.html, exits 1 on any failure.
+const fs=require('fs');const L=fs.readFileSync(0,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+const li=L.filter(x=>x.kind==='listen'),pu=L.filter(x=>x.kind==='pull'),de=L.find(x=>x.kind==='determinism');
+const sum=a=>a.reduce((s,x)=>s+x,0);const lab=x=>`${x.setting||x.tone} · ${x.names.length>3?'all '+x.names.length:x.names.join(' + ')}${x.cpl?' · Tangle':''}`;
+const C=[];const add=(name,cond,value,pass,worst)=>C.push({name,cond,value,pass,worst});
+let w=li.slice().sort((a,b)=>a.quietestDb-b.quietestDb)[0];
+add('Never silent','every 20 ms window louder than −60 dB, all '+li.length+' runs',`quietest ${w.quietestDb} dB`,w.quietestDb>=-60,lab(w));
+w=li.slice().sort((a,b)=>a.phoneQuietestDb-b.phoneQuietestDb)[0];
+add('Never silent on a phone','same, counting only sound above 300 Hz (what phone speakers play)',`quietest ${w.phoneQuietestDb} dB`,w.phoneQuietestDb>=-60,lab(w));
+w=li.slice().sort((a,b)=>a.heardPerSec-b.heardPerSec)[0];const um=sum(li.map(x=>x.undertowPct))/li.length,uw=Math.max(...li.map(x=>x.undertowPct)),hs=(.75*(w.move||.35)/.35);
+add('Events you can hear, not a roar','every run has ≥ 0.75 attacks a second a listener can pick out (spectral-flux onsets, Böck & Widmer 2013; a drone scores 0), scaled with Movement',`fewest ${w.heardPerSec}/s at movement ${w.move} · undertow up ${um.toFixed(1)}% on average, ${uw}% at most`,li.every(x=>x.heardPerSec>=.75*(x.move||.35)/.35),lab(w));
+const rel=x=>Math.min(...x.notesPerSec)/(.25*(x.move||.35)/.35);w=li.slice().sort((a,b)=>rel(a)-rel(b))[0];
+add('Every attractor plays','each playing attractor ≥ 0.25 notes a second at Medium movement (one every 4 s), scaled with Movement',`slowest ${Math.min(...w.notesPerSec)}/s at movement ${w.move} (${(100*rel(w)).toFixed(0)}% of its bar)`,rel(w)>=1,lab(w));
+const rv=li.filter(x=>x.recv);const okSub=x=>x.sub80>=-16&&x.sub80<=-3&&x.rumble<=x.punch;w=rv.slice().sort((a,b)=>Math.abs(a.sub80+10)>Math.abs(b.sub80+10)?-1:1)[0];
+add('Subwoofer engaged','Receiver output: sound below 80 Hz is −16 to −3 dB of the whole, as in a full mix (a system whose own notes are very low may sit near the top), and 20–40 Hz rumble stays under the 40–80 Hz punch, all '+rv.length+' runs',`below 80 Hz from ${Math.min(...rv.map(x=>x.sub80))} to ${Math.max(...rv.map(x=>x.sub80))} dB`,rv.every(okSub),lab(rv.find(x=>!okSub(x))||w));
+w=li.slice().sort((a,b)=>b.clipPct-a.clipPct)[0];add('No harsh clipping','≤ 0.5% of samples at full scale',`most ${w.clipPct}%`,w.clipPct<=.5,lab(w));
+const bad=li.filter(x=>x.nan>0);add('No broken samples','0 NaN in every run',`${bad.length} runs with NaN`,!bad.length,bad[0]?lab(bad[0]):'');
+const lv=pu.flatMap(x=>['nudge','pull','tangle'].map(k=>({x,k,r:sum(x[k])/Math.max(1e-9,sum(x.apart))})));lv.sort((a,b)=>a.r-b.r);
+add('Pulls keep the notes','no pair below half its Apart notes, '+pu.length+' pairs × 3 pulls',`lowest ${(100*lv[0].r).toFixed(0)}%`,lv[0].r>=.5,`${lv[0].x.names.join(' + ')} · ${lv[0].k}`);
+const iv=pu.map(x=>{const A=x.A,T=x.tangleX;if(!A||!T)return null;const dp=Math.max(...T.p.map((p,j)=>Math.abs(p-A.p[j]))),dn=Math.max(...T.n.map((n,j)=>Math.abs(n-A.n[j])/Math.max(.05,A.n[j]))),fl=T.k||0,dr=T.a&&A.a?Math.max(T.a[0]-A.a[0],T.a[1]-A.a[1]):0;return{x,dp,dn,fl,dr,ok:(dp>=50||dn>=.25||fl>=.2)&&fl>=.1};}).filter(Boolean);
+const ivw=iv.slice().sort((a,b)=>(a.ok-b.ok)||(Math.max(a.dp/50,a.dn/.25,a.fl/.2)+a.fl)-(Math.max(b.dp/50,b.dn/.25,b.fl/.2)+b.fl))[0];
+add('Interaction you can hear and see','at Tangle, every pair shares one space with its partner and changes audibly against Apart (pitch moves ≥ 50¢, note rate ≥ 25%, or ≥ 0.2 collisions a second, each a struck note) and visibly (≥ 0.1 collisions a second, each a spark)',ivw?`${iv.filter(y=>y.ok).length}/${iv.length} pairs · weakest: pitch ${ivw.dp.toFixed(0)}¢, notes ${(100*ivw.dn).toFixed(0)}%, ${ivw.fl.toFixed(2)} collisions/s`:'no data',iv.length>0&&iv.every(y=>y.ok),ivw?ivw.x.names.join(' + '):'');
+/* 'Replies echo the call' retired: rhythm surges are off by default since the attractors now meet physically */
+add('Deterministic','same settings twice → bit-identical sound',!de?'not run':de.same?'identical':'differs',!!(de&&de.same),'');
+const ok=C.every(c=>c.pass);const when=new Date().toISOString().slice(0,16).replace('T',' ')+' UTC';
+const md=`# Strange Effects listening review\n\n${when} · commit ${process.env.GITHUB_SHA?process.env.GITHUB_SHA.slice(0,7):'local'} · **${ok?'ALL PASS':'FAIL'}**\n\n| Check | Pass condition | Result | | Worst case |\n|---|---|---|---|---|\n`+C.map(c=>`| ${c.name} | ${c.cond} | ${c.value} | ${c.pass?'✅':'❌'} | ${c.worst} |`).join('\n')+'\n';
+fs.writeFileSync('report.md',md);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+fs.writeFileSync('index.html',`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Listening review</title><style>:root{--bg:#0f1115;--fg:#e8e6e1;--mut:#9a978f;--ok:#7fd49a;--bad:#ff7b7b;--line:#2a2d35}@media (prefers-color-scheme:light){:root{--bg:#faf8f4;--fg:#1d1c1a;--mut:#6b675f;--ok:#1d7a3e;--bad:#b3261e;--line:#e4dfd6}}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 -apple-system,system-ui,sans-serif;padding:20px 16px}h1{font-size:22px;margin:0 0 4px}.m{color:var(--mut);font-size:14px;margin-bottom:18px}.v{font-weight:700;color:${ok?'var(--ok)':'var(--bad)'}}.c{border-top:1px solid var(--line);padding:12px 0}.n{font-weight:600}.r{float:right}.p{color:var(--ok)}.f{color:var(--bad)}.s{color:var(--mut);font-size:14px}</style></head><body><h1>Strange Effects · listening review</h1><div class="m">${esc(when)} · <span class="v">${ok?'All pass':'Fail'}</span></div>${C.map(c=>`<div class="c"><span class="n">${esc(c.name)}</span><span class="r ${c.pass?'p':'f'}">${c.pass?'pass':'fail'}</span><div>${esc(c.value)}</div><div class="s">${esc(c.cond)}${c.worst?' · worst: '+esc(c.worst):''}</div></div>`).join('')}</body></html>`);
+console.log(md);process.exit(ok?0:1);

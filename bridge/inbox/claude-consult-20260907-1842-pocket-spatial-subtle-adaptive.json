@@ -1,0 +1,13 @@
+{
+  "nonce": "pocket-spatial-subtle-adaptive-20260907-1842",
+  "prompt": "The user has now tested the current Pocket Spatial adaptive steering on a real home-theater receiver and reports there is not much audible difference between ADAPTIVE STEERING on and off. Review the current implementation and diagnose why the adaptive path may be too subtle or targeting the wrong signal. Read apps/pocket-spatial.html and apps/pocket-spatial-steering-analyzer.js, and inspect apps/pocket-spatial-core.js only where needed to understand the signal path. Focus on two questions: (1) should the analyzer tap the original media source or the actual stereo signal immediately before the matrix encoder after the immersion/limiter stage, and (2) are the current modulation ranges too conservative for a receiver whose own matrix decoder already performs steering? Recommend a materially stronger but still stable design that creates an obvious A/B difference without destroying stereo compatibility. Give concrete revised ranges/logic for center, rear, separation, direct-path weighting, and attack/release. Prefer a change that can be implemented directly in the existing browser app. Do not edit files. Keep the answer concise and actionable.",
+  "context": [
+    "The receiver already passed the project's deliberate matrix speaker tests, so matrix decoding itself is proven.",
+    "Current adaptive mode analyzes correlation, mid/side energy, and L/R balance, but it taps the MediaElementAudioSourceNode before the immersion processing. The matrix encoder itself acts on the post-immersion, post-main-limiter stereo signal.",
+    "Current adaptive multipliers are intentionally bounded and likely mild: center about 0.82x-1.28x, rear about 0.62x-1.35x, separation about 0.85x-1.25x, with modest direct-path front-lock changes.",
+    "User wants a clearly stronger theater-surround effect while staying free, two-channel, browser-based, and honest about being matrix/quasi-surround rather than discrete Dolby."
+  ],
+  "expected_response": "Diagnose the subtle A/B result and give exact stronger dynamic-steering changes, especially tap point and coefficient ranges, with one or two safety guards.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 6
+}

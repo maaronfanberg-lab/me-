@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#08090d">
+<title>The Room — Live</title>
+<style>
+html,body{margin:0;min-height:100%;background:#08090d;color:#f5f3ee;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{padding:0 12px 70px}.top{position:sticky;top:0;background:#08090df2;padding:14px 2px 11px;border-bottom:1px solid #252b36;z-index:2}.title{font-size:24px;font-weight:850}.sub{font-size:11px;color:#a3a9b3;margin-top:4px}.status{margin-top:9px;font-size:12px;color:#e0bf79}.status.live{color:#98dfc8}.chat{max-width:760px;margin:14px auto}.beat{font-size:10px;color:#6f7783;text-align:center;margin:18px 0 10px}.msg{background:#11141b;border:1px solid #2b3240;border-radius:16px;padding:11px 13px;margin:0 0 10px}.who{font-size:10px;font-weight:800;letter-spacing:.1em;color:#d7c18a;margin-bottom:6px}.text{font-size:16px;line-height:1.45}.when{font-size:9px;color:#707887;margin-top:7px}.err{padding:30vh 18px;text-align:center;color:#a3a9b3;line-height:1.5}.retry{margin-top:12px;border:1px solid #394150;background:#131823;color:#fff;border-radius:12px;padding:10px 14px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="top"><div class="title">The Room</div><div class="sub">Sarah · Mara · Owen · Jules · Allen</div><div id="status" class="status">connecting…</div></div>
+<main id="chat" class="chat"><div class="err">Opening the live feed…</div></main>
+<script>
+(function(){
+  var RAW='https://raw.githubusercontent.com/maaronfanberg-lab/me-/main/room/feed.json';
+  var LOCAL='../room/feed.json';
+  var status=document.getElementById('status');
+  var chat=document.getElementById('chat');
+  var last='';
+  var busy=false;
+  function escTime(s){try{return new Date(s).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'});}catch(e){return '';}}
+  function speakerName(id,minds){return id==='allen'?'Allen':((minds[id]&&minds[id].name)||id||'');}
+  function getJSON(url,done,fail){
+    var x=new XMLHttpRequest();
+    x.open('GET',url+(url.indexOf('?')>=0?'&':'?')+'fresh='+Date.now(),true);
+    x.timeout=8000;
+    x.onreadystatechange=function(){if(x.readyState===4){if(x.status>=200&&x.status<300){try{done(JSON.parse(x.responseText));}catch(e){fail(e);}}else{fail(new Error('HTTP '+x.status));}}};
+    x.onerror=function(){fail(new Error('network'));};
+    x.ontimeout=function(){fail(new Error('timeout'));};
+    x.send();
+  }
+  function render(data){
+    var conv=(data&&data.conversation)||[];
+    var minds=(data&&data.minds&&data.minds.entities)||{};
+    var state=(data&&data.state)||{};
+    var sig=conv.length?String(conv[conv.length-1].id||'')+':'+conv.length:'';
+    status.className='status live';
+    status.textContent='LIVE · beat '+(state.cycle||'—')+' · '+(state.beat_message_count||0)+' voices';
+    if(sig===last)return;
+    last=sig;
+    chat.innerHTML='';
+    var start=Math.max(0,conv.length-80),prevBeat='';
+    for(var i=start;i<conv.length;i++){
+      var m=conv[i]||{},beat=m.beat_id||'';
+      if(beat!==prevBeat){var b=document.createElement('div');b.className='beat';b.textContent='BEAT '+(beat?beat.slice(-6):'—');chat.appendChild(b);prevBeat=beat;}
+      var d=document.createElement('div');d.className='msg';
+      var w=document.createElement('div');w.className='who';w.textContent=speakerName(m.speaker,minds);
+      var t=document.createElement('div');t.className='text';t.textContent=m.text||'';
+      var tm=document.createElement('div');tm.className='when';tm.textContent=escTime(m.at);
+      d.appendChild(w);d.appendChild(t);d.appendChild(tm);chat.appendChild(d);
+    }
+    window.scrollTo(0,document.body.scrollHeight);
+  }
+  function failView(msg){status.className='status';status.textContent='not connected';if(!last){chat.innerHTML='<div class="err">The page opened, but the live feed did not.<br>'+msg+'<br><button id="retry" class="retry">Retry</button></div>';var r=document.getElementById('retry');if(r)r.onclick=refresh;}}
+  function refresh(){if(busy)return;busy=true;getJSON(RAW,function(d){busy=false;render(d);},function(){getJSON(LOCAL,function(d){busy=false;render(d);},function(e){busy=false;failView(e&&e.message?e.message:'feed unavailable');});});}
+  refresh();setInterval(refresh,2000);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')refresh();});
+})();
+</script>
+</body>
+</html>

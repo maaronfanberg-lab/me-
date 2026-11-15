@@ -2,7 +2,11 @@ name: Deploy project home to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, gev-live-flights-build-fix]
+    paths-ignore:
+      - 'room/*.json'
+      - 'room/**/*.json'
+      - 'society/**'
   workflow_dispatch:
 
 permissions:
@@ -11,8 +15,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-${{ github.ref }}
+  # This repository receives frequent independent commits. Do not kill a valid
+  # Pages build merely because a newer commit arrived while it was running.
+  # GitHub still retains only the newest pending run for this concurrency group.
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -21,16 +28,32 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout newest ref
         uses: actions/checkout@v6
+
+      - name: Bake newest Room snapshot when legacy launcher supports it
+        run: |
+          if grep -q '__ROOM_SNAPSHOT_B64__' apps/sarah-room.html; then
+            python3 scripts/bake_room.py
+          else
+            echo 'Current Room launcher uses the live viewer; skipping legacy snapshot bake.'
+          fi
+
+      # Earth Signal is intentionally NOT rebuilt in the generic Pages workflow.
+      # Its currently committed static bundle remains available under apps/.
+      # Earth-specific builds should run only in an Earth-specific workflow.
+
       - name: Configure Pages
+        if: github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
+
       - name: Upload site
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v4
         with:
           path: .
-      - name: Deploy
+
+      - name: Deploy Pages
+        if: github.ref == 'refs/heads/main'
         id: deployment
         uses: actions/deploy-pages@v4

@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Deep Bass Machine</title><style>
+*{box-sizing:border-box}body{margin:0;background:#090a0c;color:#eee;font:15px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;padding:18px}main{max-width:760px;margin:auto}h1{margin:0;font-size:clamp(28px,8vw,54px);letter-spacing:.04em}.sub{color:#aaa;margin:6px 0 18px}.card{background:#13151a;border:1px solid #343741;border-radius:20px;padding:16px;margin:12px 0}.strike{width:min(70vw,330px);aspect-ratio:1;border-radius:50%;margin:18px auto;display:grid;place-items:center;user-select:none;touch-action:manipulation;border:1px solid #54545b;background:radial-gradient(circle at 38% 30%,#ffffff10 0 15%,transparent 35%),radial-gradient(circle,#34343a,#1e1f24 52%,#101115 74%);box-shadow:inset 0 0 70px #ffffff08,0 0 80px #00000055;font-size:28px;font-weight:800;letter-spacing:.14em}.strike.hit{animation:hit .45s}@keyframes hit{0%{transform:scale(.97);filter:brightness(1.45)}100%{transform:scale(1)}}.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}button,select{background:#17191f;color:#eee;border:1px solid #454954;border-radius:12px;padding:11px 13px;font:inherit}button{cursor:pointer}.status{text-align:center;color:#b9b9c2;font-size:13px;min-height:20px}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.ctl{background:#0d0f13;border:1px solid #2a2d34;border-radius:12px;padding:10px}.ctl label{display:flex;justify-content:space-between;font-size:12px;color:#bbb}.ctl output{color:#ddd}input{width:100%;accent-color:#888b96}.keys{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:12px}.key{padding:10px 2px;text-align:center;background:#101217;border:1px solid #30333b;border-radius:10px;touch-action:manipulation}.key b{display:block}@media(max-width:520px){.controls{grid-template-columns:1fr 1fr}.keys{grid-template-columns:repeat(4,1fr)}}
+</style></head><body><main><h1>DEEP BASS MACHINE</h1><div class="sub">Huge soft strike → deep resonant body → pleasant harmonic hum. No metallic shimmer.</div><section class="card"><div id="strike" class="strike">STRIKE</div><div id="status" class="status">Tap STRIKE — low-latency audio arms on first touch</div><div class="row"><button id="dn">−</button><select id="note"></select><button id="up">+</button><button id="stop">STOP</button></div><div id="keys" class="keys"></div></section><section class="card"><div class="row"><button data-p="choir">DEEP CHOIR</button><button data-p="monolith">MONOLITH</button><button data-p="wind">DARK WIND</button><button data-p="savage">SAVAGE BODY</button></div><div id="controls" class="controls"></div></section></main><script>
+(()=>{
+const AC=window.AudioContext||window.webkitAudioContext;
+let c,master,banks=[],bankIndex=0;
+const status=document.getElementById('status');
+const S={body:[0,1,.78],strike:[0,1,.58],weight:[0,1,.9],hum:[0,1,.72],bloom:[0,1,.62],grind:[0,1,.2],damp:[0,1,.3],size:[1,30,24]};
+const root=document.getElementById('controls');
+for(const[k,v]of Object.entries(S)){
+  const d=document.createElement('div'); d.className='ctl';
+  d.innerHTML=`<label>${k.toUpperCase()}<output></output></label><input id="${k}" type="range" min="${v[0]}" max="${v[1]}" step="${k==='size'?'.1':'.01'}" value="${v[2]}">`;
+  root.appendChild(d); const i=d.querySelector('input'),o=d.querySelector('output');
+  const f=()=>o.value=k==='size'?(+i.value).toFixed(1)+' m':Math.round(+i.value*100)+'%'; f();
+  i.oninput=()=>{v[2]=+i.value;f();};
+}
+const N=[];for(let m=24;m<=47;m++){const a=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];N.push({n:a[m%12]+(Math.floor(m/12)-1),f:440*2**((m-69)/12)})}
+const sel=document.getElementById('note');N.forEach((x,i)=>{const o=document.createElement('option');o.value=i;o.textContent=x.n;sel.appendChild(o)});sel.value=12;
+dn.onclick=()=>sel.value=Math.max(0,+sel.value-1);up.onclick=()=>sel.value=Math.min(N.length-1,+sel.value+1);
+const keys=document.getElementById('keys');N.slice(0,12).forEach((x,i)=>{const b=document.createElement('div');b.className='key';b.innerHTML=`<b>${x.n}</b>${x.f.toFixed(1)} Hz`;b.onpointerdown=e=>strikeNow(x.f,.75,e);keys.appendChild(b)});
+const R=[1,1.5,2,2.5,3,4,5,6,8,10,12,15];
+function shaperCurve(){const n=512,a=7,cv=new Float32Array(n);for(let i=0;i<n;i++){const x=i*2/(n-1)-1;cv[i]=(1+a)*x/(1+a*Math.abs(x))}return cv}
+const curve=shaperCurve();
+function g0(){const g=c.createGain();g.gain.value=.0001;return g}
+function makePan(v){if(c.createStereoPanner){const p=c.createStereoPanner();p.pan.value=v;return p}return c.createGain()}
+function makeOsc(type='sine'){const o=c.createOscillator();o.type=type;o.frequency.value=40;o.start();return o}
+function makeBank(){
+  const bus=c.createGain(),coreBus=c.createGain(),bodyBus=c.createGain(),humBus=c.createGain();
+  const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1800;
+  const sh=c.createWaveShaper();sh.curve=curve;sh.oversample='2x';
+  const grit=c.createGain();grit.gain.value=.1;
+  coreBus.connect(bus); humBus.connect(bus); bodyBus.connect(bus); bodyBus.connect(lp); lp.connect(sh); sh.connect(grit); grit.connect(bus); bus.connect(master);
+  const th={o:makeOsc('sine'),g:g0()}; th.o.connect(th.g);th.g.connect(coreBus);
+  const core={o:makeOsc('sine'),g:g0()};core.o.connect(core.g);core.g.connect(coreBus);
+  const body=R.map((r,i)=>{const o=makeOsc(i<4?'sine':'triangle'),g=g0(),p=makePan(i<3?0:Math.sin(i*1.37)*.22);o.connect(g);g.connect(p);p.connect(bodyBus);return{o,g,r,i}});
+  const hum=[1,2,3,5].map((m,i)=>{const o=makeOsc(i?'triangle':'sine'),g=g0(),p=makePan(i<2?0:Math.sin(i*1.7)*.18);o.connect(g);g.connect(p);p.connect(humBus);return{o,g,m,i}});
+  return{bus,coreBus,bodyBus,humBus,lp,grit,th,core,body,hum};
+}
+function prewarm(){
+  if(c||!AC)return;
+  try{c=new AC({latencyHint:'interactive'});master=c.createGain();master.gain.value=.8;const lim=c.createDynamicsCompressor();lim.threshold.value=-10;lim.knee.value=10;lim.ratio.value=12;lim.attack.value=.002;lim.release.value=.18;master.connect(lim);lim.connect(c.destination);banks=[makeBank(),makeBank()];status.textContent=c.state==='running'?'Audio ready':'Tap STRIKE to unlock audio';c.onstatechange=()=>{status.textContent=c.state==='running'?'Audio ready':'Tap STRIKE to unlock audio'};}catch(e){status.textContent='Audio error: '+(e.message||e)}
+}
+function env(g,t,a,p,r){const x=g.gain;x.cancelScheduledValues(t);x.setValueAtTime(.0001,t);x.exponentialRampToValueAtTime(Math.max(.0002,p),t+a);x.exponentialRampToValueAtTime(.0001,t+a+r)}
+function trigger(b,f,vel){
+  const t=c.currentTime+.0005,B=S.body[2],W=S.weight[2],H=S.hum[2],BL=S.bloom[2],D=S.damp[2],Z=(S.size[2]-1)/29,G=S.grind[2],K=S.strike[2];
+  b.bodyBus.gain.setValueAtTime(.26+.28*B,t); b.humBus.gain.setValueAtTime(.20+.28*H,t); b.coreBus.gain.setValueAtTime(.5+.3*W,t); b.lp.frequency.setValueAtTime(700+1300*B,t); b.grit.gain.setValueAtTime(.025+.20*G,t);
+  b.th.o.frequency.setValueAtTime(Math.max(12,f*.5),t);env(b.th.g,t,.0008,.32*vel*(.7+.3*K),.18+.16*Z);
+  b.core.o.frequency.setValueAtTime(f,t);env(b.core.g,t,.0015,.26*vel*(.62+.38*W),7+12*Z+6*H);
+  b.body.forEach(({o,g,r,i})=>{const F=f*r;if(F>3600){g.gain.cancelScheduledValues(t);g.gain.setValueAtTime(.0001,t);return}const h=i/(R.length-1);o.frequency.setValueAtTime(F,t);const amp=.15*vel*Math.exp(-i*.43)*(.64+.45*B)*(1-.72*h);const decay=Math.max(.45,(3.7+10*Z)*(1-h*.6)*(1-.72*D));env(g,t,.0015+.006*h,amp,decay)});
+  b.hum.forEach(({o,g,m,i})=>{o.frequency.setValueAtTime(f*m,t);const delay=[0,.18,.5,.9][i],pk=[.18,.085,.055,.035][i]*vel*(i?BL:H);const x=g.gain;x.cancelScheduledValues(t);x.setValueAtTime(.0001,t);x.setValueAtTime(.0001,t+delay);x.exponentialRampToValueAtTime(Math.max(.0002,pk),t+delay+.45);x.exponentialRampToValueAtTime(.0001,t+9+14*H+6*Z)});
+}
+function strikeNow(f,vel=.82,e){e?.preventDefault();try{if(!c)prewarm();if(!c)return;if(c.state!=='running'){const p=c.resume();if(p&&p.catch)p.catch(()=>{});}const b=banks[bankIndex++%banks.length];trigger(b,f,vel);const el=document.getElementById('strike');el.classList.remove('hit');void el.offsetWidth;el.classList.add('hit')}catch(x){status.textContent='Audio error: '+(x.message||x)}}
+strike.onpointerdown=e=>strikeNow(N[+sel.value].f,.82,e);
+strike.ontouchstart=e=>{if(e.cancelable)e.preventDefault();strikeNow(N[+sel.value].f,.82,e)};
+stop.onclick=()=>{if(!c)return;const t=c.currentTime;banks.forEach(b=>[b.th.g,b.core.g,...b.body.map(x=>x.g),...b.hum.map(x=>x.g)].forEach(g=>{g.gain.cancelScheduledValues(t);g.gain.setTargetAtTime(.0001,t,.006)}))};
+const P={choir:{body:.8,strike:.56,weight:.92,hum:.78,bloom:.72,grind:.14,damp:.27,size:24},monolith:{body:.65,strike:.45,weight:1,hum:.63,bloom:.32,grind:.1,damp:.18,size:30},wind:{body:.72,strike:.38,weight:.86,hum:.82,bloom:.58,grind:.08,damp:.34,size:28},savage:{body:.78,strike:.62,weight:.9,hum:.56,bloom:.42,grind:.48,damp:.3,size:20}};
+document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{const p=P[b.dataset.p];for(const[k,v]of Object.entries(p)){S[k][2]=v;const i=document.getElementById(k);i.value=v;i.dispatchEvent(new Event('input'))}});
+prewarm();
+})();
+</script></body></html>

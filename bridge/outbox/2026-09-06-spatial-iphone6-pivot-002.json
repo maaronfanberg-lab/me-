@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-06-spatial-iphone6-pivot-002.json",
+  "request_sha256": "9bb253f3de82f5f8ca330719cefef30c34129ba9eceb47852e5746161062bd34",
+  "request_nonce": "spatial-iphone6-pivot-20260906-002",
+  "completed_at": "2026-09-06T13:23:44.448085Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "**Recommendation:** Ship **Route B — UIKit/AVAudioEngine local-file player** first (AVAudioPlayerNode → AVAudioEnvironmentNode with `.HRTF` rendering algorithm → mainMixerNode → outputNode), operating only on locally-imported audio files (not SoundCloud streams).\n\n**Why:**\n- iOS 12.5 Safari has **no AudioWorklet** (added in 14.5). Real-time HRTF/binaural DSP in Route A would have to run on the deprecated **ScriptProcessorNode**, which executes on the main thread and reliably glitches/underruns on an A8 chip — this is the single biggest technical blocker for Route A, not a tuning problem.\n- AVAudioEngine is native, hardware-accelerated, has shipped since iOS 8, and includes a purpose-built 3D/environmental audio node (`AVAudioEnvironmentNode`) with HRTF spatialization out of the box — far less engineering than hand-rolling PannerNode-based spatialization in JS.\n- Route B has **zero SoundCloud ToS exposure** — it never touches third-party User Content, so there's no derivative-permission gating logic needed for the first release.\n- Route C is legally and technically heavier: it requires (a) a permission-check/allowlist system per track before any processing, and (b) an AAC-HLS segment fetch → decrypt → decode-to-PCM pipeline via `AVAssetReader`/`AVURLAsset`, which is non-trivial even natively and would delay a usable release. It should be deferred to a v2 gated feature, not the first ship.\n- Route A also inherits Safari-specific friction on old iOS (autoplay/gesture restrictions, background-audio limitations, memory-pressure eviction) that add risk without solving the DSP bottleneck.\n\n**Next step:** Build a minimal native prototype: single-view iOS app, `AVAudioEngine` with `AVAudioPlayerNode -> AVAudioEnvironmentNode -> mainMixerNode`, set `environmentNode.renderingAlgorithm = .HRTF`, load one local test file (m4a/mp3), and manually verify binaural left/right/front/back positioning on wired headphones on an actual iPhone 6 running iOS 12.5.x. Measure CPU load and audio-thread stability under sustained playback (watch for `AVAudioEngineConfigurationChangeNotification` and buffer underrun logs) before adding any streaming/SoundCloud logic.\n\n**Biggest trap:** Assuming Route A can be made \"good enough\" by optimizing JS — the lack of AudioWorklet on iOS 12.5 is a hard platform ceiling, not a tunable parameter, so no amount of buffer-size tweaking fixes ScriptProcessorNode glitching on this hardware/OS combo. A secondary trap: assuming Route C's legal gate (\"uploader permits derivatives\") is a one-time check — it must be re-validated per track/session since permissions can change, and the HLS-to-PCM decode step still needs to be built natively (Safari MSE/Web Audio cannot do this on iOS 12.5), so Route C effectively *also* requires most of Route B's native audio stack as a prerequisite.",
+  "session_id": "9aea162d-d87a-431b-aa0f-1b02e6dac4d9",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 509,
+    "cache_read_input_tokens": 3183,
+    "output_tokens": 2466,
+    "output_tokens_details": {
+      "thinking_tokens": 1364
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 509,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2466,
+        "cache_read_input_tokens": 3183,
+        "cache_creation_input_tokens": 509,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 509
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.0285006,
+  "num_turns": 1
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": 3,
+  "status": "locked_before_independent_replication_and_ablation",
+  "anchor_evidence": {
+    "community_run_id": 33533326825,
+    "community_run_number": 118,
+    "artifact_id": 9810957121,
+    "artifact_sha256": "fdab00caf21df61e63802c33e7d2cd63c7e213cb463a3e81a780a719e0803c1f"
+  },
+  "artifact_selection": {
+    "community_workflow_id": 345955962,
+    "maximum_run_number_exclusive": 118,
+    "desired_independent_artifacts": 4,
+    "minimum_independent_artifacts": 3,
+    "maximum_candidate_runs_to_scan": 50,
+    "minimum_exact_ticks_per_artifact": 12,
+    "require_non_overlapping_time_ranges": true,
+    "selection_order": "descending_run_number_before_outcomes"
+  },
+  "primary_metric": "discounted_future_retrieval_rank_delta_pe_minus_yoked",
+  "k": 4,
+  "future_horizon_ticks": 4,
+  "future_discount": 0.8,
+  "prediction_alpha": 0.35,
+  "prediction_absence_decay": 0.9,
+  "seeds": [17, 31, 47, 67, 83, 101, 127, 149],
+  "maximum_yoke_fallback_rate": 0.25,
+  "replication_gate": {
+    "minimum_median_artifact_effect": 0.05,
+    "minimum_positive_artifact_fraction": 0.75
+  },
+  "ablation_gate": {
+    "minimum_effect_degradation": 0.02,
+    "minimum_core_ablations_showing_degradation": 2,
+    "core_ablations": [
+      "no_prediction_learning",
+      "shuffle_surprise_identity",
+      "scramble_temporal_order"
+    ],
+    "diagnostic_ablations": [
+      "absence_decay_zero",
+      "absence_decay_one",
+      "retrieval_only"
+    ],
+    "shuffle_surprise_seed": 8675309,
+    "temporal_shuffle_seed": 314159
+  },
+  "interpretation": "Run 118 is the discovery anchor and cannot count as replication. Replication artifacts must be selected before their outcomes are computed, contain at least 12 exact Stanford-matched retrieval ticks, and have non-overlapping time-step ranges. Prediction error advances only if the replication gate passes and at least two of the three core ablations materially reduce its advantage. Passing earns shadow-mode observation only, never live influence on reflection, memory, planning, or speech."
+}

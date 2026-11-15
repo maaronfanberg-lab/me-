@@ -1,0 +1,231 @@
+name: Pocket Spatial iPhone 6 CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/pocket-spatial-*'
+    paths:
+      - 'apps/pocket-spatial.html'
+      - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-commons-buffered.js'
+      - 'apps/pocket-spatial-buffered-catalog.js'
+      - 'apps/pocket-spatial-buffer-probe.js'
+      - 'tests/pocket-spatial-core.test.js'
+      - 'tests/pocket-spatial-ui.test.js'
+      - 'tests/pocket-spatial-commons-buffered.test.js'
+      - 'tests/pocket-spatial-buffered-catalog.test.js'
+      - 'tests/pocket-spatial-buffer-probe.test.js'
+      - '.github/workflows/pocket-spatial-iphone6.yml'
+  pull_request:
+    paths:
+      - 'apps/pocket-spatial.html'
+      - 'apps/pocket-spatial-core.js'
+      - 'apps/pocket-spatial-commons-buffered.js'
+      - 'apps/pocket-spatial-buffered-catalog.js'
+      - 'apps/pocket-spatial-buffer-probe.js'
+      - 'tests/pocket-spatial-core.test.js'
+      - 'tests/pocket-spatial-ui.test.js'
+      - 'tests/pocket-spatial-commons-buffered.test.js'
+      - 'tests/pocket-spatial-buffered-catalog.test.js'
+      - 'tests/pocket-spatial-buffer-probe.test.js'
+      - '.github/workflows/pocket-spatial-iphone6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-web-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify slider-to-DSP calibration math
+        run: node tests/pocket-spatial-core.test.js
+
+      - name: Verify real UI events drive exact Web Audio targets
+        run: node tests/pocket-spatial-ui.test.js
+
+      - name: Verify buffered Commons catalog logic
+        run: node tests/pocket-spatial-buffered-catalog.test.js
+
+      - name: Verify buffered Commons immersive graph
+        run: node tests/pocket-spatial-commons-buffered.test.js
+
+      - name: Verify buffered PCM compatibility probe
+        run: node tests/pocket-spatial-buffer-probe.test.js
+
+      - name: Extract inline JavaScript
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          html=Path('apps/pocket-spatial.html').read_text()
+          scripts=re.findall(r'<script>([\s\S]*?)</script>', html, flags=re.I)
+          assert len(scripts)==1, f'expected one inline script, got {len(scripts)}'
+          Path('/tmp/pocket-spatial.js').write_text(scripts[0])
+          PY
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check apps/pocket-spatial-core.js
+          node --check apps/pocket-spatial-commons-buffered.js
+          node --check apps/pocket-spatial-buffered-catalog.js
+          node --check apps/pocket-spatial-buffer-probe.js
+          node --check /tmp/pocket-spatial.js
+
+      - name: Enforce ES5 syntax for old Safari page code
+        run: |
+          npx --yes es-check@7 es5 apps/pocket-spatial-core.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-commons-buffered.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-buffered-catalog.js
+          npx --yes es-check@7 es5 apps/pocket-spatial-buffer-probe.js
+          npx --yes es-check@7 es5 /tmp/pocket-spatial.js
+
+      - name: Verify active buffered Commons contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "load('pocket-spatial-commons-buffered.js'" apps/pocket-spatial-core.js
+          grep -q "load('pocket-spatial-buffered-catalog.js'" apps/pocket-spatial-core.js
+          grep -q "load('pocket-spatial-buffer-probe.js'" apps/pocket-spatial-core.js
+          if grep -q "load('pocket-spatial-soundcloud" apps/pocket-spatial-core.js; then
+            echo 'SoundCloud must not be part of the active Pocket Spatial loader.'
+            exit 1
+          fi
+          if grep -q "load('pocket-spatial-commons.js'" apps/pocket-spatial-core.js; then
+            echo 'Legacy remote media-element Commons path must not be active.'
+            exit 1
+          fi
+          grep -q "Category:Audio files of music" apps/pocket-spatial-buffered-catalog.js
+          grep -q 'generator=categorymembers' apps/pocket-spatial-buffered-catalog.js
+          grep -q 'LicenseShortName' apps/pocket-spatial-buffered-catalog.js
+          grep -q 'BUFFER + PLAY IMMERSIVE' apps/pocket-spatial-buffered-catalog.js
+          grep -q "responseType='arraybuffer'" apps/pocket-spatial-commons-buffered.js
+          grep -q 'decodeAudioData' apps/pocket-spatial-commons-buffered.js
+          grep -q 'createBufferSource' apps/pocket-spatial-commons-buffered.js
+          grep -q 'MAX_COMPRESSED_BYTES=6291456' apps/pocket-spatial-commons-buffered.js
+          grep -q 'MAX_DURATION_SECONDS=180' apps/pocket-spatial-commons-buffered.js
+          grep -q 'PRESET_SPACE=86' apps/pocket-spatial-commons-buffered.js
+          grep -q 'PRESET_ANGLE=64' apps/pocket-spatial-commons-buffered.js
+          grep -q 'PRESET_DEPTH=58' apps/pocket-spatial-commons-buffered.js
+          if grep -E -q 'client_id|access_token|api[_-]?key' apps/pocket-spatial-buffered-catalog.js; then
+            echo 'Buffered Commons catalog unexpectedly requires a credential.'
+            exit 1
+          fi
+          if grep -E -q 'MediaRecorder|captureStream|indexedDB|localStorage|caches\.open' apps/pocket-spatial-commons-buffered.js apps/pocket-spatial-buffered-catalog.js; then
+            echo 'Buffered Commons path must not record or persist media.'
+            exit 1
+          fi
+          echo 'Buffered Commons active-path contract passed.'
+
+      - name: Smoke-test live Wikimedia Commons API, MP3 and CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          API_URL='https://commons.wikimedia.org/w/api.php?action=query&generator=categorymembers&gcmtitle=Category%3AAudio%20files%20of%20music&gcmnamespace=6&gcmtype=file&gcmlimit=12&prop=videoinfo&viprop=url%7Cmime%7Cderivatives%7Cextmetadata&viextmetadatafilter=LicenseShortName%7CLicenseUrl%7CArtist%7CUsageTerms&format=json&origin=*'
+          UA='PocketSpatial/0.2 (https://maaronfanberg-lab.github.io/me-/apps/pocket-spatial.html)'
+          curl -fsS --max-time 25 -A "$UA" "$API_URL" -o /tmp/commons.json
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+          data=json.loads(Path('/tmp/commons.json').read_text())
+          assert 'error' not in data, data.get('error')
+          pages=(data.get('query') or {}).get('pages') or {}
+          assert pages, 'Commons category query returned no pages'
+          def meta(info,key):
+              raw=((info.get('extmetadata') or {}).get(key) or {}).get('value') or ''
+              return re.sub(r'<[^>]+>','',str(raw)).strip()
+          def license_ok(info):
+              text=' '.join([meta(info,'LicenseShortName'),meta(info,'LicenseUrl'),meta(info,'UsageTerms')]).lower()
+              if not text: return False
+              bad=('noncommercial','no derivatives','noderivatives','/by-nc','-nc-','/by-nd','-nd-')
+              return not any(x in text for x in bad)
+          def is_mp3(mime,url,key=''):
+              mime=(mime or '').lower(); url=(url or '').lower().split('?')[0]; key=(key or '').lower()
+              return 'audio/mpeg' in mime or 'audio/mp3' in mime or url.endswith('.mp3') or key=='mp3' or 'mp3' in key
+          candidates=[]
+          for page in pages.values():
+              info=((page.get('videoinfo') or [None])[0])
+              if not info or not license_ok(info): continue
+              original=info.get('url') or ''
+              if original.startswith('https://') and is_mp3(info.get('mime'),original):
+                  candidates.append((page,info,original,'original')); continue
+              for d in info.get('derivatives') or []:
+                  url=d.get('src') or d.get('url') or ''
+                  if url.startswith('https://') and is_mp3(d.get('type') or d.get('mime'),url,d.get('transcodekey') or d.get('key')):
+                      candidates.append((page,info,url,'derivative')); break
+          assert candidates, 'Commons returned no derivative-permitting MP3 candidate in this batch'
+          page,info,url,source=candidates[0]
+          Path('/tmp/commons-audio-url').write_text(url)
+          print('Testing',page.get('title'),'via',source,'MP3')
+          print('License:',meta(info,'LicenseShortName') or meta(info,'UsageTerms'))
+          PY
+          AUDIO_URL="$(cat /tmp/commons-audio-url)"
+          curl -fsSL --max-time 25 -A "$UA" \
+            -H 'Origin: https://maaronfanberg-lab.github.io' \
+            -H 'Range: bytes=0-65535' \
+            -D /tmp/commons.headers \
+            -o /tmp/commons.sample \
+            "$AUDIO_URL"
+          test -s /tmp/commons.sample
+          grep -i -E '^access-control-allow-origin:[[:space:]]*(\*|https://maaronfanberg-lab.github.io)' /tmp/commons.headers
+          echo 'Live Commons MP3 bytes and CORS check passed.'
+
+      - name: Verify page consumes the tested core
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Eq '<script src="pocket-spatial-core\.js\?v=[^"]+"></script>' apps/pocket-spatial.html
+          CORE_BUILD="$(sed -n "s/.*var build='\([^']*\)'.*/\1/p" apps/pocket-spatial-core.js | head -n1)"
+          HTML_BUILD="$(sed -n 's/.*pocket-spatial-core\.js?v=\([^"<]*\).*/\1/p' apps/pocket-spatial.html | head -n1)"
+          test -n "$CORE_BUILD"
+          test -n "$HTML_BUILD"
+          test "$CORE_BUILD" = "$HTML_BUILD"
+          grep -q 'var core=window.PocketSpatialCore' apps/pocket-spatial.html
+          grep -q 'core.appliedTargets' apps/pocket-spatial.html
+          grep -q 'core.readouts' apps/pocket-spatial.html
+          echo "Core cache id matches child-script build id: $CORE_BUILD"
+
+      - name: Verify lightweight early-reflection graph contract
+        run: |
+          grep -q 'reflDelayL1=ctx.createDelay(0.05)' apps/pocket-spatial.html
+          grep -q 'reflDelayR1=ctx.createDelay(0.05)' apps/pocket-spatial.html
+          grep -q 'reflDelayL2=ctx.createDelay(0.05)' apps/pocket-spatial.html
+          grep -q 'reflDelayR2=ctx.createDelay(0.05)' apps/pocket-spatial.html
+          grep -q 'state.reflDelayL1=state.ctx.createDelay(0.05)' apps/pocket-spatial-commons-buffered.js
+          grep -q 'state.reflDelayR1=state.ctx.createDelay(0.05)' apps/pocket-spatial-commons-buffered.js
+          if grep -E -q 'createConvolver|createScriptProcessor|AudioWorklet' /tmp/pocket-spatial.js apps/pocket-spatial-core.js apps/pocket-spatial-commons-buffered.js; then
+            echo 'Heavy/custom DSP primitive leaked into the iPhone 6 layer.'
+            exit 1
+          fi
+
+      - name: Validate legacy HTML structure
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          html=Path('apps/pocket-spatial.html').read_text()
+          assert html.lstrip().lower().startswith('<!doctype html>')
+          class P(HTMLParser):
+              def __init__(self):
+                  HTMLParser.__init__(self); self.ids=[]; self.labels=[]; self.buttons=[]; self.has_audio=False; self.lang=None
+              def handle_starttag(self,tag,attrs):
+                  a=dict(attrs)
+                  if tag=='html': self.lang=a.get('lang')
+                  if 'id' in a: self.ids.append(a['id'])
+                  if tag=='label' and 'for' in a: self.labels.append(a['for'])
+                  if tag=='button': self.buttons.append(a)
+                  if tag=='audio': self.has_audio=True
+          p=P(); p.feed(html)
+          assert p.lang=='en'; assert p.has_audio
+          assert len(p.ids)==len(set(p.ids)), 'duplicate id detected'
+          for required in ('file','space','angle','depth','spatial','audio','delay','cutoff','far','direct','reflTimes','reflGain','reflCutoff','master'):
+              assert required in p.ids, f'missing required id {required}'
+          for labelled in ('file','space','angle','depth'):
+              assert labelled in p.labels, f'missing label for {labelled}'
+          assert p.buttons and all(b.get('type')=='button' for b in p.buttons), 'every button must declare type=button'
+          print('Legacy HTML structure passed.')
+          PY

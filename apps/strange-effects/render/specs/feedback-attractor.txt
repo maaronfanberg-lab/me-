@@ -1,0 +1,97 @@
+# 19-DIMENSIONAL FEEDBACK ATTRACTOR
+# Continuous-time autonomous system
+
+# PARAMETERS
+rho = 28
+A = 0.25
+B = 1.5
+C = 1.0
+D = 1.0
+E = 0.8
+
+# NORMALIZED CORE STATES
+q1 = tanh(x1/24)
+q2 = tanh(x2/25)
+q3 = tanh((x3-25)/25)
+
+# GAUSSIAN GRAPH
+w12 = exp(-(q1-q2)^2/1.28)
+w13 = exp(-(q1-q3)^2/1.28)
+w23 = exp(-(q2-q3)^2/1.28)
+
+g1 = w12*(q2-q1) + w13*(q3-q1)
+g2 = w12*(q1-q2) + w23*(q3-q2)
+g3 = w13*(q1-q3) + w23*(q2-q3)
+
+# TWO-BAND SPECTRAL ENTROPY PROXY
+P1 = x8^2 + x9^2 + 0.000001
+P2 = x10^2 + x11^2 + 0.000001
+
+p = P1/(P1+P2)
+
+H = -(p*ln(p)+(1-p)*ln(1-p))/ln(2)
+
+# SKEWNESS FEEDBACK
+V = max(x5-x4^2,0.000001)
+
+G = (x6-3*x4*x5+2*x4^3)/(V^1.5)
+
+# TRANSPORT FEEDBACK PROXY
+W = (abs(x12-x13)+abs(x14-x15))/25
+
+# CORE DYNAMICS
+F1 = 10*(x2-x1)
+     + 18*A*g1
+     + 10*B*(2*H-1)
+
+F2 = x1*(rho-x3)-x2
+     + 18*A*g2
+     + 6*C*tanh(G)
+
+F3 = x1*x2-(8/3)*x3
+     + 18*A*g3
+     + 8*D*tanh(W)
+     + 10*E*x19
+
+# ENDOGENOUS WINDING PROXY
+Omega = ((x1-x16)*F2-(x2-x17)*F1)
+        /(1+(x1-x16)^2+(x2-x17)^2)
+
+# COMPLETE 19-VARIABLE SYSTEM
+
+dx1/dt  = F1
+dx2/dt  = F2
+dx3/dt  = F3
+
+dx4/dt  = 0.20*(x1-x4)
+dx5/dt  = 0.20*(x1^2-x5)
+dx6/dt  = 0.20*(x1^3-x6)
+dx7/dt  = 0.08*(x4-x7)
+
+dx8/dt  = -0.35*x8-1.2*x9+(x1-x7)/24
+dx9/dt  = 1.2*x8-0.35*x9
+
+dx10/dt = -0.35*x10-2.4*x11+(x1-x7)/24
+dx11/dt = 2.4*x10-0.35*x11
+
+dx12/dt = 2.0*(x1-x12)
+dx13/dt = 0.08*(x1-x13)
+
+dx14/dt = 2.0*(abs(x1-x12)-x14)
+dx15/dt = 0.08*(abs(x1-x13)-x15)
+
+dx16/dt = 0.15*(x1-x16)
+dx17/dt = 0.15*(x2-x17)
+
+dx18/dt = 0.25*(Omega-x18)
+dx19/dt = 0.10*(tanh(x18)-x19)
+
+# INITIAL CONDITIONS
+x1 = 1
+x2 = 1
+x3 = 1
+x4 through x19 = 0
+
+# INTEGRATION
+Method = RK4
+dt = 0.006

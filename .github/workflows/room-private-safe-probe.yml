@@ -1,0 +1,107 @@
+name: Room private safe probe
+
+on:
+  push:
+    paths:
+      - 'society/room-private-safe-probe.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ROOM_PROMPT_PERCEPTION: ${{ secrets.ROOM_PROMPT_PERCEPTION }}
+      ROOM_PROMPT_DELIBERATION: ${{ secrets.ROOM_PROMPT_DELIBERATION }}
+      ROOM_PROMPT_EXPRESSION: ${{ secrets.ROOM_PROMPT_EXPRESSION }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Run deterministic branching conversation-tree simulator
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,sys
+          sys.path.insert(0,'scripts')
+          import room_social_v5 as s
+          t={
+            'semantic_schema':3,'id':'topic-000001','root':'learning','current_facet':'skepticism',
+            'facets':['skepticism','curiosity'],'visited_facets':['skepticism'],'facet_index':0,
+            'unresolved':[],'examples':[],'disagreements':[],'shared_references':[],
+            'participants':list(s.ORDER),'turns':500,'low_novelty_beats':0,'recent_terms':['learning','skepticism'],
+            'last_shift_cycle':1,'status':'active'
+          }
+          history=[]
+          cycle=501
+          def beat(terms):
+            global cycle,t
+            msgs=[]
+            for i,sp in enumerate(s.ORDER):
+              msgs.append({'speaker':sp,'text':' '.join(terms),'cognition':{'topic_episode':'topic-000001','topic_terms':terms}})
+            t=s.update_topic(t,msgs,cycle)
+            history.append({'cycle':cycle,'focus':t.get('current_facet'),'status':t.get('status'),'branches':[b.get('label') for b in t.get('branches',[])[:12]]})
+            cycle+=1
+          for _ in range(6): beat(['learning','skepticism','photography'])
+          first_focus=t.get('current_facet')
+          for _ in range(6): beat(['photography','composition','light'])
+          second_focus=t.get('current_facet')
+          assert int(t.get('semantic_schema',0))==4
+          assert first_focus!='skepticism', (first_focus,history)
+          assert second_focus!='skepticism', (second_focus,history)
+          assert 'skepticism' in t.get('branch_history',[]), t
+          assert any(int(b.get('depth',0))>=2 for b in t.get('branches',[])), t
+          out={'pass':True,'first_focus':first_focus,'second_focus':second_focus,'branch_history':t.get('branch_history',[]),'branches':t.get('branches',[]),'trace':history}
+          open('room/topic-tree-diagnostic.json','w').write(json.dumps(out,indent=2)+'\n')
+          print('TOPIC TREE PASS',first_focus,'->',second_focus)
+          PY
+      - name: Prepare exact production model runtime for simulator
+        run: |
+          set -euo pipefail
+          rm -rf .room_probe_model
+          mkdir -p .room_probe_model/runtime
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'society-brain-q4_0.gguf' --dir .room_probe_model
+          gh release download society-brain-v1 --repo "$GITHUB_REPOSITORY" --pattern 'llama-runtime-linux-x64.tar.gz' --dir .room_probe_model
+          echo '7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  .room_probe_model/society-brain-q4_0.gguf' | sha256sum -c -
+          echo '360a5bfab5b8fe562c52e060a998a052f5fc7d98a0448b035c2eedbb6acfbd94  .room_probe_model/llama-runtime-linux-x64.tar.gz' | sha256sum -c -
+          tar -xzf .room_probe_model/llama-runtime-linux-x64.tar.gz -C .room_probe_model/runtime
+      - name: Run focused four-voice expression simulator
+        run: |
+          set -euo pipefail
+          server_bin=$(find .room_probe_model/runtime -type f -name 'llama-server' | head -1)
+          chmod +x "$server_bin"
+          env -u ROOM_PROMPT_PERCEPTION -u ROOM_PROMPT_DELIBERATION -u ROOM_PROMPT_EXPRESSION -u ROOM_NODE_PROMPT \
+            "$server_bin" -m .room_probe_model/society-brain-q4_0.gguf --host 127.0.0.1 --port 18080 -c 16384 -np 2 >.room_probe_model/expression-server.log 2>&1 &
+          model_pid=$!
+          trap 'kill "$model_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 120); do
+            curl -fsS http://127.0.0.1:18080/health >/dev/null 2>&1 && break
+            kill -0 "$model_pid" 2>/dev/null || break
+            sleep 1
+          done
+          ROOM_MODEL_URL='http://127.0.0.1:18080/completion' \
+          ROOM_NODE_PROMPT="${ROOM_PROMPT_EXPRESSION:-}" \
+            python3 scripts/room_expression_probe.py
+          kill "$model_pid" 2>/dev/null || true
+          trap - EXIT
+      - name: Run current full 12-node Room simulator without publishing dialogue
+        continue-on-error: true
+        run: python3 scripts/room_full_beat_probe.py
+      - name: Publish safe simulator results
+        if: always()
+        run: |
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add room/topic-tree-diagnostic.json room/expression-diversity-diagnostic.json room/private-full-beat-diagnostic.json 2>/dev/null || true
+          git commit -m "Record Room simulator results" || true
+          for n in 1 2 3 4; do
+            git push origin HEAD:main && exit 0
+            git fetch origin main || true
+            git rebase origin/main || { git rebase --abort || true; }
+            sleep "$n"
+          done
+          exit 1

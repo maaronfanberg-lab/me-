@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/geometry-cathedral-code-review-20261010-v1.json",
+  "request_sha256": "d2cec984bb714b76c39ec9b082b4ef1864c22c6732a08d67bab77b0fd40a32fa",
+  "request_nonce": "geometry-cathedral-code-review-20261010-v1",
+  "completed_at": "2026-10-10T10:28:19.656321Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "# Review of `apps/geometry-cathedral.html`\n\nI read the file statically and did not run it. Items marked **Verified** come from reading the code and the three@0.162 source behaviour as I know it. Items marked **Suggestion** are judgement calls. I found no fatal JS error in the main path.\n\n## Verified bugs\n\n**1. High: bloom path ignores the pixel ratio, so the output is blurry. `initBloom()` and `draw()`.**\n- `EffectComposer` reads `renderer.getPixelRatio()` once, in its constructor. `initBloom()` runs when the ratio is still 1.\n- `draw()` later calls `renderer.setPixelRatio(ratio)`, but `composer.setSize(w,h)` keeps using the old internal ratio of 1.\n- The scene and bloom therefore render at 1× and are upscaled by `OutputPass`. The \"Render resolution\" slider also does nothing whenever bloom is on.\n- Patch in `draw()`, before `composer.setSize`:\n  ```js\n  if(composer){composer.setPixelRatio(ratio);composer.setSize(w,h);}\n  ```\n- `antialias:true` has no effect on the composer path, because the render target has no MSAA. This is a suggestion, not part of the patch above.\n  - To fix it, pass a target with samples: `new EffectComposer(renderer,new THREE.WebGLRenderTarget(1,1,{type:THREE.HalfFloatType,samples:4}))`.\n  - On phones, either skip MSAA or keep the ratio at 1.6 or below.\n\n**2. High: GPU memory leak on every rebuild. `disposeTree()`.**\n- In r162, `InstancedMesh` buffers (`instanceMatrix` and `instanceColor`) are freed only when `InstancedMesh.dispose()` fires its `dispose` event.\n- `disposeTree` only disposes geometry and materials, so every slider tick, preset or mode switch leaks the pearl instance buffers.\n- Patch: add `if(node.isInstancedMesh)node.dispose();` inside the traverse callback.\n\n**3. Medium-high: Focus mode on mobile is only 63svh tall. CSS.**\n- The mobile rule `.stage{height:var(--scene-height);position:sticky}` still sets `height`.\n- `body.focus .stage{position:fixed;inset:0}` wins on position but doesn't override `height`, so the fixed stage is 63svh and not full screen.\n- The page also still scrolls behind it.\n- Patch:\n  ```css\n  body.focus{overflow:hidden}\n  body.focus .stage{position:fixed;inset:0;height:100svh;min-height:0;z-index:20}\n  ```\n\n**4. Medium: dead or misleading controls and text.**\n- `fieldFrequency` (\"Moving luminous wave\") is never read anywhere.\n- `drift` (\"Particle orbit speed\") only wiggles the root's z rotation and, in gravity mode, adds a slight y rotation. Particles are static `Points`, and the `animated` array is never used.\n- The gravity `science` text says \"animated beads are artistic orbit markers\", but nothing is animated. Either animate the sparks or change the text to \"static marker particles\".\n- Patch (minimal): remove `fieldFrequency` from `configs`, and fix the wording of the `drift` hint and the gravity science text.\n- In torus mode, `pearls` is effectively capped near `branches`, because only every third branch gets 3 pearls.\n\n**5. Medium: PID readout and time dilation. `animate()` and `advance()`.**\n- `#pidValue` updates only every 1.3 s, inside the HUD tick, so the \"live\" error looks frozen. Update it each frame, or every 150 ms, when `mode==='control'`.\n- The controller integrates with real `1/120` steps regardless of `params.speed`, so \"Time dilation\" at 0 doesn't freeze the PID. It only freezes `t`, which drives the disturbance and the pulse.\n- Patch: `advance(1/120*params.speed)`. Guard the derivative term, which divides by `dt`, with `Math.max(dt,.005)`. That guard already exists.\n\n**6. Medium: portrait phone framing. `draw()`.**\n- The vertical FOV is fixed at 46° with the camera about 13 units away. At an aspect of about 0.7, the horizontal half-width at that distance is under 4 units.\n- The cathedral's radius is up to about `R*1.65`, so it is clipped on phones.\n- Patch in `draw()` after setting the aspect:\n  ```js\n  camera.fov = w/h<1 ? Math.min(78, 2*Math.atan(Math.tan(23*Math.PI/180)/(w/h))*180/Math.PI) : 46;\n  ```\n  Put it before `updateProjectionMatrix`.\n\n**7. Low-medium: mobile HUD overlap.**\n- `#stats` (\"NN FPS · DRAG TO ORBIT · PINCH TO ZOOM\") is about 200 px wide. It collides with `.stageInfo` (max-width 230 px) on a 390 px screen.\n- Patch: `@media(max-width:800px){#stats{display:none}}`. Alternatively, keep only the FPS on mobile.\n\n**8. Low: the Orbit button's `.active` state isn't initialised.** Autorotate starts on, but the button doesn't show it. Add `$('#orbit').classList.toggle('active',params.autorotate)` in `syncUi`.\n\n## Math and labeling (Flamm / PID)\n\n**Verified correct.**\n- `flamm()` uses the right relation, z = 2√(rs(r−rs)), shifted so z=0 at the outer edge.\n- The throat at r=rs has a vertical tangent, and the funnel shape is right.\n- The `mesh` + `horizon` geometry is consistent.\n\n**Verified labeling inaccuracy.**\n- `flamm()` multiplies by `warp*1.05`. At the default `warp=1` this is already a 5% distortion, and the science text claims \"the Flamm paraboloid relation\".\n- Patch: drop the `1.05`. Change the text to \"Flamm paraboloid, vertically scaled by the Embedding depth slider, so it is exact only at 1.0×\".\n- Rename the \"Schwarzschild scale\" label to \"Horizon radius rs (model units)\". The code sets `rs=mass*.59`, which is not 2GM/c².\n\n**PID.**\n- It is a valid discrete PID on a spring-damper plant, with a −0.55x restoring spring, an integral clamp as anti-windup, and a clamped derivative.\n- P-only control leaves a steady-state offset because of the spring. That is a good teaching point, so mention it in the text.\n- The derivative acts on error, so there is a kick on the first step. This is acceptable.\n\n**Suggestion.** Set `orbit.target.y≈-1.5` in gravity mode, because the funnel centre sits well below y=0.\n\n## Three.js 0.162 usage\n\n- **Fine:**\n  - The importmap and addons paths are correct, and `OutputPass` is used after bloom.\n  - Tone mapping and exposure live in `OutputPass`, which reads the renderer settings each frame.\n  - The `EffectComposer` → `RenderPass` → `UnrealBloomPass` → `OutputPass` order is right.\n  - `bloom<=.03` falls back to `renderer.render` correctly.\n  - `Iridescence` on `MeshPhysicalMaterial` and the `InstancedMesh` colour usage are valid.\n- **Suggestion (colour):** `Color.setHSL(h,s,l)` defaults to the linear working space, so `colorAt` produces washed-out pastels. Use `c.setHSL(h,sat,.62,THREE.SRGBColorSpace)` to get the intended pearly or saturated hues. Reduce the lightness if it ends up too bright.\n- **Suggestion (sparks and stars):** `PointsMaterial` sparks are about 1–2 px squares (size .026 at distance 13). Use a radial-gradient `CanvasTexture` as `map` (with `alphaTest` or additive blending), and size around .06–.1. Remember to dispose of it.\n- **Suggestion (screenshot cost):** `preserveDrawingBuffer:true` costs fill-rate on iOS. Instead, call `render()` and then `toDataURL` in the same tick; with `preserveDrawingBuffer:false` that still works.\n\n## Performance on iPhone\n\n- Bloom is the main cost: UnrealBloomPass runs 5 mip levels in half float.\n  - After fix #1, the effective resolution rises from 1× to 1.6×, so cap the pixel ratio at 1.25 when bloom is on and the device is mobile.\n- Add a simple adaptive step: if the FPS stays under 30 for 2 HUD ticks, lower the `quality` param.\n- Suggestion: add `webglcontextlost` (`preventDefault`) and `webglcontextrestored` (`build()`) handlers, since iOS drops contexts often.\n- Suggestion: pause the loop when `document.hidden`.\n- Suggestion: add `::-moz-range-thumb` styling for the Firefox sliders.\n- Suggestion: \"Mutate geometry\" and \"Surprise Me\" only change cathedral-style params. They do almost nothing visible in gravity mode, and the torus ignores `radius`. Branch on mode and mutate `mass`, `warp` and `grid` when the mode is gravity.\n\n## Priority order for ChatGPT's patch\n\n1. #2: InstancedMesh dispose.\n2. #1: `composer.setPixelRatio`.\n3. #3: Focus mode CSS.\n4. #6: portrait FOV.\n5. #4: remove or fix the dead controls and the wrong gravity text.\n6. #5: PID readout rate and `speed` scaling.\n7. #7 and #8, then the Flamm label fix.\n8. Colour-space, sprite and context-loss suggestions.",
+  "session_id": "f1e7f8e7-c060-4595-8bd7-7324636841b3",
+  "usage": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 20129,
+    "cache_read_input_tokens": 6047,
+    "output_tokens": 13364,
+    "output_tokens_details": {
+      "thinking_tokens": 9881
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 20129,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 13290,
+        "cache_read_input_tokens": 3443,
+        "cache_creation_input_tokens": 19290,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 19290
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.21476869999999998,
+  "num_turns": 2
+}

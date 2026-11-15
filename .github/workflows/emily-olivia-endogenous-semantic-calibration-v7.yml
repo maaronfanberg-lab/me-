@@ -1,0 +1,84 @@
+name: Emily Olivia semantic refractory calibration v7
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/emily-olivia-society/endogenous_semantic_refractory_calibration_v7.py'
+      - '.github/workflows/emily-olivia-endogenous-semantic-calibration-v7.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  development-calibration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            experiments/emily-olivia-society/dialogue_attractor.py
+            experiments/emily-olivia-society/endogenous_workspace.py
+            experiments/emily-olivia-society/endogenous_workspace_replay.py
+            experiments/emily-olivia-society/endogenous_workspace_artifact_tape.py
+            experiments/emily-olivia-society/endogenous_refractory_selection_v5.py
+            experiments/emily-olivia-society/endogenous_semantic_refractory_v6.py
+            experiments/emily-olivia-society/endogenous_semantic_refractory_calibration_v7.py
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: emily-olivia-community-results
+          path: artifact-112
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 33532383600
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: emily-olivia-community-results
+          path: artifact-118
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 33533326825
+
+      - name: Compile calibration instrument
+        working-directory: experiments/emily-olivia-society
+        run: python3 -m py_compile endogenous_semantic_refractory_calibration_v7.py endogenous_semantic_refractory_v6.py
+
+      - name: Run fixed-grid development calibration
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 endogenous_semantic_refractory_calibration_v7.py \
+            --historical-replica ../../artifact-112 \
+            --discovery-anchor ../../artifact-118 \
+            --out semantic-calibration-v7.json
+
+      - name: Enforce development-only boundary
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('semantic-calibration-v7.json').read_text())
+          assert d['evidence_role'] == 'development_only_not_confirmatory'
+          assert d['produced_dialogue'] is False
+          assert d['wrote_live_memory'] is False
+          assert d['activated_live_workspace'] is False
+          assert d['activated_shadow_mode'] is False
+          assert d['results']['shadow_mode_permitted'] is False
+          print(json.dumps({'candidate': d['candidate'], 'results': d['results']}, indent=2, sort_keys=True))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emily-olivia-semantic-refractory-calibration-v7
+          path: experiments/emily-olivia-society/semantic-calibration-v7.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>LEVIATHAN — cable bass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="leviathan.css?v=20260819b">
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-top">
+    <h1>LEVIATHAN</h1>
+    <span class="sub">7 cables · 7 pickups</span>
+    <span class="sub" id="engTag" style="margin-left:auto;color:#4C5872"></span>
+  </div>
+  <div class="gauge">
+    <div class="gauge-track">
+      <div class="gauge-fill" id="gfill"></div>
+      <div class="gauge-mark" style="left:20%"></div>
+    </div>
+    <div class="gauge-lbl">
+      <span>CABLE LOAD <b id="gpct">—</b> of breaking</span>
+      <span>FRAME <b id="gframe">—</b></span>
+    </div>
+  </div>
+</div>
+
+<div class="stage">
+  <canvas id="cv"></canvas>
+  <div class="stage-tag">bridge → clamp → nut</div>
+  <div class="stage-note" id="noteName">—</div>
+</div>
+
+<button class="power" id="power">POWER ON</button>
+
+<div id="classicQuick" style="margin:12px;padding:12px;border:1px solid #38455F;background:#0C111C">
+  <div style="font-family:Oswald,sans-serif;font-size:15px;letter-spacing:.16em;color:#C9D3E6;margin-bottom:3px">CLASSICAL AUTO-PLAY</div>
+  <div style="font-size:10px;color:#68758F;margin-bottom:10px">Tap one. LEVIATHAN powers itself on and performs for about 70 seconds.</div>
+  <div style="display:grid;grid-template-columns:1fr;gap:7px">
+    <button class="btn" style="width:100%;text-align:left;padding:13px" onclick="window.playLeviathanClassic&&window.playLeviathanClassic('bach')">▶ BACH — PRELUDE IN C · ~71 SEC</button>
+    <button class="btn" style="width:100%;text-align:left;padding:13px" onclick="window.playLeviathanClassic&&window.playLeviathanClassic('moon')">▶ BEETHOVEN — MOONLIGHT · ~75 SEC</button>
+    <button class="btn" style="width:100%;text-align:left;padding:13px" onclick="window.playLeviathanClassic&&window.playLeviathanClassic('satie')">▶ SATIE — GYMNOPÉDIE NO. 1 · ~72 SEC</button>
+  </div>
+</div>
+
+<div id="workpieceQuick" style="margin:12px;padding:12px;border:1px solid #5B45A8;background:#0C111C">
+  <div style="font-family:Oswald,sans-serif;font-size:15px;letter-spacing:.16em;color:#C9D3E6;margin-bottom:3px">ORIGINAL WORK MUSIC</div>
+  <div style="font-size:10px;color:#68758F;margin-bottom:4px">Aluminum modal piano · cathedral reverb · LEVIATHAN · trance lead · electronic percussion · dubstep bass</div>
+  <div id="workpieceSection" style="font-size:10px;color:#8C6BF0;margin-bottom:10px">I · Nave — aluminum piano alone</div>
+  <button class="btn" id="workpiecePlay" style="width:100%;text-align:left;padding:14px">▶ PLAY — THE CATHEDRAL MACHINE · 30:00</button>
+  <div style="display:flex;gap:7px;margin-top:7px">
+    <button class="btn wide" id="workpiecePause">PAUSE</button>
+    <button class="btn wide" id="workpieceStop">STOP</button>
+  </div>
+  <div style="height:7px;border:1px solid #232D45;background:#080B12;margin-top:11px;overflow:hidden"><div id="workpieceFill" style="height:100%;width:0%;background:#8C6BF0"></div></div>
+  <div style="display:flex;justify-content:space-between;gap:8px;margin-top:7px;font-size:10px;color:#68758F">
+    <span id="workpieceStatus">Ready</span><span id="workpieceClock">0:00 / 30:00</span>
+  </div>
+</div>
+
+<div class="kbwrap" id="kbwrap" style="display:none">
+  <div class="kbrow kb-acc" id="kbAcc"></div>
+  <div class="kbrow kb-nat" id="kbNat"></div>
+  <div class="kbctl">
+    <button class="btn wide" id="octDn">◀ OCTAVE</button>
+    <button class="btn" id="panic">STOP</button>
+    <button class="btn wide" id="octUp">OCTAVE ▶</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab on" data-p="pu">PICKUPS</button>
+  <button class="tab" data-p="st">STRING</button>
+  <button class="tab" data-p="rig">RIG</button>
+  <button class="tab" data-p="ck">CHECK</button>
+</div>
+
+<div class="panel on" id="p-pu"></div>
+<div class="panel" id="p-st"></div>
+<div class="panel" id="p-rig"></div>
+<div class="panel" id="p-ck"></div>
+
+<script src="leviathan-core.js?v=20260819b"></script>
+<script src="leviathan-ui.js?v=20260819b"></script>
+<script src="leviathan-checks.js?v=20260819b"></script>
+<script src="leviathan-classics.js?v=20260819d"></script>
+<script src="leviathan-workpiece.js?v=20260819e"></script>
+</body>
+</html>

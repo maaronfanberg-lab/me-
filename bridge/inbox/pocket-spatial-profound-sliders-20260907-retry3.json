@@ -1,0 +1,13 @@
+{
+  "nonce": "pocket-spatial-profound-sliders-20260907-retry3",
+  "prompt": "Inspect apps/pocket-spatial.html and apps/pocket-spatial-core.js. The user says Angle and the other spatial sliders still feel weak, and the result does not feel truly 3D or immersive over stereo speakers/home-theater front channels. Identify the 3 to 5 highest-impact DSP changes that would make slider movement produce profound, unmistakable perceptual changes, especially Angle, Depth, Spatial Amount, and Room Wrap. Give concrete Web Audio topology, formulas, gain/delay/filter ranges, defaults, and extreme values. Prioritize transaural/crosstalk cancellation, mid-side processing, decorrelation, depth cues, and front/back/elevation cues that do not require measured HRTFs. The top 20-30% of controls may intentionally sound excessive. Preserve limiting and avoid simply making it louder.",
+  "context": [
+    "Current graph includes direct stereo paths, delayed filtered cross-ear paths, early reflections, later cross-fed room-wrap arrivals, master trim, and a limiter.",
+    "Several controls already use exponential mappings, but perceptual impact remains too small.",
+    "Playback source is live Audius via HTMLAudioElement into Web Audio on iPhone, then to a home-theater system.",
+    "The current processor outputs stereo, not discrete surround."
+  ],
+  "expected_response": "Return a concise prioritized engineering review. For each recommendation, state why it should sound stronger than the current design and provide enough detail to implement it in Web Audio. End with a recommended first implementation order.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 20
+}

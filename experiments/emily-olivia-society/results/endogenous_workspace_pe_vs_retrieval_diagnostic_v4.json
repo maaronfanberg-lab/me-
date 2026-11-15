@@ -1,0 +1,52 @@
+{
+  "evidence_version": 4,
+  "experiment": "anchor_pe_vs_retrieval_diagnostic_v4",
+  "workflow_run_id": 33536906637,
+  "workflow_job_id": 99953340594,
+  "result_artifact_id": 9811991087,
+  "result_artifact_sha256": "b5750b1ef6bba948b23e741978d675565b4cf8beb75b35f0dd4e392528de1b9e",
+  "source_run_id": 33533326825,
+  "source_artifact_id": 9810957121,
+  "source_artifact_sha256": "fdab00caf21df61e63802c33e7d2cd63c7e213cb463a3e81a780a719e0803c1f",
+  "produced_dialogue": false,
+  "wrote_live_memory": false,
+  "activated_live_workspace": false,
+  "shadow_mode_permitted": false,
+  "tape": {
+    "tick_count": 14,
+    "time_step_start": 62,
+    "time_step_end": 75,
+    "exact_node_metadata": true
+  },
+  "anchor_results": {
+    "learned_prediction_error": {
+      "selector_score": 0.5761904761904761,
+      "delta_vs_yoked": 0.46664399092970515
+    },
+    "retrieval_only": {
+      "selector_score": 0.5761904761904761,
+      "delta_vs_yoked": 0.46664399092970515
+    },
+    "no_prediction_learning": {
+      "selector_score": 0.5761904761904761,
+      "delta_vs_yoked": 0.46664399092970515
+    },
+    "shuffle_surprise_identity": {
+      "selector_score": 0.1997866419294991,
+      "delta_vs_yoked": 0.0369171304885591
+    },
+    "scramble_temporal_order": {
+      "selector_score": 0.5568095238095238,
+      "delta_vs_yoked": 0.43674716553287973
+    },
+    "prediction_error_minus_retrieval_selector_score": 0.0,
+    "prediction_error_minus_retrieval_delta_vs_yoked": 0.0
+  },
+  "replica_context": {
+    "community_run_number": 112,
+    "learned_prediction_error_delta_vs_yoked": 0.109893,
+    "retrieval_only_delta_vs_yoked": 0.496871,
+    "prediction_error_minus_retrieval_delta": -0.386978
+  },
+  "interpretation": "The original v2 positive result does not identify learned prediction error as its cause. On the discovery anchor, learned prediction error, no-learning, and plain retrieval are exactly tied. On the one older non-overlapping replica, plain retrieval substantially outperforms learned prediction error. The prediction-learning mechanism therefore has no demonstrated incremental value and must not advance to shadow mode. The surviving clue is narrower: item identity and temporal order can matter, but that requires a new hypothesis tested directly against retrieval rather than being called prediction error."
+}

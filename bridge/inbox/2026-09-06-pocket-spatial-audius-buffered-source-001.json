@@ -1,0 +1,16 @@
+{
+  "nonce": "pocket-spatial-audius-buffered-source-20260906-001",
+  "prompt": "Read-only architecture and rights-handling consult for Pocket Spatial on a physical iPhone 6 / iOS 12.5.x Safari. The current app has a proven buffered source path: remote MP3 -> XMLHttpRequest responseType=arraybuffer -> decodeAudioData callback form -> AudioBufferSourceNode -> existing lightweight stereo Pocket Spatial DSP. Wikimedia Commons works on the physical phone. We now want Audius as a second source before further perceptual tuning. Current official Audius API exposes GET /tracks/{track_id}/stream as a streamable MP3 endpoint. Audius track metadata includes a license field and access/stream gating fields. Audius Terms say creator-selected restrictions carry into API use and alternative Creative Commons licenses can prohibit derivatives. Recommend the smallest robust Audius integration for old Safari: discovery/search endpoint choice, whether to use api.audius.co directly or discovery-node failover, browser-safe authentication/app_name/API-key strategy as of 2026, how to construct/follow the stream URL, CORS/redirect concerns with XHR ArrayBuffer, handling stream-gated/non-streamable tracks, and conservative license filtering so Pocket Spatial does not spatial-process tracks whose selected license prohibits derivatives. Also advise whether to reuse the existing buffered engine through a source-neutral track object or maintain separate engines. Preserve ES5/iOS12 compatibility, no service worker, no persistence, no recording/export, and do not change DSP tuning yet. Do not modify repo files.",
+  "context": [
+    "Device: iPhone 6, iOS 12.5.x Safari.",
+    "Physical result: remote buffered MP3 via XHR -> decodeAudioData -> AudioBufferSourceNode works and feeds real PCM.",
+    "Current active source: Wikimedia Commons buffered catalog.",
+    "Current per-track safety ceiling: 6 MB compressed / 180 seconds decoded duration.",
+    "Current Audius official API reference lists GET /tracks/{track_id}/stream as streamable MP3.",
+    "Current Audius Terms/API licensing materials say creator-selected restrictions carry into API use and Creative Commons NoDerivatives options exist.",
+    "Goal: prove a second live music source works before further sound-quality tuning."
+  ],
+  "expected_response": "Under 900 words: recommended endpoint/auth pattern, browser/CORS risks, exact metadata gates, license-filter logic, source-neutral integration shape, and focused on-device diagnostics for the Audius path. State anything that must be verified live before merge.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 10
+}

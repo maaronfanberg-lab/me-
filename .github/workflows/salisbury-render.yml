@@ -1,0 +1,80 @@
+name: salisbury render
+
+# Renders LAPSE (compositions/salisbury) in full and commits the MP3 and a check report to its own branch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      t0:
+        description: "Start time (s)"
+        required: false
+        default: "0"
+      t1:
+        description: "End time (s)"
+        required: false
+        default: "1200"
+      label:
+        description: "Short name for the output"
+        required: false
+        default: "full"
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install numpy==2.5.3 scipy==1.18.1 matplotlib==3.11.2
+      - run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+      - name: Fetch the VSCO-2-CE sample library (CC0), only the folders the piece uses
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse https://github.com/sgossner/VSCO-2-CE "$RUNNER_TEMP/vsco"
+          cd "$RUNNER_TEMP/vsco"
+          git sparse-checkout set Strings Brass Woodwinds "Keys/Organ" Percussion 2>&1 | tee -a "$GITHUB_WORKSPACE/compositions/salisbury/ci.log"
+          du -sh . | tee -a "$GITHUB_WORKSPACE/compositions/salisbury/ci.log"
+          ls Percussion | head -3 | tee -a "$GITHUB_WORKSPACE/compositions/salisbury/ci.log"
+          head -c 64 "Strings/Harp/KSHarp_A2_mf.wav" | od -c | head -2 | tee -a "$GITHUB_WORKSPACE/compositions/salisbury/ci.log"
+      - name: Compose and render
+        working-directory: compositions/salisbury
+        env:
+          VSCO: ${{ runner.temp }}/vsco
+        run: |
+          set -o pipefail
+          python -c "import numpy, scipy, sys; print(sys.version, numpy.__version__, scipy.__version__)" 2>&1 | tee -a ci.log
+          python compose2.py 2>&1 | tee -a ci.log
+          python -W ignore render.py ${{ inputs.t0 }} ${{ inputs.t1 }} lapse.wav 2>&1 | tee -a ci.log
+      - name: Encode and check
+        working-directory: compositions/salisbury
+        run: |
+          mkdir -p out flac
+          # lossless master: 24-bit FLAC at the recordings' native 44.1 kHz, triangular dither from the float master
+          ffmpeg -hide_banner -loglevel error -y -i lapse.wav -af "aresample=osf=s32:dither_method=triangular" -sample_fmt s32 -bits_per_raw_sample 24 -compression_level 8 "flac/Lapse_${{ inputs.label }}_24bit_44k1.flac"
+          ffmpeg -hide_banner -loglevel error -y -i lapse.wav -codec:a libmp3lame -b:a 320k "out/Lapse_${{ inputs.label }}.mp3"
+          ls -la flac out
+          ffmpeg -hide_banner -nostats -i lapse.wav -af ebur128=peak=true -f null - 2>&1 | grep -E "I:|LRA:|Peak:" | tail -3 > out/loudness.txt
+          python -W ignore check_render.py lapse.wav ${{ inputs.t0 }} out
+          cat out/loudness.txt out/report.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lapse-flac
+          path: compositions/salisbury/flac
+          compression-level: 0
+          retention-days: 30
+      - name: Commit to a results branch
+        if: always()
+        run: |
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          B="salisbury-render/${{ inputs.label }}-${{ github.run_id }}"
+          git checkout -q -b "$B"
+          mkdir -p compositions/salisbury/out; cp compositions/salisbury/ci.log compositions/salisbury/out/ 2>/dev/null || true
+          git add -f compositions/salisbury/out
+          git commit -q -m "LAPSE render ${{ inputs.label }} (run ${{ github.run_id }})"
+          for i in 1 2 3 4 5; do git push -q origin "HEAD:refs/heads/$B" && { echo "pushed to $B"; exit 0; }; sleep $((i * 3)); done
+          echo "PUSH FAILED"; exit 1

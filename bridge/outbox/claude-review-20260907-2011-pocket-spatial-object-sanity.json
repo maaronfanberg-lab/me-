@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/claude-review-20260907-2011-pocket-spatial-object-sanity.json",
+  "request_sha256": "a3c23e78862a35679d4acd420bfc98b88e365d7e49a50d91c93129d215bcfad2",
+  "request_nonce": "pocket-spatial-object-sanity-20260907-2011",
+  "completed_at": "2026-09-08T01:09:27.142952Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "**1) JS syntax/runtime blocker:** None found. All new object-bus variables (`objCenterLHP/LLP/RHP/RLP/LGain/RGain/Bus/OutL/OutR`, `objPresenceLHP…RGain`, `objHighLHP…RB`) are declared, created in `buildGraph()`, and consumed in `applyMatrix()` with matching names. No unmatched braces or undefined refs spotted in `pocket-spatial-steering-analyzer.js` either (clean AudioWorkletProcessor).\n\n**2) Duplicate audible audio:** No literal double-connect of the same signal to the same destination. `analysisNode→analysisSink→ctx.destination` is muted (`analysisSink.gain=0`) and the worklet itself zeroes its output buffer, so the analysis tap is inaudible. All new object buses (`objCenterOutL/R`, `objPresenceLGain/RGain`, `objHighLA/LB/RA/RB`) are additive contributions into `matrixMerge`/`matrixLBus`/`matrixRBus`, not duplicated identical paths — layering by design, not a duplication bug.\n\n**3) OFF state silence/restoration:** Correct. In `applyMatrix()`, `active=enabled&&adaptiveEnabled&&steer.ready`; when `adaptiveEnabled=false`, `active=false`, so `centerExtra`, `highFeed`, `frontL`, `frontR` all stay at their initialized `0`, driving `objCenterOutL/R.gain`, `objPresenceLGain/RGain.gain`, and `objHighLA/LB/RA/RB.gain` to 0 (silent). Simultaneously `rear=b.rear` and `center=b.center` revert to their un-scaled (non-`*.35`/`*.60`) legacy values, and `matrixLGainA/B`, `matrixRGainA/B`, `matrixLL/LR/RL/RR`, `matrixDirectL/R`, `matrixTrim` are computed the same way as before the feature existed. Readouts correctly show `0%`/`OFF`.\n\n**4) Rear coefficient/polarity orientation:** Preserved. `matrixLL=-.49*rear`, `matrixLR=.871*rear`, `matrixRL=-.871*rear`, `matrixRR=.49*rear` are unchanged sign/magnitude pattern (unit-norm quadrature pair) regardless of mode — only the scalar `rear` (via `active?b.rear*.35:b.rear`) changes. The new `objHigh` cross-feed mirrors the existing `matrixLGainA/B` convention (own-channel positive, cross-channel negative via `-objCross*highFeed`), so no polarity flip was introduced.\n\n**5) Gain/classification bug risk — dangerously hot, not ineffective:** `highFeed=clamp(.08+4.70*steer.objRear,.05,4.80)` in `applyMatrix()` is badly out of scale compared to sibling object gains (`centerExtra` capped ≈`.504`, `frontL/R` capped `.28`). At full ambience confidence (`steer.objRear→1`) this injects up to ~4.8× gain into `matrixLBus`/`matrixRBus` for the 3.5–8kHz band, on top of the existing `matrixLGainA/B` unity/cross feed, before the final `rear` scalar and `matrixLimiter` catch it. Combined with the fast `.020s` attack smoothing of `steer.objRear` (in `handleAnalysis()`), this can produce abrupt, large surges on any decorrelated high-frequency transient (cymbals/reverb tails), likely forcing `matrixLimiter` into constant hard-limiting — audibly \"hot\"/pumping rather than a clean surround lift, and could mask the intended effect (perceived as harsh/ineffective spatial detail). Suggested check: rescale `highFeed` to roughly `clamp(.08+0.5*steer.objRear,.05,.9)` to match the ~2× headroom used by `centerExtra`/`front`, then re-verify against `matrixLimiter` gain-reduction telemetry.",
+  "session_id": "1610c7dc-467b-452f-a0e5-a93587b31a42",
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 21530,
+    "cache_read_input_tokens": 15635,
+    "output_tokens": 14418,
+    "output_tokens_details": {
+      "thinking_tokens": 12690
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 21530,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 14088,
+        "cache_read_input_tokens": 4822,
+        "cache_creation_input_tokens": 19891,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 19891
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.23458900000000002,
+  "num_turns": 6
+}

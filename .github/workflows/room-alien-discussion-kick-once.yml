@@ -1,0 +1,66 @@
+name: Room alien discussion kick once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-alien-discussion-kick-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  tell-room:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Inject Allen alien topic through normal Room participant path
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/make_inbox.py <<'PY'
+          import json, uuid
+          from datetime import datetime, timezone
+          text = (
+              "Sarah, Mara, Owen: discuss this together now. If intelligent alien life evolved on a world very different "
+              "from Earth, what might it actually look like, and how might it communicate if its senses, body, environment, "
+              "or social organization were unlike ours? Consider gravity, atmosphere, oceans, light, vibration, chemistry, "
+              "touch, distributed bodies, and communication unlike language. Challenge each other's ideas. There is no "
+              "hidden rule or correct answer to figure out. Don't analyze the assignment. Start discussing the aliens."
+          )
+          assert len(text) <= 700, len(text)
+          payload={"messages":[{
+              "id":"alien-topic-"+str(uuid.uuid4()),
+              "speaker":"allen",
+              "text":text,
+              "at":datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+          }]}
+          open("/tmp/alien-inbox.json","w").write(json.dumps(payload))
+          PY
+
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+
+          for attempt in 1 2 3 4 5 6; do
+            git fetch origin main
+            git reset --hard origin/main
+            python3 /tmp/make_inbox.py
+            PYTHONPATH=scripts python3 scripts/room_participant.py /tmp/alien-inbox.json /tmp/alien-ack.json
+            python3 - <<'PY'
+          import json
+          ack=json.load(open("/tmp/alien-ack.json"))
+          assert len(ack.get("ids") or []) == 1, ack
+          print("Allen alien topic injected:", ack["ids"][0])
+          PY
+            git add room/conversation.json room/discourse.json room/cognitive_state.json
+            git commit -m "Inject Allen alien-life discussion topic"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep "$attempt"
+          done
+          exit 1

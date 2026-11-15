@@ -1,0 +1,58 @@
+name: Room warm-runner watchdog simulator
+# post-patch verification kick: 2026-08-19
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sarah-society.yml'
+      - '.github/workflows/room-warm-runner-simulator.yml'
+      - 'scripts/room_warm_runner_watchdog_sim.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-warm-runner-watchdog-simulator
+  cancel-in-progress: true
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Clear previous diagnostic
+        run: rm -f room/warm-runner-watchdog-diagnostic.json
+
+      - name: Run deterministic hung-node simulator
+        id: simulator
+        continue-on-error: true
+        run: python3 scripts/room_warm_runner_watchdog_sim.py
+
+      - name: Publish simulator diagnostic
+        if: always()
+        run: |
+          test -f room/warm-runner-watchdog-diagnostic.json || printf '%s\n' '{"pass":false,"error":"watchdog simulator produced no diagnostic"}' > room/warm-runner-watchdog-diagnostic.json
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add room/warm-runner-watchdog-diagnostic.json
+          git commit -m "Record Room warm-runner watchdog diagnostic" || exit 0
+          for n in 1 2 3 4 5; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; }
+            sleep "$n"
+          done
+          exit 1
+
+      - name: Enforce simulator result
+        if: always()
+        env:
+          SIMULATOR_OUTCOME: ${{ steps.simulator.outcome }}
+        run: test "$SIMULATOR_OUTCOME" = success

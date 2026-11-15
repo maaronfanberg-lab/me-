@@ -1,0 +1,120 @@
+name: Smoke Things Falcon v3 engine
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/things-v24-falcon-v3-engine-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMMUNITY_BITNET_ROOT: ${{ github.workspace }}/experiments/emily-olivia-society/vendor/BitNet
+      COMMUNITY_BITNET_MODEL: ${{ github.workspace }}/experiments/emily-olivia-society/models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf
+      COMMUNITY_BITNET_PORT: '8080'
+      COMMUNITY_BITNET_START_TIMEOUT: '1200'
+      COMMUNITY_GENERATION_TIMEOUT: '120'
+      THINGS_RELAY_BASE: 'https://room-live-mirror.dfp6k69dw5.workers.dev'
+      THINGS_OIDC_AUDIENCE: 'room-live-mirror'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Falcon BitNet runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            experiments/emily-olivia-society/.venv-agentsociety
+            experiments/emily-olivia-society/.venv-stanford
+            experiments/emily-olivia-society/vendor
+            experiments/emily-olivia-society/models
+            experiments/emily-olivia-society/.bootstrap-ready-v12
+          key: community-runtime-bitnet-v12-${{ runner.os }}-py311-${{ hashFiles('experiments/emily-olivia-society/bootstrap_upstreams.sh', 'experiments/emily-olivia-society/patch_stanford_local.py', 'experiments/emily-olivia-society/upstreams.json') }}
+          restore-keys: |
+            community-runtime-bitnet-v12-${{ runner.os }}-py311-
+
+      - name: Validate optimized bridge
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 -m py_compile things_falcon_bridge.py things_falcon_bridge_base.py things_falcon_bridge_v3.py
+          bash bootstrap_upstreams.sh
+          test -x vendor/BitNet/build/bin/llama-server
+          test -s models/Falcon3-10B-Instruct-1.58bit/ggml-model-i2_s.gguf
+
+      - name: Start Falcon and v3 bridge
+        working-directory: experiments/emily-olivia-society
+        run: |
+          python3 bitnet_server.py start
+          python3 bitnet_server.py probe
+          .venv-stanford/bin/python things_falcon_bridge.py > /tmp/things-v3.log 2>&1 &
+          echo $! > /tmp/things-v3.pid
+          sleep 3
+          if ! kill -0 "$(cat /tmp/things-v3.pid)" 2>/dev/null; then
+            cat /tmp/things-v3.log
+            exit 1
+          fi
+
+      - name: End-to-end Fanberg enrichment
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --connect-timeout 5 --max-time 15 -o /tmp/enqueue.json -w '%{http_code}' \
+            -H 'content-type: application/json' \
+            --data '{"term":"Fanberg","context":["surname","name relatedness"]}' \
+            "$THINGS_RELAY_BASE/api/things/enrich")
+          cat /tmp/enqueue.json
+          test "$code" = 202
+          JOB=$(python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/enqueue.json'))
+          print(d.get('id',''))
+          PY
+          )
+          test -n "$JOB"
+          for attempt in $(seq 1 48); do
+            curl -sS --connect-timeout 5 --max-time 15 \
+              "$THINGS_RELAY_BASE/api/things/result?id=$JOB" > /tmp/result.json
+            status=$(python3 - <<'PY'
+          import json
+          print(json.load(open('/tmp/result.json')).get('status',''))
+          PY
+            )
+            if [ "$status" = done ]; then break; fi
+            if [ "$status" = error ]; then cat /tmp/result.json; cat /tmp/things-v3.log; exit 1; fi
+            sleep 5
+          done
+          cat /tmp/result.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/result.json'))
+          if d.get('status') != 'done': raise SystemExit(f'not completed: {d}')
+          r=d.get('result') or {}
+          if r.get('term') != 'Fanberg': raise SystemExit(f'wrong term: {r}')
+          if 'Falcon3-10B-Instruct-1.58bit' not in str(r.get('engine')): raise SystemExit(f'wrong engine: {r}')
+          sources=r.get('evidence_sources') or []
+          relations=r.get('relations') or []
+          if len(sources) < 2: raise SystemExit(f'not multi-source: {sources}')
+          if not relations: raise SystemExit(f'no relations: {r}')
+          for row in relations:
+              if not row.get('label') or not row.get('relation') or not row.get('sources'):
+                  raise SystemExit(f'malformed relation: {row}')
+          print(json.dumps({'elapsed_seconds':r.get('elapsed_seconds'),'sources':sources,'relations':relations},indent=2))
+          PY
+          echo '--- v3 bridge log ---'
+          cat /tmp/things-v3.log
+
+      - name: Stop isolated engine
+        if: always()
+        working-directory: experiments/emily-olivia-society
+        run: |
+          if [ -f /tmp/things-v3.pid ]; then kill "$(cat /tmp/things-v3.pid)" 2>/dev/null || true; fi
+          python3 bitnet_server.py stop || true

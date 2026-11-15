@@ -1,0 +1,24 @@
+PASS LayerNorm backward matches finite differences  max abs err 7.2e-10
+PASS ln=none, tanh: gradients match finite differences  worst rel err 6.4e-08
+PASS ln=none, relu signed: gradients match finite differences  worst rel err 7.7e-08
+PASS ln=final, tanh: gradients match finite differences  worst rel err 8.1e-08
+PASS ln=final, relu signed: gradients match finite differences  worst rel err 3.9e-08
+PASS ln=pre, tanh: gradients match finite differences  worst rel err 1.3e-08
+PASS ln=pre, relu signed: gradients match finite differences  worst rel err 1.0e-07
+PASS ln=pre_final, tanh: gradients match finite differences  worst rel err 5.1e-08
+PASS ln=pre_final, relu signed: gradients match finite differences  worst rel err 1.7e-07
+PASS ln=post, tanh: gradients match finite differences  worst rel err 2.4e-07
+PASS ln=post, relu signed: gradients match finite differences  worst rel err 1.2e-06
+PASS ln=center, tanh: gradients match finite differences  worst rel err 1.8e-08
+PASS ln=center, relu signed: gradients match finite differences  worst rel err 5.6e-08
+PASS ln=center_random, tanh: gradients match finite differences  worst rel err 6.7e-08
+PASS ln=center_random, relu signed: gradients match finite differences  worst rel err 5.1e-08
+PASS ln=offset, tanh: gradients match finite differences  worst rel err 2.1e-07
+PASS ln=offset, relu signed: gradients match finite differences  worst rel err 4.5e-08
+PASS ln="none" equals lapse.nets.MLP (weights, loss, every delta)
+PASS branch signs equal lapse.nets.MLP's
+PASS center: the readout input averages to zero over X at initialisation
+PASS center_random: offset has m0's norm
+PASS offset: equals minus the plain ReLU twin's mean last stream
+PASS offset: the stream is untouched and the logits move by exactly W_out m_relu
+23/23 LayerNorm-network checks passed

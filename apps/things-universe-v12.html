@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#071018">
+<title>Things Universe v12</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+:root{--bg:#071018;--panel:#101a28;--line:#26384f;--text:#eef4ff;--muted:#91a2ba;--a:#76e2d8;--b:#d8c985;--bridge:#c6a7ff;--edge:#6f819f;--h:100dvh}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{background:radial-gradient(900px 600px at 0 -10%,#18304c,transparent 58%),radial-gradient(900px 650px at 100% 100%,#1b1530,transparent 55%),var(--bg)}button,input{font:inherit}.app{height:var(--h);display:grid;grid-template-rows:auto 1fr}.top{padding:max(5px,env(safe-area-inset-top)) 7px 6px;background:rgba(7,16,24,.95);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.08);z-index:10}.row{height:32px;display:grid;grid-template-columns:minmax(0,1fr) 46px 46px;gap:5px;align-items:center}.brand{display:flex;align-items:baseline;gap:6px;min-width:0}.brand b{font-size:17px;letter-spacing:-.04em}.ver{font:700 8px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}.search{height:38px;display:grid;grid-template-columns:minmax(0,1fr) 84px;gap:5px;margin-top:4px}.tools{height:36px;display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:4px}.btn,input{border:1px solid var(--line);background:#101b2a;color:var(--text);border-radius:10px}.btn{height:32px;padding:5px 7px;font-size:11px;white-space:nowrap}.search input{min-width:0;padding:8px 10px;font-size:13px;outline:0}.search .btn{height:38px;background:linear-gradient(135deg,#315171,#203650);font-weight:800}.tools .btn{width:100%;overflow:hidden;text-overflow:ellipsis}.btn.on{color:var(--a);border-color:#477679}.stage{position:relative;min-height:0;overflow:hidden}svg{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}.link{stroke:var(--edge);stroke-opacity:.42}.link.bridge{stroke:var(--bridge);stroke-opacity:.9}.edgeText{font-size:7px;fill:#9fb0c8;paint-order:stroke;stroke:#071018;stroke-width:3px;stroke-linejoin:round;pointer-events:none}.node text{font-size:9px;fill:#eef4ff;paint-order:stroke;stroke:#071018;stroke-width:4px;stroke-linejoin:round;pointer-events:none}.node circle{stroke:rgba(255,255,255,.35);stroke-width:1}.bar{position:absolute;left:6px;right:6px;top:6px;display:flex;gap:5px;z-index:8;pointer-events:none}.pill{background:#0f1927df;border:1px solid rgba(255,255,255,.08);border-radius:999px;padding:5px 7px;font-size:8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pair{max-width:72%}.pair b{color:var(--text)}.stat{margin-left:auto;max-width:40%}.hud{position:absolute;left:6px;bottom:max(6px,env(safe-area-inset-bottom));display:flex;gap:4px;z-index:8;pointer-events:none}.zoomBtns{position:absolute;right:6px;top:36px;z-index:10;display:grid;grid-template-columns:32px 32px;gap:5px}.zoomBtns .btn{width:32px;height:32px;padding:0;font-size:20px}.empty{position:absolute;inset:0;display:grid;place-items:center;padding:20px;pointer-events:none}.empty div{max-width:340px;text-align:center;color:var(--muted);font-size:12px;line-height:1.4}.empty b{display:block;color:var(--text);font-size:23px;margin-bottom:6px}.think{position:absolute;top:37px;left:50%;transform:translateX(-50%);display:none;z-index:12;background:#152235;border:1px solid var(--line);border-radius:999px;padding:6px 8px;font-size:8px}.think.show{display:block}.toast{position:absolute;left:50%;bottom:42px;transform:translateX(-50%);display:none;z-index:20;background:#152235;border:1px solid var(--line);border-radius:999px;padding:6px 9px;font-size:8px;max-width:85%;text-align:center}.toast.show{display:block}.card{position:absolute;left:7px;right:7px;bottom:max(7px,env(safe-area-inset-bottom));display:none;z-index:30;background:#0f1927fa;border:1px solid var(--line);border-radius:15px;padding:11px}.card.open{display:block}.card h2{font-size:18px;margin:3px 25px 4px 0}.card p{font-size:11px;color:#c8d4e5;margin:0}.x{position:absolute;right:6px;top:3px;border:0;background:none;color:var(--muted);font-size:21px}.tag{font:700 8px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--b);text-transform:uppercase}.reader{position:fixed;inset:0;height:var(--h);display:none;z-index:60;background:linear-gradient(#0b1320,#071018)}.reader.open{display:flex;flex-direction:column}.rh{height:44px;display:flex;align-items:center;padding:max(6px,env(safe-area-inset-top)) 9px 6px;border-bottom:1px solid rgba(255,255,255,.08)}.rh .btn{margin-left:auto}.rb{flex:1;overflow:auto;padding:12px 11px max(100px,calc(env(safe-area-inset-bottom) + 82px))}.rb h2{font-size:26px;margin:0 0 10px}.box{border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px;margin-bottom:8px;background:rgba(255,255,255,.03)}.box p,.box li{font-size:12px;line-height:1.4;color:#d0dbea}.box ul{padding-left:17px;margin:6px 0 0}@media(max-height:620px){.row{height:29px}.search,.search .btn{height:35px}.tools{height:33px}.btn{height:29px}.top{padding-top:3px;padding-bottom:4px}.zoomBtns{top:33px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top">
+  <div class="row"><div class="brand"><b>Things Universe</b><span class="ver">v12</span></div><button class="btn" id="fit">Fit</button><button class="btn" id="reset">Reset</button></div>
+  <div class="search"><input id="q" autocomplete="off" placeholder="Type the first idea"><button class="btn" id="add">Add thing</button></div>
+  <div class="tools"><button class="btn" id="auto">Auto-grow: off</button><button class="btn" id="explain">Explain A ↔ B</button><button class="btn" id="bridge">Find bridge</button></div>
+</header>
+<main class="stage" id="stage">
+  <svg id="svg"></svg>
+  <div class="empty" id="empty"><div><b>Give me two ideas.</b>Each idea becomes its own sprawling territory. Pinch to zoom way out and watch the islands grow.</div></div>
+  <div class="bar"><div class="pill pair" id="pair">A: <b>none</b> · B: <b>none</b></div><div class="pill stat" id="status">Ready</div></div>
+  <div class="zoomBtns"><button class="btn" id="zm">−</button><button class="btn" id="zp">+</button></div>
+  <div class="hud"><div class="pill" id="count">0 nodes</div><div class="pill" id="front">A 0 · B 0</div><div class="pill" id="bc">0 bridges</div><div class="pill" id="zoomPct">100%</div></div>
+  <div class="think" id="think">Thinking…</div><div class="toast" id="toast"></div>
+  <div class="card" id="card"><button class="x" id="cx">×</button><span class="tag" id="tag"></span><h2 id="ct"></h2><p id="cd"></p></div>
+  <div class="reader" id="reader"><div class="rh"><strong>Relationship</strong><button class="btn" id="rx">Close</button></div><div class="rb" id="rb"></div></div>
+</main>
+</div>
+<script>
+'use strict';
+const $=s=>document.querySelector(s),DM='https://api.datamuse.com/words';
+const KNOW={
+ philosophy:[['logic','uses'],['ethics','includes'],['meaning','asks about'],['knowledge','asks about'],['aesthetics','includes'],['wonder','begins in'],['mind','studies'],['reasoning','depends on']],
+ fungus:[['mycology','is studied by'],['mushroom','includes'],['spore','reproduces by'],['mycelium','grows as'],['decomposition','participates in'],['symbiosis','can form'],['ecosystem','lives in']],
+ fungi:[['mycology','are studied by'],['mushroom','include'],['spore','reproduce by'],['mycelium','grow as'],['decomposition','participate in'],['symbiosis','can form']],
+ love:[['attachment','involves'],['care','involves'],['trust','supports'],['emotion','is an'],['oxytocin','relates to'],['dopamine','relates to']],
+ peace:[['calm','includes'],['safety','depends on'],['trust','supports'],['cooperation','depends on'],['love','can support']],
+ emotion:[['brain','involves'],['memory','interacts with'],['neurotransmitter','is influenced by'],['fear','includes'],['love','includes']],
+ dopamine:[['reward','relates to'],['motivation','relates to'],['learning','supports'],['brain','functions in']],
+ serotonin:[['mood','influences'],['calm','can support'],['brain','functions in']],
+ oxytocin:[['bonding','relates to'],['attachment','relates to'],['trust','relates to'],['brain','functions in']],
+ geometry:[['mathematics','belongs to'],['shape','studies'],['symmetry','studies'],['proportion','uses'],['art','appears in'],['pattern','creates']],
+ art:[['creativity','expresses'],['beauty','explores'],['aesthetics','belongs to'],['design','overlaps with'],['geometry','uses'],['pattern','uses'],['emotion','expresses']],
+ mathematics:[['geometry','includes'],['pattern','studies'],['symmetry','studies'],['logic','uses'],['science','supports'],['number','studies']],
+ math:[['geometry','includes'],['pattern','studies'],['symmetry','studies'],['logic','uses'],['science','supports'],['number','studies']],
+ pattern:[['structure','describes'],['mathematics','appears in'],['art','appears in'],['music','appears in'],['nature','appears in']],
+ nature:[['ecosystem','contains'],['life','contains'],['pattern','contains'],['evolution','changes through']],
+ life:[['biology','is studied by'],['evolution','changes through'],['ecosystem','exists in'],['meaning','can be given']],
+ meaning:[['language','is expressed by'],['culture','is shaped by'],['philosophy','is studied in'],['interpretation','depends on']],
+ system:[['structure','has'],['network','can form'],['pattern','can show'],['feedback','can contain']],
+ systems:[['structure','have'],['network','can form'],['pattern','can show'],['feedback','can contain']],
+ brain:[['neurotransmitter','uses'],['emotion','supports'],['memory','supports'],['learning','supports']],
+ trust:[['safety','depends on'],['cooperation','supports'],['love','supports']],
+ creativity:[['imagination','depends on'],['art','appears in'],['play','can emerge from'],['design','supports']],
+ imagination:[['creativity','supports'],['art','supports'],['play','supports']],
+ 'cat in the hat':[['play','celebrates'],['imagination','awakens'],['rules','disrupts'],['humor','uses'],['childhood','targets']],
+ 'the cat in the hat':[['play','celebrates'],['imagination','awakens'],['rules','disrupts'],['humor','uses'],['childhood','targets']],
+ 'the cat in the hat 2003 film':[['comedy','is a'],['film','is a'],['play','uses'],['imagination','uses'],['rules','disrupts'],['childhood','targets']],
+ play:[['imagination','feeds'],['learning','supports'],['creativity','supports'],['rules','can bend']],
+ rules:[['order','support'],['ethics','relate to'],['freedom','limit']],
+ ecosystem:[['organism','contains'],['network','can resemble'],['symbiosis','contains'],['fungus','contains']],
+ network:[['node','contains'],['connection','contains'],['system','can form'],['pattern','can show']],
+ logic:[['philosophy','uses'],['mathematics','uses'],['reasoning','supports']],
+ ethics:[['philosophy','belongs to'],['care','can ground'],['rules','relates to']],
+ aesthetics:[['philosophy','belongs to'],['beauty','studies'],['art','studies']],
+ beauty:[['aesthetics','is studied by'],['art','appears in'],['symmetry','can involve'],['nature','appears in']],
+ mycelium:[['network','resembles'],['fungus','belongs to'],['soil','grows through'],['decomposition','supports']],
+ symbiosis:[['cooperation','can involve'],['ecosystem','occurs in'],['fungus','can form']],
+ decomposition:[['nutrient cycle','supports'],['ecosystem','occurs in'],['fungus','participates in']],
+ tree:[['branch','has'],['root','has'],['leaf','has'],['forest','forms'],['network','resembles'],['fractal','can resemble']],
+ trees:[['branch','have'],['root','have'],['leaf','have'],['forest','form'],['network','resemble'],['fractal','can resemble']],
+ birdsong:[['bird','is produced by'],['sound','is'],['rhythm','contains'],['syntax','can show'],['communication','supports']],
+ finnish:[['language','is a'],['agglutination','uses'],['grammar','has'],['finland','is spoken in'],['syntax','has']],
+ 'prime numbers':[['mathematics','belong to'],['number theory','belong to'],['divisibility','are defined by'],['pattern','show']],
+ language:[['syntax','has'],['grammar','has'],['meaning','carries'],['communication','supports']],
+ syntax:[['grammar','belongs to'],['language','structures'],['formal grammar','can be modeled by']],
+ 'formal grammar':[['logic','connects to'],['mathematics','connects to'],['programming','supports']],
+ fractal:[['pattern','is a'],['geometry','belongs to'],['branching','can describe'],['nature','appears in']],
+ branching:[['tree','appears in'],['network','appears in'],['river','appears in'],['blood vessel','appears in'],['lightning','appears in']]
+};
+const GENERIC=[['system','can be viewed as'],['pattern','can involve'],['culture','can influence'],['history','has'],['meaning','can carry'],['structure','can have']];
+let nodes=[],edges=[],rootA=null,rootB=null,round=0,bridgeCount=0,auto=false,busy=false,token=0;
+const sideState={A:{seen:new Set(),queue:[],expanded:new Set()},B:{seen:new Set(),queue:[],expanded:new Set()}},cache=new Map();
+const key=s=>String(s||'').toLowerCase().trim().replace(/[’']/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ').slice(0,70);
+const label=s=>String(s||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+const id=()=> 'n'+Math.random().toString(36).slice(2,9);
+const byId=x=>nodes.find(n=>n.id===x),byKey=k=>nodes.find(n=>n.k===k);
+function side(n){return n.a&&n.b?'both':n.a?'A':n.b?'B':''}
+function jitter(seed){let h=2166136261;for(const c of seed){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return ((h>>>0)%10000)/10000-.5}
+function newPos(s,parent,k){let w=$('#stage').clientWidth||700,h=$('#stage').clientHeight||500;if(parent&&Number.isFinite(parent.x))return{x:parent.x+55+jitter(k+'x')*90,y:parent.y+jitter(k+'y')*120};return s==='A'?{x:w*.28,y:h*.5}:{x:w*.72,y:h*.5}}
+function node(term,s='',parent=null,rel='related to'){
+  let k=key(term),n=byKey(k),was=!!n;if(!n){let p=newPos(s,parent,k);n={id:id(),k,l:label(term),a:false,b:false,bridge:false,parentA:null,parentB:null,relA:'',relB:'',depthA:99,depthB:99,x:p.x,y:p.y};nodes.push(n)}
+  if(s==='A'){n.a=true;if(parent&&n.parentA==null){n.parentA=parent.id;n.relA=rel;n.depthA=(parent.depthA<99?parent.depthA:0)+1}else if(!parent)n.depthA=0}
+  if(s==='B'){n.b=true;if(parent&&n.parentB==null){n.parentB=parent.id;n.relB=rel;n.depthB=(parent.depthB<99?parent.depthB:0)+1}else if(!parent)n.depthB=0}
+  if(was&&n.a&&n.b)markBridge(n,false);return n
+}
+function addEdge(a,b,rel,sideName='',bridge=false){if(!a||!b||a.id===b.id)return;let e=edges.find(e=>{let s=e.source?.id||e.source,t=e.target?.id||e.target;return(s===a.id&&t===b.id)||(s===b.id&&t===a.id)});if(!e){e={source:a.id,target:b.id,rel:rel||'related to',side:sideName,bridge};edges.push(e)}if(bridge)e.bridge=true;return e}
+function toast(t){let x=$('#toast');x.textContent=t;x.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('show'),1800)}
+function thinking(on,t='Thinking…'){$('#think').classList.toggle('show',on);$('#think').textContent=t}
+function ui(t){if(t)$('#status').textContent=t;$('#count').textContent=nodes.length+' nodes';$('#front').textContent=`A ${sideState.A.seen.size} · B ${sideState.B.seen.size}`;$('#bc').textContent=bridgeCount+' bridge'+(bridgeCount===1?'':'s');$('#empty').style.display=nodes.length?'none':'grid';$('#pair').innerHTML=`A: <b>${rootA?.l||'none'}</b> · B: <b>${rootB?.l||'none'}</b>`;$('#q').placeholder=!rootA?'Type the first idea':!rootB?'Type the second idea':'Pair is set — reset for a new pair'}
+async function semantic(term){let k=key(term);if(cache.has(k))return cache.get(k);let m=new Map();for(const [w,r] of KNOW[k]||[])m.set(key(w),{k:key(w),l:label(w),r,score:210-m.size*9,src:'local'});try{let ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),3500),res=await fetch(`${DM}?ml=${encodeURIComponent(k)}&max=65`,{signal:ctl.signal});clearTimeout(to);if(res.ok)for(const x of await res.json()){let q=key(x.word);if(q&&q!==k&&!m.has(q)&&q.length>1)m.set(q,{k:q,l:label(x.word),r:'semantically related to',score:Math.log10((x.score||1)+10)*25,src:'net'})}}catch{}if(!m.size)for(const [w,r] of GENERIC)m.set(key(w),{k:key(w),l:label(w),r,score:40-m.size,src:'generic'});let out=[...m.values()].sort((a,b)=>b.score-a.score);cache.set(k,out);return out}
+function markBridge(n,notify=true){if(!n.bridge){n.bridge=true;n.a=n.b=true;bridgeCount++;if(notify)toast('New bridge: '+n.l)}}
+function resetFrontiers(){for(const s of ['A','B']){let st=sideState[s],root=s==='A'?rootA:rootB;st.seen=new Set();st.queue=[];st.expanded=new Set();if(root){for(const n of nodes)if(n[s.toLowerCase()]){st.seen.add(n.k);st.queue.push(n.k)}}}ui('Ready')}
+async function expand(s,count=5){let st=sideState[s],other=sideState[s==='A'?'B':'A'],sk=st.queue.find(k=>!st.expanded.has(k));if(!sk)return 0;st.expanded.add(sk);let p=byKey(sk),cands=(await semantic(sk)).filter(x=>!st.seen.has(x.k)),added=0;for(const c of cands.slice(0,count)){let existed=!!byKey(c.k),n=node(c.l,s,p,c.r),cross=other.seen.has(n.k);addEdge(p,n,c.r,s,cross);st.seen.add(n.k);if(!st.queue.includes(n.k))st.queue.push(n.k);if(!existed)added++;if(cross){n.a=n.b=true;markBridge(n)}}render();return added}
+async function sharedBridge(){if(round<4||!rootA||!rootB)return 0;let ak=sideState.A.queue.filter(k=>!sideState.A.expanded.has(k)).slice(0,5),bk=sideState.B.queue.filter(k=>!sideState.B.expanded.has(k)).slice(0,5);if(!ak.length||!bk.length)return 0;let ma=new Map(),mb=new Map();for(const q of ak)for(const x of (await semantic(q)).slice(0,30))if(!ma.has(x.k))ma.set(x.k,{...x,from:q});for(const q of bk)for(const x of (await semantic(q)).slice(0,30))if(!mb.has(x.k))mb.set(x.k,{...x,from:q});let best=null;for(const [k,a] of ma){let b=mb.get(k);if(!b||k===rootA.k||k===rootB.k)continue;let score=a.score+b.score;if(!best||score>best.score)best={k,a,b,score}}if(!best||best.score<100)return 0;let pa=byKey(best.a.from),pb=byKey(best.b.from),n=byKey(best.k)||node(best.a.l);n.a=n.b=true;n.parentA=n.parentA||pa?.id;n.parentB=n.parentB||pb?.id;n.relA=n.relA||best.a.r;n.relB=n.relB||best.b.r;addEdge(pa,n,best.a.r,'A',true);addEdge(pb,n,best.b.r,'B',true);sideState.A.seen.add(n.k);sideState.B.seen.add(n.k);if(!sideState.A.queue.includes(n.k))sideState.A.queue.push(n.k);if(!sideState.B.queue.includes(n.k))sideState.B.queue.push(n.k);markBridge(n);render();return 1}
+async function doRound(){if(busy||!rootA)return 0;busy=true;round++;thinking(true,'Round '+round+'…');let added=0;try{added+=await expand('A',rootB?5:7);if(rootB)added+=await expand('B',5);if(rootB)await sharedBridge();ui(`Round ${round}: +${added}`);return added}catch(e){ui('Retrying next round');return 0}finally{busy=false;thinking(false)}}
+async function sprout(n,s,limit=8){thinking(true,'Sprouting '+n.l+'…');let added=0;for(const c of (await semantic(n.k)).slice(0,limit)){let ex=!!byKey(c.k),q=node(c.l,s,n,c.r);addEdge(n,q,c.r,s,false);sideState[s].seen.add(q.k);if(!sideState[s].queue.includes(q.k))sideState[s].queue.push(q.k);if(!ex)added++}render();thinking(false);ui('Sprouted '+added)}
+async function addThing(t){let s=!rootA?'A':!rootB?'B':'';if(!s){toast('Reset to start a new pair');return}let n=node(t,s);if(s==='A')rootA=n;else rootB=n;sideState[s].seen.add(n.k);sideState[s].queue.push(n.k);render();await sprout(n,s,8);if(rootA&&rootB){resetFrontiers();round=0;ui('Two islands ready')}setTimeout(fitGraph,220)}
+async function autoLoop(t){while(auto&&t===token){await doRound();if(!auto||t!==token)break;await new Promise(r=>setTimeout(r,850))}}
+function toggleAuto(){if(auto){auto=false;token++;$('#auto').classList.remove('on');$('#auto').textContent='Auto-grow: off';ui('Ready');return}if(!rootA){toast('Add an idea first');return}auto=true;let t=++token;$('#auto').classList.add('on');$('#auto').textContent='Auto-grow: on';ui('Auto-growing…');autoLoop(t)}
+async function findBridge(){if(!rootA||!rootB){toast('Add two ideas first');return}let before=bridgeCount;$('#bridge').disabled=true;for(let i=0;i<20;i++){await doRound();if(bridgeCount>before&&i>2)break}$('#bridge').disabled=false;if(bridgeCount>before)explain();else toast('No bridge yet — keep growing')}
+function neighbors(id){return edges.map(e=>{let s=e.source?.id||e.source,t=e.target?.id||e.target;return s===id?t:t===id?s:null}).filter(Boolean)}
+function path(a,b){let q=[[a.id,[a.id]]],seen=new Set([a.id]);while(q.length){let [cur,p]=q.shift();if(cur===b.id)return p.map(byId);for(const nx of neighbors(cur))if(!seen.has(nx)){seen.add(nx);q.push([nx,[...p,nx]])}}return null}
+function edgeBetween(a,b){return edges.find(e=>{let s=e.source?.id||e.source,t=e.target?.id||e.target;return(s===a.id&&t===b.id)||(s===b.id&&t===a.id)})}
+function explain(){if(!rootA||!rootB){toast('Add two ideas first');return}let p=path(rootA,rootB),h=`<h2>${rootA.l} ↔ ${rootB.l}</h2>`;if(!p)h+=`<div class="box"><strong>Still separate</strong><p>${round} growth rounds. The two territories are still separate islands.</p></div>`;else{let z='';for(let i=0;i<p.length-1;i++){let e=edgeBetween(p[i],p[i+1]);z+=`<li><b>${p[i].l}</b> — ${e?.rel||'related to'} → <b>${p[i+1].l}</b></li>`}h+=`<div class="box"><strong>Bridge found</strong><ul>${z}</ul></div>`}h+=`<div class="box"><p>These are exploratory semantic relationships, not proof of causation.</p></div>`;$('#rb').innerHTML=h;$('#reader').classList.add('open')}
+
+let svg=d3.select('#svg'),g=svg.append('g'),lg=g.append('g'),eg=g.append('g'),ng=g.append('g');
+let currentTransform=d3.zoomIdentity;
+const zoom=d3.zoom().scaleExtent([.015,40]).on('zoom',e=>{currentTransform=e.transform;g.attr('transform',e.transform);$('#zoomPct').textContent=Math.round(e.transform.k*100)+'%'});svg.call(zoom);
+let sim=d3.forceSimulation().force('link',d3.forceLink().id(d=>d.id).distance(d=>d.bridge?105:88).strength(d=>d.bridge?.5:.34)).force('charge',d3.forceManyBody().strength(-230)).force('collision',d3.forceCollide(d=>d.bridge?18:13)).alphaDecay(.035).velocityDecay(.36);
+function nodeFill(n){return n.bridge?'#c6a7ff':side(n)==='A'?'#76e2d8':side(n)==='B'?'#d8c985':'#9cb1c9'}
+function render(){let w=$('#stage').clientWidth,h=$('#stage').clientHeight;sim.force('center',d3.forceCenter(w/2,h/2));let L=lg.selectAll('line').data(edges,d=>`${d.source?.id||d.source}-${d.target?.id||d.target}`);L.exit().remove();L=L.enter().append('line').attr('stroke-width',d=>d.bridge?1.8:1.05).merge(L).attr('class',d=>'link'+(d.bridge?' bridge':''));let E=eg.selectAll('text').data(edges,d=>`${d.source?.id||d.source}-${d.target?.id||d.target}`);E.exit().remove();E=E.enter().append('text').attr('class','edgeText').merge(E).text(d=>d.rel);let N=ng.selectAll('g').data(nodes,d=>d.id);N.exit().remove();let en=N.enter().append('g').attr('class','node').call(d3.drag().on('start',(e,d)=>{if(!e.active)sim.alphaTarget(.18).restart();d.fx=d.x;d.fy=d.y}).on('drag',(e,d)=>{d.fx=e.x;d.fy=e.y}).on('end',(e,d)=>{if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null}));en.append('circle');en.append('text').attr('x',11).attr('y',3);en.on('click',(e,d)=>{e.stopPropagation();$('#tag').textContent=d.bridge?'bridge concept':side(d)==='A'?'A territory':'B territory';$('#ct').textContent=d.l;semantic(d.k).then(a=>$('#cd').textContent=a.length?'Nearby: '+a.slice(0,7).map(x=>x.l).join(', '):'No nearby concepts loaded.');$('#card').classList.add('open')});N=en.merge(N);N.select('circle').attr('r',d=>d===rootA||d===rootB?12:d.bridge?9:6.5).attr('fill',nodeFill);N.select('text').text(d=>d.l.length>31?d.l.slice(0,29)+'…':d.l);sim.nodes(nodes).on('tick',()=>{L.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);E.attr('x',d=>(d.source.x+d.target.x)/2).attr('y',d=>(d.source.y+d.target.y)/2);N.attr('transform',d=>`translate(${d.x},${d.y})`)});sim.force('link').links(edges);sim.alpha(.72).restart();ui()}
+function fitGraph(){if(!nodes.length)return;let box=g.node().getBBox(),w=$('#stage').clientWidth,h=$('#stage').clientHeight;if(!box.width||!box.height)return;let k=Math.max(.015,Math.min(2,.88/Math.max(box.width/w,box.height/h,.001))),x=w/2-k*(box.x+box.width/2),y=h/2-k*(box.y+box.height/2);svg.transition().duration(450).call(zoom.transform,d3.zoomIdentity.translate(x,y).scale(k))}
+function resize(){let w=$('#stage').clientWidth,h=$('#stage').clientHeight;svg.attr('viewBox',`0 0 ${w} ${h}`);sim.force('center',d3.forceCenter(w/2,h/2)).alpha(.18).restart()}
+$('#add').onclick=()=>{let v=$('#q').value.trim();if(v){$('#q').value='';addThing(v)}};$('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#add').click()}});$('#auto').onclick=toggleAuto;$('#bridge').onclick=findBridge;$('#explain').onclick=explain;$('#fit').onclick=fitGraph;$('#zp').onclick=()=>svg.transition().duration(160).call(zoom.scaleBy,1.55);$('#zm').onclick=()=>svg.transition().duration(160).call(zoom.scaleBy,1/1.55);$('#cx').onclick=()=>$('#card').classList.remove('open');$('#rx').onclick=()=>$('#reader').classList.remove('open');$('#reset').onclick=()=>{auto=false;token++;nodes=[];edges=[];rootA=rootB=null;round=bridgeCount=0;for(const s of ['A','B']){sideState[s].seen=new Set();sideState[s].queue=[];sideState[s].expanded=new Set()}$('#auto').classList.remove('on');$('#auto').textContent='Auto-grow: off';$('#card').classList.remove('open');lg.selectAll('*').remove();eg.selectAll('*').remove();ng.selectAll('*').remove();svg.call(zoom.transform,d3.zoomIdentity);render();ui('Ready')};
+function vv(){document.documentElement.style.setProperty('--h',Math.round(window.visualViewport?.height||innerHeight)+'px');requestAnimationFrame(resize)}window.visualViewport?.addEventListener('resize',vv);window.visualViewport?.addEventListener('scroll',vv);addEventListener('resize',vv);vv();resize();render();ui('Ready');
+</script>
+</body>
+</html>

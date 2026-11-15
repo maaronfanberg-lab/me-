@@ -1,0 +1,159 @@
+name: Room relay transport probe
+# verify live relay plus Allen auth fallback: 2026-08-19
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/room-relay-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: room-relay-transport-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      ROOM_RELAY_URL: https://room-live-mirror.dfp6k69dw5.workers.dev
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Re-validate committed Worker source
+        id: validate
+        continue-on-error: true
+        run: |
+          rm -f room/worker-ingest-simulator-diagnostic.json
+          node scripts/room_worker_ingest_sim.mjs
+
+      - name: Send current Room feed to live Worker
+        id: ingest
+        if: steps.validate.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          token_json=$(curl -fsS --connect-timeout 3 --max-time 8 \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=room-live-mirror")
+          relay_token=$(printf '%s' "$token_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value", ""))')
+          test -n "$relay_token"
+          body=$(curl -fsS --connect-timeout 3 --max-time 8 \
+            -X POST \
+            -H "Authorization: Bearer ${relay_token}" \
+            -H 'Content-Type: application/json' \
+            --data-binary @room/feed.json \
+            "${ROOM_RELAY_URL}/api/ingest")
+          printf '%s\n' "$body" > /tmp/ingest-response.json
+          cat /tmp/ingest-response.json
+
+      - name: Read live Worker after ingest attempt
+        id: readback
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          curl -fsS --connect-timeout 3 --max-time 8 \
+            -H 'Origin: https://maaronfanberg-lab.github.io' \
+            "${ROOM_RELAY_URL}/api/feed?fresh=$(date +%s)" > /tmp/relay-live.json
+
+      - name: Probe live Allen auth without a credential
+        id: allen_auth
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          code=$(curl -sS --connect-timeout 3 --max-time 8 \
+            -o /tmp/allen-auth-response.json \
+            -w '%{http_code}' \
+            "${ROOM_RELAY_URL}/api/allen/auth")
+          rc=$?
+          set -e
+          echo "http_code=${code}" >> "$GITHUB_OUTPUT"
+          echo "curl_rc=${rc}" >> "$GITHUB_OUTPUT"
+          cat /tmp/allen-auth-response.json 2>/dev/null || true
+          test "$rc" -eq 0
+
+      - name: Write live deployment diagnosis
+        if: always()
+        env:
+          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          INGEST_OUTCOME: ${{ steps.ingest.outcome }}
+          READBACK_OUTCOME: ${{ steps.readback.outcome }}
+          ALLEN_AUTH_OUTCOME: ${{ steps.allen_auth.outcome }}
+          ALLEN_AUTH_HTTP: ${{ steps.allen_auth.outputs.http_code }}
+          ALLEN_AUTH_CURL_RC: ${{ steps.allen_auth.outputs.curl_rc }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          from datetime import datetime,timezone
+          local=json.load(open('room/feed.json'))
+          ls=local.get('state',{})
+          ingest={}
+          try: ingest=json.load(open('/tmp/ingest-response.json'))
+          except Exception: pass
+          raw={}
+          try: raw=json.load(open('/tmp/relay-live.json'))
+          except Exception: pass
+          remote=raw.get('feed',raw) if isinstance(raw,dict) else {}
+          rs=remote.get('state',{}) if isinstance(remote,dict) else {}
+          auth={}
+          try: auth=json.load(open('/tmp/allen-auth-response.json'))
+          except Exception: pass
+          same_boot=bool(ls.get('boot_id') and ls.get('boot_id')==rs.get('boot_id'))
+          accepted=bool(ingest.get('accepted'))
+          reason=ingest.get('reason')
+          fixed_live = accepted and same_boot
+          auth_http=str(os.environ.get('ALLEN_AUTH_HTTP') or '')
+          allen_fallback_live=(auth_http=='401' and auth.get('error')=='unauthorized')
+          out={
+            'checked_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+            'source_sha':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+            'source_validation':os.environ.get('VALIDATE_OUTCOME') or 'skipped',
+            'ingest_transport':os.environ.get('INGEST_OUTCOME') or 'skipped',
+            'readback_transport':os.environ.get('READBACK_OUTCOME') or 'skipped',
+            'ingest_accepted':accepted,
+            'ingest_reason':reason,
+            'local_boot_id':ls.get('boot_id'),
+            'local_cycle':ls.get('cycle'),
+            'relay_boot_id':rs.get('boot_id'),
+            'relay_cycle':rs.get('cycle'),
+            'same_boot':same_boot,
+            'validated_fix_is_live':fixed_live,
+            'allen_auth_transport':os.environ.get('ALLEN_AUTH_OUTCOME') or 'skipped',
+            'allen_auth_http':auth_http,
+            'allen_auth_error':auth.get('error'),
+            'allen_auth_fallback_live':allen_fallback_live,
+          }
+          if fixed_live and allen_fallback_live: out['state']='relay-and-allen-auth-live'
+          elif fixed_live: out['state']='relay-live-allen-auth-not-yet-live'
+          elif reason=='older-cycle': out['state']='live-worker-still-old-cycle-only-build'
+          elif not same_boot: out['state']='live-worker-still-on-older-room-boot'
+          else: out['state']='live-worker-needs-deployment-or-further-inspection'
+          open('room/relay-live-source-status.json','w').write(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Publish live deployment diagnosis
+        if: always()
+        run: |
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add room/relay-live-source-status.json
+          git commit -m "Record live Room Worker source status" || exit 0
+          for n in 1 2 3 4 5 6; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; }
+            sleep "$n"
+          done
+          exit 0

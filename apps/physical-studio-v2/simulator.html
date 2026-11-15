@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Physical Studio QA Simulator</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;background:#111;color:#eee;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}body{padding:14px}.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}button{border:1px solid #555;background:#222;color:#fff;border-radius:8px;padding:9px 12px;font:inherit}.grid{display:grid;grid-template-columns:minmax(320px,430px) minmax(320px,1fr);gap:12px;align-items:start}.phone{width:390px;max-width:100%;aspect-ratio:390/844;border:1px solid #444;border-radius:24px;overflow:hidden;background:#000;box-shadow:0 12px 40px #0008}.phone iframe{width:100%;height:100%;border:0}.panel{border:1px solid #333;border-radius:12px;background:#181818;padding:12px}.summary{font-weight:700;margin-bottom:8px}.pass{color:#8fe39b}.fail{color:#ff8f8f}.warn{color:#ffd27d}.log{white-space:pre-wrap;max-height:520px;overflow:auto;border-top:1px solid #2c2c2c;padding-top:10px}.shots{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.shots canvas{width:100%;background:#000;border:1px solid #333;border-radius:8px}.meter{height:90px;width:100%;background:#0b0b0b;border:1px solid #333;border-radius:8px;margin-top:10px}@media(max-width:850px){.grid{grid-template-columns:1fr}.phone{margin:auto}}
+</style>
+</head>
+<body>
+<div class="bar"><strong>PHYSICAL STUDIO · INTERNAL QA SIMULATOR</strong><button id="run">RUN FULL SUITE</button><button id="reload">RELOAD APP</button><span id="state">idle</span></div>
+<div class="grid">
+  <div class="phone"><iframe id="app" src="./index.html?qa=1"></iframe></div>
+  <div class="panel">
+    <div id="summary" class="summary">Not run.</div>
+    <div id="log" class="log"></div>
+    <div class="shots"><canvas id="before" width="195" height="422"></canvas><canvas id="after" width="195" height="422"></canvas></div>
+    <canvas id="meter" class="meter" width="700" height="90"></canvas>
+  </div>
+</div>
+<script type="module">
+const app=document.getElementById('app'),run=document.getElementById('run'),reload=document.getElementById('reload'),state=document.getElementById('state'),logEl=document.getElementById('log'),summary=document.getElementById('summary');
+const before=document.getElementById('before'),after=document.getElementById('after'),meter=document.getElementById('meter');
+let results=[];const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function log(s,cls=''){logEl.innerHTML+=`<div class="${cls}">${s}</div>`;logEl.scrollTop=logEl.scrollHeight}
+function check(name,ok,detail=''){results.push({name,ok});log(`${ok?'PASS':'FAIL'}  ${name}${detail?' — '+detail:''}`,ok?'pass':'fail');return ok}
+function frameDoc(){try{return app.contentDocument||app.contentWindow.document}catch(e){return null}}
+function canvas(){const d=frameDoc();return d&&d.querySelector('canvas')}
+function capture(target){const c=canvas();if(!c)throw Error('no canvas');const x=target.getContext('2d',{willReadFrequently:true});x.clearRect(0,0,target.width,target.height);x.drawImage(c,0,0,target.width,target.height);return x.getImageData(0,0,target.width,target.height)}
+function variation(img){let min=255,max=0,sum=0,n=0;for(let i=0;i<img.data.length;i+=16){const v=(img.data[i]+img.data[i+1]+img.data[i+2])/3;min=Math.min(min,v);max=Math.max(max,v);sum+=v;n++}return{range:max-min,mean:sum/Math.max(1,n)}}
+function diff(a,b){let s=0,n=0;for(let i=0;i<a.data.length;i+=32){s+=Math.abs(a.data[i]-b.data[i])+Math.abs(a.data[i+1]-b.data[i+1])+Math.abs(a.data[i+2]-b.data[i+2]);n+=3}return s/Math.max(1,n)}
+function dispatchPointer(c,type,x,y,id=1){const r=c.getBoundingClientRect();const ev=new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:id,pointerType:'touch',isPrimary:true,clientX:r.left+x,clientY:r.top+y,buttons:type==='pointerup'?0:1});c.dispatchEvent(ev)}
+async function drag(dx,dy){const c=canvas(),r=c.getBoundingClientRect(),sx=r.width*.5,sy=r.height*.5;dispatchPointer(c,'pointerdown',sx,sy);for(let i=1;i<=12;i++){dispatchPointer(c,'pointermove',sx+dx*i/12,sy+dy*i/12);await sleep(12)}dispatchPointer(c,'pointerup',sx+dx,sy+dy);await sleep(450)}
+async function boot(){for(let i=0;i<40;i++){const d=frameDoc(),c=canvas();if(d&&c&&c.width>0&&c.height>0)return true;await sleep(150)}return false}
+function uiFits(){const d=frameDoc();if(!d)return false;const bad=[];d.querySelectorAll('button,input,section,nav').forEach(el=>{const r=el.getBoundingClientRect();if(r.width&&r.height&&(r.right<0||r.bottom<0||r.left>innerWidth||r.top>844))bad.push(el.id||el.className||el.tagName)});return bad.length===0}
+async function audioTest(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw Error('AudioContext unavailable');const ctx=new AC({latencyHint:'interactive'});await ctx.audioWorklet.addModule('./physics-worklet.js?v=qa2');const node=new AudioWorkletNode(ctx,'physical-graph',{outputChannelCount:[2]});const analyser=new AnalyserNode(ctx,{fftSize:2048});const mute=new GainNode(ctx,{gain:0});node.connect(analyser).connect(mute).connect(ctx.destination);await ctx.resume();node.port.postMessage({t:'graph',bodies:[{mass:1,damping:.1,anchor:true},{mass:1,damping:.12,anchor:false}],springs:[{a:0,b:1,stiffness:500,damping:2}]});await sleep(100);const buf=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(buf);let pre=Math.sqrt(buf.reduce((s,v)=>s+v*v,0)/buf.length);node.port.postMessage({t:'hit',index:1,amount:1.8});await sleep(120);analyser.getFloatTimeDomainData(buf);let rms=Math.sqrt(buf.reduce((s,v)=>s+v*v,0)/buf.length),peak=Math.max(...buf.map(Math.abs));drawWave(buf);await sleep(650);analyser.getFloatTimeDomainData(buf);let tail=Math.sqrt(buf.reduce((s,v)=>s+v*v,0)/buf.length);node.disconnect();analyser.disconnect();mute.disconnect();await ctx.close();return{pre,rms,peak,tail}}
+function drawWave(buf){const x=meter.getContext('2d');x.clearRect(0,0,meter.width,meter.height);x.strokeStyle='#ddd';x.beginPath();for(let i=0;i<buf.length;i++){const px=i/(buf.length-1)*meter.width,py=meter.height*.5-buf[i]*meter.height*.42;i?x.lineTo(px,py):x.moveTo(px,py)}x.stroke()}
+async function runSuite(){run.disabled=true;results=[];logEl.innerHTML='';summary.textContent='Running…';state.textContent='running';try{
+  const ok=await boot();check('App boots and exposes a WebGL canvas',ok);if(!ok)throw Error('boot failed');
+  const c=canvas();check('Canvas has real dimensions',c.width>100&&c.height>100,`${c.width}×${c.height}`);
+  const b=capture(before),bv=variation(b);check('Rendered frame is not blank/solid',bv.range>8,`pixel range ${bv.range.toFixed(1)}`);
+  await drag(120,0);const h=capture(after),hd=diff(b,h);check('Horizontal orbit visibly changes rendered scene',hd>1.2,`frame delta ${hd.toFixed(2)}`);
+  const v0=capture(before);await drag(0,-150);const v1=capture(after),vd=diff(v0,v1);check('Vertical orbit visibly changes rendered scene',vd>1.2,`frame delta ${vd.toFixed(2)}`);
+  const r0=capture(before);await drag(120,0);await drag(120,0);const r1=capture(after),rd=diff(r0,r1);check('Repeated horizontal drags continue changing orientation',rd>1.2,`frame delta ${rd.toFixed(2)}`);
+  const u0=capture(before);await drag(0,-120);await drag(0,-120);const u1=capture(after),ud=diff(u0,u1);check('Repeated vertical drags continue changing orientation',ud>1.2,`frame delta ${ud.toFixed(2)}`);
+  check('Core UI remains inside phone viewport',uiFits());
+  const d=frameDoc(),bodyBtn=d&&d.querySelector('[data-tool="body"]');if(bodyBtn){bodyBtn.click();await sleep(80);check('Palette tool can become active',bodyBtn.classList.contains('active'))}else check('Palette tool can become active',false,'body tool missing');
+  try{const a=await audioTest();check('Audio worklet produces near-silence before hit',a.pre<.01,`RMS ${a.pre.toFixed(5)}`);check('Audio worklet produces measurable signal after hit',a.rms>.0001,`RMS ${a.rms.toFixed(5)}`);check('Audio output remains finite and below clipping',Number.isFinite(a.peak)&&a.peak<1.05,`peak ${a.peak.toFixed(3)}`);check('Audio signal decays after excitation',a.tail<a.rms,`tail ${a.tail.toFixed(5)}`)}catch(e){check('Audio worklet test',false,e.message)}
+ }catch(e){log('SUITE ABORTED — '+e.message,'fail')}
+ const pass=results.filter(x=>x.ok).length,total=results.length,fail=total-pass;summary.innerHTML=`${fail===0?'<span class="pass">PASS</span>':'<span class="fail">FAIL</span>'} — ${pass}/${total} checks passed`;state.textContent=fail===0?'pass':'fail';run.disabled=false}
+run.onclick=runSuite;reload.onclick=()=>{app.src='./index.html?qa='+Date.now();state.textContent='reloading'};app.addEventListener('load',()=>state.textContent='app loaded');
+</script>
+</body>
+</html>

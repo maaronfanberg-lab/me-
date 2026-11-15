@@ -1,0 +1,16 @@
+{
+  "name": "physical-studio-v2-qa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "qa": "playwright test",
+    "qa:webkit": "playwright test --project=webkit-iphone",
+    "qa:chromium": "playwright test --project=chromium-phone",
+    "qa:physics": "node ./qa/physics-fuzzer.mjs",
+    "qa:audit": "node ./qa/source-audit.mjs",
+    "qa:report": "node ./qa/release-gate.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

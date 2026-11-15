@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/little-world-lab-falcon-runtime-20260905.json",
+  "request_sha256": "f1e4df192ad463e4d6ee9fb742522b0a45259f84f7cb853ddeed170aabe05425",
+  "request_nonce": "f1e4df192ad463e4d6ee9fb7",
+  "completed_at": "2026-09-05T19:55:36.160206Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "## Findings\n\n**No safe, generic, reusable Falcon/BitNet launcher exists in this repo today.** Every concrete mechanism that builds/downloads/serves a BitNet or Falcon model is tied to infrastructure this task excludes:\n\n| Mechanism | Path | Why it's excluded |\n|---|---|---|\n| BitNet.cpp build + local `llama-server` on :8080 | `experiments/emily-olivia-society/bootstrap_upstreams.sh`, `bitnet_server.py`, model at `experiments/emily-olivia-society/models/Falcon3-1B-Instruct-1.58bit/ggml-model-i2_s.gguf` | This *is* Emily/Olivia state/workflow — off-limits per task |\n| Falcon enrichment bridge (`Falcon3-10B-Instruct-1.58bit`) | `experiments/emily-olivia-society/things_falcon_bridge*.py`, workflows `things-v24-falcon-*.yml` | Different API contract entirely (Cloudflare Worker `/api/things/enrich`, not `/v1/chat/completions`) and routes through `room-live-mirror` relay — this is The Room's infra |\n| \"Society brain\" GGUF (Qwen2.5‑0.5B via llama.cpp release asset) | `society/MODEL.md`, `bootstrap-society-brain.yml` | Different model/contract, tied to Room/society persistent state committed back to the repo |\n\nSo: **the honest answer is \"no safe generic runtime exists\"** — nothing in the repo currently stands up a BitNet/Falcon `llama-server` independent of Room/Emily-Olivia coupling.\n\n## Model/secret assumptions in `living_world.py` (already safe)\n`BitNetBackend` itself has no secret/auth dependency — it's plain stdlib `urllib`, reads only `LIVING_WORLD_MODEL_URL` and `LIVING_WORLD_MODEL_NAME` env vars, and calls `GET /health` then `POST /v1/chat/completions` with an OpenAI-style body. Nothing to leak.\n\n## GitHub-hosted runners: not realistic as a first step\nThe one comparable in-repo example (`emily-olivia-local-smoke.yml`) needs a 90‑minute timeout, a restore/save cache of the compiled `vendor/BitNet` + model, and a 55‑minute bootstrap budget for just a 1B model. There is no existing *generic* workflow doing this, and building one would either (a) duplicate/depend on the excluded bootstrap script, or (b) require writing a brand-new, independent workflow from scratch — not the minimal path for a first real run.\n\n## Recommended minimal isolated path (local, not CI)\n1. In a scratch directory **outside** `experiments/emily-olivia-society/` and outside any Room path, build/install `llama.cpp` (or upstream `BitNet.cpp`) yourself and download a small public 1-bit/1B-class Falcon GGUF from Hugging Face directly, verifying the checksum yourself (do not reuse the emily-olivia bootstrap script or its cached model).\n2. Start the server locally: `llama-server -m <your-model.gguf> --host 127.0.0.1 --port 8080` (confirm exact flags via that binary's own `--help`).\n3. Sanity check: `curl http://127.0.0.1:8080/health`.\n4. From `experiments/little-world-lab/`, run a short smoke first:\n   ```\n   python living_world.py --backend bitnet --ticks 10 --actors-per-tick 2 --seed 7 --output runs/falcon-smoke-1\n   ```\n5. If stable (no `backend_error` events, reasonable `proposal_rejections`), scale to the full window:\n   ```\n   python living_world.py --backend bitnet --ticks 30 --actors-per-tick 2 --seed 7 --output runs/falcon-30\n   ```\nOptionally override `LIVING_WORLD_MODEL_URL` / `LIVING_WORLD_MODEL_NAME` env vars if your endpoint/model name differ from defaults — no secrets required.\n\nThis keeps the run fully local, contract-compatible, and completely decoupled from The Room and Emily/Olivia workflows/state.",
+  "session_id": "2a7a4b31-073b-4baf-9bc0-9d746830fbde",
+  "usage": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 26722,
+    "cache_read_input_tokens": 61965,
+    "output_tokens": 5219,
+    "output_tokens_details": {
+      "thinking_tokens": 2519
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 26722,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3131,
+        "cache_read_input_tokens": 24010,
+        "cache_creation_input_tokens": 5724,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 5724
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.17269400000000001,
+  "num_turns": 18
+}

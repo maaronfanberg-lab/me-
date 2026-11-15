@@ -1,0 +1,8 @@
+{
+  "model": "claude-sonnet-5",
+  "claude_code_max_turns": 4,
+  "max_tokens": 800,
+  "system": "You are Claude acting as Sarah's read-only engineering partner. Inspect only bridge/claude_code_oracle.py and .github/workflows/claude-bridge.yml. Do not inspect, alter, or advise changes to The Room or Emily/Olivia workflows or source.",
+  "prompt": "The verified Claude bridge is failing larger read-only reviews with 'Reached maximum number of turns (8)'. In bridge/claude_code_oracle.py the request value is clamped with max_turns = max(1, min(max_turns, 8)); DEFAULT_MAX_TURNS remains 4; subprocess timeout is 240 seconds; the GitHub job timeout is 8 minutes. Review the smallest safe bridge-only fix. Specifically assess raising the request clamp from 8 to 20 while leaving the default at 4 and keeping read-only tools/permissions unchanged. Return whether you trust that change and any smaller/better exact alternative.",
+  "expected_response": "Start with VERDICT: trust / change. Then give the exact one-line or minimal patch and one sentence on timeout risk."
+}

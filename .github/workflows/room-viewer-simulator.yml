@@ -1,0 +1,113 @@
+name: Room viewer simulator
+# known-working Ubuntu WebKit harness: 2026-08-19
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'room/index.html'
+      - 'tests/room-viewer-live.spec.mjs'
+      - 'tests/room-viewer-cors.spec.mjs'
+      - 'tests/room-viewer.playwright.config.mjs'
+      - 'tests/room-viewer-static-server.mjs'
+      - '.github/workflows/room-viewer-simulator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: room-viewer-simulator
+  cancel-in-progress: true
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Clear prior simulator results
+        run: rm -f room/viewer-simulator-diagnostic.json room/viewer-cors-simulator-diagnostic.json
+
+      - name: Install Playwright test runner and WebKit
+        id: install
+        continue-on-error: true
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save @playwright/test@latest
+          npx playwright install --with-deps webkit
+
+      - name: Start deterministic local site
+        id: server
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          node tests/room-viewer-static-server.mjs > /tmp/room-viewer-http.log 2>&1 &
+          echo $! > /tmp/room-viewer-http.pid
+          for n in $(seq 1 30); do
+            node -e "fetch('http://127.0.0.1:4173/room/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" && exit 0
+            sleep 1
+          done
+          cat /tmp/room-viewer-http.log
+          exit 1
+
+      - name: Run WebKit iPhone Room viewer simulator
+        id: simulator
+        if: steps.install.outcome == 'success' && steps.server.outcome == 'success'
+        continue-on-error: true
+        run: npx playwright test --config tests/room-viewer.playwright.config.mjs
+
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-viewer-simulator-evidence
+          path: |
+            room/viewer-simulator-diagnostic.json
+            room/viewer-cors-simulator-diagnostic.json
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish simulator diagnostics
+        if: always()
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          SERVER_OUTCOME: ${{ steps.server.outcome }}
+          SIMULATOR_OUTCOME: ${{ steps.simulator.outcome }}
+        run: |
+          if [ ! -f room/viewer-simulator-diagnostic.json ]; then
+            node - <<'NODE'
+          const fs=require('fs');
+          const out={pass:false,error:'simulator produced no diagnostic',install_outcome:process.env.INSTALL_OUTCOME||'',server_outcome:process.env.SERVER_OUTCOME||'',simulator_outcome:process.env.SIMULATOR_OUTCOME||''};
+          fs.writeFileSync('room/viewer-simulator-diagnostic.json',JSON.stringify(out,null,2)+'\n');
+          NODE
+          fi
+          if [ ! -f room/viewer-cors-simulator-diagnostic.json ]; then
+            node - <<'NODE'
+          const fs=require('fs');
+          const out={pass:false,error:'CORS simulator produced no diagnostic',install_outcome:process.env.INSTALL_OUTCOME||'',server_outcome:process.env.SERVER_OUTCOME||'',simulator_outcome:process.env.SIMULATOR_OUTCOME||''};
+          fs.writeFileSync('room/viewer-cors-simulator-diagnostic.json',JSON.stringify(out,null,2)+'\n');
+          NODE
+          fi
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add room/viewer-simulator-diagnostic.json room/viewer-cors-simulator-diagnostic.json
+          git commit -m "Record Room viewer simulator diagnostics" || exit 0
+          for n in 1 2 3 4 5; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; }
+            sleep "$n"
+          done
+          exit 1
+
+      - name: Enforce simulator result
+        if: always()
+        env:
+          SIMULATOR_OUTCOME: ${{ steps.simulator.outcome }}
+        run: test "$SIMULATOR_OUTCOME" = success

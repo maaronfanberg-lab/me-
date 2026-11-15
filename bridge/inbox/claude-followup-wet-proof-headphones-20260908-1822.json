@@ -1,0 +1,13 @@
+{
+  "nonce": "pocket-spatial-headphones-wet-proof-followup-20260908-1822",
+  "prompt": "Follow-up to your diagnosis in bridge/outbox/claude-diagnose-pocket-spatial-headphones-20260908-1815.json. I agree that we need one decisive wet-branch diagnostic before redesigning gain staging. However, your proposed WIDTH PROOF is primarily a hard L/R channel swap. On a centered or roughly symmetric stereo music mix, swapping channels can itself be hard to notice, so it is not as decisive as the text claims. Please design ONE truly unmistakable wet-branch-only proof test for iPhone/Safari that distinguishes: (A) wet branch definitely reaches output and current spatial effect is merely too subtle/gain-law-limited, (B) source is mono/near-mono, and (C) wet branch/channel routing is broken. Prefer a test that a listener cannot plausibly miss on ordinary music, such as deliberately muting one wet output channel, hard-routing a verified single input channel to one ear, or another safe gross manipulation. It must bypass the normal masterGain/self-normalization for the diagnostic only, not permanently alter playback. Give exact Web Audio graph/code changes for pocket-spatial-headphones.js and the exact interpretation of each possible listening outcome. Also state whether you still believe the self-normalizing masterGain architecture is the primary problem after considering this objection. Do not propose multiple iterative fixes; give one diagnostic protocol and, only after its possible outcomes, the corresponding single architectural fix for the likely case.",
+  "context": [
+    "Established: whole-output 400 Hz DSP PROOF is dramatically audible.",
+    "Established: Spatial ON/OFF remains effectively identical after substantial cue gain increases.",
+    "Primary target: iPhone Safari + Sennheiser PXC 550-II.",
+    "We are deliberately not changing DSP again until this diagnostic is designed correctly."
+  ],
+  "expected_response": "One unmistakable wet-only diagnostic with exact code and a three-way interpretation; confirm or revise the gain-law root-cause diagnosis.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 6
+}

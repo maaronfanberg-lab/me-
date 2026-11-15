@@ -1,0 +1,33 @@
+name: Bubble core CI
+
+on:
+  push:
+    branches:
+      - bubble-coupled-sim-v1
+    paths:
+      - "bubble/**"
+      - "scripts/test_bubble_core.py"
+      - ".github/workflows/bubble-core-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install numerical dependencies
+        run: python -m pip install --upgrade pip numpy scipy
+
+      - name: Run bubble physics validation suite
+        run: PYTHONPATH=. python scripts/test_bubble_core.py

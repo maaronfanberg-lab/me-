@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "locked_before_first_real_history_replay",
+  "primary_metric": "future_retrieval_credit_hit_rate_delta_b_minus_c",
+  "minimum_effect_size": 0.1,
+  "future_horizon_ticks": 4,
+  "seeds": [11, 23, 37, 53, 71, 89, 107, 131],
+  "minimum_positive_seeds": 6,
+  "k": 4,
+  "minimum_tape_ticks": 8,
+  "fail_if_ignition_retrieval_rank_correlation_exceeds": 0.9,
+  "maximum_yoke_fallback_rate": 0.25,
+  "interpretation": "This is a historical proxy trial. It supports scarcity consolidation only if B's consolidation credits predict later reappearance in the recorded Stanford retrieval pool at least 0.10 better than matched yoked-shuffle C in the median seed, with a positive delta in at least 6 of 8 locked seeds. A rank-correlation relabel warning or excessive yoke fallback invalidates support.",
+  "limitations": "Historical replay commits preserve retrieval order and content but not the original Stanford importance/recency scalars. The history tape therefore uses explicitly labelled neutral constants for those unavailable fields. A positive proxy result is permission for a better instrumented offline test, not permission to activate the live workspace."
+}

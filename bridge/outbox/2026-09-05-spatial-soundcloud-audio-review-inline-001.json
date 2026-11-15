@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/2026-09-05-spatial-soundcloud-audio-review-inline-001.json",
+  "request_sha256": "a8fbb6d51d893171b1fc8aab72b27def48481c2ff32874b6c0c7395a9e9196ad",
+  "request_nonce": "spatial-soundcloud-audio-review-inline-20260905-001",
+  "completed_at": "2026-09-06T02:47:48.187631Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "# Review: HLSMixTap.swift / BinauralDSP.swift\n\n## Critical — needs Xcode 27/device verification (cannot confirm from source alone)\n\n1. **`AVAudioMixInputParametersTrackID.mixID` (HLSMixTap.install)** — This symbol/case name is not something I can verify against a real SDK. If the actual Xcode 27 API uses a different type/case name, or `.rawValue` isn't directly assignable to `AVMutableAudioMixInputParameters.trackID` (`CMPersistentTrackID`/`Int32`), this line fails to compile. **Action:** compile against the real Xcode 27 SDK before relying on this; have a fallback path (e.g., the older `kCMPersistentTrackID_Invalid`/master-mix convention) ready.\n2. **`MTAudioProcessingTapCallbacks` closure arities** — As written, the `init`/`prepare`/`process`/`unprepare`/`finalize` closures match the historical (Xcode 15/16) C signatures (3/3/6/1/1 params respectively, all captureless so they can lower to `@convention(c)`). This *should* still hold in Xcode 27, but must be confirmed — an SDK header change (e.g., added `@Sendable`/`@convention(c)` annotations under Swift 6) could silently break this. **Action:** build once against Xcode 27 before merge; don't assume.\n3. **Serial-execution contract for prepare/process/unprepare** — The DSP relies on Apple's documented guarantee that these callbacks never overlap for a given tap so that non-atomic state (`sampleRate`, `channelCount`, `leftHistory`, `writeIndex`, `leftFarLP/rightFarLP`) can be touched without locks. Swift 6's Sendable checker cannot verify this because the whole object graph is smuggled through `Unmanaged`. **Action:** verify this guarantee still holds in the Xcode 27 docs/header comments; if not, add a lock or serial queue.\n\n## High — confirmed source issues\n\n4. **No FairPlay/DRM guard before tap install.** The supplied Apple guidance states whole-mix taps are unsupported for FairPlay content, but `install(on:)` never inspects `item.asset` for protection before attaching the tap. This will either fail at `MTAudioProcessingTapCreateWithPreferredFormat`/mix-attachment time with an opaque `OSStatus`, or (worse) silently no-op depending on runtime behavior. **Fix:** check the asset's protection status before calling `install(on:)` and surface a distinct, user-facing error (add a `TapError.unsupportedProtectedContent` case) instead of relying on the caller to interpret a raw OSStatus.\n5. **Silent DSP bypass on format mismatch is not surfaced.** `BinauralDSP.process` guards on `channelCount == 2 && isFloat32`; if the negotiated `processingFormat` differs from the requested preferred format (which Apple explicitly allows — the preferred format is only a hint), audio passes through untouched with *no* signal to the app. UI could show \"spatial ON\" while nothing is happening. **Fix:** have `prepare` report whether the format is DSP-eligible (extend `onPrepared` or add a second callback) so the caller can reflect true capability in UI.\n\n## Medium — confirmed, lower impact\n\n6. **Realtime-safety nit: per-callback ARC traffic.** `Unmanaged<TapContext>.fromOpaque(...).takeUnretainedValue()` runs once per `process`/`prepare`/`unprepare` invocation, incurring at least one atomic retain/release of `TapContext` on the audio thread. This is generally tolerated (lock-free), but if strict allocation/atomic-free RT auditing is a requirement, restructure to avoid the transient strong reference (e.g., work directly with the raw pointer and `Unmanaged`-typed member access without materializing a local `let context`).\n7. **No smoothing of `wetAmount`-derived coefficients across buffer boundaries.** `delayFrames`, `cutoff`/`lpAlpha` are recomputed once per `process()` call from the *current* atomic load of `amountBits`, not interpolated per-sample. Rapid UI-driven `setAmount` changes could produce small step artifacts at buffer boundaries (delay-line pointer jump, filter coefficient jump). Likely inaudible at typical buffer sizes but worth a click/zipper-noise test on device.\n8. **No `Sendable` annotation/documentation on `TapContext`/`BinauralDSP`.** These cross into a nonisolated C-callback context only because `Unmanaged` bypasses the checker. This compiles today but is a latent maintenance hazard: a future refactor to Swift-native closures (which *do* get Sendable-checked) would break. **Fix:** mark both `@unchecked Sendable` with a comment documenting the manual single-thread-per-callback-sequence contract.\n\n## Low\n\n9. **`TapError` has no case for unsupported/protected content or format-mismatch**, forcing callers to guess from an `OSStatus`. Add explicit cases as noted in #4/#5.\n10. Confirm `kMTAudioProcessingTapCreationFlag_PostEffects` is still the correct flag for \"whole mix\" taps in Xcode 27 (vs. `PreEffects`); the choice determines whether the binaural stage runs before or after AVFoundation's own volume/mix effects — verify this matches product intent.\n\n## DSP claim assessment: \"true ITD + frequency-dependent cross-ear attenuation, not simple panning\"\n\n**Partially valid, but overstated.**\n- The ITD math (`(a/c)(θ+sinθ)`, Woodworth spherical-head model, a=8.75cm) is a legitimate physical approximation and is genuinely different from amplitude panning: it introduces a true time delay plus a one-pole low-pass (\"head shadow\") applied only to the delayed *crossfeed* path (`rightFarLP` feeding `binauralL`, and vice versa). This is real delay+spectral shaping, not gain-only panning — the differentiation from \"simple panning\" is defensible.\n- However: the effective angle (25°–70°) is driven solely by the global `wetAmount` knob, not by any per-source azimuth in the actual stereo content. This makes it a **static headphone crossfeed/widener**, not a dynamic per-object binaural spatializer. There's also no broadband ILD independent of the shadow filter and no pinna/elevation cues.\n- **Recommendation:** relabel internally/in tests as \"ITD-based crossfeed with frequency-dependent head-shadow filtering\" rather than \"binaural,\" to avoid overclaiming HRTF-equivalent spatialization. The falsifiable test: feed a pure impulse into L only and R only separately; confirm the opposite channel's low-passed impulse appears in the other ear delayed by `delayFrames` samples and attenuated per `farGain`/`lpAlpha` — this validates the mechanism but doesn't validate \"true binaural localization,\" which would require per-source-angle HRTF magnitude/phase and cannot be confirmed by this code alone.\n\n## Suggested falsification tests\n- Unit test `BinauralDSP.process` directly (bypassing the tap) with synthetic impulses/sine sweeps at `wetAmount ∈ {0,0.5,1}` to confirm delay-in-samples and cutoff match the formulas, and that `wetAmount=0` is bit-exact passthrough.\n- Format-mismatch test: call `prepare` with mono/int16 ASBD and confirm `process` is a no-op (guard triggers) rather than corrupting the buffer.\n- Device test on iOS 27/Xcode 27: build once to confirm items #1–#3 compile as written; test against a FairPlay-protected `AVPlayerItem` to confirm graceful failure rather than crash.",
+  "session_id": "ac84c741-1e10-42d6-a744-d454ecaf7866",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 4541,
+    "cache_read_input_tokens": 3183,
+    "output_tokens": 17719,
+    "output_tokens_details": {
+      "thinking_tokens": 15025
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 4541,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 17719,
+        "cache_read_input_tokens": 3183,
+        "cache_creation_input_tokens": 4541,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 4541
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.20019759999999998,
+  "num_turns": 1
+}

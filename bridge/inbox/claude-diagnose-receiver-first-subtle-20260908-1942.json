@@ -1,0 +1,7 @@
+{
+  "nonce": "pocket-spatial-receiver-first-subtle-20260908-1942",
+  "prompt": "Read only apps/pocket-spatial.html, apps/pocket-spatial-commons-buffered.js, and apps/pocket-spatial-steering-analyzer.js. User is testing on the actual matrix/Pro Logic receiver and reports virtually no audible difference with the current receiver-first encoding on versus off. Diagnose the strongest concrete reason in the current code. Pay special attention to applyMatrix(), active rear scaling, the Claude-tuned highFeed, masterGain/trim normalization, and whether receiver-first neutralization is actually applied before the matrix. We previously reduced highFeed from up to 4.8 to .08+.50*objRear (max .58 in practice) because 4.8 was dangerously hot, but active rear is still b.rear*.35. Determine whether that combination accidentally neuters the surround cue. Recommend the smallest safe code change that should make matrix ON materially more distinct on a compatible receiver without restoring dangerous gain or changing the empirically proven rear coefficient signs (-.49/.871/-.871/.49). Also say whether a hard diagnostic mode that solos a known rear matrix cue is warranted before more tuning. Do not edit files. Keep under 700 words.",
+  "expected_response": "Concise diagnosis, exact gain math, minimal safe patch recommendation, and one diagnostic recommendation.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 5
+}

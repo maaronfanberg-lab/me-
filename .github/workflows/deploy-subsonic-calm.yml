@@ -1,0 +1,154 @@
+name: Deploy Subsonic Calm
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cloudflare/subsonic-calm/**'
+      - 'apps/subsonic-calm.html'
+      - 'scripts/subsonic-calm-signal-smoke.mjs'
+      - '.github/workflows/deploy-subsonic-calm.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-subsonic-calm
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check Cloudflare token
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          echo 'Cloudflare API token is available.'
+
+      - name: Select Fanberg Cloudflare account
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
+            > /tmp/cf-accounts.json
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          d=json.load(open('/tmp/cf-accounts.json'))
+          if not d.get('success'):
+              raise SystemExit('Cloudflare account lookup failed; refusing to guess an account.')
+          matches=[a for a in d.get('result',[]) if 'fanberg' in str(a.get('name','')).lower()]
+          if len(matches) != 1:
+              names=[str(a.get('name','')) for a in d.get('result',[])]
+              raise SystemExit(f'Expected exactly one Cloudflare account containing Fanberg; found {len(matches)}. Accessible account names: {names}')
+          a=matches[0]
+          print(f"CLOUDFLARE_ACCOUNT_ID={a['id']}")
+          print(f"CLOUDFLARE_ACCOUNT_NAME={a['name']}")
+          PY
+          echo 'Selected Fanberg Cloudflare account.'
+
+      - name: Validate selected account
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          case "${CLOUDFLARE_ACCOUNT_NAME,,}" in
+            *fanberg*) echo "Deploy target verified: $CLOUDFLARE_ACCOUNT_NAME" ;;
+            *) echo 'Refusing non-Fanberg Cloudflare account.'; exit 1 ;;
+          esac
+
+      - name: Validate Worker syntax
+        run: node --check cloudflare/subsonic-calm/src/index.js
+
+      - name: Run research-informed v4 signal gate
+        run: node scripts/subsonic-calm-signal-smoke.mjs
+
+      - name: Deploy Cloudflare front door
+        id: deploy
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes wrangler@latest deploy --config cloudflare/subsonic-calm/wrangler.jsonc 2>&1 | tee /tmp/subsonic-deploy.txt
+          url=$(grep -Eo 'https://[^[:space:]]+\.workers\.dev' /tmp/subsonic-deploy.txt | tail -1)
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed URL: $url"
+
+      - name: Verify live v4 front door
+        env:
+          APP_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 "$APP_URL/health" | tee /tmp/health.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/health.json'))
+          assert d.get('ok') is True
+          assert d.get('app') == 'subsonic-calm'
+          assert d.get('version') == '4'
+          assert d.get('speaker') == 'Polk PSW10'
+          assert d.get('profile') == 'low-salience-research'
+          assert d.get('source') == 'github-pages'
+          assert d.get('diagnostic_80hz') is True
+          print('Live Subsonic Calm v4 front door verified.')
+          PY
+          location=$(curl -fsSI "$APP_URL/" | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}' | tail -1)
+          echo "$location" | grep -q 'maaronfanberg-lab.github.io/me-/apps/subsonic-calm.html'
+          echo "SUBSONIC_CALM_URL=$APP_URL" >> "$GITHUB_ENV"
+          echo "SUBSONIC_CALM_TARGET=$location" >> "$GITHUB_ENV"
+
+      - name: Record exact verified deployment
+        shell: bash
+        run: |
+          mkdir -p status
+          python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          d={
+            'verified_at':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+            'app':'subsonic-calm',
+            'version':'4',
+            'speaker':'Polk PSW10',
+            'profile':'low-salience-research',
+            'cloudflare_account':os.environ.get('CLOUDFLARE_ACCOUNT_NAME'),
+            'cloudflare_url':os.environ.get('SUBSONIC_CALM_URL'),
+            'target_url':os.environ.get('SUBSONIC_CALM_TARGET'),
+            'health':'passed',
+            'signal_smoke':'passed',
+            'diagnostic_80hz':True,
+          }
+          open('status/subsonic-calm.json','w').write(json.dumps(d,indent=2)+'\n')
+          print(json.dumps(d,indent=2))
+          PY
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add status/subsonic-calm.json
+          git commit -m "Record verified Subsonic Calm v4 deployment" || exit 0
+          for n in 1 2 3 4; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; exit 1; }
+            sleep "$n"
+          done
+          exit 1
+
+      - name: Summary
+        run: |
+          echo "### Subsonic Calm v4 deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloudflare account: $CLOUDFLARE_ACCOUNT_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "Profile: low-salience research" >> "$GITHUB_STEP_SUMMARY"
+          echo "Signal gate: passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "80 Hz diagnostic: present" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloudflare: $SUBSONIC_CALM_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Target: $SUBSONIC_CALM_TARGET" >> "$GITHUB_STEP_SUMMARY"

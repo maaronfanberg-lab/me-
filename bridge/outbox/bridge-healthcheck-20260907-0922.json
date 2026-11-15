@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/bridge-healthcheck-20260907-0922.json",
+  "request_sha256": "35de544ede778502839a9392b068d5b13113c0043270ee6656c8976d4a41941a",
+  "request_nonce": "bridge-healthcheck-20260907-0922",
+  "completed_at": "2026-09-07T14:23:55.071078Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-5"
+  ],
+  "response": "**PASS**\n\nNo blocking operational ambiguities found. Evidence:\n\n- **Discovery path is closed-loop**: `AGENTS.md` (lines 5–19) tells a fresh assistant to read `bridge/README.md` and `.github/workflows/claude-bridge.yml` before acting, and both files were confirmed present and mutually consistent.\n- **Request creation**: `bridge/README.md`'s \"Cross-chat quickstart\" (lines 7–53) gives a concrete repo target (`maaronfanberg-lab/me-`), a worked example inbox JSON, explicit uniqueness/one-request-per-push rules, and matches the actual `prompt`-required validation in `bridge/claude_code_oracle.py:read_request` (lines 30–41).\n- **Trigger/runtime behavior matches docs**: the workflow (`push` on `bridge/inbox/*.json`, `git diff-tree ... tail -n 1` single-file resolver, 8-minute `timeout-minutes: 8`) matches README's stated \"one request per push\" resolver behavior and \"~8 minute\" polling guidance (lines 17, 34–35 of README vs. lines 4–7, 26, 44 of the workflow).\n- **Verification fields align across all three layers**: README's acceptance checklist (`protocol`, `ok`, `verified_model_family: \"claude\"`, non-empty `response`, matching hash/nonce — lines 37–42, 114–123) matches the exact keys `claude_code_oracle.py` writes (`protocol`, `ok`, `request_sha256`, `request_nonce`, `verified_model_family`, `response` — lines 177–188, 198–205) and matches `AGENTS.md`'s summary (lines 15).\n- **Failure handling is documented and code-consistent**: the workflow commits the outbox file even on oracle failure (`continue-on-error: true` + `if: always()` commit step, lines 65, 78–93), so a failed run still yields an inspectable `ok: false`/`error` outbox rather than silence — consistent with README step 7's \"absent or reports an error\" instruction (line 43).\n- **Read-only/advisory role is stated redundantly and consistently**: `AGENTS.md` line 16, README lines 44/51/98–100, and the actual CLI invocation in `claude_code_oracle.py` (`--tools Read,Glob,Grep`, `--allowedTools Read,Glob,Grep`, no write/shell tools — lines 138–146) all agree Claude cannot write, run shell, commit, or dispatch workflows.\n\nA fresh assistant with GitHub read/write access can follow this chain end-to-end (create inbox file → wait ~8 min → read matching outbox → check the six verification fields → treat Claude as advisory) using only these four files, with no dependency on prior-chat memory.",
+  "session_id": "464027fc-c5ad-41e5-91e3-dfd253b7a583",
+  "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 12324,
+    "cache_read_input_tokens": 15491,
+    "output_tokens": 3890,
+    "output_tokens_details": {
+      "thinking_tokens": 2263
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 12324,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3174,
+        "cache_read_input_tokens": 4546,
+        "cache_creation_input_tokens": 10961,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 10961
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "reported_cost_usd": 0.0924272,
+  "num_turns": 13
+}

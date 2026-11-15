@@ -1,0 +1,11 @@
+{
+  "nonce": "relay-conversation-architecture-20261110-a1",
+  "prompt": "Design a practical, bounded two-way conversation relay between a ChatGPT assistant and Claude through GitHub, based on the current bridge code in this repository. How should messages from ChatGPT reach Claude and Claude replies reach ChatGPT across multiple turns? Provide a concrete minimal protocol, handling of provider-specific rate limits (subscription OAuth vs separate GitHub Copilot Claude access), idempotency, loop prevention, identity verification, safe GitHub Actions triggers, and a 3-step proof-of-concept test. Do not propose evading platform quotas, and do not claim GitHub provides free compute.",
+  "context": [
+    "Current verified mailbox: bridge/inbox/<id>.json triggers .github/workflows/claude-bridge.yml and commits bridge/outbox/<id>.json. Existing Claude Code subscription path and optional Copilot fallback. The current GitHub workflow chooses Copilot only when CLAUDE_CODE_OAUTH_TOKEN is missing; it does not fail over when the existing subscription token encounters a usage limit.",
+    "Need a conversation with multiple user-controlled turns and explicit pause after each assistant response; all messages in this public repo must be nonsensitive."
+  ],
+  "expected_response": "Practical stepwise engineering design including 2 independent Claude transports, safe response provenance and clear distinction between conceptual design and tested functionality.",
+  "claude_code_model": "sonnet",
+  "claude_code_max_turns": 2
+}
