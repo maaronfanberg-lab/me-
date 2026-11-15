@@ -29,6 +29,15 @@ def verify_work_receipt(person: str, decision_id: str, verb: str, obj: str,
             requested_cycle < 0):
         raise ValueError("Invalid work request")
     receipts = []
+    # A reused ledger identifier is ambiguous even if only one of its
+    # records matches this decision. Do not certify a forged/colliding ID.
+    ids = set()
+    collisions = set()
+    for event in referee_events:
+        if isinstance(event, Mapping) and isinstance(event.get("id"), str) and event["id"]:
+            if event["id"] in ids:
+                collisions.add(event["id"])
+            ids.add(event["id"])
     for event in referee_events:
         if not isinstance(event, Mapping):
             continue
@@ -44,7 +53,7 @@ def verify_work_receipt(person: str, decision_id: str, verb: str, obj: str,
         receipts.append(event)
     # Duplicate or contradictory ledger records are not proof of a unique
     # completion. Refuse to invent a tie-breaker.
-    if len(receipts) != 1:
+    if len(receipts) != 1 or receipts[0]["id"] in collisions:
         return None
     event = receipts[0]
     return {"event_id": event["id"], "source_decision_id": decision_id,
