@@ -1,7 +1,7 @@
 name: Deep Water seismic audio tests
 on:
   push:
-    branches: [main, deep-water-seismic-voices-20261114, deep-water-direct-audification-20261114]
+    branches: [main, deep-water-seismic-voices-20261114, deep-water-direct-audification-20261114, deep-water-distinct-raw-waves-20261114]
     paths:
       - 'apps/deep-water/**'
       - '.github/workflows/deep-water-seismic-test.yml'
@@ -26,6 +26,8 @@ jobs:
           node --check apps/deep-water/mseed.js
           node --check apps/deep-water/test-seismic-voices.cjs
           node --check apps/deep-water/test-direct-wave.cjs
+          node --check apps/deep-water/wave-windows.js
+          node --check apps/deep-water/test-wave-windows.cjs
           python3 - <<'PY'
           from pathlib import Path
           src = Path('apps/deep-water/index.html').read_text()
@@ -36,3 +38,5 @@ jobs:
         run: node apps/deep-water/test-seismic-voices.cjs
       - name: Direct waveform audification tests
         run: node apps/deep-water/test-direct-wave.cjs
+      - name: Measured waveform section tests
+        run: node apps/deep-water/test-wave-windows.cjs
