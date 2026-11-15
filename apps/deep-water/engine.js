@@ -17,11 +17,11 @@ class Eng{
   // master: underwater low-pass, 18 Hz high-pass (receiver/sub protection), small 4-line FDN for the open water
   this.lp=[0,0,0,0];this.hpS=[[0,0,0,0],[0,0,0,0]];const w=Math.tan(Math.PI*18/SR),k=1/(1+Math.SQRT2*w+w*w);this.hc=[k,-2*k,k,2*(w*w-1)*k,(1-Math.SQRT2*w+w*w)*k];
   this.fdn=[2399,3119,3793,4447].map(n=>({b:new Float32Array(Math.round(n*SR/48000)),w:0,lp:0}));this.fdnG=Math.pow(10,-3*(3119/48000)/4.5);
-  this.brown=0;this.humLP=[0,0,0,0];this.sz=null;this.szNext=null;this.szPos=0;this.szRate=800;this.szLvl=0;this.szG=0;this.szEnv=0;this.szHP=[0,0];this.sd=null;this.sdNext=null;this.yS=0;this.eF=0;this.eS=0;this.sdCd=0;this.drv=.004;this.sdLog=null;this.sdWave={sign:0,len:0,peak:0,sum:0,diff:0,prev:0};this.sdIndex=-1;this.direct=false;this.speed=40;this.szBaseRate=40;this.directPeak=0;
+  this.brown=0;this.humLP=[0,0,0,0];this.sz=null;this.szNext=null;this.szPos=0;this.szRate=800;this.szLvl=0;this.szG=0;this.szEnv=0;this.szHP=[0,0];this.sd=null;this.sdNext=null;this.yS=0;this.eF=0;this.eS=0;this.sdCd=0;this.drv=.004;this.sdLog=null;this.sdWave={sign:0,len:0,peak:0,sum:0,diff:0,prev:0};this.sdIndex=-1;this.direct=false;this.speed=40;this.szBaseRate=40;this.directPeak=0;this.directClipId=0;this.directCycles=0;this.directLast=0;this.directTail=0;this.directTransition=0;this.directBlendTotal=Math.max(1,Math.round(.012*SR));
   const wd=Math.tan(Math.PI*15/SR),kd=1/(1+Math.SQRT2*wd+wd*wd);
   this.dhpc=[kd,-2*kd,kd,2*(wd*wd-1)*kd,(1-Math.SQRT2*wd+wd*wd)*kd];this.dhp=[0,0,0,0];this.mod=0;this.KD=.25/(Math.pow(.1,3)*.06*Math.pow(omega(.1,0),2));this.vol=.6;}
  // real seismometer trace (already sped up and normalised by the page), looped; swapped in at the loop boundary
- seis(d){if(!d){this.szNext=null;this.sz=null;this.sd=null;this.sdNext=null;this.sdIndex=-1;this.sdWave={sign:0,len:0,peak:0,sum:0,diff:0,prev:0};this.B=this.B.filter(b=>!b.sdb);this.dhp.fill(0);this.directPeak=0;return;}if(!this.sz){this.sz=d.data;this.sd=d.drive||null;this.szBaseRate=d.rate;this.szRate=this.direct?d.rate*this.speed:d.rate;this.szPos=0;this.sdIndex=-1;this.sdWave={sign:0,len:0,peak:0,sum:0,diff:0,prev:0};}else{this.szNext=d.data;this.sdNext=d.drive||null;this.szBaseRate=d.rate;this.szRate=this.direct?d.rate*this.speed:d.rate;}}
+ seis(d){if(!d){this.szNext=null;this.sz=null;this.sd=null;this.sdNext=null;this.sdIndex=-1;this.sdWave={sign:0,len:0,peak:0,sum:0,diff:0,prev:0};this.B=this.B.filter(b=>!b.sdb);this.dhp.fill(0);this.directPeak=0;this.directLast=0;this.directTransition=0;this.directClipId=0;return;}if(this.direct){this.directTail=this.directLast;this.directTransition=this.directBlendTotal;this.sz=d.data;this.sd=null;this.szNext=null;this.sdNext=null;this.szBaseRate=d.rate;this.szRate=d.rate*this.speed;this.szPos=0;this.dhp.fill(0);this.directClipId=d.clip||0;return;}if(!this.sz){this.sz=d.data;this.sd=d.drive||null;this.szBaseRate=d.rate;this.szRate=this.direct?d.rate*this.speed:d.rate;this.szPos=0;this.sdIndex=-1;this.sdWave={sign:0,len:0,peak:0,sum:0,diff:0,prev:0};}else{this.szNext=d.data;this.sdNext=d.drive||null;this.szBaseRate=d.rate;this.szRate=this.direct?d.rate*this.speed:d.rate;}}
  rnd(){this.seed=(this.seed*1664525+1013904223)>>>0;return this.seed/4294967296;}
  // one bubble: a radius (m), h depth (m), pan -1..1, dist (m) from the listener, x0 initial wobble
  bubble(a,h,pan,dist,x0,rise,delay){this.Q.push({t:this.t+Math.round((delay||0)*this.SR),a,h,pan,dist,x0,rise});}
@@ -53,11 +53,12 @@ class Eng{
    const x=v*Math.max(0,fade);
    const y=c[0]*x+c[1]*z[0]+c[2]*z[1]-c[3]*z[2]-c[4]*z[3];
    z[1]=z[0];z[0]=x;z[3]=z[2];z[2]=y;
-   L[j]=y;R[j]=y;peak=Math.max(peak,Math.abs(y));
+   let out=y;if(this.directTransition>0){const t=1-this.directTransition/this.directBlendTotal;out=y*t+this.directTail*(1-t);this.directTransition--;}
+   L[j]=out;R[j]=out;this.directLast=out;peak=Math.max(peak,Math.abs(out));
    this.szEnv+=(Math.abs(y)-this.szEnv)*.0002;
    p+=step;
    if(p>=n){
-    p%=n;
+    this.directCycles++;p%=n;
     if(this.szNext){
      this.sz=this.szNext;this.sd=this.sdNext;this.szNext=null;this.sdNext=null;
      a=this.sz;n=a.length; p%=n;

@@ -27,6 +27,7 @@ body:not(.seismic) .directCtl{display:none!important}
 body.seismic #seis{height:38vh;min-height:210px}
 body.seismic #qp{margin-top:14px}
 body.seismic #szCap{line-height:1.5}
+#segbar{display:flex;gap:8px;margin:8px 0 5px;flex-wrap:wrap}#segbar button{padding:10px 13px;border:0;border-radius:10px;background:var(--chip);color:var(--ink)}#segbar button.on{background:var(--on);color:#04121c}#segNote{color:var(--dim);font-size:12.5px}
 body.min #panel{display:none}body.min #cv{height:calc(100dvh - 250px - env(safe-area-inset-bottom));max-height:none;min-height:240px}
 #ver{display:block;color:var(--dim);font-size:12px;margin:8px 0 12px}
 </style></head><body>
@@ -37,7 +38,7 @@ body.min #panel{display:none}body.min #cv{height:calc(100dvh - 250px - env(safe-
 <div id="bar"><button id="go">Start</button><button id="tog">Hide controls</button></div>
 <div id="panel">
 <div id="qp"><h2 class="qonly">Earthquakes, last 24 hours</h2><canvas class="qonly" id="map"></canvas><div class="qonly" id="qsum" style="color:var(--dim);font-size:12px;margin-top:4px"></div>
-<h2 style="margin-top:12px">The ground at the seismometer</h2><canvas id="seis"></canvas><div id="szCap">Tap Start to load the seismometer.</div>
+<h2 style="margin-top:12px">The ground at the seismometer</h2><canvas id="seis"></canvas><div class="directCtl" id="segbar"><button id="nextWave">Next measured section</button><button id="scanMode" class="on">Auto explore: On</button><button id="reloadWave">New recording</button></div><div class="directCtl" id="segNote">Sections come from measured differences in the seismogram. No sounds invented.</div><div id="szCap">Tap Start to load the seismometer.</div>
 <h2 class="qonly" style="margin-top:12px">Which quakes are bubbling now</h2><div class="qonly" id="qlist">Tap Start to load the earthquakes.</div><button class="qonly" id="qmore">Show all</button></div>
 <div class="ctl"><b>Released by</b><div class="chips" data-k="src"></div></div>
 <div class="ctl"><b>Seismometer station</b><div class="chips" data-k="sta"></div><div id="szRead" style="color:var(--dim);font-size:12.5px;margin-top:6px"></div></div>
@@ -45,7 +46,7 @@ body.min #panel{display:none}body.min #cv{height:calc(100dvh - 250px - env(safe-
 <div class="ctl legacyCtl"><b>Earth vibrations heard</b><div class="chips" data-k="szm"></div></div>
 <div class="ctl legacyCtl"><b>How many bubbles</b><div class="chips" data-k="dens"></div></div>
 <div class="ctl legacyCtl"><b>Deep hum</b><div class="chips" data-k="hum"></div></div>
-<div class="ctl directCtl"><b>Play the recorded wave faster</b><div class="chips" data-k="speed"></div><div style="color:var(--dim);font-size:12px;margin-top:6px">The shape stays the same. 1 Hz in the ground becomes 40 Hz at 40× speed. A fixed 15 Hz low-cut protects the speakers.</div></div>
+<div class="ctl directCtl"><b>Play the recorded wave faster</b><div class="chips" data-k="speed"></div><div style="color:var(--dim);font-size:12px;margin-top:6px">Faster playback brings slow ground vibrations into hearing. The recorded waveform remains the sound. A fixed 15 Hz low-cut protects speakers. Begin at low volume.</div></div>
 <div class="ctl"><b>Volume</b><div class="chips" data-k="vol"></div></div>
 <details><summary>What you're hearing</summary><ul>
 <li><b>Direct waveform audification:</b> the measured vertical-component waveform is sent to both audio channels. There are no tones, bubbles, oscillators, random generators, or reverberation in this mode. Every wiggle in the signal produces a corresponding wiggle in the audio output.</li>
@@ -60,25 +61,25 @@ body.min #panel{display:none}body.min #cv{height:calc(100dvh - 250px - env(safe-
 <li class="legacyInfo"><b>Hear the Earth move:</b> a real seismometer's record of the ground's vertical motion, the last 20 minutes played 20 times faster as a one-minute loop that refreshes every minute (1 Hz shaking becomes a 20 Hz rumble). When an earthquake's waves reach the station you hear them, see them in the trace at the bottom, and more bubbles rise while the ground shakes.</li>
 <li class="legacyInfo">The deep hum swells a little when the world is busier.</li>
 <li class="legacyInfo">If the data can't be reached, Alex's Morel attractor releases the bubbles instead.</li>
-<li class="legacyInfo">No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 14 Nov · direct seismic audification</span></details>
+<li class="legacyInfo">No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 14 Nov · measured-wave contrast exploration</span></details>
 </div>
-<script src="engine.js?v=20261114h"></script><script src="mseed.js?v=20261114h"></script>
+<script src="engine.js?v=20261114i"></script><script src="mseed.js?v=20261114i"></script><script src="wave-windows.js?v=20261114a"></script>
 <script>
-const S={src:4,dens:0,hum:1,vol:1,sta:0,szl:0,szm:1,speed:2};const QON=()=>S.src<=1,WON=()=>S.src===1||S.src===2;
-const OPT={src:['Earthquakes','Earthquakes + Wikipedia','Wikipedia edits','Morel attractor','Direct seismogram audio'],speed:['10×','20×','40×','80×'],dens:['Calm','Medium','Lots'],sta:['Albuquerque','Ely, Minnesota','Harvard','Hawaii','Japan','Off'],szl:['Off','Soft','Strong'],szm:['Quakes only','All ground motion'],hum:['On','Off'],vol:['Whisper','Soft','Medium','Loud']};
-const DENS=[.25,.6,1.5],VOL=[.25,.5,.8,1.15],SPEED=[10,20,40,80];
+const S={src:4,dens:0,hum:1,vol:1,sta:0,szl:0,szm:1,speed:3};const QON=()=>S.src<=1,WON=()=>S.src===1||S.src===2;
+const OPT={src:['Earthquakes','Earthquakes + Wikipedia','Wikipedia edits','Morel attractor','Direct seismogram audio'],speed:['20×','40×','80×','160×','320×','640×'],dens:['Calm','Medium','Lots'],sta:['Albuquerque','Ely, Minnesota','Harvard','Hawaii','Japan','Off'],szl:['Off','Soft','Strong'],szm:['Quakes only','All ground motion'],hum:['On','Off'],vol:['Whisper','Soft','Medium','Loud']};
+const DENS=[.25,.6,1.5],VOL=[.25,.5,.8,1.15],SPEED=[20,40,80,160,320,640];
 const $=id=>document.getElementById(id);
 document.querySelectorAll('.chips').forEach(el=>{const k=el.dataset.k;OPT[k].forEach((n,i)=>{const b=document.createElement('button');b.textContent=n;b.onclick=()=>{S[k]=i;paint();apply(k);};el.appendChild(b);});});
 function paint(){document.body.classList.toggle('seismic',S.src===4);document.querySelectorAll('.chips').forEach(el=>{const k=el.dataset.k;[...el.children].forEach((b,i)=>b.classList.toggle('on',S[k]===i));});}
-function apply(k){if(k==='vol'&&au.g)au.g.gain.setTargetAtTime(S.src===4?Math.min(.85,VOL[S.vol]):VOL[S.vol],au.ctx.currentTime,.1);if(k==='hum')post({hum:S.src===4?0:S.hum===0?1:0});if(k==='speed')post({speed:SPEED[S.speed]});if(k==='src'){post({direct:S.src===4,speed:SPEED[S.speed],hum:S.src===4?0:S.hum===0?1:0});post({seis:null});connect();seisPoll();}if(k==='sta'){post({seis:null});szData=null;seisPoll();}if(k==='szl')post({szl:[0,.22,.5][S.szl]});if(k==='szm'&&S.src!==4)seisPoll();}
+function apply(k){if(k==='vol'&&au.g)au.g.gain.setTargetAtTime(S.src===4?Math.min(.85,VOL[S.vol]):VOL[S.vol],au.ctx.currentTime,.1);if(k==='hum')post({hum:S.src===4?0:S.hum===0?1:0});if(k==='speed')post({speed:SPEED[S.speed]});if(k==='src'){post({direct:S.src===4,speed:SPEED[S.speed],hum:S.src===4?0:S.hum===0?1:0});post({seis:null});waveSections=[];waveSource=null;connect();seisPoll();}if(k==='sta'){post({seis:null});waveSections=[];waveSource=null;szData=null;seisPoll();}if(k==='szl')post({szl:[0,.22,.5][S.szl]});if(k==='szm'&&S.src!==4)seisPoll();}
 // ---------- audio
 const au={ctx:null,node:null,g:null,on:false};const post=m=>{if(au.node)au.node.port.postMessage(m);};
 async function start(){if(!au.node){if(!au.ctx)au.ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'});
   const src=DEEP.toString()+`
 const D=DEEP();class P extends AudioWorkletProcessor{constructor(){super();this.e=new D.Eng(sampleRate);this.port.onmessage=m=>{const d=m.data;if(d.ev)this.e.event(d.ev);if(d.hum!==undefined)this.e.hum=d.hum;if(d.rate!==undefined)this.e.rateLvl=d.rate;if(d.seis!==undefined)this.e.seis(d.seis);if(d.szl!==undefined)this.e.szLvl=d.szl;if(d.direct!==undefined){this.e.direct=!!d.direct;this.e.szRate=this.e.direct?this.e.szBaseRate*this.e.speed:this.e.szBaseRate;}if(d.speed!==undefined){this.e.speed=d.speed;if(this.e.direct)this.e.szRate=this.e.szBaseRate*d.speed;} };this.k=0;}
- process(i,o){const L=o[0][0],R=o[0][1]||o[0][0];this.e.process(L,R,L.length);if((this.k+=L.length)>=12000){this.k=0;const z=this.e.sz;this.port.postMessage({env:this.e.szEnv,pos:z?this.e.szPos/z.length:0,sdf:this.e.sdLast||0,sdc:this.e.sdCount||0,poly:this.e.B.length,peak:this.e.directPeak||0});}return true;}}registerProcessor('deep-water',P);`;
+ process(i,o){const L=o[0][0],R=o[0][1]||o[0][0];this.e.process(L,R,L.length);if((this.k+=L.length)>=12000){this.k=0;const z=this.e.sz;this.port.postMessage({env:this.e.szEnv,pos:z?this.e.szPos/z.length:0,sdf:this.e.sdLast||0,sdc:this.e.sdCount||0,poly:this.e.B.length,peak:this.e.directPeak||0,cycles:this.e.directCycles||0,clip:this.e.directClipId||0});}return true;}}registerProcessor('deep-water',P);`;
   await au.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
-  au.node=new AudioWorkletNode(au.ctx,'deep-water',{numberOfInputs:0,outputChannelCount:[2]});au.node.port.onmessage=m=>{szEnv=m.data.env;szPosF=m.data.pos;if(S.src===4&&szData){$('last').textContent=szData.name+' · direct waveform · '+SPEED[S.speed]+'× playback · recording level '+Math.round((m.data.peak||0)*100)+'%';}else if(m.data.sdc&&m.data.sdc!==sdSeen&&szData){sdSeen=m.data.sdc;$('last').textContent='Measured wave '+sdSeen+' · '+szData.name+' · '+Math.round(m.data.sdf)+' Hz bass · '+m.data.poly+' simultaneous voices';}};au.g=au.ctx.createGain();au.g.gain.value=S.src===4?Math.min(.85,VOL[S.vol]):VOL[S.vol];au.node.connect(au.g).connect(au.ctx.destination);post({direct:S.src===4,speed:SPEED[S.speed],hum:S.src===4?0:S.hum===0?1:0});}
+  au.node=new AudioWorkletNode(au.ctx,'deep-water',{numberOfInputs:0,outputChannelCount:[2]});au.node.port.onmessage=m=>{szEnv=m.data.env;szPosF=m.data.pos;if(S.src===4&&szData){if(m.data.cycles!==seenCycles){seenCycles=m.data.cycles;if(autoScan&&waveSections.length>1)selectSection((waveSectionIndex+1)%waveSections.length);}$('last').textContent=szData.name+' · actual recording section '+(waveSectionIndex+1)+'/'+Math.max(1,waveSections.length)+' · '+SPEED[S.speed]+'× · level '+Math.round((m.data.peak||0)*100)+'%';}else if(m.data.sdc&&m.data.sdc!==sdSeen&&szData){sdSeen=m.data.sdc;$('last').textContent='Measured wave '+sdSeen+' · '+szData.name+' · '+Math.round(m.data.sdf)+' Hz bass · '+m.data.poly+' simultaneous voices';}};au.g=au.ctx.createGain();au.g.gain.value=S.src===4?Math.min(.85,VOL[S.vol]):VOL[S.vol];au.node.connect(au.g).connect(au.ctx.destination);post({direct:S.src===4,speed:SPEED[S.speed],hum:S.src===4?0:S.hum===0?1:0});}
  await au.ctx.resume();au.on=true;$('go').textContent='Stop';connect();seisPoll();}
 $('go').onclick=async()=>{try{if(au.on){await au.ctx.suspend();au.on=false;$('go').textContent='Start';disconnect();}else await start();}catch(e){au.on=false;$('go').textContent='Start';$('last').textContent='Audio could not start: '+(e.message||e);}};
 // ---------- live data -> bubbles
@@ -133,14 +134,36 @@ setInterval(()=>{rawRate=rawRate*.7+rawCount/2*.3;rawCount=0;post({rate:Math.min
 
 /* EarthScope miniSEED vertical-component samples: directly audified in seismic mode by time compression and stable amplitude scaling. A recent window is looped; fetching occurs about once a minute. */
 const STA=[['IU','ANMO','00','BHZ','Albuquerque, New Mexico'],['US','EYMN','00','BHZ','Ely, Minnesota'],['IU','HRV','00','BHZ','Harvard, Massachusetts'],['IU','POHA','00','BHZ','Pohakuloa, Hawaii'],['IU','MAJO','00','BHZ','Matsushiro, Japan']];
-const MS=MSEED();let sdSeen=0,szData=null,szEnv=0,szPosF=0,szT=null,szErr='',szInfo='',seisGeneration=0;
+const MS=MSEED(),WAVES=WAVE_WINDOWS();let sdSeen=0,szData=null,szEnv=0,szPosF=0,szT=null,szErr='',szInfo='',seisGeneration=0;
+let waveSource=null,waveSections=[],waveSectionIndex=0,autoScan=true,seenCycles=0,clipSerial=0;
+function selectSection(i){
+ if(!waveSource||!waveSections.length)return;
+ waveSectionIndex=((i%waveSections.length)+waveSections.length)%waveSections.length;
+ const w=waveSections[waveSectionIndex],samples=waveSource.x.slice(w.from,w.end);
+ szData={x:samples,xd:samples,rate:waveSource.rate,startT:w.at,endT:w.at+w.duration*1000,name:waveSource.name,peak:waveSource.peak};
+ post({seis:{data:samples,rate:waveSource.rate,clip:++clipSerial}});
+ $('segNote').textContent='Measured section '+(waveSectionIndex+1)+' of '+waveSections.length+' · '+new Date(w.at).toUTCString().slice(5,25)+' UTC · '+Math.round(w.duration)+' s ground motion · measured relative strength '+Math.round(100*w.energy)+'%';
+ $('szCap').textContent=waveSource.name+' · actual seismogram · gold line follows playback';
+}
+$('nextWave').onclick=()=>selectSection(waveSectionIndex+1);
+$('scanMode').onclick=()=>{autoScan=!autoScan;$('scanMode').textContent='Auto explore: '+(autoScan?'On':'Off');$('scanMode').classList.toggle('on',autoScan);};
+$('reloadWave').onclick=()=>{waveSections=[];waveSource=null;post({seis:null});seisPoll();};
 const iso=t=>new Date(t).toISOString().slice(0,19);
 async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGeneration;if(S.sta>=STA.length){post({seis:null});szData=null;$('szRead').textContent='';return;}
- const [net,sta,loc,cha,name]=STA[S.sta],t1=Date.now(),t0=t1-22*60000;
- try{const r=await fetch(`https://service.iris.edu/fdsnws/dataselect/1/query?net=${net}&sta=${sta}&loc=${loc}&cha=${cha}&starttime=${iso(t0)}&endtime=${iso(t1)}&nodata=404`,{cache:'no-store'});
-  if(!r.ok)throw new Error(r.status===404?'no recent data from this station':'HTTP '+r.status);
-  const bytes=await r.arrayBuffer();if(req!==seisGeneration||!au.on)return;const recs=MS.parse(bytes).filter(x=>x.rate>0&&x.samples.length).sort((a,b)=>a.start-b.start);if(!recs.length)throw new Error('empty');
-  const rate=recs[0].rate,startT=recs[0].start,last=recs[recs.length-1],endT=last.start+last.samples.length/rate*1000,N=Math.round((endT-startT)/1000*rate),x=new Float32Array(N);
+ const [net,sta,loc,cha,name]=STA[S.sta],t1=Date.now();
+ try{let bytes=null;
+  // Longer real recording for contrasting waveforms; fall back if archive rejects request.
+  for(const minutes of (S.src===4?[75,22]:[22])){
+   try{const t0=t1-minutes*60000;
+    const url=`https://service.iris.edu/fdsnws/dataselect/1/query?net=${net}&sta=${sta}&loc=${loc}&cha=${cha}&starttime=${iso(t0)}&endtime=${iso(t1)}&nodata=404`;
+    const r=await fetch(url,{cache:'no-store'});
+    if(!r.ok)throw new Error(r.status===404?'no recent data from this station':'HTTP '+r.status);
+    bytes=await r.arrayBuffer();break;
+   }catch(e){if(minutes===22)throw e;}
+  }
+  if(req!==seisGeneration||!au.on)return;
+  const recs=MS.parse(bytes).filter(x=>x.rate>0&&x.samples.length).sort((a,b)=>a.start-b.start);if(!recs.length)throw new Error('empty');
+  const rate=recs[0].rate,startT=recs[0].start,last=recs[recs.length-1],endT=last.start+last.samples.length/rate*1000,N=Math.round((endT-startT)/1000*rate);if(N<2||N>1200000)throw new Error('invalid recording length');const x=new Float32Array(N);
   for(const q of recs){const o=Math.round((q.start-startT)/1000*rate);for(let i=0;i<q.samples.length&&o+i<N;i++)if(o+i>=0)x[o+i]=q.samples[i];}
   // No waves are synthesized in direct mode. One gain factor applies across the entire recording.
   // Center the ADC trace and peak-normalize without saturation, gating, filtering or per-event shaping.
@@ -149,8 +172,9 @@ async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGen
    let peak=0;for(let i=0;i<N;i++){x[i]-=mean;peak=Math.max(peak,Math.abs(x[i]));}
    if(!(peak>0))throw new Error('no measurable samples');
    const scale=.78/peak;for(let i=0;i<N;i++)x[i]*=scale;
-   szData={x,xd:x,rate,startT,endT,name,peak};
-   post({seis:{data:x,rate}});
+   waveSource={x,rate,startT,endT,name,peak};waveSections=WAVES.analyze(x,rate,startT);
+   if(!waveSections.length)throw new Error('no measurable waveform sections');
+   selectSection(0);
   }else{
    let m=0;for(let i=0;i<N;i++)m+=x[i]/N;const a=[];for(let i=0;i<N;i++){x[i]-=m;}const hp=Math.exp(-2*Math.PI*.05/rate);let pv=0,py=0;for(let i=0;i<N;i++){const y=hp*(py+x[i]-pv);pv=x[i];py=y;x[i]=y;}
    for(let i=0;i<N;i+=7)a.push(Math.abs(x[i]));a.sort((p,q)=>p-q);const sc=3*(a[Math.floor(a.length*.9)]||1);for(let i=0;i<N;i++)x[i]=Math.tanh(x[i]/sc);
@@ -161,9 +185,9 @@ async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGen
     for(let i=0;i<N;i++){const t=Math.max(0,Math.min(1,(env[i]/med-2)/2));g+=(t-g)*(t>g?.05:.002);x[i]*=g;}}
    szData={x,xd,rate,startT,endT,name,peak:a[a.length-1]/sc*3};post({seis:{data:x,drive:xd,rate:rate*20}});post({szl:[0,.22,.5][S.szl]});
   }
-  szErr='';szInfo=`${name} (${net}.${sta}) · last ${Math.round((endT-startT)/60000)} min up to ${Math.max(0,Math.round((Date.now()-endT)/60000))} min ago · ${S.src===4?SPEED[S.speed]:20}× replay`;}
- catch(e){if(req!==seisGeneration||!au.on)return;szData=null;post({seis:null});szErr='Seismometer not reachable ('+(e.message||'network')+'), retrying each minute';}
- $('szRead').textContent=szErr||szInfo;$('szCap').textContent=szErr||(szData?szData.name+' · vertical seismogram · gold line = playback position · recorded wave goes directly to the speakers':'');szT=setTimeout(seisPoll,60000);}
+  szErr='';szInfo=`${name} (${net}.${sta}) · ${Math.round((endT-startT)/60000)} min recorded · ${S.src===4?waveSections.length+' measured sections':'continuous trace'} · recording ends ${Math.max(0,Math.round((Date.now()-endT)/60000))} min ago · ${S.src===4?SPEED[S.speed]:20}×`;}
+ catch(e){if(req!==seisGeneration||!au.on)return;waveSections=[];waveSource=null;szData=null;post({seis:null});szErr='Seismometer not reachable ('+(e.message||'network')+'), retrying each minute';}
+ $('szRead').textContent=szErr||szInfo;$('szCap').textContent=szErr||(szData?szData.name+' · vertical seismogram · gold line = playback position · recorded wave goes directly to the speakers':'');szT=setTimeout(seisPoll,10*60000);}
 
 // ---------- earthquake panel: world map (longitude/latitude, dots by magnitude, glow by how much each is bubbling now),
 // full seismometer trace with time marks, and the list of quakes ranked by their current (Omori) share of the bubbles
