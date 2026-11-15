@@ -61,6 +61,8 @@ def decide(person: str, events: Sequence[Mapping], *,
                 isinstance(addresses, (list, tuple)) and
                 person in [str(x).lower() for x in addresses]):
             for proposal in proposals:
+                if not isinstance(proposal, Mapping):
+                    continue
                 if (proposal.get("kind") == "reply" and
                         proposal.get("source_event_id") == event_id and
                         isinstance(proposal.get("text"), str) and
@@ -71,6 +73,8 @@ def decide(person: str, events: Sequence[Mapping], *,
     if active_task:
         return Decision("observe", "continuing_unfinished_task")
     for proposal in proposals:
+        if not isinstance(proposal, Mapping):
+            continue
         if proposal.get("kind") != "work":
             continue
         verb, obj = proposal.get("verb"), proposal.get("object")
