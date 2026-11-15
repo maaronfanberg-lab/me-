@@ -7,7 +7,7 @@ function WAVE_WINDOWS(){
   const seconds=Math.min(480,Math.max(24,duration/8));
   const size=Math.min(x.length,Math.max(2,Math.round(seconds*rate)));
   const hop=Math.max(1,Math.round(size*.5)),candidates=[],seen=new Set();
-  const limit=Math.max(1,Math.min(10,opts.limit||7));
+  const limit=opts.limit===undefined?Number.POSITIVE_INFINITY:Math.max(1,opts.limit);
   function measure(from){
    if(seen.has(from))return;seen.add(from);
    const end=Math.min(x.length,from+size),n=end-from;
@@ -49,7 +49,10 @@ function WAVE_WINDOWS(){
     const score=d+.18*energy;
     if(score>top){top=score;winner=c;}
    }
-   if(!winner)break;picked.push(winner);
+   if(!winner)break;
+   const novelty=Math.min(...picked.map(p=>distance(winner,p)));
+   if(novelty<.12)break; // no further measured contrast: do not label similar noise as unique
+   picked.push(winner);
   }
   return picked.map((c,i)=>({
    id:i+1,from:c.from,end:c.end,at:c.at,
