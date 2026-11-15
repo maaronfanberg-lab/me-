@@ -30,6 +30,7 @@ jobs:
           node --check apps/deep-water/capture-latest.js
           node --check apps/deep-water/test-capture-latest.cjs
           node --check apps/deep-water/smoke-live-seedlink.cjs
+          node -e "const fs=require('node:fs'),vm=require('node:vm'); const h=fs.readFileSync('apps/deep-water/index.html','utf8'); const s=h.split('<script>')[1].split('</script>')[0]; new vm.Script(s); if(!h.includes('id=\"captureLatest\"'))throw Error('Capture button missing'); console.log('Inline UI syntax OK');"
       - name: Deterministic capture and CSV tests
         run: node --test apps/deep-water/test-capture-latest.cjs
       - name: Verify newly arriving real EarthScope samples
