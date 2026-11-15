@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+import unittest
+from room_social_memory import context_for, witnessed_history, retrieve, relationship_evidence
+
+
+class SocialMemoryTests(unittest.TestCase):
+    def setUp(self):
+        self.events = [
+            {"id": "a", "speaker": "mara", "text": "Sarah, look at the plant.",
+             "at": "2026-11-15T00:00:00Z"},
+            {"id": "b", "speaker": "owen", "text": "The notebook is wet.",
+             "visibility": "private", "witnesses": ["owen", "jules"]},
+            {"id": "c", "speaker": "sarah", "text": "Mara, the plant has new leaves."},
+        ]
+
+    def test_public_history_preserved(self):
+        self.assertEqual([x.event_id for x in witnessed_history(self.events, "sarah")], ["a", "c"])
+
+    def test_private_event_not_shared(self):
+        self.assertEqual([x.event_id for x in witnessed_history(self.events, "jules")], ["a", "b", "c"])
+
+    def test_relevance_retrieval(self):
+        events = witnessed_history(self.events, "sarah")
+        self.assertEqual(retrieve(events, "plant")[0].event_id, "c")
+
+    def test_relationships_are_evidence_not_affinity(self):
+        events = witnessed_history(self.events, "sarah")
+        self.assertEqual(relationship_evidence(events, "sarah")["mara"], 2)
+        self.assertNotIn("closeness", context_for("sarah", self.events, "plant"))
+
+    def test_duplicate_event_not_replayed(self):
+        events = self.events + [self.events[0]]
+        self.assertEqual(len(witnessed_history(events, "sarah")), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
