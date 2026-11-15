@@ -195,7 +195,7 @@ async function captureLatest(){
     $('exportCapture').disabled=false;
   }catch(e){
     if(id!==captureGeneration || req!==seisGeneration)return;
-    captured=null;
+    captured=null;waveSections=[];waveSource=null;szData=null;post({seis:null});
     $('captureStatus').textContent='Fresh capture unavailable: '+(e.message||e)+'. You can try the direct miniSEED download.';
     link.href=CAP.archiveURL(station,Date.now());link.hidden=false;
   }finally{
