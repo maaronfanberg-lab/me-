@@ -68,6 +68,15 @@ the module never writes the live repository. Run a fresh 160-turn public
 audit in PR-only CI and report both prior and new metrics, with denominator
 160. Do not merge merely because these descriptive tests pass.
 
+**Sandbox result:** on PR run 43722166185 (2026-11-15, passing),
+13 tests succeeded (8 witnessed-memory + 5 trace-audit).
+On the same 160-turn snapshot, the old lexical duplicate metric remained
+zero, but the new audit identified **30 repeated intended-work turns**
+within the preceding 80 turns and **41 distinct (speaker, verb, object)
+signatures**. There were 114 intention-phrase turns and 17 explicit
+name-address proxy turns. This is evidence that the earlier metric missed
+some recurring *actions*, not a measured improvement in conversation.
+
 **Production outcome:** not yet tested: this is instrumentation only.
 Success for a future replacement engine requires matched longitudinal
 replays and grounded world-action follow-through, not merely fewer lexical
