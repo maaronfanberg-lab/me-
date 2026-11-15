@@ -289,7 +289,8 @@ async function loadLabels(langOverride) {
 onmessage = async ({ data }) => {
   switch (data.message) {
     case 'predict':
-      await handlePredict(data);
+      try { await handlePredict(data); }
+      catch (err) { postMessage({ message: 'analysis_error', error: String(err?.message || err) }); }
       break;
     case 'area-scores':
       await handleAreaScores(data);
