@@ -81,7 +81,7 @@ class LocalLlama(language_model.LanguageModel):
             raise ValueError("Expected llama.cpp's /v1/chat/completions endpoint")
         self.url, self.model_id = url, model_id
 
-    def sample_text(
+    def _sample_raw_text(
         self,
         prompt: str,
         *,
@@ -93,6 +93,7 @@ class LocalLlama(language_model.LanguageModel):
         timeout: float = language_model.DEFAULT_TIMEOUT_SECONDS,
         seed: int | None = None,
     ) -> str:
+        # Raw model transport is shared by action generation and choice selection.
         body: dict[str, Any] = {
             "model": self.model_id,
             "messages": [{"role": "user", "content": prompt}],
@@ -118,6 +119,25 @@ class LocalLlama(language_model.LanguageModel):
         for stop in terminators:
             if stop and stop in output:
                 output = output.split(stop, 1)[0]
+        return output
+
+    def sample_text(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = language_model.DEFAULT_MAX_TOKENS,
+        terminators: Collection[str] = language_model.DEFAULT_TERMINATORS,
+        temperature: float = language_model.DEFAULT_TEMPERATURE,
+        top_p: float = language_model.DEFAULT_TOP_P,
+        top_k: int = language_model.DEFAULT_TOP_K,
+        timeout: float = language_model.DEFAULT_TIMEOUT_SECONDS,
+        seed: int | None = None,
+    ) -> str:
+        output = self._sample_raw_text(
+            prompt, max_tokens=max_tokens, terminators=terminators,
+            temperature=temperature, top_p=top_p, top_k=top_k,
+            timeout=timeout, seed=seed,
+        )
         action, data = interrupt_response_parsing.extract_json_block(output)
         safe_silence = '\n{"mask": [], "timer": {"time": "15m", "reason": "reflect quietly"}}'
         if not isinstance(data.get("mask"), list) or not isinstance(data.get("timer"), dict):
@@ -143,7 +163,8 @@ class LocalLlama(language_model.LanguageModel):
         if not responses:
             raise ValueError("No choices")
         options = "\n".join(f"{i}: {value}" for i, value in enumerate(responses))
-        answer = self.sample_text(
+        # Choices require an index, not an action-control JSON block.
+        answer = self._sample_raw_text(
             prompt + "\n\nSelect ONE choice by its integer index only:\n" + options,
             max_tokens=15, temperature=0.1, seed=seed,
         )
