@@ -1,0 +1,36 @@
+name: Deep Water Capture latest verification
+on:
+  push:
+    branches: [deep-water-capture-latest-20261115]
+    paths:
+      - 'apps/deep-water/**'
+      - '.github/workflows/deep-water-capture.yml'
+  pull_request:
+    paths:
+      - 'apps/deep-water/**'
+      - '.github/workflows/deep-water-capture.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            apps/deep-water
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JavaScript syntax
+        run: |
+          node --check apps/deep-water/capture-latest.js
+          node --check apps/deep-water/test-capture-latest.cjs
+          node --check apps/deep-water/smoke-live-seedlink.cjs
+      - name: Deterministic capture and CSV tests
+        run: node --test apps/deep-water/test-capture-latest.cjs
+      - name: Verify newly arriving real EarthScope samples
+        run: node --experimental-websocket apps/deep-water/smoke-live-seedlink.cjs
