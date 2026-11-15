@@ -159,6 +159,7 @@ function DEEP_CAPTURE(parser) {
       } catch (e) { errors.push('archive: ' + (e.message || e)); }
     }
     if (!best) throw new Error(errors.join('; ') || 'No measured samples');
+    if (best.endT > at + 30000) throw new Error('Measured sample timestamp is unexpectedly in the future');
     best.ageMs = Math.max(0, at - best.endT);
     best.warning = best.ageMs > STALE_MS ? 'Not fresh: newest measured sample is older than 2 minutes' : '';
     best.errors = errors;
