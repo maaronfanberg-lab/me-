@@ -44,9 +44,15 @@ def witnessed_history(events: Sequence[Mapping], person: str) -> list[Experience
         text = str(event.get("text") or "").strip()
         # Old Room public feed is visible to all. New private events MUST
         # explicitly identify witnesses and are never globally visible.
-        visibility = str(event.get("visibility") or "public")
-        witnesses = tuple(str(x).lower() for x in (event.get("witnesses") or []))
-        accessible = (visibility == "public" or person in witnesses or speaker == person)
+        # Only absent legacy visibility is public. Explicitly empty, unknown
+        # or malformed classifications fail closed, including for the actor.
+        visibility = event["visibility"] if "visibility" in event else "public"
+        raw_witnesses = event.get("witnesses")
+        witnesses = (tuple(str(x).lower() for x in raw_witnesses)
+                     if isinstance(raw_witnesses, (tuple, list)) else ())
+        accessible = (visibility == "public" or
+                      visibility == "private" and
+                      (person in witnesses or speaker == person))
         if not eid or eid in seen or speaker not in PEOPLE or not text or not accessible:
             continue
         seen.add(eid)
