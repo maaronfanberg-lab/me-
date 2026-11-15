@@ -171,13 +171,19 @@ async function captureLatest(){
     const x=new Float32Array(count),scale=.78/peak;
     for(let i=0;i<count;i++)x[i]=(result.raw[i]-mean)*scale;
     const windows=WAVES.analyze(x,result.rate,result.startT);
-    if(!windows.length)throw Error('No measurable waveform section');
+    // Always include the newest actually recorded tail, even if it is quiet.
+    const tailLen=Math.min(count,Math.max(2,Math.round(Math.min(480,Math.max(24,count/result.rate/8))*result.rate)));
+    const tailFrom=count-tailLen;
+    let sumAll=0,sumTail=0;
+    for(let i=0;i<count;i++){sumAll+=x[i]*x[i];if(i>=tailFrom)sumTail+=x[i]*x[i];}
+    const relative=Math.min(1,Math.sqrt((sumTail/tailLen)/Math.max(1e-18,sumAll/count)));
+    const latestWindow={from:tailFrom,end:count,at:result.startT+tailFrom/result.rate*1000,duration:tailLen/result.rate,energy:relative,label:'Newest recorded section'};
+    const latestExisting=windows.findIndex(w=>w.from===tailFrom&&w.end===count);
+    let latest=latestExisting;
+    if(latest<0){latest=windows.length;windows.push(latestWindow);}
     captured=result;
     waveSource={x,rate:result.rate,startT:result.startT,endT:result.endT,name:result.name,peak};
     waveSections=windows;
-    // Pick the section ending most recently, not the strongest or an invented preset.
-    let latest=0;
-    for(let i=1;i<windows.length;i++)if(windows[i].at+windows[i].duration*1000 > windows[latest].at+windows[latest].duration*1000)latest=i;
     selectSection(latest);
     const age=Math.max(0,Date.now()-result.endT);
     const status=result.name+' ('+result.id+') · '+result.source+
