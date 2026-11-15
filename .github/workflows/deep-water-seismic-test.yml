@@ -1,0 +1,29 @@
+name: Deep Water seismic voice tests
+on:
+  push:
+    branches: [main, deep-water-seismic-voices-20261114]
+    paths:
+      - 'apps/deep-water/**'
+      - '.github/workflows/deep-water-seismic-test.yml'
+  pull_request:
+    paths:
+      - 'apps/deep-water/**'
+      - '.github/workflows/deep-water-seismic-test.yml'
+permissions:
+  contents: read
+jobs:
+  seismic-voices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks
+        run: |
+          node --check apps/deep-water/engine.js
+          node --check apps/deep-water/mseed.js
+          node --check apps/deep-water/test-seismic-voices.cjs
+      - name: Wave-derived voice tests
+        run: node apps/deep-water/test-seismic-voices.cjs
