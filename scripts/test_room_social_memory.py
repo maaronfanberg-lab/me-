@@ -52,5 +52,30 @@ class SocialMemoryTests(unittest.TestCase):
 
 
 
+    def test_unknown_visibility_fails_closed(self):
+        events = [
+            {"id": "legacy", "speaker": "mara", "text": "Public legacy note."},
+            {"id": "unknown", "speaker": "mara", "text": "Unclassified secret.", "visibility": "unclassified"},
+            {"id": "empty", "speaker": "mara", "text": "Empty classification.", "visibility": ""},
+            {"id": "private", "speaker": "mara", "text": "Private note.", "visibility": "private", "witnesses": ["mara"]},
+        ]
+        self.assertEqual([e.event_id for e in witnessed_history(events, "sarah")], ["legacy"])
+        self.assertEqual([e.event_id for e in witnessed_history(events, "mara")],
+                         ["legacy", "private"])
+
+    def test_malformed_witnesses_cannot_grant_access(self):
+        events = [{"id": "p", "speaker": "mara", "text": "Private note.",
+                   "visibility": "private", "witnesses": "sarah"}]
+        self.assertEqual(witnessed_history(events, "sarah"), [])
+        self.assertEqual(len(witnessed_history(events, "mara")), 1)
+
+    def test_duplicate_private_id_cannot_shadow_public_history(self):
+        events = [
+            {"id": "same", "speaker": "mara", "text": "Secret.", "visibility": "private", "witnesses": ["mara"]},
+            {"id": "same", "speaker": "mara", "text": "Public note.", "visibility": "public"},
+        ]
+        self.assertEqual([e.text for e in witnessed_history(events, "sarah")], ["Public note."])
+
+
 if __name__ == "__main__":
     unittest.main()
