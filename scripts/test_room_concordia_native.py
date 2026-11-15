@@ -3,6 +3,7 @@
 from pathlib import Path
 import json
 import unittest
+from unittest.mock import patch
 
 import room_concordia_native as native
 
@@ -66,6 +67,25 @@ class NativeConcordiaTests(unittest.TestCase):
         for person in native.PARTICIPANTS:
             identity = native.identity_text(person, config)
             self.assertIn(config["p"][person]["psychology_v2"]["core_identity"], identity)
+
+    def test_llama_choice_uses_raw_numeric_response(self):
+        model = native.LocalLlama("http://127.0.0.1:18080/v1/chat/completions", "local")
+        # A bare index is valid for Concordia choice prompts, even though it
+        # is deliberately invalid as a scheduler action control block.
+        with patch.object(model, "_sample_raw_text", return_value="1") as call:
+            index, selected, metadata = model.sample_choice(
+                "Choose the next entity", ["Sarah", "Mara", "Jules"]
+            )
+        self.assertEqual((index, selected, metadata), (1, "Mara", {}))
+        call.assert_called_once()
+
+    def test_llama_action_still_requires_scheduler_json(self):
+        model = native.LocalLlama("http://127.0.0.1:18080/v1/chat/completions", "local")
+        with patch.object(model, "_sample_raw_text", return_value="1"):
+            self.assertEqual(
+                model.sample_text("What does Mara independently choose to do next?"),
+                '\\n{"mask": [], "timer": {"time": "15m", "reason": "reflect quietly"}}',
+            )
 
     def test_llama_adapter_refuses_remote_upload_of_room_prompts(self):
         with self.assertRaises(ValueError):
