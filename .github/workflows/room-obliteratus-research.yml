@@ -27,15 +27,17 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = 'research/room-obliteratus-v014-20261116'
-          git fetch --no-tags --depth=1 origin main
+          # Pinned original research branching point; main receives live Room feed writes.
+          BASE_SHA=a93fb990e6d31ab453fd0c184458477c6673b51e
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
           echo 'Changed paths vs main:'
-          git diff --name-only FETCH_HEAD HEAD
+          git diff --name-only "$BASE_SHA" HEAD
           while IFS= read -r path; do
             case "$path" in
               experiments/room-obliteratus/*|docs/research/2026-11-16-room-obliteratus-*|.github/workflows/room-obliteratus-research.yml) ;;
               *) echo "PRODUCTION OR UNRELATED FILE MODIFIED: $path"; exit 2 ;;
             esac
-          done < <(git diff --name-only FETCH_HEAD HEAD)
+          done < <(git diff --name-only "$BASE_SHA" HEAD)
           test ! -d experiments/room-obliteratus/room
       - name: Compile and run bounded, dependency-free tests
         shell: bash
