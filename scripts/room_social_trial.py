@@ -25,7 +25,7 @@ TRACE_LISTS = ("dialogue", "events", "deliveries", "action_claims",
 
 def _permitted(event: Mapping, recipient: str) -> bool:
     """No unknown metadata, blanket private visibility or inferred witnesses."""
-    if recipient not in PARTICIPANTS:
+    if not isinstance(recipient, str) or recipient not in PARTICIPANTS:
         return False
     if event.get("visibility") == "public":
         return True
@@ -67,9 +67,10 @@ def inspect_trace(run: Mapping) -> dict:
                 not isinstance(item.get("witnesses"), (list, tuple))):
             issues.append("invalid_private_witnesses")
     for delivery in run["deliveries"]:
-        if (not isinstance(delivery, Mapping) or
-                not _permitted(by_id.get(delivery.get("event_id"), {}),
-                               delivery.get("recipient"))):
+        event_id = delivery.get("event_id") if isinstance(delivery, Mapping) else None
+        recipient = delivery.get("recipient") if isinstance(delivery, Mapping) else None
+        if (not isinstance(event_id, str) or
+                not _permitted(by_id.get(event_id, {}), recipient)):
             issues.append("unauthorized_or_unverifiable_delivery")
     verified_claims = 0
     for claim in run["action_claims"]:
@@ -103,7 +104,7 @@ def inspect_trace(run: Mapping) -> dict:
             issues.append("invalid_reply_receipt")
             continue
         eid = reply.get("source_event_id")
-        if eid not in allen_ids or not isinstance(reply.get("actor"), str):
+        if not isinstance(eid, str) or eid not in allen_ids or not isinstance(reply.get("actor"), str):
             issues.append("unverifiable_allen_reply")
             continue
         if eid in answered:
@@ -111,9 +112,14 @@ def inspect_trace(run: Mapping) -> dict:
             continue
         addressed = next((m.get("addresses") for m in run["allen_inputs"]
                           if isinstance(m, Mapping) and m.get("id") == eid), [])
+        msg = next((m for m in run["allen_inputs"]
+                    if isinstance(m, Mapping) and m.get("id") == eid), {})
         if (not isinstance(addressed, (list, tuple)) or
                 reply["actor"] not in addressed):
             issues.append("unaddressed_allen_reply")
+            continue
+        if not _permitted(msg, reply["actor"]):
+            issues.append("unwitnessed_allen_reply")
             continue
         answered.add(eid)
     counts = audit(run["dialogue"])
