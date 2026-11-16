@@ -9,7 +9,7 @@ from pathlib import Path
 
 MODEL_ID = "HuggingFaceTB/SmolLM2-135M-Instruct"
 REVISION = "12fd25f77366fa6b3b4b768ec3050bf629380bac"
-CONCEPT = "contextual-answer-versus-deflection"
+CONCEPT = "contextually-correct-versus-swapped-answer"
 OBJECTS = [
     "notebook", "compass", "lantern", "pencil", "scarf", "telescope", "mug", "umbrella",
     "timetable", "key", "photograph", "map", "sketch", "violin", "stone", "ribbon",
@@ -28,13 +28,24 @@ PLACES = [
 
 
 def examples(start, end):
-    groups = {"positive": [], "uncertain": [], "topic_shift": []}
+    """Counterbalanced contextual correctness; matched text/word distributions.
+
+    Each object has two mirror-image contexts and the SAME two possible answers.
+    The positive examples answer using the actual observed sign; the matched
+    controls give the other location. This eliminates basic unigram/trigram
+    shortcuts that invalidated the first natural-language contrast.
+    """
+    groups = {"positive": [], "wrong_answer": []}
     for i, item in enumerate(OBJECTS[start:end], start=start):
-        place = PLACES[(i * 7 + i // 9) % len(PLACES)]
-        prefix = f"Mara: Where is the {item}?\nSarah: "
-        groups["positive"].append(prefix + f"You asked about the {item}. It is {place}.")
-        groups["uncertain"].append(prefix + f"You asked about the {item}. I cannot confirm its location.")
-        groups["topic_shift"].append(prefix + f"You asked about the {item}. Let's discuss something else instead.")
+        left = PLACES[(i * 3) % len(PLACES)]
+        right = PLACES[(i * 3 + 5) % len(PLACES)]
+        for correct, incorrect in ((left, right), (right, left)):
+            prefix = (
+                f"Mara: I read the label for the {item}. It says '{correct}'. "
+                f"Where is the {item}?\\nSarah: "
+            )
+            groups["positive"].append(prefix + f"The {item} is {correct}.")
+            groups["wrong_answer"].append(prefix + f"The {item} is {incorrect}.")
     return groups
 
 
@@ -75,8 +86,8 @@ def run(model_path, cases_file, output_path, n_cases, max_tokens):
     if model.config.model_type != "llama" or not tokenizer.chat_template:
         raise RuntimeError("Expected local dense Llama model with a chat template")
     layer = max(1, model.config.num_hidden_layers // 2)
-    training = examples(0, 32)
-    heldout = examples(32, 56)
+    training = examples(0, 24)
+    heldout = examples(24, 44)
     train_features = {k: activations(model, tokenizer, v, layer) for k,v in training.items()}
     held_features = {k: activations(model, tokenizer, v, layer) for k,v in heldout.items()}
     recipe = ExtractionRecipe(method="diff_means", pool_controls="mean_of_means",
@@ -100,8 +111,8 @@ def run(model_path, cases_file, output_path, n_cases, max_tokens):
         "kind": "real_pretrained_model_and_conditional_reversible_steering",
         "model_id": MODEL_ID, "model_revision": REVISION, "OBLITERATUS_version": "v0.1.4",
         "concept_id": CONCEPT, "activation_layer": layer,
-        "training_examples_per_class": 32, "independent_validation_per_class":24,
-        "split": "distinct fictional objects; shared response templates",
+        "training_examples_per_class": 48, "independent_validation_per_class":40,
+        "split": "distinct fictional objects; counterbalanced matched-vocabulary correct/incorrect answers",
         "validation": validation, "neural_activations_measured": True,
         "steering_executed": False, "production_room_modified": False,
         "limitations": [
