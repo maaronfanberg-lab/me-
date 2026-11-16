@@ -218,7 +218,7 @@ const iso=t=>new Date(t).toISOString().slice(0,19);
    vertical ground motion at an IU station, 2 min before the P wave to 100 min after, 20 samples/s, stored as int16. */
 let ARC=[],arcSel=-1;
 fetch('archive/index.json?v=20261116',{cache:'no-store'}).then(r=>r.json()).then(j=>{ARC=j;const el=$('arcChips');const mk=(txt,k)=>{const b=document.createElement('button');b.textContent=txt;b.onclick=()=>{arcSel=k;paintArc();szData=null;seisPoll();};el.appendChild(b);};
- mk('Live',-1);ARC.forEach((e,k)=>mk(e.name.split(',')[0].split(' (')[0]+' M'+e.mag+' · '+e.time.slice(0,4),k));paintArc();}).catch(()=>{$('arcRead').textContent='Archive list not available.';});
+ mk('Live',-1);ARC.forEach((e,k)=>mk(e.name.split(',')[0].split(' (')[0]+(e.name.includes('heard in Germany')?' (heard in Germany)':'')+' M'+e.mag+' · '+e.time.slice(0,4),k));paintArc();}).catch(()=>{$('arcRead').textContent='Archive list not available.';});
 function paintArc(){[...$('arcChips').children].forEach((b,i)=>b.classList.toggle('on',i-1===arcSel));const e=ARC[arcSel];
  $('arcRead').textContent=e?`${e.name} · M${e.mag} · ${new Date(e.time).toUTCString().slice(5,22)} UTC · ${e.depth_km} km deep · recorded at ${e.stationName} (${e.station}), ${e.distance_deg}° away · P wave at ${Math.round(e.p_s/60)} min, S at ${Math.round(e.s_s/60)} min into the recording`:'Live is the seismometer above; pick an earthquake to hear its real recording instead.';}
 async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGeneration;if(arcSel<0&&S.sta>=STA.length){post({seis:null});szData=null;$('szRead').textContent='';return;}
