@@ -42,7 +42,7 @@ def examples(start, end):
         for correct, incorrect in ((left, right), (right, left)):
             prefix = (
                 f"Mara: I read the label for the {item}. It says '{correct}'. "
-                f"Where is the {item}?\\nSarah: "
+                f"Where is the {item}?\nSarah: "
             )
             groups["positive"].append(prefix + f"The {item} is {correct}.")
             groups["wrong_answer"].append(prefix + f"The {item} is {incorrect}.")
