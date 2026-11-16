@@ -47,3 +47,12 @@ ground is an octave in the sound); (2) a half-wave sings only if its peak is ≥
 sung for 0.5 s; (3) up/down-going half-waves pan slightly left/right; (4) master low-pass 6 kHz, voice low-pass
 1.5–5 kHz by curvature. Results on a synthetic microseism + quake trace: voices/s 25.8 → 9.8; pitch 10–90% range
 31–111 Hz → 30–1600 Hz; tests updated (prominence, steady background ≤ 4 voices/s, 2× frequency = octave ±0.15).
+
+## Update (2026-11-16, later): "not impressive"
+Observed in a render: voices were very short (≤0.9 s) and, on microseism-dominated traces, mostly pinned to the 30 Hz floor,
+so the result was a dense low clicking. Changes: one transposition factor per trace (slow log-mean of wave frequency → 200 Hz)
+keeping exact ratios between waves; voices ring for their physical decay time (6/β, 0.3–2.5 s); a half-wave must also reach
+1.2× the trace's 2 s RMS (tiny noise wiggles never sing); voices get the open-water reverb and a wider stereo image;
+bubble-cloud collective resonance (Lu, Prosperetti & Yoon 1990; Commander & Prosperetti 1989) gives a deep boom when 6+
+voices form within a second. Render (synthetic microseism + quake): voice pitch 10/50/90% = 40/220/2464 Hz (was all ≈30–111 Hz),
+6.7 voices/s, 6 cloud booms at 20–28 Hz around the quake.

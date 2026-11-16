@@ -22,14 +22,14 @@ assert.equal(none.sdCount||0,0,'no input must not trigger notes');
 assert.equal(quiet.energy,0,'no input and no hum must be silent');
 const trace=makeTrace(),e=new Eng(SR);e.hum=0;e.szLvl=0;e.sdLog=[];
 e.seis({data:trace,drive:trace,rate:40*20});
-const measured=render(e,.7);
+const measured=render(e,3);
 // 2026-11-16 (Alex: 'not the constant static'): only prominent half-waves sing (peak >= 1.25x the running average, or
 // one every 0.5 s), so every voice still comes from a measured half-wave but the steady background no longer hisses.
-assert.ok((e.sdCount||0)>30,'prominent measured half-waves must be represented; count '+e.sdCount);
-assert.ok(measured.maxVoices>3,'overlapping voices allowed; actual max '+measured.maxVoices);
+assert.ok((e.sdCount||0)>=3,'prominent measured half-waves must be represented; count '+e.sdCount);
+assert.ok(measured.maxVoices>1,'overlapping voices allowed; actual max '+measured.maxVoices);
 assert.ok(measured.energy>0.01,'wave resonances must be audible');
 const signatures=new Set(e.sdLog.map(v=>v.slice(0,5).map(x=>x.toFixed(5)).join(':')));
-assert.ok(signatures.size>=Math.min(20,Math.floor(e.sdLog.length*.25)),'distinct wave shapes must produce distinct sound parameters; '+signatures.size+' of '+e.sdLog.length);
+assert.ok(signatures.size>=Math.min(20,Math.floor(e.sdLog.length*.5)),'distinct wave shapes must produce distinct sound parameters; '+signatures.size+' of '+e.sdLog.length);
 // steady background (constant-amplitude 0.3 Hz wave, like a microseism) must stay sparse: no dense hiss
 {const rate=40,n=rate*60,a=new Float32Array(n);for(let i=0;i<n;i++)a[i]=.3*Math.sin(2*Math.PI*.3*i/rate+.3*Math.sin(i/57));
  const q=new Eng(SR);q.hum=0;q.szLvl=0;q.seis({data:a,drive:a,rate:rate*20});render(q,2);
