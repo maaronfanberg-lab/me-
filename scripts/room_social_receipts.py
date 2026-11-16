@@ -46,6 +46,9 @@ def verify_work_receipt(person: str, decision_id: str, verb: str, obj: str,
                 event.get("actor") != person or
                 event.get("source_decision_id") != decision_id or
                 event.get("verb") != verb or event.get("object") != obj or
+                event.get("visibility") not in ("public", "private") or
+                (event.get("visibility") == "private" and
+                 not isinstance(event.get("witnesses"), (list, tuple))) or
                 not isinstance(cycle, int) or isinstance(cycle, bool) or
                 cycle <= requested_cycle or
                 not isinstance(event.get("id"), str) or not event["id"]):
