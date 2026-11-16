@@ -10,8 +10,8 @@ spec.loader.exec_module(mod)
 
 
 def lexical_presence(text):
-    text = re.sub(r"\\s+", " ", text.casefold())
-    return ({("word", token) for token in re.findall(r"\\w+", text)} |
+    text = re.sub(r"\s+", " ", text.casefold())
+    return ({("word", token) for token in re.findall(r"\w+", text)} |
             {("char", text[i:i+3]) for i in range(len(text) - 2)})
 
 
