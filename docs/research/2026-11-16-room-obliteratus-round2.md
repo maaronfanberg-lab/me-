@@ -36,11 +36,12 @@ Date: 2026-11-16 UTC. Branch: `research/room-obliteratus-v014-20261116`. Draft P
 - Deliberately added the alpha=0 test because the prior six tests checked restoration only, and an anomalous zero-dose arm could otherwise masquerade as intervention impact.
 - Stronger activation interventions can degrade utility and coherence. See Xu et al., *Why Steering Works: Toward a Unified View of Language Model Parameter Dynamics*, ACL 2026, DOI: 10.18653/v1/2026.acl-long.1463, https://aclanthology.org/2026.acl-long.1463/.
 
-## GitHub verification (to be filled with observed status)
+## GitHub verification (confirmed on GitHub Actions)
 
 - Original round-2 commit SHA: `255b09b7aa52275727e820ef7667b8ffeac4cc78`.
-- First round-2 CI run: `43886451247`, **FAILED** at branch isolation; root cause was comparing against moving `main`, not a research-only diff. This was a test-design mistake, not a failed model experiment. Fixed by pinning fork-point `1ed9db726c9bee47846a182e2a7103105d689a39`. New run: pending verification.
-- Corrected GitHub Actions run: [`43886885051`](https://github.com/maaronfanberg-lab/me-/actions/runs/43886885051), **SUCCESS**. All 38 tests passed in 0.047 seconds. Synthetic 20-case demo passed; 60 unlabeled pairs generated, without collected ratings. Uploaded artifact ID `14233374439`, SHA256 `601776cc002ce473c42ca266fac8cacdcfe193874daf4c3b2bb773509a3dcf7a`.\n- Unit tests: 38/38 pass in local Python. Mock controls: pass. Anonymous task count: 60.
+- First round-2 CI run: `43886451247`, **FAILED** at branch isolation; root cause was comparing against moving `main`, not a research-only diff. This was a test-design mistake, not a failed model experiment. Fixed by pinning fork-point `1ed9db726c9bee47846a182e2a7103105d689a39`. The corrected run and its results are recorded below.
+- Corrected GitHub Actions run: [`43886885051`](https://github.com/maaronfanberg-lab/me-/actions/runs/43886885051), **SUCCESS**. All 38 tests passed in 0.047 seconds. Synthetic 20-case demo passed; 60 unlabeled pairs generated, without collected ratings. Uploaded artifact ID `14233374439`, SHA256 `601776cc002ce473c42ca266fac8cacdcfe193874daf4c3b2bb773509a3dcf7a`.
+- Unit tests: 38/38 pass in local Python. Mock controls: pass. Anonymous task count: 60.
 - The live Room's code/state/feed/prompts, deployment, and schedules have not been modified by these research changes.
 
 ## Next scientific gate
