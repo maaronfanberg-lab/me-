@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090c11">
+<title>Pulse Current</title>
+<style>
+:root{color-scheme:dark;--ink:#e3e9ee;--mute:#a6b5c2;--bg:#090c11;--panel:#121922;--line:#293645;--aqua:#8ce2df;--amber:#ffbc80;font-family:Inter,system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink)}button,input,select{font:inherit}button,select{border:1px solid var(--line);color:var(--ink);background:#151e28;border-radius:8px;min-height:42px;padding:.55rem .8rem;cursor:pointer}button:hover,select:hover{border-color:var(--aqua)}button[aria-pressed=true]{background:#244347;border-color:#69adaa;color:#f0ffff}a{color:var(--aqua)}
+.shell{min-height:100dvh;display:flex;flex-direction:column;gap:10px;padding:max(8px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+header,footer{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}h1{font-size:1.24rem;font-weight:650;margin:0 .35rem;letter-spacing:.04em}.buttons{display:flex;flex-wrap:wrap;gap:6px}main{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;flex:1;min-height:0}main.open{grid-template-columns:minmax(0,1fr) minmax(265px,340px)}
+.stage{display:flex;flex-direction:column;min-width:0;gap:7px}.water{position:relative;flex:1;min-height:clamp(240px,55vh,660px);background:#080e17}canvas{display:block;width:100%;border-radius:8px}#water{position:absolute;inset:0;height:100%;touch-action:pan-y}#chain{height:100px;background:#10151d}.trace{display:grid;grid-template-columns:52px minmax(0,1fr);gap:5px;align-items:center}.traceLabels{display:grid;gap:.4rem;font-size:.72rem;padding-left:.25rem}.in{color:var(--amber)}.out{color:var(--aqua)}#trace{height:49px;background:#10151d}
+aside{height:min(75dvh,760px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:10px;scrollbar-color:#536679 var(--panel)}aside[hidden]{display:none}details{border-bottom:1px solid var(--line);padding:.5rem 0}summary{cursor:pointer;font-weight:620;padding:.32rem .12rem}label.control{display:grid;grid-template-columns:1fr 4.5em;align-items:center;gap:4px;padding:.38rem .1rem;font-size:.86rem}output{text-align:right;font-variant-numeric:tabular-nums;color:var(--aqua)}input[type=range]{width:100%;grid-column:1/-1;accent-color:#7ececf;min-height:25px;margin:0}input[type=number]{color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;width:100%;padding:.35rem;font-size:16px}p{font-size:.85rem;line-height:1.5;color:var(--mute);margin:.4rem 0 .65rem}.state{display:grid;grid-template-columns:2.2em 1fr 1fr auto;gap:4px;align-items:center;padding:5px 0;font-size:.78rem}.state button{min-height:34px;padding:.3rem .45rem}.state output{grid-column:2/5;text-align:left;color:var(--mute)}
+footer{font-size:.78rem;color:var(--mute);min-height:27px}.fault{color:#ffb27f}.focus h1,.focus footer{display:none}.focus header{justify-content:flex-end}.focus .water{min-height:65dvh}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media(max-width:760px){main.open{grid-template-columns:minmax(0,1fr)}aside{height:auto;max-height:none}.shell{min-height:100dvh}header{align-items:flex-start}h1{padding:.35rem 0}.water{min-height:51dvh}#chain{height:84px}.buttons{gap:4px}button,select{font-size:.85rem;padding:.45rem .6rem}.focus .water{min-height:65dvh}}
+</style>
+</head>
+<body>
+<div class="shell" id="shell">
+<header><h1>Pulse Current</h1><div class="buttons">
+<button id="play" type="button">Pause</button><button id="sound" type="button" aria-pressed="false">Sound off</button>
+<button id="focus" type="button" aria-pressed="false">Full view</button><button id="controls" type="button" aria-expanded="false" aria-controls="panel">Controls</button>
+</div></header>
+<main id="main">
+<section class="stage" aria-label="Simulation">
+<div class="water"><canvas id="water" aria-label="Bickley jet tracer field. Tap to release a cloud of tracers."></canvas></div>
+<canvas id="chain" aria-label="Moving mechanical masses and the springs connecting them"></canvas>
+<div class="trace"><div class="traceLabels"><span class="in">Input</span><span class="out">Output</span></div><canvas id="trace" aria-label="Time traces of peaks at the first and last masses"></canvas></div>
+</section>
+<aside id="panel" hidden>
+<details open><summary>Pulse comparison</summary>
+<p>Both settings use the same drive frequency from the paper. Switch between them to hear which pulses survive.</p>
+<div class="buttons"><button id="lost" type="button">Pulse loss</button><button id="pass" type="button">All peaks pass</button><button id="reset" type="button">Reset from rest</button></div>
+</details>
+<details open><summary>Lattice</summary><div id="latticeControls"></div></details>
+<details><summary>Jet and coupling</summary><div id="jetControls"></div><p>Gains for the three traveling waves are independent. The final mass adds a decaying pulse to wave 1. Zero coupling restores the published jet equation.</p></details>
+<details><summary>Sound and playback</summary><div id="mediaControls"></div><p>Low tones mark output pulses. A higher tone marks input pulses. The time strip shows live peak events above velocity 0.5.</p></details>
+<details id="states"><summary>Positions and velocities</summary><p>Every mass has a displacement and velocity. Enter values and tap Set. The live row reports the current state.</p><div id="stateRows"></div></details>
+<details><summary>Model and verification</summary><p><a href="https://arxiv.org/html/2611.17535v1#S3">Mechanical lattice, Eq. 8 and Fig. 9</a> · <a href="https://arxiv.org/html/2509.22482v3#S4.SS5">Bickley jet, §4.5</a></p>
+<p>Both systems use double-precision RK4. Preset comparison states start after 120 forcing periods, so you can see the steady patterns immediately. The match test counts 16 input and 12 output peaks at drive 0.17 over 20 forcing periods, at steps 0.01 and 0.005. At drive 0.15, it counts 13 and 13 in the same window. The models use separate clocks and the coupling is one way.</p></details>
+</aside>
+</main>
+<footer><span>Tap the current to release tracers</span><span id="status" aria-live="polite"></span></footer>
+</div>
+<script>
+const engine=function engine(){
+  const TAU=2*Math.PI;
+  const params={n:20,gamma:.15,beta:.2,vp:1.05,a:4.8,b:10.1,c:5.8,F:.17,omega:1.4,dt:.01};
+  const jet={U:5.4138,L:1.77,r:6.371,A:[.075,.4,.3],C:[.1446,.2053,.4561],rate:.24,coupling:.14,tail:.72};
+  function lattice(p){
+    const n=p.n, y=new Float64Array(n*2), z=y.slice(), a=y.slice(), b=y.slice(), c=y.slice(), d=y.slice(), previous=new Float64Array(n), rising=new Uint8Array(n);
+    const friction=w=>((p.a*w*w)-(p.b*Math.abs(w))+p.c)*w;
+    y.fill(-friction(-p.vp),0,n);
+    let time=0,phase=0;
+    function rhs(Y,k,angle){
+      for(let j=0;j<n;j++){
+        const u=Y[j],v=Y[n+j];
+        const lap=(j>0?Y[j-1]-u:0)+(j+1<n?Y[j+1]-u:0);
+        k[j]=v;
+        k[n+j]=(-u+p.beta*lap-friction(v-p.vp)+(j===0?p.F*Math.sin(angle):0))/p.gamma;
+      }
+    }
+    function step(h,peak){
+      const dp=h*p.omega;
+      rhs(y,a,phase);
+      for(let j=0;j<y.length;j++)z[j]=y[j]+h*a[j]/2;
+      rhs(z,b,phase+dp/2);
+      for(let j=0;j<y.length;j++)z[j]=y[j]+h*b[j]/2;
+      rhs(z,c,phase+dp/2);
+      for(let j=0;j<y.length;j++)z[j]=y[j]+h*c[j];
+      rhs(z,d,phase+dp);
+      for(let j=0;j<y.length;j++)y[j]+=h*(a[j]+2*b[j]+2*c[j]+d[j])/6;
+      if(!y.every(Number.isFinite)||y.some(value=>Math.abs(value)>50)) return false;
+      phase=(phase+dp)%TAU;
+      for(let j=0;j<n;j++){
+        const v=y[n+j], last=previous[j];
+        if(peak&&rising[j]&&v<=last&&last>.5)peak(j,last,time);
+        rising[j]=v>last;
+        previous[j]=v;
+      }
+      time+=h;
+      return true;
+    }
+    function edit(j,u,v){y[j]=u;y[n+j]=v;previous[j]=v;rising[j]=0;}
+    return {y,n,step,edit,get time(){return time;}};
+  }
+  function tracerField(jet){
+    const s=new Float64Array(2),a=s.slice(),b=s.slice(),c=s.slice(),d=s.slice();
+    const k=new Float64Array(3),w=k.slice(),A=k.slice();
+    let L,U;
+    function prepare(){
+      U=jet.U; L=jet.L;
+      for(let i=0;i<3;i++){
+        k[i]=2*(i+1)/jet.r;
+        w[i]=k[i]*U*jet.C[i];
+        A[i]=jet.A[i];
+      }
+    }
+    function velocity(x,y,t,pulse,out){
+      const u=Math.tanh(y/L),q=1-u*u;
+      let cos=0,sin=0;
+      for(let i=0;i<3;i++){
+        const amp=A[i]+(i===0?pulse:0),theta=k[i]*x-w[i]*t;
+        cos+=amp*Math.cos(theta);
+        sin+=amp*k[i]*Math.sin(theta);
+      }
+      out[0]=U*q*(1+2*u*cos);
+      out[1]=-U*L*q*sin;
+    }
+    function advect(x,y,t,h,p0,p1,pm,out){
+      velocity(x,y,t,p0,a);
+      velocity(x+h*a[0]/2,y+h*a[1]/2,t+h/2,pm,b);
+      velocity(x+h*b[0]/2,y+h*b[1]/2,t+h/2,pm,c);
+      velocity(x+h*c[0],y+h*c[1],t+h,p1,d);
+      s[0]=x+h*(a[0]+2*b[0]+2*c[0]+d[0])/6;
+      s[1]=y+h*(a[1]+2*b[1]+2*c[1]+d[1])/6;
+      out[0]=s[0];out[1]=s[1];
+    }
+    prepare();
+    return {prepare,velocity,advect};
+  }
+  function benchmark(F,h){
+    const p={...params,F},m=lattice(p),T=TAU/p.omega,counts=[0,0],max=[0,0];
+    function peak(j,v,t){
+      if(t<120*T||t>=140*T)return;
+      const i=j===0?0:j===p.n-1?1:-1;
+      if(i>=0){counts[i]++;max[i]=Math.max(max[i],v);}
+    }
+    while(m.time<140*T+h)if(!m.step(h,peak))throw Error("Unstable lattice");
+    return {counts,max};
+  }
+  return {params,jet,lattice,tracerField,benchmark};
+};
+const warm={"0.15":[0.594412726402138,0.6605875633236279,0.7558216490343598,0.906934876023966,1.1173800362706998,0.7297492606315135,0.5199477726679552,0.5155138534030467,0.5299073877667011,0.5730839869984876,0.6578693828720945,0.7894793201884539,0.969001218881495,1.110506216802711,0.5679092022254636,0.5219250113554673,0.5463780516204854,0.6064826111922149,0.7141845800712904,0.915863234070528,-0.096907435178241,-0.12846889113848184,-0.1681103840620058,-0.21905413133498952,-0.3022803396314101,0.8297698721824134,0.031424315948520964,-0.0063375382316816645,-0.0300165687056298,-0.07247927529641598,-0.1253750971410954,-0.1813750066918485,-0.24392131794176883,0.5365586800297409,0.1981900640098972,-0.00956282736172169,-0.04903023924081027,-0.09574639626859963,-0.14749902027805045,-0.23672215732326984],"0.17":[0.6514609220585849,0.7913272087499471,0.9909957781176341,0.9696990461462066,0.5414178141560394,0.5409559886790721,0.5934775804083917,0.6868098481925884,0.8238422771392274,1.006414394881618,1.0453950367941898,0.5512744216276979,0.5135297475671851,0.5155480164931135,0.5305785072027207,0.5723600855096745,0.6521120725080825,0.7747764788244935,0.9421974101250903,1.2329364500722635,-0.12096400464395723,-0.1811158852889732,-0.25919990276382104,0.7579858025952008,0.0730371188132773,-0.04070085992478998,-0.087920832062778,-0.13984603324178851,-0.19355926300124068,-0.2590438354181187,0.6813095514735071,0.151273352839617,0.004156142517214921,-0.008230733284079948,-0.0316665121911601,-0.07249808400312661,-0.1227895535771961,-0.17624255561575153,-0.22714534104975245,0.18087788132283059]};
+const {params,jet:originalJet,lattice,tracerField}=engine();
+const p={...params};
+const jet={...originalJet,A:[...originalJet.A],C:[...originalJet.C]};
+const view={speed:8,volume:.64,fade:.93};
+const $=id=>document.getElementById(id);
+const water=$("water"),chain=$("chain"),trace=$("trace");
+const wc=water.getContext("2d",{alpha:false}),cc=chain.getContext("2d",{alpha:false}),tc=trace.getContext("2d",{alpha:false});
+const palette=["#83dbdb","#72b7db","#b8eae1","#586eac","#f0c298","#b87d5e"];
+const count=1280, x=new Float64Array(count),y=x.slice(),lastX=x.slice(),lastY=x.slice(),colors=new Uint8Array(count);
+const next=new Float64Array(2);
+const field=tracerField(jet);
+const history=[],velTrace=[[],[]];
+let sim=lattice(p),flowTime=0,envelope=0,frameTime=0,mechanicalBudget=0,flowBudget=0,lastRead=0,touchCursor=0;
+let running=true,fresh=true,soundOn=false, audioContext,master,stateRefs=[];
+let rng=169346;
+function rand(){rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;}
+function length(){return Math.PI*jet.r;}
+function wrap(value,period){return value-period*Math.floor(value/period);}
+function extent(){return Math.max(3.45,2.6*jet.L);}
+function seed(){
+  rng=169346;
+  for(let i=0;i<count;i++){
+    x[i]=rand()*length();
+    y[i]=(rand()-.5)*2*extent();
+    colors[i]=y[i]>0?Math.floor(rand()*3):3+Math.floor(rand()*3);
+  }
+  fresh=true;
+}
+seed();
+function settle(F){
+  Object.assign(p,params,{F});
+  sim=lattice(p);
+  warm[F].slice(0,p.n).forEach((u,j)=>sim.edit(j,u,warm[F][p.n+j]));
+  clearMotion();
+  refreshInputs();
+  renderStates();
+  $("status").className="";
+  $("status").textContent=F===.17?"Pulse-loss setting":"All-peaks-pass setting";
+}
+function clearMotion(){
+  history.length=0;
+  velTrace.forEach(line=>line.length=0);
+  envelope=0;flowTime=0;flowBudget=0;mechanicalBudget=0;
+  seed();
+}
+function playPulse(end,velocity,ordinal){
+  if(!soundOn||audioContext?.state!=="running")return;
+  const osc=audioContext.createOscillator(),gain=audioContext.createGain();
+  const now=audioContext.currentTime+.015+Math.min(ordinal,10)*.008;
+  const fundamental=(end?54:157)+(velocity-.5)*(end?19:28);
+  osc.type=end?"sine":"triangle";
+  osc.frequency.setValueAtTime(fundamental*1.4,now);
+  osc.frequency.exponentialRampToValueAtTime(fundamental,now+.08);
+  gain.gain.setValueAtTime(.0001,now);
+  gain.gain.exponentialRampToValueAtTime(end?.29:.09,now+.026);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+(end?.32:.18));
+  osc.connect(gain).connect(master);
+  osc.start(now);osc.stop(now+(end?.34:.20));
+}
+async function toggleSound(){
+  if(soundOn){soundOn=false;master.gain.setTargetAtTime(0,audioContext.currentTime,.015);}
+  else{
+    try{
+      if(!audioContext){
+        const Audio=window.AudioContext||window.webkitAudioContext;
+        audioContext=new Audio();
+        master=audioContext.createGain();
+        master.gain.value=0;
+        master.connect(audioContext.destination);
+      }
+      await audioContext.resume();
+      soundOn=audioContext.state==="running";
+      if(soundOn)master.gain.setTargetAtTime(view.volume,audioContext.currentTime,.03);
+      else $("status").textContent="Tap Sound again to start audio";
+    }catch{$("status").textContent="Audio is unavailable in this browser";}
+  }
+  $("sound").textContent=soundOn?"Sound on":"Sound off";
+  $("sound").setAttribute("aria-pressed",soundOn);
+}
+function size(canvas,context,ratioCap=1.6){
+  const rect=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,ratioCap);
+  const w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));
+  if(canvas.width!==w||canvas.height!==h){
+    canvas.width=w;canvas.height=h;
+    if(canvas===water)fresh=true;
+  }
+  return [w,h];
+}
+function drawWater(dt){
+  const [w,h]=size(water,wc), span=length(), range=extent(), xScale=w/span,yScale=h/(2*range);
+  if(fresh){
+    wc.fillStyle="#080e17";wc.fillRect(0,0,w,h);fresh=false;
+    for(let i=0;i<count;i++){
+      wc.fillStyle=palette[colors[i]];
+      wc.fillRect(x[i]*xScale,h/2-y[i]*yScale,1.5,1.5);
+    }
+  }
+  if(!running)return;
+  lastX.set(x);lastY.set(y);
+  flowBudget+=dt*jet.rate*view.speed;
+  const hFlow=.02;
+  if(flowBudget<hFlow)return;
+  while(flowBudget>=hFlow){
+    const elapsed=hFlow/(jet.rate*view.speed),p0=envelope,pM=p0*Math.exp(-elapsed/(2*jet.tail)),p1=p0*Math.exp(-elapsed/jet.tail);
+    for(let i=0;i<count;i++){
+      field.advect(x[i],y[i],flowTime,hFlow,p0,p1,pM,next);
+      x[i]=wrap(next[0],span);y[i]=next[1];
+    }
+    flowTime+=hFlow;flowBudget-=hFlow;envelope=p1;
+  }
+  wc.fillStyle="rgba(8,14,23,"+(1-Math.pow(view.fade,dt*60))+")";
+  wc.fillRect(0,0,w,h);
+  wc.lineWidth=Math.max(.9,w/1150);
+  for(let color=0;color<palette.length;color++){
+    wc.beginPath();wc.strokeStyle=palette[color];wc.globalAlpha=.59;
+    for(let i=0;i<count;i++){
+      if(colors[i]!==color||Math.abs(x[i]-lastX[i])>span/2)continue;
+      wc.moveTo(lastX[i]*xScale,h/2-lastY[i]*yScale);
+      wc.lineTo(x[i]*xScale,h/2-y[i]*yScale);
+    }
+    wc.stroke();
+  }
+  wc.globalAlpha=1;
+}
+function drawChain(){
+  const [w,h]=size(chain,cc);
+  cc.fillStyle="#10151d";cc.fillRect(0,0,w,h);
+  const pad=w*.045,dx=(w-2*pad)/(p.n-1),scale=h*.43,bed=h*.75;
+  cc.strokeStyle="#293645";cc.lineWidth=1;
+  cc.beginPath();cc.moveTo(pad,bed);cc.lineTo(w-pad,bed);cc.stroke();
+  const eq=(((p.a*p.vp*p.vp)-(p.b*p.vp)+p.c)*p.vp);
+  const yy=j=>Math.min(h*.77,Math.max(h*.18,h*.53-(sim.y[j]-eq)*scale));
+  cc.beginPath();
+  for(let j=0;j<p.n;j++)cc.lineTo(pad+dx*j,yy(j));
+  cc.strokeStyle="#6a8193";cc.lineWidth=Math.max(1,w/880);cc.stroke();
+  for(let j=0;j<p.n;j++){
+    const xx=pad+dx*j,v=sim.y[p.n+j],offset=yy(j);
+    cc.strokeStyle="rgba(113,147,158,.33)";
+    cc.beginPath();cc.moveTo(xx,offset);cc.lineTo(xx,bed);cc.stroke();
+    cc.beginPath();cc.fillStyle=j===0?"#ffbc80":j===p.n-1?"#8ce2df":v>.45?"#e9f7e3":"#8b9dac";
+    cc.arc(xx,offset,Math.min(dx*.33,3+9*Math.min(1,Math.abs(v))),0,Math.PI*2);cc.fill();
+  }
+}
+function drawTrace(){
+  const [w,h]=size(trace,tc),span=9*2*Math.PI/p.omega;
+  tc.fillStyle="#10151d";tc.fillRect(0,0,w,h);
+  for(let j=0;j<2;j++){
+    const y0=h*(j===0?.30:.76);
+    tc.strokeStyle="#25303b";tc.beginPath();tc.moveTo(0,y0);tc.lineTo(w,y0);tc.stroke();
+    tc.strokeStyle=j===0?"#ffbc80":"#8ce2df";
+    tc.lineWidth=1.3;tc.beginPath();let started=false;
+    for(const [t,v] of velTrace[j]){
+      const xx=w*(1-(sim.time-t)/span),yy=y0-h*.20*v;
+      if(xx<0)continue;
+      if(started)tc.lineTo(xx,yy);else{tc.moveTo(xx,yy);started=true;}
+    }
+    tc.stroke();
+    tc.fillStyle=tc.strokeStyle;
+    for(const ev of history){
+      if(ev.lane!==j)continue;
+      const xx=w*(1-(sim.time-ev.t)/span);
+      if(xx>=0)tc.fillRect(xx-1,y0-h*.21,2,h*.27);
+    }
+  }
+}
+let waveSample=0;
+function loop(stamp){
+  const elapsed=frameTime?Math.min(.04,(stamp-frameTime)/1000):0;
+  frameTime=stamp;
+  if(running){
+    mechanicalBudget+=elapsed*view.speed;
+    let audioOrdinal=0;
+    while(mechanicalBudget>=p.dt){
+      const ok=sim.step(p.dt,(j,v,t)=>{
+        if(j!==0&&j!==p.n-1)return;
+        const end=j===p.n-1;
+        history.push({lane:end?1:0,t});
+        if(end)envelope=Math.min(.75,envelope+jet.coupling*v);
+        playPulse(end,v,audioOrdinal++);
+      });
+      if(!ok){
+        sim=lattice(p);
+        clearMotion();
+        setRunning(false);
+        $("status").className="fault";
+        $("status").textContent="Integration became unstable. Reduce the timestep or load a comparison setting.";
+        break;
+      }
+      mechanicalBudget-=p.dt;
+      if(++waveSample%5===0){
+        velTrace[0].push([sim.time,sim.y[p.n]]);velTrace[1].push([sim.time,sim.y[2*p.n-1]]);
+      }
+    }
+    const oldest=sim.time-10*2*Math.PI/p.omega;
+    while(history.length&&history[0].t<oldest)history.shift();
+    for(const line of velTrace)while(line.length&&line[0][0]<oldest)line.shift();
+  }
+  drawWater(elapsed);drawChain();drawTrace();
+  if(stamp-lastRead>180&&$("states").open&&!$("panel").hidden){renderStates();lastRead=stamp;}
+  requestAnimationFrame(loop);
+}
+const items=[];
+function slider(parent,obj,key,name,min,max,step,changed){
+  const label=document.createElement("label"),title=document.createElement("span"),output=document.createElement("output"),input=document.createElement("input");
+  label.className="control";title.textContent=name;
+  input.type="range";input.min=min;input.max=max;input.step=step;input.setAttribute("aria-label",name);
+  function update(){input.value=obj[key];output.textContent=Number(obj[key]).toFixed(step<.001?4:step<.01?3:step<.1?2:1);}
+  input.addEventListener("input",()=>{obj[key]=Number(input.value);update();if(changed)changed();});
+  label.append(title,output,input);$(parent).append(label);items.push(update);update();
+}
+function refreshInputs(){items.forEach(update=>update());}
+for(const s of [
+ ["F","Drive amplitude",0,.34,.001],["omega","Drive angular frequency",.45,4,.01],
+ ["gamma","Dimensionless mass",.08,.42,.001],["beta","Spring coupling",0,.85,.005],
+ ["vp","Plate speed",.82,1.24,.001],["a","Cubic friction",2,8,.01],
+ ["b","Quadratic friction",5,14,.01],["c","Linear friction",3,9,.01],
+ ["dt","RK4 step",.0025,.0125,.0025]
+])slider("latticeControls",p,...s);
+for(const s of [
+ ["U","Jet top speed",1,8,.001],["L","Jet width scale",.65,2.8,.01],["r","Period radius",4,10,.001],
+ ["coupling","Pulse coupling",0,.45,.005],["tail","Pulse decay, seconds",.08,2.5,.01],["rate","Flow days per lattice time",.04,.6,.005]
+]){
+  slider("jetControls",jet,...s,()=>{field.prepare();if(s[0]==="coupling"&&jet.coupling===0)envelope=0;if(s[0]==="r"){for(let i=0;i<count;i++)x[i]=wrap(x[i],length());fresh=true;}});
+}
+for(let i=0;i<3;i++){
+  slider("jetControls",jet.A,i,"Wave "+(i+1)+" amplitude",0,.85,.001,field.prepare);
+  slider("jetControls",jet.C,i,"Wave "+(i+1)+" speed / jet speed",0,1,.0001,field.prepare);
+}
+slider("mediaControls",view,"speed","Lattice playback speed",2,16,.5);
+slider("mediaControls",view,"volume","Volume",0,1,.01,()=>{if(soundOn)master.gain.setTargetAtTime(view.volume,audioContext.currentTime,.03);});
+slider("mediaControls",view,"fade","Trail persistence",.62,.99,.01);
+function renderStates(){
+  stateRefs.forEach((ref,j)=>{ref.textContent="Live  u "+sim.y[j].toFixed(4)+"   v "+sim.y[p.n+j].toFixed(4);});
+}
+for(let j=0;j<p.n;j++){
+  const row=document.createElement("div"),label=document.createElement("span"),u=document.createElement("input"),v=document.createElement("input"),button=document.createElement("button"),live=document.createElement("output");
+  row.className="state";label.textContent=String(j+1).padStart(2,"0");
+  for(const [input,name] of [[u,"Displacement"],[v,"Velocity"]]){
+    input.type="number";input.step="any";input.placeholder=name==="Velocity"?"v":"u";input.setAttribute("aria-label",name+" of mass "+(j+1));
+  }
+  button.type="button";button.textContent="Set";button.setAttribute("aria-label","Set state of mass "+(j+1));
+  button.addEventListener("click",()=>{
+    const nextU=u.value===""?sim.y[j]:Number(u.value),nextV=v.value===""?sim.y[p.n+j]:Number(v.value);
+    if(!Number.isFinite(nextU)||!Number.isFinite(nextV)||Math.abs(nextU)>10||Math.abs(nextV)>10){$("status").textContent="Enter values from −10 to 10.";return;}
+    sim.edit(j,nextU,nextV);renderStates();$("status").textContent="Mass "+(j+1)+" updated";
+  });
+  row.append(label,u,v,button,live);$("stateRows").append(row);stateRefs.push(live);
+}
+water.addEventListener("pointerup",event=>{
+  const box=water.getBoundingClientRect(),cx=(event.clientX-box.left)/box.width*length(),cy=(.5-(event.clientY-box.top)/box.height)*2*extent();
+  for(let i=0;i<128;i++){
+    const j=touchCursor++%count,angle=rand()*2*Math.PI,d=Math.sqrt(rand());
+    x[j]=wrap(cx+.15*length()/5*d*Math.cos(angle),length());y[j]=cy+.32*d*Math.sin(angle);
+    colors[j]=i%3+ (cy<0?3:0);
+  }
+  if(!running)fresh=true;
+});
+function setRunning(value){
+  running=value;$("play").textContent=running?"Pause":"Play";
+}
+$("play").onclick=()=>setRunning(!running);
+$("sound").onclick=toggleSound;
+$("controls").onclick=()=>{
+  const isOpen=$("panel").hidden;
+  $("panel").hidden=!isOpen;
+  $("main").classList.toggle("open",isOpen);
+  $("controls").setAttribute("aria-expanded",isOpen);
+  if(isOpen)renderStates();
+};
+$("focus").onclick=()=>{
+  const focused=$("shell").classList.toggle("focus");
+  $("focus").textContent=focused?"Exit full view":"Full view";
+  $("focus").setAttribute("aria-pressed",focused);
+  if(focused&&!$("panel").hidden)$("controls").click();
+};
+$("lost").onclick=()=>{settle(.17);setRunning(true);};
+$("pass").onclick=()=>{settle(.15);setRunning(true);};
+$("reset").onclick=()=>{sim=lattice(p);clearMotion();renderStates();$("status").className="";$("status").textContent="Reset to the unforced equilibrium";setRunning(true);};
+settle(.17);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
