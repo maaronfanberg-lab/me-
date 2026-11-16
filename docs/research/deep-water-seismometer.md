@@ -51,8 +51,14 @@ sung for 0.5 s; (3) up/down-going half-waves pan slightly left/right; (4) master
 ## Update (2026-11-16, later): "not impressive"
 Observed in a render: voices were very short (≤0.9 s) and, on microseism-dominated traces, mostly pinned to the 30 Hz floor,
 so the result was a dense low clicking. Changes: one transposition factor per trace (slow log-mean of wave frequency → 200 Hz)
-keeping exact ratios between waves; voices ring for their physical decay time (6/β, 0.3–2.5 s); a half-wave must also reach
+(superseded below); voices ring for their physical decay time (6/β, 0.3–2.5 s); a half-wave must also reach
 1.2× the trace's 2 s RMS (tiny noise wiggles never sing); voices get the open-water reverb and a wider stereo image;
 bubble-cloud collective resonance (Lu, Prosperetti & Yoon 1990; Commander & Prosperetti 1989) gives a deep boom when 6+
 voices form within a second. Render (synthetic microseism + quake): voice pitch 10/50/90% = 40/220/2464 Hz (was all ≈30–111 Hz),
 6.7 voices/s, 6 cloud booms at 20–28 Hz around the quake.
+
+Correction (same day): the per-trace transposition was replaced by a fixed map of the real ground frequency fg (played Hz / 20)
+over the seismic band: f = 60·(2000/60)^(log(fg/0.05)/log 200), 40–2500 Hz (microseisms ≈ 150 Hz, body waves 1–8 Hz ≈
+500–1700 Hz); voice displacement scaled by 3 cm/a so small (high) bubbles radiate the same pressure as large ones (they were
+~26 dB quieter); calm waves at ≥ 1.2× RMS may sing every 0.25 s; cloud boom level reduced. Checks: 0.2/2/8 Hz ground waves
+→ 150/689/2000 Hz at −23.5/−17.6/−17.3 dB; render voice pitch 10/50/90% = 117/967/2500 Hz, 7.7 voices/s; all tests pass.

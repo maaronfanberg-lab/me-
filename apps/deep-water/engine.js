@@ -92,21 +92,25 @@ class Eng{
       this.sdIndex=i;const w=this.sdWave,s=this.sd[i%n],sg=s>0?1:s<0?-1:0;
       if(w.sign&&sg&&sg!==w.sign){
        // Prominence: a half-wave sings only if it stands out from the recent ones (peak >= 1.5x their running average and
-       // >= 1.2x the trace's 2 s RMS), or if none has sung for 0.6 s and it is at least 0.8x RMS (tiny noise wiggles never sing). The steady background then no longer forms a dense hiss of overlapping voices.
+       // >= 1.2x the trace's 2 s RMS), or if none has sung for 0.25 s and it is at least 0.8x RMS (tiny noise wiggles never sing). The steady background then no longer forms a dense hiss of overlapping voices.
+       if(w.len>=1){const hz=this.szRate/(2*w.len);this.lgHz=this.lgHz===undefined?Math.log(hz):this.lgHz+(Math.log(hz)-this.lgHz)*.02;}
        this.pkAvg=this.pkAvg===undefined?w.peak:this.pkAvg+(w.peak-this.pkAvg)*.05;this.sinceV=(this.sinceV||0)+w.len;
-       if(w.len>=1&&w.peak>=.002&&(w.peak>=Math.max(1.5*this.pkAvg,1.2*Math.sqrt(this.ms2||0))||(this.sinceV>=.6*this.szRate&&w.peak>=.8*Math.sqrt(this.ms2||0)))){this.sinceV=0;
+       if(w.len>=1&&w.peak>=.002&&(w.peak>=Math.max(1.5*this.pkAvg,1.2*Math.sqrt(this.ms2||0))||(this.sinceV>=.25*this.szRate&&w.peak>=.8*Math.sqrt(this.ms2||0)))){this.sinceV=0;
         const waveHz=this.szRate/(2*w.len),rms=Math.sqrt(w.sum/w.len);
         // Wave period -> pitch, in proportion: f = 4 x the played wave frequency (80x the real ground frequency at 20x
         // playback), so the musical intervals between waves are the Earth's own; 30 Hz-2.5 kHz. Amplitude -> energy;
         // curvature -> damping/timbre; up- or down-going half-wave -> slightly left or right.
-        this.lgHz=this.lgHz===undefined?Math.log(waveHz):this.lgHz+(Math.log(waveHz)-this.lgHz)*.01;
-        // transpose (one factor for the whole trace, slowly adapting) so the trace's typical wave sits near 200 Hz;
-        // ratios between waves stay exact, kept exact
-        const f0=Math.max(40,Math.min(3000,200*waveHz/Math.exp(this.lgHz))),rough=Math.min(1,w.diff/(w.peak*Math.max(1,w.len)));
+                // the real ground frequency (played Hz / the page's 20x bubble-mode playback) across the seismic band 0.05-10 Hz maps onto 60-2000 Hz on a
+        // log scale (each doubling of ground frequency = x1.58 in pitch): microseisms ~0.2 Hz ≈ 150 Hz, quake body waves
+        // 1-8 Hz ≈ 500-1700 Hz, long surface waves deep. Order and proportions of the waves are kept.
+        const fg=waveHz/20,f0=Math.max(40,Math.min(2500,60*Math.pow(2000/60,Math.log(Math.max(1e-3,fg)/.05)/Math.log(200)))),rough=Math.min(1,w.diff/(w.peak*Math.max(1,w.len)));
         const h=25,a=3.26*Math.sqrt(1+h/10.33)/f0;
         const life=Math.round(Math.min(2.5,Math.max(.3,6/(TAU*f0*((TAU*f0*a)/CW+.025+.08*rough)/2)))*SR);
         const x0=Math.min(.09,.004+.055*Math.sqrt(Math.max(0,rms*w.peak)));
-        this.B.push({a0:a,h0:h,a,h,x:x0,v:0,w:TAU*f0,be:0,wake:0,rise:0,n:0,age:0,env:1,sdb:1,f0,rough,
+        // radiated pressure ∝ a·x, so for the same wave energy a small (high) bubble would be ~20x quieter than a 3 cm one;
+        // give every wave the same acoustic pressure for its amplitude so high voices are heard: x scaled by 3 cm / a
+        const xs=x0*Math.min(20,Math.max(1,.03/a));
+        this.B.push({a0:a,h0:h,a,h,x:xs,v:0,w:TAU*f0,be:0,wake:0,rise:0,n:0,age:0,env:1,sdb:1,f0,rough,
          gl:.65*Math.sqrt(Math.max(0,1-(.45*w.sign+.4*(2*this.szPos/n-1)))),gr:.65*Math.sqrt(Math.max(0,1+(.45*w.sign+.4*(2*this.szPos/n-1)))),rv:.35,cut:Math.min(.95,1-Math.exp(-TAU*(1500+3500*rough)/SR)),lp:0,life});
         this.sdLast=f0;this.sdCount=(this.sdCount||0)+1;
         // Bubble cloud: N bubbles close together oscillate collectively far below any single bubble (Lu, Prosperetti & Yoon
@@ -115,7 +119,7 @@ class Eng{
         const tn=this.t;this.cloudT=(this.cloudT||[]).filter(x=>tn-x<SR);this.cloudT.push(tn);
         if(this.cloudT.length>=6&&tn-(this.cloudLast||-1e9)>1.5*SR){this.cloudLast=tn;const N=this.cloudT.length,beta=Math.min(.05,N/200),Rc=1.5*Math.cbrt(N/10),
          fc=Math.max(20,Math.min(80,Math.sqrt(3*GAM*press(25)/(RHO*beta))/(TAU*Rc))),ac=3.26*Math.sqrt(1+25/10.33)/fc,g2=1/(1+10/12),pc=.5*(2*this.szPos/n-1);
-         this.B.push({a0:ac,h0:25,a:ac,h:25,x:Math.min(.08,.03+.004*N),v:0,w:TAU*fc,be:0,wake:0,rise:0,n:0,age:0,env:1,sdb:1,f0:fc,rough:0,
+         this.B.push({a0:ac,h0:25,a:ac,h:25,x:Math.min(.01,.004+.0005*N),v:0,w:TAU*fc,be:0,wake:0,rise:0,n:0,age:0,env:1,sdb:1,f0:fc,rough:0,
           gl:g2*Math.sqrt(1-pc),gr:g2*Math.sqrt(1+pc),rv:.5,cut:Math.min(.9,1-Math.exp(-TAU*600/SR)),lp:0,life:Math.round(4*SR)});this.clouds=(this.clouds||0)+1;if(this.sdLog)this.sdLog.push([fc,0,0,0,0,'cloud']);}
         if(this.sdLog)this.sdLog.push([f0,w.peak,w.len,rms,rough]);
        }
