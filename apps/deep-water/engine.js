@@ -91,15 +91,20 @@ class Eng{
      if(i!==this.sdIndex){
       this.sdIndex=i;const w=this.sdWave,s=this.sd[i%n],sg=s>0?1:s<0?-1:0;
       if(w.sign&&sg&&sg!==w.sign){
-       if(w.len>=1&&w.peak>=.002){
+       // Prominence: a half-wave sings only if it stands out from the recent ones (peak >= 1.25x their running average),
+       // or if none has sung for 0.5 s. The steady background then no longer forms a dense hiss of overlapping voices.
+       this.pkAvg=this.pkAvg===undefined?w.peak:this.pkAvg+(w.peak-this.pkAvg)*.05;this.sinceV=(this.sinceV||0)+w.len;
+       if(w.len>=1&&w.peak>=.002&&(w.peak>=1.25*this.pkAvg||this.sinceV>=.5*this.szRate)){this.sinceV=0;
         const waveHz=this.szRate/(2*w.len),rms=Math.sqrt(w.sum/w.len);
-        // Wave period -> audible sub/bass resonance; amplitude -> energy; curvature -> damping/timbre.
-        const f0=22+96*waveHz/(waveHz+30),rough=Math.min(1,w.diff/(w.peak*Math.max(1,w.len)));
+        // Wave period -> pitch, in proportion: f = 4 x the played wave frequency (80x the real ground frequency at 20x
+        // playback), so the musical intervals between waves are the Earth's own; 30 Hz-2.5 kHz. Amplitude -> energy;
+        // curvature -> damping/timbre; up- or down-going half-wave -> slightly left or right.
+        const f0=Math.max(30,Math.min(2500,4*waveHz)),rough=Math.min(1,w.diff/(w.peak*Math.max(1,w.len)));
         const h=25,a=3.26*Math.sqrt(1+h/10.33)/f0;
         const life=Math.round(Math.max(.07,Math.min(.9,.06+1.3/(waveHz+6)+.08*rms))*SR);
         const x0=Math.min(.09,.004+.055*Math.sqrt(Math.max(0,rms*w.peak)));
         this.B.push({a0:a,h0:h,a,h,x:x0,v:0,w:TAU*f0,be:0,wake:0,rise:0,n:0,age:0,env:1,sdb:1,f0,rough,
-         gl:.65,gr:.65,rv:0,cut:Math.min(.9,1-Math.exp(-TAU*(700+1700*rough)/SR)),lp:0,life});
+         gl:.65*Math.sqrt(1-.35*w.sign),gr:.65*Math.sqrt(1+.35*w.sign),rv:0,cut:Math.min(.95,1-Math.exp(-TAU*(1500+3500*rough)/SR)),lp:0,life});
         this.sdLast=f0;this.sdCount=(this.sdCount||0)+1;
         if(this.sdLog)this.sdLog.push([f0,w.peak,w.len,rms,rough]);
        }
@@ -118,7 +123,7 @@ class Eng{
    for(let k=0;k<4;k++){const d=F[k];let v=(o[k]-s)*this.fdnG+wet*.35;d.lp+=(v-d.lp)*.25;d.b[d.w]=d.lp;d.w=(d.w+1)%d.b.length;}
    l+=(o[0]+o[2])*.5;r+=(o[1]+o[3])*.5;
    const out=[l,r];for(let c=0;c<2;c++){const S=this.hpS[c],x=out[c],y=hc[0]*x+hc[1]*S[0]+hc[2]*S[1]-hc[3]*S[2]-hc[4]*S[3];S[1]=S[0];S[0]=x;S[3]=S[2];S[2]=y;
-    const k2=1-Math.exp(-TAU*1800/SR);this.lp[2*c]+=(y-this.lp[2*c])*k2;this.lp[2*c+1]+=(this.lp[2*c]-this.lp[2*c+1])*k2;out[c]=Math.tanh(this.lp[2*c+1]*this.vol*1.6)/1.6*1.3;}
+    const k2=1-Math.exp(-TAU*6000/SR);this.lp[2*c]+=(y-this.lp[2*c])*k2;this.lp[2*c+1]+=(this.lp[2*c]-this.lp[2*c+1])*k2;out[c]=Math.tanh(this.lp[2*c+1]*this.vol*1.6)/1.6*1.3;}
    L[j]=out[0];R[j]=out[1];this.t++;}}
 }
 return{Eng,minnaert,omega,press};}

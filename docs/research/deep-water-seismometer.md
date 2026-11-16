@@ -37,3 +37,13 @@ envelope exceeds 1.8× its 2 s envelope (or every 3 s of steady motion), and (c)
 f = 40·10^((u+1)/2) Hz, u = clamp(y/0.5, −1, 1), which the bubble keeps following while it rings. Quake-catalogue
 bubbles are used only when no seismogram is available. Check: correlation between bubble pitch (log) and trace height at
 release = 1.000 on a synthetic trace; engine 1.4% of real time; browser test with real miniSEED, no errors.
+
+## Update (2026-11-16): higher pitches, more variety, no static
+Observed: Alex wanted higher pitches and more variety, without the steady static. Cause found: every measured half-wave
+became a voice (≈26 voices/s on a microseism-like trace) with pitch squeezed into 22–118 Hz (saturating map), and the
+master low-pass sat at 1.8 kHz. Change: (1) pitch proportional to the measured wave frequency, f = 4 × played wave Hz
+(80× the ground frequency at 20× playback), 30 Hz–2.5 kHz, so intervals between waves are preserved (an octave in the
+ground is an octave in the sound); (2) a half-wave sings only if its peak is ≥ 1.25× the running average, or if none has
+sung for 0.5 s; (3) up/down-going half-waves pan slightly left/right; (4) master low-pass 6 kHz, voice low-pass
+1.5–5 kHz by curvature. Results on a synthetic microseism + quake trace: voices/s 25.8 → 9.8; pitch 10–90% range
+31–111 Hz → 30–1600 Hz; tests updated (prominence, steady background ≤ 4 voices/s, 2× frequency = octave ±0.15).
