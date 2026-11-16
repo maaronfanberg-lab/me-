@@ -49,6 +49,21 @@ class SocialDecisionTests(unittest.TestCase):
         self.assertEqual(decide("owen", [], proposals=[None, 4, work]).kind, "work")
         self.assertEqual(decide("owen", [], proposals=[None, 4]).kind, "observe")
 
+    def test_pending_reply_does_not_discard_unfinished_task(self):
+        event = {"id": "allen-urgent", "speaker": "allen", "visibility": "public",
+                 "addresses": ["sarah"], "text": "Can you answer?"}
+        reply = [{"kind": "reply", "source_event_id": "allen-urgent", "text": "Yes."}]
+        task = {"verb": "measure", "object": "plant", "id": "task-1"}
+        interrupted = decide("sarah", [event], proposals=reply, active_task=task)
+        self.assertEqual(interrupted.kind, "observe")
+        self.assertEqual(interrupted.reason, "continuing_unfinished_task")
+        self.assertEqual(interrupted.source_event_id, "allen-urgent")
+        resumed = decide("sarah", [event], proposals=reply)
+        self.assertEqual((resumed.kind, resumed.source_event_id),
+                         ("reply", "allen-urgent"))
+        self.assertEqual(decide("sarah", [event], acknowledged=["allen-urgent"],
+                                proposals=reply).kind, "observe")
+
     def test_unknown_participant(self):
         with self.assertRaises(ValueError):
             decide("visitor", [])
