@@ -1,0 +1,35 @@
+name: Deep Water archive of great earthquakes
+# Downloads real historical seismograms (EarthScope/IRIS FDSN) for the events in apps/deep-water/archive/events.json
+# and commits compact int16 copies, so the Deep Water app can play them from GitHub Pages.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - apps/deep-water/archive/events.json
+      - apps/deep-water/archive/build.py
+      - .github/workflows/deep-water-archive.yml
+permissions:
+  contents: write
+concurrency:
+  group: deep-water-archive
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet obspy
+      - run: python apps/deep-water/archive/build.py
+      - name: Commit archive
+        run: |
+          git config user.name "deep-water-archive"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/deep-water/archive/*.i16 apps/deep-water/archive/index.json
+          git commit -q -m "Deep Water archive: great-earthquake seismograms (run ${{ github.run_id }})" || exit 0
+          for i in 1 2 3 4 5 6 7 8; do git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0; sleep $((i*3)); done
+          exit 1
