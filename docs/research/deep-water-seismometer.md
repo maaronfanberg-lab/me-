@@ -71,3 +71,11 @@ dataselect, 2 min before the iasp91 P arrival to 100 min after, detrends, low-pa
 commits int16 + index.json. First run: 9 of 10 archived (Tōhoku 2011, Sumatra 2004, Maule 2010, Kamchatka 2025,
 Chignik 2021, Türkiye 2023, Kaikōura 2016, Gorkha 2015, Ridgecrest 2019); Bolivia 1994 had no IU …00.BHZ data.
 The app plays them from the same site (no cross-origin request), through the same bubble or direct modes as live data.
+
+## Update (2026-11-16): equal loudness
+Alex asked for sounds of roughly equal volume. Each bubble's displacement is now chosen so its peak radiated pressure
+(KD·a³·ω²·x) hits a common target, with half of the inverse A-weighting (IEC 61672) as a gentle equal-loudness correction
+(≤ +18 dB for low notes) and a small lift above 2 kHz for the water low-pass; events keep ±3 dB of their own strength.
+A master leveller (0.5 s RMS, gain ×0.2–×8, down in 0.3 s, up in 2 s) evens out busy and sparse stretches.
+Single bubbles 26 Hz–3.4 kHz, half-A-weighted peak: spread 30 dB → 7 dB. Per-second level spread (10–90%) on a synthetic
+quake render: 18.5 → 13.7 dB (silent gaps between sparse voices remain). Direct seismogram audio unchanged. Tests pass.

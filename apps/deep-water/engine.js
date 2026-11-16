@@ -22,6 +22,11 @@ class Eng{
   this.dhpc=[kd,-2*kd,kd,2*(wd*wd-1)*kd,(1-Math.SQRT2*wd+wd*wd)*kd];this.dhp=[0,0,0,0];this.mod=0;this.KD=.25/(Math.pow(.1,3)*.06*Math.pow(omega(.1,0),2));this.vol=.6;}
  // real seismometer trace (already sped up and normalised by the page), looped; swapped in at the loop boundary
  seis(d){if(!d){this.szNext=null;this.sz=null;this.sd=null;this.sdNext=null;this.sdIndex=-1;this.sdWave={sign:0,len:0,peak:0,sum:0,diff:0,prev:0};this.B=this.B.filter(b=>!b.sdb);this.dhp.fill(0);this.directPeak=0;this.directLast=0;this.directTransition=0;this.directClipId=0;return;}if(this.direct){this.directTail=this.directLast;this.directTransition=this.directBlendTotal;this.sz=d.data;this.sd=null;this.szNext=null;this.sdNext=null;this.szBaseRate=d.rate;this.szRate=d.rate*this.speed;this.szPos=0;this.dhp.fill(0);this.directClipId=d.clip||0;return;}if(!this.sz){this.sz=d.data;this.sd=d.drive||null;this.szBaseRate=d.rate;this.szRate=this.direct?d.rate*this.speed:d.rate;this.szPos=0;this.sdIndex=-1;this.sdWave={sign:0,len:0,peak:0,sum:0,diff:0,prev:0};}else{this.szNext=d.data;this.sdNext=d.drive||null;this.szBaseRate=d.rate;this.szRate=this.direct?d.rate*this.speed:d.rate;}}
+
+ // Equal loudness: peak radiated pressure = KD·a³·ω²·x, so choose x for a common target, then compensate half of the
+ // A-weighting (ears hear low notes as quieter), capped at +18 dB, plus a little lift above 2 kHz for the water's low-pass; 'rel' keeps a little of each event's own strength (±3 dB).
+ xFor(a,w,rel){const f=w/TAU,f2=f*f,ra=12194*12194*f2*f2/((f2+20.6*20.6)*Math.sqrt((f2+107.7*107.7)*(f2+737.9*737.9))*(f2+12194*12194)),
+  aw=20*Math.log10(ra)+2,comp=Math.pow(10,Math.min(18,Math.max(-3,-.5*aw))/20)*(f>2000?Math.sqrt(f/2000):1);return .06*comp*(rel===undefined?1:rel)/(this.KD*a*a*a*w*w);}
  rnd(){this.seed=(this.seed*1664525+1013904223)>>>0;return this.seed/4294967296;}
  // one bubble: a radius (m), h depth (m), pan -1..1, dist (m) from the listener, x0 initial wobble
  bubble(a,h,pan,dist,x0,rise,delay){this.Q.push({t:this.t+Math.round((delay||0)*this.SR),a,h,pan,dist,x0,rise});}
@@ -33,7 +38,7 @@ class Eng{
   this.bubble(e.a,e.h,e.pan,e.dist,.06,1,0);}
  start(q){
   const g=1/(1+q.dist/12),cut=Math.min(.9,1-Math.exp(-TAU*Math.max(250,2400/(1+q.dist/15))/this.SR));
-  this.B.push({a0:q.a,h0:q.h,a:q.a,h:q.h,x:q.x0,v:0,w:omega(q.a,q.h),be:0,wake:0,rise:q.rise,n:0,age:0,env:1,
+  this.B.push({a0:q.a,h0:q.h,a:q.a,h:q.h,x:this.xFor(q.a,omega(q.a,q.h),Math.min(1.4,Math.max(.7,q.x0/.06))),v:0,w:omega(q.a,q.h),be:0,wake:0,rise:q.rise,n:0,age:0,env:1,
    gl:g*Math.sqrt(.5*(1-Math.max(-1,Math.min(1,q.pan)))),gr:g*Math.sqrt(.5*(1+Math.max(-1,Math.min(1,q.pan)))),rv:Math.min(.8,.15+q.dist/60),cut,lp:0,life:Math.round((q.a<.05?3:Math.min(30,8+q.h/3))*this.SR)});}
  // Literal audification: each output sample is interpolated from the seismometer time series.
  // It is NOT used to trigger oscillators, reverb, noise, or random events.
@@ -110,7 +115,7 @@ class Eng{
         // radiated pressure ∝ a·x, so for the same wave energy a small (high) bubble would be ~20x quieter than a 3 cm one;
         // give every wave the same acoustic pressure for its amplitude so high voices are heard: x scaled by 3 cm / a
         const xs=x0*Math.min(20,Math.max(1,.03/a));
-        this.B.push({a0:a,h0:h,a,h,x:xs,v:0,w:TAU*f0,be:0,wake:0,rise:0,n:0,age:0,env:1,sdb:1,f0,rough,
+        this.B.push({a0:a,h0:h,a,h,x:this.xFor(a,TAU*f0,.7+.6*Math.min(1,xs/(.06*Math.min(20,Math.max(1,.03/a))))),v:0,w:TAU*f0,be:0,wake:0,rise:0,n:0,age:0,env:1,sdb:1,f0,rough,
          gl:.65*Math.sqrt(Math.max(0,1-(.45*w.sign+.4*(2*this.szPos/n-1)))),gr:.65*Math.sqrt(Math.max(0,1+(.45*w.sign+.4*(2*this.szPos/n-1)))),rv:.35,cut:Math.min(.95,1-Math.exp(-TAU*(1500+3500*rough)/SR)),lp:0,life});
         this.sdLast=f0;this.sdCount=(this.sdCount||0)+1;
         // Bubble cloud: N bubbles close together oscillate collectively far below any single bubble (Lu, Prosperetti & Yoon
@@ -119,7 +124,7 @@ class Eng{
         const tn=this.t;this.cloudT=(this.cloudT||[]).filter(x=>tn-x<SR);this.cloudT.push(tn);
         if(this.cloudT.length>=6&&tn-(this.cloudLast||-1e9)>1.5*SR){this.cloudLast=tn;const N=this.cloudT.length,beta=Math.min(.05,N/200),Rc=1.5*Math.cbrt(N/10),
          fc=Math.max(20,Math.min(80,Math.sqrt(3*GAM*press(25)/(RHO*beta))/(TAU*Rc))),ac=3.26*Math.sqrt(1+25/10.33)/fc,g2=1/(1+10/12),pc=.5*(2*this.szPos/n-1);
-         this.B.push({a0:ac,h0:25,a:ac,h:25,x:Math.min(.01,.004+.0005*N),v:0,w:TAU*fc,be:0,wake:0,rise:0,n:0,age:0,env:1,sdb:1,f0:fc,rough:0,
+         this.B.push({a0:ac,h0:25,a:ac,h:25,x:this.xFor(ac,TAU*fc,1.2),v:0,w:TAU*fc,be:0,wake:0,rise:0,n:0,age:0,env:1,sdb:1,f0:fc,rough:0,
           gl:g2*Math.sqrt(1-pc),gr:g2*Math.sqrt(1+pc),rv:.5,cut:Math.min(.9,1-Math.exp(-TAU*600/SR)),lp:0,life:Math.round(4*SR)});this.clouds=(this.clouds||0)+1;if(this.sdLog)this.sdLog.push([fc,0,0,0,0,'cloud']);}
         if(this.sdLog)this.sdLog.push([f0,w.peak,w.len,rms,rough]);
        }
@@ -137,6 +142,9 @@ class Eng{
    let s=0;const o=[0,0,0,0];for(let k=0;k<4;k++){const d=F[k];o[k]=d.b[d.w];s+=o[k];}s*=.5;
    for(let k=0;k<4;k++){const d=F[k];let v=(o[k]-s)*this.fdnG+wet*.35;d.lp+=(v-d.lp)*.25;d.b[d.w]=d.lp;d.w=(d.w+1)%d.b.length;}
    l+=(o[0]+o[2])*.5;r+=(o[1]+o[3])*.5;
+   // overall leveller: 0.5 s RMS follower steers a gain (x0.2-x8; down in 0.3 s, up in 2 s) toward a steady loudness
+   {const p2=(l*l+r*r)*.5;this.lvlMs=(this.lvlMs===undefined?p2:this.lvlMs+(p2-this.lvlMs)*(1-Math.exp(-1/(.5*SR))));const want=Math.max(.2,Math.min(8,.12/Math.sqrt(this.lvlMs+1e-9))),g0=this.lvlG===undefined?1:this.lvlG;
+    this.lvlG=g0+(want-g0)*(1-Math.exp(-1/((want<g0?.3:2)*SR)));l*=this.lvlG;r*=this.lvlG;}
    const out=[l,r];for(let c=0;c<2;c++){const S=this.hpS[c],x=out[c],y=hc[0]*x+hc[1]*S[0]+hc[2]*S[1]-hc[3]*S[2]-hc[4]*S[3];S[1]=S[0];S[0]=x;S[3]=S[2];S[2]=y;
     const k2=1-Math.exp(-TAU*6000/SR);this.lp[2*c]+=(y-this.lp[2*c])*k2;this.lp[2*c+1]+=(this.lp[2*c]-this.lp[2*c+1])*k2;out[c]=Math.tanh(this.lp[2*c+1]*this.vol*1.6)/1.6*1.3;}
    L[j]=out[0];R[j]=out[1];this.t++;}}
