@@ -18,6 +18,7 @@ details{margin:8px 16px 28px;background:#071827;border-radius:14px;padding:4px 1
 #qp{margin:6px 16px 10px;background:#061524;border-radius:14px;padding:10px 12px}#qp h2{font-size:13px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin:2px 0 8px}
 #map,#seis{display:block;width:100%;border-radius:8px;background:#030d18}#map{aspect-ratio:2/1}#seis{height:110px;margin-top:4px}
 #qlist{font-size:13px;margin-top:8px}#qlist .q{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #0e2a40}#qlist .m{min-width:42px;font-weight:700}
+#qlist .q{cursor:pointer;border-radius:8px}#qlist .q.sel{background:#0f3350;outline:1px solid var(--on)}
 #qlist .bar{height:6px;border-radius:3px;background:#7cc6e6;min-width:2px}#qlist .pl{flex:1;line-height:1.3}#qlist .ag{color:var(--dim);font-size:12px;white-space:nowrap}
 #qmore{margin-top:8px;border:0;border-radius:999px;padding:8px 13px;background:var(--chip);color:var(--ink);font-size:14px}#szCap{color:var(--dim);font-size:12px;margin-top:4px}
 body{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
@@ -33,7 +34,7 @@ body.seismic #szCap{line-height:1.5}
 body.min #panel{display:none}body.min #cv{height:calc(100dvh - 250px - env(safe-area-inset-bottom));max-height:none;min-height:240px}
 #ver{display:block;color:var(--dim);font-size:12px;margin:8px 0 12px}
 </style></head><body>
-<header><h1>Deep Water</h1><span><b id="ver2" style="font-weight:600">v 16 Nov · great earthquakes archive</b></span></header>
+<header><h1>Deep Water</h1><span><b id="ver2" style="font-weight:600">v 16 Nov · tap a quake to hear it</b></span></header>
 <canvas id="cv"></canvas>
 <div id="live">Not listening yet</div>
 <div id="last">Tap Start. The seismometer's measured waveform goes directly to the speakers, time-accelerated. No synthetic notes.</div>
@@ -41,7 +42,7 @@ body.min #panel{display:none}body.min #cv{height:calc(100dvh - 250px - env(safe-
 <div id="panel">
 <div id="qp"><h2 class="qonly">Earthquakes, last 24 hours</h2><canvas class="qonly" id="map"></canvas><div class="qonly" id="qsum" style="color:var(--dim);font-size:12px;margin-top:4px"></div>
 <h2 style="margin-top:12px">The ground at the seismometer</h2><canvas id="seis"></canvas><div class="directCtl" id="segbar"><button id="nextWave">Next measured section</button><button id="scanMode" class="on">Auto explore: On</button><button id="reloadWave">New recording</button></div><div class="directCtl" id="segNote">Sections come from measured differences in the seismogram. No sounds invented.</div><div class="directCtl" id="recbar"><b>Recordings</b><button id="captureLatest">Capture latest</button><button id="exportCapture" disabled>Export original CSV</button><div id="captureStatus" role="status" aria-live="polite">Capture a measured wave. UTC time and recording age appear here.</div><a id="rawCapture" hidden target="_blank" rel="noopener">Download original miniSEED instead</a></div><div id="szCap">Tap Start to load the seismometer.</div>
-<h2 class="qonly" style="margin-top:12px">Which quakes are bubbling now</h2><div class="qonly" id="qlist">Tap Start to load the earthquakes.</div><button class="qonly" id="qmore">Show all</button></div>
+<h2 class="qonly" style="margin-top:12px">Which quakes are bubbling now</h2><div class="qonly" style="color:var(--dim);font-size:12px;margin:-4px 0 4px">Tap a quake to hear its own seismogram (tap it again for live).</div><div class="qonly" id="qlist">Tap Start to load the earthquakes.</div><button class="qonly" id="qmore">Show all</button></div>
 <div class="ctl"><b>Great earthquakes (real recordings from the archives)</b><div class="chips2" id="arcChips"></div><div id="arcRead" style="color:var(--dim);font-size:12.5px;margin-top:6px">Live is the seismometer above; pick an earthquake to hear its real recording instead.</div></div>
 <div class="ctl"><b>Released by</b><div class="chips" data-k="src"></div></div>
 <div class="ctl"><b>Seismometer station</b><div class="chips" data-k="sta"></div><div id="szRead" style="color:var(--dim);font-size:12.5px;margin-top:6px"></div></div>
@@ -64,9 +65,9 @@ body.min #panel{display:none}body.min #cv{height:calc(100dvh - 250px - env(safe-
 <li class="legacyInfo"><b>Hear the Earth move:</b> a real seismometer's record of the ground's vertical motion, the last 20 minutes played 20 times faster as a one-minute loop that refreshes every minute (1 Hz shaking becomes a 20 Hz rumble). When an earthquake's waves reach the station you hear them, see them in the trace at the bottom, and more bubbles rise while the ground shakes.</li>
 <li class="legacyInfo">The deep hum swells a little when the world is busier.</li>
 <li class="legacyInfo">If the data can't be reached, Alex's Morel attractor releases the bubbles instead.</li>
-<li class="legacyInfo">No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 16 Nov · great earthquakes archive</span></details>
+<li class="legacyInfo">No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 16 Nov · tap a quake to hear it</span></details>
 </div>
-<script src="engine.js?v=20261116e"></script><script src="mseed.js?v=20261116e"></script><script src="wave-windows.js?v=20261116e"></script><script src="capture-latest.js?v=20261116e"></script>
+<script src="engine.js?v=20261116f"></script><script src="mseed.js?v=20261116f"></script><script src="wave-windows.js?v=20261116f"></script><script src="capture-latest.js?v=20261116f"></script>
 <script>
 const S={src:0,dens:0,hum:1,vol:1,sta:0,szl:0,szm:1,speed:3};const QON=()=>S.src<=1,WON=()=>S.src===1||S.src===2;
 const OPT={src:['Earthquakes','Earthquakes + Wikipedia','Wikipedia edits','Morel attractor','Direct seismogram audio'],speed:['20×','40×','80×','160×','320×','640×'],dens:['Calm','Medium','Lots'],sta:['Albuquerque','Ely, Minnesota','Harvard','Hawaii','Japan','Off'],szl:['Off','Soft','Strong'],szm:['Quakes only','All ground motion'],hum:['On','Off'],vol:['Whisper','Soft','Medium','Loud']};
@@ -137,6 +138,16 @@ setInterval(()=>{rawRate=rawRate*.7+rawCount/2*.3;rawCount=0;post({rate:Math.min
 
 /* EarthScope miniSEED vertical-component samples: directly audified in seismic mode by time compression and stable amplitude scaling. A recent window is looped; fetching occurs about once a minute. */
 const STA=[['IU','ANMO','00','BHZ','Albuquerque, New Mexico'],['US','EYMN','00','BHZ','Ely, Minnesota'],['IU','HRV','00','BHZ','Harvard, Massachusetts'],['IU','POHA','00','BHZ','Pohakuloa, Hawaii'],['IU','MAJO','00','BHZ','Matsushiro, Japan']];
+const STA_LL=[[34.9459,-106.4572],[47.9462,-91.495],[42.5064,-71.5583],[19.7573,-155.5326],[36.5457,138.2041]];
+/* Tap a quake in the list: fetch that quake's own seismogram from the nearest of these stations, from 2 min before its P
+   wave (iasp91-style travel-time table) to up to 60 min after, and play it like the live trace. */
+let qPick=null;
+const degBetween=(a,b,c,d)=>{const r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2;return 2*Math.asin(Math.min(1,Math.sqrt(x)))/r;};
+const PTT=[[0,0],[10,145],[20,280],[30,370],[40,460],[50,535],[60,600],[70,662],[80,720],[90,775],[100,825],[120,1030],[140,1150],[180,1210]];
+const pTime=d=>{for(let i=1;i<PTT.length;i++)if(d<=PTT[i][0]){const [a,ta]=PTT[i-1],[b,tb]=PTT[i];return ta+(tb-ta)*(d-a)/(b-a);}return 1210;};
+function pickQuake(v){if(qPick&&qPick.id===v.id){qPick=null;}else{let best=0,bd=1e9;STA_LL.forEach(([la,lo],k)=>{const d=degBetween(v.lat,v.lon,la,lo);if(d<bd){bd=d;best=k;}});
+  const P=pTime(bd)*1000,t0=v.t+P-120000,t1=Math.min(Date.now()-60000,v.t+P+60*60000);qPick={id:v.id,v,st:best,deg:bd,t0,t1};arcSel=-1;if(typeof paintArc==='function')paintArc();}
+ szData=null;drawList();seisPoll();}
 const MS=MSEED(),WAVES=WAVE_WINDOWS(),CAP=DEEP_CAPTURE(MS);let captured=null,captureGeneration=0;let sdSeen=0,szData=null,szEnv=0,szPosF=0,szT=null,szErr='',szInfo='',seisGeneration=0;
 let waveSource=null,waveSections=[],waveSectionIndex=0,autoScan=true,seenCycles=0,clipSerial=0;
 function selectSection(i){
@@ -217,24 +228,25 @@ const iso=t=>new Date(t).toISOString().slice(0,19);
 /* Great earthquakes: real historical seismograms archived by a GitHub job (archive/build.py) from EarthScope/IRIS FDSN:
    vertical ground motion at an IU station, 2 min before the P wave to 100 min after, 20 samples/s, stored as int16. */
 let ARC=[],arcSel=-1;
-fetch('archive/index.json?v=20261116',{cache:'no-store'}).then(r=>r.json()).then(j=>{ARC=j;const el=$('arcChips');const mk=(txt,k)=>{const b=document.createElement('button');b.textContent=txt;b.onclick=()=>{arcSel=k;paintArc();szData=null;seisPoll();};el.appendChild(b);};
+fetch('archive/index.json?v=20261116',{cache:'no-store'}).then(r=>r.json()).then(j=>{ARC=j;const el=$('arcChips');const mk=(txt,k)=>{const b=document.createElement('button');b.textContent=txt;b.onclick=()=>{arcSel=k;qPick=null;paintArc();szData=null;drawList();seisPoll();};el.appendChild(b);};
  mk('Live',-1);ARC.forEach((e,k)=>mk(e.name.split(',')[0].split(' (')[0]+(e.name.includes('heard in Germany')?' (heard in Germany)':'')+' M'+e.mag+' · '+e.time.slice(0,4),k));paintArc();}).catch(()=>{$('arcRead').textContent='Archive list not available.';});
 function paintArc(){[...$('arcChips').children].forEach((b,i)=>b.classList.toggle('on',i-1===arcSel));const e=ARC[arcSel];
  $('arcRead').textContent=e?`${e.name} · M${e.mag} · ${new Date(e.time).toUTCString().slice(5,22)} UTC · ${e.depth_km} km deep · recorded at ${e.stationName} (${e.station}), ${e.distance_deg}° away · P wave at ${Math.round(e.p_s/60)} min, S at ${Math.round(e.s_s/60)} min into the recording`:'Live is the seismometer above; pick an earthquake to hear its real recording instead.';}
-async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGeneration;if(arcSel<0&&S.sta>=STA.length){post({seis:null});szData=null;$('szRead').textContent='';return;}
- const ae=arcSel>=0?ARC[arcSel]:null,[net,sta,loc,cha,name]=ae?[...ae.station.split('.'),ae.name+' (recorded at '+ae.stationName+')']:STA[S.sta],t1=Date.now();
+async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGeneration;if(!qPick&&arcSel<0&&S.sta>=STA.length){post({seis:null});szData=null;$('szRead').textContent='';return;}
+ const qp=qPick,ae=(!qp&&arcSel>=0)?ARC[arcSel]:null,[net,sta,loc,cha,name]=qp?[...STA[qp.st].slice(0,4),'M'+qp.v.mag.toFixed(1)+' '+qp.v.place+' (recorded at '+STA[qp.st][4]+', '+Math.round(qp.deg)+'° away)']:ae?[...ae.station.split('.'),ae.name+' (recorded at '+ae.stationName+')']:STA[S.sta],t1=Date.now();
+ if(qp&&qp.t1-qp.t0<3*60000){$('szRead').textContent='That quake\'s waves are still arriving at '+STA[qp.st][4]+'; try again in a few minutes.';return;}
  try{let bytes=null,rate,startT,endT,N,x;
   if(ae){const r=await fetch('archive/'+ae.file,{cache:'force-cache'});if(!r.ok)throw new Error('archive file '+r.status);const q=new Int16Array(await r.arrayBuffer());
    if(req!==seisGeneration||!au.on)return;rate=ae.sps;N=q.length;startT=Date.parse(ae.start);endT=startT+N/rate*1000;x=new Float32Array(N);for(let i=0;i<N;i++)x[i]=q[i]/32767;}
   else{
   // (live) Longer real recording for contrasting waveforms; fall back if archive rejects request.
-  for(const minutes of (S.src===4?[75,22]:[22])){
-   try{const t0=t1-minutes*60000;
-    const url=`https://service.iris.edu/fdsnws/dataselect/1/query?net=${net}&sta=${sta}&loc=${loc}&cha=${cha}&starttime=${iso(t0)}&endtime=${iso(t1)}&nodata=404`;
+  for(const minutes of (qp?[0]:(S.src===4?[75,22]:[22]))){
+   try{const t0=qp?qp.t0:t1-minutes*60000,te=qp?qp.t1:t1;
+    const url=`https://service.iris.edu/fdsnws/dataselect/1/query?net=${net}&sta=${sta}&loc=${loc}&cha=${cha}&starttime=${iso(t0)}&endtime=${iso(te)}&nodata=404`;
     const r=await fetch(url,{cache:'no-store'});
     if(!r.ok)throw new Error(r.status===404?'no recent data from this station':'HTTP '+r.status);
     bytes=await r.arrayBuffer();break;
-   }catch(e){if(minutes===22)throw e;}
+   }catch(e){if(minutes===22||qp)throw e;}
   }
   if(req!==seisGeneration||!au.on)return;
   const recs=MS.parse(bytes).filter(x=>x.rate>0&&x.samples.length).sort((a,b)=>a.start-b.start);if(!recs.length)throw new Error('empty');
@@ -262,7 +274,7 @@ async function seisPoll(){clearTimeout(szT);if(!au.on)return;const req=++seisGen
   }
   szErr='';szInfo=`${name} (${net}.${sta}) · ${Math.round((endT-startT)/60000)} min recorded · ${S.src===4?waveSections.length+' measured sections':'continuous trace'} · recording ends ${Math.max(0,Math.round((Date.now()-endT)/60000))} min ago · ${S.src===4?SPEED[S.speed]:20}×`;}
  catch(e){if(req!==seisGeneration||!au.on)return;waveSections=[];waveSource=null;szData=null;post({seis:null});szErr='Seismometer not reachable ('+(e.message||'network')+'), retrying each minute';}
- $('szRead').textContent=szErr||szInfo;$('szCap').textContent=szErr||(szData?szData.name+' · vertical seismogram · gold line = playback position · recorded wave goes directly to the speakers':'');szT=(S.src===4||arcSel>=0)?null:setTimeout(seisPoll,10*60000);if(arcSel>=0&&!szErr)$('szRead').textContent='Archive · '+szInfo.replace(/ · recording ends.*?ago/,'');}
+ $('szRead').textContent=szErr||szInfo;$('szCap').textContent=szErr||(szData?szData.name+' · vertical seismogram · gold line = playback position · recorded wave goes directly to the speakers':'');szT=(S.src===4||arcSel>=0||qPick)?null:setTimeout(seisPoll,10*60000);if(arcSel>=0&&!szErr)$('szRead').textContent='Archive · '+szInfo.replace(/ · recording ends.*?ago/,'');}
 
 // ---------- earthquake panel: world map (longitude/latitude, dots by magnitude, glow by how much each is bubbling now),
 // full seismometer trace with time marks, and the list of quakes ranked by their current (Omori) share of the bubbles
@@ -282,9 +294,10 @@ function drawSeis(){const [w,h]=fit(szC);sx2.fillStyle='#030d18';sx2.fillRect(0,
  sx2.fillStyle='rgba(127,163,184,.9)';sx2.font='11px system-ui';const t=x=>new Date(x).toTimeString().slice(0,5);sx2.fillText(t(szData.startT),4,h-5);const e=t(szData.endT);sx2.fillText(e,w-4-sx2.measureText(e).width,h-5);}
 function drawList(){const el=$('qlist');if(!vents.length){el.textContent=qErr||'Waiting for the earthquake feed…';return;}const L=vents.map(lam),tot=L.reduce((a,b)=>a+b,0)||1;
  const rows=vents.map((v,i)=>({v,share:L[i]/tot})).sort((a,b)=>b.share-a.share).slice(0,qAll?400:10);
- el.innerHTML=rows.map(({v,share})=>`<div class="q"><span class="m">M${v.mag.toFixed(1)}</span><span class="pl">${v.place.replace(/</g,'&lt;')}<br><span class="ag">${ago(v.t)} · ${Math.round(v.dep)} km deep · ${v.n} bubbles so far</span></span><span class="bar" style="width:${Math.round(60*share)+2}px"></span></div>`).join('');
+ el.innerHTML=rows.map(({v,share})=>`<div class="q${qPick&&qPick.id===v.id?' sel':''}" data-id="${v.id}" role="button"><span class="m">M${v.mag.toFixed(1)}</span><span class="pl">${v.place.replace(/</g,'&lt;')}<br><span class="ag">${ago(v.t)} · ${Math.round(v.dep)} km deep · ${v.n} bubbles so far</span></span><span class="bar" style="width:${Math.round(60*share)+2}px"></span></div>`).join('');
  $('qsum').textContent=`${vents.length} earthquakes recorded worldwide · largest M${Math.max(...vents.map(v=>v.mag)).toFixed(1)} · brighter dots are bubbling more right now`+(newest?' · ring = newest':'');}
 setInterval(drawList,5000);
+$('qlist').addEventListener('click',ev=>{const row=ev.target.closest('.q');if(!row)return;const v=vents.find(x=>x.id===row.dataset.id);if(v){if(!au.on){$('szRead').textContent='Tap Start first, then pick a quake.';return;}pickQuake(v);}});
 // ---------- picture: bubbles rising through dark water
 const cv=$('cv'),cx=cv.getContext('2d');let vis=[],last=performance.now();
 function addVis(ev){const n=ev.kind==='train'?(ev.n||6):ev.kind==='cluster'?(ev.n||5):ev.kind==='giant'?5:1;for(let j=0;j<n;j++){if(vis.length>160)vis.shift();vis.push({x:.5+ev.pan*.42+(Math.random()-.5)*(ev.kind==='single'?0:.06),h:ev.h+(Math.random()-.5)*(n>1?4:0),a:ev.a*(j?(.3+.6*Math.random()):1),d:j*(ev.kind==='train'?.3:.15),born:performance.now(),giant:ev.kind==='giant',far:ev.dist});}}
