@@ -68,7 +68,8 @@ def decide(person: str, events: Sequence[Mapping], *,
                         proposal.get("source_event_id") == event_id and
                         isinstance(proposal.get("text"), str) and
                         proposal["text"].strip()):
-                    return Decision("reply", "grounded_unanswered_address", event_id)
+                    if not active_task:
+                        return Decision("reply", "grounded_unanswered_address", event_id)
             # Preserve the unanswered address without blocking valid independent work.
             pending_address_id = event_id
             break
