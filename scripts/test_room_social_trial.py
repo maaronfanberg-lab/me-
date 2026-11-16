@@ -121,6 +121,23 @@ class RoomSocialTrialTests(unittest.TestCase):
         self.assertIn("unverifiable_allen_reply", result["hard_failures"])
 
 
+    def test_observed_live_dangling_bracket_is_flagged_without_false_crash_claim(self):
+        r = fixture()
+        r["dialogue"] = [{"speaker": "sarah", "text":
+            "I'm going to review my observations.\\n\\n["}]
+        result = inspect_trace(r)
+        self.assertEqual(result["metrics"]["suspected_truncated_turns"], 1)
+        self.assertEqual(result["hard_failures"], [])
+        r["dialogue"][0]["text"] = "I quietly review the notebook."
+        self.assertEqual(inspect_trace(r)["metrics"]["suspected_truncated_turns"], 0)
+
+    def test_empty_or_invalid_dialogue_turn_fails_closed(self):
+        r = fixture()
+        r["dialogue"] = [None, {"speaker": "jules", "text": ""}]
+        result = inspect_trace(r)
+        self.assertIn("malformed_dialogue_turn", result["hard_failures"])
+        self.assertIn("empty_or_nontext_dialogue_turn", result["hard_failures"])
+
 
 if __name__ == "__main__":
     unittest.main()
