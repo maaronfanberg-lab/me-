@@ -62,3 +62,12 @@ over the seismic band: f = 60·(2000/60)^(log(fg/0.05)/log 200), 40–2500 Hz (m
 500–1700 Hz); voice displacement scaled by 3 cm/a so small (high) bubbles radiate the same pressure as large ones (they were
 ~26 dB quieter); calm waves at ≥ 1.2× RMS may sing every 0.25 s; cloud boom level reduced. Checks: 0.2/2/8 Hz ground waves
 → 150/689/2000 Hz at −23.5/−17.6/−17.3 dB; render voice pitch 10/50/90% = 117/967/2500 Hz, 7.7 voices/s; all tests pass.
+
+## Update (2026-11-16): great-earthquake archive
+Alex asked to use historical seismograph recordings from public archives. A GitHub Actions job
+(.github/workflows/deep-water-archive.yml, apps/deep-water/archive/build.py, ObsPy) finds each event in the USGS
+catalogue, downloads the vertical BHZ seismogram at IU.ANMO (fallbacks IU.HRV/COLA/TUC) from EarthScope/IRIS FDSN
+dataselect, 2 min before the iasp91 P arrival to 100 min after, detrends, low-passes at 8 Hz and resamples to 20 sps, and
+commits int16 + index.json. First run: 9 of 10 archived (Tōhoku 2011, Sumatra 2004, Maule 2010, Kamchatka 2025,
+Chignik 2021, Türkiye 2023, Kaikōura 2016, Gorkha 2015, Ridgecrest 2019); Bolivia 1994 had no IU …00.BHZ data.
+The app plays them from the same site (no cross-origin request), through the same bubble or direct modes as live data.
