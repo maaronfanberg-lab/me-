@@ -27,7 +27,7 @@ Date: 2026-11-16 UTC. Branch: `research/room-obliteratus-v014-20261116`. Draft P
 17. Tested that the context manager removes an intervention even if generation raises an exception. **PASS on simulated hook**; real OBLITERATUS removal is still untested.
 18. Executed the deterministic simulated trial on 20 scenarios across four doses; every placebo and restoration control passed. **PASS**, simulator only.
 19. Generated 60 randomized, unlabeled answer-comparison tasks for a future blind quality review, with a separate local answer key. **PASS**; no actual judges or ratings yet.
-20. Extended the branch-only GitHub Actions workflow to enforce permitted changed paths, rerun all contract tests, generate mock outputs and upload only safe synthetic artifacts. **UPDATED; new run must be independently verified and recorded below.**
+20. Extended the branch-only GitHub Actions workflow to enforce permitted changed paths, rerun all contract tests, generate mock outputs and upload only safe synthetic artifacts. **UPDATED; original new run failed the branch-isolation check because `main` moves with Room state. The guard is now pinned to the actual fork point; a second CI run requires verification.**
 
 ## Baseline and effect status
 
@@ -38,8 +38,8 @@ Date: 2026-11-16 UTC. Branch: `research/room-obliteratus-v014-20261116`. Draft P
 
 ## GitHub verification (to be filled with observed status)
 
-- New commit SHA: pending push.
-- New GitHub Actions run id and conclusion: pending verification.
+- Original round-2 commit SHA: `255b09b7aa52275727e820ef7667b8ffeac4cc78`.
+- First round-2 CI run: `43886451247`, **FAILED** at branch isolation; root cause was comparing against moving `main`, not a research-only diff. This was a test-design mistake, not a failed model experiment. Fixed by pinning fork-point `1ed9db726c9bee47846a182e2a7103105d689a39`. New run: pending verification.
 - Unit tests: 38/38 pass in local Python. Mock controls: pass. Anonymous task count: 60.
 - The live Room's code/state/feed/prompts, deployment, and schedules have not been modified by these research changes.
 
