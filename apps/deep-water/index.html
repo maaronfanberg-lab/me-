@@ -67,7 +67,7 @@ body.min #panel{display:none}body.min #cv{height:calc(100dvh - 250px - env(safe-
 <li class="legacyInfo">If the data can't be reached, Alex's Morel attractor releases the bubbles instead.</li>
 <li class="legacyInfo">No surface, no splashes, no running water: only the deep.</li></ul><span id="ver">Version 16 Nov · tap a quake to hear it</span></details>
 </div>
-<script src="engine.js?v=20261116f"></script><script src="mseed.js?v=20261116f"></script><script src="wave-windows.js?v=20261116f"></script><script src="capture-latest.js?v=20261116f"></script>
+<script src="engine.js?v=20261116g"></script><script src="mseed.js?v=20261116g"></script><script src="wave-windows.js?v=20261116g"></script><script src="capture-latest.js?v=20261116g"></script>
 <script>
 const S={src:0,dens:0,hum:1,vol:1,sta:0,szl:0,szm:1,speed:3};const QON=()=>S.src<=1,WON=()=>S.src===1||S.src===2;
 const OPT={src:['Earthquakes','Earthquakes + Wikipedia','Wikipedia edits','Morel attractor','Direct seismogram audio'],speed:['20×','40×','80×','160×','320×','640×'],dens:['Calm','Medium','Lots'],sta:['Albuquerque','Ely, Minnesota','Harvard','Hawaii','Japan','Off'],szl:['Off','Soft','Strong'],szm:['Quakes only','All ground motion'],hum:['On','Off'],vol:['Whisper','Soft','Medium','Loud']};
@@ -119,7 +119,7 @@ async function pollQuakes(first){try{
   const fresh=(j.features||[]).filter(f=>!seenQ.has(f.id)).sort((a,b)=>a.properties.time-b.properties.time);
   fresh.forEach((f,i)=>{seenQ.add(f.id);const v=ventOf(f);vents.push(v);newest=v;setTimeout(()=>{if(au.on)release(vEv(v,'giant',Math.min(.5,.12+.08*v.mag)),'New earthquake · M'+v.mag.toFixed(1)+' '+v.place);},i*5000+400);});
   vents=vents.filter(v=>Date.now()-v.t<26*3.6e6);qErr='';lastData=performance.now();}catch(e){qErr='earthquake feed not reachable, retrying each minute';}liveLine();drawList();}
-function ventTick(){if(!au.on||!QON()||!vents.length||szData)return;ventCarry+=DENS[S.dens]*.25*(szData?Math.min(3,.5+4*szEnv):1);while(ventCarry>=1){ventCarry-=1;
+function ventTick(){if(!au.on||!QON()||!vents.length||S.src===4)return;ventCarry+=DENS[S.dens]*.25*(szData?Math.min(3,.5+4*szEnv):1);while(ventCarry>=1){ventCarry-=1;
   const C=vents.filter(v=>!recentPick.includes(v.id)),P=C.length?C:vents,W=P.map(pickW),tot=W.reduce((x,y)=>x+y,0);let u=Math.random()*tot,k=0;while(k<W.length-1&&u>W[k]){u-=W[k];k++;}
   const v=P[k];v.n++;flashQ[v.id]=performance.now();recentPick.push(v.id);if(recentPick.length>6)recentPick.shift();
   const e={kind:v.mag>=4?'train':'single',n:Math.max(2,Math.round(v.mag)),a:quakeA(v),h:quakeH(v),pan:Math.max(-1,Math.min(1,v.lon/180)),dist:5+45*Math.abs(v.lat)/90};
