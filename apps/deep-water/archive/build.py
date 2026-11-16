@@ -30,20 +30,23 @@ index = []
 for ev in events:
     try:
         t0 = UTCDateTime(ev["date"])
-        cat = usgs.get_events(starttime=t0 - 86400, endtime=t0 + 2 * 86400, minmagnitude=ev["mag"] - 0.3, orderby="magnitude", limit=1)
+        kw = dict(latitude=ev["lat"], longitude=ev["lon"], maxradius=1.5) if "lat" in ev else {}
+        cat = usgs.get_events(starttime=t0 - 86400, endtime=t0 + 2 * 86400, minmagnitude=ev["mag"] - 0.6, orderby="magnitude", limit=1, **kw)
         e = cat[0]; o = e.preferred_origin() or e.origins[0]; m = e.preferred_magnitude() or e.magnitudes[0]
         done = False
-        for net, sta, loc, cha, sname, slat, slon in STATIONS:
+        for net, sta, loc, cha, sname, slat, slon in (ev.get("stations") or STATIONS):
             deg = locations2degrees(o.latitude, o.longitude, slat, slon)
             arr = model.get_travel_times(source_depth_in_km=max(0, (o.depth or 0) / 1000), distance_in_degree=deg, phase_list=["P", "Pdiff", "PKP", "PKIKP", "S", "Sdiff", "SKS"])
             p = min([a.time for a in arr if a.name.startswith("P")] or [deg * 8.0])
             s = min([a.time for a in arr if a.name.startswith("S")] or [p * 1.8])
-            start, end = o.time + p - 120, o.time + p + 100 * 60
+            start, end = o.time + p - 120, o.time + p + ev.get("after_min", 100) * 60
             try:
                 st = dc.get_waveforms(net, sta, loc, cha, start, end)
             except Exception as err:
                 print(ev["id"], sta, "no data:", err); continue
-            st.merge(fill_value=0); tr = st[0]
+            st = st.select(channel=cha); st.merge(fill_value=0)
+            locs = sorted(set(t.stats.location for t in st)); best = "00" if "00" in locs else (locs[0] if locs else "")
+            st = st.select(location=best); tr = st[0]; loc = tr.stats.location
             if tr.stats.npts < 0.8 * (end - start) * tr.stats.sampling_rate:
                 print(ev["id"], sta, "too short", tr.stats.npts); continue
             tr.detrend("demean"); tr.detrend("linear"); tr.taper(0.01)
