@@ -40,9 +40,14 @@ def examples(start, end):
         left = PLACES[(i * 3) % len(PLACES)]
         right = PLACES[(i * 3 + 5) % len(PLACES)]
         for correct, incorrect in ((left, right), (right, left)):
+            # Both candidate completions occur verbatim in both class prompts.
+            # Under OBLITERATUS's binary word/char-trigram lexical features,
+            # correct and swapped completions therefore have identical sets.
             prefix = (
-                f"Mara: I read the label for the {item}. It says '{correct}'. "
-                f"Where is the {item}?\nSarah: "
+                f"Mara: Candidate sentences: Sarah: The {item} is {left}. "
+                f"Sarah: The {item} is {right}. "
+                f"I checked the label: the correct location for the {item} "
+                f"is {correct}, not {incorrect}. Which candidate is supported?\\nSarah: "
             )
             groups["positive"].append(prefix + f"The {item} is {correct}.")
             groups["wrong_answer"].append(prefix + f"The {item} is {incorrect}.")
