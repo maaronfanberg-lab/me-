@@ -40,6 +40,7 @@ jobs:
             esac
           done < <(git diff --name-only "$BASE_SHA" HEAD)
           python3 -m py_compile experiments/room-obliteratus/real_pilot.py
+          python3 -m unittest discover -s experiments/room-obliteratus -p 'test_*.py' -v
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -94,7 +95,7 @@ jobs:
           python -u experiments/room-obliteratus/real_pilot.py \
             --model-dir "$RUNNER_TEMP/obliteratus-model" \
             --cases experiments/room-obliteratus/synthetic_cases.json \
-            --n-cases 6 --max-tokens 36 \
+            --n-cases 20 --max-tokens 36 \
             --out "$RUNNER_TEMP/obliteratus-real-neural-report.json"
           python - <<'PY'
           import json,os
