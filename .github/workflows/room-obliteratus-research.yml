@@ -1,0 +1,32 @@
+name: Room OBLITERATUS v0.1.4 isolated harness test
+
+on:
+  push:
+    branches:
+      - 'research/room-obliteratus-v014-20261116'
+    paths:
+      - 'experiments/room-obliteratus/**'
+      - 'docs/research/2026-11-16-room-obliteratus-protocol.md'
+      - '.github/workflows/room-obliteratus-research.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pure-python-contract:
+    name: Test research harness without model or live Room access
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert branch isolation and run deterministic tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'research/room-obliteratus-v014-20261116'
+          python3 -m py_compile experiments/room-obliteratus/ab_trial.py
+          python3 -m unittest discover -s experiments/room-obliteratus -p 'test_*.py' -v
+          test -f experiments/room-obliteratus/synthetic_cases.json
