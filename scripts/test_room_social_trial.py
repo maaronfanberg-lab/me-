@@ -80,7 +80,7 @@ class RoomSocialTrialTests(unittest.TestCase):
     def test_allen_reply_has_addressed_evidence(self):
         r = fixture()
         r["allen_inputs"] = [{"id": "allen1", "speaker": "allen",
-                              "addresses": ["sarah"]}]
+                              "visibility": "public", "addresses": ["sarah"]}]
         r["replies"] = [{"source_event_id": "allen1", "actor": "sarah"}]
         self.assertEqual(inspect_trace(r)["metrics"]["grounded_allen_replies"], 1)
         self.assertEqual(inspect_trace(r)["hard_failures"], [])
@@ -100,6 +100,26 @@ class RoomSocialTrialTests(unittest.TestCase):
         result = compare_trials(b, c)
         self.assertEqual(result["status"], "needs_independent_behavioral_review")
         self.assertGreater(result["deltas"]["near_duplicates"], 0)
+
+
+    def test_unwitnessed_private_allen_input_cannot_be_credited(self):
+        r = fixture()
+        r["allen_inputs"] = [{"id": "allenp", "speaker": "allen",
+                              "visibility": "private", "witnesses": ["allen", "mara"],
+                              "addresses": ["sarah"]}]
+        r["replies"] = [{"source_event_id": "allenp", "actor": "sarah"}]
+        result = inspect_trace(r)
+        self.assertIn("unwitnessed_allen_reply", result["hard_failures"])
+        self.assertEqual(result["metrics"]["grounded_allen_replies"], 0)
+
+    def test_malformed_delivery_and_reply_ids_fail_without_crashing(self):
+        r = fixture()
+        r["deliveries"] = [None, {"event_id": [], "recipient": []}]
+        r["replies"] = [{"source_event_id": [], "actor": "mara"}]
+        result = inspect_trace(r)
+        self.assertIn("unauthorized_or_unverifiable_delivery", result["hard_failures"])
+        self.assertIn("unverifiable_allen_reply", result["hard_failures"])
+
 
 
 if __name__ == "__main__":
