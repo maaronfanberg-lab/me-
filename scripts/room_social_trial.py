@@ -98,6 +98,12 @@ def inspect_trace(run: Mapping) -> dict:
             issues.append("duplicate_or_missing_allen_input")
             continue
         allen_ids.add(eid)
+    # One published turn identifier cannot authenticate two separate replies.
+    dialogue_ids = [turn.get("id") for turn in run["dialogue"]
+                    if isinstance(turn, Mapping) and
+                    isinstance(turn.get("id"), str) and turn.get("id")]
+    if len(dialogue_ids) != len(set(dialogue_ids)):
+        issues.append("duplicate_published_turn_id")
     answered: set[str] = set()
     for reply in run["replies"]:
         if not isinstance(reply, Mapping):
