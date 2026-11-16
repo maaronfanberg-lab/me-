@@ -43,6 +43,22 @@ class ReceiptTests(unittest.TestCase):
         self.assertIsNone(self.receipt([conflicting, self.event]))
         self.assertIsNotNone(self.receipt([self.event, dict(conflicting, id="other")]))
 
+    def test_missing_or_unknown_visibility_cannot_certify_completion(self):
+        for visibility in (None, "", "unknown", "PRIVATE"):
+            event = dict(self.event)
+            if visibility is None:
+                event.pop("visibility")
+            else:
+                event["visibility"] = visibility
+            with self.subTest(visibility=visibility):
+                self.assertIsNone(self.receipt([event]))
+
+    def test_private_receipt_requires_witness_list(self):
+        for witnesses in (None, "mara", {"mara": True}, 12):
+            event = dict(self.event, visibility="private", witnesses=witnesses)
+            with self.subTest(witnesses=witnesses):
+                self.assertIsNone(self.receipt([event]))
+
     def test_private_receipt_stays_private(self):
         event = dict(self.event, visibility="private", witnesses=["mara", "owen"])
         receipt = self.receipt([event])
