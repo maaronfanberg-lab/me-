@@ -82,10 +82,27 @@ class RoomSocialTrialTests(unittest.TestCase):
         r["allen_inputs"] = [{"id": "allen1", "speaker": "allen",
                               "visibility": "public", "addresses": ["sarah"]}]
         r["replies"] = [{"source_event_id": "allen1", "actor": "sarah"}]
+        r["dialogue"] = [{"id": "turn1", "speaker": "sarah", "text": "Yes, Allen.", "source_event_id": "allen1"}]
         self.assertEqual(inspect_trace(r)["metrics"]["grounded_allen_replies"], 1)
         self.assertEqual(inspect_trace(r)["hard_failures"], [])
         r["replies"] = [{"source_event_id": "allen1", "actor": "owen"}]
         self.assertIn("unaddressed_allen_reply", inspect_trace(r)["hard_failures"])
+
+    def test_reply_receipt_without_published_turn_is_not_credit(self):
+        r = fixture()
+        r["allen_inputs"] = [{"id": "a1", "speaker": "allen",
+                              "visibility": "public", "addresses": ["sarah"]}]
+        r["replies"] = [{"source_event_id": "a1", "actor": "sarah"}]
+        result = inspect_trace(r)
+        self.assertEqual(result["metrics"]["grounded_allen_replies"], 0)
+        self.assertIn("missing_or_ambiguous_published_allen_reply", result["hard_failures"])
+        r["dialogue"] = [{"id": "t1", "speaker": "sarah", "text": "Hello"}]
+        self.assertEqual(inspect_trace(r)["metrics"]["grounded_allen_replies"], 0)
+        r["dialogue"][0]["source_event_id"] = "a1"
+        self.assertEqual(inspect_trace(r)["metrics"]["grounded_allen_replies"], 1)
+        r["dialogue"].append(dict(r["dialogue"][0], id="t2"))
+        self.assertIn("missing_or_ambiguous_published_allen_reply",
+                      inspect_trace(r)["hard_failures"])
 
     def test_no_allen_inputs_is_unobserved_not_ignored(self):
         self.assertEqual(inspect_trace(fixture())["metrics"]["accepted_allen_inputs"], 0)
