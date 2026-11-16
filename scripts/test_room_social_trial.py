@@ -104,6 +104,24 @@ class RoomSocialTrialTests(unittest.TestCase):
         self.assertIn("missing_or_ambiguous_published_allen_reply",
                       inspect_trace(r)["hard_failures"])
 
+    def test_duplicate_published_id_cannot_prove_two_distinct_replies(self):
+        r = fixture()
+        r["allen_inputs"] = [
+            {"id": "a1", "speaker": "allen", "visibility": "public", "addresses": ["sarah"]},
+            {"id": "a2", "speaker": "allen", "visibility": "public", "addresses": ["sarah"]},
+        ]
+        r["replies"] = [
+            {"source_event_id": "a1", "actor": "sarah"},
+            {"source_event_id": "a2", "actor": "sarah"},
+        ]
+        r["dialogue"] = [
+            {"id": "same-turn", "speaker": "sarah", "text": "First reply", "source_event_id": "a1"},
+            {"id": "same-turn", "speaker": "sarah", "text": "Second reply", "source_event_id": "a2"},
+        ]
+        self.assertIn("duplicate_published_turn_id", inspect_trace(r)["hard_failures"])
+        r["dialogue"][1]["id"] = "distinct-turn"
+        self.assertNotIn("duplicate_published_turn_id", inspect_trace(r)["hard_failures"])
+
     def test_no_allen_inputs_is_unobserved_not_ignored(self):
         self.assertEqual(inspect_trace(fixture())["metrics"]["accepted_allen_inputs"], 0)
         self.assertEqual(inspect_trace(fixture())["metrics"]["grounded_allen_replies"], 0)
