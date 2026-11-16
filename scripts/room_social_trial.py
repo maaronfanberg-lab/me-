@@ -122,10 +122,25 @@ def inspect_trace(run: Mapping) -> dict:
             issues.append("unwitnessed_allen_reply")
             continue
         answered.add(eid)
+    # Grounded production counterexample (2026-11-16, cycle 69743):
+    # a published Sarah utterance ended with a bare '['. Treat that as
+    # suspicious truncation, not as proof of a model crash or social failure.
+    malformed_turns = 0
+    for turn in run["dialogue"]:
+        if not isinstance(turn, Mapping):
+            issues.append("malformed_dialogue_turn")
+            continue
+        body = turn.get("text")
+        if not isinstance(body, str) or not body.strip():
+            issues.append("empty_or_nontext_dialogue_turn")
+            continue
+        if body.rstrip().endswith(("[", "{", "(", "\\", "\\n[")):
+            malformed_turns += 1
     counts = audit(run["dialogue"])
     return {
         "metrics": {
             "turns": counts["turns"],
+            "suspected_truncated_turns": malformed_turns,
             "questions": counts["question_mark_turns"],
             "intention_phrases": counts["intention_phrase_turns"],
             "near_duplicates": counts["same_speaker_near_duplicates"],
