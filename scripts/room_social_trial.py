@@ -121,6 +121,17 @@ def inspect_trace(run: Mapping) -> dict:
         if not _permitted(msg, reply["actor"]):
             issues.append("unwitnessed_allen_reply")
             continue
+        # A reply receipt alone is not evidence of an actual spoken response.
+        # Require a distinct published turn explicitly linked to the input.
+        linked = [turn for turn in run["dialogue"]
+                  if isinstance(turn, Mapping) and
+                  turn.get("speaker") == reply["actor"] and
+                  turn.get("source_event_id") == eid and
+                  isinstance(turn.get("id"), str) and turn["id"] and
+                  isinstance(turn.get("text"), str) and turn["text"].strip()]
+        if len(linked) != 1:
+            issues.append("missing_or_ambiguous_published_allen_reply")
+            continue
         answered.add(eid)
     # Grounded production counterexample (2026-11-16, cycle 69743):
     # a published Sarah utterance ended with a bare '['. Treat that as
