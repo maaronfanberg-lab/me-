@@ -127,6 +127,52 @@ def _semantic_echo(text: str, speaker: str, history: list) -> bool:
     return False
 
 
+def _social_context(conversation: list, person: str) -> str:
+    """Keep witnessed direct Allen requests accessible until linked resolution.
+
+    This is NON-BINDING social evidence, NOT a verified world observation and
+    NOT a demand to speak. Failed or silent native beats must not erase the
+    request merely because the transport previously marked it seen.
+    """
+    from collections import Counter
+    from room_social_joint_context import joint_context
+
+    # Malformed or colliding IDs cannot authorize a social obligation.
+    counts = Counter(
+        item["id"] for item in conversation
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+        and item["id"]
+    )
+    unique = [
+        item for item in conversation
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+        and counts[item["id"]] == 1
+    ]
+    bids = joint_context(unique, person, limit=12)["open_bids"]
+    directed = [
+        bid for bid in bids
+        if bid.get("from") == "allen" and
+        bid.get("kind") in ("address", "question")
+    ][-2:]
+    if not directed:
+        return ""
+    lines = [
+        "WITNESSED UNRESOLVED DIALOGUE (NOT a verified physical fact; "
+        "response optional, no invented progress):"
+    ]
+    for bid in directed:
+        quote = str(bid.get("text") or "").replace("\\r", " ").replace("\\n", " ")[:300]
+        lines.append(
+            "Allen directly addressed you; source_event_id="
+            + str(bid["source_id"])[:100] + "; words=" + json.dumps(quote, ensure_ascii=False)
+        )
+    lines.append(
+        "You may answer, decline truthfully, or continue independent work. "
+        "Never claim the request was fulfilled unless the referee verified it."
+    )
+    return "\\n".join(lines)
+
+
 def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     room = root / "room"
     conversation = _load(room / "conversation.json", [])
@@ -144,10 +190,19 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     room_life.validate(life_world, c.CFG)
     room_life.repair_profile_goals(life_world, c.CFG)
     # Native agents see the verified current environment BEFORE they choose.
-    world_contexts = {
-        who: room_life.context(life_world, who)
-        for who in native.PARTICIPANTS
-    }
+    world_contexts = {}
+    for who in native.PARTICIPANTS:
+        physical = room_life.context(life_world, who)
+        pending = _social_context(conversation, who)
+        # The native world's constant component is capped at 3000 chars.
+        # Reserve explicit space for unresolved *witnessed* conversation
+        # without conflating it with trusted referee-generated world effects.
+        if pending:
+            world_contexts[who] = (
+                physical[:max(0, 2998 - len(pending))] + "\\n\\n" + pending
+            )
+        else:
+            world_contexts[who] = physical
     delivered_world_ids = list(checkpoint.get("delivered_life_event_ids") or [])
     already_delivered = set(delivered_world_ids)
     pending_world_events = [
