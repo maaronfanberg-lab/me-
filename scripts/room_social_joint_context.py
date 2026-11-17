@@ -19,8 +19,8 @@ _NAME = "|".join(sorted(PEOPLE))
 # A vocative is a conservative, explicit address, not a reference to
 # somebody's work: "Sarah, ..." is different from "Sarah's notebook".
 _INITIAL_VOCATIVE = re.compile(
-    rf'^\s*["“‘]?\s*(?:hey|hi|hello)\s+(?P<person>{_NAME})\s*[,!?]|'
-    rf'^\s*["“‘]?\s*(?P<direct>{_NAME})\s*[,!?]', re.I
+    rf'^\s*["“‘]?\s*(?:hey|hi|hello)\s+(?P<person>{_NAME})\s*[,!?.]|'
+    rf'^\s*["“‘]?\s*(?P<direct>{_NAME})\s*[,!?.]', re.I
 )
 
 
