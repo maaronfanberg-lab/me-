@@ -97,6 +97,15 @@ def inspect_trace(run: Mapping) -> dict:
         if not isinstance(eid, str) or not eid or eid in allen_ids:
             issues.append("duplicate_or_missing_allen_input")
             continue
+        if (msg.get("visibility") not in ("public", "private") or
+                not isinstance(msg.get("addresses"), (list, tuple)) or
+                not msg["addresses"] or
+                any(not isinstance(name, str) or name not in PARTICIPANTS - {"allen"}
+                    for name in msg["addresses"]) or
+                (msg.get("visibility") == "private" and
+                 not isinstance(msg.get("witnesses"), (list, tuple)))):
+            issues.append("invalid_allen_input_provenance")
+            continue
         allen_ids.add(eid)
     # One published turn identifier cannot authenticate two separate replies.
     dialogue_ids = [turn.get("id") for turn in run["dialogue"]
