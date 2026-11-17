@@ -2,12 +2,22 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101717"><title>One Micrometer Apart | Chaotic Chamber</title>
 <style>
 :root{color-scheme:dark;--bg:#101717;--fg:#f2ede5;--mute:#a9bdb8;--border:#405652;--left:#efba89;--right:#8fe0d0}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,sans-serif}main{max-width:850px;margin:auto;padding:20px 14px max(30px,env(safe-area-inset-bottom))}h1{font:normal clamp(33px,6vw,50px)/1.05 Georgia,serif;letter-spacing:-.04em;margin:9px 0 7px}p{margin:6px 0 12px;color:var(--mute)}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.16em;color:var(--mute)}.upper{display:flex;justify-content:space-between;gap:12px;align-items:center}a{color:var(--right);text-underline-offset:3px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}button,select{appearance:none;min-height:44px;font:inherit;background:#1c2927;color:var(--fg);border:1px solid #60746e;border-radius:6px;padding:10px 13px;cursor:pointer}button:focus-visible,select:focus-visible{outline:2px solid var(--left);outline-offset:2px}button.primary{background:var(--left);border-color:var(--left);color:#271b13;font-weight:650}button[disabled]{opacity:.6}label{display:flex;align-items:center;gap:10px;color:var(--mute);flex-wrap:wrap}select{color:var(--fg);padding-right:28px}.settings{display:flex;flex-wrap:wrap;gap:12px 22px;margin:14px 0 12px}.scene{margin:0 0 11px}.scene-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:4px 0}.scene-top strong{font-size:13px;font-weight:650}.scene-top .small{font-variant-numeric:tabular-nums;color:var(--mute);font-size:12px}canvas.chamber{width:100%;aspect-ratio:2.7/1;display:block;background:#142322;border:1px solid var(--border);border-radius:4px}.l{color:var(--left)}.r{color:var(--right)}.measure{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:15px 0 4px}.tile{border-top:1px solid var(--border);padding-top:9px;min-width:0}.tile span{display:block;font-size:12px;color:var(--mute)}.tile b{font-size:clamp(16px,3vw,22px);font-weight:500;word-break:break-word;font-variant-numeric:tabular-nums}.plotWrap{margin:17px 0 10px;border-top:1px solid var(--border);padding-top:12px}.plotTitle{display:flex;justify-content:space-between;color:var(--mute);font-size:12px;margin-bottom:6px;gap:12px}#plot{width:100%;height:155px;display:block}.note{font-size:13px;color:var(--mute)}#status{min-height:20px;color:var(--left)}@media(max-width:520px){canvas.chamber{aspect-ratio:2.05/1}.measure{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:1/-1}main{padding-top:16px}}
+.physics{margin:12px 0 16px;border-block:1px solid var(--border);padding:10px 0}
+.physics summary{cursor:pointer;min-height:34px;color:var(--fg)}.physics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:0 20px}
+.physics-control{display:block;padding:5px 0}.physics-control span{display:flex;justify-content:space-between;gap:8px}.physics-control output{color:var(--left);font-variant-numeric:tabular-nums}
+.physics-control input{display:block;width:100%;margin:0;min-height:32px;accent-color:var(--right)}
+.physics-control input:focus-visible,.physics summary:focus-visible{outline:2px solid var(--left)}
 </style></head><body><main>
 <div class="upper"><span class="eyebrow">Chaotic Chamber / Experiment 01</span><a href="./">Original chamber</a></div>
 <h1>One Micrometer Apart</h1>
 <p>Two identical 26-particle chambers. One particle moves just 1 µm in the right-hand world. Each ear hears the impacts from its own world. Headphones recommended.</p>
 <div class="toolbar"><button class="primary" id="start">Hear both worlds</button><button id="testSound">Test speakers</button><button id="pause" disabled>Pause</button><button id="replay">Replay same launch</button><button id="new">New launch</button></div>
 <div class="settings"><label>Initial displacement <select id="shift"><option value="0">0 µm (control)</option><option value="0.000001" selected>1 µm</option><option value="0.00001">10 µm</option><option value="0.0001">100 µm</option><option value="0.001">1 mm</option></select></label><label>Charge feedback <select id="feedback"><option value="on" selected>On</option><option value="off">Off</option></select></label></div>
+<details class="physics" open><summary>Physics and sound</summary>
+<p class="note">Sliders affect both worlds as they run. Replay to start both worlds with the current settings.</p>
+<div class="physics-grid" id="physics-controls"></div>
+<details><summary>Oscillator coefficients</summary><div class="physics-grid" id="oscillator-controls"></div></details>
+</details>
 <div class="scene"><div class="scene-top"><strong class="l">LEFT EAR · world A</strong><span class="small" id="hitsL">0 wall hits</span></div><canvas class="chamber" id="canvasL" aria-label="World A: 26 bouncing particles"></canvas></div>
 <div class="scene"><div class="scene-top"><strong class="r">RIGHT EAR · world B</strong><span class="small" id="hitsR">0 wall hits</span></div><canvas class="chamber" id="canvasR" aria-label="World B: same launch with one particle displaced"></canvas></div>
 <div class="measure"><div class="tile"><span>Elapsed physics time</span><b id="time">0.0 s</b></div><div class="tile"><span>RMS particle separation</span><b id="distance">0.000 mm</b></div><div class="tile"><span>Same-wall hits within ±20 ms</span><b id="matched">0 / 0</b></div></div>
@@ -63,5 +73,43 @@ $('replay').addEventListener('click',restart);
 $('new').addEventListener('click',()=>{seed=(seed+1)>>>0;restart();});
 $('shift').addEventListener('change',e=>{shift=Number(e.target.value);restart();});
 $('feedback').addEventListener('change',e=>{feedback=e.target.value==='on';restart();});
+function addControls(host,definitions){
+  for(const [key,name,min,max,step,unit] of definitions){
+    const label=document.createElement('label'),caption=document.createElement('span');
+    const title=document.createElement('span'),value=document.createElement('output'),input=document.createElement('input');
+    label.className='physics-control';
+    title.textContent=name;
+    input.type='range';input.id='parameter-'+key;
+    input.min=min;input.max=max;input.step=step;input.value=p[key];
+    value.setAttribute('for',input.id);
+    const update=()=>{
+      p[key]=a.p[key]=b.p[key]=Number(input.value);
+      value.value=input.value+(unit?' '+unit:'');
+    };
+    input.addEventListener('input',update);
+    value.value=input.value+(unit?' '+unit:'');
+    caption.append(title,value);
+    label.append(caption,input);
+    host.append(label);
+  }
+}
+addControls($('physics-controls'),[
+  ['stroke','Wall stroke',0,.16,.002,'m'],
+  ['rate','Wall drive speed',1,9,.1,'×'],
+  ['mass','Heavy/light mass',1,40,1,'×'],
+  ['restitution','Collision restitution',.55,.98,.01,''],
+  ['drag','Linear drag',0,.75,.01,'s⁻¹'],
+  ['damping','Sound decay',.05,.5,.01,'s']
+]);
+addControls($('oscillator-controls'),[
+  ['epsilon','Oscillator gain ε',.08,.40,.0001,''],
+  ['lambda','Charge relaxation Λ',.10,.5,.0001,''],
+  ['H','Frequency feedback H',-.12,.12,.00001,''],
+  ['K','Force feedback K',-.5,0,.0001,''],
+  ['C','Position to charge C',-3,-1,.0001,''],
+  ['D','Velocity to charge D',-1.5,0,.0001,''],
+  ['E','Mixed feedback E',-1.2,0,.0001,''],
+  ['G','Charge saturation G',.5,1.6,.0001,'']
+]);
 function frame(now){const d=Math.min(.055,(now-(last||now))/1000);last=now;if(running){remainder+=d;const steps=Math.min(30,Math.floor(remainder/STEP));if(steps>0){if(soundEnabled&&ac?.state==='running'){scheduleOffset=ac.currentTime+.030-(a.time+steps*STEP);}try{for(let i=0;i<steps;i++){advance(a,STEP,onHitA);advance(b,STEP,onHitB);remainder-=STEP;if(a.time-lastPoint>=.18){history.push([a.time,separation(a,b)]);lastPoint=a.time;}}}catch(err){running=false;killQueued();$('status').textContent='Simulation stopped: '+err.message;}}}if(now%250<18)updateStats();draw();requestAnimationFrame(frame);}init();requestAnimationFrame(frame);
 </script></body></html>
