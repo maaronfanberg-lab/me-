@@ -54,15 +54,33 @@ class SocialDecisionTests(unittest.TestCase):
                  "addresses": ["sarah"], "text": "Can you answer?"}
         reply = [{"kind": "reply", "source_event_id": "allen-urgent", "text": "Yes."}]
         task = {"verb": "measure", "object": "plant", "id": "task-1"}
+        # A conversation can interrupt attention without destroying work.
+        original_task = dict(task)
         interrupted = decide("sarah", [event], proposals=reply, active_task=task)
-        self.assertEqual(interrupted.kind, "observe")
-        self.assertEqual(interrupted.reason, "continuing_unfinished_task")
+        self.assertEqual(interrupted.kind, "reply")
         self.assertEqual(interrupted.source_event_id, "allen-urgent")
+        self.assertEqual(task, original_task)
+        self.assertEqual(decide("sarah", [event], active_task=task).kind, "observe")
+        self.assertEqual(decide("sarah", [event], acknowledged=["allen-urgent"],
+                                proposals=reply, active_task=task).kind, "observe")
         resumed = decide("sarah", [event], proposals=reply)
         self.assertEqual((resumed.kind, resumed.source_event_id),
                          ("reply", "allen-urgent"))
         self.assertEqual(decide("sarah", [event], acknowledged=["allen-urgent"],
                                 proposals=reply).kind, "observe")
+
+    def test_busy_agent_cannot_leak_private_message_or_invent_reply(self):
+        task = {"verb": "write", "object": "board", "id": "t"}
+        hidden = {"id": "private", "speaker": "allen", "visibility": "private",
+                  "witnesses": ["allen", "mara"], "addresses": ["owen"]}
+        possible = [{"kind": "reply", "source_event_id": "private", "text": "I heard you."}]
+        self.assertEqual(decide("owen", [hidden], proposals=possible,
+                                active_task=task).kind, "observe")
+        addressed = dict(hidden, visibility="public")
+        self.assertEqual(decide("owen", [addressed], active_task=task).kind, "observe")
+        self.assertEqual(decide("owen", [addressed], proposals=possible,
+                                active_task=task).kind, "reply")
+        self.assertEqual(task, {"verb": "write", "object": "board", "id": "t"})
 
     def test_colliding_event_ids_cannot_authorize_a_reply(self):
         address = {"id": "same", "speaker": "allen", "visibility": "public",
