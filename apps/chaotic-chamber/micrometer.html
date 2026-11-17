@@ -128,30 +128,49 @@ function applyFields(s,dt){
     a.vx=vx*rad;a.vy=vy*rad;
   }
 }
-function recordSensors(s,old,dt,onImpact){
-  const n=s.p.detectorLayers;if(!n)return;
+function detectSegment(crossings,particle,q,x,y,time,duration,layers){
+  const dx=x-q.x;
+  if(!dx)return;
+  for(let layer=0;layer<layers;layer++){
+    const sensorX=.42+(layer+1)*1.47/(layers+1);
+    const fraction=(sensorX-q.x)/dx;
+    // Count a crossing at the end of a segment only once.
+    if(fraction<=0||fraction>1)continue;
+    const sensorY=q.y+fraction*(y-q.y);
+    if(sensorY<R||sensorY>1-R)continue;
+    crossings.push({particle,layer,kind:'detector',location:sensorY,
+      x:sensorX,y:sensorY,impulse:Math.min(2,Math.hypot(q.vx,q.vy)),
+      time:time+fraction*duration});
+  }
+}
+function recordSensors(s,crossings,onImpact){
   const sigma=s.p.scattering;
-  for(let i=0;i<s.particles.length;i++){
-    const q=s.particles[i];
-    for(let layer=0;layer<n;layer++){
-      const x=.42+(layer+1)*1.47/(n+1);
-      if((old[i]-x)*(q.x-x)>0||old[i]===q.x)continue;
-      const frac=clamp((x-old[i])/(q.x-old[i]),0,1);
-      const y=q.y; if(y<R||y>1-R)continue;
-      const v=Math.hypot(q.vx,q.vy);
-      s.detected++;
-      onImpact?.({kind:'detector',location:y,x,y,impulse:Math.min(2,v),time:s.time-dt+frac*dt});
-      if(sigma){
-        const u1=Math.max(1e-9,s.rng()),u2=s.rng();
-        const angle=sigma*Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
-        const ca=Math.cos(angle),sa=Math.sin(angle);
-        const vx=q.vx,vy=q.vy;q.vx=vx*ca-vy*sa;q.vy=vx*sa+vy*ca;
-      }
+  // Apply scattering at the step boundary, in the original particle/layer order.
+  crossings.sort((a,b)=>a.particle-b.particle||a.layer-b.layer||a.time-b.time);
+  for(const {particle,layer,...event} of crossings){
+    s.detected++;
+    onImpact?.(event);
+    if(sigma){
+      const q=s.particles[particle];
+      const u1=Math.max(1e-9,s.rng()),u2=s.rng();
+      const angle=sigma*Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+      const ca=Math.cos(angle),sa=Math.sin(angle);
+      const vx=q.vx,vy=q.vy;
+      q.vx=vx*ca-vy*sa;
+      q.vy=vx*sa+vy*ca;
     }
   }
 }
-function advance(s,dt,onImpact){const p=s.p,particles=s.particles;const old=particles.map(q=>q.x);applyFields(s,dt);s.u=rk4(s.u,dt*p.rate,p,s.feedback);if(s.u.some(v=>!Number.isFinite(v)||Math.abs(v)>50))throw Error('Oscillator left the simulation range');s.stroke+=clamp(p.stroke-s.stroke,-.24*dt,.24*dt);const nextWall=.28+s.stroke*Math.tanh(s.u[0]*.65),wallSpeed=(nextWall-s.wall)/dt,decay=Math.exp(-p.drag*dt/2);let remaining=dt,elapsed=0,impacts=0;for(const a of particles){a.vx*=decay;a.vy*=decay;a.inv=1/a.mass;}function move(t){for(const a of particles){a.x+=a.vx*t;a.y+=a.vy*t;}elapsed+=t;remaining=Math.max(0,remaining-t);}function emit(kind,location,x,y,j){s.impacts++;onImpact?.({kind,location,x,y,impulse:j,time:s.time+elapsed});}
-while(remaining>1e-13&&impacts<LIMIT){let t=remaining+1,a=null,b=null,kind='';const wall=s.wall+wallSpeed*elapsed;function candidate(time,first,second,type){if(time>=-1e-10&&time<=remaining&&time<t){t=Math.max(0,time);a=first;b=second;kind=type;}}for(let i=0;i<particles.length;i++){const q=particles[i];if(q.vx<wallSpeed-1e-13)candidate(Math.max(0,q.x-wall-R)/(wallSpeed-q.vx),q,null,'piston');if(q.vx>1e-13)candidate(Math.max(0,W-R-q.x)/q.vx,q,null,'right');if(q.vy>1e-13)candidate(Math.max(0,1-R-q.y)/q.vy,q,null,'bottom');if(q.vy<-1e-13)candidate(Math.max(0,q.y-R)/(-q.vy),q,null,'top');if(p.pairCollisions)for(let j=i+1;j<particles.length;j++)candidate(pairTime(q,particles[j]),q,particles[j],'pair');}if(!a){move(remaining);break;}move(t);if(b){const x=b.x-a.x,y=b.y-a.y,d=Math.hypot(x,y),nx=x/d,ny=y/d,invSum=a.inv+b.inv,j=-(1+p.restitution)*((b.vx-a.vx)*nx+(b.vy-a.vy)*ny)/invSum;if(d<2*R){const correction=(2*R-d+1e-10)/invSum;a.x-=nx*correction*a.inv;a.y-=ny*correction*a.inv;b.x+=nx*correction*b.inv;b.y+=ny*correction*b.inv;}a.vx-=j*nx*a.inv;a.vy-=j*ny*a.inv;b.vx+=j*nx*b.inv;b.vy+=j*ny*b.inv;emit(kind,(a.x+b.x)/(2*W),(a.x+b.x)/2,(a.y+b.y)/2,j);}else{const horizontal=kind==='piston'||kind==='right',incoming=horizontal?a.vx:a.vy,speed=kind==='piston'?wallSpeed:0,change=(1+p.restitution)*(speed-incoming);if(horizontal){a.vx+=change;a.x=kind==='piston'?s.wall+wallSpeed*elapsed+R:W-R;}else{a.vy+=change;a.y=kind==='top'?R:1-R;}emit(kind,horizontal?a.y:a.x/W,a.x,a.y,Math.abs(change)/a.inv);}impacts++;}if(remaining>1e-13){s.overflow++;throw Error('Collision limit reached. Reduce wall stroke or mass ratio.');}for(const a of particles){a.vx*=decay;a.vy*=decay;}s.wall=nextWall;s.time+=dt;recordSensors(s,old,dt,onImpact);
+function advance(s,dt,onImpact){const p=s.p,particles=s.particles;const layers=p.detectorLayers, crossings=layers?[]:null;applyFields(s,dt);s.u=rk4(s.u,dt*p.rate,p,s.feedback);if(s.u.some(v=>!Number.isFinite(v)||Math.abs(v)>50))throw Error('Oscillator left the simulation range');s.stroke+=clamp(p.stroke-s.stroke,-.24*dt,.24*dt);const nextWall=.28+s.stroke*Math.tanh(s.u[0]*.65),wallSpeed=(nextWall-s.wall)/dt,decay=Math.exp(-p.drag*dt/2);let remaining=dt,elapsed=0,impacts=0;for(const a of particles){a.vx*=decay;a.vy*=decay;a.inv=1/a.mass;}function move(t){
+  for(let i=0;i<particles.length;i++){
+    const q=particles[i],x=q.x+q.vx*t,y=q.y+q.vy*t;
+    if(crossings)detectSegment(crossings,i,q,x,y,s.time+elapsed,t,layers);
+    q.x=x;q.y=y;
+  }
+  elapsed+=t;
+  remaining=Math.max(0,remaining-t);
+}function emit(kind,location,x,y,j){s.impacts++;onImpact?.({kind,location,x,y,impulse:j,time:s.time+elapsed});}
+while(remaining>1e-13&&impacts<LIMIT){let t=remaining+1,a=null,b=null,kind='';const wall=s.wall+wallSpeed*elapsed;function candidate(time,first,second,type){if(time>=-1e-10&&time<=remaining&&time<t){t=Math.max(0,time);a=first;b=second;kind=type;}}for(let i=0;i<particles.length;i++){const q=particles[i];if(q.vx<wallSpeed-1e-13)candidate(Math.max(0,q.x-wall-R)/(wallSpeed-q.vx),q,null,'piston');if(q.vx>1e-13)candidate(Math.max(0,W-R-q.x)/q.vx,q,null,'right');if(q.vy>1e-13)candidate(Math.max(0,1-R-q.y)/q.vy,q,null,'bottom');if(q.vy<-1e-13)candidate(Math.max(0,q.y-R)/(-q.vy),q,null,'top');if(p.pairCollisions)for(let j=i+1;j<particles.length;j++)candidate(pairTime(q,particles[j]),q,particles[j],'pair');}if(!a){move(remaining);break;}move(t);if(b){const x=b.x-a.x,y=b.y-a.y,d=Math.hypot(x,y),nx=x/d,ny=y/d,invSum=a.inv+b.inv,j=-(1+p.restitution)*((b.vx-a.vx)*nx+(b.vy-a.vy)*ny)/invSum;if(d<2*R){const correction=(2*R-d+1e-10)/invSum;a.x-=nx*correction*a.inv;a.y-=ny*correction*a.inv;b.x+=nx*correction*b.inv;b.y+=ny*correction*b.inv;}a.vx-=j*nx*a.inv;a.vy-=j*ny*a.inv;b.vx+=j*nx*b.inv;b.vy+=j*ny*b.inv;emit(kind,(a.x+b.x)/(2*W),(a.x+b.x)/2,(a.y+b.y)/2,j);}else{const horizontal=kind==='piston'||kind==='right',incoming=horizontal?a.vx:a.vy,speed=kind==='piston'?wallSpeed:0,change=(1+p.restitution)*(speed-incoming);if(horizontal){a.vx+=change;a.x=kind==='piston'?s.wall+wallSpeed*elapsed+R:W-R;}else{a.vy+=change;a.y=kind==='top'?R:1-R;}emit(kind,horizontal?a.y:a.x/W,a.x,a.y,Math.abs(change)/a.inv);}impacts++;}if(remaining>1e-13){s.overflow++;throw Error('Collision limit reached. Reduce wall stroke or mass ratio.');}for(const a of particles){a.vx*=decay;a.vy*=decay;}s.wall=nextWall;s.time+=dt;if(crossings)recordSensors(s,crossings,onImpact);
 }
 function separation(a,b){let sum=0;const n=Math.min(a.particles.length,b.particles.length);for(let i=0;i<n;i++){const dx=a.particles[i].x-b.particles[i].x,dy=a.particles[i].y-b.particles[i].y;sum+=dx*dx+dy*dy;}return Math.sqrt(sum/Math.max(1,n));}
 function matchSurfaceEvents(left,right,tolerance=.02){
