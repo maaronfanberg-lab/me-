@@ -48,7 +48,12 @@ def decide(person: str, events: Sequence[Mapping], *,
     """
     if person not in PEOPLE:
         raise ValueError("Unknown Room participant")
-    seen = set(acknowledged)
+    # A colliding ledger ID cannot authenticate a reply opportunity.
+    ids = [event.get("id") for event in events
+           if isinstance(event, Mapping) and isinstance(event.get("id"), str)
+           and event.get("id")]
+    collisions = {event_id for event_id in ids if ids.count(event_id) > 1}
+    seen = set(acknowledged) | collisions
     pending_address_id = None
     for event in reversed(events):
         if not isinstance(event, Mapping) or not visible(event, person):
