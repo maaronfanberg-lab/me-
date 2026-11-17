@@ -101,3 +101,34 @@ def decide(person: str, events: Sequence[Mapping], *,
     if pending_address_id:
         return Decision("observe", "awaiting_grounded_reply", pending_address_id)
     return Decision("observe", "no_grounded_proposal")
+
+
+def decide_from_history(person: str, events: Sequence[Mapping], *,
+                        acknowledged: Sequence[str] = (),
+                        proposals: Sequence[Mapping] = (),
+                        active_task: Mapping | None = None) -> Decision:
+    """Join witnessed conversational bids to a *proposal*, without writing speech.
+
+    The legacy public feed has no explicit visibility or addresses metadata.
+    joint_context identifies genuine vocatives and permissible witnesses.
+    Only absent legacy visibility is public; explicit unknown stays blocked.
+    Raw duplicate IDs remain in the input to decide(), which rejects collisions.
+    Nothing here generates a response or commits a world action.
+    """
+    from room_social_joint_context import joint_context
+
+    bids = {bid["source_id"] for bid in joint_context(events, person)["open_bids"]}
+    eligible = []
+    for event in events:
+        if not isinstance(event, Mapping):
+            continue
+        event_id = event.get("id")
+        if not isinstance(event_id, str) or event_id not in bids:
+            continue
+        normalized = dict(event)
+        if "visibility" not in normalized:
+            normalized["visibility"] = "public"
+        normalized["addresses"] = [person]  # Derived from witnessed bid, not model text.
+        eligible.append(normalized)
+    return decide(person, eligible, acknowledged=acknowledged,
+                  proposals=proposals, active_task=active_task)
