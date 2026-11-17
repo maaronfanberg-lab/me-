@@ -198,7 +198,8 @@ if(typeof module!=='undefined')module.exports={defaults,STEP,W,R,COUNT,launch,ad
 'use strict';
 const $=id=>document.getElementById(id),p={...defaults};
 let seed=418,feedback=true,shift=1e-6,a,b,running=false,hasStarted=false,last=0,remainder=0,history=[],surfaceA=[],surfaceB=[],lastPoint=0;
-let ac=null,mix=null,busL=null,busR=null,soundEnabled=false,tones=new Set();
+let ac=null,mix=null,busL=null,busR=null,soundEnabled=false;
+const tones=[new Set(),new Set()], maxTonesPerChannel=72;
 const impactClock=createStereoClock();
 function createStereoClock(){
   const minimumLead=.006, targetLead=.035, maximumLead=.120;
@@ -221,8 +222,13 @@ function createStereoClock(){
 }
 const modes={piston:[73,148,241,393,631],right:[121,227,364,535,826],top:[184,293,477,702,911],bottom:[98,193,318,482,708],pair:[302,479,751],detector:[420,625,810]};
 function init(){a=launch(seed,p,feedback);b=launch(seed,p,feedback);b.particles[0].x+=shift;history=[[0,separation(a,b)]];lastPoint=0;surfaceA=[];surfaceB=[];remainder=0;last=0;updateStats();draw();}
-function killQueued(){impactClock.reset();if(!ac)return;const now=ac.currentTime;for(const obj of Array.from(tones)){if(obj.at>now){try{obj.osc.stop(now)}catch{}tones.delete(obj);}}}
-function voice(e,pan){if(!soundEnabled||!ac||ac.state!=='running')return;const when=impactClock.at(e.time),arr=modes[e.kind],amp=.18*p.volume*Math.tanh(Math.abs(e.impulse)*p.sensitivity)*(e.kind==='pair'?.55:e.kind==='detector'?.28:1);if(amp<.000025||tones.size>140)return;for(let k=0;k<arr.length;k++){const o=ac.createOscillator(),g=ac.createGain(),shape=Math.sin(Math.PI*(k+1)*(.02+.96*clamp(e.location,0,1))),duration=p.damping/(1+.27*k)*(e.kind==='pair'?.45:1);o.type='sine';o.frequency.value=arr[k];g.gain.setValueAtTime(0,when);g.gain.linearRampToValueAtTime(amp*shape/(1+k*.74),when+.001);g.gain.setTargetAtTime(0,when+.001,duration/5);o.connect(g);g.connect(pan<0?busL:busR);const entry={osc:o,at:when};tones.add(entry);o.onended=()=>{tones.delete(entry);o.disconnect();g.disconnect();};o.start(when);o.stop(when+duration*1.5+.008);}}
+function killQueued(){impactClock.reset();if(!ac)return;const now=ac.currentTime;for(const channel of tones){
+  for(const obj of channel){
+    if(obj.at>now){try{obj.osc.stop(now)}catch{}channel.delete(obj);}
+  }
+}}
+function voice(e,pan){if(!soundEnabled||!ac||ac.state!=='running')return;const when=impactClock.at(e.time),arr=modes[e.kind],amp=.18*p.volume*Math.tanh(Math.abs(e.impulse)*p.sensitivity)*(e.kind==='pair'?.55:e.kind==='detector'?.28:1);const channel=tones[pan<0?0:1];
+if(amp<.000025||channel.size+arr.length>maxTonesPerChannel)return;for(let k=0;k<arr.length;k++){const o=ac.createOscillator(),g=ac.createGain(),shape=Math.sin(Math.PI*(k+1)*(.02+.96*clamp(e.location,0,1))),duration=p.damping/(1+.27*k)*(e.kind==='pair'?.45:1);o.type='sine';o.frequency.value=arr[k];g.gain.setValueAtTime(0,when);g.gain.linearRampToValueAtTime(amp*shape/(1+k*.74),when+.001);g.gain.setTargetAtTime(0,when+.001,duration/5);o.connect(g);g.connect(pan<0?busL:busR);const entry={osc:o,at:when};channel.add(entry);o.onended=()=>{channel.delete(entry);o.disconnect();g.disconnect();};o.start(when);o.stop(when+duration*1.5+.008);}}
 function onHitA(e){if(e.kind!=='pair'&&e.kind!=='detector')surfaceA.push({time:e.time,kind:e.kind});voice(e,-1);}
 function onHitB(e){if(e.kind!=='pair'&&e.kind!=='detector')surfaceB.push({time:e.time,kind:e.kind});voice(e,1);}
 function distanceText(x){if(x<.001)return (x*1e6).toFixed(2)+' µm';if(x<1)return (x*1000).toFixed(2)+' mm';return x.toFixed(3)+' m';}
@@ -245,7 +251,7 @@ function drawPlot(){const canvas=$('plot'),[w,h]=sizeCanvas(canvas);if(!w||!h)re
 function draw(){chamber($('canvasL'),a,['#f6e5b4','#ebb78a']);chamber($('canvasR'),b,['#dffaf4','#85dbca']);drawPlot();}
 function pause(isPaused){running=!isPaused;remainder=0;killQueued();updateStats();$('pause').textContent=isPaused?'Resume':'Pause';$('start').textContent=isPaused?'Hear both worlds':'Playing stereo impacts';$('start').disabled=!isPaused&&soundEnabled;}
 function restart(resume=hasStarted){killQueued();init();running=resume;$('pause').disabled=!hasStarted;$('pause').textContent=running?'Pause':'Resume';$('start').disabled=running&&soundEnabled;$('start').textContent=running&&soundEnabled?'Playing stereo impacts':'Hear both worlds';$('status').textContent=hasStarted?(running?'Relaunched both worlds with matching physics. Listen for their trajectories to separate.':'Both worlds are ready. Tap Resume to continue.'):'Tap Hear both worlds to begin.';}
-function makeAudio(){if(ac&&ac.state!=='closed')return;const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)throw Error('This browser does not support Web Audio.');ac=new Audio();mix=ac.createGain();mix.gain.value=.82;const limiter=ac.createDynamicsCompressor();limiter.threshold.value=-15;limiter.ratio.value=8;const merger=ac.createChannelMerger(2);busL=ac.createGain();busR=ac.createGain();busL.connect(merger,0,0);busR.connect(merger,0,1);merger.connect(mix);mix.connect(limiter);limiter.connect(ac.destination);ac.addEventListener('statechange',()=>{if(soundEnabled&&ac.state!=='running'){$('start').disabled=false;$('start').textContent='Resume sound';$('status').textContent='Audio interrupted. Tap Resume sound.';}});}
+function makeAudio(){if(ac&&ac.state!=='closed')return;const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)throw Error('This browser does not support Web Audio.');ac=new Audio();for(const channel of tones)channel.clear();mix=ac.createGain();mix.gain.value=.82;const limiter=ac.createDynamicsCompressor();limiter.threshold.value=-15;limiter.ratio.value=8;const merger=ac.createChannelMerger(2);busL=ac.createGain();busR=ac.createGain();busL.connect(merger,0,0);busR.connect(merger,0,1);merger.connect(mix);mix.connect(limiter);limiter.connect(ac.destination);ac.addEventListener('statechange',()=>{if(soundEnabled&&ac.state!=='running'){$('start').disabled=false;$('start').textContent='Resume sound';$('status').textContent='Audio interrupted. Tap Resume sound.';}});}
 // This short centered tone is a speaker check, not a simulated collision.
 // Scheduling it before awaiting resume also unlocks Web Audio on stricter mobile browsers.
 function speakerCheck(){const now=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.setValueAtTime(480,now);g.gain.setValueAtTime(0,now);g.gain.linearRampToValueAtTime(.16,now+.012);g.gain.exponentialRampToValueAtTime(.0001,now+.40);o.connect(g);g.connect(mix);o.onended=()=>{o.disconnect();g.disconnect();};o.start(now);o.stop(now+.42);}
