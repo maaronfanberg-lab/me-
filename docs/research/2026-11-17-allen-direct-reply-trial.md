@@ -93,3 +93,44 @@ independently verifiable full sequence demonstrates a real proposal,
 delivered witnessed response, intact unfinished work, referee-confirmed
 consequence, and satisfactory privacy, intentional-silence, and duplicate
 controls with production-safe rollback.
+
+## Independently checked referee provenance: H4
+
+**Defect:** the actual persistent `room_life` referee emitted
+`work_started` and `work_completed` without a shared, independently
+issued causal identifier. The isolated receipt verifier therefore could not
+authenticate an actual transition, even though its hand-built test fixtures
+contained apparently valid provenance. This is the missing causal link, not
+a failure of lexical scoring.
+
+**Pre-registered acceptance tests** were committed *before* the repair
+(`f51ae45aec114fc25fa99a384cb3bdaf717a8433`):
+- A valid, controlled work request gets a referee-issued start event ID.
+- No completion receipt exists at start or before the requisite ticks.
+- Completion carries matching actor, verb, object and start-event ID.
+- A replay of the same cycle never double-applies the task.
+- A legacy task whose original start was not provable still completes
+  normally, but receives no invented causal receipt.
+- All privacy, duplicate, Allen-reply and intentional-quiet suites remain green.
+
+The pre-fix CI run
+https://github.com/maaronfanberg-lab/me-/actions/runs/44080852573
+**failed as expected** with `KeyError: 'source_decision_id'` in the new
+causal test. No production runner was altered.
+
+Repair `79a36ee313e5084f930ddb8e59ffdec2fa10d51a` is limited to
+`scripts/room_life.py` on the isolated branch. The referee now issues an
+identity on accepted `work_started`, records it on the active task, and
+attaches it to a later `work_completed` event **only after verifying the
+matching original start**. It does not trust a model-supplied source ID,
+reset old tasks, or claim that historical completions have provenance.
+
+The repaired
+https://github.com/maaronfanberg-lab/me-/actions/runs/44080969729
+passed **67/67** experimental tests, including both new causal tests.
+An additional upstream-Concordia integration workflow may run separately;
+its result must be verified before claiming integration compatibility.
+
+This is a deterministic referee correctness result, **not a validated
+multi-agent conversation**, and no same-snapshot candidate-versus-production
+LLM rollout is represented as having happened.
