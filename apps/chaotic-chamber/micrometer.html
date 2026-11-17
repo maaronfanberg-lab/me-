@@ -2,65 +2,192 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101717"><title>One Micrometer Apart | Chaotic Chamber</title>
 <style>
 :root{color-scheme:dark;--bg:#101717;--fg:#f2ede5;--mute:#a9bdb8;--border:#405652;--left:#efba89;--right:#8fe0d0}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,sans-serif}main{max-width:850px;margin:auto;padding:20px 14px max(30px,env(safe-area-inset-bottom))}h1{font:normal clamp(33px,6vw,50px)/1.05 Georgia,serif;letter-spacing:-.04em;margin:9px 0 7px}p{margin:6px 0 12px;color:var(--mute)}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.16em;color:var(--mute)}.upper{display:flex;justify-content:space-between;gap:12px;align-items:center}a{color:var(--right);text-underline-offset:3px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}button,select{appearance:none;min-height:44px;font:inherit;background:#1c2927;color:var(--fg);border:1px solid #60746e;border-radius:6px;padding:10px 13px;cursor:pointer}button:focus-visible,select:focus-visible{outline:2px solid var(--left);outline-offset:2px}button.primary{background:var(--left);border-color:var(--left);color:#271b13;font-weight:650}button[disabled]{opacity:.6}label{display:flex;align-items:center;gap:10px;color:var(--mute);flex-wrap:wrap}select{color:var(--fg);padding-right:28px}.settings{display:flex;flex-wrap:wrap;gap:12px 22px;margin:14px 0 12px}.scene{margin:0 0 11px}.scene-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:4px 0}.scene-top strong{font-size:13px;font-weight:650}.scene-top .small{font-variant-numeric:tabular-nums;color:var(--mute);font-size:12px}canvas.chamber{width:100%;aspect-ratio:2.7/1;display:block;background:#142322;border:1px solid var(--border);border-radius:4px}.l{color:var(--left)}.r{color:var(--right)}.measure{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:15px 0 4px}.tile{border-top:1px solid var(--border);padding-top:9px;min-width:0}.tile span{display:block;font-size:12px;color:var(--mute)}.tile b{font-size:clamp(16px,3vw,22px);font-weight:500;word-break:break-word;font-variant-numeric:tabular-nums}.plotWrap{margin:17px 0 10px;border-top:1px solid var(--border);padding-top:12px}.plotTitle{display:flex;justify-content:space-between;color:var(--mute);font-size:12px;margin-bottom:6px;gap:12px}#plot{width:100%;height:155px;display:block}.note{font-size:13px;color:var(--mute)}#status{min-height:20px;color:var(--left)}@media(max-width:520px){canvas.chamber{aspect-ratio:2.05/1}.measure{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:1/-1}main{padding-top:16px}}
-.physics{margin:12px 0 16px;border-block:1px solid var(--border);padding:10px 0}
-.physics summary{cursor:pointer;min-height:34px;color:var(--fg)}.physics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:0 20px}
-.physics-control{display:block;padding:5px 0}.physics-control span{display:flex;justify-content:space-between;gap:8px}.physics-control output{color:var(--left);font-variant-numeric:tabular-nums}
-.physics-control input{display:block;width:100%;margin:0;min-height:32px;accent-color:var(--right)}
-.physics-control input:focus-visible,.physics summary:focus-visible{outline:2px solid var(--left)}
+
+/* Physics lab controls: real-valued inputs that change the integration. */
+.lab-head{border-top:1px solid var(--border);margin-top:17px;padding-top:14px}
+.lab-head h2{font:normal 25px Georgia,serif;margin:4px 0}
+.select-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin:12px 0}
+.select-row label{display:flex;flex-direction:column;align-items:stretch;gap:5px;font-size:13px}
+.select-row select{width:100%}
+.control-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+fieldset.physics{border:1px solid var(--border);border-radius:8px;margin:11px 0 0;padding:0 13px 13px;min-width:0}
+fieldset.physics legend{color:var(--right);padding:0 7px;font-weight:650;letter-spacing:.02em}
+.slider-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(218px,1fr));gap:3px 18px}
+.slider{display:block !important;color:var(--fg);border-bottom:1px solid #30443f;padding:9px 0 7px}
+.slider .control-head{font-size:13px}.slider output{font-variant-numeric:tabular-nums;color:var(--left);font-size:13px}
+.slider input{width:100%;height:32px;display:block;accent-color:var(--right);touch-action:pan-y}
+.hint{font-size:12px;color:var(--mute);margin:7px 0}
+.controls-badge{font-variant-numeric:tabular-nums;color:var(--right)}
+.graph-note{max-width:780px}
+.legend{font-size:12px;color:var(--mute);display:flex;flex-wrap:wrap;gap:13px;padding:6px 0}
+.legend b{font-weight:550}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px}
+@media(max-width:520px){.slider-grid{grid-template-columns:1fr}.lab-head h2{font-size:23px}.select-row{grid-template-columns:1fr 1fr}.select-row label:first-child{grid-column:1/-1}}
+
+.advanced{margin-top:15px;padding-top:6px;border-top:1px solid var(--border)}.advanced h2{font:normal 24px Georgia,serif;margin:10px 0 3px}
+@media(max-width:520px){#scenes{position:sticky;top:0;z-index:4;background:#101717;padding:7px 0 3px;box-shadow:0 8px 13px #0009}#scenes .scene{margin-bottom:5px}#scenes canvas.chamber{aspect-ratio:3.6/1}#scenes .scene-top{margin:0 0 2px}#scenes .scene-top strong,#scenes .small{font-size:11px}}
 </style></head><body><main>
 <div class="upper"><span class="eyebrow">Chaotic Chamber / Experiment 01</span><a href="./">Original chamber</a></div>
 <h1>One Micrometer Apart</h1>
-<p>Two identical 26-particle chambers. One particle moves just 1 µm in the right-hand world. Each ear hears the impacts from its own world. Headphones recommended.</p>
+<p>Two matched particle worlds, one tiny displacement. Explore billiards, charged beams and detector physics. Each ear hears its own simulated impacts and detector crossings. Headphones recommended.</p>
 <div class="toolbar"><button class="primary" id="start">Hear both worlds</button><button id="testSound">Test speakers</button><button id="pause" disabled>Pause</button><button id="replay">Replay same launch</button><button id="new">New launch</button></div>
-<div class="settings"><label>Initial displacement <select id="shift"><option value="0">0 µm (control)</option><option value="0.000001" selected>1 µm</option><option value="0.00001">10 µm</option><option value="0.0001">100 µm</option><option value="0.001">1 mm</option></select></label><label>Charge feedback <select id="feedback"><option value="on" selected>On</option><option value="off">Off</option></select></label></div>
-<details class="physics" open><summary>Physics and sound</summary>
-<p class="note">Sliders affect both worlds as they run. Replay to start both worlds with the current settings.</p>
-<div class="physics-grid" id="physics-controls"></div>
-<details><summary>Oscillator coefficients</summary><div class="physics-grid" id="oscillator-controls"></div></details>
-</details>
-<div class="scene"><div class="scene-top"><strong class="l">LEFT EAR · world A</strong><span class="small" id="hitsL">0 wall hits</span></div><canvas class="chamber" id="canvasL" aria-label="World A: 26 bouncing particles"></canvas></div>
-<div class="scene"><div class="scene-top"><strong class="r">RIGHT EAR · world B</strong><span class="small" id="hitsR">0 wall hits</span></div><canvas class="chamber" id="canvasR" aria-label="World B: same launch with one particle displaced"></canvas></div>
+<section class="lab-head" aria-label="Physics experiment controls">
+<h2>Physics laboratory <span class="controls-badge">30 sliders · 5 selectors</span></h2>
+<div class="select-row">
+<label>Experiment <select id="preset"><option value="billiards">Moving-wall chaos</option><option value="spectrometer">CERN-style magnetic tracker</option><option value="plasma">Electron / positron plasma</option><option value="beams">Counter-propagating beams</option><option value="muons">Electron / muon tracks</option><option value="trap">Charged harmonic trap</option></select></label>
+<label>Particle species <select id="species"><option value="neutral">Neutral disks (classical)</option><option value="pair">Electron − / positron +</option><option value="ep">Electron − / proton +</option><option value="muon">Electron − / muon +</option><option value="protons">Proton + / antiproton −</option></select></label>
+<label>Initial displacement <select id="shift"><option value="0">0 µm (control)</option><option value="0.000001" selected>1 µm</option><option value="0.00001">10 µm</option><option value="0.0001">100 µm</option><option value="0.001">1 mm</option></select></label>
+<label>Oscillator charge feedback <select id="feedback"><option value="on" selected>On</option><option value="off">Off</option></select></label>
+<label>Particle collisions <select id="collisions"><option value="on" selected>Elastic / inelastic disks</option><option value="off">Off: free crossing tracks</option></select></label>
+</div>
+<p class="hint">Select a particle experiment, then adjust the numerical physics while you watch both worlds below.</p>
+</section>
+<div id="scenes" aria-label="Live twin particle chambers"><div class="scene"><div class="scene-top"><strong class="l">LEFT EAR · world A</strong><span class="small" id="hitsL">0 wall · 0 sensor</span></div><canvas class="chamber" id="canvasL" aria-label="World A: 26 bouncing particles"></canvas></div>
+<div class="scene"><div class="scene-top"><strong class="r">RIGHT EAR · world B</strong><span class="small" id="hitsR">0 wall · 0 sensor</span></div><canvas class="chamber" id="canvasR" aria-label="World B: same launch with one particle displaced"></canvas></div>
+</div>
 <div class="measure"><div class="tile"><span>Elapsed physics time</span><b id="time">0.0 s</b></div><div class="tile"><span>RMS particle separation</span><b id="distance">0.000 mm</b></div><div class="tile"><span>Same-wall hits within ±20 ms</span><b id="matched">0 / 0</b></div></div>
 <div class="plotWrap"><div class="plotTitle"><strong>Separation through time (logarithmic scale)</strong><span>Each point calculated from both simulations</span></div><canvas id="plot" aria-label="Chart of particle separation over elapsed time"></canvas></div>
-<p class="note">Both worlds use the original chamber's collision solver, equal starting velocities, oscillator state and wall motion. Only particle 1's horizontal position differs. Physics runs at 240 steps/second; a stereo strike is generated at each computed collision. The hit-match count compares surface impacts on the same wall within 20 milliseconds. It is not a chaos exponent.</p>
+<section class="advanced"><h2>Live physics controls</h2><div id="physicsControls"></div>
+<p class="hint graph-note">Changes to fields, forces, walls and sound act immediately. Species, particle count, initial speed and beam spread relaunch both worlds identically. The difference between the worlds always comes from the displacement you choose.</p>
+<div class="legend"><span><i class="dot" style="background:#e8ae73"></i>negative charge</span><span><i class="dot" style="background:#7de8da"></i>positive charge</span><span><i class="dot" style="background:#c2c8c3"></i>neutral</span><span>lines = detector sensors, not decoration</span></div>
+</section>
+<p class="note">The core is a 2D numerical experiment, not actual LHC collision data or a Geant4 substitute. Charged tracks use the Lorentz law <em>F = q(E + v × B)</em> with a Boris velocity update, optional softened Coulomb forces, harmonic confinement, drag, and collision impulses. Particle charge signs and electron/proton/muon rest-mass ratios are preserved, but electromagnetic strengths are <em>scaled laboratory units</em>, not SI tesla or volts/meter. Hard disks and Gaussian sensor scattering are explicit models, not quantum scattering, annihilation or particle creation. The 240 Hz event-based collision solver approximates the bent path by short straight segments; strong fields increase this numerical error. Separate physical collisions and sensor crossings make distinct sounds. <a href="https://home.cern/science/experiments/how-detector-works/">CERN tracking overview</a> · <a href="https://geant4.web.cern.ch/documentation/dev/bfad_html/ForApplicationDevelopers/Detector/electroMagneticField.html">Geant4 field integration</a>.</p>
 <p id="status" role="status">Tap “Hear both worlds” to begin. Headphone volume low at first.</p>
 </main>
 <script id="engine">
 'use strict';
-const defaults=Object.freeze({stroke:.12,rate:5.5,mass:8,restitution:.90,drag:.14,damping:.22,epsilon:.2611,lambda:.1907,H:.03416,K:-.3156,C:-2.3761,D:-.9267,E:-.7871,G:1.1833});
+const defaults=Object.freeze({stroke:.12,rate:5.5,mass:8,restitution:.90,drag:.14,damping:.22,epsilon:.2611,lambda:.1907,H:.03416,K:-.3156,C:-2.3761,D:-.9267,E:-.7871,G:1.1833,count:26,speed:.30,beamSpread:.16,fieldB:0,fieldEx:0,fieldEy:0,fieldHz:0,coulomb:0,softening:.09,trap:0,radiation:0,detectorLayers:0,scattering:0,trail:38,volume:.8,sensitivity:1.4,pairCollisions:1,beamMode:0,species:"neutral"});
 const STEP=1/240,W=2,R=.032,COUNT=26,LIMIT=140;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function randomFor(seed){let s=seed>>>0;return()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296;};}
 function oscillator(u,p,feedback){const[x,y,z]=u,H=feedback?p.H:0,K=feedback?p.K:0;return[y,p.epsilon*(1-x*x)*y-(1+H*z)*x+K*z,p.C*x+p.D*y-p.lambda*z+p.E*x*z-p.G*z*z*z];}
 function rk4(u,h,p,feedback){const add=(v,k,s)=>v.map((x,i)=>x+s*k[i]),a=oscillator(u,p,feedback),b=oscillator(add(u,a,h/2),p,feedback),c=oscillator(add(u,b,h/2),p,feedback),d=oscillator(add(u,c,h),p,feedback);return u.map((v,i)=>v+h*(a[i]+2*b[i]+2*c[i]+d[i])/6);}
-function launch(seed,p,feedback){const rng=randomFor(seed),particles=[];let u=[.1,0,0];for(let i=0;i<5000;i++)u=rk4(u,.02,p,feedback);if(u.some(v=>!Number.isFinite(v)||Math.abs(v)>50))throw Error('Oscillator left the simulation range');const wall=.28+p.stroke*Math.tanh(u[0]*.65);for(let i=0;i<COUNT;i++){let x,y;do{x=.49+rng()*1.40;y=.095+rng()*.81;}while(particles.some(q=>(q.x-x)**2+(q.y-y)**2<(2*R+.006)**2));const a=rng()*2*Math.PI,speed=.09+rng()*.23,heavy=i%5===0;particles.push({x,y,vx:speed*Math.cos(a),vy:speed*Math.sin(a),heavy,inv:heavy?1/p.mass:1});}return{p:{...p},feedback,u,wall,stroke:p.stroke,particles,time:0,impacts:0,overflow:0};}
-function pairTime(a,b){const x=b.x-a.x,y=b.y-a.y,vx=b.vx-a.vx,vy=b.vy-a.vy,approach=x*vx+y*vy;if(approach>=-1e-13)return Infinity;const v2=vx*vx+vy*vy,c=x*x+y*y-4*R*R;if(c<=0)return 0;const disc=approach*approach-v2*c;return disc>0?c/(-approach+Math.sqrt(disc)):Infinity;}
-function advance(s,dt,onImpact){const p=s.p,particles=s.particles;s.u=rk4(s.u,dt*p.rate,p,s.feedback);if(s.u.some(v=>!Number.isFinite(v)||Math.abs(v)>50))throw Error('Oscillator left the simulation range');s.stroke+=clamp(p.stroke-s.stroke,-.24*dt,.24*dt);const nextWall=.28+s.stroke*Math.tanh(s.u[0]*.65),wallSpeed=(nextWall-s.wall)/dt,decay=Math.exp(-p.drag*dt/2);let remaining=dt,elapsed=0,impacts=0;for(const a of particles){a.vx*=decay;a.vy*=decay;a.inv=a.heavy?1/p.mass:1;}function move(t){for(const a of particles){a.x+=a.vx*t;a.y+=a.vy*t;}elapsed+=t;remaining=Math.max(0,remaining-t);}function emit(kind,location,x,y,j){s.impacts++;onImpact?.({kind,location,x,y,impulse:j,time:s.time+elapsed});}
-while(remaining>1e-13&&impacts<LIMIT){let t=remaining+1,a=null,b=null,kind='';const wall=s.wall+wallSpeed*elapsed;function candidate(time,first,second,type){if(time>=-1e-10&&time<=remaining&&time<t){t=Math.max(0,time);a=first;b=second;kind=type;}}for(let i=0;i<particles.length;i++){const q=particles[i];if(q.vx<wallSpeed-1e-13)candidate(Math.max(0,q.x-wall-R)/(wallSpeed-q.vx),q,null,'piston');if(q.vx>1e-13)candidate(Math.max(0,W-R-q.x)/q.vx,q,null,'right');if(q.vy>1e-13)candidate(Math.max(0,1-R-q.y)/q.vy,q,null,'bottom');if(q.vy<-1e-13)candidate(Math.max(0,q.y-R)/(-q.vy),q,null,'top');for(let j=i+1;j<particles.length;j++)candidate(pairTime(q,particles[j]),q,particles[j],'pair');}if(!a){move(remaining);break;}move(t);if(b){const x=b.x-a.x,y=b.y-a.y,d=Math.hypot(x,y),nx=x/d,ny=y/d,invSum=a.inv+b.inv,j=-(1+p.restitution)*((b.vx-a.vx)*nx+(b.vy-a.vy)*ny)/invSum;if(d<2*R){const correction=(2*R-d+1e-10)/invSum;a.x-=nx*correction*a.inv;a.y-=ny*correction*a.inv;b.x+=nx*correction*b.inv;b.y+=ny*correction*b.inv;}a.vx-=j*nx*a.inv;a.vy-=j*ny*a.inv;b.vx+=j*nx*b.inv;b.vy+=j*ny*b.inv;emit(kind,(a.x+b.x)/(2*W),(a.x+b.x)/2,(a.y+b.y)/2,j);}else{const horizontal=kind==='piston'||kind==='right',incoming=horizontal?a.vx:a.vy,speed=kind==='piston'?wallSpeed:0,change=(1+p.restitution)*(speed-incoming);if(horizontal){a.vx+=change;a.x=kind==='piston'?s.wall+wallSpeed*elapsed+R:W-R;}else{a.vy+=change;a.y=kind==='top'?R:1-R;}emit(kind,horizontal?a.y:a.x/W,a.x,a.y,Math.abs(change)/a.inv);}impacts++;}if(remaining>1e-13){s.overflow++;throw Error('Collision limit reached. Reduce wall stroke or mass ratio.');}for(const a of particles){a.vx*=decay;a.vy*=decay;}s.wall=nextWall;s.time+=dt;
+function speciesAt(species,i,p){
+  if(species==='pair')return i%2?{q:1,m:1}:{q:-1,m:1};
+  if(species==='ep')return i%2?{q:1,m:1836.1527}:{q:-1,m:1};
+  if(species==='muon')return i%2?{q:1,m:206.7683}:{q:-1,m:1};
+  if(species==='protons')return i%2?{q:-1,m:1836.1527}:{q:1,m:1836.1527};
+  return {q:0,m:i%5===0?p.mass:1};
 }
-function separation(a,b){let sum=0;for(let i=0;i<COUNT;i++){const dx=a.particles[i].x-b.particles[i].x,dy=a.particles[i].y-b.particles[i].y;sum+=dx*dx+dy*dy;}return Math.sqrt(sum/COUNT);}
-if(typeof module!=='undefined')module.exports={defaults,STEP,W,R,COUNT,launch,advance,separation};
+function launch(seed,p,feedback){
+  const rng=randomFor(seed),particles=[];let u=[.1,0,0];
+  for(let i=0;i<5000;i++)u=rk4(u,.02,p,feedback);
+  if(u.some(v=>!Number.isFinite(v)||Math.abs(v)>50))throw Error('Oscillator left the simulation range');
+  const wall=.28+p.stroke*Math.tanh(u[0]*.65);
+  const count=p.count||COUNT;
+  for(let i=0;i<count;i++){
+    const side=i%2,beam=Boolean(p.beamMode);
+    let x,y,attempt=0;
+    do{
+      x=beam?(side?1.58+rng()*.25:.55+rng()*.23):.49+rng()*1.40;
+      y=.095+rng()*.81;
+      if(++attempt>10000)throw Error('Too many particles for the chamber. Reduce the count.');
+    }while(particles.some(q=>(q.x-x)**2+(q.y-y)**2<(2*R+.006)**2));
+    const angle=beam?(side?Math.PI:0)+(rng()-.5)*2*p.beamSpread:(rng()*2*Math.PI);
+    const speed=beam?p.speed:(.35+rng()*1.30)*p.speed;
+    const type=speciesAt(p.species,i,p),heavy=type.m>1.01;
+    particles.push({x,y,vx:speed*Math.cos(angle),vy:speed*Math.sin(angle),heavy,inv:1/type.m,mass:type.m,q:type.q,trail:[]});
+  }
+  return{p:{...p},feedback,u,wall,stroke:p.stroke,particles,time:0,impacts:0,overflow:0,rng:randomFor((seed^0x9e3779b9)>>>0),detected:0};
+}
+function pairTime(a,b){const x=b.x-a.x,y=b.y-a.y,vx=b.vx-a.vx,vy=b.vy-a.vy,approach=x*vx+y*vy;if(approach>=-1e-13)return Infinity;const v2=vx*vx+vy*vy,c=x*x+y*y-4*R*R;if(c<=0)return 0;const disc=approach*approach-v2*c;return disc>0?c/(-approach+Math.sqrt(disc)):Infinity;}
+// Lorentz acceleration in scaled laboratory units; species retain their true charge signs and mass ratios.
+// Boris rotation does not spuriously change speed in a pure magnetic field (no other forces).
+function applyFields(s,dt){
+  const p=s.p,particles=s.particles,n=particles.length;
+  const ax=new Float64Array(n),ay=new Float64Array(n);
+  const modulation=p.fieldHz?Math.cos(2*Math.PI*p.fieldHz*s.time):1;
+  for(let i=0;i<n;i++){
+    const a=particles[i];
+    if(p.species==='neutral'){a.mass=a.heavy?p.mass:1; a.inv=1/a.mass;}
+    const qm=a.q/a.mass;
+    ax[i]=qm*p.fieldEx*modulation-p.trap*(a.x-1.14)/a.mass;
+    ay[i]=qm*p.fieldEy*modulation-p.trap*(a.y-.5)/a.mass;
+  }
+  if(p.coulomb>0){
+    const soft2=p.softening*p.softening;
+    for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+      const a=particles[i],b=particles[j];
+      if(a.q===0||b.q===0)continue;
+      const dx=a.x-b.x,dy=a.y-b.y;
+      const r2=dx*dx+dy*dy+soft2;
+      // Force on i proportional to q_i q_j (r_i-r_j), with equal and opposite recoil on j.
+      const f=p.coulomb*a.q*b.q/(r2*Math.sqrt(r2));
+      ax[i]+=f*dx/a.mass;ay[i]+=f*dy/a.mass;
+      ax[j]-=f*dx/b.mass;ay[j]-=f*dy/b.mass;
+    }
+  }
+  for(let i=0;i<n;i++){
+    const a=particles[i],qm=a.q/a.mass,half=dt*.5;
+    let vx=a.vx+half*ax[i],vy=a.vy+half*ay[i];
+    const t=qm*p.fieldB*half,rr=2*t/(1+t*t);
+    const px=vx+vy*t,py=vy-vx*t;
+    vx+=py*rr;vy-=px*rr;
+    vx+=half*ax[i];vy+=half*ay[i];
+    const rad=Math.exp(-p.radiation*dt*qm*qm); // phenomenological charged-track loss, not Larmor radiation
+    a.vx=vx*rad;a.vy=vy*rad;
+  }
+}
+function recordSensors(s,old,dt,onImpact){
+  const n=s.p.detectorLayers;if(!n)return;
+  const sigma=s.p.scattering;
+  for(let i=0;i<s.particles.length;i++){
+    const q=s.particles[i];
+    for(let layer=0;layer<n;layer++){
+      const x=.42+(layer+1)*1.47/(n+1);
+      if((old[i]-x)*(q.x-x)>0||old[i]===q.x)continue;
+      const frac=clamp((x-old[i])/(q.x-old[i]),0,1);
+      const y=q.y; if(y<R||y>1-R)continue;
+      const v=Math.hypot(q.vx,q.vy);
+      s.detected++;
+      onImpact?.({kind:'detector',location:y,x,y,impulse:Math.min(2,v),time:s.time-dt+frac*dt});
+      if(sigma){
+        const u1=Math.max(1e-9,s.rng()),u2=s.rng();
+        const angle=sigma*Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+        const ca=Math.cos(angle),sa=Math.sin(angle);
+        const vx=q.vx,vy=q.vy;q.vx=vx*ca-vy*sa;q.vy=vx*sa+vy*ca;
+      }
+    }
+  }
+}
+function advance(s,dt,onImpact){const p=s.p,particles=s.particles;const old=particles.map(q=>q.x);applyFields(s,dt);s.u=rk4(s.u,dt*p.rate,p,s.feedback);if(s.u.some(v=>!Number.isFinite(v)||Math.abs(v)>50))throw Error('Oscillator left the simulation range');s.stroke+=clamp(p.stroke-s.stroke,-.24*dt,.24*dt);const nextWall=.28+s.stroke*Math.tanh(s.u[0]*.65),wallSpeed=(nextWall-s.wall)/dt,decay=Math.exp(-p.drag*dt/2);let remaining=dt,elapsed=0,impacts=0;for(const a of particles){a.vx*=decay;a.vy*=decay;a.inv=1/a.mass;}function move(t){for(const a of particles){a.x+=a.vx*t;a.y+=a.vy*t;}elapsed+=t;remaining=Math.max(0,remaining-t);}function emit(kind,location,x,y,j){s.impacts++;onImpact?.({kind,location,x,y,impulse:j,time:s.time+elapsed});}
+while(remaining>1e-13&&impacts<LIMIT){let t=remaining+1,a=null,b=null,kind='';const wall=s.wall+wallSpeed*elapsed;function candidate(time,first,second,type){if(time>=-1e-10&&time<=remaining&&time<t){t=Math.max(0,time);a=first;b=second;kind=type;}}for(let i=0;i<particles.length;i++){const q=particles[i];if(q.vx<wallSpeed-1e-13)candidate(Math.max(0,q.x-wall-R)/(wallSpeed-q.vx),q,null,'piston');if(q.vx>1e-13)candidate(Math.max(0,W-R-q.x)/q.vx,q,null,'right');if(q.vy>1e-13)candidate(Math.max(0,1-R-q.y)/q.vy,q,null,'bottom');if(q.vy<-1e-13)candidate(Math.max(0,q.y-R)/(-q.vy),q,null,'top');if(p.pairCollisions)for(let j=i+1;j<particles.length;j++)candidate(pairTime(q,particles[j]),q,particles[j],'pair');}if(!a){move(remaining);break;}move(t);if(b){const x=b.x-a.x,y=b.y-a.y,d=Math.hypot(x,y),nx=x/d,ny=y/d,invSum=a.inv+b.inv,j=-(1+p.restitution)*((b.vx-a.vx)*nx+(b.vy-a.vy)*ny)/invSum;if(d<2*R){const correction=(2*R-d+1e-10)/invSum;a.x-=nx*correction*a.inv;a.y-=ny*correction*a.inv;b.x+=nx*correction*b.inv;b.y+=ny*correction*b.inv;}a.vx-=j*nx*a.inv;a.vy-=j*ny*a.inv;b.vx+=j*nx*b.inv;b.vy+=j*ny*b.inv;emit(kind,(a.x+b.x)/(2*W),(a.x+b.x)/2,(a.y+b.y)/2,j);}else{const horizontal=kind==='piston'||kind==='right',incoming=horizontal?a.vx:a.vy,speed=kind==='piston'?wallSpeed:0,change=(1+p.restitution)*(speed-incoming);if(horizontal){a.vx+=change;a.x=kind==='piston'?s.wall+wallSpeed*elapsed+R:W-R;}else{a.vy+=change;a.y=kind==='top'?R:1-R;}emit(kind,horizontal?a.y:a.x/W,a.x,a.y,Math.abs(change)/a.inv);}impacts++;}if(remaining>1e-13){s.overflow++;throw Error('Collision limit reached. Reduce wall stroke or mass ratio.');}for(const a of particles){a.vx*=decay;a.vy*=decay;}s.wall=nextWall;s.time+=dt;recordSensors(s,old,dt,onImpact);
+}
+function separation(a,b){let sum=0;const n=Math.min(a.particles.length,b.particles.length);for(let i=0;i<n;i++){const dx=a.particles[i].x-b.particles[i].x,dy=a.particles[i].y-b.particles[i].y;sum+=dx*dx+dy*dy;}return Math.sqrt(sum/Math.max(1,n));}
+if(typeof module!=='undefined')module.exports={defaults,STEP,W,R,COUNT,launch,advance,separation,applyFields,speciesAt};
 </script>
 <script>
 'use strict';
 const $=id=>document.getElementById(id),p={...defaults};
 let seed=418,feedback=true,shift=1e-6,a,b,running=false,hasStarted=false,last=0,remainder=0,history=[],surfaceA=[],surfaceB=[],lastPoint=0;
 let ac=null,mix=null,busL=null,busR=null,soundEnabled=false,tones=new Set(),scheduleOffset=0;
-const modes={piston:[73,148,241,393,631],right:[121,227,364,535,826],top:[184,293,477,702,911],bottom:[98,193,318,482,708],pair:[302,479,751]};
+const modes={piston:[73,148,241,393,631],right:[121,227,364,535,826],top:[184,293,477,702,911],bottom:[98,193,318,482,708],pair:[302,479,751],detector:[420,625,810]};
 function init(){a=launch(seed,p,feedback);b=launch(seed,p,feedback);b.particles[0].x+=shift;history=[[0,separation(a,b)]];lastPoint=0;surfaceA=[];surfaceB=[];remainder=0;last=0;updateStats();draw();}
 function killQueued(){if(!ac)return;const now=ac.currentTime;for(const obj of Array.from(tones)){if(obj.at>now){try{obj.osc.stop(now)}catch{}tones.delete(obj);}}}
-function voice(e,pan){if(!soundEnabled||!ac||ac.state!=='running')return;const when=Math.max(ac.currentTime+.006,e.time+scheduleOffset),arr=modes[e.kind],amp=.18*Math.tanh(Math.abs(e.impulse)*1.4)*(e.kind==='pair'?.55:1);if(amp<.000025)return;for(let k=0;k<arr.length;k++){const o=ac.createOscillator(),g=ac.createGain(),shape=Math.sin(Math.PI*(k+1)*(.02+.96*clamp(e.location,0,1))),duration=p.damping/(1+.27*k)*(e.kind==='pair'?.45:1);o.type='sine';o.frequency.value=arr[k];g.gain.setValueAtTime(0,when);g.gain.linearRampToValueAtTime(amp*shape/(1+k*.74),when+.001);g.gain.setTargetAtTime(0,when+.001,duration/5);o.connect(g);g.connect(pan<0?busL:busR);const entry={osc:o,at:when};tones.add(entry);o.onended=()=>{tones.delete(entry);o.disconnect();g.disconnect();};o.start(when);o.stop(when+duration*1.5+.008);}}
-function onHitA(e){if(e.kind!=='pair')surfaceA.push({time:e.time,kind:e.kind});voice(e,-1);}
-function onHitB(e){if(e.kind!=='pair')surfaceB.push({time:e.time,kind:e.kind});voice(e,1);}
+function voice(e,pan){if(!soundEnabled||!ac||ac.state!=='running')return;const when=Math.max(ac.currentTime+.006,e.time+scheduleOffset),arr=modes[e.kind],amp=.18*p.volume*Math.tanh(Math.abs(e.impulse)*p.sensitivity)*(e.kind==='pair'?.55:e.kind==='detector'?.28:1);if(amp<.000025||tones.size>140)return;for(let k=0;k<arr.length;k++){const o=ac.createOscillator(),g=ac.createGain(),shape=Math.sin(Math.PI*(k+1)*(.02+.96*clamp(e.location,0,1))),duration=p.damping/(1+.27*k)*(e.kind==='pair'?.45:1);o.type='sine';o.frequency.value=arr[k];g.gain.setValueAtTime(0,when);g.gain.linearRampToValueAtTime(amp*shape/(1+k*.74),when+.001);g.gain.setTargetAtTime(0,when+.001,duration/5);o.connect(g);g.connect(pan<0?busL:busR);const entry={osc:o,at:when};tones.add(entry);o.onended=()=>{tones.delete(entry);o.disconnect();g.disconnect();};o.start(when);o.stop(when+duration*1.5+.008);}}
+function onHitA(e){if(e.kind!=='pair'&&e.kind!=='detector')surfaceA.push({time:e.time,kind:e.kind});voice(e,-1);}
+function onHitB(e){if(e.kind!=='pair'&&e.kind!=='detector')surfaceB.push({time:e.time,kind:e.kind});voice(e,1);}
 function matches(){let n=0,j=0,match=0;for(const e of surfaceA){while(j<surfaceB.length&&surfaceB[j].time<e.time-.02)j++;if(j<surfaceB.length&&surfaceB[j].kind===e.kind&&Math.abs(surfaceB[j].time-e.time)<=.02){match++;j++;}}return match;}
 function distanceText(x){if(x<.001)return (x*1e6).toFixed(2)+' µm';if(x<1)return (x*1000).toFixed(2)+' mm';return x.toFixed(3)+' m';}
-function updateStats(){$('time').textContent=a.time.toFixed(1)+' s';$('hitsL').textContent=surfaceA.length+' wall hits';$('hitsR').textContent=surfaceB.length+' wall hits';$('distance').textContent=distanceText(separation(a,b));$('matched').textContent=matches()+' / '+Math.max(surfaceA.length,surfaceB.length);}
+function updateStats(){$('time').textContent=a.time.toFixed(1)+' s';$('hitsL').textContent=surfaceA.length+' wall · '+a.detected+' sensor';$('hitsR').textContent=surfaceB.length+' wall · '+b.detected+' sensor';$('distance').textContent=distanceText(separation(a,b));$('matched').textContent=matches()+' / '+Math.max(surfaceA.length,surfaceB.length);}
 function sizeCanvas(c){const rect=c.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1),w=Math.round(rect.width*dpr),h=Math.round(rect.height*dpr);if(c.width!==w||c.height!==h){c.width=w;c.height=h;}return[w,h];}
-function chamber(canvas,s,colors){const[w,h]=sizeCanvas(canvas);if(!w||!h)return;const c=canvas.getContext('2d'),scale=Math.min((w-16)/2.13,(h-12)/1.08),ox=(w-scale*W)/2,oy=(h-scale)/2;c.clearRect(0,0,w,h);c.fillStyle='#10201f';c.fillRect(0,0,w,h);c.setTransform(scale,0,0,scale,ox,oy);c.fillStyle='#1b3030';c.fillRect(s.wall,0,W-s.wall,1);c.strokeStyle='#405954';c.lineWidth=.004;c.strokeRect(s.wall,0,W-s.wall,1);c.fillStyle='#c38b62';c.fillRect(s.wall-.020,0,.020,1);for(let i=0;i<s.particles.length;i++){const q=s.particles[i];c.beginPath();c.arc(q.x,q.y,R,0,2*Math.PI);c.fillStyle=i===0?colors[0]:q.heavy?'#c28b63':colors[1];c.fill();}c.setTransform(1,0,0,1,0,0);}
+function chamber(canvas,s,colors){const[w,h]=sizeCanvas(canvas);if(!w||!h)return;const c=canvas.getContext('2d'),scale=Math.min((w-16)/2.13,(h-12)/1.08),ox=(w-scale*W)/2,oy=(h-scale)/2;c.clearRect(0,0,w,h);c.fillStyle='#10201f';c.fillRect(0,0,w,h);c.setTransform(scale,0,0,scale,ox,oy);c.fillStyle='#1b3030';c.fillRect(s.wall,0,W-s.wall,1);c.strokeStyle='#405954';c.lineWidth=.004;c.strokeRect(s.wall,0,W-s.wall,1);c.fillStyle='#c38b62';c.fillRect(s.wall-.020,0,.020,1);
+for(let layer=0;layer<s.p.detectorLayers;layer++){
+ const x=.42+(layer+1)*1.47/(s.p.detectorLayers+1);
+ c.beginPath();c.moveTo(x,0);c.lineTo(x,1);c.strokeStyle='#92a59d';c.setLineDash([.02,.019]);c.lineWidth=.004;c.stroke();c.setLineDash([]);
+}
+for(let i=0;i<s.particles.length;i++){
+ const q=s.particles[i],color=q.q<0?'#e8ae73':q.q>0?'#7de8da':i===0?colors[0]:'#b5c7be';
+ if(q.trail&&q.trail.length>1){c.beginPath();for(let j=0;j<q.trail.length;j++){
+ const v=q.trail[j];j?c.lineTo(v[0],v[1]):c.moveTo(v[0],v[1]);}
+ c.lineTo(q.x,q.y);c.strokeStyle=color;c.globalAlpha=.42;c.lineWidth=.003;c.stroke();c.globalAlpha=1;}
+ c.beginPath();c.arc(q.x,q.y,R,0,2*Math.PI);c.fillStyle=color;c.fill();
+ if(i===0){c.beginPath();c.arc(q.x,q.y,R*1.35,0,2*Math.PI);c.lineWidth=.003;c.strokeStyle='#ffffff';c.stroke();}
+}c.setTransform(1,0,0,1,0,0);}
 function drawPlot(){const canvas=$('plot'),[w,h]=sizeCanvas(canvas);if(!w||!h)return;const c=canvas.getContext('2d'),left=52,right=w-7,top=8,bottom=h-25,maxT=Math.max(30,a.time),minLog=-8,maxLog=.5;c.clearRect(0,0,w,h);c.fillStyle='#101717';c.fillRect(0,0,w,h);c.font=(12*Math.min(2,devicePixelRatio||1))+'px system-ui';c.textAlign='right';c.textBaseline='middle';c.strokeStyle='#45615c';c.fillStyle='#adbfba';c.lineWidth=1;for(const[x,label]of [[-6,'1 µm'],[-3,'1 mm'],[0,'1 m']]){const y=bottom-(x-minLog)/(maxLog-minLog)*(bottom-top);c.beginPath();c.moveTo(left,y);c.lineTo(right,y);c.stroke();c.fillText(label,left-7,y);}c.textAlign='left';c.fillText('0 s',left,bottom+15);c.textAlign='right';c.fillText(maxT.toFixed(0)+' s',right,bottom+15);c.strokeStyle='#efba89';c.lineWidth=2*Math.min(2,devicePixelRatio||1);c.beginPath();let began=false;for(const[t,dist]of history){const x=left+t/maxT*(right-left),y=bottom-(Math.log10(Math.max(dist,1e-8))-minLog)/(maxLog-minLog)*(bottom-top);if(!began){c.moveTo(x,y);began=true;}else c.lineTo(x,y);}c.stroke();}
 function draw(){chamber($('canvasL'),a,['#f6e5b4','#ebb78a']);chamber($('canvasR'),b,['#dffaf4','#85dbca']);drawPlot();}
 function pause(isPaused){running=!isPaused;remainder=0;killQueued();updateStats();$('pause').textContent=isPaused?'Resume':'Pause';$('start').textContent=isPaused?'Hear both worlds':'Playing stereo impacts';$('start').disabled=!isPaused&&soundEnabled;}
-function restart(){killQueued();init();running=hasStarted;$('pause').disabled=!hasStarted;$('pause').textContent='Pause';$('start').disabled=hasStarted&&soundEnabled;$('start').textContent=soundEnabled?'Playing stereo impacts':'Hear both worlds';$('status').textContent=hasStarted?'Same physics, new trajectories. Listen for the first disagreement.':'Tap “Hear both worlds” to begin.';}
+function restart(){killQueued();init();running=hasStarted;$('pause').disabled=!hasStarted;$('pause').textContent='Pause';$('start').disabled=hasStarted&&soundEnabled;$('start').textContent=soundEnabled?'Playing stereo impacts':'Hear both worlds';$('status').textContent=hasStarted?'Relaunched both worlds with matching physics. Listen for their trajectories to separate.':'Tap Hear both worlds to begin.';}
 function makeAudio(){if(ac&&ac.state!=='closed')return;const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)throw Error('This browser does not support Web Audio.');ac=new Audio();mix=ac.createGain();mix.gain.value=.82;const limiter=ac.createDynamicsCompressor();limiter.threshold.value=-15;limiter.ratio.value=8;const merger=ac.createChannelMerger(2);busL=ac.createGain();busR=ac.createGain();busL.connect(merger,0,0);busR.connect(merger,0,1);merger.connect(mix);mix.connect(limiter);limiter.connect(ac.destination);ac.addEventListener('statechange',()=>{if(soundEnabled&&ac.state!=='running'){$('start').disabled=false;$('start').textContent='Resume sound';$('status').textContent='Audio interrupted. Tap Resume sound.';}});}
 // This short centered tone is a speaker check, not a simulated collision.
 // Scheduling it before awaiting resume also unlocks Web Audio on stricter mobile browsers.
@@ -73,43 +200,96 @@ $('replay').addEventListener('click',restart);
 $('new').addEventListener('click',()=>{seed=(seed+1)>>>0;restart();});
 $('shift').addEventListener('change',e=>{shift=Number(e.target.value);restart();});
 $('feedback').addEventListener('change',e=>{feedback=e.target.value==='on';restart();});
-function addControls(host,definitions){
-  for(const [key,name,min,max,step,unit] of definitions){
-    const label=document.createElement('label'),caption=document.createElement('span');
-    const title=document.createElement('span'),value=document.createElement('output'),input=document.createElement('input');
-    label.className='physics-control';
-    title.textContent=name;
-    input.type='range';input.id='parameter-'+key;
-    input.min=min;input.max=max;input.step=step;input.value=p[key];
-    value.setAttribute('for',input.id);
-    const update=()=>{
-      p[key]=a.p[key]=b.p[key]=Number(input.value);
-      value.value=input.value+(unit?' '+unit:'');
-    };
-    input.addEventListener('input',update);
-    value.value=input.value+(unit?' '+unit:'');
-    caption.append(title,value);
-    label.append(caption,input);
-    host.append(label);
-  }
-}
-addControls($('physics-controls'),[
-  ['stroke','Wall stroke',0,.16,.002,'m'],
-  ['rate','Wall drive speed',1,9,.1,'×'],
-  ['mass','Heavy/light mass',1,40,1,'×'],
-  ['restitution','Collision restitution',.55,.98,.01,''],
+
+// Presets are reproducible starting points, not different sound recordings.
+const presets={
+ billiards:{species:'neutral',count:26,speed:.30,stroke:.12,fieldB:0,fieldEx:0,fieldEy:0,coulomb:0,trap:0,detectorLayers:0,beamMode:0,scattering:0,pairCollisions:1},
+ spectrometer:{species:'ep',count:26,speed:.55,stroke:0,drag:.012,fieldB:6,fieldEx:.04,fieldEy:0,coulomb:0,trap:0,detectorLayers:4,beamMode:0,scattering:.01,pairCollisions:0},
+ plasma:{species:'pair',count:32,speed:.26,stroke:.02,drag:.03,fieldB:2.8,fieldEx:0,fieldEy:.05,coulomb:.004,softening:.12,trap:0,detectorLayers:2,beamMode:0,scattering:0,pairCollisions:1},
+ beams:{species:'pair',count:28,speed:.56,stroke:0,drag:.007,fieldB:.15,fieldEx:0,fieldEy:0,coulomb:.002,softening:.10,trap:0,detectorLayers:3,beamMode:1,beamSpread:.10,scattering:0,pairCollisions:1},
+ muons:{species:'muon',count:26,speed:.50,stroke:0,drag:.01,fieldB:7,fieldEx:.05,fieldEy:.05,coulomb:0,trap:0,detectorLayers:4,beamMode:0,scattering:.014,pairCollisions:0},
+ trap:{species:'pair',count:22,speed:.30,stroke:0,drag:.01,fieldB:4,fieldEx:.06,fieldEy:0,coulomb:.001,trap:.3,detectorLayers:2,beamMode:0,scattering:0,pairCollisions:0}
+};
+const labGroups=[
+ ['Magnetic & electric fields','Lorentz force, scaled units; positive and negative tracks bend oppositely.',[
+  ['fieldB','Axial magnetic field B',-12,12,.1,'field units'],
+  ['fieldEx','Horizontal electric field Eₓ',-.8,.8,.01,'field units'],
+  ['fieldEy','Vertical electric field Eᵧ',-.8,.8,.01,'field units'],
+  ['fieldHz','Electric-field oscillation',0,12,.1,'Hz'],
+  ['coulomb','Coulomb coupling κ',0,.02,.0001,'scaled'],
+  ['softening','Charge softening length',.045,.4,.005,'m'],
+  ['trap','Harmonic trap stiffness',0,2,.02,'s⁻²'],
+  ['radiation','Radiation-like damping',0,.6,.01,'s⁻¹']
+ ]],
+ ['Particle initial conditions','Relauch both worlds to change starting configuration.',[
+  ['count','Particle count',8,52,1,'particles'],
+  ['speed','Launch speed',.05,1,.01,'m/s'],
+  ['beamSpread','Beam angular spread',0,1.4,.01,'rad']
+ ]],
+ ['Walls, material & oscillator','Disk collision mechanics and the original plasma-oscillator-driven wall.',[
+  ['stroke','Moving-wall stroke',0,.16,.002,'m'],
+  ['rate','Oscillator speed multiplier',1,9,.1,'×'],
+  ['mass','Neutral heavy/light mass',1,40,1,'×'],
+  ['restitution','Disk restitution',.45,1,.01,''],
   ['drag','Linear drag',0,.75,.01,'s⁻¹'],
-  ['damping','Sound decay',.05,.5,.01,'s']
-]);
-addControls($('oscillator-controls'),[
   ['epsilon','Oscillator gain ε',.08,.40,.0001,''],
-  ['lambda','Charge relaxation Λ',.10,.5,.0001,''],
+  ['lambda','Charge relaxation λ',.10,.5,.0001,''],
   ['H','Frequency feedback H',-.12,.12,.00001,''],
   ['K','Force feedback K',-.5,0,.0001,''],
-  ['C','Position to charge C',-3,-1,.0001,''],
-  ['D','Velocity to charge D',-1.5,0,.0001,''],
+  ['C','Position-charge coupling C',-3,-1,.0001,''],
+  ['D','Velocity-charge coupling D',-1.5,0,.0001,''],
   ['E','Mixed feedback E',-1.2,0,.0001,''],
   ['G','Charge saturation G',.5,1.6,.0001,'']
-]);
-function frame(now){const d=Math.min(.055,(now-(last||now))/1000);last=now;if(running){remainder+=d;const steps=Math.min(30,Math.floor(remainder/STEP));if(steps>0){if(soundEnabled&&ac?.state==='running'){scheduleOffset=ac.currentTime+.030-(a.time+steps*STEP);}try{for(let i=0;i<steps;i++){advance(a,STEP,onHitA);advance(b,STEP,onHitB);remainder-=STEP;if(a.time-lastPoint>=.18){history.push([a.time,separation(a,b)]);lastPoint=a.time;}}}catch(err){running=false;killQueued();$('status').textContent='Simulation stopped: '+err.message;}}}if(now%250<18)updateStats();draw();requestAnimationFrame(frame);}init();requestAnimationFrame(frame);
+ ]],
+ ['Detector & sound','Detector sensors sound only when a particle crosses them.',[
+  ['detectorLayers','Sensor planes',0,5,1,''],
+  ['scattering','Sensor scattering RMS',0,.20,.005,'rad'],
+  ['trail','Track length',0,120,1,'points'],
+  ['damping','Resonance decay',.05,.7,.01,'s'],
+  ['volume','Collision audio level',.05,1.8,.05,'×'],
+  ['sensitivity','Impact sensitivity',.2,5,.1,'×']
+ ]]
+];
+const sliders={};
+function labFormat(key,n,unit){
+ const digits=['epsilon','H','K','lambda','C','D','E','G','coulomb','softening','scattering'].includes(key)?4:Math.abs(n)<1?3:2;
+ return Number(n).toFixed(digits).replace(/\.?0+$/,'')+(unit?' '+unit:'');
+}
+function makeLab(){
+ const host=$('physicsControls');
+ labGroups.forEach(([title,hint,controls],idx)=>{
+  const field=document.createElement('fieldset');field.className='physics';
+  const legend=document.createElement('legend');legend.textContent=title;field.append(legend);
+  const para=document.createElement('p');para.className='hint';para.textContent=hint;field.append(para);
+  const grid=document.createElement('div');grid.className='slider-grid';
+  for(const[key,name,min,max,step,unit]of controls){
+   const label=document.createElement('label');label.className='slider';
+   const header=document.createElement('span');header.className='control-head';
+   const labelText=document.createElement('span');labelText.textContent=name;
+   const output=document.createElement('output');
+   const input=document.createElement('input');input.type='range';input.min=min;input.max=max;input.step=step;input.value=p[key];
+   input.id='lab-'+key;output.htmlFor=input.id;output.value=labFormat(key,p[key],unit);
+   input.addEventListener('input',()=>{
+    p[key]=Number(input.value);output.value=labFormat(key,p[key],unit);
+    if(['count','speed','beamSpread','mass'].includes(key)){restart();}
+    else{
+      if(a&&b){a.p[key]=b.p[key]=p[key];}
+      if(key==='trail'&&a&&b){for(const s of[a,b])for(const q of s.particles)q.trail=q.trail.slice(-p.trail);}
+      $('status').textContent=name+' = '+output.value+' · applied to both worlds';
+    }
+   });
+   header.append(labelText,output);label.append(header,input);grid.append(label);
+   sliders[key]={input,output,unit};
+  }
+  field.append(grid);host.append(field);
+ });
+}
+function syncLab(){for(const[k,o]of Object.entries(sliders)){o.input.value=p[k];o.output.value=labFormat(k,p[k],o.unit);} $('species').value=p.species;$('collisions').value=p.pairCollisions?'on':'off';}
+function setPreset(name){Object.assign(p,{...defaults},presets[name]);syncLab();restart();$('status').textContent='Loaded '+$('preset').selectedOptions[0].textContent+' · each slider controls the numerical physics.';}
+makeLab();
+Object.assign(p,presets.spectrometer);$('preset').value='spectrometer';syncLab();
+$('preset').addEventListener('change',e=>setPreset(e.target.value));
+$('species').addEventListener('change',e=>{p.species=e.target.value;restart();});
+$('collisions').addEventListener('change',e=>{p.pairCollisions=e.target.value==='on'?1:0;a.p.pairCollisions=b.p.pairCollisions=p.pairCollisions;restart();});
+function frame(now){const d=Math.min(.055,(now-(last||now))/1000);last=now;if(running){remainder+=d;const steps=Math.min(30,Math.floor(remainder/STEP));if(steps>0){if(soundEnabled&&ac?.state==='running'){scheduleOffset=ac.currentTime+.030-(a.time+steps*STEP);}try{for(let i=0;i<steps;i++){advance(a,STEP,onHitA);advance(b,STEP,onHitB);remainder-=STEP;if(i%8===0){for(const s of [a,b])for(const q of s.particles){q.trail.push([q.x,q.y]);if(q.trail.length>p.trail)q.trail.splice(0,q.trail.length-p.trail);}}if(a.time-lastPoint>=.18){history.push([a.time,separation(a,b)]);if(history.length>2200)history=history.filter((_,j)=>j%2===0);lastPoint=a.time;}}}catch(err){running=false;killQueued();$('status').textContent='Simulation stopped: '+err.message;}}}if(now%250<18)updateStats();draw();requestAnimationFrame(frame);}init();requestAnimationFrame(frame);
 </script></body></html>
