@@ -176,8 +176,9 @@ function createImpactClock() {
       lastStrike = simTime + offset;
       return lastStrike;
     },
-    reset() {
+    reset(discardScheduled = false) {
       offset = null;
+      if (discardScheduled) lastStrike = -Infinity;
     }
   };
 }
@@ -202,6 +203,7 @@ let seed=418, feedback=false, state=launch(seed,settings,feedback), running=true
 let remainder=0,last=0, previousMeter=0, effects=[], tracks=Array.from({length:COUNT},()=>[]);
 let audioContext, master, audioEnabled=false;
 const impactClock=createImpactClock();
+const strikeStarts=new Map();
 const modes={
   piston:[73,148,241,393,631,1009],right:[121,227,364,535,826,1201],
   top:[184,293,477,702,911],bottom:[98,193,318,482,708],pair:[302,479,751]
@@ -219,8 +221,24 @@ function strike(ac,destination,event,when,damping) {
     gain.gain.linearRampToValueAtTime(amp*shape/(1+k*.74),when+.001);
     gain.gain.setTargetAtTime(0,when+.001,duration/5);
     tone.start(when);tone.stop(when+duration*1.5+.008);
-    tone.onended=()=>{gain.disconnect();tone.disconnect();};
+    strikeStarts.set(tone,when);
+    tone.onended=()=>{
+      strikeStarts.delete(tone);
+      gain.disconnect();tone.disconnect();
+    };
   }
+}
+function cancelQueuedStrikes() {
+  if(audioContext&&audioContext.state!=='closed'){
+    const now=audioContext.currentTime;
+    for(const [tone,start] of strikeStarts){
+      if(start>now){
+        tone.stop(now);
+        strikeStarts.delete(tone);
+      }
+    }
+  }
+  impactClock.reset(true);
 }
 function strikeLive(e) {
   if(e.kind!=='pair' || e.impulse>.10) {
@@ -246,7 +264,7 @@ function controls(items,host){
 }
 controls(mainControls,byId('controls'));controls(coefficients,byId('coefficients'));
 function playState(value){
-  running=value;remainder=0;impactClock.reset();
+  running=value;remainder=0;cancelQueuedStrikes();
   byId('play').textContent=value?'Pause motion':'Resume motion';byId('play').setAttribute('aria-pressed',String(value));
 }
 function replay(){
@@ -290,6 +308,7 @@ byId('sound').onclick=async()=>{
   try{
     if(audioEnabled&&audioContext?.state==='running'){
       audioEnabled=false;
+      cancelQueuedStrikes();
       master.gain.setTargetAtTime(0,audioContext.currentTime,.02);
     }else{
       if(!audioContext||audioContext.state==='closed'){
@@ -303,7 +322,12 @@ byId('sound').onclick=async()=>{
         const context=audioContext;
         context.addEventListener('statechange',()=>{
           if(context!==audioContext)return;
-          impactClock.reset();
+          if(context.state==='closed'){
+            strikeStarts.clear();
+            impactClock.reset(true);
+          }else{
+            impactClock.reset();
+          }
           updateSoundButton();
         });
       }
