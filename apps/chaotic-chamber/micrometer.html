@@ -244,7 +244,7 @@ for(let i=0;i<s.particles.length;i++){
 function drawPlot(){const canvas=$('plot'),[w,h]=sizeCanvas(canvas);if(!w||!h)return;const c=canvas.getContext('2d'),left=52,right=w-7,top=8,bottom=h-25,maxT=Math.max(30,a.time),minLog=-8,maxLog=.5;c.clearRect(0,0,w,h);c.fillStyle='#101717';c.fillRect(0,0,w,h);c.font=(12*Math.min(2,devicePixelRatio||1))+'px system-ui';c.textAlign='right';c.textBaseline='middle';c.strokeStyle='#45615c';c.fillStyle='#adbfba';c.lineWidth=1;for(const[x,label]of [[-6,'1 µm'],[-3,'1 mm'],[0,'1 m']]){const y=bottom-(x-minLog)/(maxLog-minLog)*(bottom-top);c.beginPath();c.moveTo(left,y);c.lineTo(right,y);c.stroke();c.fillText(label,left-7,y);}c.textAlign='left';c.fillText('0 s',left,bottom+15);c.textAlign='right';c.fillText(maxT.toFixed(0)+' s',right,bottom+15);c.strokeStyle='#efba89';c.lineWidth=2*Math.min(2,devicePixelRatio||1);c.beginPath();let began=false;for(const[t,dist]of history){const x=left+t/maxT*(right-left),y=bottom-(Math.log10(Math.max(dist,1e-8))-minLog)/(maxLog-minLog)*(bottom-top);if(!began){c.moveTo(x,y);began=true;}else c.lineTo(x,y);}c.stroke();}
 function draw(){chamber($('canvasL'),a,['#f6e5b4','#ebb78a']);chamber($('canvasR'),b,['#dffaf4','#85dbca']);drawPlot();}
 function pause(isPaused){running=!isPaused;remainder=0;killQueued();updateStats();$('pause').textContent=isPaused?'Resume':'Pause';$('start').textContent=isPaused?'Hear both worlds':'Playing stereo impacts';$('start').disabled=!isPaused&&soundEnabled;}
-function restart(){killQueued();init();running=hasStarted;$('pause').disabled=!hasStarted;$('pause').textContent='Pause';$('start').disabled=hasStarted&&soundEnabled;$('start').textContent=soundEnabled?'Playing stereo impacts':'Hear both worlds';$('status').textContent=hasStarted?'Relaunched both worlds with matching physics. Listen for their trajectories to separate.':'Tap Hear both worlds to begin.';}
+function restart(resume=hasStarted){killQueued();init();running=resume;$('pause').disabled=!hasStarted;$('pause').textContent=running?'Pause':'Resume';$('start').disabled=running&&soundEnabled;$('start').textContent=running&&soundEnabled?'Playing stereo impacts':'Hear both worlds';$('status').textContent=hasStarted?(running?'Relaunched both worlds with matching physics. Listen for their trajectories to separate.':'Both worlds are ready. Tap Resume to continue.'):'Tap Hear both worlds to begin.';}
 function makeAudio(){if(ac&&ac.state!=='closed')return;const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)throw Error('This browser does not support Web Audio.');ac=new Audio();mix=ac.createGain();mix.gain.value=.82;const limiter=ac.createDynamicsCompressor();limiter.threshold.value=-15;limiter.ratio.value=8;const merger=ac.createChannelMerger(2);busL=ac.createGain();busR=ac.createGain();busL.connect(merger,0,0);busR.connect(merger,0,1);merger.connect(mix);mix.connect(limiter);limiter.connect(ac.destination);ac.addEventListener('statechange',()=>{if(soundEnabled&&ac.state!=='running'){$('start').disabled=false;$('start').textContent='Resume sound';$('status').textContent='Audio interrupted. Tap Resume sound.';}});}
 // This short centered tone is a speaker check, not a simulated collision.
 // Scheduling it before awaiting resume also unlocks Web Audio on stricter mobile browsers.
@@ -253,7 +253,7 @@ async function wakeAudio(){makeAudio();speakerCheck();await Promise.race([ac.res
 $('testSound').addEventListener('click',async()=>{const button=$('testSound');button.disabled=true;try{await wakeAudio();$('status').textContent='Test tone sent to your audio output. Collision sounds use the same output.';}catch(e){$('status').textContent=e.message;}finally{button.disabled=false;}});
 $('start').addEventListener('click',async()=>{const button=$('start');button.disabled=true;try{await wakeAudio();soundEnabled=true;hasStarted=true;running=true;$('pause').disabled=false;$('pause').textContent='Pause';button.textContent='Playing stereo impacts';$('status').textContent='Audio started with a short test tone. Now each actual collision produces a stereo strike.';}catch(e){soundEnabled=false;hasStarted=true;running=true;$('pause').disabled=false;$('status').textContent=e.message+' Simulation continues without sound.';button.disabled=false;button.textContent='Retry sound';}});
 $('pause').addEventListener('click',()=>{pause(running);if(!running)$('status').textContent='Paused. Resume to continue the same physical trajectory.';});
-$('replay').addEventListener('click',restart);
+$('replay').addEventListener('click',()=>restart());
 $('new').addEventListener('click',()=>{seed=(seed+1)>>>0;restart();});
 $('shift').addEventListener('change',e=>{shift=Number(e.target.value);restart();});
 $('feedback').addEventListener('change',e=>{feedback=e.target.value==='on';restart();});
@@ -278,7 +278,7 @@ const labGroups=[
   ['trap','Harmonic trap stiffness',0,2,.02,'s⁻²'],
   ['radiation','Radiation-like damping',0,.6,.01,'s⁻¹']
  ]],
- ['Particle initial conditions','Relauch both worlds to change starting configuration.',[
+ ['Particle initial conditions','Release a slider to relaunch both worlds with the new starting conditions.',[
   ['count','Particle count',8,52,1,'particles'],
   ['speed','Launch speed',.05,1,.01,'m/s'],
   ['beamSpread','Beam angular spread',0,1.4,.01,'rad']
@@ -326,14 +326,21 @@ function makeLab(){
    const output=document.createElement('output');
    const input=document.createElement('input');input.type='range';input.min=min;input.max=max;input.step=step;input.value=p[key];
    input.id='lab-'+key;output.htmlFor=input.id;output.value=labFormat(key,p[key],unit);
+   const changesLaunch=['count','speed','beamSpread'].includes(key);
    input.addEventListener('input',()=>{
-    p[key]=Number(input.value);output.value=labFormat(key,p[key],unit);
-    if(['count','speed','beamSpread','mass'].includes(key)){restart();}
-    else{
-      if(a&&b){a.p[key]=b.p[key]=p[key];}
-      if(key==='trail'&&a&&b){for(const s of[a,b])for(const q of s.particles)q.trail=q.trail.slice(-p.trail);}
-      $('status').textContent=name+' = '+output.value+' · applied to both worlds';
-    }
+    const value=Number(input.value);
+    output.value=labFormat(key,value,unit);
+    if(changesLaunch)return;
+    p[key]=value;
+    if(a&&b){a.p[key]=b.p[key]=value;}
+    if(key==='trail'&&a&&b){for(const s of[a,b])for(const q of s.particles)q.trail=q.trail.slice(-p.trail);}
+    $('status').textContent=name+' = '+output.value+' · applied to both worlds';
+   });
+   if(changesLaunch)input.addEventListener('change',()=>{
+    const value=Number(input.value);
+    if(value===p[key])return;
+    p[key]=value;
+    restart(running);
    });
    header.append(labelText,output);label.append(header,input);grid.append(label);
    sliders[key]={input,output,unit};
