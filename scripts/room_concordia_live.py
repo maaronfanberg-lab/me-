@@ -161,7 +161,7 @@ def _social_context(conversation: list, person: str) -> str:
         "response optional, no invented progress):"
     ]
     for bid in directed:
-        quote = str(bid.get("text") or "").replace("\\r", " ").replace("\\n", " ")[:300]
+        quote = str(bid.get("text") or "").replace("\r", " ").replace("\n", " ")[:300]
         lines.append(
             "Allen directly addressed you; source_event_id="
             + str(bid["source_id"])[:100] + "; words=" + json.dumps(quote, ensure_ascii=False)
@@ -170,7 +170,7 @@ def _social_context(conversation: list, person: str) -> str:
         "You may answer, decline truthfully, or continue independent work. "
         "Never claim the request was fulfilled unless the referee verified it."
     )
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
@@ -199,7 +199,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         # without conflating it with trusted referee-generated world effects.
         if pending:
             world_contexts[who] = (
-                physical[:max(0, 2998 - len(pending))] + "\\n\\n" + pending
+                physical[:max(0, 2998 - len(pending))] + "\n\n" + pending
             )
         else:
             world_contexts[who] = physical
