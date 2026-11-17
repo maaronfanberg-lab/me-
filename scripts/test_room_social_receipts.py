@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 import unittest
+import json
+import sys
+import types
+from unittest.mock import patch
+import room_life
 from room_social_receipts import verify_work_receipt, witnessed_receipt
 
 
@@ -65,6 +70,70 @@ class ReceiptTests(unittest.TestCase):
         self.assertTrue(witnessed_receipt(receipt, event, "owen"))
         self.assertFalse(witnessed_receipt(receipt, event, "sarah"))
         self.assertFalse(witnessed_receipt(receipt, dict(event, id="other"), "owen"))
+
+    @staticmethod
+    def _deterministic_parser():
+        # Exercise room_life's actual referee transitions without installing
+        # or invoking the production Concordia engine.
+        root = types.ModuleType("concordia")
+        root.__path__ = []
+        components = types.ModuleType("concordia.components")
+        components.__path__ = []
+        gm = types.ModuleType("concordia.components.game_master")
+        gm.__path__ = []
+        gm.interrupt_response_parsing = types.SimpleNamespace(
+            extract_json_block=lambda raw: ("", json.loads(raw)))
+        return patch.dict(sys.modules, {
+            "concordia": root, "concordia.components": components,
+            "concordia.components.game_master": gm,
+        })
+
+    def test_referee_issued_work_start_proves_later_completion(self):
+        config = {"p": {}}
+        world = room_life.initial(config, 10)
+        instruction = json.dumps({"mask": [], "timer": {},
+                                  "work": {"verb": "inspect", "object": "plant"}})
+        steps = [{"actions": {"Owen": instruction}}]
+        with self._deterministic_parser():
+            room_life.advance(world, config, 10, steps)
+            started = [e for e in world["events"] if e["kind"] == "work_started"]
+            self.assertEqual(len(started), 1)
+            source_id = started[0]["id"]
+            self.assertIsNone(verify_work_receipt(
+                "owen", source_id, "inspect", "plant", 10, world["events"]))
+            self.assertEqual(world["lives"]["owen"]["task"]["source_decision_id"],
+                             source_id)
+            room_life.advance(world, config, 11, [])
+            self.assertIsNone(verify_work_receipt(
+                "owen", source_id, "inspect", "plant", 10, world["events"]))
+            room_life.advance(world, config, 12, [])
+            finished = [e for e in world["events"] if e["kind"] == "work_completed"]
+            self.assertEqual(len(finished), 1)
+            self.assertEqual(finished[0]["source_decision_id"], source_id)
+            self.assertEqual((finished[0]["verb"], finished[0]["object"]),
+                             ("inspect", "plant"))
+            receipt = verify_work_receipt(
+                "owen", source_id, "inspect", "plant", 10, world["events"])
+            self.assertEqual(receipt["event_id"], finished[0]["id"])
+            self.assertTrue(witnessed_receipt(receipt, finished[0], "mara"))
+            room_life.advance(world, config, 12, steps)  # Replayed commit.
+            self.assertEqual(len([e for e in world["events"]
+                                  if e["kind"] == "work_completed"]), 1)
+
+    def test_legacy_task_completion_without_start_receipt_stays_unverified(self):
+        config = {"p": {}}
+        world = room_life.initial(config, 10)
+        world["lives"]["owen"]["task"] = {
+            "verb": "inspect", "object": "plant", "duration": 2,
+            "progress": 1, "started_cycle": 9,
+        }
+        with self._deterministic_parser():
+            room_life.advance(world, config, 10, [])
+        self.assertEqual(len(world["events"]), 1)
+        self.assertEqual(world["events"][0]["kind"], "work_completed")
+        self.assertNotIn("source_decision_id", world["events"][0])
+        self.assertIsNone(verify_work_receipt(
+            "owen", "legacy-unknown", "inspect", "plant", 9, world["events"]))
 
     def test_invalid_requests_fail(self):
         with self.assertRaises(ValueError):
