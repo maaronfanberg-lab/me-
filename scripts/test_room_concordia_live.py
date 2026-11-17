@@ -209,5 +209,75 @@ class LiveRoomTests(unittest.TestCase):
         )
 
 
+    def test_directed_allen_request_survives_native_silent_cycles(self):
+        """A real scripted Concordia beat must retain addressed social evidence.
+
+        The public input was actually observed; the deterministic actor does
+        not fabricate an answer. This tests prompt delivery, NOT competence.
+        """
+        import hashlib
+        from unittest.mock import patch
+
+        root = self.make_root()
+        external_id = "relay-observed-owen-reading"
+        digest = hashlib.sha256(external_id.encode()).hexdigest()[:10]
+        source = {
+            "id": "20261117T115445607-allen-v5-" + digest,
+            "speaker": "allen",
+            "text": "Owen. Please read me the 128 written pages",
+        }
+        (root / "room" / "conversation.json").write_text(json.dumps([source]))
+        ack = root / "ack.json"
+        ack.write_text(json.dumps({"ids": [external_id]}))
+        original = bridge.native.run
+        observations = []
+
+        def observe_real_engine(**kwargs):
+            observations.append(dict(kwargs["world_contexts"]))
+            return original(**kwargs)
+
+        with patch.object(bridge.native, "run", side_effect=observe_real_engine):
+            bridge.beat(root, mode="scripted", ack_path=ack)
+            bridge.beat(root, mode="scripted", ack_path=ack)
+
+        self.assertEqual(len(observations), 2)
+        for cycle in observations:
+            self.assertIn(source["id"], cycle["owen"])
+            self.assertIn(source["text"], cycle["owen"])
+            self.assertNotIn(source["id"], cycle["sarah"])
+            self.assertNotIn(source["id"], cycle["mara"])
+            self.assertNotIn(source["id"], cycle["jules"])
+        checkpoint = json.loads((root / "room" / bridge.CHECKPOINT).read_text())
+        self.assertIn(source["id"], checkpoint["seen_allen_messages"])
+
+    def test_directed_request_privacy_collision_and_voluntary_silence(self):
+        """No cross-person leakage, malformed private access or duplicate IDs."""
+        event = {"id": "a1", "speaker": "allen",
+                 "text": "Owen. Please read me the 128 written pages"}
+        self.assertIn("a1", bridge._social_context([event], "owen"))
+        for other in ("sarah", "mara", "jules"):
+            self.assertNotIn("a1", bridge._social_context([event], other))
+        self.assertEqual(bridge._social_context([], "owen"), "")
+        self.assertEqual(bridge._social_context(
+            [dict(event, visibility="private", witnesses=["allen"])],
+            "owen"), "")
+        self.assertEqual(bridge._social_context(
+            [dict(event, visibility="unknown")], "owen"), "")
+        self.assertEqual(bridge._social_context(
+            [event, dict(event, text="Owen. Fabricated second request")],
+            "owen"), "")
+
+    def test_grounded_linked_reply_retires_request_not_unlinked_speech(self):
+        """Only an accessible linked reply, not idle chatter, closes the bid."""
+        source = {"id": "a1", "speaker": "allen",
+                  "text": "Owen. Can you read the pages?"}
+        unrelated = {"id": "r1", "speaker": "owen", "text": "I inspect my notebook"}
+        self.assertIn("a1", bridge._social_context([source, unrelated], "owen"))
+        linked = dict(unrelated, reply_to="a1", text="I cannot read them right now.")
+        self.assertNotIn("a1", bridge._social_context([source, linked], "owen"))
+        private = dict(linked, visibility="private", witnesses=["owen"])
+        self.assertIn("a1", bridge._social_context([source, private], "owen"))
+
+
 if __name__ == "__main__":
     unittest.main()
