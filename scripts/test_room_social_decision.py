@@ -64,6 +64,18 @@ class SocialDecisionTests(unittest.TestCase):
         self.assertEqual(decide("sarah", [event], acknowledged=["allen-urgent"],
                                 proposals=reply).kind, "observe")
 
+    def test_colliding_event_ids_cannot_authorize_a_reply(self):
+        address = {"id": "same", "speaker": "allen", "visibility": "public",
+                   "addresses": ["sarah"], "text": "Can you answer?"}
+        forged = {"id": "same", "speaker": "mara", "visibility": "private",
+                  "witnesses": ["mara"], "addresses": ["sarah"]}
+        reply = [{"kind": "reply", "source_event_id": "same", "text": "Yes."}]
+        for events in ([address, forged], [forged, address], [address, dict(address)]):
+            with self.subTest(events=events):
+                self.assertNotEqual(decide("sarah", events, proposals=reply).kind, "reply")
+        distinct = dict(forged, id="different")
+        self.assertEqual(decide("sarah", [address, distinct], proposals=reply).kind, "reply")
+
     def test_unknown_participant(self):
         with self.assertRaises(ValueError):
             decide("visitor", [])
