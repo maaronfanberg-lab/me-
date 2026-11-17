@@ -160,11 +160,31 @@ if(typeof module!=='undefined')module.exports={defaults,STEP,W,R,COUNT,launch,ad
 'use strict';
 const $=id=>document.getElementById(id),p={...defaults};
 let seed=418,feedback=true,shift=1e-6,a,b,running=false,hasStarted=false,last=0,remainder=0,history=[],surfaceA=[],surfaceB=[],lastPoint=0;
-let ac=null,mix=null,busL=null,busR=null,soundEnabled=false,tones=new Set(),scheduleOffset=0;
+let ac=null,mix=null,busL=null,busR=null,soundEnabled=false,tones=new Set();
+const impactClock=createStereoClock();
+function createStereoClock(){
+  const minimumLead=.006, targetLead=.035, maximumLead=.120;
+  let offset=null, latest=-Infinity;
+  return {
+    begin(now,start,end){
+      // Shift the complete stereo batch when it arrives late.
+      if(offset===null||start+offset<now+minimumLead||end+offset>now+maximumLead){
+        offset=Math.max(now+minimumLead-start,now+targetLead-end,latest-start);
+      }
+    },
+    at(time){
+      const when=time+offset;
+      // A right-channel callback can precede a left-channel event in simulation time.
+      latest=Math.max(latest,when);
+      return when;
+    },
+    reset(){offset=null;latest=-Infinity;}
+  };
+}
 const modes={piston:[73,148,241,393,631],right:[121,227,364,535,826],top:[184,293,477,702,911],bottom:[98,193,318,482,708],pair:[302,479,751],detector:[420,625,810]};
 function init(){a=launch(seed,p,feedback);b=launch(seed,p,feedback);b.particles[0].x+=shift;history=[[0,separation(a,b)]];lastPoint=0;surfaceA=[];surfaceB=[];remainder=0;last=0;updateStats();draw();}
-function killQueued(){if(!ac)return;const now=ac.currentTime;for(const obj of Array.from(tones)){if(obj.at>now){try{obj.osc.stop(now)}catch{}tones.delete(obj);}}}
-function voice(e,pan){if(!soundEnabled||!ac||ac.state!=='running')return;const when=Math.max(ac.currentTime+.006,e.time+scheduleOffset),arr=modes[e.kind],amp=.18*p.volume*Math.tanh(Math.abs(e.impulse)*p.sensitivity)*(e.kind==='pair'?.55:e.kind==='detector'?.28:1);if(amp<.000025||tones.size>140)return;for(let k=0;k<arr.length;k++){const o=ac.createOscillator(),g=ac.createGain(),shape=Math.sin(Math.PI*(k+1)*(.02+.96*clamp(e.location,0,1))),duration=p.damping/(1+.27*k)*(e.kind==='pair'?.45:1);o.type='sine';o.frequency.value=arr[k];g.gain.setValueAtTime(0,when);g.gain.linearRampToValueAtTime(amp*shape/(1+k*.74),when+.001);g.gain.setTargetAtTime(0,when+.001,duration/5);o.connect(g);g.connect(pan<0?busL:busR);const entry={osc:o,at:when};tones.add(entry);o.onended=()=>{tones.delete(entry);o.disconnect();g.disconnect();};o.start(when);o.stop(when+duration*1.5+.008);}}
+function killQueued(){impactClock.reset();if(!ac)return;const now=ac.currentTime;for(const obj of Array.from(tones)){if(obj.at>now){try{obj.osc.stop(now)}catch{}tones.delete(obj);}}}
+function voice(e,pan){if(!soundEnabled||!ac||ac.state!=='running')return;const when=impactClock.at(e.time),arr=modes[e.kind],amp=.18*p.volume*Math.tanh(Math.abs(e.impulse)*p.sensitivity)*(e.kind==='pair'?.55:e.kind==='detector'?.28:1);if(amp<.000025||tones.size>140)return;for(let k=0;k<arr.length;k++){const o=ac.createOscillator(),g=ac.createGain(),shape=Math.sin(Math.PI*(k+1)*(.02+.96*clamp(e.location,0,1))),duration=p.damping/(1+.27*k)*(e.kind==='pair'?.45:1);o.type='sine';o.frequency.value=arr[k];g.gain.setValueAtTime(0,when);g.gain.linearRampToValueAtTime(amp*shape/(1+k*.74),when+.001);g.gain.setTargetAtTime(0,when+.001,duration/5);o.connect(g);g.connect(pan<0?busL:busR);const entry={osc:o,at:when};tones.add(entry);o.onended=()=>{tones.delete(entry);o.disconnect();g.disconnect();};o.start(when);o.stop(when+duration*1.5+.008);}}
 function onHitA(e){if(e.kind!=='pair'&&e.kind!=='detector')surfaceA.push({time:e.time,kind:e.kind});voice(e,-1);}
 function onHitB(e){if(e.kind!=='pair'&&e.kind!=='detector')surfaceB.push({time:e.time,kind:e.kind});voice(e,1);}
 function matches(){let n=0,j=0,match=0;for(const e of surfaceA){while(j<surfaceB.length&&surfaceB[j].time<e.time-.02)j++;if(j<surfaceB.length&&surfaceB[j].kind===e.kind&&Math.abs(surfaceB[j].time-e.time)<=.02){match++;j++;}}return match;}
@@ -291,5 +311,5 @@ Object.assign(p,presets.spectrometer);$('preset').value='spectrometer';syncLab()
 $('preset').addEventListener('change',e=>setPreset(e.target.value));
 $('species').addEventListener('change',e=>{p.species=e.target.value;restart();});
 $('collisions').addEventListener('change',e=>{p.pairCollisions=e.target.value==='on'?1:0;a.p.pairCollisions=b.p.pairCollisions=p.pairCollisions;restart();});
-function frame(now){const d=Math.min(.055,(now-(last||now))/1000);last=now;if(running){remainder+=d;const steps=Math.min(30,Math.floor(remainder/STEP));if(steps>0){if(soundEnabled&&ac?.state==='running'){scheduleOffset=ac.currentTime+.030-(a.time+steps*STEP);}try{for(let i=0;i<steps;i++){advance(a,STEP,onHitA);advance(b,STEP,onHitB);remainder-=STEP;if(i%8===0){for(const s of [a,b])for(const q of s.particles){q.trail.push([q.x,q.y]);if(q.trail.length>p.trail)q.trail.splice(0,q.trail.length-p.trail);}}if(a.time-lastPoint>=.18){history.push([a.time,separation(a,b)]);if(history.length>2200)history=history.filter((_,j)=>j%2===0);lastPoint=a.time;}}}catch(err){running=false;killQueued();$('status').textContent='Simulation stopped: '+err.message;}}}if(now%250<18)updateStats();draw();requestAnimationFrame(frame);}init();requestAnimationFrame(frame);
+function frame(now){const d=Math.min(.055,(now-(last||now))/1000);last=now;if(running){remainder+=d;const steps=Math.min(30,Math.floor(remainder/STEP));if(steps>0){if(soundEnabled&&ac?.state==='running'){impactClock.begin(ac.currentTime,a.time,a.time+steps*STEP);}try{for(let i=0;i<steps;i++){advance(a,STEP,onHitA);advance(b,STEP,onHitB);remainder-=STEP;if(i%8===0){for(const s of [a,b])for(const q of s.particles){q.trail.push([q.x,q.y]);if(q.trail.length>p.trail)q.trail.splice(0,q.trail.length-p.trail);}}if(a.time-lastPoint>=.18){history.push([a.time,separation(a,b)]);if(history.length>2200)history=history.filter((_,j)=>j%2===0);lastPoint=a.time;}}}catch(err){running=false;killQueued();$('status').textContent='Simulation stopped: '+err.message;}}}if(now%250<18)updateStats();draw();requestAnimationFrame(frame);}init();requestAnimationFrame(frame);
 </script></body></html>
