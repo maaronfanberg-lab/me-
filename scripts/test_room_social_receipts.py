@@ -116,6 +116,11 @@ class ReceiptTests(unittest.TestCase):
                 "owen", source_id, "inspect", "plant", 10, world["events"])
             self.assertEqual(receipt["event_id"], finished[0]["id"])
             self.assertTrue(witnessed_receipt(receipt, finished[0], "mara"))
+            # The consequence is independently retrievable by a different
+            # character as witnessed evidence, not a fabricated utterance.
+            mara_memories = room_life.retrieve(world, "mara", "plant", limit=4)
+            self.assertIn(finished[0]["id"], [m["id"] for m in mara_memories])
+            self.assertIn(finished[0]["id"], room_life.context(world, "mara"))
             room_life.advance(world, config, 12, steps)  # Replayed commit.
             self.assertEqual(len([e for e in world["events"]
                                   if e["kind"] == "work_completed"]), 1)
