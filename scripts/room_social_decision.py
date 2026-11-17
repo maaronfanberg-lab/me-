@@ -52,7 +52,12 @@ def decide(person: str, events: Sequence[Mapping], *,
     ids = [event.get("id") for event in events
            if isinstance(event, Mapping) and isinstance(event.get("id"), str)
            and event.get("id")]
-    collisions = {event_id for event_id in ids if ids.count(event_id) > 1}
+    unique_ids = set()
+    collisions = set()
+    for event_id in ids:
+        if event_id in unique_ids:
+            collisions.add(event_id)
+        unique_ids.add(event_id)
     seen = set(acknowledged) | collisions
     pending_address_id = None
     for event in reversed(events):
