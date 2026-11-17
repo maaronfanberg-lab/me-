@@ -122,6 +122,26 @@ class RoomSocialTrialTests(unittest.TestCase):
         r["dialogue"][1]["id"] = "distinct-turn"
         self.assertNotIn("duplicate_published_turn_id", inspect_trace(r)["hard_failures"])
 
+    def test_malformed_allen_provenance_cannot_inflate_reply_metrics(self):
+        for patch in ({"visibility": "unknown"},
+                      {"visibility": None},
+                      {"addresses": []},
+                      {"addresses": ["not_a_character"]},
+                      {"visibility": "private", "witnesses": "sarah"}):
+            r = fixture()
+            msg = {"id": "a1", "speaker": "allen", "visibility": "public",
+                   "addresses": ["sarah"]}
+            msg.update(patch)
+            r["allen_inputs"] = [msg]
+            r["replies"] = [{"source_event_id": "a1", "actor": "sarah"}]
+            r["dialogue"] = [{"id": "t1", "speaker": "sarah",
+                              "text": "Acknowledged", "source_event_id": "a1"}]
+            with self.subTest(patch=patch):
+                outcome = inspect_trace(r)
+                self.assertIn("invalid_allen_input_provenance", outcome["hard_failures"])
+                self.assertEqual(outcome["metrics"]["accepted_allen_inputs"], 0)
+                self.assertEqual(outcome["metrics"]["grounded_allen_replies"], 0)
+
     def test_no_allen_inputs_is_unobserved_not_ignored(self):
         self.assertEqual(inspect_trace(fixture())["metrics"]["accepted_allen_inputs"], 0)
         self.assertEqual(inspect_trace(fixture())["metrics"]["grounded_allen_replies"], 0)
