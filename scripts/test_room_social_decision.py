@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import unittest
-from room_social_decision import decide, visible
+from room_social_decision import decide, decide_from_history, visible
 
 
 class SocialDecisionTests(unittest.TestCase):
@@ -93,6 +93,42 @@ class SocialDecisionTests(unittest.TestCase):
                 self.assertNotEqual(decide("sarah", events, proposals=reply).kind, "reply")
         distinct = dict(forged, id="different")
         self.assertEqual(decide("sarah", [address, distinct], proposals=reply).kind, "reply")
+
+    def test_live_legacy_allen_request_reaches_owen_without_losing_task(self):
+        # Recorded wording from the public production feed; no model answer is invented.
+        event_id = "20261117T115445607-allen-v5-d05d69466d"
+        live = {"id": event_id, "speaker": "allen",
+                "text": "Owen. Please read me the 128 written pages"}
+        proposal = [{"kind": "reply", "source_event_id": event_id,
+                     "text": "I can discuss the recorded pages."}]
+        task = {"id": "t", "verb": "measure", "object": "plant"}
+        self.assertEqual(decide_from_history("owen", [live]).kind, "observe")
+        result = decide_from_history("owen", [live], proposals=proposal, active_task=task)
+        self.assertEqual((result.kind, result.source_event_id), ("reply", event_id))
+        self.assertEqual(task, {"id": "t", "verb": "measure", "object": "plant"})
+        self.assertEqual(decide_from_history("owen", [live],
+                         acknowledged=[event_id], proposals=proposal).kind, "observe")
+        self.assertEqual(decide_from_history("mara", [live],
+                         proposals=proposal).kind, "observe")
+
+    def test_history_bridge_private_duplicate_and_quiet_controls(self):
+        event = {"id": "private-bid", "speaker": "mara",
+                 "text": "Sarah. Did you check the plant?", "visibility": "private",
+                 "witnesses": ["mara", "sarah"]}
+        reply = [{"kind": "reply", "source_event_id": "private-bid",
+                  "text": "I checked the leaves."}]
+        self.assertEqual(decide_from_history("sarah", [event], proposals=reply).kind,
+                         "reply")
+        self.assertEqual(decide_from_history("owen", [event], proposals=reply).kind,
+                         "observe")
+        unknown = dict(event, visibility="unknown")
+        self.assertEqual(decide_from_history("sarah", [unknown],
+                         proposals=reply).kind, "observe")
+        # A colliding source cannot be accepted even if one copy is witnessed.
+        collision = dict(event, speaker="allen", visibility="public")
+        self.assertEqual(decide_from_history("sarah", [event, collision],
+                         proposals=reply).kind, "observe")
+        self.assertEqual(decide_from_history("jules", []).kind, "observe")
 
     def test_unknown_participant(self):
         with self.assertRaises(ValueError):
