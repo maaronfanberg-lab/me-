@@ -264,13 +264,35 @@ byId('feedback').onclick=()=>{
   byId('feedback').setAttribute('aria-pressed',String(feedback));
   byId('feedback').textContent=feedback?'Charge feedback on':'Charge feedback off';
 };
+function updateSoundButton(){
+  const button=byId('sound');
+  const audible=audioEnabled&&audioContext?.state==='running';
+  button.setAttribute('aria-pressed',String(audible));
+  button.textContent=audible?'Mute sound':audioEnabled?'Resume sound':'Enable sound';
+}
+async function resumeSound(context){
+  let timer;
+  try{
+    await Promise.race([
+      context.resume(),
+      new Promise((_,reject)=>{
+        timer=setTimeout(()=>reject(Error('Sound did not resume. Tap the sound button to retry.')),1500);
+      })
+    ]);
+    if(context.state!=='running')throw Error('Sound is paused by the browser. Tap the sound button to retry.');
+  }finally{
+    clearTimeout(timer);
+  }
+}
 byId('sound').onclick=async()=>{
   const button=byId('sound');
   button.disabled=true;
   try{
-    if(audioEnabled){audioEnabled=false;master.gain.setTargetAtTime(0,audioContext.currentTime,.02);}
-    else{
-      if(!audioContext){
+    if(audioEnabled&&audioContext?.state==='running'){
+      audioEnabled=false;
+      master.gain.setTargetAtTime(0,audioContext.currentTime,.02);
+    }else{
+      if(!audioContext||audioContext.state==='closed'){
         const Audio=window.AudioContext||window.webkitAudioContext;
         if(!Audio)throw Error('Web Audio is unavailable in this browser.');
         audioContext=new Audio();
@@ -278,16 +300,24 @@ byId('sound').onclick=async()=>{
         limiter.threshold.value=-14;limiter.ratio.value=8;
         master=audioContext.createGain();master.gain.value=0;
         master.connect(limiter);limiter.connect(audioContext.destination);
+        const context=audioContext;
+        context.addEventListener('statechange',()=>{
+          if(context!==audioContext)return;
+          impactClock.reset();
+          updateSoundButton();
+        });
       }
-      await audioContext.resume();
-      if(audioContext.state!=='running')throw Error('Sound is suspended. Try the sound button again.');
-      audioEnabled=true;master.gain.setTargetAtTime(.68,audioContext.currentTime,.02);
+      await resumeSound(audioContext);
+      audioEnabled=true;
+      master.gain.setTargetAtTime(.68,audioContext.currentTime,.02);
       byId('notice').textContent='';
     }
     impactClock.reset();
-    button.setAttribute('aria-pressed',String(audioEnabled));button.textContent=audioEnabled?'Mute sound':'Enable sound';
   }catch(e){byId('notice').textContent=e.message;}
-  finally{button.disabled=false;}
+  finally{
+    updateSoundButton();
+    button.disabled=false;
+  }
 };
 function immersive(on){
   stage.classList.toggle('immersive',on);document.body.classList.toggle('immersive',on);
