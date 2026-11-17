@@ -16,6 +16,20 @@ class SocialJointContextTests(unittest.TestCase):
         self.assertEqual(sarah["open_bids"][0]["kind"], "question")
         self.assertEqual(joint_context(events, "owen")["open_bids"], [])
 
+    def test_live_period_vocative_routes_allen_request_to_owen_only(self):
+        # An actual live Room input begins "Owen." rather than "Owen,".
+        event = {"id": "allen-observed", "speaker": "allen",
+                 "text": "Owen. Please read me the 128 written pages"}
+        self.assertEqual([x["source_id"] for x in
+                          joint_context([event], "owen")["open_bids"]],
+                         ["allen-observed"])
+        for other in ("sarah", "mara", "jules"):
+            self.assertEqual(joint_context([event], other)["open_bids"], [])
+        # Ordinary third-person mentions are not directed requests.
+        unrelated = {"id": "mention", "speaker": "mara",
+                     "text": "Owen's notebook is beside the plant."}
+        self.assertEqual(joint_context([unrelated], "owen")["open_bids"], [])
+
     def test_explicit_addressee_and_no_forced_response(self):
         events = [{"id": "q", "speaker": "owen", "text": "What happened?",
                    "to": "jules"}]
