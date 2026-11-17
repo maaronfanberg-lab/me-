@@ -44,7 +44,8 @@ def decide(person: str, events: Sequence[Mapping], *,
     Priority: explicitly addressed *unanswered* witnessed message; then an
     independently proposed and valid work choice; otherwise quiet observation.
     A pending address alone does not create a fabricated reply. Never replay
-    an acknowledged event or interrupt existing work.
+    an acknowledged event or overwrite unfinished work. A grounded reply may
+    coexist with an active task; no new work is started while occupied.
     """
     if person not in PEOPLE:
         raise ValueError("Unknown Room participant")
@@ -78,8 +79,10 @@ def decide(person: str, events: Sequence[Mapping], *,
                         proposal.get("source_event_id") == event_id and
                         isinstance(proposal.get("text"), str) and
                         proposal["text"].strip()):
-                    if not active_task:
-                        return Decision("reply", "grounded_unanswered_address", event_id)
+                    # Speaking does not cancel or overwrite existing physical work.
+                    # A grounded reply is allowed while an unfinished task persists;
+                    # the world referee, not this pure decision gate, advances work.
+                    return Decision("reply", "grounded_unanswered_address", event_id)
             # Preserve the unanswered address without blocking valid independent work.
             pending_address_id = event_id
             break
