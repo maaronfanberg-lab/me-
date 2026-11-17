@@ -134,3 +134,78 @@ its result must be verified before claiming integration compatibility.
 This is a deterministic referee correctness result, **not a validated
 multi-agent conversation**, and no same-snapshot candidate-versus-production
 LLM rollout is represented as having happened.
+
+
+## Actual native beat input-boundary experiment (2026-11-17 23:26–23:34 UTC)
+
+This is a new mechanism, NOT a repetition of the earlier reply-policy or
+vocative-regex fixes. Those gates recognized the directed Allen bid but were
+not connected to the native Concordia decision context. The live adapter's
+`seen_allen_messages` transport checkpoint was updated after delivering a
+one-time interrupt, regardless of subsequent publication. This creates a
+specific opportunity for a silent interval to consume a request without any
+durable, agent-visible *unanswered* request at the next decision.
+
+Pinned observational snapshot (read before code edits):
+- live `room/feed.json` blob `a05402980ea4dcbab53da5021ad3d927009a9aeb`
+- live `room/state.json` blob `53b35ea5b4cf6fa7945e631abfd480f4669860b2`
+- cycle 71240, generated 2026-11-17 23:26:51 UTC; 13 silent cycles,
+  scheduler zero queued events; directed Allen request from 11:54:45
+  remains in the 160-entry public feed without a demonstrable response
+- current production job 134283437990 was `in_progress` when sampled;
+  no restart or competing runner was initiated.
+
+**Falsifiable hypothesis:** A request reaches the one-time transport but
+is absent from the future per-agent context after a silent beat. Fixing that
+context gap should preserve Owen's original witnessed text and ID across two
+real scripted native-engine beats even after `seen_allen_messages` contains
+the ID. It must not reach Sarah/Mara/Jules, and duplicate IDs, unknown/private
+visibility, unlinked talk and unauthorized private replies must not create a
+false resolution. Quiet decisions remain valid; no reply is scripted.
+
+**Pre-fix test commit:** `226d874a`. Native CI
+https://github.com/maaronfanberg-lab/me-/actions/runs/44200153332
+**failed as expected**: 12 `test_room_concordia_live` tests; 1
+assertion failure showed the actual Owen decision context lacked the
+accepted Allen ID and message, and 2 errors exposed the deliberately
+absent pending-social-context method. The upstream native-engine core
+nine-test suite still passed. This is a genuine red integration result.
+
+**Narrow isolated implementation:** `c3d7e695` modifies
+`scripts/room_concordia_live.py` to compute independently witnessed,
+unresolved *direct* Allen bids from existing public conversation through
+`room_social_joint_context.joint_context`, exclude colliding IDs, and
+include a clearly tagged nonbinding source-ID-bearing social section in
+only that addressee's actual native decision context. The physical
+world section retains its independent provenance. The context is
+reconstructed each beat without marking it fulfilled when the transport
+marks it seen. No character is forced to speak and no claim of reading
+the pages is authored. `8c406dc0` corrects formatting of section
+separators and literal newline handling.
+
+**Green verification:** Native Concordia integration CI
+https://github.com/maaronfanberg-lab/me-/actions/runs/44200260596
+passed after the targeted implementation: all 12 bridge tests, including
+the two-beat real engine test and negative controls, as well as the
+nine-test upstream-native engine suite and other world-life regression
+suites. Experimental relationship-centered CI
+https://github.com/maaronfanberg-lab/me-/actions/runs/44200260615
+passed. The latter results are before the formatting-only commit;
+recheck CI at the latest head before considering further work.
+
+**Measured improvement:** accepted previously one-shot Allen request
+is present in Owen's context on both scripted beats, while absent from
+the other characters' contexts. A genuine published Owen response,
+completed reading, 160-turn same-model replay, blinded comparative
+social review, and durable commitment after the conversation retention
+window have **NOT** been verified. This is an engineering input-boundary
+repair, not a proven improvement in social intelligence. Do not merge
+or cut over on these tests alone.
+
+Research interpretation: Park et al. *Generative Agents* motivates
+keeping autobiographical evidence retrievable over multiple decisions;
+SOTOPIA shows that attention-path correctness is not equivalent to
+social competence. The six Karpathy engineering sources in
+`docs/room-karpathy-source-map.md` motivate fixed evidence and
+independent red/green verification, not replacing character memory
+with a global prompt or automatically promoting the candidate.
