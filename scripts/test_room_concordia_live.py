@@ -279,5 +279,61 @@ class LiveRoomTests(unittest.TestCase):
         self.assertIn("a1", bridge._social_context([source, private], "owen"))
 
 
+    def test_unanswered_direct_request_survives_feed_eviction_and_restart(self):
+        """An addressed witnessed request cannot vanish with the rolling feed."""
+        from unittest.mock import patch
+        root = self.make_root()
+        request = {"id": "allen-old-128-pages", "speaker": "allen",
+                   "text": "Owen. Please read me the 128 written pages"}
+        (root / "room" / "conversation.json").write_text(json.dumps([request]))
+        ack = root / "ack.json"
+        ack.write_text('{"ids":[]}')
+        contexts = []
+        real_run = bridge.native.run
+
+        def observe(**kwargs):
+            contexts.append(kwargs["world_contexts"])
+            return real_run(**kwargs)
+
+        with patch.object(bridge.native, "run", side_effect=observe):
+            bridge.beat(root, mode="scripted", ack_path=ack)
+            # Mimic the feed evicting the original witnessed input.
+            (root / "room" / "conversation.json").write_text("[]")
+            bridge.beat(root, mode="scripted", ack_path=ack)
+        self.assertIn(request["id"], contexts[0]["owen"])
+        self.assertIn(request["id"], contexts[1]["owen"])
+        for ctx in contexts:
+            self.assertNotIn(request["id"], ctx["sarah"])
+            self.assertNotIn(request["id"], ctx["mara"])
+            self.assertNotIn(request["id"], ctx["jules"])
+        stored = json.loads((root / "room" / bridge.CHECKPOINT).read_text())
+        self.assertEqual(
+            [e["id"] for e in stored["pending_social_evidence"]],
+            [request["id"]],
+        )
+
+    def test_retained_social_evidence_never_leaks_private_or_duplicate_ids(self):
+        request = {"id": "allen-old", "speaker": "allen",
+                   "text": "Owen. Please read me the 128 written pages"}
+        self.assertEqual(
+            bridge._retain_social_evidence(
+                [], [dict(request, visibility="private", witnesses=["allen"])]), [])
+        self.assertEqual(
+            bridge._retain_social_evidence(
+                [], [dict(request, visibility="unknown")]), [])
+        self.assertEqual(
+            bridge._retain_social_evidence(
+                [], [request, dict(request, text="Owen. Another request")]), [])
+        retained = bridge._retain_social_evidence([], [request])
+        self.assertEqual(len(retained), 1)
+        self.assertEqual(bridge._retain_social_evidence(retained, []), retained)
+        linked = {"id": "owen-reply", "speaker": "owen", "reply_to": request["id"],
+                  "text": "I cannot read all of those pages right now."}
+        self.assertEqual(bridge._retain_social_evidence(retained, [linked]), [])
+        self.assertEqual(bridge._retain_social_evidence(
+            retained, [dict(linked, visibility="private", witnesses=["owen"])]),
+            retained)
+
+
 if __name__ == "__main__":
     unittest.main()
