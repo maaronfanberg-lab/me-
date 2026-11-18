@@ -209,3 +209,57 @@ social competence. The six Karpathy engineering sources in
 `docs/room-karpathy-source-map.md` motivate fixed evidence and
 independent red/green verification, not replacing character memory
 with a global prompt or automatically promoting the candidate.
+
+
+## 2026-11-18 01:22 UTC — Feed-eviction persistence experiment
+
+**Distinct from earlier work:** the previous `_social_context` patch made a
+public Allen request visible across consecutive *silent* native decisions
+only while the request remained in `conversation.json`. It did not survive
+eviction from the rolling feed. The current live snapshot (feed blob
+`c84f360d2f4120615fcd5a442322e298b9c503bb`, state blob
+`4d6f5fd872ecde881335263a69f23beb59504865`) is cycle 71355,
+01:22:06 UTC, with 24 silent cycles, one rejected semantic echo and
+four queued scheduler events. The public 160-entry feed includes the
+unanswered Owen reading request at index 105; 157 character turns,
+134 with an intention-style lexical marker, one question mark.
+This is a **live observation**, not a same-snapshot model comparison.
+
+**Hypothesis and prespecified negative controls:** when the rolling
+conversation drops the witnessed request, the next native beat loses
+the evidence. A source-ID-linked, public-only, explicitly addressed
+pending record in the native checkpoint should retain it across restart
+and feed eviction, without sharing it with other characters. Unknown
+visibility, private unwitnessed messages, colliding IDs, unlinked
+chatter, and private replies must not create false memories or closure.
+Speech remains voluntary.
+
+**Red test commit** `b545dcc6`, native CI
+https://github.com/maaronfanberg-lab/me-/actions/runs/44215325041:
+14 bridge tests yielded 1 failure and 1 error. The real scripted
+native-engine second beat lacked Allen's original ID after the feed
+was evicted; the helper was deliberately absent. **Green candidate**
+`1167df91`, native CI
+https://github.com/maaronfanberg-lab/me-/actions/runs/44215349858:
+completed success; social-memory CI
+https://github.com/maaronfanberg-lab/me-/actions/runs/44215349940:
+completed success. Candidate only, no merge or production restart.
+
+The change retains up to 24 unique public Allen source records in
+`pending_social_evidence` in the existing checkpoint. It carries
+unresolved directed evidence into the *actual native engine world_contexts*
+per addressee on subsequent beats. It does not convert a claim into
+referee-verified work. It drops records only on a publicly witnessed,
+explicitly linked reply; no arbitrary intent, silence or unrelated
+speech counts. The test simulates eviction and restart and checks the
+real native engine's input, not a mocked reply generator.
+
+**Unresolved:** no actual Llama-generated published Owen reply, no
+verified reading action, no real-world relationship improvement, no
+matched LLM replay, and no independently measured improvement over
+production. Explicit reply_to metadata is not yet guaranteed by the
+publication bridge, so some old requests may remain pending even if
+answered conversationally; the retention cap is a safety bound, not
+semantic resolution. This candidate must remain isolated. Next
+distinct experiment must measure generated replies and verified
+consequences, not add another lexical evaluator.
