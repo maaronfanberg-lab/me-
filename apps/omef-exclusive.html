@@ -335,7 +335,7 @@ function twinRender(preview){
  drawCtx.fillStyle=getComputedStyle(document.body).getPropertyValue('--canvas');drawCtx.fillRect(0,0,buffer.width,buffer.height);
  count.textContent='Calculating new attractor…';
  const rawA=twinRaw('A'),rawB=twinRaw('B'),cfg=twinConfig();
- const full=+$('points').value,total=preview?Math.min(4200,full):Math.min(full,55000);
+ const full=+$('points').value,total=preview?Math.min(3200,full):Math.min(full,55000);
  const alphaInk=preview?.93:.68,dot=preview?1.35:1.15;
  status.textContent=(preview?'preview':'testing')+' · coupled OMEF';$('twinStats').textContent='Computing both mathematical systems and their coupled output…';
  setTimeout(()=>{
@@ -347,7 +347,7 @@ function twinRender(preview){
   const st=twinStepper(rawA,rawB,cfg);
   const theme=document.body.className,rgb=theme==='color'?'130,236,255':theme==='dark'?'185,249,232':'9,34,58';
   drawCtx.fillStyle='rgba('+rgb+','+alphaInk+')';
-  let drawn=0,cosSum=0,sinSum=0,driveSum=0,measure=0;
+  let drawn=0,cosSum=0,sinSum=0,driveSum=0,measure=0,lastPaint=0;
   status.textContent=(preview?'live preview':'rendering')+' · coupled OMEF';
   function batch(){
    if(my!==token||stopped)return;
@@ -359,7 +359,13 @@ function twinRender(preview){
     if(drawn>220){cosSum+=p.cos;sinSum+=p.sin;driveSum+=p.drive;measure++;}
     drawn++;
    }
-   drawCtx.fill();count.textContent='Preparing '+drawn.toLocaleString()+' points';
+   drawCtx.fill();
+   // Paint progressively so a real parameter change becomes visible well before
+   // the complete sample has finished. Candidate screening has already passed.
+   if(drawn>=400&&(drawn-lastPaint>=650||drawn===total)){
+    ctx.drawImage(buffer,0,0);lastPaint=drawn;
+    count.textContent='Drawing '+drawn.toLocaleString()+' points';
+   }
    if(drawn===total||drawn%256<64){
     const r=measure?Math.hypot(cosSum,sinSum)/measure:0;
     $('twinStats').textContent='Golden-phase coherence R = '+r.toFixed(3)+
