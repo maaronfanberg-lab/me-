@@ -69,7 +69,7 @@ body.color{--bg:#07121b;--panel:#101d2a;--text:#eaf4ff;--muted:#a8bdce;--line:#2
 <div id="twinSpeedControls"></div>
 <div class="hint" id="twinSpeedInfo">Speed: every 2.4 seconds plus computation time. New images are shown only after validation.</div>
 <div id="twinGlobals"></div>
-<div class="pure">The living attractor uses the original OMEF projection coordinates of two coupled formulas. It keeps drawing while their parameters drift, with a persistent gray-white filament trail on black—like the original OMEF visual.</div>
+<div class="pure">The living attractor uses the original OMEF projection coordinates of two coupled formulas. It keeps drawing a persistent gray-white filament trail on black, like the original. Ink controls brightness, Size controls filament thickness, and Points controls live drawing density within the device's processing budget.</div>
 <div class="grid2"><button id="twinRestore" class="secondary">Restore circuit</button><button id="twinDecouple" class="secondary">Switch off links</button><button id="twinRerender" class="secondary">Build more detail</button></div>
 <div class="pure" id="twinStats" style="margin-top:10px">Cross-system resonance will be measured here.</div>
 </section><section id="twinParameterSection"><h2>Separate OMEF parameters</h2><p class="twin-note">Each row gives separate controls for the two complete formulas, but there is only one visual. Any A or B slider recomputes the joint trajectory; delayed cross-formula links carry the consequences onward.</p><div class="grid2"><button id="twinResetA" class="secondary">Reset A</button><button id="twinResetB" class="secondary">Reset B</button><button id="twinCopyAB">Copy A → B</button><button id="twinCopyBA">Copy B → A</button></div><div id="twinParameterGroups"></div></section>
@@ -416,18 +416,23 @@ function liveFrame(time){
  const theme=getComputedStyle(document.body),rgb=theme.getPropertyValue('--ink').trim()||'255,255,255';
  const detail=time<st.detailUntil;
  if(time-st.lastFade>850&&!detail){
-  ctx.globalAlpha=.022;ctx.fillStyle=theme.getPropertyValue('--canvas').trim()||'#000';
+  const persistence=+$('twinPersistence').value;
+  ctx.globalAlpha=1-Math.exp(-(.85*Math.LN2)/Math.max(10,persistence));ctx.fillStyle=theme.getPropertyValue('--canvas').trim()||'#000';
   ctx.fillRect(0,0,cv.width,cv.height);ctx.globalAlpha=1;st.lastFade=time;
  }
- ctx.fillStyle='rgba('+rgb+','+(detail?.095:.075)+')';
+ const ink=clamp(.015+(+$('ink').value)/650,.015,.17);
+ const dot=Math.max(.55,(+$('size').value)/2);
+ ctx.fillStyle='rgba('+rgb+','+(detail?Math.min(.18,ink*1.12):ink)+')';
  ctx.beginPath();
- const start=performance.now(),cap=detail?370:230;
+ const start=performance.now();
+ const density=clamp(Math.sqrt(Math.max(25000,+$('points').value)/250000),.35,2);
+ const cap=Math.round((detail?370:230)*density);
  let drawnNow=0;
  while(drawnNow<cap&&performance.now()-start<7){
   const p=st.engine(),q=twinCombine(p,st.config),x=q[0],y=q[1];drawnNow++;
   if(!Number.isFinite(x)||!Number.isFinite(y))continue;
   const px=cv.width/2+(x-st.cx)*st.scale,py=cv.height/2-(y-st.cy)*st.scale;
-  if(px>=1&&px<cv.width-1&&py>=1&&py<cv.height-1)ctx.rect(px,py,1,1);
+  if(px>=1&&px<cv.width-1&&py>=1&&py<cv.height-1)ctx.rect(px,py,dot,dot);
   st.minX=Math.min(st.minX,x);st.maxX=Math.max(st.maxX,x);
   st.minY=Math.min(st.minY,y);st.maxY=Math.max(st.maxY,y);
   st.samples++;st.drawn++;st.cos+=p.cos;st.sin+=p.sin;st.drive+=p.drive;st.measures++;
@@ -461,8 +466,8 @@ function twinSlider(parent,id,label,min,max,step,value){
  const el=document.createElement('input');el.id=id;el.type='range';el.min=min;el.max=max;el.step=step;el.value=value;
  const out=document.createElement('div');out.id=id+'v';out.className='value';out.textContent=value;
  row.append(lbl,el,out);parent.appendChild(row);
- el.addEventListener('input',()=>{out.textContent=(+el.value).toFixed(step>=1?0:2);if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'){evolutionStatus('Mutation depth adjusted');return;}if(id==='twinMorphDuration'){evolutionStatus('Transition duration updated');return;}holdForEditing();requestPreview();});
- el.addEventListener('change',()=>{if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'||id==='twinMorphDuration')return;cancelPreview();render(true);});return el;
+ el.addEventListener('input',()=>{out.textContent=(+el.value).toFixed(step>=1?0:2);if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'){evolutionStatus('Mutation depth adjusted');return;}if(id==='twinMorphDuration'){evolutionStatus('Drift smoothness adjusted');return;}if(id==='twinPersistence'){evolutionStatus('Trail persistence adjusted');return;}holdForEditing();requestPreview();});
+ el.addEventListener('change',()=>{if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'||id==='twinMorphDuration'||id==='twinPersistence')return;cancelPreview();render(true);});return el;
 }
 function twinSelect(parent,id,label,options,value){
  const row=document.createElement('div'),lbl=document.createElement('label'),el=document.createElement('select');row.className='twin-control';
@@ -474,6 +479,7 @@ function twinSelect(parent,id,label,options,value){
 function buildTwinUI(){
  twinSlider($('twinSpeedControls'),'twinSpeed','Evolution speed',1,10,1,3);
  twinSlider($('twinSpeedControls'),'twinMorphDuration','Drift smoothness · seconds',.8,9,.2,4.4);
+ twinSlider($('twinSpeedControls'),'twinPersistence','Trail persistence · s',10,120,5,55);
  twinSlider($('twinSpeedControls'),'twinDepth','Mutation depth',1,10,1,5);
  evolutionStatus();
  twinSlider($('twinGlobals'),'twinGlobal','Cross-coupling',0,4,.05,1);
