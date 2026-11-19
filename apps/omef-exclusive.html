@@ -183,7 +183,7 @@ function twinSlider(parent,id,label,min,max,step,value){
  el.addEventListener('change',()=>{cancelPreview();render(false);});return el;
 }
 function twinSelect(parent,id,label,options,value){
- const row=document.createElement('div');row.className='twin-control',lbl=document.createElement('label'),el=document.createElement('select');
+ const row=document.createElement('div'),lbl=document.createElement('label'),el=document.createElement('select');row.className='twin-control';
  lbl.htmlFor=id;lbl.textContent=label;el.id=id;
  for(const [v,t] of options){const o=document.createElement('option');o.value=v;o.textContent=t;el.appendChild(o);}
  el.value=value;row.append(lbl,el);parent.appendChild(row);
