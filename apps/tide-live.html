@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#07121e">
+<title>TIDE · Turbulent Interacting Dynamical Ensemble</title>
+<style>
+:root{color-scheme:dark;--bg:#07111d;--panel:#0d1c2a;--edge:rgba(168,202,229,.14);--ink:#edf2fa;--muted:#8da8bb;--aqua:#82d8d1;--gold:#e8d1a1;--highlight:#6cbdc0;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;color:var(--ink);background:radial-gradient(ellipse at 28% -24%,#163947 0,transparent 49%),linear-gradient(160deg,#07121d,#091420 70%,#0b111e);min-height:100vh}button,input,select{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--aqua);outline-offset:2px}.shell{max-width:1620px;margin:auto;padding:17px clamp(12px,2vw,30px) 32px}.mast{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0 17px;border-bottom:1px solid var(--edge)}.logotype{font-size:clamp(22px,3vw,32px);font-weight:650;letter-spacing:.25em;line-height:1}.subtitle{color:var(--muted);letter-spacing:.13em;text-transform:uppercase;font-size:9px;margin-top:8px}.stamp{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);text-align:right}.stamp strong{display:block;color:var(--aqua);font-size:11px;letter-spacing:.08em;margin-bottom:4px}.workbench{display:grid;grid-template-columns:minmax(0,1.76fr) minmax(315px,.84fr);gap:18px;margin-top:17px}.left,.right{min-width:0}.visual-wrap{position:relative;overflow:hidden;border:1px solid rgba(128,195,210,.24);border-radius:17px;background:#050e1a;box-shadow:0 16px 54px #01071180}.visualhead{display:flex;gap:10px;justify-content:space-between;align-items:center;padding:11px 15px;min-height:42px;border-bottom:1px solid var(--edge);background:#0a1925}.visualhead .eyebrow{color:var(--aqua);font-size:10px;letter-spacing:.18em;text-transform:uppercase}.visualhead small{font-size:10px;color:var(--muted)}.canvas-area{position:relative;min-height:245px;height:clamp(320px,65vh,690px);background:#071625}.canvas-area canvas{display:block;width:100%;height:100%;touch-action:pan-y}.canvas-badge{position:absolute;left:14px;bottom:13px;pointer-events:none;display:flex;align-items:center;gap:6px;opacity:.6;font-size:10px;letter-spacing:.09em;text-transform:uppercase}.dot{width:5px;height:5px;border-radius:10px;background:var(--aqua);box-shadow:0 0 9px var(--aqua)}.visual-wrap.theater{position:fixed;inset:0;z-index:9000;border-radius:0;display:flex;flex-direction:column}.visual-wrap.theater .canvas-area{height:auto;flex:1;min-height:0}.visual-wrap.theater .visualhead{flex-shrink:0}.visual-wrap.theater .canvas-badge{display:none}.nav{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:5px;padding:11px 0 10px}.nav::-webkit-scrollbar{display:none}.tab{border:1px solid var(--edge);border-radius:8px;padding:9px 13px;white-space:nowrap;color:#91abbc;background:#0b1a27;font-size:11px;letter-spacing:.03em}.tab.selected{background:#22424c;border-color:#6aadae;color:#e8ffff}.toolbar{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px}.pill{border:1px solid rgba(175,209,227,.22);border-radius:9px;background:#122534;color:#d8e7ef;font-size:11px;padding:11px 12px;min-height:38px}.pill.primary{background:#376c70;color:#fff;border-color:#5b9d9c}.pill:active{transform:scale(.98)}.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;margin:11px 0 7px}.metric{background:#0c1a29;border:1px solid var(--edge);border-radius:10px;padding:10px 8px}.metric span{display:block;color:#8da9b9;font-size:9px;letter-spacing:.15em}.metric strong{display:block;font-weight:550;font-size:clamp(12px,1.45vw,17px);font-variant-numeric:tabular-nums;margin-top:6px}.detail{line-height:1.8;color:#8ea6b5;font-family:ui-monospace,SFMono-Regular,monospace;font-size:10px;min-height:34px;padding:5px 3px}.right .panel{background:linear-gradient(150deg,#102432,#0b1927);border:1px solid var(--edge);border-radius:17px;overflow:hidden}.panel-header{padding:17px 17px 13px}.smallcaps{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--aqua)}h2{margin:5px 0 6px;font-size:21px;font-weight:500;letter-spacing:-.035em}.desc{font-size:12px;line-height:1.65;color:#9fb5c2;margin:6px 0}.parameter-count{font-size:11px;color:var(--gold)}.search{width:100%;padding:12px 14px;margin-top:10px;border-radius:10px;background:#071622;color:#e7f1fc;border:1px solid rgba(153,203,214,.22);font-size:12px}.groups{height:clamp(300px,72vh,740px);overflow-y:auto;scrollbar-color:#2c5660 #081926;padding-bottom:8px}.group{border-top:1px solid var(--edge)}.group[hidden],.knob[hidden]{display:none!important}.group summary{list-style:none;cursor:pointer;display:flex;align-items:center;min-height:45px;padding:12px 16px;color:#e4eff5;font-size:12px;letter-spacing:.025em;user-select:none}.group summary::-webkit-details-marker{display:none}.group summary:before{content:'+';display:inline-flex;justify-content:center;width:20px;margin-right:9px;color:var(--aqua);font-size:18px;font-weight:300}.group[open] summary:before{content:'−'}.knob{display:block;padding:8px 16px 13px;background:#0c1d29;border-top:1px solid rgba(161,203,215,.055)}.knobhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:12px;color:#d6e8ed}.knobhead output{color:var(--gold);font-variant-numeric:tabular-nums;font-size:11px;font-family:ui-monospace,monospace}.knob small{display:block;color:#708e9e;font-size:10px;margin-top:5px;line-height:1.4}.knob input[type=range]{width:100%;height:20px;margin:5px 0 0;appearance:none;-webkit-appearance:none;background:transparent;touch-action:auto}.knob input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:linear-gradient(to right,var(--highlight) var(--fill,50%),#264250 var(--fill,50%))}.knob input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:#264250}.knob input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-6px;border:2px solid #c9ffff;background:#163d4b;border-radius:50%;box-shadow:0 0 0 3px #123542}.knob input[type=range]::-moz-range-thumb{width:15px;height:15px;border:2px solid #c9ffff;background:#163d4b;border-radius:50%}.foot{border-top:1px solid var(--edge);margin-top:14px;padding-top:16px;color:#829ba9;font-size:11px;line-height:1.65}.linkage{font-size:11px;color:#b4dedc;background:#102735;border:1px solid rgba(133,210,205,.2);border-radius:10px;padding:10px 13px;min-height:40px;margin-top:9px}.controls-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-top:1px solid var(--edge)}.controls-foot select{background:#101f2f;color:#cfdee9;border:1px solid #32505d;border-radius:8px;padding:6px;font-size:10px}.summary{margin-top:12px;padding:15px 16px;border:1px solid var(--edge);background:#0b1c2a;border-radius:12px}.summary strong{color:#d4e5ee;font-size:11px}.summary p{margin:7px 0;font-size:11px;line-height:1.6;color:#8ca6b5}.model-list{margin:3px 0 0;padding-left:16px;color:#87a4b4;font-size:10px;line-height:1.8}@media(max-width:930px){.workbench{grid-template-columns:minmax(0,1fr)}.groups{height:auto;max-height:none}.canvas-area{height:55vh;min-height:255px}.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:530px){.shell{padding:11px 10px 25px}.stamp{display:none}.mast{padding-bottom:12px}.canvas-area{height:43vh;min-height:225px}.metrics{grid-template-columns:repeat(3,1fr)}.pill{flex:1;padding:11px 8px}.panel-header{padding:16px}.nav{gap:4px}.tab{padding:8px 11px}.visualhead{padding:8px 12px}}@media(orientation:landscape) and (max-height:500px){.canvas-area{height:65vh}.shell{padding-top:6px}.mast{padding-bottom:6px}.mast .subtitle{display:none}.metrics{grid-template-columns:repeat(6,1fr)}}
+
+/* v1.2: persistently visible experiment while interacting with controls on touch screens. */
+.visualhead .eyebrow{display:flex;min-width:0;align-items:center;white-space:nowrap;overflow:hidden}
+.live-param{display:inline-block;color:#f0d6a1;letter-spacing:0;text-transform:none;font-weight:500;margin-left:9px;overflow:hidden;text-overflow:ellipsis;min-width:0;white-space:nowrap}
+@media(max-width:930px){
+ html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+ .shell{display:flex;flex-direction:column;max-width:none;height:100vh;height:100dvh;overflow:hidden;padding:max(6px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+ .mast,.foot{display:none}
+ .workbench{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,46fr) minmax(0,54fr);gap:7px;margin:0}
+ .left{min-height:0;display:flex;flex-direction:column}
+ .visual-wrap{flex:1;min-height:0;display:flex;flex-direction:column;border-radius:10px}
+ .visualhead{flex:0 0 auto;min-height:27px;padding:5px 9px}
+ .visualhead small{display:none}
+ .visualhead .eyebrow{font-size:9px;letter-spacing:.08em}
+ .canvas-area{flex:1;min-height:0;height:auto}
+ .canvas-badge{display:none}
+ .nav{flex:0 0 auto;min-height:32px;gap:4px;padding:3px 0}
+ .tab{padding:7px 9px;font-size:10px}
+ .toolbar{display:flex;flex:0 0 auto;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:4px;margin:0;padding-bottom:1px;min-height:33px}
+ .toolbar::-webkit-scrollbar{display:none}
+ .toolbar .pill{flex:0 0 auto;min-height:30px;padding:6px 8px;font-size:10px;border-radius:7px}
+ .toolbar:not(.more-open) #step,.toolbar:not(.more-open) #perturb,.toolbar:not(.more-open) #reset{display:none}
+ .left .metrics,.left .detail,.left .linkage,.left .summary{display:none}
+ .right{display:flex;min-height:0}
+ .right .panel{display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden;border-radius:10px}
+ .panel-header{flex:0 0 auto;padding:7px 10px 6px}
+ .panel-header .smallcaps,.panel-header .desc,.panel-header .parameter-count{display:none}
+ .panel-header h2{font-size:14px;margin:0 0 4px;font-weight:550;letter-spacing:0}
+ .search{margin:0;padding:7px 10px;font-size:12px;border-radius:7px}
+ .groups{flex:1;min-height:0;height:auto;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;padding-bottom:14px}
+ .group summary{min-height:39px;padding:8px 11px;font-size:11px}
+ .knob{padding:7px 11px 8px}
+ .knobhead{font-size:11px}
+ .knob input[type=range]{height:31px;margin:4px 0 0;touch-action:pan-x}
+ .knob input[type=range]::-webkit-slider-thumb{height:23px;width:23px;margin-top:-10px}
+ .knob input[type=range]::-moz-range-thumb{height:23px;width:23px}
+ .knob small{font-size:9px;margin-top:3px}
+ .controls-foot{flex:0 0 auto;gap:5px;padding:5px 8px;flex-wrap:wrap}
+ .controls-foot .pill{min-height:28px;padding:5px 7px;font-size:9px}
+ .controls-foot select{font-size:10px;padding:5px}
+ .visual-wrap.theater{position:fixed;inset:0;z-index:9000;border-radius:0}
+ .visual-wrap.theater .visualhead{min-height:35px}
+}
+@media(max-width:930px) and (orientation:landscape){
+ .workbench{grid-template-columns:minmax(0,1.48fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+ .canvas-area{min-height:0;height:auto}
+ .panel-header{padding:5px 9px}
+ .panel-header h2{margin:0 0 3px}
+ .controls-foot{gap:3px;padding:4px 6px}
+ .controls-foot .pill{padding:4px 5px}
+}
+@media(max-width:930px) and (max-height:420px) and (orientation:portrait){
+ .workbench{grid-template-rows:minmax(0,45fr) minmax(0,55fr)}
+ .nav{min-height:29px}
+ .toolbar .pill{min-height:28px}
+}
+
+/* Resilient display: render status is always visible above the canvas. */
+.renderer-health{flex:none;color:#90e8d1;font-size:10px;font-family:ui-monospace,SFMono-Regular,monospace;letter-spacing:.025em;white-space:nowrap}
+.renderer-health.error{color:#ffb396}
+.render-fault{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(6,15,26,.94);color:#f8c0a8;text-align:center;padding:18px;font:12px/1.65 system-ui;z-index:5}
+.render-fault[hidden]{display:none!important}
+@media(max-width:530px){.renderer-health{font-size:9px}}
+</style>
+</head>
+<body><main class="shell"><header class="mast"><div><div class="logotype">TIDE <span style="color:#88cfcd;font-weight:300;letter-spacing:0">/</span></div><div class="subtitle">Turbulent Interacting Dynamical Ensemble</div></div><div class="stamp"><strong>COMPUTATIONAL INSTRUMENT · v1.2</strong>12 interconnected mechanisms · seeded dynamics</div></header>
+<div class="workbench"><section class="left"><div id="visual" class="visual-wrap"><div class="visualhead"><span class="eyebrow">Live model · <span id="viewName">Field</span><span id="liveParam" class="live-param" aria-live="off">Adjust a slider to see its value</span></span><span id="rendererHealth" class="renderer-health" role="status">Starting…</span><small>Actual simulation · luminous scientific rendering</small></div><div class="canvas-area"><canvas id="stage" role="img" aria-label="Live TIDE dynamics"></canvas><div id="renderFault" class="render-fault" hidden></div><div class="canvas-badge"><i class="dot"></i> SIMULATED PHYSICAL AND DYNAMICAL FIELDS</div></div></div>
+<nav class="nav" id="tabs" aria-label="Visualization layers"></nav><div class="toolbar"><button id="run" class="pill primary">Pause</button><button id="audio" class="pill primary">Enable sound</button><button id="visualStyle" class="pill" aria-pressed="true" title="Switch between luminous and diagnostic mapping of the real reaction–diffusion field">Rendering: Luminous</button><button id="step" class="pill">Single step</button><button id="perturb" class="pill">Perturb</button><button id="reset" class="pill">Reset state</button><button id="follow" class="pill" aria-pressed="false" title="Automatically show the visualization corresponding to each adjusted model layer">Follow: Off</button><button id="moreTools" class="pill" aria-expanded="false" title="Show additional simulation controls">Tools ▾</button><button id="full" class="pill">Expand visual</button></div>
+<div class="metrics" id="metrics"></div><div class="detail" id="detail"></div><div class="linkage" id="linkage">Every visible and audible feature reads from integrated TIDE state; touch a parameter to inspect its equation mapping.</div>
+<div class="summary"><strong>Model fidelity and numerical scope</strong><p>TIDE's actual coupled equations power the field, trajectories, graph, clocks, events, landscape and audio. This is a real-time reduced discretization, not a claim of reproducing the full research-scale specification. Domain 36×36, 30 graph nodes, 32 inertial clocks, 48 Hopfield units, 56 reservoir units, with a variable-order Caputo L1 history window of 320 steps.</p><p>Explicit approximations: compressible momentum uses semi-Lagrangian advection; event arrivals use conditional Poisson time steps rather than exact Ogata thinning; Ollivier curvature uses entropically regularized transport; neural-field kernels are truncated Gaussian convolutions; RLS and fractional memory use finite numerical histories. The Information view calculates exploratory lag-one Gaussian transfer entropy from twelve sampled layer observables; it is not the full Part 15 estimator suite. Exact 256² fluid dynamics, full-spectrum Lyapunov statistics, and formal information-validation benchmarks are <em>not</em> claimed here.</p><p>Corrections implemented: the accumulator receives a nonlinear stabilizing loss when the documented cost alone fails; avalanche fatigue raises thresholds after a topple; Brownian strain uses squared deterministic drift, not undefined squared white-noise velocity; componentwise TIDE-vs-OMEF dynamism is not asserted without measurements. No external audio samples, arbitrary particle animations or precomputed attractor loops. The optional luminous renderer uses bilinear reconstruction, gradients and isolines of simulated fields for visual clarity and glow; it does not add numerical resolution.</p><p><a href="./tide-math-corrections.md" target="_blank" rel="noopener" style="color:#8ad9d5;text-decoration:underline">Mathematical corrections, changed equations, and verification limits</a></p></div>
+</section><aside class="right"><section class="panel"><div class="panel-header"><span class="smallcaps">Parameter laboratory</span><h2>100 independent controls</h2><p class="desc">Live numerical coefficients from all twelve layers, plus eight sound mappings. Sliders write directly to the running solver.</p><span id="count" class="parameter-count">100 live parameters</span><input id="search" class="search" type="search" placeholder="Find a variable or equation…" autocomplete="off" aria-label="Search controls"></div><div id="controls" class="groups"></div><div class="controls-foot"><div style="display:flex;gap:6px;flex-wrap:wrap"><button id="defaults" class="pill">Restore defaults</button><button id="savePreset" class="pill">Save preset</button><button id="loadPreset" class="pill">Load preset</button><input id="presetFile" type="file" accept="application/json,.json" style="display:none"></div><label class="smallcaps" for="quality">Δt <select id="quality" aria-label="Numerical time step"><option value="1" selected>0.025</option><option value="2">0.016</option><option value="3">0.040</option></select></label></div></section></aside></div>
+<footer class="foot">TIDE · A research-playable, self-exciting system of coupled nonlinear mechanisms. Audio requires a tap to start on iOS. Change individual mechanisms and observe the effects in their corresponding view.</footer></main>
+<script>
+/* Exactly 100 independent, active controls; key, label, min, max, initial, step, explanation */
+const GROUPS = [
+['01 / Core triad','Core',[
+['phiResponse1','Prey response Φ₁',0.001,0.4,0.12,0.001,'Strength of the singular Φ(ψ) response in (1.5)'],
+['phiResponse0','Prey offset Φ₀',0.01,1.5,0.18,0.01,'Offset in Φ(ψ)'],
+['gammaBase','Prey loss γ̄',0.02,1,0.10,0.01,'Baseline prey mortality'],
+['gammaSwing','Switcher → prey Δγ',0,0.5,0.08,0.005,'May–Leonard mortality switching'],
+['preyGrowth','Growth scale ν',0.2,3,1.2,0.02,'Converts logistic K(s) into g in (1.4)'],
+['predatorTurn','Predator turnover βψ',0.05,1,0.23,0.01,'Predator occupancy decay'],
+['accumulatorCost','Accumulator cost rχ',0.1,2,0.72,0.02,'Surplus dependence on accumulator'],
+['strainBrake','Strain braking ζη',0,2,0.34,0.02,'Strain raises accumulator carrying cost'],
+['switchA','Competition aML',0.15,0.95,0.72,0.01,'May–Leonard clockwise inhibition'],
+['switchB','Competition bML',1.05,2.7,1.65,0.01,'May–Leonard opposing inhibition']]],
+['02 / Pattern field','Pattern',[
+['diffA','Activator diffusivity Da',0.001,0.3,0.018,0.001,'Activator Laplacian (2.1)'],
+['diffB','Inhibitor diffusivity Db',0.03,1.4,1.25,0.01,'Inhibitor Laplacian (2.2)'],
+['excitableBias','Inhibitor offset β₀',-0.6,0.8,0.18,0.01,'b nullcline translation'],
+['inhibitorDecay','Inhibitor decay β₁',0.3,3,1.1,0.02,'Slope of h(a,b)'],
+['inhibitorSpeed','Inhibitor timescale εb',0.01,0.4,0.12,0.005,'Relative response speed'],
+['fieldDrive','Uniform drive I₀',-0.55,0.85,0.36,0.01,'Field bias in (2.4)'],
+['coreField','Triad → field ιφ',0,1.5,0.40,0.01,'Core shifts activator drive'],
+['strainField','Strain → field ιη',0,0.8,0.06,0.01,'Strain excites field'],
+['burstField','Burst footprint gain',0,1.5,0.42,0.01,'Event-induced spatial Gaussian'],
+['fieldToCore','Field → predator κa',0,0.6,0.13,0.01,'Mean field changes predator turnover']]],
+['03 / Fluid','Fluid',[
+['fluidVisc','Dynamic viscosity μf',0.001,0.3,0.055,0.001,'Fluid velocity diffusion'],
+['fluidDrag','Large-scale drag γf',0.005,1.2,0.13,0.005,'Removes kinetic energy'],
+['fluidPressure','Reference pressure p₀',0.02,2.5,0.57,0.02,'Compressible pressure scale'],
+['pressureGamma','Polytropic index Γ',1,2,1.4,0.02,'Pressure-density exponent'],
+['fluidSource','Activator mass source qa',0,0.3,0.018,0.002,'Positive local mass injection'],
+['fluidDrain','Inhibitor mass sink qb',0,0.3,0.015,0.002,'Inhibitor-driven mass removal'],
+['activatorForce','Gradient force χa',0,3,0.65,0.02,'Fluid acceleration up ∇a'],
+['clockForce','Clock stirring Fθ',0,2,0.49,0.01,'Phase-coherent spatial forcing'],
+['stirWave','Stirring wave number',1,8,3,1,'Spatial frequency of clock force'],
+['fluidToBurst','Vorticity → burst κZ',0,0.2,0.017,0.002,'Enstrophy feeds Hawkes baseline']]],
+['04 / Phase clocks','Clocks',[
+['clockCouple','Base coupling Kc',0,5,1.36,0.02,'Kuramoto–Sakaguchi coupling'],
+['clockInertia','Phase inertia mθ',0.08,4,0.65,0.02,'Second-order clock inertia'],
+['clockSpread','Frequency spread ΔΩ',0.02,1.7,0.43,0.01,'Lorentzian frequency half-width'],
+['clockLag','Phase lag αS',0,1.4,0.17,0.01,'Sakaguchi lag'],
+['clockLocal','Ring nonlocality ϰ',0,1,0.61,0.01,'Nonlocal coupling cosine kernel'],
+['strainLock','Strain → lock Kη',0,4,1.6,0.02,'Strain strengthens phase locking'],
+['vortexUnlock','Enstrophy unlock Kρ',0,2,0.22,0.01,'Turbulence weakens phase locking'],
+['walkerToClock','Walker → clocks εq',0,2,0.28,0.01,'Langevin walker perturbs phases'],
+['clockToCore','Clocks → core εθ',0,0.6,0.17,0.01,'Coherent phase alters mortality'],
+['clockNoise','Clock stochasticity σθ',0,1.5,0.045,0.005,'Brownian phase-velocity noise']]],
+['05 / Hawkes & SIRS','Bursts',[
+['burstBase','Immigrant rate μH',0,3,0.13,0.01,'Exogenous Hawkes intensity'],
+['burstDecay','Echo decay βH',0.1,8,1.35,0.05,'Exponential Hawkes kernel decay'],
+['burstProduct','Echo productivity κ₀',0,1.3,0.33,0.01,'Mean offspring per mark scale'],
+['burstExponent','ETAS exponent aE',0,0.9,0.28,0.01,'Event-mark productivity exponent'],
+['burstPareto','Mark exponent bGR',0.95,2.99,1.55,0.02,'Power-law mark tail exponent'],
+['infectionRate','SIRS spread βI',0,3,0.81,0.02,'Network infection transmission'],
+['recoveryRate','SIRS recovery δI',0.1,3,1.1,0.02,'Active-to-recovered transition'],
+['immunityLoss','Immunity waning ξR',0,1.5,0.21,0.01,'Recovered-to-susceptible return'],
+['infectionEcho','Infection → bursts αI',0,2,0.38,0.01,'Joint excitation loop']]],
+['06 / Avalanches','Avalanches',[
+['creepLoad','Uniform loading εz',0.0001,0.08,0.008,0.0001,'Slow sandpile creep'],
+['massLoad','Fluid → load ςm',0,0.18,0.035,0.002,'Graph mass adds load'],
+['infectionLoad','SIRS → load ςI',0,0.3,0.09,0.002,'Spreading raises load'],
+['strainLoad','Strain → load ςη',0,0.22,0.045,0.002,'Global shared load'],
+['avalancheKeep','OFC conserved share αOFC',0.45,0.99,0.84,0.01,'Fraction transferred in each toppling'],
+['avalancheThreshold','Threshold z₀c',0.25,3,0.90,0.01,'Nominal toppling threshold'],
+['avalancheFatigue','Threshold fatigue φF',0,0.4,0.07,0.005,'Corrected: toppling RAISES threshold'],
+['avalancheToBurst','Avalanche → burst ζA',0,2,0.4,0.01,'Size of avalanche-triggered marked event']]],
+['07 / Fractional strain','Strain',[
+['alphaMin','Memory-order floor αmin',0.2,0.95,0.58,0.01,'Minimum Caputo order'],
+['alphaSlope','Variable order slope kα',0,4,0.8,0.02,'How state changes α(t)'],
+['strainRelax','Strain relaxation τη',0.2,20,3.2,0.1,'Caputo relaxation timescale'],
+['strainSaturate','Strain quadratic loss ζ₂',0,2,0.19,0.01,'Nonlinear damping of strain'],
+['coreStrain','Core → strain gain',0,1,0.20,0.01,'Core overshoot + variation source'],
+['vortexStrain','Vorticity → strain',0,1,0.18,0.01,'Enstrophy contribution to strain'],
+['eventStrain','Event → strain',0,1,0.15,0.01,'Regularized finite-duration avalanche impulses']]],
+['08 / Langevin landscape','Walker',[
+['wellBarrier','Four-well barrier ΔV',0.2,5,1.2,0.02,'Quartic well depth'],
+['wellTwist','Diagonal tilt c₁₂',-1,1,0.13,0.01,'Coupling of walker coordinates'],
+['walkerNoise','Langevin ε₀',0.005,1.5,0.22,0.005,'Brownian diffusion temperature'],
+['burstHeat','Burst → εΛ',0,1.2,0.20,0.01,'Burst rate heats walker'],
+['hillHeight','History hill wG',0,0.7,0.15,0.01,'Metadynamics history deposition'],
+['hillWidth','Hill width sG',0.15,1.5,0.43,0.01,'Metadynamics Gaussian radius'],
+['hillFade','Hill lifetime τfade',0.5,30,9,0.1,'Memory of visited wells'],
+['tiltCore','Core → landscape hφ',0,2,0.54,0.02,'Core changes landscape tilt'],
+['tiltMemory','Recall → landscape hs',0,2,0.43,0.02,'Stored patterns tilt landscape']]],
+['09 / Associative memory','Hopfield',[
+['hopGain','Recall gain βs',0.5,6,2.1,0.05,'Tanh neuron response'],
+['hopSequence','Sequence λseq',0,1.5,0.33,0.01,'Asymmetric next-pattern drive'],
+['hopAdapt','Adaptation gϑ',0,2,0.33,0.02,'Active units fatigue'],
+['hopWorld','World projection gin',0,2,0.42,0.02,'Observable forcing to memory units'],
+['neuralField','Neural pattern feedback gu',0,1,0.19,0.01,'Amari bump field pins activator']]],
+['10 / Thermodynamics','Heat',[
+['thermalDiff','Heat diffusion κT',0,1,0.14,0.01,'Laplacian heat transport'],
+['thermalCool','Radiative cooling Γr',0,1,0.18,0.01,'Thermal return to ambient'],
+['thermalCouple','Thermal pressure switch',0,1,0.37,0.01,'Mixture of barotropic/ideal-gas pressures'],
+['heatToWalk','Heat → walker εT',0,2,0.22,0.02,'Dissipated heat feeds Langevin noise']]],
+['11 / Moving graph','Geometry',[
+['graphCurvature','Curvature flow ηRF',0,0.5,0.06,0.005,'Entropic Ollivier-weight flow'],
+['graphTraffic','Traffic gain ηF',0,1,0.15,0.01,'Busy graph edges reinforce'],
+['graphDecay','Edge decay λW',0,0.5,0.08,0.005,'Network edges weaken'],
+['graphMobility','Anchor mobility',0,1,0.32,0.01,'Nodes follow fluid tracer velocity'],
+['graphToBurst','Fragility targeting λκ',0,3,0.7,0.02,'Negative curvature attracts events']]],
+['12 / Echo reservoir','Reservoir',[
+['reservoirGain','Reservoir recurrent gain ϱ',0,0.99,0.84,0.01,'Echo-state spectral bound via row normalization'],
+['reservoirLeak','Reservoir leak aL',0.02,1,0.29,0.01,'Reservoir update speed'],
+['reservoirLearn','RLS learning rate',0,1,0.54,0.01,'Scale online readout learning'],
+['autonomyMax','Autonomy αA max',0,1,0.27,0.01,'Forecast replaces selected coupling inputs'],
+['surpriseStrain','Surprise → strain cS',0,1,0.11,0.01,'Unexpected residual raises memory strain']]],
+['13 / Live sonification','Audio',[
+['audioLevel','Master output',0,0.75,0.32,0.01,'Final gain after compressor'],
+['audioBase','Base pitch (MIDI)',36,79,52,1,'Reference pitch of oscillator bank'],
+['audioClock','Phase-to-pitch depth',0,2,0.87,0.01,'Clocks drive pitch and detuning'],
+['audioPattern','Pattern → spectral brightness',0,1,0.74,0.01,'Pattern roughness sets lowpass cutoff'],
+['audioFluid','Vorticity → noise',0,1,0.39,0.01,'Fluid enstrophy excites filtered noise'],
+['audioBurst','Burst transient level',0,1,0.63,0.01,'Actual Hawkes / avalanche events produce attacks'],
+['audioPan','Walker spatial pan',0,1,0.86,0.01,'q₁ moves sonic image left/right'],
+['audioMemory','Memory timbre depth',0,1,0.60,0.01,'Hopfield recall sets harmonic coloration']]]
+];
+const PARAMS=GROUPS.flatMap(g=>g[2].map(p=>({key:p[0],label:p[1],min:p[2],max:p[3],value:p[4],step:p[5],info:p[6],group:g[1]})));
+const DEFAULTS=Object.fromEntries(PARAMS.map(d=>[d.key,d.value]));
+if (PARAMS.length !== 100 || new Set(PARAMS.map(x=>x.key)).size !== 100) throw new Error('Expected 100 distinct parameters');
+
+/* TIDE realtime numerical implementation. Each equation is traced in README panel. */
+const TAU=Math.PI*2, SIG=x=>1/(1+Math.exp(-Math.max(-35,Math.min(35,x)))), CL=(x,a,b)=>Math.max(a,Math.min(b,x));
+const HF=(seed,layer,step,i)=>{let x=(seed ^ Math.imul(layer+11,0x9e3779b9) ^ Math.imul(step+1,0x85ebca6b) ^ Math.imul(i+1,0xc2b2ae35))>>>0;x=Math.imul(x^(x>>>16),0x7feb352d);x=Math.imul(x^(x>>>15),0x846ca68b);return ((x^(x>>>16))>>>0)/4294967296};
+const NOISE=(seed,layer,step,i)=>Math.sqrt(-2*Math.log(Math.max(1e-12,HF(seed,layer,step,2*i))))*Math.cos(TAU*HF(seed,layer,step,2*i+1));
+class TIDE {
+ constructor(p=DEFAULTS,seed=19){this.p={...p};this.seed=seed;this.S=36;this.N=30;this.K=32;this.M=48;this.NR=56;this.dt=.025;this.init();}
+ init(){const Z=this.S*this.S,N=this.N,K=this.K,M=this.M;this.t=0;this.stepNo=0;this.error='';this.pulse=0;this.shock=0;this.Sigma=0;this.confidence=0;this.Hq=0;this.infoHistory=[];this.infoComputed=0;this.infoTE=Array.from({length:12},()=>new Float64Array(12));this.infoAIS=new Float64Array(12);this.lastBurst=0;this.eventTotal=0;this.avalancheTotal=0;this.latestAvalanche=0;this.hills=[];this.trail=[];
+  this.phi=.30;this.psi=.29;this.chi=.18;this.eta=.08;this.n=[.55,.22,.32];this.alpha=.7;this.hawkEcho=0;this.hawkRate=.15;this.q=[.78,-.72];this.qGrad=[0,0];this.overlaps=[0,0,0,0];this.curvMean=0;this.frag=.2;this.R=.1;this.Psi=0;this.kin=0;this.vort=0;this.aMean=0;this.rough=.1;this.front=0;this.heatMean=1;this.infected=0;this.massMean=0;
+  this.a=new Float64Array(Z);this.b=new Float64Array(Z);this.rho=new Float64Array(Z);this.ux=new Float64Array(Z);this.uy=new Float64Array(Z);this.heat=new Float64Array(Z);this.neur=new Float64Array(Z);this.impulse=new Float64Array(Z);this.tmp={};
+  for(let i=0;i<Z;i++){const x=i%this.S,y=Math.floor(i/this.S);let d=.06*(HF(this.seed,1,0,i)-.5);this.a[i]=.946+d+.19*Math.sin(.38*x+.5)*Math.cos(.42*y-.8)+.23*Math.exp(-((x-9)**2+(y-14)**2)/80);this.b[i]=1.024+d*.1+.08*Math.sin(.31*x-.45)*Math.cos(.28*y+.6);this.rho[i]=1+0.015*(HF(this.seed,2,0,i)-.5);this.heat[i]=1;}
+  this.left=new Int32Array(Z);this.right=new Int32Array(Z);this.up=new Int32Array(Z);this.down=new Int32Array(Z);
+  for(let y=0;y<this.S;y++)for(let x=0;x<this.S;x++){let i=y*this.S+x;this.left[i]=y*this.S+(x+this.S-1)%this.S;this.right[i]=y*this.S+(x+1)%this.S;this.up[i]=((y+this.S-1)%this.S)*this.S+x;this.down[i]=((y+1)%this.S)*this.S+x;}
+  this.phase=new Float64Array(K);this.omega=new Float64Array(K);this.vel=new Float64Array(K);for(let i=0;i<K;i++){let r=HF(this.seed,3,0,i),v=Math.tan(Math.PI*(CL(r,.03,.97)-.5));this.phase[i]=TAU*HF(this.seed,4,0,i);this.omega[i]=CL(v,-5,5);this.vel[i]=this.omega[i];}
+  this.xi=new Float64Array(N);this.yi=new Float64Array(N);this.homeX=new Float64Array(N);this.homeY=new Float64Array(N);this.z=new Float64Array(N);this.zc=new Float64Array(N);this.mi=new Float64Array(N);this.I=new Float64Array(N);this.Re=new Float64Array(N);this.curvature=new Float64Array(N);this.W=new Float64Array(N*N);this.edges=[];
+  for(let i=0;i<N;i++){let a=TAU*i/N;this.xi[i]=this.homeX[i]=this.S/2+12*Math.cos(a);this.yi[i]=this.homeY[i]=this.S/2+12*Math.sin(a);this.z[i]=HF(this.seed,5,0,i)*.4;this.zc[i]=this.p.avalancheThreshold*(.9+.2*HF(this.seed,5,0,i+300));this.mi[i]=.1;
+   for(let d=1;d<=3;d++){let j=(i+d)%N;this.W[i*N+j]=.24+.13*HF(this.seed,6,0,i*8+d);this.W[j*N+i]=.24+.13*HF(this.seed,6,0,i*8+d+500);}}
+  this.rebuildEdges();this.graphGeometry();
+  this.memPatterns=[];for(let mu=0;mu<4;mu++){let v=new Float64Array(M);for(let j=0;j<M;j++)v[j]=HF(this.seed,7,mu,j)>.5?1:-1;this.memPatterns.push(v);}this.mem=new Float64Array(M);this.adapt=new Float64Array(M);this.proj=Array.from({length:M},(_,j)=>Array.from({length:14},(_,k)=>(HF(this.seed,8,j,k)-.5)*Math.sqrt(12/14)));
+  this.rs=new Float64Array(this.NR);this.rw=Array.from({length:this.NR},(_,i)=>{let arr=[];for(let j=0;j<this.NR;j++)if(HF(this.seed,9,i,j)<.07)arr.push([j,(HF(this.seed,10,i,j)-.5)*.45]);return arr;});
+  this.rInput=Array.from({length:this.NR},(_,i)=>Array.from({length:14},(_,j)=>(HF(this.seed,11,i,j)-.5)*.25));this.rout=Array.from({length:14},()=>new Float64Array(this.NR+1));this.rP=Array.from({length:this.NR+1},(_,i)=>{let r=new Float64Array(this.NR+1);r[i]=5;return r;});this.means=new Float64Array(14);this.variances=new Float64Array(14).fill(1);this.pred=new Float64Array(14);this.alphaA=0;this.surprise=0;this.avgErr=1;this.resTrained=0;
+  this.etaHistory=[this.eta];this.strainEvent=0;this.observable=new Float64Array(14);this.sonify={};this.computeSummary();
+ }
+ rebuildEdges(){const N=this.N,old=new Map(this.edges.map(e=>[e.i+','+e.j,e]));this.edges=[];for(let i=0;i<N;i++)for(let j=0;j<N;j++)if(i!==j&&this.W[i*N+j]>.02){this.edges.push(old.get(i+','+j)||{i,j,v:new Float64Array(5)});}}
+ sample(f,x,y){let S=this.S;x=(x%S+S)%S;y=(y%S+S)%S;let ax=Math.floor(x),ay=Math.floor(y),bx=(ax+1)%S,by=(ay+1)%S;let fx=x-ax,fy=y-ay;return (1-fy)*((1-fx)*f[ay*S+ax]+fx*f[ay*S+bx])+fy*((1-fx)*f[by*S+ax]+fx*f[by*S+bx]);}
+ lap(f,i){return f[this.left[i]]+f[this.right[i]]+f[this.up[i]]+f[this.down[i]]-4*f[i];}
+ gradX(f,i){return .5*(f[this.right[i]]-f[this.left[i]]);}
+ gradY(f,i){return .5*(f[this.down[i]]-f[this.up[i]]);}
+ computeSummary(){let n=this.a.length,sa=0,sb=0,sq=0,kin=0,en=0,front=0,heat=0,infect=0,mass=0;for(let i=0;i<n;i++){let a=this.a[i],v=this.uy[this.right[i]]-this.uy[this.left[i]]-this.ux[this.down[i]]+this.ux[this.up[i]];sa+=a;sb+=this.b[i];sq+=a*a;kin+=this.rho[i]*(this.ux[i]**2+this.uy[i]**2);en+=v*v*.125;front+=Math.hypot(this.gradX(this.a,i),this.gradY(this.a,i));heat+=this.heat[i];}this.aMean=sa/n;this.bMean=sb/n;this.rough=Math.sqrt(Math.max(0,sq/n-(sa/n)**2));this.kin=kin/(2*n);this.vort=en/n;this.front=front/n;this.heatMean=heat/n;for(let i=0;i<this.N;i++){infect+=this.I[i];mass+=this.mi[i];}this.infected=infect/this.N;this.massMean=mass/this.N;}
+ coreStep(dt){const p=this.p,n=this.n;const dn=n.map((v,i)=>v*(1-v-p.switchA*n[(i+1)%3]-p.switchB*n[(i+2)%3])+0.00008);
+  for(let i=0;i<3;i++)n[i]=CL(n[i]+dt*dn[i],1e-8,2);
+  let gamma=p.gammaBase+p.gammaSwing*(n[0]-n[2])+p.clockToCore*this.R*Math.cos(this.Psi)*p.gammaBase;
+  let beta=CL(p.predatorTurn+p.fieldToCore*Math.tanh(this.aMean),.025,2);
+  let cost=p.accumulatorCost*(1+p.strainBrake*this.eta);
+  let surplus=1-this.phi-cost*this.chi;
+  let drive=.10+1.5*SIG(5*(surplus-.22));let g=drive/p.preyGrowth-.34;
+  let derivPhi=this.phi*(p.phiResponse1/Math.max(.035,1-this.psi)**2-p.phiResponse0-gamma);
+  let derivPsi=this.psi*(g-beta);
+  let derivChi=drive-surplus-this.chi*g-(1.2+0.8*p.strainBrake*this.eta)*this.chi**3;
+  this.phi=CL(this.phi+dt*CL(derivPhi,-4,4),.0001,.98);this.psi=CL(this.psi+dt*CL(derivPsi,-4,4),.0001,.97);this.chi=CL(this.chi+dt*CL(derivChi,-5,5),-2,4);
+  this.coreSpeed=Math.abs(derivPhi)+.2*Math.hypot(...dn);this.coreOvershoot=Math.max(0,this.chi-.4);}
+ clockStep(dt){const p=this.p,K=this.K,ph=this.phase,vel=this.vel;let re=0,im=0,re2=0,im2=0;for(let k=0;k<K;k++){re+=Math.cos(ph[k]);im+=Math.sin(ph[k]);re2+=Math.cos(2*ph[k]);im2+=Math.sin(2*ph[k]);}this.R=Math.hypot(re,im)/K;this.Psi=Math.atan2(im,re);this.Z2=Math.hypot(re2,im2)/K;
+  let coup=Math.max(0,p.clockCouple+p.strainLock*(this.eta**3)/(.5**3+this.eta**3)-p.vortexUnlock*this.vort);
+  for(let k=0;k<K;k++){let force=0,den=0;for(let j=0;j<K;j++){let A=(1+p.clockLocal*Math.cos(TAU*(k-j)/K))/(1+p.clockLocal);force+=A*Math.sin(ph[j]-ph[k]-p.clockLag);den+=A;}const natural=1+p.clockSpread*this.omega[k];let xi=p.walkerToClock*this.q[0]*Math.cos(ph[k]-this.Psi);let dd=(natural+coup*force/den+xi-vel[k])/p.clockInertia;
+    vel[k]=CL(vel[k]+dt*dd+p.clockNoise*Math.sqrt(dt)*NOISE(this.seed,20,this.stepNo,k)/p.clockInertia,-12,12);ph[k]=(ph[k]+dt*vel[k])%TAU;}
+  this.clockCoupling=coup;this.clockSpeed=Math.abs(this.R-(this.previousR??this.R))/dt;this.previousR=this.R;}
+ spatialStep(dt){let p=this.p,S=this.S,Z=S*S,a=this.a,b=this.b,rho=this.rho,vx=this.ux,vy=this.uy,heat=this.heat,neur=this.neur;let na=new Float64Array(Z),nb=new Float64Array(Z),nr=new Float64Array(Z),nvx=new Float64Array(Z),nvy=new Float64Array(Z),nh=new Float64Array(Z);
+ const driving=(1-this.alphaA)*this.aMean+this.alphaA*CL(this.pred[4]*this.variances[4]+this.means[4],-2,2);
+ const drive=p.fieldDrive+p.coreField*(this.phi-.3)+p.strainField*this.eta+.10*this.alphaA*(driving-this.aMean);
+ const coherentX=this.phase.reduce((s,x)=>s+Math.cos(x),0)/this.K,coherentY=this.phase.reduce((s,x)=>s+Math.sin(x),0)/this.K;
+ for(let i=0;i<Z;i++){const x=i%S,y=Math.floor(i/S);let dpx=this.gradX(rho,i),dpy=this.gradY(rho,i),gradA=this.gradX(a,i),gradB=this.gradY(a,i),gradAy=this.gradY(a,i);
+  let divU=this.gradX(vx,i)+this.gradY(vy,i),q=Math.max(.15,rho[i]);
+  let pressure=k=>p.fluidPressure*(1-p.thermalCouple)*Math.pow(Math.max(.1,rho[k]),p.pressureGamma)+p.thermalCouple*p.fluidPressure*rho[k]*Math.max(.1,heat[k]);
+  let dpX=.5*(pressure(this.right[i])-pressure(this.left[i]));let dpY=.5*(pressure(this.down[i])-pressure(this.up[i]));
+  let stir=p.clockForce*(coherentX*Math.cos(TAU*p.stirWave*x/S)+coherentY*Math.sin(TAU*p.stirWave*y/S));
+  let ax=(-dpX/q+p.fluidVisc*this.lap(vx,i)/q+p.activatorForce*gradA+stir-p.fluidDrag*vx[i]);
+  let ay=(-dpY/q+p.fluidVisc*this.lap(vy,i)/q+p.activatorForce*gradAy+stir*Math.cos(TAU*y/S)-p.fluidDrag*vy[i]);
+  let fromX=x-dt*vx[i],fromY=y-dt*vy[i];nvx[i]=CL(this.sample(vx,fromX,fromY)+dt*ax,-4,4);nvy[i]=CL(this.sample(vy,fromX,fromY)+dt*ay,-4,4);
+  let localA=this.sample(a,fromX,fromY),localB=this.sample(b,fromX,fromY),localR=this.sample(rho,fromX,fromY),localH=this.sample(heat,fromX,fromY);
+  let f=localA-localA**3/3-localB+drive+this.impulse[i];
+  na[i]=CL(localA+dt*(p.diffA*this.lap(a,i)+f-divU*localA+p.neuralField*.1*SIG(2*neur[i])), -2.8,2.8);
+  nb[i]=CL(localB+dt*(p.diffB*this.lap(b,i)+p.inhibitorSpeed*(localA+p.excitableBias-p.inhibitorDecay*localB)-divU*localB),-2.8,2.8);
+  nr[i]=CL(localR+dt*(-localR*divU+p.fluidSource*Math.max(0,a[i]-.25)-p.fluidDrain*localR*Math.max(0,b[i]-.2)),.1,4);
+  const e11=this.gradX(vx,i),e22=this.gradY(vy,i),e12=.5*(this.gradY(vx,i)+this.gradX(vy,i));let diss=2*p.fluidVisc*(e11*e11+e22*e22+2*e12*e12-divU*divU/3)+p.fluidDrag*q*(vx[i]*vx[i]+vy[i]*vy[i]);
+  nh[i]=CL(localH+dt*(p.thermalDiff*this.lap(heat,i)+diss-pressure(i)*divU-p.thermalCool*(localH-1))/Math.max(.2,q),.1,6);
+  this.impulse[i]*=Math.exp(-dt*2.2);}
+ this.a=na;this.b=nb;this.rho=nr;this.ux=nvx;this.uy=nvy;this.heat=nh;
+ // Amari field (9.10): two spatial Gaussian convolutions of sigmoid-neural activity.
+ if(this.stepNo%6===0){let next=new Float64Array(Z),sg=new Float64Array(Z);for(let i=0;i<Z;i++)sg[i]=SIG(2.5*neur[i]);
+  for(let y=0;y<S;y++)for(let x=0;x<S;x++){let e=0,inh=0,nE=0,nI=0;for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){let j=((y+dy+S)%S)*S+((x+dx+S)%S),r2=dx*dx+dy*dy;let wE=Math.exp(-r2/(2*1.4**2)),wI=Math.exp(-r2/(2*3.2**2));e+=wE*sg[j];inh+=wI*sg[j];nE+=wE;nI+=wI;}let i=y*S+x;next[i]=CL(neur[i]+6*dt*(-neur[i]+1.25*e/nE-.95*inh/nI+.24*a[i]-.1),-3,3);}
+  this.neur=next;}
+ }
+ graphGeometry(){// Entropy-regularized W1 for lazy Ollivier curvature on weighted directed neighborhood measures.
+  const N=this.N,W=this.W,dist=Array.from({length:N},(_,i)=>Float64Array.from({length:N},(_,j)=>i===j?0:W[i*N+j]>.025?1/W[i*N+j]:1e5));
+  for(let k=0;k<N;k++)for(let i=0;i<N;i++)for(let j=0;j<N;j++)if(dist[i][k]+dist[k][j]<dist[i][j])dist[i][j]=dist[i][k]+dist[k][j];
+  let accum=new Float64Array(N),count=new Float64Array(N),neg=0,edges=0;
+  let neigh=i=>{let dest=[i],probs=[.5],tot=0;for(let j=0;j<N;j++)tot+=W[i*N+j];if(tot<1e-12)return {d:[i],p:[1]};for(let j=0;j<N;j++)if(W[i*N+j]>.025){dest.push(j);probs.push(.5*W[i*N+j]/tot);}return {d:dest,p:probs};};
+  for(const e of this.edges){let {i,j}=e,aa=neigh(i),bb=neigh(j),ni=aa.d.length,nj=bb.d.length;let transport=Array.from({length:ni},(_,r)=>new Float64Array(nj));let u=new Float64Array(ni).fill(1),v=new Float64Array(nj).fill(1);
+   for(let r=0;r<ni;r++)for(let c=0;c<nj;c++)transport[r][c]=Math.exp(-Math.min(100,dist[aa.d[r]][bb.d[c]])*.35);
+   for(let it=0;it<22;it++){for(let r=0;r<ni;r++){let den=0;for(let c=0;c<nj;c++)den+=transport[r][c]*v[c];u[r]=aa.p[r]/Math.max(1e-35,den);}for(let c=0;c<nj;c++){let den=0;for(let r=0;r<ni;r++)den+=transport[r][c]*u[r];v[c]=bb.p[c]/Math.max(1e-35,den);}}
+   let cost=0;for(let r=0;r<ni;r++)for(let c=0;c<nj;c++)cost+=u[r]*transport[r][c]*v[c]*Math.min(1e5,dist[aa.d[r]][bb.d[c]]);
+   e.curv=CL(1-cost/Math.max(.0001,dist[i][j]),-3,1);accum[i]+=e.curv;count[i]++;neg+=e.curv<0?1:0;edges++;}
+  for(let i=0;i<N;i++)this.curvature[i]=count[i]?accum[i]/count[i]:0;this.curvMean=this.curvature.reduce((a,b)=>a+b,0)/N;this.frag=edges?neg/edges:0;}
+ graphStep(dt){const p=this.p,N=this.N,W=this.W;
+ for(let i=0;i<N;i++){let x=this.xi[i],y=this.yi[i];this.xi[i]=(x+dt*(p.graphMobility*this.sample(this.ux,x,y)-.07*(x-this.homeX[i]))+this.S)%this.S;this.yi[i]=(y+dt*(p.graphMobility*this.sample(this.uy,x,y)-.07*(y-this.homeY[i]))+this.S)%this.S;}
+ let incoming=new Float64Array(N),outgoing=new Float64Array(N),compression=0;
+ for(const e of this.edges){let {i,j}=e,w=W[i*N+j],pi=this.sample(this.rho,this.xi[i],this.yi[i]),pj=this.sample(this.rho,this.xi[j],this.yi[j]);let v=e.v,next=new Float64Array(v.length),dx=Math.max(1,Math.hypot(this.xi[i]-this.xi[j],this.yi[i]-this.yi[j]))/v.length;
+  for(let k=0;k<v.length;k++){let l=k===0?v[k]:v[k-1],r=k===v.length-1?v[k]:v[k+1];next[k]=CL(v[k]+dt*(-v[k]*(r-l)/(2*dx)+.1*(r-2*v[k]+l)/(dx*dx)-(pj-pi)/Math.max(1,dx*v.length)),-3,3);compression+=Math.max(0,(l-r)/(2*dx));}e.v=next;
+  let f=Math.max(0,w*next.at(-1)*this.mi[i]/(1+this.mi[i]));incoming[j]+=f;outgoing[i]+=f;W[i*N+j]=CL(w+dt*(p.graphCurvature*e.curv*w+p.graphTraffic*f-p.graphDecay*w),.01,3);}
+ for(let i=0;i<N;i++){let source=.04*this.sample(this.rho,this.xi[i],this.yi[i]);this.mi[i]=CL(this.mi[i]+dt*(incoming[i]-outgoing[i]+source-.23*this.mi[i]),0,4);}
+ this.shock=compression/Math.max(1,this.edges.length);if(this.stepNo%80===0){ // curvature-driven surgery and proximity-dependent triadic closure
+  let change=false;for(let i=0;i<N;i++)for(let j=0;j<N;j++)if(i!==j&&W[i*N+j]<.025){W[i*N+j]=0;change=true;}
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++)if(i!==j&&W[i*N+j]===0){let common=0;for(let k=0;k<N;k++)if(W[i*N+k]>.025&&W[k*N+j]>.025)common++;let dx=Math.abs(this.xi[i]-this.xi[j]),dy=Math.abs(this.yi[i]-this.yi[j]);dx=Math.min(dx,this.S-dx);dy=Math.min(dy,this.S-dy);let rate=.005*common*Math.exp(-Math.hypot(dx,dy)/10);if(HF(this.seed,44,this.stepNo,i*N+j)<rate*dt*80){W[i*N+j]=.048;change=true;}}
+  if(change)this.rebuildEdges();this.graphGeometry();}
+ }
+ markedEvent(mark,node,kind='hawkes'){this.eventTotal++;this.lastBurst=this.t;this.pulse=Math.min(8,this.pulse+mark);let i=node??this.chooseNode(),x=this.xi[i],y=this.yi[i],p=this.p;
+  this.hawkEcho=CL(this.hawkEcho+p.burstProduct*Math.pow(Math.max(.01,mark),Math.min(p.burstExponent,p.burstPareto-.03))*p.burstDecay,0,35);
+  this.z[i]=CL(this.z[i]+.28*mark,0,8);this.I[i]=CL(this.I[i]+(1-this.I[i]-this.Re[i])*(1-Math.exp(-.28*mark)),0,1-this.Re[i]);
+  for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){let ix=((Math.round(x)+dx+this.S)%this.S),iy=((Math.round(y)+dy+this.S)%this.S);let ind=iy*this.S+ix;this.impulse[ind]+=p.burstField*mark*Math.exp(-(dx*dx+dy*dy)/8);}
+  this.strainEvent+=p.eventStrain*mark;this.onBurst?.(mark,x,y,kind);}
+ chooseNode(){let probs=[],total=0;for(let i=0;i<this.N;i++){let v=Math.exp(CL(.95*this.z[i]-this.p.graphToBurst*this.curvature[i],-5,5));probs.push(v);total+=v;}let r=HF(this.seed,32,this.stepNo,this.eventTotal)*total;for(let i=0;i<this.N;i++){r-=probs[i];if(r<=0)return i;}return this.N-1;}
+ burstAndSand(dt){const p=this.p,N=this.N,W=this.W;this.hawkEcho*=Math.exp(-p.burstDecay*dt);
+ const realBase=p.burstBase+p.fluidToBurst*this.vort+p.infectionEcho*this.infected;
+ const predBase=CL(this.pred[9]*Math.sqrt(this.variances[9])+this.means[9],0,10);
+ let base=CL((1-this.alphaA)*realBase+this.alphaA*predBase,0,10);this.hawkRate=CL(base+this.hawkEcho,0,45);
+ // conditional Poisson tau-leap: intensity is locally frozen within dt, not Ogata exact-time thinning.
+ let arrivals=CL(Math.floor(this.hawkRate*dt+HF(this.seed,31,this.stepNo,0)),0,3);
+ for(let e=0;e<arrivals;e++){let rand=Math.max(1e-8,HF(this.seed,31,this.stepNo,e+4));let mark=Math.min(5,Math.pow(rand,-1/p.burstPareto));this.markedEvent(mark,undefined,'hawkes');}
+ let nI=new Float64Array(N),nR=new Float64Array(N);for(let i=0;i<N;i++){let contacts=0;for(let j=0;j<N;j++)contacts+=W[j*N+i]*this.I[j];let sus=Math.max(0,1-this.I[i]-this.Re[i]);nI[i]=CL(this.I[i]+dt*(p.infectionRate*sus*contacts-p.recoveryRate*this.I[i]),0,1);nR[i]=CL(this.Re[i]+dt*(p.recoveryRate*this.I[i]-p.immunityLoss*this.Re[i]),0,1);if(nI[i]+nR[i]>1){let scale=1/(nI[i]+nR[i]);nI[i]*=scale;nR[i]*=scale;}}
+ this.I=nI;this.Re=nR;
+ for(let i=0;i<N;i++){this.z[i]=CL(this.z[i]+dt*(p.creepLoad+p.massLoad*this.mi[i]+p.infectionLoad*this.I[i]+p.strainLoad*this.eta*(1+.4*this.R)-.008*Math.max(0,this.z[i]-.1)),0,12);
+ this.zc[i]+=dt*.1*(Math.max(.05,p.avalancheThreshold*(1+.15*this.curvature[i]))-this.zc[i]);}
+ let queue=[];for(let i=0;i<N;i++)if(this.z[i]>=this.zc[i])queue.push(i);
+ let sizes=new Int32Array(N),sz=0,generations=0;
+ while(queue.length&&sz<400){let next=[];for(const i of queue){if(this.z[i]<this.zc[i])continue;let th=this.zc[i];this.z[i]-=th;this.zc[i]=CL(this.zc[i]*(1+p.avalancheFatigue),.05,9);sizes[i]++;sz++;let den=0;for(let j=0;j<N;j++)den+=W[i*N+j];if(den>0)for(let j=0;j<N;j++)if(W[i*N+j]>.025){this.z[j]+=p.avalancheKeep*th*W[i*N+j]/den;if(this.z[j]>=this.zc[j])next.push(j);}if(this.z[i]>=this.zc[i])next.push(i);if(sz>=400)break;}
+ queue=[...new Set(next)];generations++;if(generations>90)break;}
+ this.latestAvalanche=sz;this.avalancheLoss=sz*(1-p.avalancheKeep)*p.avalancheThreshold;if(sz){this.avalancheTotal++;this.strainEvent+=p.eventStrain*sz*.4;}
+ if(sz>=3){let i=0;for(let k=1;k<N;k++)if(sizes[k]>sizes[i])i=k;this.markedEvent(p.avalancheToBurst*Math.pow(sz/3,.5),i,'avalanche');}
+ this.pulse*=Math.exp(-dt*4);this.strainEvent*=Math.exp(-dt*2);}
+ walkerStep(dt){const p=this.p,q=this.q;let tiltX=p.tiltCore*(this.phi-.3)+.1*this.aMean,tiltY=.12*(this.eta-.3)+.1*this.infected;
+ let memX=0,memY=0;const wells=[[1,1],[1,-1],[-1,1],[-1,-1]];for(let i=0;i<4;i++){memX+=this.overlaps[i]*wells[i][0];memY+=this.overlaps[i]*wells[i][1];}tiltX+=p.tiltMemory*memX*.35;tiltY+=p.tiltMemory*memY*.35;
+ let barrier=CL(p.wellBarrier*(1+.25*this.R*Math.cos(this.Psi)),.1,8);
+ let gx=4*barrier*q[0]*(q[0]*q[0]-1)+p.wellTwist*q[1]-tiltX,gy=4*barrier*q[1]*(q[1]*q[1]-1)+p.wellTwist*q[0]-tiltY,hv=0;
+ let alive=[];for(let h of this.hills){let age=this.t-h.t,fade=Math.exp(-age/p.hillFade);if(fade<.004)continue;let dx=q[0]-h.x,dy=q[1]-h.y,mag=p.hillHeight*h.w*fade*Math.exp(-(dx*dx+dy*dy)/(2*p.hillWidth**2));hv+=mag;gx-=mag*dx/(p.hillWidth**2);gy-=mag*dy/(p.hillWidth**2);alive.push(h);}this.hills=alive.slice(-180);
+ let force2=gx*gx+gy*gy;this.qGrad=[gx,gy];this.V=barrier*((q[0]*q[0]-1)**2+(q[1]*q[1]-1)**2)+p.wellTwist*q[0]*q[1]-tiltX*q[0]-tiltY*q[1]+hv;
+ let noise=CL(p.walkerNoise+p.burstHeat*this.hawkRate/2+this.p.heatToWalk*Math.max(0,this.heatMean-1),.005,3);
+ q[0]=CL(q[0]-dt*CL(gx,-15,15)+Math.sqrt(2*noise*dt)*NOISE(this.seed,40,this.stepNo,0),-2.5,2.5);
+ q[1]=CL(q[1]-dt*CL(gy,-15,15)+Math.sqrt(2*noise*dt)*NOISE(this.seed,40,this.stepNo,1),-2.5,2.5);
+ if(this.stepNo%Math.round(1/dt)===0)this.hills.push({x:q[0],y:q[1],t:this.t,w:1});this.walkDiss=force2;
+ let sum=0;this.wellP=wells.map(([x,y])=>{let w=Math.exp(-((q[0]-x)**2+(q[1]-y)**2)/.52);sum+=w;return w;});this.wellP=this.wellP.map(w=>w/Math.max(1e-12,sum));this.Hq=-this.wellP.reduce((sum,w)=>sum+(w>0?w*Math.log(w):0),0);this.well=Math.max(0,...this.wellP);}
+ hopfieldStep(dt){const p=this.p,M=this.M,P=this.memPatterns.length,overlaps=new Float64Array(P);for(let mu=0;mu<P;mu++)for(let j=0;j<M;j++)overlaps[mu]+=this.mem[j]*this.memPatterns[mu][j]/M;this.overlaps=Array.from(overlaps.slice(0,4));
+ const y=this.observable;for(let j=0;j<M;j++){let exc=0;for(let mu=0;mu<P;mu++){let sig=this.memPatterns[mu][j];exc+=sig*overlaps[mu]+p.hopSequence*this.memPatterns[(mu+1)%P][j]*overlaps[mu];}exc-=P/M*this.mem[j];let inp=0;for(let c=0;c<14;c++)inp+=this.proj[j][c]*CL(y[c],-4,4);this.mem[j]+=dt*1.6*(-this.mem[j]+Math.tanh(p.hopGain*(exc+p.hopWorld*.24*inp-this.adapt[j])));this.adapt[j]+=dt*.28*(-this.adapt[j]+p.hopAdapt*this.mem[j]);}}
+ fractionalStep(dt){const p=this.p,hist=this.etaHistory;let normalized=CL(this.vort/1-this.R-this.V/4,-5,5);this.alpha=CL(p.alphaMin+(1-p.alphaMin)*SIG(p.alphaSlope*normalized),p.alphaMin,.999);
+ let source=p.coreStrain*(this.coreOvershoot+this.coreSpeed*.16)+p.vortexStrain*this.vort+.04*this.front+.04*this.clockSpeed+this.strainEvent+.025*this.shock+.04*this.frag+p.surpriseStrain*Math.max(0,this.surprise-1)+.0008*this.walkDiss;
+ let a=this.alpha,scale=Math.pow(dt,-a)/gammaFn(2-a);let terms=0,len=Math.min(320,hist.length-1);
+ for(let j=1;j<=len;j++){let w=Math.pow(j+1,1-a)-Math.pow(j,1-a);terms+=w*(hist[hist.length-j]-hist[hist.length-j-1]);}
+ let eta0=hist.at(-1),next=eta0;
+ // L1 Caputo discretization with implicit damping: positive root via safeguarded Newton.
+ for(let it=0;it<8;it++){let f=scale*(next-eta0+terms)+next/p.strainRelax+p.strainSaturate*next*next-source;next=CL(next-f/(scale+1/p.strainRelax+2*p.strainSaturate*Math.max(0,next)),0,12);}
+ this.eta=next;hist.push(next);if(hist.length>322)hist.shift();}
+ observables(){return [this.phi,this.psi,this.chi,this.eta,this.aMean,this.rough,this.kin,this.vort,this.R,this.hawkRate,this.infected,this.latestAvalanche/10,this.q[0],this.q[1]];}
+ reservoirStep(){let p=this.p,y=this.observables();let yy=new Float64Array(14),z=new Float64Array(14);
+ for(let i=0;i<14;i++){let raw=CL(y[i],-30,30);this.means[i]=.997*this.means[i]+.003*raw;this.variances[i]=.997*this.variances[i]+.003*(raw-this.means[i])**2;z[i]=CL((raw-this.means[i])/Math.sqrt(this.variances[i]+.05),-4,4);yy[i]=z[i];}
+ let newR=new Float64Array(this.NR),r=this.rs;
+ for(let i=0;i<this.NR;i++){let sum=0,abs=0;for(const [j,w] of this.rw[i]){sum+=w*r[j];abs+=Math.abs(w);}sum=p.reservoirGain*sum/Math.max(.1,abs);for(let j=0;j<14;j++){let v=(1-this.alphaA)*z[j]+this.alphaA*this.pred[j];sum+=this.rInput[i][j]*v;}newR[i]=(1-p.reservoirLeak)*r[i]+p.reservoirLeak*Math.tanh(sum);}
+ this.rs=newR;let rr=Float64Array.from([...newR,1]);let old=this.pred.slice();let err=0;for(let i=0;i<14;i++){let out=0;for(let j=0;j<rr.length;j++)out+=this.rout[i][j]*rr[j];this.pred[i]=CL(out,-6,6);err+=(old[i]-z[i])**2;}this.surprise=err/Math.max(.001,this.avgErr);this.avgErr=.99*this.avgErr+.01*err;
+ // RLS update with symmetric inverse covariance; initialized from ridge prior.
+ let P=this.rP,L=rr.length,Pr=new Float64Array(L),den=0,forget=.999;
+ for(let i=0;i<L;i++){for(let j=0;j<L;j++)Pr[i]+=P[i][j]*rr[j];den+=rr[i]*Pr[i];}den+=forget;
+ let kr=new Float64Array(L);for(let i=0;i<L;i++)kr[i]=Pr[i]/den;
+ for(let i=0;i<14;i++)for(let j=0;j<L;j++)this.rout[i][j]+=p.reservoirLearn*(z[i]-this.pred[i])*kr[j];
+ for(let i=0;i<L;i++)for(let j=0;j<L;j++)P[i][j]=CL((P[i][j]-kr[i]*Pr[j])/forget,-100,100);
+ this.resTrained++;let target=this.resTrained>60?p.autonomyMax*this.confidence*(this.surprise<4?1:0):0;this.alphaA=CL(this.alphaA+.04*(target-this.alphaA),0,p.autonomyMax);}
+ informationStep(){let row=[this.phi,this.rough,this.vort,this.R,this.hawkRate,this.latestAvalanche,this.eta,this.q[0],Math.max(...this.overlaps),this.heatMean,this.frag,this.surprise];this.infoHistory.push(row.map(x=>CL(x,-100,100)));if(this.infoHistory.length>220)this.infoHistory.shift();if(this.stepNo%80||this.infoHistory.length<32)return;
+  const xs=this.infoHistory;const L=xs.length-1;
+  let cov=(a,b)=>{let ma=0,mb=0;for(let k=0;k<L;k++){ma+=a[k];mb+=b[k];}ma/=L;mb/=L;let sum=0;for(let k=0;k<L;k++)sum+=(a[k]-ma)*(b[k]-mb);return sum/L;};
+  for(let j=0;j<12;j++){let prev=xs.slice(0,-1).map(r=>r[j]),future=xs.slice(1).map(r=>r[j]);let vz=cov(future,future),vx=cov(prev,prev),zx=cov(future,prev),base=Math.max(1e-12,vz-zx*zx/Math.max(1e-9,vx));this.infoAIS[j]=vz>1e-9?CL(.5*Math.log(vz/base),0,9):0;
+   for(let i=0;i<12;i++){if(i===j){this.infoTE[i][j]=0;continue;}let src=xs.slice(0,-1).map(r=>r[i]);let vy=cov(src,src),xy=cov(prev,src),zy=cov(future,src),ridge=1e-9;let den=Math.max(1e-15,(vx+ridge)*(vy+ridge)-xy*xy);let explained=(zx*zx*(vy+ridge)+zy*zy*(vx+ridge)-2*zx*zy*xy)/den;let full=Math.max(1e-12,vz-explained);this.infoTE[i][j]=CL(.5*Math.log(base/full),0,5);}}
+  this.infoComputed++;}
+ thermodynamicsStep(){let e=this,p=e.p; // Nonnegative dissipative proxy, NOT a literal universal entropy production law.
+  let walker=e.walkDiss/Math.max(.001,p.walkerNoise),visc=p.fluidVisc*e.vort+p.fluidDrag*e.kin,sirs=p.recoveryRate*e.infected,av=e.avalancheLoss||0;
+  let raw=CL(.03*walker+visc+sirs*.12+av*.03,0,50);e.Sigma=.985*e.Sigma+.015*raw;e.confidence=Math.exp(-e.Sigma/1.8)*Math.exp(-e.Hq/Math.log(4));}
+ step(dt=this.dt){this.t+=dt;this.stepNo++;this.computeSummary();this.observable=Float64Array.from(this.observables());this.coreStep(dt);this.clockStep(dt);this.spatialStep(dt);if(this.stepNo%3===0)this.graphStep(dt*3);this.burstAndSand(dt);this.walkerStep(dt);this.hopfieldStep(dt);this.fractionalStep(dt);this.thermodynamicsStep();if(this.stepNo%4===0){this.reservoirStep();this.informationStep();}if(this.stepNo%2===0){this.trail.push([this.phi,this.psi,this.chi,this.eta,this.q[0],this.q[1],this.R,this.vort]);if(this.trail.length>1150)this.trail.shift();}
+ if(!Number.isFinite(this.eta+this.phi+this.q[0]+this.aMean)){this.error='Numerical guard: reset state';this.init();return false;}return true;}
+ snapshot(){return {t:this.t,phi:this.phi,psi:this.psi,chi:this.chi,eta:this.eta,alpha:this.alpha,R:this.R,vort:this.vort,rough:this.rough,rate:this.hawkRate,events:this.eventTotal,avalanches:this.avalancheTotal,q:[...this.q],heat:this.heatMean,auto:this.alphaA,frag:this.frag,net:this.edges.length,confidence:this.confidence,info:this.infoComputed,step:this.stepNo};}
+}
+// Lanczos-gamma coefficients for the Caputo L1 kernel.
+function gammaFn(z){let p=[.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.6150291621406,12.507343278686905,-.13857109526572012,9.984369578019572e-6,1.5056327351493116e-7];if(z<.5)return Math.PI/(Math.sin(Math.PI*z)*gammaFn(1-z));z-=1;let x=p[0];for(let i=1;i<p.length;i++)x+=p[i]/(z+i);let t=z+7.5;return Math.sqrt(TAU)*t**(z+.5)*Math.exp(-t)*x;}
+
+const app=new TIDE(DEFAULTS,19);
+const $=id=>document.getElementById(id), ctl=$('controls'), stage=$('stage'), ctx=stage.getContext('2d',{alpha:false}), low=document.createElement('canvas'),lowctx=low.getContext('2d');
+let view='Field',luminous=true,running=true,sound=null,prev=performance.now(),acc=0,frames=0,lastFrame=0,bursts=[],drag=false,followControls=false,pendingRepaint=true;
+const views=['Field','Flow','Heat','Graph','Attractor','Landscape','Clocks','Information'];
+const GROUP_VIEW={Core:'Attractor',Pattern:'Field',Fluid:'Flow',Clocks:'Clocks',Bursts:'Graph',Avalanches:'Graph',Strain:'Attractor',Walker:'Landscape',Hopfield:'Landscape',Heat:'Heat',Geometry:'Graph',Reservoir:'Information'};
+function setFollow(on){followControls=!!on;$('follow').textContent='Follow: '+(followControls?'On':'Off');$('follow').setAttribute('aria-pressed',String(followControls));}
+$('follow').onclick=()=>setFollow(!followControls);setFollow(false);
+$('moreTools').onclick=()=>{let show=$('moreTools').getAttribute('aria-expanded')!=='true';document.querySelector('.toolbar').classList.toggle('more-open',show);$('moreTools').textContent=show?'Tools ▴':'Tools ▾';$('moreTools').setAttribute('aria-expanded',String(show));};
+const histColors={Field:[12,22,37],Flow:[5,19,31],Heat:[8,19,33]};
+function updateStatus(){let s=app.snapshot();$('metrics').innerHTML=[['TIME',s.t.toFixed(1)],['STRAIN',s.eta.toFixed(3)],['LOCK',s.R.toFixed(2)],['BURSTS',s.events],['VORT',s.vort.toFixed(3)],['α',s.alpha.toFixed(2)]].map(([k,v])=>`<div class="metric"><span>${k}</span><strong>${v}</strong></div>`).join('');
+ $('detail').textContent=`φ ${s.phi.toFixed(2)} · ψ ${s.psi.toFixed(2)} · χ ${s.chi.toFixed(2)} · roughness ${s.rough.toFixed(3)} · heat ${s.heat.toFixed(2)} · well (${s.q[0].toFixed(2)}, ${s.q[1].toFixed(2)}) · edges ${s.net} · autonomy ${s.auto.toFixed(2)} · confidence ${s.confidence.toFixed(2)}`;
+ $('run').textContent=running?'Pause':'Resume';$('count').textContent=PARAMS.length+' live parameters';$('audio').textContent=sound?'Sound on':'Enable sound';}
+function buildControls(){for(const group of GROUPS){let details=document.createElement('details');details.className='group';details.open=group[1]==='Audio'||group[1]==='Core';let title=document.createElement('summary');title.textContent=`${group[0]}  ·  ${group[2].length} variables`;details.appendChild(title);
+  for(const d of PARAMS.filter(x=>x.group===group[1])){let row=document.createElement('label');row.className='knob';row.dataset.search=(d.label+' '+d.info+' '+d.group).toLowerCase();row.htmlFor='sl-'+d.key;
+   let info=document.createElement('div');info.className='knobhead';let name=document.createElement('span');name.textContent=d.label;let val=document.createElement('output');val.id='out-'+d.key;val.textContent=String(d.value);info.append(name,val);row.append(info);
+   let slide=document.createElement('input');slide.type='range';slide.id='sl-'+d.key;slide.min=d.min;slide.max=d.max;slide.step=d.step;slide.value=d.value;slide.setAttribute('aria-label',d.label);slide.dataset.key=d.key;slide.addEventListener('input',()=>{const v=+slide.value;app.p[d.key]=v;val.textContent=v.toFixed(d.step<.001?4:d.step<.01?3:d.step<1?2:0);slide.style.setProperty('--fill',Math.round((v-d.min)/(d.max-d.min)*100)+'%');$('linkage').textContent=`${d.group} · ${d.info}`;$('liveParam').textContent=d.label+' = '+val.textContent;if(followControls&&GROUP_VIEW[d.group])selectView(GROUP_VIEW[d.group]);if(sound)sound.update();pendingRepaint=true;});slide.style.setProperty('--fill',Math.round((d.value-d.min)/(d.max-d.min)*100)+'%');row.append(slide);
+   let desc=document.createElement('small');desc.textContent=d.info;row.append(desc);details.append(row);}
+  ctl.append(details);}
+}
+function selectView(s){view=s;for(let b of document.querySelectorAll('[data-view]'))b.classList.toggle('selected',b.dataset.view===view);$('viewName').textContent=view;}
+for(let v of views){let b=document.createElement('button');b.className='tab';b.textContent=v;b.dataset.view=v;b.onclick=()=>{selectView(v);setFollow(false);};$('tabs').append(b);}selectView('Field');buildControls();
+$('visualStyle').onclick=()=>{luminous=!luminous;$('visualStyle').textContent='Rendering: '+(luminous?'Luminous':'Diagnostic');$('visualStyle').setAttribute('aria-pressed',String(luminous));pendingRepaint=true;$('linkage').textContent=luminous?'Luminous mode: blue-gold radiance, contour filaments, and illuminated gradients computed directly from the actual activator, inhibitor, and fluid fields. No synthetic dynamics.':'Diagnostic mode: original direct field-color mapping.';safeRender();};
+$('run').onclick=()=>{running=!running;updateStatus();};$('step').onclick=()=>{running=false;app.step();updateStatus();safeRender();};$('perturb').onclick=()=>{app.markedEvent(2.5,app.chooseNode(),'user-perturbation');$('linkage').textContent='Controlled perturbation injected: marked burst A=2.5. All coupling pathways remain governed by TIDE.';updateStatus();};
+$('reset').onclick=()=>{app.init();bursts=[];$('linkage').textContent='Seed 19 · All model states reset, current controls retained';updateStatus();};
+$('defaults').onclick=()=>{for(const d of PARAMS){app.p[d.key]=d.value;let sl=$('sl-'+d.key);sl.value=d.value;sl.dispatchEvent(new Event('input'));}app.init();$('linkage').textContent='100 original parameter values restored';};
+$('audio').onclick=async()=>{if(!sound){sound=new TideAudio(app);try{await sound.start();}catch(e){sound=null;$('linkage').textContent='Audio unavailable: '+e.message;return;}}else{sound.stop();sound=null;}updateStatus();};
+$('search').addEventListener('input',e=>{let q=e.target.value.toLowerCase();for(let group of document.querySelectorAll('.group')){let shown=0;for(let row of group.querySelectorAll('.knob')){let hit=!q||row.dataset.search.includes(q);row.hidden=!hit;shown+=hit;}group.hidden=shown===0;if(q&&shown)group.open=true;}});
+$('full').onclick=async()=>{try{if(!document.fullscreenElement){await ($('visual').requestFullscreen?.()||document.documentElement.requestFullscreen?.());}else await document.exitFullscreen();}catch(e){$('linkage').textContent='Fullscreen is unavailable in this browser. Rotate your device for a wider canvas.';}};
+$('savePreset').onclick=()=>{const payload={format:'TIDE-100-preset',version:1,seed:app.seed,parameters:app.p};const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));link.download='tide-100-parameters.json';document.body.appendChild(link);link.click();setTimeout(()=>{URL.revokeObjectURL(link.href);link.remove()},500);};
+$('loadPreset').onclick=()=>$('presetFile').click();$('presetFile').onchange=async e=>{let f=e.target.files?.[0];if(!f)return;try{let data=JSON.parse(await f.text());if(data.format!=='TIDE-100-preset'||!data.parameters)throw Error('Not a TIDE preset');for(const def of PARAMS){let v=data.parameters[def.key];if(!Number.isFinite(v))continue;const sl=$('sl-'+def.key);sl.value=CL(v,def.min,def.max);sl.dispatchEvent(new Event('input'));}app.init();$('linkage').textContent='TIDE preset loaded; simulation restarted with the imported coefficients.';}catch(error){$('linkage').textContent='Unable to load preset: '+error.message;}e.target.value='';};
+$('quality').onchange=e=>{let n=+e.target.value;app.dt=n===1?.025:n===2?.016:.04;$('linkage').textContent=`Time step ${app.dt} · smaller = higher temporal resolution`};
+// Native HTML audio starts only after a user gesture; no autoplay.
+class TideAudio {
+ constructor(engine){this.e=engine;this.ac=null;this.voices=[];this.lastEvent=0;}
+ async start(){let AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw Error('Web Audio API not found');let ac=this.ac=new AC();
+  const master=this.master=ac.createGain();master.gain.value=.001;const comp=this.comp=ac.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=18;comp.ratio.value=8;comp.attack.value=.005;comp.release.value=.19;master.connect(comp);comp.connect(ac.destination);
+  this.panner=ac.createStereoPanner?ac.createStereoPanner():null;this.lowpass=ac.createBiquadFilter();this.lowpass.type='lowpass';this.lowpass.frequency.value=1200;this.lowpass.Q.value=1.6;this.lowpass.connect(this.panner||master);if(this.panner)this.panner.connect(master);
+  for(let i=0;i<5;i++){let osc=ac.createOscillator(),g=ac.createGain();osc.type=['sine','triangle','sine','sawtooth','sine'][i];osc.frequency.value=130;g.gain.value=0.0;osc.connect(g);g.connect(this.lowpass);osc.start();this.voices.push({osc,g});}
+  const noiseBuffer=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate),samples=noiseBuffer.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]=2*HF(101,23,0,i)-1;let ns=ac.createBufferSource();ns.buffer=noiseBuffer;ns.loop=true;this.ns=ns;
+  this.noiseFilter=ac.createBiquadFilter();this.noiseFilter.type='bandpass';this.noiseFilter.Q.value=1.4;this.noiseGain=ac.createGain();this.noiseGain.gain.value=.001;ns.connect(this.noiseFilter);this.noiseFilter.connect(this.noiseGain);this.noiseGain.connect(master);ns.start();
+  await ac.resume();this.update();}
+ update(){if(!this.ac)return;let a=this.ac,t=a.currentTime,e=this.e,p=e.p,base=440*Math.pow(2,(p.audioBase-69)/12);let memory=Math.max(0,...e.overlaps.map(Math.abs)),phase=e.phase;
+  for(let i=0;i<this.voices.length;i++){let osc=this.voices[i].osc,g=this.voices[i].g,angle=phase[(i*7)%e.K],freq=base*[1,1.5,2,2.5,3][i]*Math.pow(2,(p.audioClock*(.24*Math.sin(angle)+.13*(e.chi-.4)+.1*e.q[i%2]))/12);osc.frequency.setTargetAtTime(CL(freq,22,4500),t,.06);let amp=.09/(1+i*.34)*(i===0?.85:.3+.65*memory*p.audioMemory)*(.45+.55*e.R);g.gain.setTargetAtTime(amp,t,.085);}
+  this.lowpass.frequency.setTargetAtTime(CL(240+5000*p.audioPattern*SIG(3*(e.rough+.22*e.aMean))*(.6+.3*memory*p.audioMemory),160,9000),t,.08);
+  this.lowpass.Q.setTargetAtTime(0.8+7*p.audioMemory*memory,t,.1);
+  this.noiseFilter.frequency.setTargetAtTime(CL(110+5000*SIG(e.vort*2),90,6500),t,.09);
+  this.noiseGain.gain.setTargetAtTime(CL(.005+p.audioFluid*.095*Math.sqrt(Math.max(0,e.vort)),0,.12),t,.12);
+  if(this.panner)this.panner.pan.setTargetAtTime(CL(e.q[0]/2*p.audioPan,-1,1),t,.13);
+  this.master.gain.setTargetAtTime(p.audioLevel,t,.1);
+ }
+ burst(mark){if(!this.ac)return;let ac=this.ac,p=this.e.p,t=ac.currentTime,amp=CL(mark*p.audioBurst*.13,0,.42);if(amp<.005)return;let o=ac.createOscillator(),f=ac.createBiquadFilter(),g=ac.createGain();o.type='triangle';o.frequency.setValueAtTime(110+90*this.e.R+Math.min(600,mark*120),t);o.frequency.exponentialRampToValueAtTime(35+60*this.e.R,t+.35);f.type='lowpass';f.frequency.value=2500+600*this.e.rough;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(amp,t+.012);g.gain.exponentialRampToValueAtTime(.0001,t+.42);o.connect(f);f.connect(g);g.connect(this.master);o.start(t);o.stop(t+.43);}
+ stop(){if(!this.ac)return;this.master.gain.setTargetAtTime(0,this.ac.currentTime,.02);let ac=this.ac;setTimeout(()=>ac.close().catch(()=>{}),80);this.ac=null;}
+}
+app.onBurst=(mark,x,y,kind)=>{bursts.push({x,y,t:performance.now(),kind});if(bursts.length>32)bursts.shift();sound?.burst(mark);};
+const RGB=(r,g,b)=>[CL(r|0,0,255),CL(g|0,0,255),CL(b|0,0,255)];
+function resize(){let dpr=CL(window.devicePixelRatio||1,1,2),w=stage.clientWidth,h=stage.clientHeight;let nw=Math.max(1,Math.round(w*dpr)),nh=Math.max(1,Math.round(h*dpr));if(stage.width!==nw||stage.height!==nh){stage.width=nw;stage.height=nh;}ctx.setTransform(dpr,0,0,dpr,0,0);return [w,h];}
+function backdrop(){const [w,h]=resize();ctx.fillStyle='#050e1a';ctx.fillRect(0,0,w,h);return [w,h];}
+function fieldRenderLegacy(){let [w,h]=backdrop(),e=app,S=e.S;low.width=S;low.height=S;let data=lowctx.createImageData(S,S);for(let i=0;i<S*S;i++){let a=e.a[i],b=e.b[i],r=e.rho[i],T=e.heat[i],v=(e.uy[e.right[i]]-e.uy[e.left[i]]-e.ux[e.down[i]]+e.ux[e.up[i]])*.5;let rgb;
+ if(view==='Field'){let c=Math.tanh((a-e.aMean)/(.07+.55*e.rough)),d=Math.tanh((b-e.bMean)/(.08+.4*e.rough));rgb=RGB(24+181*Math.max(0,c)+38*Math.max(0,-d),37+138*Math.max(0,c)+45*Math.max(0,d),65+164*Math.max(0,-c)+65*Math.max(0,d));}
+ else if(view==='Flow'){let vv=Math.tanh(v*.9),f=Math.tanh(Math.hypot(e.ux[i],e.uy[i]));rgb=RGB(24+210*Math.max(0,vv)+40*f,35+90*f+42*Math.abs(vv),61+190*Math.max(0,-vv)+35*f);}
+ else {let hot=SIG((T-1)*4-1),cold=Math.max(0,1-hot);rgb=RGB(26+218*hot,30+95*hot+60*cold,68+168*cold-60*hot);}
+ let o=i*4;data.data[o]=rgb[0];data.data[o+1]=rgb[1];data.data[o+2]=rgb[2];data.data[o+3]=255;}
+ lowctx.putImageData(data,0,0);let aspect=w/h,sw,sh,sx,sy;if(aspect>=1){sw=h;sh=h;sx=(w-sw)/2;sy=0;}else{sw=w;sh=w;sx=0;sy=(h-sh)/2;}ctx.imageSmoothingEnabled=true;ctx.drawImage(low,sx,sy,sw,sh);
+ // Lagrangian trajectories are advected with the simulated fluid velocity, rather than arbitrary decorative motion.
+ if(!fieldRender.tracers)fieldRender.tracers=Array.from({length:400},(_,i)=>({x:HF(31,1,0,i)*S,y:HF(31,2,0,i)*S}));
+ ctx.globalCompositeOperation='screen';let stepDelta=CL(e.stepNo-(fieldRender.previousStep??e.stepNo),0,6),k=e.dt*stepDelta;fieldRender.previousStep=e.stepNo;for(const q of fieldRender.tracers){q.x=(q.x+k*e.sample(e.ux,q.x,q.y)+S)%S;q.y=(q.y+k*e.sample(e.uy,q.x,q.y)+S)%S;let a=e.sample(e.a,q.x,q.y);ctx.fillStyle=`rgba(${Math.round(90+145*SIG(a))},${Math.round(120+100*SIG(a))},245,.42)`;ctx.fillRect(sx+q.x/S*sw,sy+q.y/S*sh,1.4,1.4);}ctx.globalCompositeOperation='source-over';
+ let now=performance.now();bursts=bursts.filter(b=>now-b.t<1800);for(let b of bursts){let age=(now-b.t)/1800;ctx.beginPath();ctx.arc(sx+b.x/S*sw,sy+b.y/S*sh,2+age*sw*.19,0,TAU);ctx.lineWidth=1.8;ctx.strokeStyle=`rgba(255,210,147,${.7*(1-age)})`;ctx.stroke();}
+ if(w>450){ctx.strokeStyle='rgba(203,231,255,.25)';ctx.strokeRect(sx,sy,sw,sh);}}
+
+// Luminous rendering of the SAME discretized TIDE state. No independent phase,
+// noise, texture generator, or phantom particle trajectories. High-resolution
+// reconstruction and isocontours are visualization, NOT extra PDE resolution.
+function luminousFieldRender(){
+ const [w,h]=backdrop(),e=app,S=e.S,coarse=window.matchMedia?.('(pointer: coarse)')?.matches;
+ const Q=coarse?204:Math.min(340,Math.max(240,Math.round(Math.max(w,h)*.53)));
+ if(low.width!==Q||low.height!==Q){low.width=Q;low.height=Q;}
+ const im=lowctx.createImageData(Q,Q),dd=im.data;
+ // Central-difference gradients of the actual activator used for surface lighting.
+ const gx=new Float32Array(S*S),gy=new Float32Array(S*S);
+ for(let j=0;j<S*S;j++){
+  gx[j]=.5*(e.a[e.right[j]]-e.a[e.left[j]]);
+  gy[j]=.5*(e.a[e.down[j]]-e.a[e.up[j]]);
+ }
+ const lerp4=(ar,a,b,c,d,fx,fy)=>{
+  let x0=ar[a]*(1-fx)+ar[b]*fx,x1=ar[c]*(1-fx)+ar[d]*fx;
+  return x0*(1-fy)+x1*fy;
+ };
+ const sm=(a,b,x)=>{x=CL((x-a)/(b-a),0,1);return x*x*(3-2*x)};
+ const aScale=.065+.55*e.rough, bScale=.085+.43*e.rough;
+ for(let iy=0;iy<Q;iy++){
+  let fyWorld=(iy+.5)*S/Q-.5,cy=Math.floor(fyWorld),fy=fyWorld-cy;
+  let y0=(cy%S+S)%S,y1=(y0+1)%S,iy0=y0*S,iy1=y1*S;
+  for(let ix=0;ix<Q;ix++){
+   let fxWorld=(ix+.5)*S/Q-.5,cx=Math.floor(fxWorld),fx=fxWorld-cx;
+   let x0=(cx%S+S)%S,x1=(x0+1)%S;
+   const aa=iy0+x0,ab=iy0+x1,ba=iy1+x0,bb=iy1+x1;
+   const A=lerp4(e.a,aa,ab,ba,bb,fx,fy), B=lerp4(e.b,aa,ab,ba,bb,fx,fy);
+   const gX=lerp4(gx,aa,ab,ba,bb,fx,fy),gY=lerp4(gy,aa,ab,ba,bb,fx,fy);
+   const activ=(A-e.aMean)/aScale, inhib=(B-e.bMean)/bScale;
+   const z=Math.tanh(activ-.22*inhib);
+   const gold=sm(-.18,.28,z), cold=sm(-1,.20,z),hot=sm(-.25,.65,z);
+   const slope=Math.hypot(gX,gY),ill=CL(.82+.35*(-gX+gY)/(aScale+.02),.52,1.33);
+   const boundary=Math.exp(-Math.pow(z/.17,2))*(.46+CL(slope*5,0,.68));
+   // Narrow, anti-aliased isolines represent actual levels of activator A.
+   const phase=(activ+.19*inhib)*3.3, contour=Math.pow(Math.max(0,Math.cos(phase*Math.PI)),22);
+   const line=contour*(.15+.37*CL(slope*5,0,1));
+   const br=30+220*hot, bg=24+166*hot,bl=18+84*hot;
+   let r=((5+22*cold)*(1-gold)+br*gold)*ill+103*boundary+100*line;
+   let g=((11+77*cold)*(1-gold)+bg*gold)*ill+58*boundary+84*line;
+   let b=((30+140*cold)*(1-gold)+bl*gold)*ill+36*boundary+53*line;
+   // Fluid compression lightly illuminates material boundaries.
+   const dens=lerp4(e.rho,aa,ab,ba,bb,fx,fy);
+   const compression=CL((dens-1)*9,-.15,.20), light=1+compression*.18;
+   const off=(iy*Q+ix)*4;dd[off]=CL(r*light,0,255);dd[off+1]=CL(g*light,0,255);dd[off+2]=CL(b*light,0,255);dd[off+3]=255;
+  }
+ }
+ lowctx.putImageData(im,0,0);
+ // Fill the viewport by cropping a continuous periodic-square simulation;
+ // never stretch or distort the physically meaningful field coordinates.
+ const sz=Math.max(w,h),sx=(w-sz)/2,sy=(h-sz)/2;
+ ctx.imageSmoothingEnabled=true;
+ // The soft halo is a blurred copy of the actual field, not simulated motion.
+ ctx.save();ctx.globalAlpha=.36;ctx.filter='blur(21px) brightness(1.15)';ctx.drawImage(low,sx,sy,sz,sz);ctx.restore();
+ ctx.drawImage(low,sx,sy,sz,sz);
+ // Short luminous strokes are fluid-velocity glyphs integrated with the model.
+ if(!luminousFieldRender.particles)luminousFieldRender.particles=Array.from({length:520},(_,i)=>({x:HF(130,1,0,i)*S,y:HF(130,2,0,i)*S}));
+ const advance=CL(e.stepNo-(luminousFieldRender.previousStep??e.stepNo),0,7)*e.dt;
+ luminousFieldRender.previousStep=e.stepNo;ctx.save();ctx.globalCompositeOperation='screen';ctx.lineWidth=.62;
+ for(const p of luminousFieldRender.particles){
+  const ux=e.sample(e.ux,p.x,p.y),uy=e.sample(e.uy,p.x,p.y),speed=Math.hypot(ux,uy);
+  p.x=(p.x+advance*ux+S)%S;p.y=(p.y+advance*uy+S)%S;
+  const x=sx+p.x/S*sz,y=sy+p.y/S*sz;if(x<0||x>=w||y<0||y>=h||speed<.01)continue;
+  const len=CL(speed*2,0,7),t=e.sample(e.a,p.x,p.y),warm=t>e.aMean;
+  ctx.strokeStyle=warm?'rgba(255,224,160,.27)':'rgba(96,191,244,.30)';
+  ctx.beginPath();ctx.moveTo(x-ux/speed*len,y-uy/speed*len);ctx.lineTo(x,y);ctx.stroke();
+ }
+ ctx.restore();
+ let now=performance.now();bursts=bursts.filter(b=>now-b.t<1800);
+ for(const event of bursts){
+  const age=(now-event.t)/1800,x=sx+event.x/S*sz,y=sy+event.y/S*sz,r=3+age*sz*.23;
+  if(x+r<0||y+r<0||x-r>w||y-r>h)continue;
+  ctx.save();ctx.strokeStyle=`rgba(255,209,119,${.8*(1-age)})`;ctx.lineWidth=1.1+1.4*(1-age);ctx.shadowColor='rgba(255,161,65,.85)';ctx.shadowBlur=16;
+  ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.stroke();ctx.restore();
+ }
+}
+function fieldRender(){if(view==='Field'&&luminous)luminousFieldRender();else fieldRenderLegacy();}
+
+function graphRender(){let [w,h]=backdrop(),e=app,p=e.p,S=e.S;let scale=Math.min(w,h)*.78/S,ox=w/2-S/2*scale,oy=h/2-S/2*scale;ctx.save();for(let ed of e.edges){let i=ed.i,j=ed.j,wt=e.W[i*e.N+j];ctx.beginPath();ctx.moveTo(ox+e.xi[i]*scale,oy+e.yi[i]*scale);ctx.lineTo(ox+e.xi[j]*scale,oy+e.yi[j]*scale);let cur=ed.curv||0;ctx.strokeStyle=cur<0?`rgba(242,122,124,${CL(.14+wt*.4,0,.85)})`:`rgba(93,203,225,${CL(.12+wt*.48,0,.9)})`;ctx.lineWidth=CL(.5+wt*2,.6,3);ctx.stroke();}
+ for(let i=0;i<e.N;i++){let x=ox+e.xi[i]*scale,y=oy+e.yi[i]*scale,z=e.z[i]/Math.max(.1,e.zc[i]);let r=3+Math.min(8,z*5);ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fillStyle=`hsl(${200-155*CL(e.I[i]+z*.4,0,1)},85%,${45+18*CL(z,0,1)}%)`;ctx.fill();ctx.strokeStyle='rgba(241,249,255,.45)';ctx.lineWidth=.6;ctx.stroke();}ctx.restore();}
+function attractorRender(){let [w,h]=backdrop(),tr=app.trail;let cx=w/2,cy=h/2,sz=Math.min(w,h)*.34,angle=.32+.05*Math.sin(app.t/3);const proj=v=>{let x=(v[0]-.38)*2.3,y=(v[2]-.4)*.8,z=(v[1]-.28)*3.2;let rx=x*Math.cos(angle)-z*Math.sin(angle),rz=x*Math.sin(angle)+z*Math.cos(angle);return [cx+sz*rx,cy+sz*(y*.8-rz*.52)];};
+ ctx.lineCap='round';ctx.save();ctx.strokeStyle='rgba(145,200,223,.33)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx-sz*.8,cy);ctx.lineTo(cx+sz*.8,cy);ctx.moveTo(cx,cy-sz*.8);ctx.lineTo(cx,cy+sz*.8);ctx.stroke();ctx.restore();for(let i=1;i<tr.length;i++){let a=proj(tr[i-1]),b=proj(tr[i]),strength=i/tr.length,c=tr[i];ctx.strokeStyle=`hsla(${180+90*CL(c[3]/2,0,1)+80*c[6]},90%,${45+30*strength}%,${.16+.80*strength})`;ctx.lineWidth=.65+2.5*strength;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();}
+ let cur=proj([app.phi,app.psi,app.chi]);ctx.fillStyle='#f9e5bd';ctx.shadowColor='#7ccaff';ctx.shadowBlur=20;ctx.beginPath();ctx.arc(...cur,4,0,TAU);ctx.fill();ctx.shadowBlur=0;
+ // Visible axes are genuine φ,ψ,χ projections of the simulated 3D phase-space trajectory.
+ }
+function landscapeRender(){let [w,h]=backdrop(),e=app,S=75,cs=Math.min(w,h)*.88,ox=(w-cs)/2,oy=(h-cs)/2,lowS=low;low.width=S;low.height=S;let im=lowctx.createImageData(S,S),bar=e.p.wellBarrier*(1+.25*e.R*Math.cos(e.Psi));for(let iy=0;iy<S;iy++)for(let ix=0;ix<S;ix++){let x=(ix/(S-1)*5-2.5),y=(iy/(S-1)*5-2.5);let V=bar*((x*x-1)**2+(y*y-1)**2)+e.p.wellTwist*x*y-e.p.tiltCore*(e.phi-.3)*x;for(let hill of e.hills){let dx=x-hill.x,dy=y-hill.y;V+=e.p.hillHeight*Math.exp(-(e.t-hill.t)/e.p.hillFade)*Math.exp(-(dx*dx+dy*dy)/(2*e.p.hillWidth**2));}let depth=Math.exp(-Math.max(0,V)*.45),z=SIG(-V);let k=(iy*S+ix)*4;im.data[k]=CL(23+165*z,0,255);im.data[k+1]=CL(35+210*depth*.65,0,255);im.data[k+2]=CL(65+180*depth,0,255);im.data[k+3]=255;}
+ lowctx.putImageData(im,0,0);ctx.drawImage(low,ox,oy,cs,cs);let px=ox+(e.q[0]+2.5)/5*cs,py=oy+(e.q[1]+2.5)/5*cs;ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px,py,10,0,TAU);ctx.stroke();ctx.fillStyle='white';ctx.beginPath();ctx.arc(px,py,3,0,TAU);ctx.fill();}
+function clocksRender(){let [w,h]=backdrop(),e=app,cx=w/2,cy=h/2,r=Math.min(w,h)*.39;ctx.strokeStyle='rgba(174,203,232,.19)';for(let k=1;k<=4;k++){ctx.beginPath();ctx.arc(cx,cy,r*k/4,0,TAU);ctx.stroke();}
+ for(let k=0;k<e.K;k++){let phase=e.phase[k],x=cx+Math.cos(phase)*r,y=cy+Math.sin(phase)*r;ctx.strokeStyle=`hsla(${175+100*k/e.K},90%,72%,.22)`;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(x,y);ctx.stroke();ctx.fillStyle=`hsl(${170+100*k/e.K},92%,68%)`;ctx.beginPath();ctx.arc(x,y,2.5,0,TAU);ctx.fill();}
+ ctx.strokeStyle='#efdfad';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(e.Psi)*r*e.R,cy+Math.sin(e.Psi)*r*e.R);ctx.stroke();}
+function informationRender(){let [w,h]=backdrop(),e=app,t=e.infoTE,n=12,labels=['C','P','F','K','B','A','M','L','H','T','G','R'];let sq=Math.min(h*.84,w*.72),cell=sq/n,ox=(w-sq)/2,oy=(h-sq)/2;
+  ctx.font=`${Math.max(10,Math.round(cell*.35))}px ui-monospace,monospace`;ctx.fillStyle='#9db5bf';ctx.textAlign='center';for(let i=0;i<n;i++){ctx.fillText(labels[i],ox+(i+.5)*cell,oy-10);ctx.fillText(labels[i],ox-12,oy+(i+.64)*cell);}for(let i=0;i<n;i++)for(let j=0;j<n;j++){let z=CL(t[i][j]/.30,0,1),x=ox+j*cell,y=oy+i*cell;ctx.fillStyle=`rgb(${Math.floor(15+222*z)},${Math.floor(34+124*z)},${Math.floor(53+59*z)})`;ctx.fillRect(x+1,y+1,cell-2,cell-2);}
+  ctx.textAlign='left';ctx.fillStyle='#c6d7e1';ctx.font='11px system-ui';ctx.fillText('Source ↓   Target →  ·  Gaussian lag-1 transfer entropy (nats)',Math.max(14,ox),Math.min(h-12,oy+sq+23));if(!e.infoComputed){ctx.fillStyle='#e4cc99';ctx.fillText('Collecting dynamical samples…',14,30);}}
+function render(){switch(view){case 'Field':case 'Flow':case 'Heat':fieldRender();break;case 'Graph':graphRender();break;case 'Attractor':attractorRender();break;case 'Landscape':landscapeRender();break;case 'Clocks':clocksRender();break;case 'Information':informationRender();break;default:fieldRenderLegacy();}}
+// Emergency renderer uses ACTUAL activator data. It needs only fillRect, and
+// avoids interpolation, filters, shadows and offscreen canvases on Safari.
+function directFieldFallback(){
+ const [w,h]=backdrop(),S=app.S,cell=Math.max(w,h)/S,ox=(w-Math.max(w,h))/2,oy=(h-Math.max(w,h))/2;
+ for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+  const i=y*S+x,v=Math.tanh((app.a[i]-app.aMean)/Math.max(.03,app.rough)),t=CL((v+1)/2,0,1);
+  ctx.fillStyle=`rgb(${Math.round(12+215*t)},${Math.round(26+145*t)},${Math.round(64+71*t)})`;
+  ctx.fillRect(ox+x*cell,oy+y*cell,cell+1,cell+1);
+ }
+ ctx.fillStyle='#ffffff';ctx.font='11px system-ui';ctx.fillText('TIDE · direct numerical field (fallback)',12,20);
+}
+let lastPaint=0,renderFaults=0,engineFaults=0,healthCount=0;
+const faultOverlay=$('renderFault'),health=$('rendererHealth');
+function showFault(message){health.textContent='RENDER ALERT';health.classList.add('error');faultOverlay.hidden=false;faultOverlay.textContent=message;}
+function safeRender(){
+ if(stage.clientWidth<3||stage.clientHeight<3){showFault('The visualization has no available screen area. Rotate the phone or reopen this version.');return;}
+ try{
+  if(!ctx)throw Error('This browser did not provide a Canvas 2D context');
+  render();renderFaults=0;faultOverlay.hidden=true;health.classList.remove('error');
+  health.textContent=`LIVE · ${view} · t ${app.t.toFixed(1)}`;
+ }catch(err){
+  renderFaults++;if(renderFaults<=3)console.error('TIDE renderer:',err);
+  try{if(!ctx)throw Error('Canvas 2D unsupported');directFieldFallback();faultOverlay.hidden=true;
+   health.classList.add('error');health.textContent='DIRECT FALLBACK · LIVE';
+  }catch(fallbackErr){showFault(`TIDE renderer unavailable: ${err.message}. ${fallbackErr.message}. Try another browser or restart this page.`);}
+ }
+}
+// iPhone can throttle requestAnimationFrame. The next frame is scheduled FIRST,
+// so a single exceptional numerical/render step cannot kill the loop permanently.
+function frame(now){
+ requestAnimationFrame(frame);
+ try{
+  const elapsed=Math.min(.085,Math.max(0,(now-prev)/1000));prev=now;
+  if(document.hidden)return;
+  if(running){acc+=elapsed;let loops=0;while(acc>=app.dt&&loops<4){app.step();acc-=app.dt;loops++;}if(loops===4)acc=0;}
+  engineFaults=0;
+ }catch(err){engineFaults++;if(engineFaults<=3)console.error('TIDE solver:',err);running=false;health.classList.add('error');health.textContent='SOLVER PAUSED · '+err.message.slice(0,36);}
+ try{
+  const cadence=window.matchMedia?.('(pointer:coarse)')?.matches?65:40;
+  if(pendingRepaint||now-lastPaint>cadence){safeRender();lastPaint=now;pendingRepaint=false;}
+  if(now-lastFrame>250){updateStatus();sound?.update();lastFrame=now;}
+ }catch(err){if(engineFaults<=3)console.error('TIDE UI:',err);showFault('Interface error: '+err.message);}
+}
+stage.addEventListener('contextlost',e=>{e.preventDefault();showFault('Graphics context was lost. Reload this page to restore live simulation.');});
+stage.addEventListener('contextrestored',()=>{faultOverlay.hidden=true;pendingRepaint=true;});
+updateStatus();safeRender();requestAnimationFrame(frame);
+window.TIDE_APP={app,PARAMS,GROUPS,snapshot:()=>app.snapshot(),selectView,render:()=>safeRender(),version:'TIDE 1.3 reliable iPhone renderer with live direct-field fallback'};
+
+// Soft fullscreen is needed because iPhone Safari may not expose Fullscreen API for ordinary page elements.
+const theatrical=$('visual');const closeBtn=document.createElement('button');closeBtn.id='closeTheater';closeBtn.textContent='Exit expanded view';closeBtn.className='pill';closeBtn.style.cssText='position:absolute;right:12px;bottom:12px;z-index:12;display:none;background:#13343f';theatrical.appendChild(closeBtn);
+const expand=$('full');expand.onclick=()=>{theatrical.classList.add('theater');closeBtn.style.display='block';document.body.style.overflow='hidden';};closeBtn.onclick=()=>{theatrical.classList.remove('theater');closeBtn.style.display='none';document.body.style.overflow='';};
+</script></body></html>
