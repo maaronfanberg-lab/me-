@@ -1,0 +1,218 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Self-Evolving Formula</title><style>
+:root{--bg:#0d0d0d;--panel:#1c1c1c;--text:#eee;--muted:#aaa;--line:#333;--accent:#109b91}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+.app{max-width:980px;margin:auto;padding-bottom:40px}header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 14px}h1{margin:0;font-size:24px;letter-spacing:.03em}.sub{font-size:12px;color:var(--muted);margin-top:4px}
+.stage{position:relative;background:#000;border-bottom:1px solid var(--line);overflow:hidden}canvas{display:block;width:100%;height:auto;background:#000}
+.hud{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.7);color:#fff;border-radius:10px;padding:6px 9px;font:12px/1.35 Menlo,Consolas,monospace;pointer-events:none;white-space:pre-line;max-width:70%}
+section{padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel)}h2{margin:0 0 8px;font-size:19px}.hint{color:var(--muted);font-size:12px;line-height:1.4;margin:-2px 0 8px}
+.row{display:grid;grid-template-columns:110px 1fr 58px;gap:8px;align-items:center;margin:8px 0}.row label{color:var(--muted);font-size:13px}.value{background:#555;color:#fff;text-align:center;border-radius:7px;padding:5px 2px;font-size:12px;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}button{font:inherit;border-radius:9px;border:0;padding:10px;background:var(--accent);color:#fff;font-weight:700;width:100%}.secondary{background:#555}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.ctl{display:flex;align-items:center;gap:6px;min-width:0}.ctl .trk{flex:1;min-width:0;display:flex;align-items:center;min-height:36px;touch-action:pan-y}.ctl .trk input{touch-action:pan-y}.stepb{width:34px;min-width:34px;height:34px;padding:0;border-radius:8px;background:#555;color:#fff;font-size:18px;line-height:1;touch-action:manipulation}@media(pointer:coarse){.ctl .trk input{pointer-events:none}}
+#rels{font:12px/1.6 Menlo,Consolas,monospace;color:var(--text);white-space:pre-wrap;word-break:break-word}#events{font:11px/1.5 Menlo,Consolas,monospace;color:var(--muted);white-space:pre-wrap;max-height:9em;overflow:auto}
+@media(max-width:719px){header{padding:8px 10px}h1{font-size:19px}.sub{display:none}.stage{position:sticky;top:0;z-index:20}.stage canvas{max-height:52svh;object-fit:contain}section{padding:10px 9px}.row{grid-template-columns:86px 1fr 48px;gap:5px}.row label{font-size:11px}.value{font-size:10px}.hud{font-size:10px}}
+</style></head><body><div class="app">
+<header><h1>SELF-EVOLVING FORMULA</h1><div class="sub">One formula drawing itself while it rewrites its own relationships. A hidden slime-mold meta formula suggests ideas; the formula decides.</div></header>
+<div class="stage"><canvas id="cv" width="800" height="800"></canvas><div class="hud" id="hud">starting</div></div>
+<section><div class="grid3" style="margin-top:0"><button id="play">Pause</button><button id="restart" class="secondary">Restart</button><button id="corner" class="secondary">Corner: off</button></div><div class="grid2" style="margin-top:8px"><button id="newseed" class="secondary">New seed</button><button id="save">Save PNG</button></div></section>
+<section><h2>Machine</h2><div class="hint">Evolution speed 0 freezes the formula and lets the current version keep drawing.</div><div id="controls"></div></section>
+<section><h2>Living relationships</h2><div class="hint">xₙ ← sign·strength·operator(inputs). ⁻ marks an anti-rule.</div><div id="rels"></div></section>
+<section><h2>What it just did</h2><div id="events"></div></section>
+</div>
+<script>
+const FORMULA=(function(){'use strict';
+function U(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function h(x, G, e) { let k = 2166136261 ^ e; const f = new Float64Array(1), w = new Uint32Array(f.buffer); for (const v of x) { f[0] = v; k = Math.imul(k ^ w[0], 16777619); k = Math.imul(k ^ w[1], 16777619); } for (const r of G) { f[0] = r.w; k = Math.imul(k ^ w[0] ^ r.s, 16777619); } return k >>> 0; }
+// portable math: only +,-,*,/ and sqrt (exactly rounded everywhere), so every browser evolves identically
+const TWO_PI_HI = 6.283185307179586, TWO_PI_LO = 2.4492935982947064e-16, HALF_PI = 1.5707963267948966;
+function sinP(x) { if (!Number.isFinite(x)) return NaN; const k = Math.round(x / TWO_PI_HI); let r = (x - k * TWO_PI_HI) - k * TWO_PI_LO;
+  if (r > HALF_PI) r = Math.PI - r; else if (r < -HALF_PI) r = -Math.PI - r;
+  const r2 = r * r; return r * (1 + r2 * (-1 / 6 + r2 * (1 / 120 + r2 * (-1 / 5040 + r2 * (1 / 362880 + r2 * (-1 / 39916800 + r2 * (1 / 6227020800 + r2 * (-1 / 1307674368000 + r2 * (1 / 355687428096000))))))))); }
+const cosP = x => sinP(x + HALF_PI);
+function logP(x) { if (!(x > 0)) return NaN; let e = 0; while (x >= 2) { x /= 2; e++; } while (x < 1) { x *= 2; e--; }
+  const s = (x - 1) / (x + 1), s2 = s * s; let t = s, sum = 0; for (let k = 1; k < 40; k += 2) { sum += t / k; t *= s2; } return 2 * sum + e * 0.6931471805599453; }
+const NV = 6, T = 2500, HIST = 64;
+// §1
+const F = v => 2 * sinP(Math.PI * v / 4);
+const W = v => (((v + 1) % 2) + 2) % 2 - 1;
+// §2 operator library (composites appended at run time)
+const BASE = {
+  hinge: (a, b, c) => a * Math.abs(b) - b * Math.abs(a),
+  quot: (a, b, c) => (a - b) / (1 + Math.abs(a) + Math.abs(c)),
+  mirror: (a, b, c) => a * Math.sign(b - c),
+  wrap: (a, b, c) => W(1.7 * (a + b)),
+  twist: (a, b, c) => Math.max(a, b) - 2 * Math.min(a, c),
+  pinch: (a, b, c) => a * b / (1 + c * c),
+  join: (a, b, c) => -Math.sign(a * b) * 0.5 * (Math.abs(a) + Math.abs(b)) * (1 + Math.abs(c)),
+  swirl: (a, b, c) => a * cosP(Math.PI * b) - c * sinP(Math.PI * a),
+  bloom: (a, b, c) => (a + b * c) / (1 + (a - c) * (a - c)),
+  lens: (a, b, c) => Math.sign(a) * Math.sqrt(Math.abs(a * b) + c * c) - c,
+  echo: 'echo'
+};
+function makeLib() { const L = { ...BASE }; return L; }
+function addComposite(L, P, Q) { const name = `(${P}∘${Q})`; if (L[name] || P === Q || P === 'echo' || Q === 'echo' || (name.match(/∘/g) || []).length > 2) return null; const p = L[P], q = L[Q]; L[name] = (a, b, c) => p(q(a, b, c), b, c); return name; }
+// §1 + §3
+function system(x0, G, rho, L) {
+  const x = Float64Array.from(x0), H = Array.from({ length: HIST }, () => Float64Array.from(x0)); let hd = 0;
+  const fns = G.map(r => L[r.op]), cnt = new Float64Array(NV); for (const r of G) cnt[r.n]++;
+  return { x, step() { const nx = new Float64Array(NV); for (let n = 0; n < NV; n++) nx[n] = rho * x[n];
+    for (let q = 0; q < G.length; q++) { const r = G[q], a = x[r.a], b = x[r.b], c = x[r.c];
+      const v = fns[q] === 'echo' ? (b > 0 ? H[(hd - r.d + HIST) % HIST][r.a] : -H[(hd - r.d + HIST) % HIST][r.c]) : fns[q](a, b, c);
+      nx[r.n] += r.s * r.w * v; }
+    for (let n = 0; n < NV; n++) x[n] = F(rho * x[n] + (nx[n] - rho * x[n]) / Math.sqrt(Math.max(1, cnt[n]))); H[hd].set(x); hd = (hd + 1) % HIST; } };
+}
+const TH = [...Array(NV)].map((_, n) => Math.PI * n / 3 + 0.3);
+const picture = x => { let X = 0, Y = 0; for (let n = 0; n < NV; n++) { X += x[n] * cosP(TH[n]); Y += (1 + 0.15 * (n % 2)) * x[n] * sinP(TH[n]); } return [X, Y]; };
+function run(x0, G, rho, L, n, burn = 200) { const s = system(x0, G, rho, L), P = new Float64Array(2 * n); for (let t = 0; t < burn; t++) s.step(); for (let t = 0; t < n; t++) { s.step(); const p = picture(s.x); P[2 * t] = p[0]; P[2 * t + 1] = p[1]; } return { P, x: Float64Array.from(s.x) }; }
+// §4
+function bbox(P) { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (let t = 0; t < P.length; t += 2) { if (P[t] < a) a = P[t]; if (P[t] > b) b = P[t]; if (P[t + 1] < c) c = P[t + 1]; if (P[t + 1] > d) d = P[t + 1]; } return [a, b, c, d]; }
+function density(P, B) { const g = 12, D = new Float64Array(g * g), w = B[1] - B[0], hh = B[3] - B[2]; for (let t = 0; t < P.length; t += 2) D[Math.min(g - 1, (P[t + 1] - B[2]) / hh * g | 0) * g + Math.min(g - 1, (P[t] - B[0]) / w * g | 0)] += 2 / P.length; return D; }
+function corner(P, B) { // correlation dimension in each 1/16 window (pair counts at r = 1/40 and 1/10 of the window)
+  const w = (B[1] - B[0]) / 4, hh = (B[3] - B[2]) / 4; let best = { v: 0, delta: 0, cx: 0, cy: 0 };
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) { const x0 = B[0] + i * w, y0 = B[2] + j * hh, Q = [];
+    for (let t = 0; t < P.length; t += 2) { const u = (P[t] - x0) / w, v = (P[t + 1] - y0) / hh; if (u >= 0 && u < 1 && v >= 0 && v < 1) Q.push(u, v); }
+    const n = Q.length / 2; if (n < 200) continue; const m = Math.min(n, 700), st = n / m, r1 = 1 / 40, r2 = 1 / 10; let c1 = 0, c2 = 0;
+    for (let a = 0; a < m; a++) { const p = Math.floor(a * st); for (let b = a + 1; b < m; b++) { const q = Math.floor(b * st), dx = Q[2 * p] - Q[2 * q], dy = Q[2 * p + 1] - Q[2 * q + 1], d = dx * dx + dy * dy; if (d < r2 * r2) { c2++; if (d < r1 * r1) c1++; } } }
+    if (!c1) continue; const delta = logP(c2 / c1) / logP(r2 / r1), val = delta > 1 && delta < 2 ? sinP(Math.PI * delta) ** 2 : 0;
+    if (val > best.v) best = { v: val, delta, cx: x0 + w / 2, cy: y0 + hh / 2 }; }
+  return best; }
+const L1 = (p, q) => { let s = 0; for (let i = 0; i < p.length; i++) s += Math.abs(p[i] - q[i]); return s; };
+// §5 meta formula: Physarum in concept space
+const DELAYS = [1, 2, 3, 5, 8, 13, 21, 34, 55];
+function makeMeta(L) {
+  const nodes = [], idx = {}; const add = (kind, key) => { idx[kind + ':' + key] = nodes.length; nodes.push({ kind, key, fs: 0, fc: 0, tried: false }); };
+  Object.keys(L).forEach(k => add('op', k)); for (let n = 0; n < NV; n++) add('wire', n); DELAYS.forEach(d => add('delay', d));
+  const edges = []; const link = (u, v) => edges.push({ u, v, G: 1, l: 1, Q: 0 });
+  const rebuild = () => { edges.length = 0; for (let u = 0; u < nodes.length; u++) for (let v = u + 1; v < nodes.length; v++) { const A = nodes[u], B = nodes[v];
+      if (A.kind === 'op' && B.kind === 'op') link(u, v); else if ((A.kind === 'op') !== (B.kind === 'op')) { const o = A.kind === 'op' ? A : B, other = A.kind === 'op' ? B : A; if (other.kind === 'wire' || o.key === 'echo' || o.key.includes('echo')) link(u, v); } } };
+  rebuild();
+  return { nodes, idx, edges, addOp(k) { const old = edges.map(e => ({ ...e })); add('op', k); rebuild(); for (const e of edges) { const m = old.find(o => o.u === e.u && o.v === e.v); e.G = m ? m.G : 0.1; } }, rebuild };
+}
+function solvePressures(M, src) { // Σ_e G_e (p_u - p_v)/l_e = σ_u, ground last node
+  const N = M.nodes.length, A = [...Array(N)].map(() => new Float64Array(N + 1));
+  for (const e of M.edges) { const g = e.G / e.l; A[e.u][e.u] += g; A[e.v][e.v] += g; A[e.u][e.v] -= g; A[e.v][e.u] -= g; }
+  for (let u = 0; u < N; u++) A[u][N] = src[u];
+  const n = N - 1; // drop grounded row/col
+  for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r; [A[c], A[p]] = [A[p], A[c]]; const piv = A[c][c] || 1e-12;
+    for (let r = 0; r < n; r++) if (r !== c) { const f = A[r][c] / piv; if (f) for (let k = c; k <= N; k++) if (k < n || k === N) A[r][k] -= f * A[c][k]; } }
+  const p = new Float64Array(N); for (let r = 0; r < n; r++) p[r] = A[r][N] / (A[r][r] || 1e-12); p[N - 1] = 0; return p; }
+const ETA = 0.3, QSTAR = 0.03;
+function metaStep(M, L, current) { // current: list of node indices of the concept in use
+  const N = M.nodes.length, src = new Float64Array(N); current.forEach(i => src[i] += 1 / current.length);
+  const f = M.nodes.map(v => v.fc ? v.fs / v.fc : 0), Fs = f.reduce((s, v) => s + v, 0);
+  if (Fs > 0) f.forEach((v, i) => src[i] -= v / Fs); else { const others = M.nodes.map((_, i) => i).filter(i => !current.includes(i)); others.forEach(i => src[i] -= 1 / others.length); }
+  const p = solvePressures(M, src); let resid = 0;
+  const net = new Float64Array(N); for (const e of M.edges) { e.Q = e.G * (p[e.u] - p[e.v]) / e.l; net[e.u] += e.Q; net[e.v] -= e.Q; e.G = Math.max(1e-6, e.G + ETA * (Math.abs(e.Q) - e.G)); }
+  for (let u = 0; u < N; u++) resid = Math.max(resid, Math.abs(net[u] - src[u]));
+  const through = new Float64Array(N); for (const e of M.edges) { through[e.u] += Math.abs(e.Q); through[e.v] += Math.abs(e.Q); }
+  const pick = kind => { let best = -1, bt = -1, any = -1, at = -1; M.nodes.forEach((v, i) => { if (v.kind !== kind) return; if (through[i] > at) { at = through[i]; any = i; } if (!v.tried && through[i] > bt) { bt = through[i]; best = i; } }); return best >= 0 ? best : any; };
+  const proposal = { op: M.nodes[pick('op')].key, n: M.nodes[pick('wire')].key, d: M.nodes[pick('delay')].key };
+  let composite = null; let qe = null; for (const e of M.edges) { const A = M.nodes[e.u], B = M.nodes[e.v]; if (A.kind === 'op' && B.kind === 'op' && Math.abs(e.Q) > QSTAR && (!qe || Math.abs(e.Q) > Math.abs(qe.Q))) qe = e; }
+  if (qe) { const name = addComposite(L, M.nodes[qe.u].key, M.nodes[qe.v].key); if (name) { M.addOp(name); composite = name; } }
+  return { proposal, composite, resid };
+}
+const CAP = 12;
+function addRel(G, r) { if (G.length >= CAP) { let k = 0; G.forEach((q, i) => { if (q.w < G[k].w) k = i; }); G.splice(k, 1); } G.push(r); return r; }
+function birth(prop, u) { return { op: prop.op, n: prop.n, a: Math.floor(u() * NV), b: Math.floor(u() * NV), c: Math.floor(u() * NV), d: prop.d, w: 0.45 + 0.7 * u(), s: u() < 0.5 ? 1 : -1 }; }
+// §6–§8 the evolving formula
+function makeEvolver(SEED) {
+  const L = makeLib(), M = makeMeta(L); let u = U(SEED);
+  let x = Float64Array.from({ length: NV }, () => 2 * u() - 1), rho = 0.35, pi = 1, Bbar = 0;
+  let G = Array.from({ length: 6 }, () => birth({ op: Object.keys(BASE)[Math.floor(u() * Object.keys(BASE).length)], n: Math.floor(u() * NV), d: DELAYS[Math.floor(u() * DELAYS.length)] }, u));
+  const A = [], log = []; let prevRho = null, low = 0, calm = 0, zero = 0, lastBorn = G[G.length - 1], maxResid = 0;
+  const conceptIdx = r => [M.idx['op:' + r.op], M.idx['wire:' + r.n], M.idx['delay:' + r.d]];
+  let e = -1;
+  function epoch() { e++;
+    u = U(h(x, G, e));
+    const meta = metaStep(M, L, conceptIdx(lastBorn)); maxResid = Math.max(maxResid, meta.resid);
+    const C = G.map(r => ({ ...r })), roll = u(); let kind;
+    if (roll < 0.25) { const r = addRel(C, birth(meta.proposal, u)); kind = 'birth ' + r.op; }
+    else if (roll < 0.4 && C.length > 1) { const k = Math.floor(u() * C.length); kind = 'death ' + C[k].op; C.splice(k, 1); }
+    else if (roll < 0.55) { const k = Math.floor(u() * C.length); C[k].s = -C[k].s; kind = 'anti ' + C[k].op; }
+    else if (roll < 0.75) { const k = Math.floor(u() * C.length); C[k].w *= 0.6 + 0.9 * u(); kind = 'reweigh ' + C[k].op; }
+    else { const k = Math.floor(u() * C.length), f = ['n', 'a', 'b', 'c'][Math.floor(u() * 4)]; C[k][f] = Math.floor(u() * NV); kind = 'rewire ' + C[k].op; }
+    const R = run(x, C, rho, L, T), Bx = bbox(R.P), ok = Number.isFinite(Bx[0]) && Bx[1] - Bx[0] > 1e-6 && Bx[3] - Bx[2] > 1e-6;
+    const rhoE = ok ? density(R.P, Bx) : null, K = ok ? corner(R.P, Bx) : { v: 0, delta: 0 };
+    const S = !ok ? 0 : A.length ? Math.min(...A.map(a => L1(rhoE, a.rho))) : 2;
+    const Bp = S * K.v;
+    for (const r of C) for (const i of conceptIdx(r)) { M.nodes[i].fs += Bp; M.nodes[i].fc++; M.nodes[i].tried = true; }
+    const accept = pi > 0 ? Bp >= 0.9 * Bbar : Bp < Bbar;
+    if (accept) { G = C; x = R.x; Bbar = Bp; if (kind.startsWith('birth')) lastBorn = C[C.length - 1]; if (S > 0.35) A.push({ rho: rhoE, G: C.map(r => ({ ...r })) }); }
+    Bbar = pi > 0 ? 0.95 * Bbar : 1.05 * Bbar;
+    // §7
+    low = S < 0.2 ? low + 1 : 0; let flip = false;
+    if (low >= 10) { pi = -pi; low = 0; flip = true; Bbar = Bp;
+      if (A.length && rhoE) { let far = A[0], fd = -1; for (const a of A) { const dd = L1(rhoE, a.rho); if (dd > fd) { fd = dd; far = a; } }
+        const top = g => [...g].sort((p, q) => q.w - p.w).slice(0, 6); G = top(G).concat(top(far.G).map(r => ({ ...r, s: -r.s }))); }
+      x = x.map((v, n) => F(-2.3 * v + 0.7 * sinP(3 * n + v))); rho = 0.15 + 0.55 * u(); }
+    // §8
+    let topple = false, kick = false;
+    if (ok && prevRho) { calm = L1(rhoE, prevRho) < 0.12 ? calm + 1 : 0; if (calm >= 6 && G.length) { let k = 0; G.forEach((r, q) => { if (r.w > G[k].w) k = q; }); G.splice(k, 1); addRel(G, birth(meta.proposal, u)); calm = 0; topple = true; } }
+    if (ok) prevRho = rhoE;
+    zero = Bp === 0 ? zero + 1 : 0; if (zero >= 3) { const r = birth(meta.proposal, u); r.w = 1 + 0.4 * u(); addRel(G, r); x = x.map((v, n) => F(v + 1.3 * sinP(5 * n + 7 * v + e))); zero = 0; kick = true; }
+    const entry = { e, kind, accept, B: Bp, S, delta: K.delta, corner: K, pi, flip, topple, kick, composite: meta.composite, x: Array.from(x), G: G.map(r => ({ ...r })), rho, view: accept && ok ? Bx : null };
+    log.push(entry); return entry;
+  }
+  return { epoch, L, log, resid: () => maxResid, state: () => ({ x, G, rho, pi }) };
+}
+function evolve(SEED, E) { const ev = makeEvolver(SEED); for (let k = 0; k < E; k++) ev.epoch(); return { log: ev.log.map(({ view, ...r }) => r), L: ev.L, maxResid: ev.resid(), ops: Object.keys(ev.L) }; }
+
+return { makeEvolver, system, picture, NV };
+})();
+</script>
+<script>(function(){'use strict';
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d'),W=cv.width,Hh=cv.height;
+const defs=[['speed','Evolution speed',0,10,0.5,2,'rounds/s'],['ppf','Points per frame',2000,60000,1000,16000,''],['trail','Trail',0.80,1,0.005,0.97,''],['ink','Ink',1,100,1,55,''],['seed','Seed',1,9999,1,1,'']];
+const cont=$('controls');
+for(const d of defs){const r=document.createElement('div');r.className='row';r.innerHTML=`<label for="${d[0]}">${d[1]}</label><input id="${d[0]}" type="range" min="${d[2]}" max="${d[3]}" step="${d[4]}" value="${d[5]}" aria-label="${d[1]}"><div class="value" id="${d[0]}v"></div>`;cont.appendChild(r);}
+const val=k=>+$(k).value;
+function labels(){$('speedv').textContent=val('speed')===0?'frozen':val('speed').toFixed(1);$('ppfv').textContent=Math.round(val('ppf')/1000)+'K';$('trailv').textContent=val('trail')>=1?'∞':val('trail').toFixed(3);$('inkv').textContent=val('ink');$('seedv').textContent=val('seed');}
+// tap path: -/+ buttons and tap-to-jump; on touch the slider ignores touches so scrolls pass through
+function fire(e){e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}
+function snap(e,v){const mn=+e.min,mx=+e.max,st=+e.step||1;v=Math.max(mn,Math.min(mx,v));v=mn+Math.round((v-mn)/st)*st;const dec=(String(e.step).split('.')[1]||'').length;return +Math.max(mn,Math.min(mx,v)).toFixed(dec);}
+document.querySelectorAll('.row input[type=range]').forEach(e=>{const row=e.parentNode,c=document.createElement('div'),t=document.createElement('div');c.className='ctl';t.className='trk';
+ const mk=(s,d)=>{const b=document.createElement('button');b.type='button';b.className='stepb';b.textContent=s;b.setAttribute('aria-label',(d<0?'Decrease ':'Increase ')+e.getAttribute('aria-label'));b.addEventListener('click',()=>{const st=+e.step||1,inc=e.id==='seed'?1:Math.max(st,Math.round((+e.max-+e.min)*.05/st)*st),v=snap(e,+e.value+d*inc);if(v!==+e.value){e.value=v;fire(e);}});return b;};
+ row.insertBefore(c,e);t.appendChild(e);c.append(mk('−',-1),t,mk('+',1));
+ t.addEventListener('click',ev=>{if(ev.target===e&&!matchMedia('(pointer:coarse)').matches)return;const r=e.getBoundingClientRect();if(r.width<=0)return;const f=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)),v=snap(e,+e.min+f*(+e.max-+e.min));if(v!==+e.value){e.value=v;fire(e);}});});
+// machine state
+let ev,live,view=null,target=null,cornerOn=false,lastEntry=null,paused=false,acc=0,lastT=0,rounds=0,events=[];
+const H=new Float32Array(W*Hh),img=ctx.createImageData(W,Hh);
+for(let i=3;i<img.data.length;i+=4)img.data[i]=255;
+function fmtRel(r){const op=r.op.length>14?r.op.slice(0,13)+'…':r.op;const args=r.op==='echo'?`x${r.a+1},x${r.b+1},x${r.c+1}; d=${r.d}`:`x${r.a+1},x${r.b+1},x${r.c+1}`;return `x${r.n+1} ← ${r.s<0?'−':'+'}${r.w.toFixed(2)}·${op}${r.s<0?'⁻':''}(${args})`;}
+function showRels(G){$('rels').textContent=G.map(fmtRel).join('\n');}
+function pushEvent(t){events.unshift(t);if(events.length>40)events.pop();$('events').textContent=events.join('\n');}
+function rebuild(x,G,rho){live={sys:FORMULA.system(x,G,rho,ev.L),G};for(let t=0;t<200;t++)live.sys.step();showRels(G);}
+function start(){const seed=val('seed');ev=FORMULA.makeEvolver(seed);rounds=0;events=[];H.fill(0);view=null;target=null;lastEntry=null;
+ const st=ev.state();rebuild(st.x,st.G,st.rho);
+ // frame the starting formula from a short run
+ const P=[];const s=FORMULA.system(st.x,st.G,st.rho,ev.L);for(let t=0;t<3000;t++){s.step();P.push(FORMULA.picture(s.x));}
+ target=boundsOf(P);view=target.slice();pushEvent(`seed ${seed}: born with ${st.G.length} relationships`);}
+function boundsOf(P){let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity;for(const p of P){if(!Number.isFinite(p[0]))continue;a=Math.min(a,p[0]);b=Math.max(b,p[0]);c=Math.min(c,p[1]);d=Math.max(d,p[1]);}if(!(b>a))b=a+1;if(!(d>c))d=c+1;return[a,b,c,d];}
+function evolveOnce(){const prev=ev.state().G;const en=ev.epoch();rounds++;lastEntry=en;
+ const st=ev.state();const changed=JSON.stringify(st.G)!==JSON.stringify(prev)||en.flip||en.kick;
+ let note=`#${en.e} ${en.kind}${en.accept?' ✓':' ✗'}`;if(en.flip)note+=' · contradicts itself (polarity '+(en.pi>0?'+':'−')+') · joins its opposite';if(en.topple)note+=' · knocks itself off balance';if(en.kick)note+=' · kicks itself awake';if(en.composite)note+=' · meta formula invents '+en.composite;
+ if(en.accept||en.flip||en.topple||en.kick||en.composite)pushEvent(note);
+ if(changed){rebuild(st.x,st.G,st.rho);if(en.view)target=en.view.slice();else{const P=[];const s=FORMULA.system(st.x,st.G,st.rho,ev.L);for(let t=0;t<2500;t++){s.step();P.push(FORMULA.picture(s.x));}target=boundsOf(P);}}}
+function frame(t){requestAnimationFrame(frame);if(!ev)return;const dt=Math.min(.25,(t-lastT)/1000||0);lastT=t;
+ if(!paused){const sp=val('speed');if(sp>0){acc+=dt*sp;let n=0;while(acc>=1&&n<4){acc-=1;evolveOnce();n++;}if(n===4)acc=0;}
+  // view eases toward the target framing (clamped interpolation)
+  let tg=target;if(cornerOn&&lastEntry&&lastEntry.corner&&lastEntry.corner.v>0){const w=(target[1]-target[0])/8,h=(target[3]-target[2])/8;tg=[lastEntry.corner.cx-w,lastEntry.corner.cx+w,lastEntry.corner.cy-h,lastEntry.corner.cy+h];}
+  const k=Math.min(1,dt*2.5);for(let i=0;i<4;i++)view[i]+=(tg[i]-view[i])*k;
+  const tr=val('trail');if(tr<1)for(let i=0;i<H.length;i++)H[i]*=tr;
+  const cx=(view[0]+view[1])/2,cy=(view[2]+view[3])/2,half=Math.max(view[1]-view[0],view[3]-view[2])/2*1.08,sc=W/(2*half),n=val('ppf'),sys=live.sys;
+  for(let q=0;q<n;q++){sys.step();const p=FORMULA.picture(sys.x),i=((p[0]-cx)*sc+W/2)|0,j=((cy-p[1])*sc+Hh/2)|0;if(i>=0&&i<W&&j>=0&&j<Hh)H[j*W+i]+=1;}}
+ let mx=0;for(let i=0;i<H.length;i++)if(H[i]>mx)mx=H[i];const lm=Math.log1p(mx||1),gain=0.35+val('ink')/60,d=img.data;
+ for(let i=0,o=0;i<H.length;i++,o+=4){const v=H[i]?Math.min(255,255*gain*Math.pow(Math.log1p(H[i])/lm,0.85)):0;d[o]=d[o+1]=d[o+2]=v;}
+ ctx.putImageData(img,0,0);
+ const pol=lastEntry?(lastEntry.pi>0?'+ (keeps what scores well)':'− (contrary: keeps what scores worse)'):'+';
+ $('hud').textContent=`seed ${val('seed')} · round ${rounds}\n${live.G.length} relationships · polarity ${pol}\nscore Ξ ${lastEntry?lastEntry.B.toFixed(3):'–'}${paused?'\npaused':''}${val('speed')===0?'\nformula frozen':''}`;}
+['speed','ppf','trail','ink'].forEach(k=>$(k).addEventListener('input',labels));
+$('seed').addEventListener('change',()=>{labels();start();});$('seed').addEventListener('input',labels);
+$('play').onclick=()=>{paused=!paused;$('play').textContent=paused?'Play':'Pause';};
+$('restart').onclick=()=>start();
+$('newseed').onclick=()=>{const s=$('seed');s.value=(+s.value%9999)+1;labels();start();};
+$('corner').onclick=()=>{cornerOn=!cornerOn;$('corner').textContent='Corner: '+(cornerOn?'on':'off');H.fill(0);};
+$('save').onclick=()=>{const a=document.createElement('a');a.download=`self-evolving-formula-seed${val('seed')}-round${rounds}.png`;a.href=cv.toDataURL('image/png');a.click();};
+window.SEF={start,evolveOnce,state:()=>({rounds,lastEntry,G:live.G,view,target}),H};
+labels();start();requestAnimationFrame(frame);
+})();</script></body></html>
