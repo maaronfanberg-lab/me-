@@ -26,7 +26,7 @@
  .toolbar{display:flex;flex:0 0 auto;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:4px;margin:0;padding-bottom:1px;min-height:33px}
  .toolbar::-webkit-scrollbar{display:none}
  .toolbar .pill{flex:0 0 auto;min-height:30px;padding:6px 8px;font-size:10px;border-radius:7px}
- .toolbar:not(.more-open) #step,.toolbar:not(.more-open) #perturb,.toolbar:not(.more-open) #reset,.toolbar:not(.more-open) #visualStyle{display:none}
+ .toolbar:not(.more-open) #step,.toolbar:not(.more-open) #perturb,.toolbar:not(.more-open) #reset{display:none}
  .left .metrics,.left .detail,.left .linkage,.left .summary{display:none}
  .right{display:flex;min-height:0}
  .right .panel{display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden;border-radius:10px}
@@ -61,11 +61,18 @@
  .nav{min-height:29px}
  .toolbar .pill{min-height:28px}
 }
+
+/* Resilient display: render status is always visible above the canvas. */
+.renderer-health{flex:none;color:#90e8d1;font-size:10px;font-family:ui-monospace,SFMono-Regular,monospace;letter-spacing:.025em;white-space:nowrap}
+.renderer-health.error{color:#ffb396}
+.render-fault{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(6,15,26,.94);color:#f8c0a8;text-align:center;padding:18px;font:12px/1.65 system-ui;z-index:5}
+.render-fault[hidden]{display:none!important}
+@media(max-width:530px){.renderer-health{font-size:9px}}
 </style>
 </head>
 <body><main class="shell"><header class="mast"><div><div class="logotype">TIDE <span style="color:#88cfcd;font-weight:300;letter-spacing:0">/</span></div><div class="subtitle">Turbulent Interacting Dynamical Ensemble</div></div><div class="stamp"><strong>COMPUTATIONAL INSTRUMENT · v1.2</strong>12 interconnected mechanisms · seeded dynamics</div></header>
-<div class="workbench"><section class="left"><div id="visual" class="visual-wrap"><div class="visualhead"><span class="eyebrow">Live model · <span id="viewName">Field</span><span id="liveParam" class="live-param" aria-live="off">Adjust a slider to see its value</span></span><small>Actual simulation · luminous scientific rendering</small></div><div class="canvas-area"><canvas id="stage" role="img" aria-label="Live TIDE dynamics"></canvas><div class="canvas-badge"><i class="dot"></i> SIMULATED PHYSICAL AND DYNAMICAL FIELDS</div></div></div>
-<nav class="nav" id="tabs" aria-label="Visualization layers"></nav><div class="toolbar"><button id="run" class="pill primary">Pause</button><button id="audio" class="pill primary">Enable sound</button><button id="step" class="pill">Single step</button><button id="perturb" class="pill">Perturb</button><button id="reset" class="pill">Reset state</button><button id="visualStyle" class="pill" aria-pressed="true" title="Switch between luminous and diagnostic mapping of the real reaction–diffusion field">Rendering: Luminous</button><button id="follow" class="pill" aria-pressed="true" title="Automatically show the visualization corresponding to each adjusted model layer">Follow: On</button><button id="moreTools" class="pill" aria-expanded="false" title="Show additional simulation controls">Tools ▾</button><button id="full" class="pill">Expand visual</button></div>
+<div class="workbench"><section class="left"><div id="visual" class="visual-wrap"><div class="visualhead"><span class="eyebrow">Live model · <span id="viewName">Field</span><span id="liveParam" class="live-param" aria-live="off">Adjust a slider to see its value</span></span><span id="rendererHealth" class="renderer-health" role="status">Starting…</span><small>Actual simulation · luminous scientific rendering</small></div><div class="canvas-area"><canvas id="stage" role="img" aria-label="Live TIDE dynamics"></canvas><div id="renderFault" class="render-fault" hidden></div><div class="canvas-badge"><i class="dot"></i> SIMULATED PHYSICAL AND DYNAMICAL FIELDS</div></div></div>
+<nav class="nav" id="tabs" aria-label="Visualization layers"></nav><div class="toolbar"><button id="run" class="pill primary">Pause</button><button id="audio" class="pill primary">Enable sound</button><button id="visualStyle" class="pill" aria-pressed="true" title="Switch between luminous and diagnostic mapping of the real reaction–diffusion field">Rendering: Luminous</button><button id="step" class="pill">Single step</button><button id="perturb" class="pill">Perturb</button><button id="reset" class="pill">Reset state</button><button id="follow" class="pill" aria-pressed="false" title="Automatically show the visualization corresponding to each adjusted model layer">Follow: Off</button><button id="moreTools" class="pill" aria-expanded="false" title="Show additional simulation controls">Tools ▾</button><button id="full" class="pill">Expand visual</button></div>
 <div class="metrics" id="metrics"></div><div class="detail" id="detail"></div><div class="linkage" id="linkage">Every visible and audible feature reads from integrated TIDE state; touch a parameter to inspect its equation mapping.</div>
 <div class="summary"><strong>Model fidelity and numerical scope</strong><p>TIDE's actual coupled equations power the field, trajectories, graph, clocks, events, landscape and audio. This is a real-time reduced discretization, not a claim of reproducing the full research-scale specification. Domain 36×36, 30 graph nodes, 32 inertial clocks, 48 Hopfield units, 56 reservoir units, with a variable-order Caputo L1 history window of 320 steps.</p><p>Explicit approximations: compressible momentum uses semi-Lagrangian advection; event arrivals use conditional Poisson time steps rather than exact Ogata thinning; Ollivier curvature uses entropically regularized transport; neural-field kernels are truncated Gaussian convolutions; RLS and fractional memory use finite numerical histories. The Information view calculates exploratory lag-one Gaussian transfer entropy from twelve sampled layer observables; it is not the full Part 15 estimator suite. Exact 256² fluid dynamics, full-spectrum Lyapunov statistics, and formal information-validation benchmarks are <em>not</em> claimed here.</p><p>Corrections implemented: the accumulator receives a nonlinear stabilizing loss when the documented cost alone fails; avalanche fatigue raises thresholds after a topple; Brownian strain uses squared deterministic drift, not undefined squared white-noise velocity; componentwise TIDE-vs-OMEF dynamism is not asserted without measurements. No external audio samples, arbitrary particle animations or precomputed attractor loops. The optional luminous renderer uses bilinear reconstruction, gradients and isolines of simulated fields for visual clarity and glow; it does not add numerical resolution.</p><p><a href="./tide-math-corrections.md" target="_blank" rel="noopener" style="color:#8ad9d5;text-decoration:underline">Mathematical corrections, changed equations, and verification limits</a></p></div>
 </section><aside class="right"><section class="panel"><div class="panel-header"><span class="smallcaps">Parameter laboratory</span><h2>100 independent controls</h2><p class="desc">Live numerical coefficients from all twelve layers, plus eight sound mappings. Sliders write directly to the running solver.</p><span id="count" class="parameter-count">100 live parameters</span><input id="search" class="search" type="search" placeholder="Find a variable or equation…" autocomplete="off" aria-label="Search controls"></div><div id="controls" class="groups"></div><div class="controls-foot"><div style="display:flex;gap:6px;flex-wrap:wrap"><button id="defaults" class="pill">Restore defaults</button><button id="savePreset" class="pill">Save preset</button><button id="loadPreset" class="pill">Load preset</button><input id="presetFile" type="file" accept="application/json,.json" style="display:none"></div><label class="smallcaps" for="quality">Δt <select id="quality" aria-label="Numerical time step"><option value="1" selected>0.025</option><option value="2">0.016</option><option value="3">0.040</option></select></label></div></section></aside></div>
@@ -361,11 +368,11 @@ function gammaFn(z){let p=[.99999999999980993,676.5203681218851,-1259.1392167224
 
 const app=new TIDE(DEFAULTS,19);
 const $=id=>document.getElementById(id), ctl=$('controls'), stage=$('stage'), ctx=stage.getContext('2d',{alpha:false}), low=document.createElement('canvas'),lowctx=low.getContext('2d');
-let view='Field',luminous=true,running=true,sound=null,prev=performance.now(),acc=0,frames=0,lastFrame=0,bursts=[],drag=false,followControls=true;
+let view='Field',luminous=true,running=true,sound=null,prev=performance.now(),acc=0,frames=0,lastFrame=0,bursts=[],drag=false,followControls=false,pendingRepaint=true;
 const views=['Field','Flow','Heat','Graph','Attractor','Landscape','Clocks','Information'];
 const GROUP_VIEW={Core:'Attractor',Pattern:'Field',Fluid:'Flow',Clocks:'Clocks',Bursts:'Graph',Avalanches:'Graph',Strain:'Attractor',Walker:'Landscape',Hopfield:'Landscape',Heat:'Heat',Geometry:'Graph',Reservoir:'Information'};
 function setFollow(on){followControls=!!on;$('follow').textContent='Follow: '+(followControls?'On':'Off');$('follow').setAttribute('aria-pressed',String(followControls));}
-$('follow').onclick=()=>setFollow(!followControls);
+$('follow').onclick=()=>setFollow(!followControls);setFollow(false);
 $('moreTools').onclick=()=>{let show=$('moreTools').getAttribute('aria-expanded')!=='true';document.querySelector('.toolbar').classList.toggle('more-open',show);$('moreTools').textContent=show?'Tools ▴':'Tools ▾';$('moreTools').setAttribute('aria-expanded',String(show));};
 const histColors={Field:[12,22,37],Flow:[5,19,31],Heat:[8,19,33]};
 function updateStatus(){let s=app.snapshot();$('metrics').innerHTML=[['TIME',s.t.toFixed(1)],['STRAIN',s.eta.toFixed(3)],['LOCK',s.R.toFixed(2)],['BURSTS',s.events],['VORT',s.vort.toFixed(3)],['α',s.alpha.toFixed(2)]].map(([k,v])=>`<div class="metric"><span>${k}</span><strong>${v}</strong></div>`).join('');
@@ -374,14 +381,14 @@ function updateStatus(){let s=app.snapshot();$('metrics').innerHTML=[['TIME',s.t
 function buildControls(){for(const group of GROUPS){let details=document.createElement('details');details.className='group';details.open=group[1]==='Audio'||group[1]==='Core';let title=document.createElement('summary');title.textContent=`${group[0]}  ·  ${group[2].length} variables`;details.appendChild(title);
   for(const d of PARAMS.filter(x=>x.group===group[1])){let row=document.createElement('label');row.className='knob';row.dataset.search=(d.label+' '+d.info+' '+d.group).toLowerCase();row.htmlFor='sl-'+d.key;
    let info=document.createElement('div');info.className='knobhead';let name=document.createElement('span');name.textContent=d.label;let val=document.createElement('output');val.id='out-'+d.key;val.textContent=String(d.value);info.append(name,val);row.append(info);
-   let slide=document.createElement('input');slide.type='range';slide.id='sl-'+d.key;slide.min=d.min;slide.max=d.max;slide.step=d.step;slide.value=d.value;slide.setAttribute('aria-label',d.label);slide.dataset.key=d.key;slide.addEventListener('input',()=>{const v=+slide.value;app.p[d.key]=v;val.textContent=v.toFixed(d.step<.001?4:d.step<.01?3:d.step<1?2:0);slide.style.setProperty('--fill',Math.round((v-d.min)/(d.max-d.min)*100)+'%');$('linkage').textContent=`${d.group} · ${d.info}`;$('liveParam').textContent=d.label+' = '+val.textContent;if(followControls&&GROUP_VIEW[d.group])selectView(GROUP_VIEW[d.group]);if(sound)sound.update();});slide.style.setProperty('--fill',Math.round((d.value-d.min)/(d.max-d.min)*100)+'%');row.append(slide);
+   let slide=document.createElement('input');slide.type='range';slide.id='sl-'+d.key;slide.min=d.min;slide.max=d.max;slide.step=d.step;slide.value=d.value;slide.setAttribute('aria-label',d.label);slide.dataset.key=d.key;slide.addEventListener('input',()=>{const v=+slide.value;app.p[d.key]=v;val.textContent=v.toFixed(d.step<.001?4:d.step<.01?3:d.step<1?2:0);slide.style.setProperty('--fill',Math.round((v-d.min)/(d.max-d.min)*100)+'%');$('linkage').textContent=`${d.group} · ${d.info}`;$('liveParam').textContent=d.label+' = '+val.textContent;if(followControls&&GROUP_VIEW[d.group])selectView(GROUP_VIEW[d.group]);if(sound)sound.update();pendingRepaint=true;});slide.style.setProperty('--fill',Math.round((d.value-d.min)/(d.max-d.min)*100)+'%');row.append(slide);
    let desc=document.createElement('small');desc.textContent=d.info;row.append(desc);details.append(row);}
   ctl.append(details);}
 }
 function selectView(s){view=s;for(let b of document.querySelectorAll('[data-view]'))b.classList.toggle('selected',b.dataset.view===view);$('viewName').textContent=view;}
 for(let v of views){let b=document.createElement('button');b.className='tab';b.textContent=v;b.dataset.view=v;b.onclick=()=>{selectView(v);setFollow(false);};$('tabs').append(b);}selectView('Field');buildControls();
-$('visualStyle').onclick=()=>{luminous=!luminous;$('visualStyle').textContent='Rendering: '+(luminous?'Luminous':'Diagnostic');$('visualStyle').setAttribute('aria-pressed',String(luminous));$('linkage').textContent=luminous?'Luminous mode: blue-gold radiance, contour filaments, and illuminated gradients computed directly from the actual activator, inhibitor, and fluid fields. No synthetic dynamics.':'Diagnostic mode: original direct field-color mapping.';render();};
-$('run').onclick=()=>{running=!running;updateStatus();};$('step').onclick=()=>{running=false;app.step();updateStatus();render();};$('perturb').onclick=()=>{app.markedEvent(2.5,app.chooseNode(),'user-perturbation');$('linkage').textContent='Controlled perturbation injected: marked burst A=2.5. All coupling pathways remain governed by TIDE.';updateStatus();};
+$('visualStyle').onclick=()=>{luminous=!luminous;$('visualStyle').textContent='Rendering: '+(luminous?'Luminous':'Diagnostic');$('visualStyle').setAttribute('aria-pressed',String(luminous));pendingRepaint=true;$('linkage').textContent=luminous?'Luminous mode: blue-gold radiance, contour filaments, and illuminated gradients computed directly from the actual activator, inhibitor, and fluid fields. No synthetic dynamics.':'Diagnostic mode: original direct field-color mapping.';safeRender();};
+$('run').onclick=()=>{running=!running;updateStatus();};$('step').onclick=()=>{running=false;app.step();updateStatus();safeRender();};$('perturb').onclick=()=>{app.markedEvent(2.5,app.chooseNode(),'user-perturbation');$('linkage').textContent='Controlled perturbation injected: marked burst A=2.5. All coupling pathways remain governed by TIDE.';updateStatus();};
 $('reset').onclick=()=>{app.init();bursts=[];$('linkage').textContent='Seed 19 · All model states reset, current controls retained';updateStatus();};
 $('defaults').onclick=()=>{for(const d of PARAMS){app.p[d.key]=d.value;let sl=$('sl-'+d.key);sl.value=d.value;sl.dispatchEvent(new Event('input'));}app.init();$('linkage').textContent='100 original parameter values restored';};
 $('audio').onclick=async()=>{if(!sound){sound=new TideAudio(app);try{await sound.start();}catch(e){sound=null;$('linkage').textContent='Audio unavailable: '+e.message;return;}}else{sound.stop();sound=null;}updateStatus();};
@@ -508,8 +515,8 @@ function fieldRender(){if(view==='Field'&&luminous)luminousFieldRender();else fi
 
 function graphRender(){let [w,h]=backdrop(),e=app,p=e.p,S=e.S;let scale=Math.min(w,h)*.78/S,ox=w/2-S/2*scale,oy=h/2-S/2*scale;ctx.save();for(let ed of e.edges){let i=ed.i,j=ed.j,wt=e.W[i*e.N+j];ctx.beginPath();ctx.moveTo(ox+e.xi[i]*scale,oy+e.yi[i]*scale);ctx.lineTo(ox+e.xi[j]*scale,oy+e.yi[j]*scale);let cur=ed.curv||0;ctx.strokeStyle=cur<0?`rgba(242,122,124,${CL(.14+wt*.4,0,.85)})`:`rgba(93,203,225,${CL(.12+wt*.48,0,.9)})`;ctx.lineWidth=CL(.5+wt*2,.6,3);ctx.stroke();}
  for(let i=0;i<e.N;i++){let x=ox+e.xi[i]*scale,y=oy+e.yi[i]*scale,z=e.z[i]/Math.max(.1,e.zc[i]);let r=3+Math.min(8,z*5);ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fillStyle=`hsl(${200-155*CL(e.I[i]+z*.4,0,1)},85%,${45+18*CL(z,0,1)}%)`;ctx.fill();ctx.strokeStyle='rgba(241,249,255,.45)';ctx.lineWidth=.6;ctx.stroke();}ctx.restore();}
-function attractorRender(){let [w,h]=backdrop(),tr=app.trail;if(tr.length<3)return;let cx=w/2,cy=h/2,sz=Math.min(w,h)*.34,angle=.32+.05*Math.sin(app.t/3);const proj=v=>{let x=(v[0]-.38)*2.3,y=(v[2]-.4)*.8,z=(v[1]-.28)*3.2;let rx=x*Math.cos(angle)-z*Math.sin(angle),rz=x*Math.sin(angle)+z*Math.cos(angle);return [cx+sz*rx,cy+sz*(y*.8-rz*.52)];};
- ctx.lineCap='round';for(let i=1;i<tr.length;i++){let a=proj(tr[i-1]),b=proj(tr[i]),strength=i/tr.length,c=tr[i];ctx.strokeStyle=`hsla(${180+90*CL(c[3]/2,0,1)+80*c[6]},90%,${45+30*strength}%,${.16+.80*strength})`;ctx.lineWidth=.65+2.5*strength;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();}
+function attractorRender(){let [w,h]=backdrop(),tr=app.trail;let cx=w/2,cy=h/2,sz=Math.min(w,h)*.34,angle=.32+.05*Math.sin(app.t/3);const proj=v=>{let x=(v[0]-.38)*2.3,y=(v[2]-.4)*.8,z=(v[1]-.28)*3.2;let rx=x*Math.cos(angle)-z*Math.sin(angle),rz=x*Math.sin(angle)+z*Math.cos(angle);return [cx+sz*rx,cy+sz*(y*.8-rz*.52)];};
+ ctx.lineCap='round';ctx.save();ctx.strokeStyle='rgba(145,200,223,.33)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx-sz*.8,cy);ctx.lineTo(cx+sz*.8,cy);ctx.moveTo(cx,cy-sz*.8);ctx.lineTo(cx,cy+sz*.8);ctx.stroke();ctx.restore();for(let i=1;i<tr.length;i++){let a=proj(tr[i-1]),b=proj(tr[i]),strength=i/tr.length,c=tr[i];ctx.strokeStyle=`hsla(${180+90*CL(c[3]/2,0,1)+80*c[6]},90%,${45+30*strength}%,${.16+.80*strength})`;ctx.lineWidth=.65+2.5*strength;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();}
  let cur=proj([app.phi,app.psi,app.chi]);ctx.fillStyle='#f9e5bd';ctx.shadowColor='#7ccaff';ctx.shadowBlur=20;ctx.beginPath();ctx.arc(...cur,4,0,TAU);ctx.fill();ctx.shadowBlur=0;
  // Visible axes are genuine φ,ψ,χ projections of the simulated 3D phase-space trajectory.
  }
@@ -521,10 +528,54 @@ function clocksRender(){let [w,h]=backdrop(),e=app,cx=w/2,cy=h/2,r=Math.min(w,h)
 function informationRender(){let [w,h]=backdrop(),e=app,t=e.infoTE,n=12,labels=['C','P','F','K','B','A','M','L','H','T','G','R'];let sq=Math.min(h*.84,w*.72),cell=sq/n,ox=(w-sq)/2,oy=(h-sq)/2;
   ctx.font=`${Math.max(10,Math.round(cell*.35))}px ui-monospace,monospace`;ctx.fillStyle='#9db5bf';ctx.textAlign='center';for(let i=0;i<n;i++){ctx.fillText(labels[i],ox+(i+.5)*cell,oy-10);ctx.fillText(labels[i],ox-12,oy+(i+.64)*cell);}for(let i=0;i<n;i++)for(let j=0;j<n;j++){let z=CL(t[i][j]/.30,0,1),x=ox+j*cell,y=oy+i*cell;ctx.fillStyle=`rgb(${Math.floor(15+222*z)},${Math.floor(34+124*z)},${Math.floor(53+59*z)})`;ctx.fillRect(x+1,y+1,cell-2,cell-2);}
   ctx.textAlign='left';ctx.fillStyle='#c6d7e1';ctx.font='11px system-ui';ctx.fillText('Source ↓   Target →  ·  Gaussian lag-1 transfer entropy (nats)',Math.max(14,ox),Math.min(h-12,oy+sq+23));if(!e.infoComputed){ctx.fillStyle='#e4cc99';ctx.fillText('Collecting dynamical samples…',14,30);}}
-function render(){switch(view){case 'Field':case 'Flow':case 'Heat':fieldRender();break;case 'Graph':graphRender();break;case 'Attractor':attractorRender();break;case 'Landscape':landscapeRender();break;case 'Clocks':clocksRender();break;case 'Information':informationRender();break;}}
-function frame(now){let elapsed=Math.min(.085,(now-prev)/1000);prev=now;if(running){acc+=elapsed;let loops=0;while(acc>=app.dt&&loops<5){app.step();acc-=app.dt;loops++;}if(loops===5)acc=0;}render();if(now-lastFrame>180){updateStatus();sound?.update();lastFrame=now;}requestAnimationFrame(frame);}
-updateStatus();requestAnimationFrame(frame);
-window.TIDE_APP={app,PARAMS,GROUPS,snapshot:()=>app.snapshot(),selectView,render,version:'TIDE 1.2 persistent live-preview and responsive controls'};
+function render(){switch(view){case 'Field':case 'Flow':case 'Heat':fieldRender();break;case 'Graph':graphRender();break;case 'Attractor':attractorRender();break;case 'Landscape':landscapeRender();break;case 'Clocks':clocksRender();break;case 'Information':informationRender();break;default:fieldRenderLegacy();}}
+// Emergency renderer uses ACTUAL activator data. It needs only fillRect, and
+// avoids interpolation, filters, shadows and offscreen canvases on Safari.
+function directFieldFallback(){
+ const [w,h]=backdrop(),S=app.S,cell=Math.max(w,h)/S,ox=(w-Math.max(w,h))/2,oy=(h-Math.max(w,h))/2;
+ for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+  const i=y*S+x,v=Math.tanh((app.a[i]-app.aMean)/Math.max(.03,app.rough)),t=CL((v+1)/2,0,1);
+  ctx.fillStyle=`rgb(${Math.round(12+215*t)},${Math.round(26+145*t)},${Math.round(64+71*t)})`;
+  ctx.fillRect(ox+x*cell,oy+y*cell,cell+1,cell+1);
+ }
+ ctx.fillStyle='#ffffff';ctx.font='11px system-ui';ctx.fillText('TIDE · direct numerical field (fallback)',12,20);
+}
+let lastPaint=0,renderFaults=0,engineFaults=0,healthCount=0;
+const faultOverlay=$('renderFault'),health=$('rendererHealth');
+function showFault(message){health.textContent='RENDER ALERT';health.classList.add('error');faultOverlay.hidden=false;faultOverlay.textContent=message;}
+function safeRender(){
+ if(stage.clientWidth<3||stage.clientHeight<3){showFault('The visualization has no available screen area. Rotate the phone or reopen this version.');return;}
+ try{
+  if(!ctx)throw Error('This browser did not provide a Canvas 2D context');
+  render();renderFaults=0;faultOverlay.hidden=true;health.classList.remove('error');
+  health.textContent=`LIVE · ${view} · t ${app.t.toFixed(1)}`;
+ }catch(err){
+  renderFaults++;if(renderFaults<=3)console.error('TIDE renderer:',err);
+  try{if(!ctx)throw Error('Canvas 2D unsupported');directFieldFallback();faultOverlay.hidden=true;
+   health.classList.add('error');health.textContent='DIRECT FALLBACK · LIVE';
+  }catch(fallbackErr){showFault(`TIDE renderer unavailable: ${err.message}. ${fallbackErr.message}. Try another browser or restart this page.`);}
+ }
+}
+// iPhone can throttle requestAnimationFrame. The next frame is scheduled FIRST,
+// so a single exceptional numerical/render step cannot kill the loop permanently.
+function frame(now){
+ requestAnimationFrame(frame);
+ try{
+  const elapsed=Math.min(.085,Math.max(0,(now-prev)/1000));prev=now;
+  if(document.hidden)return;
+  if(running){acc+=elapsed;let loops=0;while(acc>=app.dt&&loops<4){app.step();acc-=app.dt;loops++;}if(loops===4)acc=0;}
+  engineFaults=0;
+ }catch(err){engineFaults++;if(engineFaults<=3)console.error('TIDE solver:',err);running=false;health.classList.add('error');health.textContent='SOLVER PAUSED · '+err.message.slice(0,36);}
+ try{
+  const cadence=window.matchMedia?.('(pointer:coarse)')?.matches?65:40;
+  if(pendingRepaint||now-lastPaint>cadence){safeRender();lastPaint=now;pendingRepaint=false;}
+  if(now-lastFrame>250){updateStatus();sound?.update();lastFrame=now;}
+ }catch(err){if(engineFaults<=3)console.error('TIDE UI:',err);showFault('Interface error: '+err.message);}
+}
+stage.addEventListener('contextlost',e=>{e.preventDefault();showFault('Graphics context was lost. Reload this page to restore live simulation.');});
+stage.addEventListener('contextrestored',()=>{faultOverlay.hidden=true;pendingRepaint=true;});
+updateStatus();safeRender();requestAnimationFrame(frame);
+window.TIDE_APP={app,PARAMS,GROUPS,snapshot:()=>app.snapshot(),selectView,render:()=>safeRender(),version:'TIDE 1.3 reliable iPhone renderer with live direct-field fallback'};
 
 // Soft fullscreen is needed because iPhone Safari may not expose Fullscreen API for ordinary page elements.
 const theatrical=$('visual');const closeBtn=document.createElement('button');closeBtn.id='closeTheater';closeBtn.textContent='Exit expanded view';closeBtn.className='pill';closeBtn.style.cssText='position:absolute;right:12px;bottom:12px;z-index:12;display:none;background:#13343f';theatrical.appendChild(closeBtn);
