@@ -205,7 +205,7 @@ function sampleVisualProfile(rawA,rawB,cfg,n=1550){
   relativeSpread+=Math.sqrt(Math.max(0,b.ss/b.n-mean*mean))/Math.max(.01,mean);count++;}
  if(count<20)return null;relativeSpread/=count;
  const shapeScore=Math.max(0,1-relativeSpread/.42);
- if(relativeSpread>.285||occupied>750||occupied<65)return null;
+ if(relativeSpread>.23||occupied>630||occupied<65)return null;
  return {hist:Array.from(hist),count:points.length,width,height,occupied,spread:relativeSpread,shapeScore};
 }
 function visualDifference(a,b){
@@ -262,7 +262,7 @@ function evolutionSearch(force){
   const cfg={...current,links,orbitP,orbitQ};
   const profile=sampleVisualProfile(rawA,rawB,cfg,1550);
   const difference=visualDifference(profile,evolutionProfile);
-  if(profile&&profile.shapeScore>=.32&&difference>=.16){
+  if(profile&&profile.shapeScore>=.56&&difference>=.16){
    evolutionProfile=profile;evolutionAccepted++;
    $('twinOrbitP').value=orbitP;$('twinOrbitQ').value=orbitQ;
    $('twinOrbitPv').textContent=orbitP;$('twinOrbitQv').textContent=orbitQ;
