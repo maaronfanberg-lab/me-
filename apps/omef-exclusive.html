@@ -14,7 +14,44 @@ body.color{--bg:#07121b;--panel:#101d2a;--text:#eaf4ff;--muted:#a8bdce;--line:#2
 .twin-note{font-size:12px;color:var(--muted);line-height:1.5}
 .twinlink summary{font-size:13px}
 @media(max-width:719px){.twin-control{grid-template-columns:92px 1fr;gap:5px}.twin-note{font-size:11px}}
-</style></head><body class="dark"><div class="app"><header><h1>OMEF EXCLUSIVE</h1><div class="sub">The original autonomous OMEF-A engine, drawn as dense points with live controls.</div></header><div class="stage"><canvas id="omefCanvas" width="1000" height="760"></canvas><div class="badge" id="count">Total drawn points: 0</div><div class="status" id="status">booting</div></div><div class="panel">
+
+/* Dual live attractor field for coupled OMEF formulas. */
+.twin-stage{display:none}
+.stage.twin-on #omefCanvas{display:none}
+.stage.twin-on .twin-stage{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));height:100%;min-height:390px}
+.twin-pane{position:relative;min-width:0;border-right:1px solid var(--line);overflow:hidden;background:var(--canvas)}
+.twin-pane:last-child{border-right:0}
+.stage.twin-on .twin-pane canvas{display:block;width:100%;height:100%;object-fit:contain}
+.twin-pane-label{position:absolute;z-index:2;top:8px;left:8px;font:700 12px/1 Menlo,monospace;padding:6px 8px;border-radius:7px;background:rgba(0,0,0,.73)}
+.twin-pane-label.a{color:#2ee7ca}.twin-pane-label.b{color:#e677f0}
+.stage.twin-on .badge{top:auto;bottom:7px;font-size:11px}
+.stage.twin-on .status{top:auto;bottom:42px;font-size:10px}
+.tw-param-group{margin:10px 0}
+.tw-pair{padding:9px 5px;border-top:1px solid var(--line)}
+.tw-pair-name{font-size:12px;font-weight:650;color:var(--text);margin:0 0 6px}
+.tw-pair-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.tw-single{min-width:0;display:flex;flex-direction:column;gap:5px}
+.tw-single label{font:11px/1.2 Menlo,monospace;display:flex;gap:5px;justify-content:space-between;color:var(--muted)}
+.tw-single label span{font-weight:750;color:var(--text)}
+.tw-single input[type=range]{width:100%;min-width:0;accent-color:#19bda9}
+.tw-single.b input[type=range]{accent-color:#b96de1}
+.tw-single .ctl{gap:2px}
+.tw-single .stepb{width:25px;min-width:25px;height:29px;font-size:15px}
+.tw-single .trk{min-height:34px;touch-action:pan-y}
+.tw-single .trk input{pointer-events:auto!important;touch-action:none!important}
+.tw-param-group summary{font-size:13px}
+@media(max-width:719px){
+.stage.twin-on{height:46svh;min-height:320px}
+.stage.twin-on .twin-stage{min-height:320px}
+.twin-pane-label{font-size:10px;padding:5px}
+.tw-pair{padding:8px 2px}
+.tw-pair-cols{gap:5px}
+.tw-single .stepb{width:20px;min-width:20px;height:26px;font-size:14px}
+.tw-single label{font-size:10px}
+.stage.twin-on .badge{font-size:9px;padding:3px}
+.stage.twin-on .status{font-size:9px;bottom:28px}
+}
+</style></head><body class="dark"><div class="app"><header><h1>OMEF EXCLUSIVE</h1><div class="sub">The original autonomous OMEF-A engine, drawn as dense points with live controls.</div></header><div class="stage"><canvas id="omefCanvas" width="1000" height="760"></canvas><div class="twin-stage" id="twinStage"><div class="twin-pane"><div class="twin-pane-label a">OMEF A</div><canvas id="twCanvasA" width="500" height="760" aria-label="OMEF A attractor"></canvas></div><div class="twin-pane"><div class="twin-pane-label b">OMEF B</div><canvas id="twCanvasB" width="500" height="760" aria-label="OMEF B attractor"></canvas></div></div><div class="badge" id="count">Total drawn points: 0</div><div class="status" id="status">booting</div></div><div class="panel">
 
 <section id="twinEngine"><h2>Drawing engine</h2><div class="grid2"><button id="engineOriginal" class="engbtn active" aria-pressed="true">Original OMEF</button><button id="engineTwin" class="engbtn secondary" aria-pressed="false">Nodal Twin OMEF</button></div></section>
 <div id="omefUI">
@@ -26,12 +63,12 @@ body.color{--bg:#07121b;--panel:#101d2a;--text:#eaf4ff;--muted:#a8bdce;--line:#2
 
 <div id="twinUI" hidden>
 <section><h2>Nodal Twin OMEF</h2>
-<div class="pure">Two complete ten-dimensional OMEF-A systems. Selected internal subsystems of A perturb different subsystems of B and vice versa. A four-link feedback circuit is active by default. Coupling at zero leaves both OMEF engines independent.</div>
+<div class="pure">Two full ten-dimensional OMEF-A formulas appear side by side above, each with its own 61 parameters. Changing A also changes B through the selected cross-links (and vice versa). Four directed connections are active by default. Set coupling to zero to compare independent formulas.</div>
 <div id="twinGlobals"></div>
-<div class="twin-control"><label for="twinView">Attractor view</label><select id="twinView"><option value="overlay">Overlay A + B</option><option value="split">Split A / B</option><option value="a">OMEF A only</option><option value="b">OMEF B only</option></select></div>
+<div class="toggle"><input type="checkbox" id="twinSharedScale" checked><label for="twinSharedScale">Shared coordinate scale for honest A / B comparison</label></div>
 <div class="grid2"><button id="twinRestore">Restore nodal circuit</button><button id="twinDecouple" class="secondary">Decouple formulas</button></div>
 <div class="pure" id="twinStats" style="margin-top:10px">Cross-system resonance will be measured here.</div>
-</section>
+</section><section id="twinParameterSection"><h2>Separate OMEF parameters</h2><p class="twin-note">Each row controls the same OMEF parameter in two independent formulas. Move A or B: both attractors recalculate immediately, including the delayed feedback from the other formula. Reset or copy one parameter set without changing the connection network.</p><div class="grid2"><button id="twinResetA" class="secondary">Reset A</button><button id="twinResetB" class="secondary">Reset B</button><button id="twinCopyAB">Copy A → B</button><button id="twinCopyBA">Copy B → A</button></div><div id="twinParameterGroups"></div></section>
 <section><h2>Subsystem-to-subsystem connections</h2><p class="twin-note">Each link reaches from a subsystem in one OMEF formula into a selected subsystem of the other. Crest gates transmit most at aligned golden-clock phases; node gates transmit most in opposition; bipolar gates reverse sign. Delays are measured in OMEF iterations.</p><div id="twinLinks"></div></section>
 </div>
 <section><h2>Rendering</h2><div class="toggle"><input id="livePreview" type="checkbox" checked><label for="livePreview">Live preview while dragging sliders</label></div><div id="renderControls"></div><div class="grid3 theme"><button data-theme="dark" class="active">Dark</button><button data-theme="light">Light</button><button data-theme="color">Color</button></div><div class="grid2" style="margin-top:8px"><button id="download">Save PNG</button><button id="stop" class="danger">Stop</button></div></section>
@@ -62,9 +99,10 @@ const twinDefaults=[
 {source:'B',from:'pair',to:'golden',strength:1.1,lag:5,offset:0,gate:'bipolar'},
 {source:'A',from:'fibonacci',to:'market',strength:0,lag:13,offset:0,gate:'crest'},
 {source:'B',from:'triad',to:'projection',strength:0,lag:8,offset:180,gate:'node'}];
-function twinConfig(){return {global:+$('twinGlobal').value,seed:+$('twinSeed').value,view:$('twinView').value,links:twinDefaults.map((_,i)=>({source:$('tl'+i+'source').value,from:$('tl'+i+'from').value,to:$('tl'+i+'to').value,strength:+$('tl'+i+'strength').value,lag:+$('tl'+i+'lag').value,offset:+$('tl'+i+'offset').value,gate:$('tl'+i+'gate').value}))};}
-function twinStepper(raw,cfg){
- const engines=[makeTwinEngine(raw,0),makeTwinEngine(raw,cfg.seed)],ring=[new Array(80).fill(null),new Array(80).fill(null)];let tick=0;
+function twinRaw(side){return Object.fromEntries(allDefs.map(d=>[d[0],+$(('tw'+side+'_'+d[0])).value]));}
+function twinConfig(){return {global:+$('twinGlobal').value,seed:+$('twinSeed').value,sharedScale:$('twinSharedScale').checked,links:twinDefaults.map((_,i)=>({source:$('tl'+i+'source').value,from:$('tl'+i+'from').value,to:$('tl'+i+'to').value,strength:+$('tl'+i+'strength').value,lag:+$('tl'+i+'lag').value,offset:+$('tl'+i+'offset').value,gate:$('tl'+i+'gate').value}))};}
+function twinStepper(rawA,rawB,cfg){
+ const engines=[makeTwinEngine(rawA,0),makeTwinEngine(rawB,cfg.seed)],ring=[new Array(80).fill(null),new Array(80).fill(null)];let tick=0;
  const fresh=()=>({pair:0,triad:0,market:0,shadow:0,regime:0,golden:0,fibonacci:0,projection:0});
  return function(){
   const inject=[fresh(),fresh()];let drive=0;
@@ -80,8 +118,8 @@ function twinStepper(raw,cfg){
   const delta=a.phase-b.phase;return {a:a.xy,b:b.xy,cos:Math.cos(delta),sin:Math.sin(delta),drive};
  };
 }
-function twinBounds(raw,cfg,n){
- const st=twinStepper(raw,cfg),create=()=>({minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity}),a=create(),b=create(),both=create();
+function twinBounds(rawA,rawB,cfg,n){
+ const st=twinStepper(rawA,rawB,cfg),create=()=>({minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity}),a=create(),b=create(),both=create();
  function add(o,x,y){o.minX=Math.min(o.minX,x);o.maxX=Math.max(o.maxX,x);o.minY=Math.min(o.minY,y);o.maxY=Math.max(o.maxY,y);}
  for(let i=0;i<n;i++){const p=st(),[x,y]=p.a,[u,v]=p.b;if(![x,y,u,v].every(Number.isFinite)||Math.max(Math.abs(x),Math.abs(y),Math.abs(u),Math.abs(v))>1e4)return null;
   if(i<220)continue;add(a,x,y);add(b,u,v);add(both,x,y);add(both,u,v);}
@@ -89,38 +127,50 @@ function twinBounds(raw,cfg,n){
  return {a,b,both};
 }
 function twinRender(preview){
- token++;const id=token;stopped=false;updateValues();clearCanvas();count.textContent='Total drawn points: 0';
- const raw=rawValues(),cfg=twinConfig(),total=preview?Math.min(30000,+$('points').value):+$('points').value;
- const each=(cfg.view==='a'||cfg.view==='b')?total:Math.floor(total/2),alpha=clamp(.015+(+$('ink').value)/650,.015,.17),dot=+$('size').value/2;
- status.textContent=(preview?'preview':'testing')+' · Nodal Twin';$('twinStats').textContent='Computing two interacting OMEF systems…';
+ token++;const run=token;stopped=false;updateValues();count.textContent='Total drawn points: 0';
+ const rawA=twinRaw('A'),rawB=twinRaw('B'),cfg=twinConfig();
+ const target=preview?Math.min(24000,+$('points').value):+$('points').value,each=Math.max(1,Math.floor(target/2));
+ const alpha=clamp(.015+(+$('ink').value)/650,.015,.17),dot=(+$('size').value)/2;
+ const ca=$('twCanvasA'),cb=$('twCanvasB'),cA=ca.getContext('2d'),cB=cb.getContext('2d');
+ const paper=getComputedStyle(document.body).getPropertyValue('--canvas').trim()||'#000';
+ for(const [c,context] of [[ca,cA],[cb,cB]]){context.fillStyle=paper;context.fillRect(0,0,c.width,c.height);}
+ status.textContent=(preview?'preview':'testing')+' · A + B';$('twinStats').textContent='Recomputing both OMEF attractors…';
  setTimeout(()=>{
-  if(id!==token)return;
-  const bounds=twinBounds(raw,cfg,preview?3600:8000);if(!bounds){status.textContent='collapsed · reduce cross-coupling';$('twinStats').textContent='Trajectory collapsed. Reduce cross-coupling or restore the nodal circuit.';return;}
-  const split=cfg.view==='split';
-  function mapper(b,side){
-   const width=split?cv.width/2:cv.width,left=split&&side==='b'?width:0,pad=split?32:55;
-   const scale=Math.min((width-2*pad)/b.w,(cv.height-2*pad)/b.h),midX=(b.minX+b.maxX)/2,midY=(b.minY+b.maxY)/2;
-   return xy=>[left+width/2+(xy[0]-midX)*scale,cv.height/2-(xy[1]-midY)*scale];
+  if(run!==token||stopped)return;
+  const bounds=twinBounds(rawA,rawB,cfg,preview?3400:8000);
+  if(!bounds){status.textContent='collapsed · reduce coupling';$('twinStats').textContent='At least one attractor collapsed. Reduce coupling, change parameters, or reset the engines.';return;}
+  function mapper(bound,canvas){
+   const b=cfg.sharedScale?bounds.both:bound,pad=32;
+   const scale=Math.min((canvas.width-2*pad)/b.w,(canvas.height-2*pad)/b.h);
+   const midX=(b.minX+b.maxX)/2,midY=(b.minY+b.maxY)/2;
+   return p=>[canvas.width/2+(p[0]-midX)*scale,canvas.height/2-(p[1]-midY)*scale];
   }
-  const ma=mapper(split?bounds.a:bounds.both,'a'),mb=mapper(split?bounds.b:bounds.both,'b');
-  const theme=document.body.className,inkA=theme==='color'?[73,204,255]:theme==='dark'?[46,231,202]:[0,115,135],inkB=theme==='color'?[255,171,110]:theme==='dark'?[230,119,240]:[151,45,154];
-  const st=twinStepper(raw,cfg);let done=0,cx=0,cy=0,drive=0,num=0;
-  status.textContent=(preview?'live preview':'rendering')+' · Nodal Twin';
+  const ma=mapper(bounds.a,ca),mb=mapper(bounds.b,cb);
+  const theme=document.body.className,rgbA=theme==='color'?[73,204,255]:theme==='dark'?[46,231,202]:[0,115,135],rgbB=theme==='color'?[255,171,110]:theme==='dark'?[230,119,240]:[151,45,154];
+  const state=twinStepper(rawA,rawB,cfg);let n=0,co=0,si=0,drive=0,coherenceN=0;
+  status.textContent=(preview?'live preview':'rendering')+' · A + B';
+  const stats=()=>{const R=coherenceN?Math.hypot(co,si)/coherenceN:0;
+   $('twinStats').textContent='Golden phase coherence R = '+R.toFixed(3)+' · Mean cross-drive = '+(coherenceN?drive/coherenceN:0).toFixed(3)+' · '+cfg.links.filter(l=>l.strength!==0).length+' active links. R close to 1 indicates phase locking; this is not a chaos score.';};
+  function draw(context,pts,rgb){
+   if(!pts.length)return;context.fillStyle='rgba('+rgb.join(',')+','+alpha+')';context.beginPath();
+   for(const q of pts)context.rect(q[0],q[1],dot,dot);context.fill();
+  }
   function batch(){
-   if(id!==token||stopped)return;
-   const stopAt=performance.now()+(preview?4:7),aa=[],bb=[];
-   while(done<each&&performance.now()<stopAt){const p=st();if(done>220){cx+=p.cos;cy+=p.sin;drive+=p.drive;num++;}
-    if(cfg.view!=='b'){const q=ma(p.a);if(q[0]>=0&&q[0]<cv.width&&q[1]>=0&&q[1]<cv.height)aa.push(q);}
-    if(cfg.view!=='a'){const q=mb(p.b);if(q[0]>=0&&q[0]<cv.width&&q[1]>=0&&q[1]<cv.height)bb.push(q);}
-    done++;
+   if(run!==token||stopped)return;
+   const until=performance.now()+(preview?4:7),a=[],b=[];
+   while(n<each&&performance.now()<until){
+    const p=state(),q=ma(p.a),v=mb(p.b);
+    if(q[0]>=0&&q[0]<ca.width&&q[1]>=0&&q[1]<ca.height)a.push(q);
+    if(v[0]>=0&&v[0]<cb.width&&v[1]>=0&&v[1]<cb.height)b.push(v);
+    if(n>220){co+=p.cos;si+=p.sin;drive+=p.drive;coherenceN++;}
+    n++;
    }
-   function draw(points,rgb){if(!points.length)return;ctx.fillStyle='rgba('+rgb.join(',')+','+alpha+')';ctx.beginPath();for(const q of points)ctx.rect(q[0],q[1],dot,dot);ctx.fill();}
-   draw(aa,inkA);draw(bb,inkB);
-   count.textContent='Total drawn points: '+(done*(cfg.view==='a'||cfg.view==='b'?1:2)).toLocaleString();
-   if(done===each||done%256<64){const R=num?Math.hypot(cx,cy)/num:0;
-    $('twinStats').textContent='Golden-phase coherence R: '+R.toFixed(3)+' · Mean cross-drive: '+(num?drive/num:0).toFixed(3)+' · Active links: '+cfg.links.filter(l=>l.strength!==0).length+'. R≈1 indicates relative-phase locking; R≈0 means dispersed phases.';}
-   if(done<each)setTimeout(batch,0);else status.textContent=(preview?'preview ready':'done')+' · Nodal Twin';
-  }batch();
+   draw(cA,a,rgbA);draw(cB,b,rgbB);
+   count.textContent='Total drawn points: '+(n*2).toLocaleString();
+   if(n===each||n%256<64)stats();
+   if(n<each)setTimeout(batch,0);else status.textContent=(preview?'preview ready':'done')+' · A + B';
+  }
+  batch();
  },preview?5:20);
 }
 function twinSlider(parent,id,label,min,max,step,value){
@@ -142,33 +192,75 @@ function twinSelect(parent,id,label,options,value){
 function buildTwinUI(){
  twinSlider($('twinGlobals'),'twinGlobal','Cross-coupling',0,2.5,.05,1);
  twinSlider($('twinGlobals'),'twinSeed','B initial offset',0,3,.05,1);
- const modes=[['crest','Crest · aligned'],['node','Node · opposed'],['bipolar','Bipolar · signed']];
+ const globals=['twinSharedScale'];
+ $('twinSharedScale').addEventListener('change',()=>{cancelPreview();render(false);});
+ // The two parameter columns correspond to actual independent OMEF-A state machines.
+ const groupDefs=[['OMEF genome',macros],['OMEF self-feedback',feedbackDefs],...groups];
+ for(let g=0;g<groupDefs.length;g++){
+  const [name,defs]=groupDefs[g],details=document.createElement('details');
+  details.className='group tw-param-group';if(g===0)details.open=true;
+  const title=document.createElement('summary');title.textContent=name;
+  const box=document.createElement('div');details.append(title,box);$('twinParameterGroups').appendChild(details);
+  for(const d of defs){
+   const [key,label,min,max,step,def]=d,row=document.createElement('div');row.className='tw-pair';
+   const nameEl=document.createElement('div');nameEl.className='tw-pair-name';nameEl.textContent=label;
+   const cols=document.createElement('div');cols.className='tw-pair-cols';
+   for(const side of ['A','B']){
+    const single=document.createElement('div');single.className='tw-single '+(side==='B'?'b':'a');
+    const cap=document.createElement('label');cap.htmlFor='tw'+side+'_'+key;
+    const part=document.createElement('strong');part.textContent='OMEF '+side;
+    const value=document.createElement('span');value.id='tw'+side+'_'+key+'v';
+    const range=document.createElement('input');range.id='tw'+side+'_'+key;
+    range.type='range';range.min=min;range.max=max;range.step=step;range.value=def;
+    range.setAttribute('aria-label','OMEF '+side+' '+label);
+    const show=()=>{const decimals=step>=1?0:step<.01?3:2;value.textContent=(+range.value).toFixed(decimals);};
+    range.addEventListener('input',()=>{show();requestPreview();});
+    range.addEventListener('change',()=>{show();cancelPreview();render(false);});
+    cap.append(part,value);single.append(cap,range);cols.appendChild(single);show();
+   }
+   row.append(nameEl,cols);box.appendChild(row);
+  }
+ }
+ function setParams(side,values){
+  for(const d of allDefs){const elem=$('tw'+side+'_'+d[0]);elem.value=values[d[0]];elem.dispatchEvent(new Event('input'));}
+  cancelPreview();render(false);
+ }
+ const defaults=Object.fromEntries(allDefs.map(d=>[d[0],d[5]]));
+ $('twinResetA').onclick=()=>setParams('A',defaults);
+ $('twinResetB').onclick=()=>setParams('B',defaults);
+ $('twinCopyAB').onclick=()=>setParams('B',twinRaw('A'));
+ $('twinCopyBA').onclick=()=>setParams('A',twinRaw('B'));
+ const gates=[['crest','Crest · aligned'],['node','Node · opposed'],['bipolar','Bipolar · signed']];
  const refreshes=[];
  twinDefaults.forEach((p,i)=>{
-  const d=document.createElement('details');d.className='group twinlink';if(i<2)d.open=true;
-  const title=document.createElement('summary'),inner=document.createElement('div');d.append(title,inner);$('twinLinks').appendChild(d);
-  const src=twinSelect(inner,'tl'+i+'source','Sending OMEF',[['A','A'],['B','B']],p.source);
-  const from=twinSelect(inner,'tl'+i+'from','Sending node',twinNodes,p.from),to=twinSelect(inner,'tl'+i+'to','Receiving node',twinNodes,p.to);
-  twinSlider(inner,'tl'+i+'strength','Coupling',-2,2,.05,p.strength);
-  twinSlider(inner,'tl'+i+'lag','Delay',1,34,1,p.lag);
-  twinSlider(inner,'tl'+i+'offset','Phase °',0,360,5,p.offset);
-  twinSelect(inner,'tl'+i+'gate','Crest / node',modes,p.gate);
-  const refresh=()=>{const a=twinNodes.find(x=>x[0]===from.value)[1],b=twinNodes.find(x=>x[0]===to.value)[1];
-   title.textContent=(i+1)+' · '+src.value+' '+a+' → '+(src.value==='A'?'B':'A')+' '+b;};
-  [src,from,to].forEach(x=>x.addEventListener('change',refresh));refreshes.push(refresh);refresh();
+  const group=document.createElement('details');group.className='group twinlink';if(i<2)group.open=true;
+  const title=document.createElement('summary'),body=document.createElement('div');group.append(title,body);$('twinLinks').appendChild(group);
+  const source=twinSelect(body,'tl'+i+'source','Sending OMEF',[['A','A'],['B','B']],p.source);
+  const from=twinSelect(body,'tl'+i+'from','Sending node',twinNodes,p.from),to=twinSelect(body,'tl'+i+'to','Receiving node',twinNodes,p.to);
+  twinSlider(body,'tl'+i+'strength','Coupling',-2,2,.05,p.strength);
+  twinSlider(body,'tl'+i+'lag','Delay',1,34,1,p.lag);
+  twinSlider(body,'tl'+i+'offset','Phase °',0,360,5,p.offset);
+  twinSelect(body,'tl'+i+'gate','Crest / node',gates,p.gate);
+  const refresh=()=>{const a=twinNodes.find(x=>x[0]===from.value)[1],b=twinNodes.find(x=>x[0]===to.value)[1];title.textContent=(i+1)+' · '+source.value+' '+a+' → '+(source.value==='A'?'B':'A')+' '+b;};
+  [source,from,to].forEach(e=>e.addEventListener('change',refresh));refreshes.push(refresh);refresh();
  });
- $('twinView').addEventListener('change',()=>{cancelPreview();render(false);});
  function setCircuit(decouple){
-  $('twinGlobal').value=1;$('twinSeed').value=1;$('twinView').value='overlay';
+  $('twinGlobal').value=1;$('twinSeed').value=1;$('twinSharedScale').checked=true;
   twinDefaults.forEach((p,i)=>{for(const k of ['source','from','to','strength','lag','offset','gate'])$('tl'+i+k).value=k==='strength'&&decouple?0:p[k];refreshes[i]();});
-  document.querySelectorAll('#twinUI input[type=range]').forEach(e=>$(e.id+'v').textContent=(+e.value).toFixed(+e.step>=1?0:2));
+  document.querySelectorAll('#twinUI .row input[type=range]').forEach(e=>$(e.id+'v').textContent=(+e.value).toFixed(+e.step>=1?0:2));
   cancelPreview();render(false);
  }
  $('twinRestore').onclick=()=>setCircuit(false);$('twinDecouple').onclick=()=>setCircuit(true);
- $('engineOriginal').onclick=()=>{if(activeEngine==='omef')return;activeEngine='omef';$('omefUI').hidden=false;$('twinUI').hidden=true;$('engineOriginal').classList.add('active');$('engineTwin').classList.remove('active');$('engineOriginal').setAttribute('aria-pressed','true');$('engineTwin').setAttribute('aria-pressed','false');cancelPreview();render(false);};
- $('engineTwin').onclick=()=>{if(activeEngine==='twin')return;activeEngine='twin';$('omefUI').hidden=true;$('twinUI').hidden=false;$('engineTwin').classList.add('active');$('engineOriginal').classList.remove('active');$('engineOriginal').setAttribute('aria-pressed','false');$('engineTwin').setAttribute('aria-pressed','true');cancelPreview();render(false);};
+ const stage=document.querySelector('.stage');
+ function mode(m){
+  if(activeEngine===m)return;activeEngine=m;const twin=m==='twin';
+  $('omefUI').hidden=twin;$('twinUI').hidden=!twin;
+  $('engineTwin').classList.toggle('active',twin);$('engineOriginal').classList.toggle('active',!twin);
+  $('engineOriginal').setAttribute('aria-pressed',String(!twin));$('engineTwin').setAttribute('aria-pressed',String(twin));
+  stage.classList.toggle('twin-on',twin);cancelPreview();render(false);
+ }
+ $('engineOriginal').onclick=()=>mode('omef');$('engineTwin').onclick=()=>mode('twin');
 }
-
 function bounds(raw,n){const st=makeStepper(raw);let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,valid=0;for(let i=0;i<n;i++){const q=st();if(i<140)continue;const x=q[0],y=q[1];if(Number.isFinite(x)&&Number.isFinite(y)&&Math.abs(x)<1e5&&Math.abs(y)<1e5){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);valid++}}if(valid<500||maxX-minX<.01||maxY-minY<.01)return null;return{minX,maxX,minY,maxY,w:maxX-minX,h:maxY-minY}}
 function clearCanvas(){ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--canvas');ctx.fillRect(0,0,cv.width,cv.height)}
 function render(preview=false){if(activeEngine==='twin')return twinRender(preview);token++;const my=token;stopped=false;updateValues();clearCanvas();count.textContent='Total drawn points: 0';const raw=rawValues(),full=+$('points').value,total=preview?Math.min(30000,full):full,alphaInk=clamp(.015+(+$('ink').value)/650,.015,.17),dot=(+$('size').value)/2;status.textContent=(preview?'preview':'testing')+' · OMEF-A';setTimeout(()=>{if(my!==token)return;const b=bounds(raw,preview?3200:8000);if(!b){status.textContent='collapsed · lower feedback or Random visible';return}const pad=55,scale=Math.min((cv.width-pad*2)/b.w,(cv.height-pad*2)/b.h),ox=cv.width/2-scale*(b.minX+b.maxX)/2,oy=cv.height/2+scale*(b.minY+b.maxY)/2,st=makeStepper(raw),rgb=getComputedStyle(document.body).getPropertyValue('--ink');let drawn=0;ctx.fillStyle='rgba('+rgb+','+alphaInk+')';status.textContent=(preview?'live preview':'rendering')+' · OMEF-A';function batch(){if(my!==token||stopped)return;const start=performance.now();ctx.beginPath();while(drawn<total&&performance.now()-start<(preview?4:7)){const q=st(),px=ox+q[0]*scale,py=oy-q[1]*scale;if(Number.isFinite(px)&&Number.isFinite(py)&&px>=0&&px<cv.width&&py>=0&&py<cv.height)ctx.rect(px,py,dot,dot);drawn++}ctx.fill();count.textContent='Total drawn points: '+drawn.toLocaleString();if(drawn<total)setTimeout(batch,0);else status.textContent=(preview?'preview ready':'done')+' · OMEF-A'}batch()},preview?5:20)}
@@ -178,13 +270,13 @@ function reset(){allDefs.forEach(d=>$(d[0]).value=d[5]);updateValues();render(fa
 function mutate(){const o={};allDefs.forEach(d=>{const span=d[3]-d[2],amt=d[4]>=1?Math.max(1,Math.round(span*.03)):span*.025;o[d[0]]=clamp(+$(d[0]).value+rand(-amt,amt),d[2],d[3])});apply(o);render(false)}
 function randomVisible(){status.textContent='hunting · OMEF-A';const base=rawValues();let best=null,bestArea=-1;for(let tries=0;tries<70;tries++){const o={...base};macros.forEach(d=>o[d[0]]=rand(d[2],d[3]));['pairFreqA','pairFreqB','pairCosAmp','triScale','triCross','marketW1','marketW2','shadowSelf','shadowCross','regimeForce','phaseSpeed','goldCos','fib1','fib3','fib8','fib13','edgeBase','edgeSpan','squash','projReg','projCross','projPhase'].forEach(k=>{const d=defMap[k];o[k]=rand(d[2],d[3])});o.fbPair=rand(.04,.42);o.fbRegime=rand(.02,.30);o.fbProjection=rand(.05,.48);o.fbLag=Math.round(rand(2,22));o.fbMix=rand(.25,.85);o.fbDamping=rand(.82,.975);const b=bounds(o,5000);if(b){const ar=Math.max(b.w,b.h)/Math.max(.001,Math.min(b.w,b.h)),area=b.w*b.h/(1+.2*Math.max(0,ar-7));if(area>bestArea){best={o,b};bestArea=area}if(area>.16&&ar<9){apply(o);render(false);return}}}if(best){apply(best.o);render(false)}else render(false)}
 function wire(){allDefs.forEach(d=>{const e=$(d[0]);e.addEventListener('input',()=>{updateValues();requestPreview()});e.addEventListener('change',()=>{cancelPreview();render(false)})});['points','ink','size'].forEach(k=>{$(k).addEventListener('input',()=>{updateValues();requestPreview()});$(k).addEventListener('change',()=>{cancelPreview();render(false)})});$('random').onclick=randomVisible;$('mutate').onclick=mutate;$('preset').onclick=reset;$('render').onclick=()=>render(false);$('stop').onclick=()=>{stopped=true;token++;status.textContent='stopped'};$('download').onclick=()=>{const a=document.createElement('a');a.download='omef-exclusive.png';a.href=cv.toDataURL('image/png');a.click()};document.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-theme]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.body.className=b.dataset.theme==='light'?'':b.dataset.theme;render(false)})}
-window.OMEFExclusive={makeStepper,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinDefaults};buildTwinUI();wire();updateValues();render(false);
+window.OMEFExclusive={makeStepper,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinDefaults,twinRaw};buildTwinUI();wire();updateValues();$('engineTwin').click();
 })();</script><script>(function(){'use strict';
 // Tap path for every slider: -/+ buttons (1% of range, at least one step) and tap-to-jump on the track.
 // On touch screens the slider itself ignores touches, so a scroll that starts on it just scrolls.
 function fire(e){e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}
 function snap(e,v){const mn=+e.min,mx=+e.max,st=+e.step||1;v=Math.max(mn,Math.min(mx,v));v=mn+Math.round((v-mn)/st)*st;const dec=(String(e.step).split('.')[1]||'').length;return +Math.max(mn,Math.min(mx,v)).toFixed(dec);}
-document.querySelectorAll('.row input[type=range]').forEach(e=>{
+document.querySelectorAll('.row input[type=range], .tw-single input[type=range]').forEach(e=>{
  const row=e.parentNode,ctl=document.createElement('div'),trk=document.createElement('div');ctl.className='ctl';trk.className='trk';
  const mk=(t,d)=>{const b=document.createElement('button');b.type='button';b.className='stepb';b.textContent=t;b.setAttribute('aria-label',(d<0?'Decrease ':'Increase ')+(e.getAttribute('aria-label')||e.id));
   b.addEventListener('click',()=>{const st=+e.step||1,inc=Math.max(st,Math.round((+e.max-+e.min)*.01/st)*st),v=snap(e,+e.value+d*inc);if(v!==+e.value){e.value=v;fire(e);}});return b;};
