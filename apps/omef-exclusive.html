@@ -147,13 +147,14 @@ function twinProject(point,cfg,mode){
   case 2:return [ax+.55*m*bx+.18*w*Math.tanh(ax*by),ay+.55*m*by-.18*w*Math.tanh(ay*bx)];
   case 3:return [ax-.82*m*bx+.14*w*u,ay+.82*m*by+.14*w*v];
   case 4:return [bx+.55*(1-m)*ax+.18*w*Math.tanh(bx*ay),by+.55*(1-m)*ay-.18*w*Math.tanh(by*ax)];
+  case 5:return [ax+.23*m*bx+.045*w*u,ay+.23*m*by+.045*w*v];
   default:return [(1-m)*ax+m*bx+.14*w*u,(1-m)*ay+m*by+.14*w*v];
  }
 }
 
 function twinCombine(point,cfg){
  if(cfg.projectionWeights){
-  let x=0,y=0;for(let i=0;i<5;i++){const w=cfg.projectionWeights[i]||0;if(w<.0000001)continue;const p=twinProject(point,cfg,i);x+=w*p[0];y+=w*p[1];}
+  let x=0,y=0;for(let i=0;i<6;i++){const w=cfg.projectionWeights[i]||0;if(w<.0000001)continue;const p=twinProject(point,cfg,i);x+=w*p[0];y+=w*p[1];}
   return [x,y];
  }
  const next=twinProject(point,cfg,cfg.projection);
@@ -183,7 +184,7 @@ let evolutionOn=true,evolutionTimer=null,evolutionEpoch=0,evolutionAccepted=0,ev
 let morphFrameHandle=0,morphSequence=0;
 function cancelMorph(){morphSequence++;if(morphFrameHandle){cancelAnimationFrame(morphFrameHandle);morphFrameHandle=0;}}
 let refreshTwinLinkCaptions=()=>{};
-function evolutionSeconds(){return 11.0*Math.pow(.77,(+$('twinSpeed').value)-1);}
+function evolutionSeconds(){return 70.0*Math.pow(.74,(+$('twinSpeed').value)-1);}
 function evolutionStatus(phrase){
  const label=evolutionOn?'Running':'Paused';
  $('twinAutoToggle').textContent=evolutionOn?'Pause evolution':'Resume evolution';
@@ -312,7 +313,7 @@ function applyTwinGenome(A,B){
 // Both full 10D OMEF models, their delayed memories, and their clock phases
 // remain alive. Parameter changes are filtered; changed network links fade.
 function cancelMorph(){if(liveState&&liveState.frame){cancelAnimationFrame(liveState.frame);liveState.frame=0;}}
-function hot(index){return [0,1,2,3,4].map(i=>i===+index?1:0);}
+function hot(index){return [0,1,2,3,4,5].map(i=>i===+index?1:0);}
 function linkId(l){return [l.source,l.from,l.to,l.lag,l.offset,l.gate].join(':');}
 function liveRetarget(st,desired){
  const map=new Map(desired.map(l=>[linkId(l),l]));
@@ -330,32 +331,32 @@ function liveInput(){
 function liveMutate(){
  const st=liveState;if(!st||stopped||activeEngine!=='twin')return;
  const A={...st.targetA},B={...st.targetB},depth=+$('twinDepth').value;
- const n=1+Math.floor(depth/3),names=[];
+ const n=1+Math.floor(depth/5),names=[];
  for(let j=0;j<n;j++){
   const d=allDefs[Math.floor(Math.random()*allDefs.length)];
   const [key,,min,max,step]=d,side=Math.random()<.5?'A':'B',obj=side==='A'?A:B;
-  const amount=(max-min)*(.008+depth*.005)*(.5+Math.random());
+  const amount=(max-min)*(.0025+depth*.002)*(.5+Math.random());
   const v=clamp(obj[key]+(Math.random()<.5?-1:1)*amount,min,max);
   const digits=(String(step).split('.')[1]||'').length;
   obj[key]=clamp(+(min+Math.round((v-min)/step)*step).toFixed(digits),min,max);
   names.push(side+'.'+key);
  }
  const edges=st.requested.map(x=>({...x}));
- if(Math.random()<.67){
+ if(Math.random()<.37){
   const e=edges[Math.floor(Math.random()*edges.length)];
-  if(Math.random()<.25){
+  if(Math.random()<.08){
    const names=twinNodes.map(v=>v[0]);
    if(Math.random()<.5)e.from=names[Math.floor(Math.random()*names.length)];
    else e.to=names[Math.floor(Math.random()*names.length)];
   }else{
-   e.strength=clamp(e.strength+(Math.random()-.5)*(.13+.03*depth),-1.9,1.9);
-   if(Math.random()<.28)e.lag=[3,5,8,13,21,34][Math.floor(Math.random()*6)];
+   e.strength=clamp(e.strength+(Math.random()-.5)*(.05+.007*depth),-1.9,1.9);
+   if(Math.random()<.08)e.lag=[3,5,8,13,21,34][Math.floor(Math.random()*6)];
   }
  }
  const cfg={...st.targetCfg,links:edges};
- if(Math.random()<.09)cfg.projection=Math.floor(Math.random()*5);
+ if(Math.random()<.005)cfg.projection=Math.floor(Math.random()*6);
  const test=sampleVisualProfile(A,B,cfg,1500);
- if(!test||test.shapeScore<.47||test.occupancy>.77){
+ if(!test||test.shapeScore<.53||test.occupancy>.55||test.denseMass<.3){
   evolutionRejected++;evolutionStatus('Declined a diffuse or collapsed state');return;
  }
  evolutionAccepted++;evolutionProfile=test;
@@ -402,9 +403,9 @@ function liveFrame(time){
   st.B[id]+=(st.targetB[id]-st.B[id])*a;
  }
  for(const key of ['global','seed','mix','interference'])st.config[key]+=(st.targetCfg[key]-st.config[key])*a;
- for(let i=0;i<5;i++)st.weights[i]+=(st.targetWeights[i]-st.weights[i])*a;
+ for(let i=0;i<6;i++)st.weights[i]+=(st.targetWeights[i]-st.weights[i])*a;
  const sum=st.weights.reduce((x,y)=>x+y,0);
- if(sum>.00001)for(let i=0;i<5;i++)st.weights[i]/=sum;
+ if(sum>.00001)for(let i=0;i<6;i++)st.weights[i]/=sum;
  for(const edge of st.edges)edge.strength+=(edge.goal-edge.strength)*a;
  if(st.frames%300===0)st.edges=st.edges.filter(e=>Math.abs(e.strength)>.0002||Math.abs(e.goal)>.0002);
  st.config.links=st.edges;st.config.projectionWeights=st.weights;
@@ -478,15 +479,15 @@ function twinSelect(parent,id,label,options,value){
 }
 function buildTwinUI(){
  twinSlider($('twinSpeedControls'),'twinSpeed','Evolution speed',1,10,1,2);
- twinSlider($('twinSpeedControls'),'twinMorphDuration','Drift smoothness · seconds',.8,9,.2,5.8);
- twinSlider($('twinSpeedControls'),'twinPersistence','Trail persistence · s',10,120,5,35);
- twinSlider($('twinSpeedControls'),'twinDepth','Mutation depth',1,10,1,5);
+ twinSlider($('twinSpeedControls'),'twinMorphDuration','Drift smoothness · seconds',.8,9,.2,7);
+ twinSlider($('twinSpeedControls'),'twinPersistence','Trail persistence · s',10,120,5,20);
+ twinSlider($('twinSpeedControls'),'twinDepth','Mutation depth',1,10,1,3);
  evolutionStatus();
- twinSlider($('twinGlobals'),'twinGlobal','Cross-coupling',0,4,.05,1);
+ twinSlider($('twinGlobals'),'twinGlobal','Cross-coupling',0,4,.05,.45);
  twinSlider($('twinGlobals'),'twinSeed','B initial offset',0,3,.05,1);
- twinSlider($('twinGlobals'),'twinMix','Formula B influence',0,1,.01,.5);
- twinSlider($('twinGlobals'),'twinInterference','Cross-system influence',0,3,.02,.75);
- twinSelect($('twinGlobals'),'twinProjection','Shared projection',[[2,'A backbone + B feedback'],[0,'Native coordinate blend'],[1,'Cross-laced components'],[3,'Difference & sum'],[4,'B backbone + A feedback']],2);
+ twinSlider($('twinGlobals'),'twinMix','Formula B influence',0,1,.01,.16);
+ twinSlider($('twinGlobals'),'twinInterference','Cross-system influence',0,3,.02,.16);
+ twinSelect($('twinGlobals'),'twinProjection','Shared projection',[[5,'Original OMEF filaments'],[2,'A backbone + B feedback'],[0,'Native coordinate blend'],[1,'Cross-laced components'],[3,'Difference & sum'],[4,'B backbone + A feedback']],5);
  // Both full parameter sets stay editable, but there is only one mathematical output plane.
  // The two parameter columns correspond to actual independent OMEF-A state machines.
  const groupDefs=[['OMEF genome',macros],['OMEF self-feedback',feedbackDefs],...groups];
@@ -534,9 +535,9 @@ function buildTwinUI(){
     $('tw'+side+'_'+d[0]+'v').textContent=(+value).toFixed(digits);
    }
   }
-  $('twinMix').value=.2;$('twinMixv').textContent='0.20';
-  $('twinInterference').value=.2;$('twinInterferencev').textContent='0.20';
-  $('twinProjection').value=2;
+  $('twinMix').value=.12;$('twinMixv').textContent='0.12';
+  $('twinInterference').value=.12;$('twinInterferencev').textContent='0.12';
+  $('twinProjection').value=5;
   cancelPreview();render(true);
  };
  const gates=[['crest','Crest · aligned'],['node','Node · opposed'],['bipolar','Bipolar · signed']];
