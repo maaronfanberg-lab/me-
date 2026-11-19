@@ -5,17 +5,19 @@
 .stage{position:relative;background:#000;border-bottom:1px solid var(--line);overflow:hidden}canvas{display:block;width:100%;height:auto;background:#000}
 .hud{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.7);color:#fff;border-radius:10px;padding:6px 9px;font:12px/1.35 Menlo,Consolas,monospace;pointer-events:none;white-space:pre-line;max-width:70%}
 section{padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel)}h2{margin:0 0 8px;font-size:19px}.hint{color:var(--muted);font-size:12px;line-height:1.4;margin:-2px 0 8px}
-.row{display:grid;grid-template-columns:110px 1fr 58px;gap:8px;align-items:center;margin:8px 0}.row label{color:var(--muted);font-size:13px}.value{background:#555;color:#fff;text-align:center;border-radius:7px;padding:5px 2px;font-size:12px;font-variant-numeric:tabular-nums}
+.row{display:grid;grid-template-columns:120px 1fr 58px;gap:8px;align-items:center;margin:7px 0}.row label{color:var(--muted);font-size:13px}.value{background:#555;color:#fff;text-align:center;border-radius:7px;padding:5px 2px;font-size:12px;font-variant-numeric:tabular-nums}
+.row.moved label{color:#7fe3da}
 input[type=range]{width:100%;accent-color:var(--accent)}button{font:inherit;border-radius:9px;border:0;padding:10px;background:var(--accent);color:#fff;font-weight:700;width:100%}.secondary{background:#555}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .ctl{display:flex;align-items:center;gap:6px;min-width:0}.ctl .trk{flex:1;min-width:0;display:flex;align-items:center;min-height:36px;touch-action:pan-y}.ctl .trk input{touch-action:pan-y}.stepb{width:34px;min-width:34px;height:34px;padding:0;border-radius:8px;background:#555;color:#fff;font-size:18px;line-height:1;touch-action:manipulation}@media(pointer:coarse){.ctl .trk input{pointer-events:none}}
+details.group{border:1px solid var(--line);border-radius:12px;margin:9px 0;overflow:hidden}details.group summary{padding:11px 12px;font-weight:800;background:rgba(127,127,127,.08);cursor:pointer}details.group>div{padding:2px 10px 8px}details.group .gh{color:var(--muted);font-size:12px;line-height:1.4;margin:6px 0 2px}
 #rels{font:12px/1.6 Menlo,Consolas,monospace;color:var(--text);white-space:pre-wrap;word-break:break-word}#events{font:11px/1.5 Menlo,Consolas,monospace;color:var(--muted);white-space:pre-wrap;max-height:9em;overflow:auto}
-@media(max-width:719px){header{padding:8px 10px}h1{font-size:19px}.sub{display:none}.stage{position:sticky;top:0;z-index:20}.stage canvas{max-height:52svh;object-fit:contain}section{padding:10px 9px}.row{grid-template-columns:86px 1fr 48px;gap:5px}.row label{font-size:11px}.value{font-size:10px}.hud{font-size:10px}}
+@media(max-width:719px){header{padding:8px 10px}h1{font-size:19px}.sub{display:none}.stage{position:sticky;top:0;z-index:20}.stage canvas{max-height:50svh;object-fit:contain}section{padding:10px 9px}.row{grid-template-columns:90px 1fr 48px;gap:5px}.row label{font-size:11px}.value{font-size:10px}.hud{font-size:10px}}
 </style></head><body><div class="app">
 <header><h1>SELF-EVOLVING FORMULA</h1><div class="sub">One formula drawing itself while it rewrites its own relationships. A hidden slime-mold meta formula suggests ideas; the formula decides.</div></header>
 <div class="stage"><canvas id="cv" width="800" height="800"></canvas><div class="hud" id="hud">starting</div></div>
-<section><div class="grid3" style="margin-top:0"><button id="play">Pause</button><button id="restart" class="secondary">Restart</button><button id="corner" class="secondary">Corner: off</button></div><div class="grid2" style="margin-top:8px"><button id="newseed" class="secondary">New seed</button><button id="save">Save PNG</button></div></section>
-<section><h2>Machine</h2><div class="hint">Evolution speed 0 freezes the formula and lets the current version keep drawing.</div><div id="controls"></div></section>
+<section><div class="grid3"><button id="play">Pause</button><button id="restart" class="secondary">Restart</button><button id="corner" class="secondary">Corner: off</button></div><div class="grid3" style="margin-top:8px"><button id="newseed" class="secondary">New seed</button><button id="resetall" class="secondary">Reset controls</button><button id="save">Save PNG</button></div></section>
+<section><h2>Controls</h2><div class="hint">Every control acts live. Restart replays the evolution from the seed with the current settings. Moved controls turn teal.</div><div id="groups"></div></section>
 <section><h2>Living relationships</h2><div class="hint">xₙ ← sign·strength·operator(inputs). ⁻ marks an anti-rule.</div><div id="rels"></div></section>
 <section><h2>What it just did</h2><div id="events"></div></section>
 </div>
@@ -31,43 +33,113 @@ function sinP(x) { if (!Number.isFinite(x)) return NaN; const k = Math.round(x /
 const cosP = x => sinP(x + HALF_PI);
 function logP(x) { if (!(x > 0)) return NaN; let e = 0; while (x >= 2) { x /= 2; e++; } while (x < 1) { x *= 2; e--; }
   const s = (x - 1) / (x + 1), s2 = s * s; let t = s, sum = 0; for (let k = 1; k < 40; k += 2) { sum += t / k; t *= s2; } return 2 * sum + e * 0.6931471805599453; }
-const NV = 6, T = 2500, HIST = 64;
+function expP(x) { if (!Number.isFinite(x)) return x > 0 ? Infinity : 0; if (x > 700) return Infinity; if (x < -700) return 0; const k = Math.round(x / 0.6931471805599453), r = x - k * 0.6931471805599453; let t = 1, s = 1; for (let i = 1; i < 25; i++) { t *= r / i; s += t; } let p = s; if (k > 0) for (let i = 0; i < k; i++) p *= 2; else for (let i = 0; i < -k; i++) p /= 2; return p; }
+const powP = (b, e) => b === 0 ? 0 : expP(e * logP(b));
+function atanP(x) { const neg = x < 0; if (neg) x = -x; const inv = x > 1; if (inv) x = 1 / x; const red = x > 0.2679491924311227; if (red) x = (x * 1.7320508075688772 - 1) / (x + 1.7320508075688772);
+  const x2 = x * x; let t = x, s = 0; for (let k = 1; k < 36; k += 2) { s += t / k * ((k >> 1) % 2 ? -1 : 1); t *= x2; } if (red) s += 0.5235987755982988; if (inv) s = HALF_PI - s; return neg ? -s : s; }
+function atan2P(y, x) { if (x > 0) return atanP(y / x); if (x < 0) return atanP(y / x) + (y >= 0 ? Math.PI : -Math.PI); return y > 0 ? HALF_PI : y < 0 ? -HALF_PI : 0; }
+const NV = 6, HIST = 64;
+// ---------- the 75 parameters (key, group, label, min, max, step, default) ----------
+const PARAMS = [
+  // A. the step itself
+  ['rhoMul', 'Step', 'Inertia', 0, 2.5, 0.01, 1], ['scaleExp', 'Step', 'Crowd scaling', 0, 1.5, 0.01, 0.5], ['foldGain', 'Step', 'Fold gain', 0.2, 3, 0.01, 1], ['foldAmp', 'Step', 'Fold height', 0.5, 4, 0.01, 2],
+  ['foldSkew', 'Step', 'Fold skew', -1.5, 1.5, 0.01, 0], ['rhoTilt', 'Step', 'Inertia tilt', -1, 1, 0.01, 0], ['antiGain', 'Step', 'Anti-rule strength', 0, 3, 0.01, 1], ['wGain', 'Step', 'Relationship strength', 0, 3, 0.01, 1],
+  ['delayMul', 'Step', 'Echo stretch', 0.1, 4, 0.01, 1], ['ringK', 'Step', 'Ring pull', -1.5, 1.5, 0.01, 0], ['cubic', 'Step', 'Cubic restraint', -0.5, 1.5, 0.01, 0], ['memK', 'Step', 'Last-step memory', -1, 1, 0.01, 0],
+  ['parity', 'Step', 'Odd-step damping', -1, 1, 0.01, 0], ['drift', 'Step', 'Slow drift', -1, 1, 0.01, 0], ['bias', 'Step', 'Bias field', -1, 1, 0.01, 0],
+  // B. the operators
+  ['g_hinge', 'Operators', 'Hinge gain', -2, 3, 0.01, 1], ['g_quot', 'Operators', 'Quot gain', -2, 3, 0.01, 1], ['g_mirror', 'Operators', 'Mirror gain', -2, 3, 0.01, 1], ['g_wrap', 'Operators', 'Wrap gain', -2, 3, 0.01, 1],
+  ['g_twist', 'Operators', 'Twist gain', -2, 3, 0.01, 1], ['g_pinch', 'Operators', 'Pinch gain', -2, 3, 0.01, 1], ['g_join', 'Operators', 'Join gain', -2, 3, 0.01, 1], ['g_swirl', 'Operators', 'Swirl gain', -2, 3, 0.01, 1],
+  ['g_bloom', 'Operators', 'Bloom gain', -2, 3, 0.01, 1], ['g_lens', 'Operators', 'Lens gain', -2, 3, 0.01, 1], ['g_echo', 'Operators', 'Echo gain', -2, 3, 0.01, 1],
+  ['wrapK', 'Operators', 'Wrap frequency', 0.2, 6, 0.01, 1.7], ['swirlK', 'Operators', 'Swirl frequency', 0.1, 4, 0.01, 1], ['bloomW', 'Operators', 'Bloom width', 0.1, 4, 0.01, 1], ['lensC', 'Operators', 'Lens offset', -2, 3, 0.01, 1],
+  ['pinchW', 'Operators', 'Pinch waist', 0, 6, 0.01, 1], ['twistR', 'Operators', 'Twist ratio', -2, 5, 0.01, 2], ['quotS', 'Operators', 'Quot softness', 0, 5, 0.01, 1], ['joinC', 'Operators', 'Join reach', -1, 4, 0.01, 1],
+  // C. the picture
+  ['theta0', 'Picture', 'Axis turn', -3.14, 3.14, 0.01, 0.3], ['thetaMul', 'Picture', 'Axis spread', 0.1, 3, 0.01, 1], ['oddStretch', 'Picture', 'Odd-axis stretch', -1, 2, 0.01, 0.15], ['aspect', 'Picture', 'Aspect', 0.2, 3, 0.01, 1],
+  ['rot', 'Picture', 'Rotation', -3.14, 3.14, 0.01, 0], ['shear', 'Picture', 'Shear', -2, 2, 0.01, 0], ['radWarp', 'Picture', 'Radial warp', -1, 2, 0.01, 0], ['polarMix', 'Picture', 'Polar blend', 0, 1, 0.01, 0],
+  ['projTilt', 'Picture', 'Axis weighting', -1, 1, 0.01, 0], ['kaleido', 'Picture', 'Kaleidoscope folds', 1, 12, 1, 1], ['picSquash', 'Picture', 'Edge squash', 0, 4, 0.01, 0], ['invert', 'Picture', 'Inversion', 0, 1, 0.01, 0],
+  // D. how it judges and changes itself
+  ['T', 'Evolution', 'Look length', 500, 8000, 100, 2500], ['acceptTol', 'Evolution', 'Acceptance tolerance', 0.3, 1.5, 0.01, 0.9], ['barDecay', 'Evolution', 'Standard relaxing', 0.5, 1, 0.005, 0.95], ['contrary', 'Evolution', 'Contrariness', 0, 1, 0.01, 0],
+  ['boredS', 'Evolution', 'Boredom level', 0.2, 1.5, 0.01, 0.2], ['restless', 'Evolution', 'Restlessness', 0, 0.5, 0.005, 0], ['turbulence', 'Evolution', 'Turbulence', 0, 0.5, 0.005, 0], ['erosion', 'Evolution', 'Erosion', 0, 0.2, 0.002, 0],
+  ['zeroN', 'Evolution', 'Dead patience', 1, 20, 1, 3], ['cap', 'Evolution', 'Relationship cap', 3, 24, 1, 12], ['pBirth', 'Evolution', 'Birth share', 0, 0.6, 0.01, 0.25], ['pDeath', 'Evolution', 'Death share', 0, 0.4, 0.01, 0.15],
+  ['pAnti', 'Evolution', 'Anti-rule share', 0, 0.4, 0.01, 0.15], ['reweigh', 'Evolution', 'Reweigh spread', 0, 3, 0.01, 0.9], ['leap', 'Evolution', 'Leap strength', -4, 6, 0.01, 2.3], ['archiveS', 'Evolution', 'Memory threshold', 0, 1.5, 0.01, 0.35],
+  ['grid', 'Evolution', 'Shape grid', 4, 32, 1, 12],
+  // E. the slime-mold meta formula
+  ['eta', 'Meta formula', 'Tube growth', 0.01, 1, 0.01, 0.3], ['invent', 'Meta formula', 'Invention pressure', 0, 0.5, 0.005, 0], ['lenOp', 'Meta formula', 'Operator path length', 0.1, 5, 0.01, 1],
+  ['lenWire', 'Meta formula', 'Wiring path length', 0.1, 5, 0.01, 1], ['advice', 'Meta formula', 'Advice weight', 0, 1, 0.01, 0], ['foodK', 'Meta formula', 'Appetite', 0.2, 4, 0.01, 1],
+  // F. rendering (page only)
+  ['gamma', 'Rendering', 'Gamma', 0.2, 2.5, 0.01, 0.85], ['floor', 'Rendering', 'Black level', 0, 0.6, 0.01, 0], ['splat', 'Rendering', 'Dot size', 1, 4, 1, 1], ['negMix', 'Rendering', 'Negative', 0, 1, 0.01, 0],
+  ['speedColor', 'Rendering', 'Color by speed', 0, 1, 0.01, 0], ['zoom', 'Rendering', 'Zoom', 0.3, 4, 0.01, 1]
+];
+const DEF = Object.fromEntries(PARAMS.map(p => [p[0], p[6]]));
 // §1
-const F = v => 2 * sinP(Math.PI * v / 4);
 const W = v => (((v + 1) % 2) + 2) % 2 - 1;
-// §2 operator library (composites appended at run time)
-const BASE = {
-  hinge: (a, b, c) => a * Math.abs(b) - b * Math.abs(a),
-  quot: (a, b, c) => (a - b) / (1 + Math.abs(a) + Math.abs(c)),
-  mirror: (a, b, c) => a * Math.sign(b - c),
-  wrap: (a, b, c) => W(1.7 * (a + b)),
-  twist: (a, b, c) => Math.max(a, b) - 2 * Math.min(a, c),
-  pinch: (a, b, c) => a * b / (1 + c * c),
-  join: (a, b, c) => -Math.sign(a * b) * 0.5 * (Math.abs(a) + Math.abs(b)) * (1 + Math.abs(c)),
-  swirl: (a, b, c) => a * cosP(Math.PI * b) - c * sinP(Math.PI * a),
-  bloom: (a, b, c) => (a + b * c) / (1 + (a - c) * (a - c)),
-  lens: (a, b, c) => Math.sign(a) * Math.sqrt(Math.abs(a * b) + c * c) - c,
-  echo: 'echo'
-};
-function makeLib() { const L = { ...BASE }; return L; }
-function addComposite(L, P, Q) { const name = `(${P}∘${Q})`; if (L[name] || P === Q || P === 'echo' || Q === 'echo' || (name.match(/∘/g) || []).length > 2) return null; const p = L[P], q = L[Q]; L[name] = (a, b, c) => p(q(a, b, c), b, c); return name; }
-// §1 + §3
-function system(x0, G, rho, L) {
-  const x = Float64Array.from(x0), H = Array.from({ length: HIST }, () => Float64Array.from(x0)); let hd = 0;
-  const fns = G.map(r => L[r.op]), cnt = new Float64Array(NV); for (const r of G) cnt[r.n]++;
-  return { x, step() { const nx = new Float64Array(NV); for (let n = 0; n < NV; n++) nx[n] = rho * x[n];
-    for (let q = 0; q < G.length; q++) { const r = G[q], a = x[r.a], b = x[r.b], c = x[r.c];
-      const v = fns[q] === 'echo' ? (b > 0 ? H[(hd - r.d + HIST) % HIST][r.a] : -H[(hd - r.d + HIST) % HIST][r.c]) : fns[q](a, b, c);
-      nx[r.n] += r.s * r.w * v; }
-    for (let n = 0; n < NV; n++) x[n] = F(rho * x[n] + (nx[n] - rho * x[n]) / Math.sqrt(Math.max(1, cnt[n]))); H[hd].set(x); hd = (hd + 1) % HIST; } };
+function fold(v, P) { const s = sinP(Math.PI * (P.foldGain === 1 ? v : v * P.foldGain) / 4); let o = P.foldAmp === 2 ? 2 * s : P.foldAmp * s; if (P.foldSkew !== 0) o += P.foldSkew * (s * s - 0.5); return o; }
+// §2 operator library — closures read P live
+function makeLib(P) {
+  return {
+    hinge: (a, b, c) => a * Math.abs(b) - b * Math.abs(a),
+    quot: (a, b, c) => (a - b) / (1 + P.quotS * Math.abs(a) + P.quotS * Math.abs(c)),
+    mirror: (a, b, c) => a * Math.sign(b - c),
+    wrap: (a, b, c) => W(P.wrapK * (a + b)),
+    twist: (a, b, c) => Math.max(a, b) - P.twistR * Math.min(a, c),
+    pinch: (a, b, c) => a * b / (1 + P.pinchW * c * c),
+    join: (a, b, c) => -Math.sign(a * b) * 0.5 * (Math.abs(a) + Math.abs(b)) * (1 + P.joinC * Math.abs(c)),
+    swirl: (a, b, c) => a * cosP(Math.PI * P.swirlK * b) - c * sinP(Math.PI * P.swirlK * a),
+    bloom: (a, b, c) => (a + b * c) / (1 + (P.bloomW === 1 ? (a - c) * (a - c) : (a - c) * (a - c) / (P.bloomW * P.bloomW))),
+    lens: (a, b, c) => Math.sign(a) * Math.sqrt(Math.abs(a * b) + P.lensC * c * P.lensC * c) - P.lensC * c,
+    echo: 'echo'
+  };
 }
-const TH = [...Array(NV)].map((_, n) => Math.PI * n / 3 + 0.3);
-const picture = x => { let X = 0, Y = 0; for (let n = 0; n < NV; n++) { X += x[n] * cosP(TH[n]); Y += (1 + 0.15 * (n % 2)) * x[n] * sinP(TH[n]); } return [X, Y]; };
-function run(x0, G, rho, L, n, burn = 200) { const s = system(x0, G, rho, L), P = new Float64Array(2 * n); for (let t = 0; t < burn; t++) s.step(); for (let t = 0; t < n; t++) { s.step(); const p = picture(s.x); P[2 * t] = p[0]; P[2 * t + 1] = p[1]; } return { P, x: Float64Array.from(s.x) }; }
+const BASE_KEYS = ['hinge', 'quot', 'mirror', 'wrap', 'twist', 'pinch', 'join', 'swirl', 'bloom', 'lens', 'echo'];
+function addComposite(L, A, B, P) { const name = `(${A}∘${B})`; if (L[name] || A === B || A === 'echo' || B === 'echo' || (name.match(/∘/g) || []).length > 2) return null; const p = L[A], q = L[B]; L[name] = (a, b, c) => p(q(a, b, c), b, c); return name; }
+// §1 step + §3 picture
+function system(x0, G, rho, L, P) {
+  const x = Float64Array.from(x0), H = Array.from({ length: HIST }, () => Float64Array.from(x0)); let hd = 0, t = 0;
+  const fns = G.map(r => L[r.op]), cnt = new Float64Array(NV); for (const r of G) cnt[r.n]++;
+  const gain = G.map(r => { const g = P['g_' + r.op]; return g === undefined ? 1 : g; });
+  const rhoN = [...Array(NV)].map((_, n) => P.rhoMul === 1 && P.rhoTilt === 0 ? rho : rho * P.rhoMul * (1 + P.rhoTilt * (n - 2.5) / 2.5));
+  const div = [...Array(NV)].map((_, n) => { const k = Math.max(1, cnt[n]); return P.scaleExp === 0.5 ? Math.sqrt(k) : powP(k, P.scaleExp); });
+  // ghost operators: moving an operator's control off its default plants a fixed copy of that operator, so the control always shows
+  const SHAPE = { wrap: 'wrapK', swirl: 'swirlK', bloom: 'bloomW', lens: 'lensC', pinch: 'pinchW', twist: 'twistR', quot: 'quotS', join: 'joinC' };
+  const ghosts = []; BASE_KEYS.forEach((op, i) => { let gs = 0; const g = P['g_' + op]; if (g !== 1) gs += 0.35 * (g - 1);
+    const sk = SHAPE[op]; if (sk && P[sk] !== DEF[sk]) { const pr = PARAMS.find(q => q[0] === sk); gs += 0.6 * (P[sk] - DEF[sk]) / (pr[4] - pr[3]); }
+    if (gs !== 0) ghosts.push({ op, fn: L[op], gs, n: i % NV, a: (i + 1) % NV, b: (i + 3) % NV, c: (i + 4) % NV }); });
+  const extra = P.ringK !== 0 || P.cubic !== 0 || P.memK !== 0 || P.drift !== 0 || P.bias !== 0;
+  return { x, step() { const nx = new Float64Array(NV); for (let n = 0; n < NV; n++) nx[n] = rhoN[n] * x[n];
+    for (let q = 0; q < G.length; q++) { const r = G[q], a = x[r.a], b = x[r.b], c = x[r.c];
+      let v; if (fns[q] === 'echo') { const d = P.delayMul === 1 ? r.d : Math.max(1, Math.min(HIST - 1, Math.round(r.d * P.delayMul))); v = b > 0 ? H[(hd - d + HIST) % HIST][r.a] : -H[(hd - d + HIST) % HIST][r.c]; } else v = fns[q](a, b, c);
+      let w = r.w; if (P.wGain !== 1) w *= P.wGain; if (r.s < 0 && P.antiGain !== 1) w *= P.antiGain;
+      let term = r.s * w * v; if (gain[q] !== 1) term *= gain[q]; nx[r.n] += term; }
+    for (const g of ghosts) { const v = g.op === 'echo' ? (x[g.b] > 0 ? H[(hd - 8 + HIST) % HIST][g.a] : -H[(hd - 8 + HIST) % HIST][g.c]) : g.fn(x[g.a], x[g.b], x[g.c]); nx[g.n] += g.gs * v; }
+    const odd = t % 2 === 1;
+    for (let n = 0; n < NV; n++) { let push = nx[n] - rhoN[n] * x[n];
+      if (P.parity !== 0 && odd) push *= 1 - P.parity;
+      if (extra) { if (P.ringK !== 0) push += P.ringK * (x[(n + 1) % NV] - x[(n + NV - 1) % NV]); if (P.cubic !== 0) push -= P.cubic * x[n] * x[n] * x[n];
+        if (P.memK !== 0) push += P.memK * H[(hd - 2 + HIST) % HIST][n]; if (P.drift !== 0) push += P.drift * sinP(0.002 * t * (n + 1)); if (P.bias !== 0) push += P.bias * (n - 2.5) / 2.5; }
+      nx[n] = rhoN[n] * x[n] + push / div[n]; }
+    for (let n = 0; n < NV; n++) x[n] = fold(nx[n], P); H[hd].set(x); hd = (hd + 1) % HIST; t++; } };
+}
+function makePicture(P) {
+  const TH = [...Array(NV)].map((_, n) => P.thetaMul === 1 ? Math.PI * n / 3 + P.theta0 : P.thetaMul * (Math.PI * n / 3) + P.theta0);
+  const C = TH.map(cosP), S = TH.map(sinP), wt = [...Array(NV)].map((_, n) => 1 + P.projTilt * (n - 2.5) / 2.5);
+  const post = P.aspect !== 1 || P.shear !== 0 || P.rot !== 0 || P.radWarp !== 0 || P.picSquash !== 0 || P.polarMix !== 0 || P.kaleido !== 1 || P.invert !== 0;
+  const cr = cosP(P.rot), sr = sinP(P.rot);
+  return x => { let X = 0, Y = 0; for (let n = 0; n < NV; n++) { const xn = P.projTilt !== 0 ? x[n] * wt[n] : x[n]; X += xn * C[n]; Y += (1 + P.oddStretch * (n % 2)) * xn * S[n]; }
+    if (!post) return [X, Y];
+    if (P.aspect !== 1) Y *= P.aspect; if (P.shear !== 0) X += P.shear * Y;
+    if (P.rot !== 0) { const a = X * cr - Y * sr; Y = X * sr + Y * cr; X = a; }
+    if (P.radWarp !== 0) { const f = 1 + P.radWarp * (X * X + Y * Y) / 4; X *= f; Y *= f; }
+    if (P.picSquash !== 0) { X /= 1 + P.picSquash * Math.abs(X); Y /= 1 + P.picSquash * Math.abs(Y); }
+    if (P.kaleido !== 1 || P.polarMix !== 0) { const r = Math.sqrt(X * X + Y * Y); let th = atan2P(Y, X);
+      if (P.kaleido !== 1) { const sec = 2 * Math.PI / P.kaleido; th = ((th % sec) + sec) % sec; if (th > sec / 2) th = sec - th; X = r * cosP(th); Y = r * sinP(th); }
+      if (P.polarMix !== 0) { X = (1 - P.polarMix) * X + P.polarMix * (th * 0.8); Y = (1 - P.polarMix) * Y + P.polarMix * (r - 1.5); } }
+    if (P.invert !== 0) { const q = X * X + Y * Y + 0.15; X = (1 - P.invert) * X + P.invert * X / q; Y = (1 - P.invert) * Y + P.invert * Y / q; }
+    return [X, Y]; };
+}
+function run(x0, G, rho, L, n, P, pic, burn = 200) { const s = system(x0, G, rho, L, P), Q = new Float64Array(2 * n); for (let t = 0; t < burn; t++) s.step(); for (let t = 0; t < n; t++) { s.step(); const p = pic(s.x); Q[2 * t] = p[0]; Q[2 * t + 1] = p[1]; } return { P: Q, x: Float64Array.from(s.x) }; }
 // §4
 function bbox(P) { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (let t = 0; t < P.length; t += 2) { if (P[t] < a) a = P[t]; if (P[t] > b) b = P[t]; if (P[t + 1] < c) c = P[t + 1]; if (P[t + 1] > d) d = P[t + 1]; } return [a, b, c, d]; }
-function density(P, B) { const g = 12, D = new Float64Array(g * g), w = B[1] - B[0], hh = B[3] - B[2]; for (let t = 0; t < P.length; t += 2) D[Math.min(g - 1, (P[t + 1] - B[2]) / hh * g | 0) * g + Math.min(g - 1, (P[t] - B[0]) / w * g | 0)] += 2 / P.length; return D; }
-function corner(P, B) { // correlation dimension in each 1/16 window (pair counts at r = 1/40 and 1/10 of the window)
+function density(P, B, g) { const D = new Float64Array(g * g), w = B[1] - B[0], hh = B[3] - B[2]; for (let t = 0; t < P.length; t += 2) D[Math.min(g - 1, (P[t + 1] - B[2]) / hh * g | 0) * g + Math.min(g - 1, (P[t] - B[0]) / w * g | 0)] += 2 / P.length; return D; }
+function corner(P, B) {
   const w = (B[1] - B[0]) / 4, hh = (B[3] - B[2]) / 4; let best = { v: 0, delta: 0, cx: 0, cy: 0 };
   for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) { const x0 = B[0] + i * w, y0 = B[2] + j * hh, Q = [];
     for (let t = 0; t < P.length; t += 2) { const u = (P[t] - x0) / w, v = (P[t + 1] - y0) / hh; if (u >= 0 && u < 1 && v >= 0 && v < 1) Q.push(u, v); }
@@ -76,143 +148,155 @@ function corner(P, B) { // correlation dimension in each 1/16 window (pair count
     if (!c1) continue; const delta = logP(c2 / c1) / logP(r2 / r1), val = delta > 1 && delta < 2 ? sinP(Math.PI * delta) ** 2 : 0;
     if (val > best.v) best = { v: val, delta, cx: x0 + w / 2, cy: y0 + hh / 2 }; }
   return best; }
-const L1 = (p, q) => { let s = 0; for (let i = 0; i < p.length; i++) s += Math.abs(p[i] - q[i]); return s; };
-// §5 meta formula: Physarum in concept space
+const L1 = (p, q) => { if (p.length !== q.length) return 2; let s = 0; for (let i = 0; i < p.length; i++) s += Math.abs(p[i] - q[i]); return s; };
+// §5 meta formula
 const DELAYS = [1, 2, 3, 5, 8, 13, 21, 34, 55];
-function makeMeta(L) {
+function makeMeta(L, P) {
   const nodes = [], idx = {}; const add = (kind, key) => { idx[kind + ':' + key] = nodes.length; nodes.push({ kind, key, fs: 0, fc: 0, tried: false }); };
   Object.keys(L).forEach(k => add('op', k)); for (let n = 0; n < NV; n++) add('wire', n); DELAYS.forEach(d => add('delay', d));
-  const edges = []; const link = (u, v) => edges.push({ u, v, G: 1, l: 1, Q: 0 });
+  const edges = []; const link = (u, v, l) => edges.push({ u, v, G: 1, l, Q: 0 });
   const rebuild = () => { edges.length = 0; for (let u = 0; u < nodes.length; u++) for (let v = u + 1; v < nodes.length; v++) { const A = nodes[u], B = nodes[v];
-      if (A.kind === 'op' && B.kind === 'op') link(u, v); else if ((A.kind === 'op') !== (B.kind === 'op')) { const o = A.kind === 'op' ? A : B, other = A.kind === 'op' ? B : A; if (other.kind === 'wire' || o.key === 'echo' || o.key.includes('echo')) link(u, v); } } };
+      if (A.kind === 'op' && B.kind === 'op') link(u, v, P.lenOp); else if ((A.kind === 'op') !== (B.kind === 'op')) { const o = A.kind === 'op' ? A : B, other = A.kind === 'op' ? B : A; if (other.kind === 'wire') link(u, v, P.lenWire); else if (o.key === 'echo' || o.key.includes('echo')) link(u, v, 1); } } };
   rebuild();
-  return { nodes, idx, edges, addOp(k) { const old = edges.map(e => ({ ...e })); add('op', k); rebuild(); for (const e of edges) { const m = old.find(o => o.u === e.u && o.v === e.v); e.G = m ? m.G : 0.1; } }, rebuild };
+  return { nodes, idx, edges, addOp(k) { const old = edges.map(e => ({ ...e })); add('op', k); rebuild(); for (const e of edges) { const m = old.find(o => o.u === e.u && o.v === e.v); e.G = m ? m.G : 0.1; } },
+    relen() { for (const e of edges) { const A = nodes[e.u], B = nodes[e.v]; e.l = A.kind === 'op' && B.kind === 'op' ? P.lenOp : (A.kind === 'wire' || B.kind === 'wire') ? P.lenWire : 1; } } };
 }
-function solvePressures(M, src) { // Σ_e G_e (p_u - p_v)/l_e = σ_u, ground last node
+function solvePressures(M, src) {
   const N = M.nodes.length, A = [...Array(N)].map(() => new Float64Array(N + 1));
   for (const e of M.edges) { const g = e.G / e.l; A[e.u][e.u] += g; A[e.v][e.v] += g; A[e.u][e.v] -= g; A[e.v][e.u] -= g; }
   for (let u = 0; u < N; u++) A[u][N] = src[u];
-  const n = N - 1; // drop grounded row/col
+  const n = N - 1;
   for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r; [A[c], A[p]] = [A[p], A[c]]; const piv = A[c][c] || 1e-12;
     for (let r = 0; r < n; r++) if (r !== c) { const f = A[r][c] / piv; if (f) for (let k = c; k <= N; k++) if (k < n || k === N) A[r][k] -= f * A[c][k]; } }
   const p = new Float64Array(N); for (let r = 0; r < n; r++) p[r] = A[r][N] / (A[r][r] || 1e-12); p[N - 1] = 0; return p; }
-const ETA = 0.3, QSTAR = 0.03;
-function metaStep(M, L, current) { // current: list of node indices of the concept in use
+function metaStep(M, L, current, P, force) {
+  M.relen();
   const N = M.nodes.length, src = new Float64Array(N); current.forEach(i => src[i] += 1 / current.length);
-  const f = M.nodes.map(v => v.fc ? v.fs / v.fc : 0), Fs = f.reduce((s, v) => s + v, 0);
+  const f = M.nodes.map(v => { const m = v.fc ? v.fs / v.fc : 0; return P.foodK === 1 ? m : powP(m, P.foodK); }), Fs = f.reduce((s, v) => s + v, 0);
   if (Fs > 0) f.forEach((v, i) => src[i] -= v / Fs); else { const others = M.nodes.map((_, i) => i).filter(i => !current.includes(i)); others.forEach(i => src[i] -= 1 / others.length); }
   const p = solvePressures(M, src); let resid = 0;
-  const net = new Float64Array(N); for (const e of M.edges) { e.Q = e.G * (p[e.u] - p[e.v]) / e.l; net[e.u] += e.Q; net[e.v] -= e.Q; e.G = Math.max(1e-6, e.G + ETA * (Math.abs(e.Q) - e.G)); }
+  const net = new Float64Array(N); for (const e of M.edges) { e.Q = e.G * (p[e.u] - p[e.v]) / e.l; net[e.u] += e.Q; net[e.v] -= e.Q; e.G = Math.max(1e-6, e.G + P.eta * (Math.abs(e.Q) - e.G)); }
   for (let u = 0; u < N; u++) resid = Math.max(resid, Math.abs(net[u] - src[u]));
   const through = new Float64Array(N); for (const e of M.edges) { through[e.u] += Math.abs(e.Q); through[e.v] += Math.abs(e.Q); }
   const pick = kind => { let best = -1, bt = -1, any = -1, at = -1; M.nodes.forEach((v, i) => { if (v.kind !== kind) return; if (through[i] > at) { at = through[i]; any = i; } if (!v.tried && through[i] > bt) { bt = through[i]; best = i; } }); return best >= 0 ? best : any; };
   const proposal = { op: M.nodes[pick('op')].key, n: M.nodes[pick('wire')].key, d: M.nodes[pick('delay')].key };
-  let composite = null; let qe = null; for (const e of M.edges) { const A = M.nodes[e.u], B = M.nodes[e.v]; if (A.kind === 'op' && B.kind === 'op' && Math.abs(e.Q) > QSTAR && (!qe || Math.abs(e.Q) > Math.abs(qe.Q))) qe = e; }
-  if (qe) { const name = addComposite(L, M.nodes[qe.u].key, M.nodes[qe.v].key); if (name) { M.addOp(name); composite = name; } }
+  let composite = null; let qe = null; for (const e of M.edges) { const A = M.nodes[e.u], B = M.nodes[e.v]; if (A.kind === 'op' && B.kind === 'op' && Math.abs(e.Q) > 0.03 && (!qe || Math.abs(e.Q) > Math.abs(qe.Q))) qe = e; }
+  if (!qe && force) { const ops = M.nodes.map((v, i) => i).filter(i => M.nodes[i].kind === 'op' && M.nodes[i].key !== 'echo').sort((i, j) => through[j] - through[i]); if (ops.length > 1) for (let a = 0; a < ops.length && !composite; a++) for (let b = 0; b < ops.length && !composite; b++) if (a !== b) { const name = addComposite(L, M.nodes[ops[a]].key, M.nodes[ops[b]].key, P); if (name) { M.addOp(name); composite = name; } } }
+  if (qe) { const name = addComposite(L, M.nodes[qe.u].key, M.nodes[qe.v].key, P); if (name) { M.addOp(name); composite = name; } }
   return { proposal, composite, resid };
 }
-const CAP = 12;
-function addRel(G, r) { if (G.length >= CAP) { let k = 0; G.forEach((q, i) => { if (q.w < G[k].w) k = i; }); G.splice(k, 1); } G.push(r); return r; }
+function addRel(G, r, P) { while (G.length >= P.cap) { let k = 0; G.forEach((q, i) => { if (q.w < G[k].w) k = i; }); G.splice(k, 1); } G.push(r); return r; }
 function birth(prop, u) { return { op: prop.op, n: prop.n, a: Math.floor(u() * NV), b: Math.floor(u() * NV), c: Math.floor(u() * NV), d: prop.d, w: 0.45 + 0.7 * u(), s: u() < 0.5 ? 1 : -1 }; }
-// §6–§8 the evolving formula
-function makeEvolver(SEED) {
-  const L = makeLib(), M = makeMeta(L); let u = U(SEED);
+// §6–§8
+function makeEvolver(SEED, Pin) {
+  const P = Pin || { ...DEF }; const L = makeLib(P), M = makeMeta(L, P); let u = U(SEED);
   let x = Float64Array.from({ length: NV }, () => 2 * u() - 1), rho = 0.35, pi = 1, Bbar = 0;
-  let G = Array.from({ length: 6 }, () => birth({ op: Object.keys(BASE)[Math.floor(u() * Object.keys(BASE).length)], n: Math.floor(u() * NV), d: DELAYS[Math.floor(u() * DELAYS.length)] }, u));
-  const A = [], log = []; let prevRho = null, low = 0, calm = 0, zero = 0, lastBorn = G[G.length - 1], maxResid = 0;
+  let G = Array.from({ length: 6 }, () => birth({ op: BASE_KEYS[Math.floor(u() * BASE_KEYS.length)], n: Math.floor(u() * NV), d: DELAYS[Math.floor(u() * DELAYS.length)] }, u));
+  const A = [], log = []; let prevRho = null, low = 0, calm = 0, zero = 0, rest = 0, tur = 0, inv = 0, lastBorn = G[G.length - 1], maxResid = 0;
   const conceptIdx = r => [M.idx['op:' + r.op], M.idx['wire:' + r.n], M.idx['delay:' + r.d]];
   let e = -1;
   function epoch() { e++;
-    u = U(h(x, G, e));
-    const meta = metaStep(M, L, conceptIdx(lastBorn)); maxResid = Math.max(maxResid, meta.resid);
+    u = U(h(x, G, e)); const pic = makePicture(P); const u2 = U(h(x, G, e) ^ 0x9E3779B9);
+    inv += P.invent; const force = inv >= 1; if (force) inv = 0;
+    const meta = metaStep(M, L, conceptIdx(lastBorn), P, force); maxResid = Math.max(maxResid, meta.resid);
     const C = G.map(r => ({ ...r })), roll = u(); let kind;
-    if (roll < 0.25) { const r = addRel(C, birth(meta.proposal, u)); kind = 'birth ' + r.op; }
-    else if (roll < 0.4 && C.length > 1) { const k = Math.floor(u() * C.length); kind = 'death ' + C[k].op; C.splice(k, 1); }
-    else if (roll < 0.55) { const k = Math.floor(u() * C.length); C[k].s = -C[k].s; kind = 'anti ' + C[k].op; }
-    else if (roll < 0.75) { const k = Math.floor(u() * C.length); C[k].w *= 0.6 + 0.9 * u(); kind = 'reweigh ' + C[k].op; }
-    else { const k = Math.floor(u() * C.length), f = ['n', 'a', 'b', 'c'][Math.floor(u() * 4)]; C[k][f] = Math.floor(u() * NV); kind = 'rewire ' + C[k].op; }
-    const R = run(x, C, rho, L, T), Bx = bbox(R.P), ok = Number.isFinite(Bx[0]) && Bx[1] - Bx[0] > 1e-6 && Bx[3] - Bx[2] > 1e-6;
-    const rhoE = ok ? density(R.P, Bx) : null, K = ok ? corner(R.P, Bx) : { v: 0, delta: 0 };
+    const t1 = P.pBirth, t2 = P.pBirth === 0.25 && P.pDeath === 0.15 ? 0.4 : P.pBirth + P.pDeath, t3 = P.pBirth === 0.25 && P.pDeath === 0.15 && P.pAnti === 0.15 ? 0.55 : P.pBirth + P.pDeath + P.pAnti, t4 = P.pBirth === 0.25 && P.pDeath === 0.15 && P.pAnti === 0.15 ? 0.75 : t3 + 0.2;
+    if (roll < t1) { const r = addRel(C, birth(meta.proposal, u), P); kind = 'birth ' + r.op; }
+    else if (roll < t2 && C.length > 1) { const k = Math.floor(u() * C.length); kind = 'death ' + C[k].op; C.splice(k, 1); }
+    else if (roll < t3) { const k = Math.floor(u() * C.length); C[k].s = -C[k].s; kind = 'anti ' + C[k].op; }
+    else if (roll < t4) { const k = Math.floor(u() * C.length); C[k].w *= 0.6 + P.reweigh * u(); kind = 'reweigh ' + C[k].op; }
+    else { const k = Math.floor(u() * C.length), f = ['n', 'a', 'b', 'c'][Math.floor(u() * 4)]; C[k][f] = Math.floor(u() * NV); kind = 'rewire ' + C[k].op;
+      if (P.advice > 0 && u2() < P.advice) { C[k].n = meta.proposal.n; C[k].a = (meta.proposal.n + 1) % NV; kind = 'advised rewire ' + C[k].op; } }
+    const R = run(x, C, rho, L, P.T, P, pic), Bx = bbox(R.P), ok = Number.isFinite(Bx[0]) && Bx[1] - Bx[0] > 1e-6 && Bx[3] - Bx[2] > 1e-6;
+    const rhoE = ok ? density(R.P, Bx, P.grid) : null, K = ok ? corner(R.P, Bx) : { v: 0, delta: 0 };
     const S = !ok ? 0 : A.length ? Math.min(...A.map(a => L1(rhoE, a.rho))) : 2;
     const Bp = S * K.v;
     for (const r of C) for (const i of conceptIdx(r)) { M.nodes[i].fs += Bp; M.nodes[i].fc++; M.nodes[i].tried = true; }
-    const accept = pi > 0 ? Bp >= 0.9 * Bbar : Bp < Bbar;
-    if (accept) { G = C; x = R.x; Bbar = Bp; if (kind.startsWith('birth')) lastBorn = C[C.length - 1]; if (S > 0.35) A.push({ rho: rhoE, G: C.map(r => ({ ...r })) }); }
-    Bbar = pi > 0 ? 0.95 * Bbar : 1.05 * Bbar;
-    // §7
-    low = S < 0.2 ? low + 1 : 0; let flip = false;
-    if (low >= 10) { pi = -pi; low = 0; flip = true; Bbar = Bp;
+    let accept = pi > 0 ? Bp >= P.acceptTol * Bbar : Bp < Bbar;
+    if (P.contrary > 0 && u2() < P.contrary) accept = !accept;
+    if (accept) { G = C; x = R.x; Bbar = Bp; if (kind.startsWith('birth')) lastBorn = C[C.length - 1]; if (S > P.archiveS) A.push({ rho: rhoE, G: C.map(r => ({ ...r })) }); }
+    Bbar = pi > 0 ? P.barDecay * Bbar : 1.05 * Bbar;
+    low = S < P.boredS ? low + 1 : 0; let flip = false; rest += P.restless; const forced = rest >= 1; if (forced) rest = 0;
+    if (low >= 10 || forced) { pi = -pi; low = 0; flip = true; Bbar = Bp;
       if (A.length && rhoE) { let far = A[0], fd = -1; for (const a of A) { const dd = L1(rhoE, a.rho); if (dd > fd) { fd = dd; far = a; } }
-        const top = g => [...g].sort((p, q) => q.w - p.w).slice(0, 6); G = top(G).concat(top(far.G).map(r => ({ ...r, s: -r.s }))); }
-      x = x.map((v, n) => F(-2.3 * v + 0.7 * sinP(3 * n + v))); rho = 0.15 + 0.55 * u(); }
-    // §8
+        const half = Math.max(1, Math.floor(P.cap / 2)), top = g => [...g].sort((p, q) => q.w - p.w).slice(0, half); G = top(G).concat(top(far.G).map(r => ({ ...r, s: -r.s }))); }
+      x = x.map((v, n) => fold(-P.leap * v + 0.7 * sinP(3 * n + v), P)); rho = 0.15 + 0.55 * u(); }
     let topple = false, kick = false;
-    if (ok && prevRho) { calm = L1(rhoE, prevRho) < 0.12 ? calm + 1 : 0; if (calm >= 6 && G.length) { let k = 0; G.forEach((r, q) => { if (r.w > G[k].w) k = q; }); G.splice(k, 1); addRel(G, birth(meta.proposal, u)); calm = 0; topple = true; } }
+    if (ok && prevRho) { calm = L1(rhoE, prevRho) < 0.12 ? calm + 1 : 0; tur += P.turbulence; const forcedT = tur >= 1; if (forcedT) tur = 0; if ((calm >= 6 || forcedT) && G.length) { let k = 0; G.forEach((r, q) => { if (r.w > G[k].w) k = q; }); G.splice(k, 1); addRel(G, birth(meta.proposal, u), P); calm = 0; topple = true; } }
     if (ok) prevRho = rhoE;
-    zero = Bp === 0 ? zero + 1 : 0; if (zero >= 3) { const r = birth(meta.proposal, u); r.w = 1 + 0.4 * u(); addRel(G, r); x = x.map((v, n) => F(v + 1.3 * sinP(5 * n + 7 * v + e))); zero = 0; kick = true; }
+    if (P.erosion > 0) for (const r of G) r.w *= 1 - P.erosion;
+    zero = Bp === 0 ? zero + 1 : 0; if (zero >= P.zeroN) { const r = birth(meta.proposal, u); r.w = 1 + 0.4 * u(); addRel(G, r, P); x = x.map((v, n) => fold(v + (P.leap === 2.3 ? 1.3 : 1.3 * P.leap / 2.3) * sinP(5 * n + 7 * v + e), P)); zero = 0; kick = true; }
     const entry = { e, kind, accept, B: Bp, S, delta: K.delta, corner: K, pi, flip, topple, kick, composite: meta.composite, x: Array.from(x), G: G.map(r => ({ ...r })), rho, view: accept && ok ? Bx : null };
     log.push(entry); return entry;
   }
-  return { epoch, L, log, resid: () => maxResid, state: () => ({ x, G, rho, pi }) };
+  return { epoch, L, P, log, resid: () => maxResid, state: () => ({ x, G, rho, pi }) };
 }
-function evolve(SEED, E) { const ev = makeEvolver(SEED); for (let k = 0; k < E; k++) ev.epoch(); return { log: ev.log.map(({ view, ...r }) => r), L: ev.L, maxResid: ev.resid(), ops: Object.keys(ev.L) }; }
 
-return { makeEvolver, system, picture, NV };
+return { PARAMS, DEF, makeEvolver, system, makePicture, NV };
 })();
 </script>
 <script>(function(){'use strict';
 const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d'),W=cv.width,Hh=cv.height;
-const defs=[['speed','Evolution speed',0,10,0.5,2,'rounds/s'],['ppf','Points per frame',2000,60000,1000,16000,''],['trail','Trail',0.80,1,0.005,0.97,''],['ink','Ink',1,100,1,55,''],['seed','Seed',1,9999,1,1,'']];
-const cont=$('controls');
-for(const d of defs){const r=document.createElement('div');r.className='row';r.innerHTML=`<label for="${d[0]}">${d[1]}</label><input id="${d[0]}" type="range" min="${d[2]}" max="${d[3]}" step="${d[4]}" value="${d[5]}" aria-label="${d[1]}"><div class="value" id="${d[0]}v"></div>`;cont.appendChild(r);}
+const MACHINE=[['speed','Machine','Evolution speed',0,10,0.5,2],['ppf','Machine','Points per frame',2000,60000,1000,16000],['trail','Machine','Trail',0.8,1,0.005,0.97],['ink','Machine','Ink',1,100,1,55],['seed','Machine','Seed',1,9999,1,1]];
+const ALL=MACHINE.concat(FORMULA.PARAMS),DEF0=Object.fromEntries(ALL.map(d=>[d[0],d[6]]));
+const P={...FORMULA.DEF};
+const NOTES={Machine:'How fast it evolves and how it is drawn onto the canvas.',Step:'The one-step rule every variable follows: inertia, folding, crowding and new cross-pulls between the six variables.',Operators:'Each operator\'s strength and shape. Moving an operator\'s control also plants a fixed "ghost" copy of it in the formula, so its effect always shows.',Picture:'How the six hidden variables are turned into the flat picture. The formula judges itself by this picture, so these also steer its evolution.',Evolution:'How it judges itself and rewrites its own relationships: tolerance, memory, contrariness, restlessness, erosion.',
+ 'Meta formula':'The hidden slime mold in concept space: how fast its tubes grow, how far apart ideas are, how hungry it is, how often it invents and how much its advice is followed.',Rendering:'Tone and color of the drawing only. These never change the formula.'};
+const groupsEl=$('groups'),groupDiv={};
+for(const g of ['Machine','Step','Operators','Picture','Evolution','Meta formula','Rendering']){const d=document.createElement('details');d.className='group';if(g==='Machine')d.open=true;d.innerHTML=`<summary>${g} <span style="color:var(--muted);font-weight:400">(${ALL.filter(a=>a[1]===g).length})</span></summary><div><div class="gh">${NOTES[g]}</div></div>`;groupsEl.appendChild(d);groupDiv[g]=d.querySelector('div');}
+const dec=st=>st>=1?0:st>=0.1?1:st>=0.01?2:3;
+for(const d of ALL){const r=document.createElement('div');r.className='row';r.id='row_'+d[0];r.innerHTML=`<label for="${d[0]}">${d[2]}</label><input id="${d[0]}" type="range" min="${d[3]}" max="${d[4]}" step="${d[5]}" value="${d[6]}" aria-label="${d[2]}"><div class="value" id="${d[0]}v"></div>`;groupDiv[d[1]].appendChild(r);}
 const val=k=>+$(k).value;
-function labels(){$('speedv').textContent=val('speed')===0?'frozen':val('speed').toFixed(1);$('ppfv').textContent=Math.round(val('ppf')/1000)+'K';$('trailv').textContent=val('trail')>=1?'∞':val('trail').toFixed(3);$('inkv').textContent=val('ink');$('seedv').textContent=val('seed');}
-// tap path: -/+ buttons and tap-to-jump; on touch the slider ignores touches so scrolls pass through
+function label(k){const d=ALL.find(a=>a[0]===k),v=val(k);let t=v.toFixed(dec(d[5]));if(k==='speed'&&v===0)t='frozen';if(k==='ppf')t=Math.round(v/1000)+'K';if(k==='trail'&&v>=1)t='∞';if(k==='kaleido'&&v===1)t='off';$(k+'v').textContent=t;$('row_'+k).classList.toggle('moved',Math.abs(v-d[6])>1e-12);}
 function fire(e){e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}
-function snap(e,v){const mn=+e.min,mx=+e.max,st=+e.step||1;v=Math.max(mn,Math.min(mx,v));v=mn+Math.round((v-mn)/st)*st;const dec=(String(e.step).split('.')[1]||'').length;return +Math.max(mn,Math.min(mx,v)).toFixed(dec);}
+function snap(e,v){const mn=+e.min,mx=+e.max,st=+e.step||1;v=Math.max(mn,Math.min(mx,v));v=mn+Math.round((v-mn)/st)*st;const dc=(String(e.step).split('.')[1]||'').length;return +Math.max(mn,Math.min(mx,v)).toFixed(dc);}
 document.querySelectorAll('.row input[type=range]').forEach(e=>{const row=e.parentNode,c=document.createElement('div'),t=document.createElement('div');c.className='ctl';t.className='trk';
- const mk=(s,d)=>{const b=document.createElement('button');b.type='button';b.className='stepb';b.textContent=s;b.setAttribute('aria-label',(d<0?'Decrease ':'Increase ')+e.getAttribute('aria-label'));b.addEventListener('click',()=>{const st=+e.step||1,inc=e.id==='seed'?1:Math.max(st,Math.round((+e.max-+e.min)*.05/st)*st),v=snap(e,+e.value+d*inc);if(v!==+e.value){e.value=v;fire(e);}});return b;};
+ const mk=(s,dd)=>{const b=document.createElement('button');b.type='button';b.className='stepb';b.textContent=s;b.setAttribute('aria-label',(dd<0?'Decrease ':'Increase ')+e.getAttribute('aria-label'));b.addEventListener('click',()=>{const st=+e.step||1,inc=(e.id==='seed'||st>=1&&(+e.max-+e.min)<=40)?st:Math.max(st,Math.round((+e.max-+e.min)*.05/st)*st),v=snap(e,+e.value+dd*inc);if(v!==+e.value){e.value=v;fire(e);}});return b;};
  row.insertBefore(c,e);t.appendChild(e);c.append(mk('−',-1),t,mk('+',1));
  t.addEventListener('click',ev=>{if(ev.target===e&&!matchMedia('(pointer:coarse)').matches)return;const r=e.getBoundingClientRect();if(r.width<=0)return;const f=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)),v=snap(e,+e.min+f*(+e.max-+e.min));if(v!==+e.value){e.value=v;fire(e);}});});
-// machine state
-let ev,live,view=null,target=null,cornerOn=false,lastEntry=null,paused=false,acc=0,lastT=0,rounds=0,events=[];
-const H=new Float32Array(W*Hh),img=ctx.createImageData(W,Hh);
-for(let i=3;i<img.data.length;i+=4)img.data[i]=255;
+// ---------- machine ----------
+let ev,live,pic,view=null,target=null,cornerOn=false,lastEntry=null,paused=false,acc=0,lastT=0,rounds=0,events=[];
+const H=new Float32Array(W*Hh),HS=new Float32Array(W*Hh),img=ctx.createImageData(W,Hh);for(let i=3;i<img.data.length;i+=4)img.data[i]=255;
 function fmtRel(r){const op=r.op.length>14?r.op.slice(0,13)+'…':r.op;const args=r.op==='echo'?`x${r.a+1},x${r.b+1},x${r.c+1}; d=${r.d}`:`x${r.a+1},x${r.b+1},x${r.c+1}`;return `x${r.n+1} ← ${r.s<0?'−':'+'}${r.w.toFixed(2)}·${op}${r.s<0?'⁻':''}(${args})`;}
-function showRels(G){$('rels').textContent=G.map(fmtRel).join('\n');}
 function pushEvent(t){events.unshift(t);if(events.length>40)events.pop();$('events').textContent=events.join('\n');}
-function rebuild(x,G,rho){live={sys:FORMULA.system(x,G,rho,ev.L),G};for(let t=0;t<200;t++)live.sys.step();showRels(G);}
-function start(){const seed=val('seed');ev=FORMULA.makeEvolver(seed);rounds=0;events=[];H.fill(0);view=null;target=null;lastEntry=null;
- const st=ev.state();rebuild(st.x,st.G,st.rho);
- // frame the starting formula from a short run
- const P=[];const s=FORMULA.system(st.x,st.G,st.rho,ev.L);for(let t=0;t<3000;t++){s.step();P.push(FORMULA.picture(s.x));}
- target=boundsOf(P);view=target.slice();pushEvent(`seed ${seed}: born with ${st.G.length} relationships`);}
-function boundsOf(P){let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity;for(const p of P){if(!Number.isFinite(p[0]))continue;a=Math.min(a,p[0]);b=Math.max(b,p[0]);c=Math.min(c,p[1]);d=Math.max(d,p[1]);}if(!(b>a))b=a+1;if(!(d>c))d=c+1;return[a,b,c,d];}
-function evolveOnce(){const prev=ev.state().G;const en=ev.epoch();rounds++;lastEntry=en;
- const st=ev.state();const changed=JSON.stringify(st.G)!==JSON.stringify(prev)||en.flip||en.kick;
- let note=`#${en.e} ${en.kind}${en.accept?' ✓':' ✗'}`;if(en.flip)note+=' · contradicts itself (polarity '+(en.pi>0?'+':'−')+') · joins its opposite';if(en.topple)note+=' · knocks itself off balance';if(en.kick)note+=' · kicks itself awake';if(en.composite)note+=' · meta formula invents '+en.composite;
- if(en.accept||en.flip||en.topple||en.kick||en.composite)pushEvent(note);
- if(changed){rebuild(st.x,st.G,st.rho);if(en.view)target=en.view.slice();else{const P=[];const s=FORMULA.system(st.x,st.G,st.rho,ev.L);for(let t=0;t<2500;t++){s.step();P.push(FORMULA.picture(s.x));}target=boundsOf(P);}}}
+function boundsOf(P2){let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity;for(const p of P2){if(!Number.isFinite(p[0])||!Number.isFinite(p[1]))continue;a=Math.min(a,p[0]);b=Math.max(b,p[0]);c=Math.min(c,p[1]);d=Math.max(d,p[1]);}if(!(b>a))b=a+1;if(!(d>c))d=c+1;return[a,b,c,d];}
+function reframe(){const st={x:live.sys.x,G:live.G,rho:live.rho};const s=FORMULA.system(st.x,st.G,st.rho,ev.L,P),pts=[];for(let t=0;t<3000;t++){s.step();pts.push(pic(s.x));}target=boundsOf(pts);if(!view)view=target.slice();}
+function rebuild(x,G,rho,keepView){live={sys:FORMULA.system(x,G,rho,ev.L,P),G,rho};for(let t=0;t<200;t++)live.sys.step();$('rels').textContent=G.map(fmtRel).join('\n');if(!keepView)reframe();}
+function start(){ev=FORMULA.makeEvolver(val('seed'),P);pic=FORMULA.makePicture(P);rounds=0;events=[];H.fill(0);HS.fill(0);view=null;lastEntry=null;const st=ev.state();rebuild(st.x,st.G,st.rho);view=target.slice();pushEvent(`seed ${val('seed')}: born with ${st.G.length} relationships`);}
+function evolveOnce(){const prev=JSON.stringify(ev.state().G);const en=ev.epoch();rounds++;lastEntry=en;const st=ev.state();const changed=JSON.stringify(st.G)!==prev||en.flip||en.kick;
+ let note=`#${en.e} ${en.kind}${en.accept?' ✓':' ✗'}`;if(en.flip)note+=' · contradicts itself · joins its opposite';if(en.topple)note+=' · knocks itself off balance';if(en.kick)note+=' · kicks itself awake';if(en.composite)note+=' · meta formula invents '+en.composite;
+ if(en.accept||en.flip||en.topple||en.kick||en.composite)pushEvent(note);if(changed)rebuild(st.x,st.G,st.rho);}
+const GROUP_OF=Object.fromEntries(ALL.map(d=>[d[0],d[1]]));
+function onParam(k){label(k);const g=GROUP_OF[k];if(g==='Machine'||g==='Rendering')return;P[k]=val(k);
+ if(g==='Step'||g==='Operators'){rebuild(Float64Array.from(live.sys.x),live.G,live.rho,true);}
+ else if(g==='Picture'){pic=FORMULA.makePicture(P);reframe();H.fill(0);HS.fill(0);}}
+let px=0,py=0;
 function frame(t){requestAnimationFrame(frame);if(!ev)return;const dt=Math.min(.25,(t-lastT)/1000||0);lastT=t;
  if(!paused){const sp=val('speed');if(sp>0){acc+=dt*sp;let n=0;while(acc>=1&&n<4){acc-=1;evolveOnce();n++;}if(n===4)acc=0;}
-  // view eases toward the target framing (clamped interpolation)
   let tg=target;if(cornerOn&&lastEntry&&lastEntry.corner&&lastEntry.corner.v>0){const w=(target[1]-target[0])/8,h=(target[3]-target[2])/8;tg=[lastEntry.corner.cx-w,lastEntry.corner.cx+w,lastEntry.corner.cy-h,lastEntry.corner.cy+h];}
   const k=Math.min(1,dt*2.5);for(let i=0;i<4;i++)view[i]+=(tg[i]-view[i])*k;
-  const tr=val('trail');if(tr<1)for(let i=0;i<H.length;i++)H[i]*=tr;
-  const cx=(view[0]+view[1])/2,cy=(view[2]+view[3])/2,half=Math.max(view[1]-view[0],view[3]-view[2])/2*1.08,sc=W/(2*half),n=val('ppf'),sys=live.sys;
-  for(let q=0;q<n;q++){sys.step();const p=FORMULA.picture(sys.x),i=((p[0]-cx)*sc+W/2)|0,j=((cy-p[1])*sc+Hh/2)|0;if(i>=0&&i<W&&j>=0&&j<Hh)H[j*W+i]+=1;}}
- let mx=0;for(let i=0;i<H.length;i++)if(H[i]>mx)mx=H[i];const lm=Math.log1p(mx||1),gain=0.35+val('ink')/60,d=img.data;
- for(let i=0,o=0;i<H.length;i++,o+=4){const v=H[i]?Math.min(255,255*gain*Math.pow(Math.log1p(H[i])/lm,0.85)):0;d[o]=d[o+1]=d[o+2]=v;}
+  const tr=val('trail');if(tr<1)for(let i=0;i<H.length;i++){H[i]*=tr;HS[i]*=tr;}
+  const cx=(view[0]+view[1])/2,cy=(view[2]+view[3])/2,half=Math.max(view[1]-view[0],view[3]-view[2])/2*1.08/val('zoom'),sc=W/(2*half),n=val('ppf'),sys=live.sys,spl=val('splat'),colorOn=val('speedColor')>0;
+  for(let q=0;q<n;q++){sys.step();const p=pic(sys.x);let i=((p[0]-cx)*sc+W/2)|0,j=((cy-p[1])*sc+Hh/2)|0;
+   let spd=0;if(colorOn){const dx=p[0]-px,dy=p[1]-py;spd=Math.min(1,Math.sqrt(dx*dx+dy*dy)/half);px=p[0];py=p[1];}
+   if(spl===1){if(i>=0&&i<W&&j>=0&&j<Hh){H[j*W+i]+=1;if(colorOn)HS[j*W+i]+=spd;}}
+   else{for(let a=0;a<spl;a++)for(let b=0;b<spl;b++){const ii=i+a,jj=j+b;if(ii>=0&&ii<W&&jj>=0&&jj<Hh){H[jj*W+ii]+=1;if(colorOn)HS[jj*W+ii]+=spd;}}}}}
+ let mx=0;for(let i=0;i<H.length;i++)if(H[i]>mx)mx=H[i];const lm=Math.log1p(mx||1),gain=0.35+val('ink')/60,d=img.data,gam=val('gamma'),fl=val('floor'),neg=val('negMix'),scol=val('speedColor');
+ for(let i=0,o=0;i<H.length;i++,o+=4){let v=0;if(H[i]){let u=Math.pow(Math.log1p(H[i])/lm,gam);if(fl>0)u=Math.max(0,(u-fl)/(1-fl));v=Math.min(1,gain*u);}
+  let r=v,g=v,b=v;if(scol>0&&H[i]){const f=Math.min(1,HS[i]/H[i]*3);const cr=0.24+0.76*f,cg=0.55-0.0*f,cb=1-0.84*f;r=v*((1-scol)+scol*cr*1.3);g=v*((1-scol)+scol*cg*1.3);b=v*((1-scol)+scol*cb*1.3);}
+  if(neg>0){r=r*(1-neg)+(1-r)*neg;g=g*(1-neg)+(1-g)*neg;b=b*(1-neg)+(1-b)*neg;}
+  d[o]=Math.min(255,r*255);d[o+1]=Math.min(255,g*255);d[o+2]=Math.min(255,b*255);}
  ctx.putImageData(img,0,0);
- const pol=lastEntry?(lastEntry.pi>0?'+ (keeps what scores well)':'− (contrary: keeps what scores worse)'):'+';
- $('hud').textContent=`seed ${val('seed')} · round ${rounds}\n${live.G.length} relationships · polarity ${pol}\nscore Ξ ${lastEntry?lastEntry.B.toFixed(3):'–'}${paused?'\npaused':''}${val('speed')===0?'\nformula frozen':''}`;}
-['speed','ppf','trail','ink'].forEach(k=>$(k).addEventListener('input',labels));
-$('seed').addEventListener('change',()=>{labels();start();});$('seed').addEventListener('input',labels);
+ const pol=lastEntry?(lastEntry.pi>0?'+ (keeps what scores well)':'− (contrary)'):'+';const moved=ALL.filter(a=>Math.abs(val(a[0])-a[6])>1e-12&&a[1]!=='Machine').length;
+ $('hud').textContent=`seed ${val('seed')} · round ${rounds}\n${live.G.length} relationships · polarity ${pol}\nscore Ξ ${lastEntry?lastEntry.B.toFixed(3):'–'} · ${moved} controls moved${paused?'\npaused':''}${val('speed')===0?'\nformula frozen':''}`;}
+for(const d of ALL){const k=d[0];$(k).addEventListener('input',()=>onParam(k));label(k);}
+$('seed').addEventListener('change',()=>start());
 $('play').onclick=()=>{paused=!paused;$('play').textContent=paused?'Play':'Pause';};
 $('restart').onclick=()=>start();
-$('newseed').onclick=()=>{const s=$('seed');s.value=(+s.value%9999)+1;labels();start();};
-$('corner').onclick=()=>{cornerOn=!cornerOn;$('corner').textContent='Corner: '+(cornerOn?'on':'off');H.fill(0);};
+$('newseed').onclick=()=>{const s=$('seed');s.value=(+s.value%9999)+1;label('seed');start();};
+$('resetall').onclick=()=>{for(const d of ALL){if(d[0]==='seed')continue;$(d[0]).value=d[6];label(d[0]);if(d[1]!=='Machine'&&d[1]!=='Rendering')P[d[0]]=d[6];}start();};
+$('corner').onclick=()=>{cornerOn=!cornerOn;$('corner').textContent='Corner: '+(cornerOn?'on':'off');H.fill(0);HS.fill(0);};
 $('save').onclick=()=>{const a=document.createElement('a');a.download=`self-evolving-formula-seed${val('seed')}-round${rounds}.png`;a.href=cv.toDataURL('image/png');a.click();};
-window.SEF={start,evolveOnce,state:()=>({rounds,lastEntry,G:live.G,view,target}),H};
-labels();start();requestAnimationFrame(frame);
+window.SEF={start,evolveOnce,P,state:()=>({rounds,lastEntry,G:live.G,view,target}),H};
+start();requestAnimationFrame(frame);
 })();</script></body></html>
