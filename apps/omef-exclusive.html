@@ -72,7 +72,7 @@ body.color{--bg:#07121b;--panel:#101d2a;--text:#eaf4ff;--muted:#a8bdce;--line:#2
 <div class="pure">The coupled mode starts from a screened, asymmetric OMEF filament shape rather than two random clouds. The B formula perturbs A's internal terms while A remains the visual backbone. Restore filament shape resets just the parameters; Clear old trails empties the canvas without restarting either equation. Use Original OMEF parameters to transfer a shape you already like.</div>
 <div class="grid2"><button id="twinRestore" class="secondary">Restore circuit</button><button id="twinDecouple" class="secondary">Switch off links</button><button id="twinRerender" class="secondary">Build more detail</button></div>
 <div class="pure" id="twinStats" style="margin-top:10px">Cross-system resonance will be measured here.</div>
-</section><section id="twinParameterSection"><h2>Separate OMEF parameters</h2><p class="twin-note">Each row gives separate controls for the two complete formulas, but there is only one visual. Any A or B slider recomputes the joint trajectory; delayed cross-formula links carry the consequences onward.</p><div class="grid2"><button id="twinResetA" class="secondary">Reset A</button><button id="twinResetB" class="secondary">Reset B</button><button id="twinCopyAB">Copy A → B</button><button id="twinCopyBA">Copy B → A</button></div><div id="twinParameterGroups"></div></section>
+</section><section id="twinParameterSection"><h2>OMEF genome controls · A and B</h2><p class="twin-note">The first nine controls change the principal mathematical forces of each complete OMEF. Dragging either side applies its new coefficients to the running engines without resetting memory; the shared attractor immediately begins to respond.</p><div id="twinGenomeStatus" class="pure" aria-live="polite">Adjust any A or B genome control to see its live numerical application.</div><div class="grid2"><button id="twinResetA" class="secondary">Reset A</button><button id="twinResetB" class="secondary">Reset B</button><button id="twinCopyAB">Copy A → B</button><button id="twinCopyBA">Copy B → A</button></div><div id="twinParameterGroups"></div></section>
 <section><h2>Subsystem-to-subsystem connections</h2><p class="twin-note">The eight directed links form a feedback circuit across two OMEF formulas. Evolution changes both the network AND selected coefficients inside the formulas. The two full OMEF state machines preserve their 20 coordinates, histories and phases while coefficients and cross-links change gradually. The original fine-filament style is continuously accumulated on ONE canvas. There are no new-image crossfades. Manual edits hold random mutation for 12 seconds.</p><div id="twinLinks"></div></section>
 </div>
 <section><h2>Rendering</h2><div class="toggle"><input id="livePreview" type="checkbox" checked><label for="livePreview">Live preview while dragging sliders</label></div><div id="renderControls"></div><div class="grid3 theme"><button data-theme="dark" class="active">Dark</button><button data-theme="light">Light</button><button data-theme="color">Color</button></div><div class="grid2" style="margin-top:8px"><button id="download">Save PNG</button><button id="stop" class="danger">Stop</button></div></section>
@@ -335,6 +335,22 @@ function liveRetarget(st,desired){
  for(const e of st.edges){const match=map.get(linkId(e));e.goal=match?+match.strength:0;map.delete(linkId(e));}
  for(const e of map.values())st.edges.push({...e,strength:0,goal:+e.strength});
 }
+function genomeTouch(side,id,label){
+ holdForEditing();
+ const st=liveState,control=$('tw'+side+'_'+id),target=+control.value;
+ if(st&&activeEngine==='twin'){
+  const now=performance.now();
+  const previous=st[side][id];
+  st.manualUntil=now+3000;
+  st.quickFadeUntil=now+2800;
+  st.detailUntil=Math.max(st.detailUntil,now+5000);
+  st.manualGenome={side,id,label,from:previous,to:target};
+  // Update the running OMEF target immediately; do not wait for the
+  // original mode's delayed preview checkbox or restart the state.
+  liveInput();
+  $('twinGenomeStatus').textContent='OMEF '+side+' · '+label+': '+previous.toFixed(3)+' → '+target.toFixed(3)+' · applying to the live equations';
+ }else if(activeEngine==='twin')twinRender(true);
+}
 function liveInput(){
  const st=liveState;if(!st)return;
  const cfg=twinConfig();
@@ -413,7 +429,11 @@ function twinRender(preview){
 function liveFrame(time){
  const st=liveState;if(!st||!st.running||stopped||activeEngine!=='twin')return;
  const dt=st.last?clamp(time-st.last,1,70):16.67;st.last=time;st.frames++;st.frame=0;
- const tau=1000*(+$('twinMorphDuration').value),a=1-Math.exp(-dt/Math.max(250,tau));
+ const tau=1000*(+$('twinMorphDuration').value);
+ // Manual adjustments have their own fast, critically damped transition.
+ // Autonomous mutations still use the slower drift time selected above.
+ const manual=time<(st.manualUntil||0);
+ const a=1-Math.exp(-dt/Math.max(200,manual?520:tau));
  for(const d of allDefs){
   const id=d[0];
   st.A[id]+=(st.targetA[id]-st.A[id])*a;
@@ -433,9 +453,10 @@ function liveFrame(time){
  st.scale+=(st.targetScale-st.scale)*cameraA;
  const theme=getComputedStyle(document.body),rgb=theme.getPropertyValue('--ink').trim()||'255,255,255';
  const detail=time<st.detailUntil;
- if(time-st.lastFade>850&&!detail){
+ if(time-st.lastFade>(time<(st.quickFadeUntil||0)?145:850)){
   const persistence=+$('twinPersistence').value;
-  ctx.globalAlpha=1-Math.exp(-(.85*Math.LN2)/Math.max(10,persistence));ctx.fillStyle=theme.getPropertyValue('--canvas').trim()||'#000';
+  const cleaning=time<(st.quickFadeUntil||0);
+  ctx.globalAlpha=cleaning?.14:1-Math.exp(-(.85*Math.LN2)/Math.max(10,persistence));ctx.fillStyle=theme.getPropertyValue('--canvas').trim()||'#000';
   ctx.fillRect(0,0,cv.width,cv.height);ctx.globalAlpha=1;st.lastFade=time;
  }
  const ink=clamp(.015+(+$('ink').value)/650,.015,.17);
@@ -446,7 +467,7 @@ function liveFrame(time){
  const density=clamp(Math.sqrt(Math.max(25000,+$('points').value)/250000),.35,2);
  const cap=Math.round((detail?370:230)*density);
  let drawnNow=0;
- while(drawnNow<cap&&performance.now()-start<7){
+ while(drawnNow<(manual?Math.max(cap,400):cap)&&performance.now()-start<7){
   const p=st.engine(),q=twinCombine(p,st.config),x=q[0],y=q[1];drawnNow++;
   if(!Number.isFinite(x)||!Number.isFinite(y))continue;
   const px=cv.width/2+(x-st.cx)*st.scale,py=cv.height/2-(y-st.cy)*st.scale;
@@ -465,6 +486,11 @@ function liveFrame(time){
   st.samples=0;st.minX=st.minY=Infinity;st.maxX=st.maxY=-Infinity;
  }
  if(st.frames%12===0){
+  if(st.manualGenome){
+   const g=st.manualGenome,current=st[g.side][g.id];
+   const denominator=Math.abs(g.to-g.from),progress=denominator<.00001?100:Math.max(0,Math.min(100,100*(1-Math.abs(g.to-current)/denominator)));
+   $('twinGenomeStatus').textContent='OMEF '+g.side+' · '+g.label+' · live coefficient '+current.toFixed(3)+' / target '+g.to.toFixed(3)+' · '+progress.toFixed(0)+'% applied';
+  }
   count.textContent='Total drawn points: '+st.drawn.toLocaleString();
   status.textContent=evolutionOn?'Living OMEF · evolving':'Living OMEF · evolution paused';
   const coherence=st.measures?Math.hypot(st.cos,st.sin)/st.measures:0;
@@ -484,7 +510,7 @@ function twinSlider(parent,id,label,min,max,step,value){
  const el=document.createElement('input');el.id=id;el.type='range';el.min=min;el.max=max;el.step=step;el.value=value;
  const out=document.createElement('div');out.id=id+'v';out.className='value';out.textContent=value;
  row.append(lbl,el,out);parent.appendChild(row);
- el.addEventListener('input',()=>{out.textContent=(+el.value).toFixed(step>=1?0:2);if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'){evolutionStatus('Mutation depth adjusted');return;}if(id==='twinMorphDuration'){evolutionStatus('Drift smoothness adjusted');return;}if(id==='twinPersistence'){evolutionStatus('Trail persistence adjusted');return;}holdForEditing();requestPreview();});
+ el.addEventListener('input',()=>{out.textContent=(+el.value).toFixed(step>=1?0:2);if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'){evolutionStatus('Mutation depth adjusted');return;}if(id==='twinMorphDuration'){evolutionStatus('Drift smoothness adjusted');return;}if(id==='twinPersistence'){evolutionStatus('Trail persistence adjusted');return;}holdForEditing();if(liveState){liveState.manualUntil=performance.now()+2400;liveState.quickFadeUntil=performance.now()+1700;liveState.detailUntil=performance.now()+4200;liveInput();}else render(true);});
  el.addEventListener('change',()=>{if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'||id==='twinMorphDuration'||id==='twinPersistence')return;cancelPreview();render(true);});return el;
 }
 function twinSelect(parent,id,label,options,value){
@@ -526,8 +552,8 @@ function buildTwinUI(){
     range.type='range';range.min=min;range.max=max;range.step=step;range.value=twinFilamentPreset[key]===undefined?def:twinFilamentPreset[key];
     range.setAttribute('aria-label','OMEF '+side+' '+label);
     const show=()=>{const decimals=step>=1?0:step<.01?3:2;value.textContent=(+range.value).toFixed(decimals);};
-    range.addEventListener('input',()=>{holdForEditing();show();requestPreview();});
-    range.addEventListener('change',()=>{show();cancelPreview();render(true);});
+    range.addEventListener('input',()=>{show();genomeTouch(side,key,label);});
+    range.addEventListener('change',()=>{show();if(activeEngine==='twin')genomeTouch(side,key,label);else {cancelPreview();render(true);}});
     cap.append(part,value);single.append(cap,range);cols.appendChild(single);show();
    }
    row.append(nameEl,cols);box.appendChild(row);
