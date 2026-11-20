@@ -1,4 +1,4 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>OMEF EXCLUSIVE</title><style>
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><title>OMEF EXCLUSIVE</title><style>
 :root{--bg:#efefef;--panel:#e8e8e8;--text:#444;--muted:#777;--line:#c7c7c7;--accent:#109b91;--canvas:#fff;--ink:0,0,0}
 body.dark{--bg:#0d0d0d;--panel:#1c1c1c;--text:#eee;--muted:#aaa;--line:#333;--canvas:#000;--ink:255,255,255}
 body.color{--bg:#07121b;--panel:#101d2a;--text:#eaf4ff;--muted:#a8bdce;--line:#294057;--accent:#36b7ff;--canvas:#06101a;--ink:120,210,255}
@@ -51,7 +51,40 @@ body.color{--bg:#07121b;--panel:#101d2a;--text:#eaf4ff;--muted:#a8bdce;--line:#2
 .stage.twin-on .badge{font-size:9px;padding:3px}
 .stage.twin-on .status{font-size:9px;bottom:28px}
 }
-</style></head><body class="dark"><div class="app"><header><h1>OMEF EXCLUSIVE</h1><div class="sub" id="modeSubtitle">Original OMEF-A · one 10D equation · single attractor</div></header><div class="stage"><canvas id="omefCanvas" width="1000" height="760" aria-label="Original autonomous OMEF-A attractor"></canvas><div class="badge" id="count">Total drawn points: 0</div><div class="status" id="status">booting</div></div><div class="panel">
+
+/* CSS immersive mode works on iPhone Safari, where arbitrary documents cannot
+   reliably invoke the native Fullscreen API. It fills the page's visible viewport. */
+body.omef-immersive,html:has(body.omef-immersive){overflow:hidden!important;overscroll-behavior:none}
+body.omef-immersive .stage{position:fixed!important;inset:0!important;top:0!important;
+ width:100vw!important;height:100vh!important;height:100dvh!important;
+ min-height:0!important;margin:0!important;z-index:9999!important;border:0!important;
+ background:var(--canvas);overscroll-behavior:none}
+body.omef-immersive #omefCanvas,
+body.omef-immersive .stage.twin-on #omefCanvas{display:block!important;
+ width:100%!important;height:100%!important;max-height:none!important;
+ object-fit:fill!important;touch-action:manipulation!important}
+body.omef-immersive .stage .badge,body.omef-immersive .stage .status{display:none!important}
+#immersiveEnter{position:absolute;right:10px;top:10px;z-index:30;width:auto;
+ padding:9px 13px;font:700 13px/1.2 -apple-system,Arial,sans-serif;
+ color:white;background:rgba(25,25,25,.68);border:1px solid #8886;backdrop-filter:blur(10px)}
+#immersiveHUD{display:none}
+body.omef-immersive #immersiveEnter{display:none!important}
+body.omef-immersive #immersiveHUD{display:flex;position:absolute;z-index:40;
+ top:max(14px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));
+ width:auto;max-width:calc(100vw - 24px);gap:8px;align-items:center;
+ padding:7px;background:rgba(14,14,14,.72);border:1px solid #7776;
+ border-radius:14px;backdrop-filter:blur(14px);
+ transition:opacity .25s;opacity:0;pointer-events:none}
+body.omef-immersive.omef-hud-visible #immersiveHUD{opacity:1;pointer-events:auto}
+#immersiveHUD button{width:auto;min-width:0;background:#565b61;color:white;
+ border:0;font-size:13px;padding:10px 12px}
+#immersiveHUD #immersiveExit{background:#12988b}
+@media(max-width:719px){body.omef-immersive .stage,
+ body.omef-immersive .stage.twin-on{position:fixed!important;min-height:0!important;
+ height:100dvh!important}
+ #immersiveEnter{padding:8px 10px;font-size:12px}
+}
+</style></head><body class="dark"><div class="app"><header><h1>OMEF EXCLUSIVE</h1><div class="sub" id="modeSubtitle">Original OMEF-A · one 10D equation · single attractor</div></header><div class="stage"><canvas id="omefCanvas" width="1000" height="760" aria-label="Original autonomous OMEF-A attractor"></canvas><button type="button" id="immersiveEnter" aria-label="Enter full-screen visual mode">⛶ Full screen</button><div id="immersiveHUD" role="group" aria-label="Immersive view controls"><button type="button" id="immersiveExit">Show controls</button><button type="button" id="immersiveHide">Hide</button></div><div class="badge" id="count">Total drawn points: 0</div><div class="status" id="status">booting</div></div><div class="panel">
 
 <section id="twinEngine"><h2>Drawing engine</h2><div class="grid2"><button id="engineOriginal" class="engbtn active" aria-pressed="true">Original OMEF</button><button id="engineTwin" class="engbtn secondary" aria-pressed="false">Coupled OMEF · 1 image</button></div><div id="engineInfo" class="hint" role="status" style="margin:9px 0 0">ORIGINAL · One autonomous 10-coordinate OMEF equation. No cross-formula connections. A new static attractor is plotted when controls change.</div></section>
 <div id="omefUI">
@@ -729,7 +762,86 @@ function reset(){allDefs.forEach(d=>$(d[0]).value=d[5]);updateValues();render(fa
 function mutate(){const o={};allDefs.forEach(d=>{const span=d[3]-d[2],amt=d[4]>=1?Math.max(1,Math.round(span*.03)):span*.025;o[d[0]]=clamp(+$(d[0]).value+rand(-amt,amt),d[2],d[3])});apply(o);render(false)}
 function randomVisible(){status.textContent='hunting · OMEF-A';const base=rawValues();let best=null,bestArea=-1;for(let tries=0;tries<70;tries++){const o={...base};macros.forEach(d=>o[d[0]]=rand(d[2],d[3]));['pairFreqA','pairFreqB','pairCosAmp','triScale','triCross','marketW1','marketW2','shadowSelf','shadowCross','regimeForce','phaseSpeed','goldCos','fib1','fib3','fib8','fib13','edgeBase','edgeSpan','squash','projReg','projCross','projPhase'].forEach(k=>{const d=defMap[k];o[k]=rand(d[2],d[3])});o.fbPair=rand(.04,.42);o.fbRegime=rand(.02,.30);o.fbProjection=rand(.05,.48);o.fbLag=Math.round(rand(2,22));o.fbMix=rand(.25,.85);o.fbDamping=rand(.82,.975);const b=bounds(o,5000);if(b){const ar=Math.max(b.w,b.h)/Math.max(.001,Math.min(b.w,b.h)),area=b.w*b.h/(1+.2*Math.max(0,ar-7));if(area>bestArea){best={o,b};bestArea=area}if(area>.16&&ar<9){apply(o);render(false);return}}}if(best){apply(best.o);render(false)}else render(false)}
 function wire(){allDefs.forEach(d=>{const e=$(d[0]);e.addEventListener('input',()=>{updateValues();requestPreview()});e.addEventListener('change',()=>{cancelPreview();render(false)})});['points','ink','size'].forEach(k=>{$(k).addEventListener('input',()=>{updateValues();requestPreview()});$(k).addEventListener('change',()=>{cancelPreview();render(false)})});$('random').onclick=randomVisible;$('mutate').onclick=mutate;$('preset').onclick=reset;$('render').onclick=()=>render(false);$('stop').onclick=()=>{stopped=true;token++;cancelMorph();liveState=null;evolutionOn=false;evolutionCancel();evolutionStatus('Stopped');status.textContent='stopped'};$('download').onclick=()=>{const a=document.createElement('a');a.download='omef-exclusive.png';a.href=cv.toDataURL('image/png');a.click()};document.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-theme]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.body.className=b.dataset.theme==='light'?'':b.dataset.theme;render(false)})}
-window.OMEFExclusive={makeStepper,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinCombinedBounds,twinCombine,twinDefaults,twinRaw,activeMode:()=>activeEngine,solverCheck:verifyTwinSolver,evolutionState:()=>({active:evolutionOn,accepted:evolutionAccepted,rejected:evolutionRejected,mode:activeEngine,nextIn:liveState?Math.max(0,(liveState.nextEvolution-performance.now())/1000):null,label:liveState?.mutationLabel||''})};buildTwinUI();wire();updateValues();$('engineTwin').click();
+
+// The browser viewport, not the system browser chrome, is the immersive surface.
+// Resizing the bitmap must not reset the coupled 20D oscillator or its histories.
+let immersiveActive=false,immersiveHUDTimer=null,immersiveResizeJob=0;
+const immersiveStage=document.querySelector('.stage');
+function immerseShowHUD(){
+ if(!immersiveActive)return;
+ document.body.classList.add('omef-hud-visible');
+ if(immersiveHUDTimer!==null)clearTimeout(immersiveHUDTimer);
+ immersiveHUDTimer=setTimeout(()=>{
+  if(immersiveActive)document.body.classList.remove('omef-hud-visible');
+  immersiveHUDTimer=null;
+ },3400);
+}
+function immerseHideHUD(){
+ if(immersiveHUDTimer!==null){clearTimeout(immersiveHUDTimer);immersiveHUDTimer=null;}
+ document.body.classList.remove('omef-hud-visible');
+}
+function immerseResize(){
+ const beforeW=cv.width,beforeH=cv.height,rect=immersiveStage.getBoundingClientRect();
+ const ratio=immersiveActive?Math.min(1.6,Math.max(1,window.devicePixelRatio||1)):1;
+ const newW=immersiveActive?Math.max(180,Math.round((rect.width||window.innerWidth||390)*ratio)):1000;
+ const newH=immersiveActive?Math.max(240,Math.round((rect.height||window.innerHeight||760)*ratio)):760;
+ if(newW===beforeW&&newH===beforeH)return;
+ // Preserve visible trails at the correct aspect ratio, not as a stretched image.
+ let saved=null;
+ if(activeEngine==='twin'&&liveState){
+  saved=document.createElement('canvas');
+  saved.width=beforeW;saved.height=beforeH;
+  saved.getContext('2d').drawImage(cv,0,0);
+ }
+ cv.width=newW;cv.height=newH;
+ ctx.globalAlpha=1;
+ ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--canvas').trim()||'#000';
+ ctx.fillRect(0,0,newW,newH);
+ if(activeEngine==='twin'&&liveState){
+  const fit=Math.min(newW/beforeW,newH/beforeH);
+  const drawW=beforeW*fit,drawH=beforeH*fit;
+  if(saved)ctx.drawImage(saved,(newW-drawW)/2,(newH-drawH)/2,drawW,drawH);
+  // Keep world-space coordinates and delayed histories unchanged.
+  liveState.scale*=fit;liveState.targetScale*=fit;
+  liveState.minX=liveState.minY=Infinity;
+  liveState.maxX=liveState.maxY=-Infinity;
+  liveState.samples=0;
+  liveState.detailUntil=performance.now()+3500;
+ }else if(activeEngine==='omef')render(true);
+}
+function immerseSet(enable){
+ if(immersiveActive===enable)return;
+ immersiveActive=enable;
+ document.body.classList.toggle('omef-immersive',enable);
+ if(enable)immerseShowHUD();else immerseHideHUD();
+ if(immersiveResizeJob)cancelAnimationFrame(immersiveResizeJob);
+ immersiveResizeJob=requestAnimationFrame(()=>{
+  immersiveResizeJob=0;immerseResize();
+ });
+}
+function immerseWire(){
+ $('immersiveEnter').onclick=()=>immerseSet(true);
+ $('immersiveExit').onclick=()=>immerseSet(false);
+ $('immersiveHide').onclick=()=>immerseHideHUD();
+ cv.addEventListener('click',()=>{if(immersiveActive)immerseShowHUD();});
+ window.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&immersiveActive)immerseSet(false);
+ });
+ window.addEventListener('resize',()=>{
+  if(immersiveActive){
+   if(immersiveResizeJob)cancelAnimationFrame(immersiveResizeJob);
+   immersiveResizeJob=requestAnimationFrame(()=>{immersiveResizeJob=0;immerseResize();});
+  }
+ });
+ if(window.visualViewport&&window.visualViewport.addEventListener){
+  window.visualViewport.addEventListener('resize',()=>{
+   if(immersiveActive&& !immersiveResizeJob)
+    immersiveResizeJob=requestAnimationFrame(()=>{immersiveResizeJob=0;immerseResize();});
+  });
+ }
+}
+
+window.OMEFExclusive={makeStepper,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinCombinedBounds,twinCombine,twinDefaults,twinRaw,activeMode:()=>activeEngine,solverCheck:verifyTwinSolver,evolutionState:()=>({active:evolutionOn,accepted:evolutionAccepted,rejected:evolutionRejected,mode:activeEngine,nextIn:liveState?Math.max(0,(liveState.nextEvolution-performance.now())/1000):null,label:liveState?.mutationLabel||''})};buildTwinUI();wire();immerseWire();updateValues();$('engineTwin').click();
 })();</script><script>(function(){'use strict';
 // Tap path for every slider: -/+ buttons (1% of range, at least one step) and tap-to-jump on the track.
 // On touch screens the slider itself ignores touches, so a scroll that starts on it just scrolls.
