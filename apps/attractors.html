@@ -163,8 +163,9 @@ function natural(att, c) {
   for (let t = 0; t < 9000; t++) { s = rawStep(att, s, c); if (!s.every(Number.isFinite)) break; if (t >= 600) P.push(s); }
   return stats(P);
 }
-function stats(P) { const D = P[0] ? P[0].length : 2, lo = Array(D).fill(Infinity), hi = Array(D).fill(-Infinity); for (const p of P) for (let i = 0; i < D; i++) { if (p[i] < lo[i]) lo[i] = p[i]; if (p[i] > hi[i]) hi[i] = p[i]; }
-  const ctr = lo.map((v, i) => (v + hi[i]) / 2), R = Math.max(1e-9, ...lo.map((v, i) => (hi[i] - v) / 2)); return { ctr, R }; }
+function stats(P) { const D = P[0] ? P[0].length : 2, ctr = [], half = [];   // robust: centre at the median, radius from the 1%-99% spread
+  for (let i = 0; i < D; i++) { const v = P.map(p => p[i]).sort((a, b) => a - b), q = f => v[Math.floor(f * (v.length - 1))]; ctr.push(q(0.5)); half.push(Math.max(q(0.99) - q(0.5), q(0.5) - q(0.01))); }
+  return { ctr, R: Math.max(1e-9, ...half) }; }
 function rk4(f, s, c, dt) { const k1 = f(s, c), s2 = s.map((v, i) => v + dt / 2 * k1[i]), k2 = f(s2, c), s3 = s.map((v, i) => v + dt / 2 * k2[i]), k3 = f(s3, c), s4 = s.map((v, i) => v + dt * k3[i]), k4 = f(s4, c); return s.map((v, i) => v + dt / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])); }
 function rawStep(att, s, c) { return att.type === 'map' ? att.f(s, c) : rk4(att.f, s, c, att.dt); }
 // ---------- the operator library from the formula, acting on the attractor's coordinates ----------
@@ -185,7 +186,7 @@ function system(att, nat, c0, G, P, L, s0) {
   const U = Array.from({ length: HIST }, () => new Float64Array(D)); let hd = 0, t = 0;
   const cnt = new Float64Array(D); for (const r of G) cnt[r.n % D]++;
   const fns = G.map(r => L[r.op]);
-  const ghosts = []; BASE_KEYS.forEach((op, i) => { let gs = 0; const g = P['g_' + op]; if (g !== 1) gs += 0.35 * (g - 1); const sk = SHAPE[op]; if (sk && P[sk] !== DEF[sk]) gs += 0.6 * (P[sk] - DEF[sk]) / SPAN[sk]; if (gs !== 0) ghosts.push({ op, fn: L[op], gs, n: i % 6, a: (i + 1) % 6, b: (i + 3) % 6, c: (i + 4) % 6 }); });
+  const ghosts = []; BASE_KEYS.forEach((op, i) => { let gs = 0; const g = P['g_' + op]; if (g !== 1) gs += 0.6 * (g - 1); const sk = SHAPE[op]; if (sk && P[sk] !== DEF[sk]) gs += 0.6 * (P[sk] - DEF[sk]) / SPAN[sk]; if (gs !== 0) ghosts.push({ op, fn: L[op], gs, n: i % 6, a: (i + 1) % 6, b: (i + 2) % 6, c: (i + 4) % 6 }); });
   const step6 = (uN) => { const h5 = U[(hd - 5 + HIST) % HIST], h13 = U[(hd - 13 + HIST) % HIST]; return D === 3 ? [uN[0], uN[1], uN[2], h5[0], h5[1], h5[2]] : [uN[0], uN[1], h5[0], h5[1], h13[0], h13[1]]; };
   const opv = (fn, op, X, a, b, cc, dl) => op === 'echo' ? (X[b] > 0 ? U[(hd - dl + HIST) % HIST][a % D] : -U[(hd - dl + HIST) % HIST][cc % D]) : fn(X[a], X[b], X[cc]);
   function M(u, uN) { const m = new Float64Array(D), odd = t % 2 === 1, mid = (D - 1) / 2;
@@ -196,7 +197,7 @@ function system(att, nat, c0, G, P, L, s0) {
       if (P.antiGain !== 1) v -= 0.2 * d('antiGain') * x; if (P.delayMul !== 1) v += 0.3 * d('delayMul') * (U[(hd - 8 + HIST) % HIST][i] - x);
       if (P.ringK !== 0) v += 0.3 * d('ringK') * (uN[(i + 1) % D] - uN[(i + D - 1) % D] + (D === 2 ? (i ? -uN[0] : uN[1]) : 0));
       if (P.cubic !== 0) v -= 0.3 * d('cubic') * x * x * x; if (P.memK !== 0) v += 0.3 * d('memK') * U[(hd - 2 + HIST) % HIST][i];
-      if (P.parity !== 0 && odd) v += 0.4 * d('parity') * (u[i] - x); if (P.drift !== 0) v += 0.3 * d('drift') * sinP(0.002 * t * (i + 1)); if (P.bias !== 0) v += 0.2 * d('bias') * (i - mid + (D === 2 ? 0 : 0));
+      if (P.parity !== 0 && odd) v += 2.0 * d('parity') * (u[i] - x); if (P.drift !== 0) v += 0.3 * d('drift') * sinP(0.002 * t * (i + 1)); if (P.bias !== 0) v += 0.2 * d('bias') * (i - mid + (D === 2 ? 0 : 0));
       m[i] = v; }
     if (ghosts.length || G.length) { const X = step6(uN);
       for (const g of ghosts) m[g.n % D] += clamp(0.3 * g.gs * opv(g.fn, g.op, X, g.a, g.b, g.c, 8), -2, 2);
@@ -205,7 +206,7 @@ function system(att, nat, c0, G, P, L, s0) {
   const norm = s => { const u = new Float64Array(D); for (let i = 0; i < D; i++) u[i] = (s[i] - ctr[i]) / R; return u; };
   let s, omef = null, omefOut = [0, 0];
   if (att.type === 'omef') { const raw = { ...att.raw }; macros.forEach((mm, i) => raw[mm[0]] = c[i]);
-    omef = makeOmefStepper(raw, mods ? (ox, oy) => { const u = [(ox - ctr[0]) / R, (oy - ctr[1]) / R], m = M(lastU, u); return [ox + R * m[0], oy + R * m[1]]; } : null); s = [0, 0]; }
+    omef = makeOmefStepper(raw, mods ? (ox, oy) => { const u = [(ox - ctr[0]) / R, (oy - ctr[1]) / R], m = M(lastU, u); return [ox + 3 * R * m[0], oy + 3 * R * m[1]]; } : null); s = [0, 0]; }
   else s = (s0 || att.init).slice();
   let lastU = norm(s), speed = 1;
   if (att.type === 'flow') { let acc = 0; for (let k = 0; k < 50; k++) { const v = att.f(s, c); acc += Math.sqrt(v.reduce((a, b) => a + b * b, 0)) / R; } speed = acc / 50; }
