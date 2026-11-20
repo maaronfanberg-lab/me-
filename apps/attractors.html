@@ -69,7 +69,7 @@ const PARAMS = [
   ['rot', 'Picture', 'Rotation', -3.14, 3.14, 0.01, 0], ['shear', 'Picture', 'Shear', -2, 2, 0.01, 0], ['radWarp', 'Picture', 'Radial warp', -1, 2, 0.01, 0], ['polarMix', 'Picture', 'Polar blend', 0, 1, 0.01, 0],
   ['projTilt', 'Picture', 'Axis weighting', -1, 1, 0.01, 0], ['kaleido', 'Picture', 'Kaleidoscope folds', 1, 12, 1, 1], ['picSquash', 'Picture', 'Edge squash', 0, 4, 0.01, 0], ['invert', 'Picture', 'Inversion', 0, 1, 0.01, 0],
   // D. how it judges and changes itself
-  ['T', 'Evolution', 'Look length', 500, 8000, 100, 2500], ['acceptTol', 'Evolution', 'Acceptance tolerance', 0.3, 1.5, 0.01, 0.9], ['barDecay', 'Evolution', 'Standard relaxing', 0.5, 1, 0.005, 0.95], ['contrary', 'Evolution', 'Contrariness', 0, 1, 0.01, 0],
+  ['T', 'Evolution', 'Look length', 500, 8000, 100, 2500], ['acceptTol', 'Evolution', 'Acceptance tolerance', 0.3, 1.5, 0.01, 0.9], ['barDecay', 'Evolution', 'Standard relaxing', 0.5, 1, 0.005, 0.95], ['contrary', 'Evolution', 'Contrariness', 0, 0.9, 0.01, 0],
   ['boredS', 'Evolution', 'Boredom level', 0.2, 1.5, 0.01, 0.2], ['restless', 'Evolution', 'Restlessness', 0, 0.5, 0.005, 0], ['turbulence', 'Evolution', 'Turbulence', 0, 0.5, 0.005, 0], ['erosion', 'Evolution', 'Erosion', 0, 0.2, 0.002, 0],
   ['zeroN', 'Evolution', 'Dead patience', 1, 20, 1, 3], ['cap', 'Evolution', 'Relationship cap', 3, 24, 1, 12], ['pBirth', 'Evolution', 'Birth share', 0, 0.6, 0.01, 0.25], ['pDeath', 'Evolution', 'Death share', 0, 0.4, 0.01, 0.15],
   ['pAnti', 'Evolution', 'Anti-rule share', 0, 0.4, 0.01, 0.15], ['reweigh', 'Evolution', 'Reweigh spread', 0, 3, 0.01, 0.9], ['leap', 'Evolution', 'Leap strength', -4, 6, 0.01, 2.3], ['archiveS', 'Evolution', 'Memory threshold', 0, 1.5, 0.01, 0.35],
@@ -186,18 +186,18 @@ function system(att, nat, c0, G, P, L, s0) {
   const U = Array.from({ length: HIST }, () => new Float64Array(D)); let hd = 0, t = 0;
   const cnt = new Float64Array(D); for (const r of G) cnt[r.n % D]++;
   const fns = G.map(r => L[r.op]);
-  const ghosts = []; BASE_KEYS.forEach((op, i) => { let gs = 0; const g = P['g_' + op]; if (g !== 1) gs += 0.6 * (g - 1); const sk = SHAPE[op]; if (sk && P[sk] !== DEF[sk]) gs += 0.6 * (P[sk] - DEF[sk]) / SPAN[sk]; if (gs !== 0) ghosts.push({ op, fn: L[op], gs, n: i % 6, a: (i + 1) % 6, b: (i + 2) % 6, c: (i + 4) % 6 }); });
+  const ghosts = []; BASE_KEYS.forEach((op, i) => { let gs = 0; const g = P['g_' + op]; if (g !== 1) gs += 0.6 * (g - 1); const sk = SHAPE[op]; if (sk && P[sk] !== DEF[sk]) gs += 1.2 * (P[sk] - DEF[sk]) / SPAN[sk]; if (gs !== 0) ghosts.push({ op, fn: L[op], gs, n: i % 6, a: (i + 1) % 6, b: (i + 2) % 6, c: (i + 4) % 6 }); });
   const step6 = (uN) => { const h5 = U[(hd - 5 + HIST) % HIST], h13 = U[(hd - 13 + HIST) % HIST]; return D === 3 ? [uN[0], uN[1], uN[2], h5[0], h5[1], h5[2]] : [uN[0], uN[1], h5[0], h5[1], h13[0], h13[1]]; };
   const opv = (fn, op, X, a, b, cc, dl) => op === 'echo' ? (X[b] > 0 ? U[(hd - dl + HIST) % HIST][a % D] : -U[(hd - dl + HIST) % HIST][cc % D]) : fn(X[a], X[b], X[cc]);
-  function M(u, uN) { const m = new Float64Array(D), odd = t % 2 === 1, mid = (D - 1) / 2;
+  function M(u, uN) { const m = new Float64Array(D), odd = t % 2 === 1, mid = (D - 1) / 2, vs = att.type === 'flow' ? 0.3 / (att.dt * speed) : 1;
     for (let i = 0; i < D; i++) { let v = 0, x = uN[i];
-      if (P.rhoMul !== 1) v += 0.5 * d('rhoMul') * (u[i] - x); if (P.scaleExp !== 0.5) v += 0.5 * d('scaleExp') * x * Math.abs(x);
+      if (P.rhoMul !== 1) v += 0.5 * d('rhoMul') * (u[i] - x) * vs; if (P.scaleExp !== 0.5) v += 0.5 * d('scaleExp') * x * Math.abs(x);
       if (P.foldGain !== 1) v += 0.3 * d('foldGain') * sinP(Math.PI * x); if (P.foldAmp !== 2) v += 0.3 * d('foldAmp') * (sinP(HALF_PI * x) - x);
-      if (P.foldSkew !== 0) { const q = sinP(Math.PI * x); v += 0.25 * d('foldSkew') * (q * q - 0.5); } if (P.rhoTilt !== 0) v += 0.5 * d('rhoTilt') * (u[i] - x) * (i - mid) / Math.max(1, mid);
+      if (P.foldSkew !== 0) { const q = sinP(Math.PI * x); v += 0.25 * d('foldSkew') * (q * q - 0.5); } if (P.rhoTilt !== 0) v += 0.5 * d('rhoTilt') * (u[i] - x) * vs * (i - mid) / Math.max(1, mid);
       if (P.antiGain !== 1) v -= 0.2 * d('antiGain') * x; if (P.delayMul !== 1) v += 0.3 * d('delayMul') * (U[(hd - 8 + HIST) % HIST][i] - x);
       if (P.ringK !== 0) v += 0.3 * d('ringK') * (uN[(i + 1) % D] - uN[(i + D - 1) % D] + (D === 2 ? (i ? -uN[0] : uN[1]) : 0));
       if (P.cubic !== 0) v -= 0.3 * d('cubic') * x * x * x; if (P.memK !== 0) v += 0.3 * d('memK') * U[(hd - 2 + HIST) % HIST][i];
-      if (P.parity !== 0 && odd) v += 2.0 * d('parity') * (u[i] - x); if (P.drift !== 0) v += 0.3 * d('drift') * sinP(0.002 * t * (i + 1)); if (P.bias !== 0) v += 0.2 * d('bias') * (i - mid + (D === 2 ? 0 : 0));
+      if (P.parity !== 0 && odd) v += 2.0 * d('parity') * (u[i] - x) * vs; if (P.drift !== 0) v += 0.3 * d('drift') * sinP(0.002 * t * (i + 1)); if (P.bias !== 0) v += 0.2 * d('bias') * (i - mid + (D === 2 ? 0 : 0));
       m[i] = v; }
     if (ghosts.length || G.length) { const X = step6(uN);
       for (const g of ghosts) m[g.n % D] += clamp(0.3 * g.gs * opv(g.fn, g.op, X, g.a, g.b, g.c, 8), -2, 2);
@@ -208,13 +208,17 @@ function system(att, nat, c0, G, P, L, s0) {
   if (att.type === 'omef') { const raw = { ...att.raw }; macros.forEach((mm, i) => raw[mm[0]] = c[i]);
     omef = makeOmefStepper(raw, mods ? (ox, oy) => { const u = [(ox - ctr[0]) / R, (oy - ctr[1]) / R], m = M(lastU, u); return [ox + 3 * R * m[0], oy + 3 * R * m[1]]; } : null); s = [0, 0]; }
   else s = (s0 || att.init).slice();
-  let lastU = norm(s), speed = 1;
+  let lastU = norm(s), speed = 1, stall = 0; const ring = new Float64Array(512);
   if (att.type === 'flow') { let acc = 0; for (let k = 0; k < 50; k++) { const v = att.f(s, c); acc += Math.sqrt(v.reduce((a, b) => a + b * b, 0)) / R; } speed = acc / 50; }
   const obj = { s, D, step() { let u = lastU;
       if (omef) { const q = omef(); obj.s = s = [q[0], q[1]]; }
       else { let sN = rawStep(att, s, c);
         if (mods) { const m = M(u, norm(sN)), k = att.type === 'flow' ? att.dt * speed : 1; sN = sN.map((v, i) => v + k * R * m[i]); }
         if (!sN.every(Number.isFinite) || sN.some((v, i) => Math.abs((v - ctr[i]) / R) > 60)) sN = att.init.slice();   // rescue: restart from the attractor's own initial point
+        let mv = 0; for (let i = 0; i < D; i++) mv += Math.abs(sN[i] - s[i]) / R; stall = mv < 1e-6 ? stall + 1 : 0;
+        if (mods) { ring[t & 511] = Math.round((sN[0] - ctr[0]) / R * 2000) * 100003 + Math.round((sN[1] - ctr[1]) / R * 2000);
+          if ((t & 511) === 511) { const seen = new Set(ring); if (seen.size <= 48) stall = 301; } }
+        if (stall > 300) { sN = sN.map((v, i) => v + R * 0.35 * sinP(1.7 * t + 2.3 * i + 0.5)); stall = 0; }   // keep-alive: a resting point or short repeating cycle gets a small deterministic kick
         obj.s = s = sN; }
       lastU = norm(s); U[hd].set(lastU); hd = (hd + 1) % HIST; t++; return lastU; } };
   return obj;
@@ -320,12 +324,12 @@ return { ATTRACTORS, PARAMS, DEF, makeMachine, makePicture };
 <script>(function(){'use strict';
 const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d');let W=cv.width,Hh=cv.height;
 const MACHINE=[['speed','Machine','Evolution speed',0,10,0.5,0],['ppf','Machine','Points per frame',2000,60000,1000,16000],['trail','Machine','Trail',0.8,1,0.005,0.97],['ink','Machine','Ink',1,100,1,55],['seed','Machine','Seed',1,9999,1,1],['autoseed','Machine','Next attractor every (min)',0,60,1,0]];
-const COLOR=[['vibrancy','Color','Vibrancy',0,1,0.01,1],['hue','Color','Palette shift',0,1,0.01,0],['spread','Color','Palette spread',0.2,3,0.01,1],['blend','Color','Color memory',0,0.98,0.01,0.5]];
+const COLOR=[['vibrancy','Color','Vibrancy',0,1,0.01,1],['hue','Color','Palette shift',0,0.95,0.01,0],['spread','Color','Palette spread',0.2,3,0.01,1],['blend','Color','Color memory',0,0.98,0.01,0.5]];
 const CHOICES={mode:{label:'Color mode',opts:['Mono','Density','Flame'],v:'Flame'},palette:{label:'Palette',opts:['Inferno','Magma','Viridis','Plasma','Fire','Ice','Twilight','Sunset'],v:'Inferno'},source:{label:'Flame color from',opts:['Speed','Depth','Curvature'],v:'Speed'}};
 const ALL=MACHINE.concat(COLOR,CORE.PARAMS),DEF0=Object.fromEntries(ALL.map(d=>[d[0],d[6]]));
 const P={...CORE.DEF};
-const NOTES={Color:'',Machine:'Evolution speed 0 keeps the attractor exactly as published.',Step:'Bend the attractor\'s own motion.',Operators:'Push operators into the attractor\'s coordinates.',Picture:'How the attractor is viewed.',Evolution:'Only acts when evolution speed is above 0.',
- 'Meta formula':'Only acts when evolution speed is above 0.',Rendering:'Tone and color only.'};
+const NOTES={Color:'',Machine:'Evolution speed 0 keeps the attractor exactly as published.',Step:'Bend the attractor\'s own motion.',Operators:'Push operators into the attractor\'s coordinates.',Picture:'How the attractor is viewed.',Evolution:'Moving one replays the evolution from the seed and shows round 80. Raise evolution speed to keep it going.',
+ 'Meta formula':'Moving one replays the evolution from the seed and shows round 80.',Rendering:'Tone and color only.'};
 const groupsEl=$('groups'),groupDiv={};
 const colorBox=$('colorBox');for(const [key,c] of Object.entries(CHOICES)){const w=document.createElement('div');w.className='chiprow';w.innerHTML=`<div class="lab">${c.label}</div><div class="chips" id="ch_${key}"></div>`;colorBox.appendChild(w);const box=w.querySelector('.chips');c.opts.forEach(o=>{const b=document.createElement('button');b.type='button';b.textContent=o;b.onclick=()=>{c.v=o;markChips();if(key==='palette')buildLUT();clearAcc();};box.appendChild(b);});}
 groupDiv.Color=colorBox;
@@ -363,11 +367,13 @@ function markPick(){[...picker.children].forEach((b,i)=>b.classList.toggle('on',
 function start(){mach=CORE.makeMachine(attIdx,val('seed'),P);pic=CORE.makePicture(mach.att,P);rounds=0;clearAcc();view=null;lastEntry=null;live=null;rebuild(false);reframe();view=target.slice();markPick();}
 function evolveOnce(){const en=mach.epoch();rounds++;lastEntry=en;if(en.accept||en.flip){rebuild(false);if(en.view)target=en.view.slice();else reframe();}}
 const GROUP_OF=Object.fromEntries(ALL.map(d=>[d[0],d[1]]));
-function onParam(k){label(k);const g=GROUP_OF[k];if(g==='Color'||k==='speedColor'||k==='splat'||k==='zoom'){clearAcc();return;}if(g==='Machine'||g==='Rendering')return;P[k]=val(k);
- if(g==='Step'||g==='Operators'){rebuild(true);}
+let ff=0;function evoMoved(){return ALL.some(a=>(a[1]==='Evolution'||a[1]==='Meta formula')&&Math.abs(val(a[0])-a[6])>1e-12);}
+function onParam(k){label(k);const g=GROUP_OF[k];if(g==='Evolution'||g==='Meta formula'){P[k]=val(k);start();ff=evoMoved()?80:0;return;}if(g==='Color'||k==='speedColor'||k==='splat'||k==='zoom'){clearAcc();return;}if(g==='Machine'||g==='Rendering')return;P[k]=val(k);
+ if(g==='Step'||g==='Operators'){rebuild(false);reframe();clearAcc();}
  else if(g==='Picture'){pic=CORE.makePicture(mach.att,P);reframe();clearAcc();}}
 let px=0,py=0,pdx=0,pdy=0,ci=0.5,vm=0.5,vv=0.02;
 function frame(t){requestAnimationFrame(frame);if(!mach)return;const dt=Math.min(.25,(t-lastT)/1000||0);lastT=t;
+ if(ff>0){const t0=performance.now();while(ff>0&&performance.now()-t0<14){evolveOnce();ff--;}}
  if(!paused){const sp=val('speed');if(sp>0){acc+=dt*sp;let n=0;while(acc>=1&&n<4){acc-=1;evolveOnce();n++;}if(n===4)acc=0;}
   let tg=target;if(cornerOn&&lastEntry&&lastEntry.corner&&lastEntry.corner.v>0){const w=(target[1]-target[0])/8,h=(target[3]-target[2])/8;tg=[lastEntry.corner.cx-w,lastEntry.corner.cx+w,lastEntry.corner.cy-h,lastEntry.corner.cy+h];}
   const k=Math.min(1,dt*2.5);for(let i=0;i<4;i++)view[i]+=(tg[i]-view[i])*k;
@@ -386,7 +392,7 @@ function frame(t){requestAnimationFrame(frame);if(!mach)return;const dt=Math.min
   let r=v,g=v,b=v;
   if(H[i]&&mode==='Density'){let x=(Math.min(1,v)*spr2+hs2)%1;if(x<0)x+=1;const li=Math.min(255,(x*255)|0)*3;const L=v>0?1:0;r=LUT[li]*L;g=LUT[li+1]*L;b=LUT[li+2]*L;if(vib<1){r=r*vib+v*(1-vib);g=g*vib+v*(1-vib);b=b*vib+v*(1-vib);}}
   else if(H[i]&&mode==='Flame'){const ar_=CR[i]/H[i],ag_=CG[i]/H[i],ab_=CB[i]/H[i],lum=0.3*ar_+0.59*ag_+0.11*ab_;const k2=v/Math.max(0.35,Math.max(ar_,ag_,ab_));r=v*(1-vib)+k2*(vib*ar_+(1-vib)*lum)*vib;g=v*(1-vib)+k2*(vib*ag_+(1-vib)*lum)*vib;b=v*(1-vib)+k2*(vib*ab_+(1-vib)*lum)*vib;}
-  else if(scol>0&&H[i]){const f=Math.min(1,HS[i]/H[i]*3);const cr=0.24+0.76*f,cg=0.55-0.0*f,cb=1-0.84*f;r=v*((1-scol)+scol*cr*1.3);g=v*((1-scol)+scol*cg*1.3);b=v*((1-scol)+scol*cb*1.3);}
+  if(scol>0&&H[i]){const f=Math.min(1,HS[i]/H[i]*3);const cr=0.24+0.76*f,cg=0.55-0.0*f,cb=1-0.84*f;r=r*((1-scol)+scol*cr*1.3);g=g*((1-scol)+scol*cg*1.3);b=b*((1-scol)+scol*cb*1.3);}
   if(neg>0){r=r*(1-neg)+(1-r)*neg;g=g*(1-neg)+(1-g)*neg;b=b*(1-neg)+(1-b)*neg;}
   d[o]=Math.min(255,r*255);d[o+1]=Math.min(255,g*255);d[o+2]=Math.min(255,b*255);}
  ctx.putImageData(img,0,0);
@@ -419,6 +425,6 @@ if(qs.has('a')){const k=CORE.ATTRACTORS.findIndex(a=>a.id===qs.get('a'));if(k>=0
 if(qs.has('seed')){const s=Math.max(1,Math.min(9999,parseInt(qs.get('seed'))||1));$('seed').value=s;label('seed');}
 $('guiToggle').onclick=()=>{const g=$('gui');g.classList.toggle('closed');$('guiToggle').textContent=g.classList.contains('closed')?'Open controls':'Close controls';clearAcc();};
 markChips();
-window.SEF={CHOICES,markChips,buildLUT,clearAcc,evolveOnce,P,enter,leave,size:()=>[W,Hh],state:()=>({rounds,lastEntry,att:attIdx,view,target,mach}),H,pick:i=>{attIdx=i;start();}};
+window.SEF={ffLeft:()=>ff,CHOICES,markChips,buildLUT,clearAcc,evolveOnce,P,enter,leave,size:()=>[W,Hh],state:()=>({rounds,lastEntry,att:attIdx,view,target,mach}),H,pick:i=>{attIdx=i;start();}};
 start();if(saverURL){enter(true);}requestAnimationFrame(frame);
 })();</script></body></html>
