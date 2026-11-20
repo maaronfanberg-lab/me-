@@ -1,0 +1,384 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Attractors</title><style>
+:root{--bg:#0d0d0d;--panel:#1c1c1c;--text:#eee;--muted:#aaa;--line:#333;--accent:#109b91}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+.app{max-width:980px;margin:auto;padding-bottom:40px}header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 14px}h1{margin:0;font-size:24px;letter-spacing:.03em}.sub{font-size:12px;color:var(--muted);margin-top:4px}
+.stage{position:relative;background:#000;border-bottom:1px solid var(--line);overflow:hidden}canvas{display:block;width:100%;height:auto;background:#000}
+.pick{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.pick button{padding:9px 4px;font-size:13px;background:#555}.pick button.on{background:var(--accent)}@media(max-width:719px){.pick{grid-template-columns:repeat(3,1fr)}.pick button{font-size:12px}}
+.hud{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.7);color:#fff;border-radius:10px;padding:6px 9px;font:12px/1.35 Menlo,Consolas,monospace;pointer-events:none;white-space:pre-line;max-width:70%}
+section{padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel)}h2{margin:0 0 8px;font-size:19px}.hint{color:var(--muted);font-size:12px;line-height:1.4;margin:-2px 0 8px}
+.row{display:grid;grid-template-columns:120px 1fr 58px;gap:8px;align-items:center;margin:7px 0}.row label{color:var(--muted);font-size:13px}.value{background:#555;color:#fff;text-align:center;border-radius:7px;padding:5px 2px;font-size:12px;font-variant-numeric:tabular-nums}
+.row.moved label{color:#7fe3da}
+input[type=range]{width:100%;accent-color:var(--accent)}button{font:inherit;border-radius:9px;border:0;padding:10px;background:var(--accent);color:#fff;font-weight:700;width:100%}.secondary{background:#555}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.ctl{display:flex;align-items:center;gap:6px;min-width:0}.ctl .trk{flex:1;min-width:0;display:flex;align-items:center;min-height:36px;touch-action:pan-y}.ctl .trk input{touch-action:pan-y}.stepb{width:34px;min-width:34px;height:34px;padding:0;border-radius:8px;background:#555;color:#fff;font-size:18px;line-height:1;touch-action:manipulation}@media(pointer:coarse){.ctl .trk input{pointer-events:none}}
+details.group{border:1px solid var(--line);border-radius:12px;margin:9px 0;overflow:hidden}details.group summary{padding:11px 12px;font-weight:800;background:rgba(127,127,127,.08);cursor:pointer}details.group>div{padding:2px 10px 8px}details.group .gh{color:var(--muted);font-size:12px;line-height:1.4;margin:6px 0 2px}
+#rels{font:12px/1.6 Menlo,Consolas,monospace;color:var(--text);white-space:pre-wrap;word-break:break-word}#events{font:11px/1.5 Menlo,Consolas,monospace;color:var(--muted);white-space:pre-wrap;max-height:9em;overflow:auto}
+body.immersive{overflow:hidden}body.immersive .stage{position:fixed;inset:0;z-index:100;max-height:none;border:0}body.immersive .stage canvas{width:100vw;height:100vh;height:100dvh;max-height:none;object-fit:fill}
+body.immersive .hud{display:none;max-width:calc(100% - 200px)}body.immersive.showui .hud{display:block}.hud:empty{display:none!important}#exitfs{display:none;position:absolute;right:12px;top:12px;width:auto;padding:9px 14px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.35);z-index:5}
+body.immersive.showui #exitfs{display:block}body.immersive.nocursor,body.immersive.nocursor *{cursor:none!important}
+@media(max-width:719px){header{padding:8px 10px}h1{font-size:19px}.sub{display:none}.stage{position:sticky;top:0;z-index:20}.stage canvas{max-height:50svh;object-fit:contain}section{padding:10px 9px}.row{grid-template-columns:90px 1fr 48px;gap:5px}.row label{font-size:11px}.value{font-size:10px}.hud{font-size:10px}}
+</style></head><body><div class="app">
+<header><h1>ATTRACTORS</h1></header>
+<div class="stage"><canvas id="cv" width="800" height="800"></canvas><div class="hud" id="hud"></div><button id="exitfs" type="button">Exit full screen</button></div>
+<section><div id="picker" class="pick"></div></section>
+<section><div class="grid3"><button id="play">Pause</button><button id="restart" class="secondary">Restart</button><button id="corner" class="secondary">Corner: off</button></div><div class="grid3" style="margin-top:8px"><button id="newseed" class="secondary">New seed</button><button id="resetall" class="secondary">Reset controls</button><button id="save">Save PNG</button></div><div class="grid2" style="margin-top:8px"><button id="fullscreen">Full screen</button><button id="saver" class="secondary">Screensaver mode</button></div><div class="hint" style="margin:8px 0 0">Full screen: tap or move the mouse to show the exit button and readout. Screensaver mode also keeps the screen awake, hides the cursor and starts a fresh seed every few minutes.</div></section>
+<section><h2>Controls</h2><div id="groups"></div></section>
+</div>
+<script>
+const CORE=(function(){'use strict';
+function U(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function h(x, G, e) { let k = 2166136261 ^ e; const f = new Float64Array(1), w = new Uint32Array(f.buffer); for (const v of x) { f[0] = v; k = Math.imul(k ^ w[0], 16777619); k = Math.imul(k ^ w[1], 16777619); } for (const r of G) { f[0] = r.w; k = Math.imul(k ^ w[0] ^ r.s, 16777619); } return k >>> 0; }
+// portable math: only +,-,*,/ and sqrt (exactly rounded everywhere), so every browser evolves identically
+const TWO_PI_HI = 6.283185307179586, TWO_PI_LO = 2.4492935982947064e-16, HALF_PI = 1.5707963267948966;
+function sinP(x) { if (!Number.isFinite(x)) return NaN; const k = Math.round(x / TWO_PI_HI); let r = (x - k * TWO_PI_HI) - k * TWO_PI_LO;
+  if (r > HALF_PI) r = Math.PI - r; else if (r < -HALF_PI) r = -Math.PI - r;
+  const r2 = r * r; return r * (1 + r2 * (-1 / 6 + r2 * (1 / 120 + r2 * (-1 / 5040 + r2 * (1 / 362880 + r2 * (-1 / 39916800 + r2 * (1 / 6227020800 + r2 * (-1 / 1307674368000 + r2 * (1 / 355687428096000))))))))); }
+const cosP = x => sinP(x + HALF_PI);
+function logP(x) { if (!(x > 0)) return NaN; let e = 0; while (x >= 2) { x /= 2; e++; } while (x < 1) { x *= 2; e--; }
+  const s = (x - 1) / (x + 1), s2 = s * s; let t = s, sum = 0; for (let k = 1; k < 40; k += 2) { sum += t / k; t *= s2; } return 2 * sum + e * 0.6931471805599453; }
+function expP(x) { if (!Number.isFinite(x)) return x > 0 ? Infinity : 0; if (x > 700) return Infinity; if (x < -700) return 0; const k = Math.round(x / 0.6931471805599453), r = x - k * 0.6931471805599453; let t = 1, s = 1; for (let i = 1; i < 25; i++) { t *= r / i; s += t; } let p = s; if (k > 0) for (let i = 0; i < k; i++) p *= 2; else for (let i = 0; i < -k; i++) p /= 2; return p; }
+const powP = (b, e) => b === 0 ? 0 : expP(e * logP(b));
+function atanP(x) { const neg = x < 0; if (neg) x = -x; const inv = x > 1; if (inv) x = 1 / x; const red = x > 0.2679491924311227; if (red) x = (x * 1.7320508075688772 - 1) / (x + 1.7320508075688772);
+  const x2 = x * x; let t = x, s = 0; for (let k = 1; k < 36; k += 2) { s += t / k * ((k >> 1) % 2 ? -1 : 1); t *= x2; } if (red) s += 0.5235987755982988; if (inv) s = HALF_PI - s; return neg ? -s : s; }
+function atan2P(y, x) { if (x > 0) return atanP(y / x); if (x < 0) return atanP(y / x) + (y >= 0 ? Math.PI : -Math.PI); return y > 0 ? HALF_PI : y < 0 ? -HALF_PI : 0; }
+const PARAMS = [
+  // A. the step itself
+  ['rhoMul', 'Step', 'Inertia', 0, 2.5, 0.01, 1], ['scaleExp', 'Step', 'Crowd scaling', 0, 1.5, 0.01, 0.5], ['foldGain', 'Step', 'Fold gain', 0.2, 3, 0.01, 1], ['foldAmp', 'Step', 'Fold height', 0.5, 4, 0.01, 2],
+  ['foldSkew', 'Step', 'Fold skew', -1.5, 1.5, 0.01, 0], ['rhoTilt', 'Step', 'Inertia tilt', -1, 1, 0.01, 0], ['antiGain', 'Step', 'Anti-rule strength', 0, 3, 0.01, 1], ['wGain', 'Step', 'Relationship strength', 0, 3, 0.01, 1],
+  ['delayMul', 'Step', 'Echo stretch', 0.1, 4, 0.01, 1], ['ringK', 'Step', 'Ring pull', -1.5, 1.5, 0.01, 0], ['cubic', 'Step', 'Cubic restraint', -0.5, 1.5, 0.01, 0], ['memK', 'Step', 'Last-step memory', -1, 1, 0.01, 0],
+  ['parity', 'Step', 'Odd-step damping', -1, 1, 0.01, 0], ['drift', 'Step', 'Slow drift', -1, 1, 0.01, 0], ['bias', 'Step', 'Bias field', -1, 1, 0.01, 0],
+  // B. the operators
+  ['g_hinge', 'Operators', 'Hinge gain', -2, 3, 0.01, 1], ['g_quot', 'Operators', 'Quot gain', -2, 3, 0.01, 1], ['g_mirror', 'Operators', 'Mirror gain', -2, 3, 0.01, 1], ['g_wrap', 'Operators', 'Wrap gain', -2, 3, 0.01, 1],
+  ['g_twist', 'Operators', 'Twist gain', -2, 3, 0.01, 1], ['g_pinch', 'Operators', 'Pinch gain', -2, 3, 0.01, 1], ['g_join', 'Operators', 'Join gain', -2, 3, 0.01, 1], ['g_swirl', 'Operators', 'Swirl gain', -2, 3, 0.01, 1],
+  ['g_bloom', 'Operators', 'Bloom gain', -2, 3, 0.01, 1], ['g_lens', 'Operators', 'Lens gain', -2, 3, 0.01, 1], ['g_echo', 'Operators', 'Echo gain', -2, 3, 0.01, 1],
+  ['wrapK', 'Operators', 'Wrap frequency', 0.2, 6, 0.01, 1.7], ['swirlK', 'Operators', 'Swirl frequency', 0.1, 4, 0.01, 1], ['bloomW', 'Operators', 'Bloom width', 0.1, 4, 0.01, 1], ['lensC', 'Operators', 'Lens offset', -2, 3, 0.01, 1],
+  ['pinchW', 'Operators', 'Pinch waist', 0, 6, 0.01, 1], ['twistR', 'Operators', 'Twist ratio', -2, 5, 0.01, 2], ['quotS', 'Operators', 'Quot softness', 0, 5, 0.01, 1], ['joinC', 'Operators', 'Join reach', -1, 4, 0.01, 1],
+  // C. the picture
+  ['theta0', 'Picture', 'Axis turn', -3.14, 3.14, 0.01, 0.3], ['thetaMul', 'Picture', 'Axis spread', 0.1, 3, 0.01, 1], ['oddStretch', 'Picture', 'Odd-axis stretch', -1, 2, 0.01, 0.15], ['aspect', 'Picture', 'Aspect', 0.2, 3, 0.01, 1],
+  ['rot', 'Picture', 'Rotation', -3.14, 3.14, 0.01, 0], ['shear', 'Picture', 'Shear', -2, 2, 0.01, 0], ['radWarp', 'Picture', 'Radial warp', -1, 2, 0.01, 0], ['polarMix', 'Picture', 'Polar blend', 0, 1, 0.01, 0],
+  ['projTilt', 'Picture', 'Axis weighting', -1, 1, 0.01, 0], ['kaleido', 'Picture', 'Kaleidoscope folds', 1, 12, 1, 1], ['picSquash', 'Picture', 'Edge squash', 0, 4, 0.01, 0], ['invert', 'Picture', 'Inversion', 0, 1, 0.01, 0],
+  // D. how it judges and changes itself
+  ['T', 'Evolution', 'Look length', 500, 8000, 100, 2500], ['acceptTol', 'Evolution', 'Acceptance tolerance', 0.3, 1.5, 0.01, 0.9], ['barDecay', 'Evolution', 'Standard relaxing', 0.5, 1, 0.005, 0.95], ['contrary', 'Evolution', 'Contrariness', 0, 1, 0.01, 0],
+  ['boredS', 'Evolution', 'Boredom level', 0.2, 1.5, 0.01, 0.2], ['restless', 'Evolution', 'Restlessness', 0, 0.5, 0.005, 0], ['turbulence', 'Evolution', 'Turbulence', 0, 0.5, 0.005, 0], ['erosion', 'Evolution', 'Erosion', 0, 0.2, 0.002, 0],
+  ['zeroN', 'Evolution', 'Dead patience', 1, 20, 1, 3], ['cap', 'Evolution', 'Relationship cap', 3, 24, 1, 12], ['pBirth', 'Evolution', 'Birth share', 0, 0.6, 0.01, 0.25], ['pDeath', 'Evolution', 'Death share', 0, 0.4, 0.01, 0.15],
+  ['pAnti', 'Evolution', 'Anti-rule share', 0, 0.4, 0.01, 0.15], ['reweigh', 'Evolution', 'Reweigh spread', 0, 3, 0.01, 0.9], ['leap', 'Evolution', 'Leap strength', -4, 6, 0.01, 2.3], ['archiveS', 'Evolution', 'Memory threshold', 0, 1.5, 0.01, 0.35],
+  ['grid', 'Evolution', 'Shape grid', 4, 32, 1, 12],
+  // E. the slime-mold meta formula
+  ['eta', 'Meta formula', 'Tube growth', 0.01, 1, 0.01, 0.3], ['invent', 'Meta formula', 'Invention pressure', 0, 0.5, 0.005, 0], ['lenOp', 'Meta formula', 'Operator path length', 0.1, 5, 0.01, 1],
+  ['lenWire', 'Meta formula', 'Wiring path length', 0.1, 5, 0.01, 1], ['advice', 'Meta formula', 'Advice weight', 0, 1, 0.01, 0], ['foodK', 'Meta formula', 'Appetite', 0.2, 4, 0.01, 1],
+  // F. rendering (page only)
+  ['gamma', 'Rendering', 'Gamma', 0.2, 2.5, 0.01, 0.85], ['floor', 'Rendering', 'Black level', 0, 0.6, 0.01, 0], ['splat', 'Rendering', 'Dot size', 1, 4, 1, 1], ['negMix', 'Rendering', 'Negative', 0, 1, 0.01, 0],
+  ['speedColor', 'Rendering', 'Color by speed', 0, 1, 0.01, 0], ['zoom', 'Rendering', 'Zoom', 0.3, 4, 0.01, 1]
+];
+const W = v => (((v + 1) % 2) + 2) % 2 - 1;
+function fold(v, P) { const s = sinP(Math.PI * (P.foldGain === 1 ? v : v * P.foldGain) / 4); let o = P.foldAmp === 2 ? 2 * s : P.foldAmp * s; if (P.foldSkew !== 0) o += P.foldSkew * (s * s - 0.5); return o; }
+// §2 operator library — closures read P live
+function makeLib(P) {
+  return {
+    hinge: (a, b, c) => a * Math.abs(b) - b * Math.abs(a),
+    quot: (a, b, c) => (a - b) / (1 + P.quotS * Math.abs(a) + P.quotS * Math.abs(c)),
+    mirror: (a, b, c) => a * Math.sign(b - c),
+    wrap: (a, b, c) => W(P.wrapK * (a + b)),
+    twist: (a, b, c) => Math.max(a, b) - P.twistR * Math.min(a, c),
+    pinch: (a, b, c) => a * b / (1 + P.pinchW * c * c),
+    join: (a, b, c) => -Math.sign(a * b) * 0.5 * (Math.abs(a) + Math.abs(b)) * (1 + P.joinC * Math.abs(c)),
+    swirl: (a, b, c) => a * cosP(Math.PI * P.swirlK * b) - c * sinP(Math.PI * P.swirlK * a),
+    bloom: (a, b, c) => (a + b * c) / (1 + (P.bloomW === 1 ? (a - c) * (a - c) : (a - c) * (a - c) / (P.bloomW * P.bloomW))),
+    lens: (a, b, c) => Math.sign(a) * Math.sqrt(Math.abs(a * b) + P.lensC * c * P.lensC * c) - P.lensC * c,
+    echo: 'echo'
+  };
+}
+// OMEF-A engine, copied from omef-exclusive.html (portable math substituted)
+const macros=[['a','Pair coupling',-3,3,.01,1.15],['b','Triad coupling',-3,3,.01,1.45],['c','Market memory',-3,3,.01,.72],['d','Shadow feedback',-3,3,.01,1.10],['e','Regime fluidity',-3,3,.01,1.20],['f','Golden cycles',-3,3,.01,.85],['g','Fibonacci memory',-3,3,.01,1.10],['h','Spectral edge',-3,3,.01,.65],['i','Projection mix',-3,3,.01,.35]];
+const feedbackDefs=[['fbPair','Feedback pair',0,.8,.01,.18],['fbRegime','Feedback regime',0,.6,.01,.12],['fbProjection','Feedback projection',0,.8,.01,.22],['fbLag','Feedback lag',1,32,1,8],['fbMix','Feedback mix',0,1,.01,.55],['fbDamping','Feedback damping',.70,.995,.005,.92]];
+const groups=[['Pair field',[['pairFreqA','Pair sin freq',.2,3,.01,1.70],['pairFreqB','Pair cos freq',.2,3,.01,1.31],['pairCosAmp','Pair cos amp',0,1.5,.01,.72],['pairPhaseA','Pair phase A',0,1,.01,.37],['pairPhaseB','Pair phase B',0,1,.01,.23]]],['Triad geometry',[['triScale','Triad scale',0,2,.01,1.0],['triCross','Triad cross',0,2,.01,1.0]]],['Market delays',[['marketW1','Lag A − Lag B',0,2,.01,1.0],['marketW2','Lag C − 34',0,1.5,.01,.55],['lagA','Delay A',1,21,1,13],['lagB','Delay B',2,34,1,21],['lagC','Delay C',1,13,1,8]]],['Shadow memory',[['shadowSelf','Shadow self',0,2,.01,1.0],['shadowCross','Shadow cross',0,1.5,.01,.65],['shadowLag','Shadow lag',1,34,1,13]]],['Regime field',[['r0u8','R0 U8',0,2,.01,1.15],['r0u6','R0 U6',-1.5,0,.01,-.52],['r1u6','R1 U6',0,2,.01,.92],['r1u4sq','R1 U4²',0,1,.01,.28],['r2u2','R2 U2',-1.5,0,.01,-.88],['r2u7','R2 U7',0,1.5,.01,.58],['r3u8','R3 U8',-1.5,0,.01,-.95],['r3u0','R3 U0',-1.5,0,.01,-.42],['regimeForce','Regime force',0,.5,.005,.17]]],['Golden phases',[['phaseSpeed','Phase speed',.005,.09,.001,.029],['phaseRatio','Golden ratio',1.2,2.2,.001,1.618],['phaseMod1','Phase mod U0',0,.5,.01,.18],['phaseMod2','Phase mod U6',0,.5,.01,.16],['goldCos','Golden cos amp',0,1.5,.01,.72]]],['Fibonacci memory',[['fib1','Fib lag 1',0,.8,.01,.43],['fib3','Fib lag 3',0,.8,.01,.27],['fib8','Fib lag 8',0,.8,.01,.18],['fib13','Fib lag 13',0,.8,.01,.12],['fibSelf','Fib self subtract',0,2,.01,1.0]]],['Core retention',[['edgeBase','Retention base',.3,1.2,.005,.78],['edgeSpan','Retention span',0,.5,.005,.16],['squash','Tanh squash',.3,2,.01,1.0]]],['Projection A',[['xA0','xA U0-U3',0,2.5,.01,1.25],['xA7','xA U7-U2',0,2,.01,.85],['xAdelay','xA delay',0,1,.01,.35],['yA6','yA U6-U8',0,2.5,.01,1.18],['yA5','yA U5+U1',0,2,.01,.78],['yAdelay','yA delay',0,1,.01,.32]]],['Projection B',[['projReg','Regime projection',0,3,.01,2.05],['projCross','Cross product',0,2,.01,.88],['projPhase','Phase projection',0,1.5,.01,.55]]]];
+const allDefs=macros.concat(feedbackDefs,...groups.map(g=>g[1]));
+const defMap=Object.fromEntries(allDefs.map(d=>[d[0],d]));
+const discreteIds=new Set(['fbLag','lagA','lagB','lagC','shadowLag']);
+const LOG_STRENGTH=8;
+function logMap(raw){const q={...raw},denom=log1pP(LOG_STRENGTH);for(const d of allDefs){const [id,,min,max,step,def]=d;if(discreteIds.has(id)||step>=1||q[id]===undefined)continue;const v=+q[id];if(!Number.isFinite(v)||v===def)continue;if(v>def){const span=max-def;if(span<=0)continue;const t=clamp((v-def)/span,0,1);q[id]=def+span*log1pP(LOG_STRENGTH*t)/denom}else{const span=def-min;if(span<=0)continue;const t=clamp((def-v)/span,0,1);q[id]=def-span*log1pP(LOG_STRENGTH*t)/denom}}return q}
+function makeOmefStepper(raw,hook){const pp=logMap(raw),U=Float64Array.from([.11,-.07,.19,-.13,.08,.04,.15,-.09,.12,.03]),hist=Array.from({length:34},()=>Float64Array.from(U)),alpha=Float64Array.from([.36,.24,.21,.19]),OUT=64,outX=new Float64Array(OUT),outY=new Float64Array(OUT);let head=0,phase1=.2,phase2=1.1,outHead=0,smoothX=0,smoothY=0;const pair=.22+.18*tanhP(pp.a),tri=.09+.12*tanhP(pp.b),market=.04+.11*tanhP(pp.c),shadow=.03+.10*tanhP(pp.d),reg=.018+.06*(tanhP(pp.e)+1)/2,gold=.035+.095*(tanhP(pp.f)+1)/2,fib=.025+.10*(tanhP(pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(tanhP(pp.h)+1)/2,proj=(tanhP(pp.i)+1)/2;const H=(lag,i)=>{lag=Math.max(1,Math.min(34,Math.round(lag)));return hist[(head-lag+34)%34][i]};return function(){const lag=Math.max(1,Math.min(32,Math.round(pp.fbLag))),oi=(outHead-lag+OUT)%OUT,dx=outX[oi],dy=outY[oi];smoothX=pp.fbDamping*smoothX+(1-pp.fbDamping)*dx;smoothY=pp.fbDamping*smoothY+(1-pp.fbDamping)*dy;const fbx=pp.fbMix*dx+(1-pp.fbMix)*smoothX,fby=pp.fbMix*dy+(1-pp.fbMix)*smoothY,fb1=tanhP(fbx),fb2=tanhP(fby),fb3=tanhP(.7*fbx-.7*fby);phase1+=pp.phaseSpeed*(1+pp.phaseMod1*sinP(U[0]));phase2+=pp.phaseSpeed/pp.phaseRatio*(1+pp.phaseMod2*sinP(U[6]));let s0=pp.r0u8*U[8]+pp.r0u6*U[6]+pp.fbRegime*fb1,s1=pp.r1u6*U[6]+pp.r1u4sq*U[4]*U[4]+pp.fbRegime*fb2,s2=pp.r2u2*U[2]+pp.r2u7*U[7]+pp.fbRegime*fb3,s3=pp.r3u8*U[8]+pp.r3u0*U[0]-pp.fbRegime*(.6*fb1+.4*fb2),m=Math.max(s0,s1,s2,s3),v=[expP(s0-m),expP(s1-m),expP(s2-m),expP(s3-m)],sum=v[0]+v[1]+v[2]+v[3];for(let r=0;r<4;r++)alpha[r]=(1-reg)*alpha[r]+reg*v[r]/sum;const N=new Float64Array(10);for(let i=0;i<10;i++){const j=(i+3)%10,k=(i+7)%10,l=(i+5)%10;let pairTerm=sinP(U[j]*pp.pairFreqA+i*pp.pairPhaseA)-pp.pairCosAmp*cosP(U[k]*pp.pairFreqB-i*pp.pairPhaseB);pairTerm+=pp.fbPair*(fb1*sinP(U[j]+i*.17)+.6*fb2*cosP(U[k]-i*.11));const triTerm=pp.triScale*U[j]*U[k]-pp.triCross*U[l]*U[(i+1)%10],marketTerm=pp.marketW1*(H(pp.lagA,j)-H(pp.lagB,k))+pp.marketW2*(H(pp.lagC,i)-H(34,l)),shadowTerm=pp.shadowSelf*(U[i]-H(pp.shadowLag,i))-pp.shadowCross*(H(21,j)-H(34,k)),regimeTerm=(alpha[0]-alpha[3])*sinP(.7+i*.43)+(alpha[1]-alpha[2])*cosP(.3+i*.29),goldenTerm=sinP(phase1+i*.61)+pp.goldCos*cosP(phase2+i*.41),fibTerm=pp.fib1*H(1,i)+pp.fib3*H(3,j)+pp.fib8*H(8,k)+pp.fib13*H(13,l)-pp.fibSelf*U[i],rawN=edge*U[i]+pair*pairTerm+tri*triTerm+market*marketTerm+shadow*shadowTerm+pp.regimeForce*regimeTerm+gold*goldenTerm+fib*fibTerm;N[i]=tanhP(pp.squash*rawN)}hist[head].set(N);head=(head+1)%34;U.set(N);let xA=pp.xA0*(U[0]-U[3])+pp.xA7*(U[7]-U[2])+pp.xAdelay*(H(8,9)-H(21,4)),yA=pp.yA6*(U[6]-U[8])+pp.yA5*(U[5]+U[1])+pp.yAdelay*(H(13,0)-H(3,7)),xB=pp.projReg*(alpha[0]-alpha[3])+pp.projCross*(U[2]*U[7]-U[1]*U[8])+pp.projPhase*sinP(phase1),yB=pp.projReg*(alpha[1]-alpha[2])+pp.projCross*(U[0]*U[6]-U[3]*U[5])+pp.projPhase*sinP(phase2);xA+=pp.fbProjection*fb2;yA+=pp.fbProjection*fb1;xB+=pp.fbProjection*fb3;yB-=pp.fbProjection*fb2;let ox=xA*(1-proj)+xB*proj,oy=yA*(1-proj)+yB*proj;if(hook){const q=hook(ox,oy,U);ox=q[0];oy=q[1];}outX[outHead]=clamp(ox,-12,12);outY[outHead]=clamp(oy,-12,12);outHead=(outHead+1)%OUT;return[ox,oy]}}
+// ===== Attractor machine core: classic attractors + OMEF, every control acting on the chosen attractor =====
+// (portable math, PARAMS, operators and OMEF engine are prepended by the build)
+const tanhP = x => { if (x > 20) return 1; if (x < -20) return -1; const e = expP(2 * x); return (e - 1) / (e + 1); };
+const log1pP = x => logP(1 + x);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const DEF = Object.fromEntries(PARAMS.map(p => [p[0], p[6]]));
+const SPAN = Object.fromEntries(PARAMS.map(p => [p[0], p[4] - p[3]]));
+const BASE_KEYS = ['hinge', 'quot', 'mirror', 'wrap', 'twist', 'pinch', 'join', 'swirl', 'bloom', 'lens', 'echo'];
+const HIST = 64, DELAYS = [1, 2, 3, 5, 8, 13, 21, 34, 55];
+const OMEF_DEF = Object.fromEntries(allDefs.map(d => [d[0], d[5]]));
+// ---------- the attractor library (standard published forms and coefficients) ----------
+const ATTRACTORS = [
+  { id: 'lorenz', name: 'Lorenz', type: 'flow', D: 3, c: [10, 28, 8 / 3], dt: 0.005, init: [1, 1, 1], ax: [0, 2],
+    f: (s, c) => [c[0] * (s[1] - s[0]), s[0] * (c[1] - s[2]) - s[1], s[0] * s[1] - c[2] * s[2]] },
+  { id: 'rossler', name: 'Rössler', type: 'flow', D: 3, c: [0.2, 0.2, 5.7], dt: 0.02, init: [1, 1, 0], ax: [0, 1],
+    f: (s, c) => [-s[1] - s[2], s[0] + c[0] * s[1], c[1] + s[2] * (s[0] - c[2])] },
+  { id: 'thomas', name: 'Thomas', type: 'flow', D: 3, c: [0.208186], dt: 0.05, init: [0.1, 0, 0], ax: [0, 1],
+    f: (s, c) => [sinP(s[1]) - c[0] * s[0], sinP(s[2]) - c[0] * s[1], sinP(s[0]) - c[0] * s[2]] },
+  { id: 'aizawa', name: 'Aizawa', type: 'flow', D: 3, c: [0.95, 0.7, 0.6, 3.5, 0.25, 0.1], dt: 0.01, init: [0.1, 0, 0], ax: [0, 2],
+    f: (s, c) => [(s[2] - c[1]) * s[0] - c[3] * s[1], c[3] * s[0] + (s[2] - c[1]) * s[1], c[2] + c[0] * s[2] - s[2] * s[2] * s[2] / 3 - (s[0] * s[0] + s[1] * s[1]) * (1 + c[4] * s[2]) + c[5] * s[2] * s[0] * s[0] * s[0]] },
+  { id: 'halvorsen', name: 'Halvorsen', type: 'flow', D: 3, c: [1.89], dt: 0.005, init: [-1.48, -1.51, 2.04], ax: [0, 1],
+    f: (s, c) => [-c[0] * s[0] - 4 * s[1] - 4 * s[2] - s[1] * s[1], -c[0] * s[1] - 4 * s[2] - 4 * s[0] - s[2] * s[2], -c[0] * s[2] - 4 * s[0] - 4 * s[1] - s[0] * s[0]] },
+  { id: 'chen', name: 'Chen', type: 'flow', D: 3, c: [35, 3, 28], dt: 0.002, init: [-10, 0, 37], ax: [0, 2],
+    f: (s, c) => [c[0] * (s[1] - s[0]), (c[2] - c[0]) * s[0] - s[0] * s[2] + c[2] * s[1], s[0] * s[1] - c[1] * s[2]] },
+  { id: 'dadras', name: 'Dadras', type: 'flow', D: 3, c: [3, 2.7, 1.7, 2, 9], dt: 0.005, init: [1, 1, 1], ax: [0, 1],
+    f: (s, c) => [s[1] - c[0] * s[0] + c[1] * s[1] * s[2], c[2] * s[1] - s[0] * s[2] + s[2], c[3] * s[0] * s[1] - c[4] * s[2]] },
+  { id: 'dejong', name: 'de Jong', type: 'map', D: 2, c: [-2.24, 0.43, -0.65, -2.43], init: [0.1, 0.1],
+    f: (s, c) => [sinP(c[0] * s[1]) - cosP(c[1] * s[0]), sinP(c[2] * s[0]) - cosP(c[3] * s[1])] },
+  { id: 'clifford', name: 'Clifford', type: 'map', D: 2, c: [-1.4, 1.6, 1.0, 0.7], init: [0.1, 0.1],
+    f: (s, c) => [sinP(c[0] * s[1]) + c[2] * cosP(c[0] * s[0]), sinP(c[1] * s[0]) + c[3] * cosP(c[1] * s[1])] },
+  { id: 'henon', name: 'Hénon', type: 'map', D: 2, c: [1.4, 0.3], init: [0.1, 0],
+    f: (s, c) => [1 - c[0] * s[0] * s[0] + s[1], c[1] * s[0]] },
+  { id: 'ikeda', name: 'Ikeda', type: 'map', D: 2, c: [0.9], init: [0, 0],
+    f: (s, c) => { const t = 0.4 - 6 / (1 + s[0] * s[0] + s[1] * s[1]), ct = cosP(t), st = sinP(t); return [1 + c[0] * (s[0] * ct - s[1] * st), c[0] * (s[0] * st + s[1] * ct)]; } },
+  { id: 'tinkerbell', name: 'Tinkerbell', type: 'map', D: 2, c: [0.9, -0.6013, 2.0, 0.5], init: [-0.72, -0.64],
+    f: (s, c) => [s[0] * s[0] - s[1] * s[1] + c[0] * s[0] + c[1] * s[1], 2 * s[0] * s[1] + c[2] * s[0] + c[3] * s[1]] },
+  { id: 'gumowski', name: 'Gumowski–Mira', type: 'map', D: 2, c: [0.008, 0.05, -0.496], init: [0.1, 0.1],
+    f: (s, c) => { const g = x => c[2] * x + 2 * (1 - c[2]) * x * x / (1 + x * x); const xn = s[1] + c[0] * s[1] * (1 - c[1] * s[1] * s[1]) + g(s[0]); return [xn, -s[0] + g(xn)]; } },
+  { id: 'svensson', name: 'Svensson', type: 'map', D: 2, c: [1.5, -1.8, 1.6, 0.9], init: [0.1, 0.1],
+    f: (s, c) => [c[3] * sinP(c[0] * s[0]) - sinP(c[1] * s[1]), c[2] * cosP(c[0] * s[0]) + cosP(c[1] * s[1])] },
+  { id: 'bedhead', name: 'Bedhead', type: 'map', D: 2, c: [-0.81, -0.92], init: [1, 1],
+    f: (s, c) => [sinP(s[0] * s[1] / c[1]) * s[1] + cosP(c[0] * s[0] - s[1]), s[0] + sinP(s[1]) / c[1]] },
+  { id: 'omef', name: 'OMEF', type: 'omef', D: 2, c: macros.map(m => OMEF_DEF[m[0]]), init: [0, 0] }
+];
+// normalisation: centre and radius of each attractor at its own coefficients (measured, not guessed)
+function natural(att, c) {
+  if (att.type === 'omef') { const raw = { ...OMEF_DEF }; macros.forEach((m, i) => raw[m[0]] = c[i]); const st = makeOmefStepper(raw, null); const P = []; for (let t = 0; t < 6000; t++) { const q = st(); if (t >= 400) P.push(q); } return stats(P); }
+  let s = att.init.slice(); const P = [];
+  for (let t = 0; t < 9000; t++) { s = rawStep(att, s, c); if (!s.every(Number.isFinite)) break; if (t >= 600) P.push(s); }
+  return stats(P);
+}
+function stats(P) { const D = P[0] ? P[0].length : 2, lo = Array(D).fill(Infinity), hi = Array(D).fill(-Infinity); for (const p of P) for (let i = 0; i < D; i++) { if (p[i] < lo[i]) lo[i] = p[i]; if (p[i] > hi[i]) hi[i] = p[i]; }
+  const ctr = lo.map((v, i) => (v + hi[i]) / 2), R = Math.max(1e-9, ...lo.map((v, i) => (hi[i] - v) / 2)); return { ctr, R }; }
+function rk4(f, s, c, dt) { const k1 = f(s, c), s2 = s.map((v, i) => v + dt / 2 * k1[i]), k2 = f(s2, c), s3 = s.map((v, i) => v + dt / 2 * k2[i]), k3 = f(s3, c), s4 = s.map((v, i) => v + dt * k3[i]), k4 = f(s4, c); return s.map((v, i) => v + dt / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])); }
+function rawStep(att, s, c) { return att.type === 'map' ? att.f(s, c) : rk4(att.f, s, c, att.dt); }
+// ---------- the operator library from the formula, acting on the attractor's coordinates ----------
+function makeLib(P) { return {
+  hinge: (a, b, c) => a * Math.abs(b) - b * Math.abs(a), quot: (a, b, c) => (a - b) / (1 + P.quotS * Math.abs(a) + P.quotS * Math.abs(c)),
+  mirror: (a, b, c) => a * Math.sign(b - c), wrap: (a, b, c) => W(P.wrapK * (a + b)), twist: (a, b, c) => Math.max(a, b) - P.twistR * Math.min(a, c),
+  pinch: (a, b, c) => a * b / (1 + P.pinchW * c * c), join: (a, b, c) => -Math.sign(a * b) * 0.5 * (Math.abs(a) + Math.abs(b)) * (1 + P.joinC * Math.abs(c)),
+  swirl: (a, b, c) => a * cosP(Math.PI * P.swirlK * b) - c * sinP(Math.PI * P.swirlK * a), bloom: (a, b, c) => (a + b * c) / (1 + (a - c) * (a - c) / (P.bloomW * P.bloomW)),
+  lens: (a, b, c) => Math.sign(a) * Math.sqrt(Math.abs(a * b) + P.lensC * c * P.lensC * c) - P.lensC * c, echo: 'echo' }; }
+function addComposite(L, A, B) { const name = `(${A}∘${B})`; if (L[name] || A === B || A === 'echo' || B === 'echo' || (name.match(/∘/g) || []).length > 2) return null; const p = L[A], q = L[B]; L[name] = (a, b, c) => p(q(a, b, c), b, c); return name; }
+const SHAPE = { wrap: 'wrapK', swirl: 'swirlK', bloom: 'bloomW', lens: 'lensC', pinch: 'pinchW', twist: 'twistR', quot: 'quotS', join: 'joinC' };
+// ---------- one running attractor with every modifier ----------
+function anyMod(P, G) { if (G.length) return true; for (const p of PARAMS) { if (p[1] === 'Picture' || p[1] === 'Evolution' || p[1] === 'Meta formula' || p[1] === 'Rendering') continue; if (P[p[0]] !== p[6]) return true; } return false; }
+function system(att, nat, c0, G, P, L, s0) {
+  const D = att.D, R = nat.R, ctr = nat.ctr, d = k => P[k] - DEF[k];
+  const c = P.wGain === 1 ? c0 : c0.map(v => v * (1 + 0.12 * d('wGain')));
+  const mods = anyMod(P, G);
+  const U = Array.from({ length: HIST }, () => new Float64Array(D)); let hd = 0, t = 0;
+  const cnt = new Float64Array(D); for (const r of G) cnt[r.n % D]++;
+  const fns = G.map(r => L[r.op]);
+  const ghosts = []; BASE_KEYS.forEach((op, i) => { let gs = 0; const g = P['g_' + op]; if (g !== 1) gs += 0.35 * (g - 1); const sk = SHAPE[op]; if (sk && P[sk] !== DEF[sk]) gs += 0.6 * (P[sk] - DEF[sk]) / SPAN[sk]; if (gs !== 0) ghosts.push({ op, fn: L[op], gs, n: i % 6, a: (i + 1) % 6, b: (i + 3) % 6, c: (i + 4) % 6 }); });
+  const step6 = (uN) => { const h5 = U[(hd - 5 + HIST) % HIST], h13 = U[(hd - 13 + HIST) % HIST]; return D === 3 ? [uN[0], uN[1], uN[2], h5[0], h5[1], h5[2]] : [uN[0], uN[1], h5[0], h5[1], h13[0], h13[1]]; };
+  const opv = (fn, op, X, a, b, cc, dl) => op === 'echo' ? (X[b] > 0 ? U[(hd - dl + HIST) % HIST][a % D] : -U[(hd - dl + HIST) % HIST][cc % D]) : fn(X[a], X[b], X[cc]);
+  function M(u, uN) { const m = new Float64Array(D), odd = t % 2 === 1, mid = (D - 1) / 2;
+    for (let i = 0; i < D; i++) { let v = 0, x = uN[i];
+      if (P.rhoMul !== 1) v += 0.5 * d('rhoMul') * (u[i] - x); if (P.scaleExp !== 0.5) v += 0.5 * d('scaleExp') * x * Math.abs(x);
+      if (P.foldGain !== 1) v += 0.3 * d('foldGain') * sinP(Math.PI * x); if (P.foldAmp !== 2) v += 0.3 * d('foldAmp') * (sinP(HALF_PI * x) - x);
+      if (P.foldSkew !== 0) { const q = sinP(Math.PI * x); v += 0.25 * d('foldSkew') * (q * q - 0.5); } if (P.rhoTilt !== 0) v += 0.5 * d('rhoTilt') * (u[i] - x) * (i - mid) / Math.max(1, mid);
+      if (P.antiGain !== 1) v -= 0.2 * d('antiGain') * x; if (P.delayMul !== 1) v += 0.3 * d('delayMul') * (U[(hd - 8 + HIST) % HIST][i] - x);
+      if (P.ringK !== 0) v += 0.3 * d('ringK') * (uN[(i + 1) % D] - uN[(i + D - 1) % D] + (D === 2 ? (i ? -uN[0] : uN[1]) : 0));
+      if (P.cubic !== 0) v -= 0.3 * d('cubic') * x * x * x; if (P.memK !== 0) v += 0.3 * d('memK') * U[(hd - 2 + HIST) % HIST][i];
+      if (P.parity !== 0 && odd) v += 0.4 * d('parity') * (u[i] - x); if (P.drift !== 0) v += 0.3 * d('drift') * sinP(0.002 * t * (i + 1)); if (P.bias !== 0) v += 0.2 * d('bias') * (i - mid + (D === 2 ? 0 : 0));
+      m[i] = v; }
+    if (ghosts.length || G.length) { const X = step6(uN);
+      for (const g of ghosts) m[g.n % D] += clamp(0.3 * g.gs * opv(g.fn, g.op, X, g.a, g.b, g.c, 8), -2, 2);
+      const crowd = 1 / (1 + (G.length / P.cap) * (G.length / P.cap)); for (let q = 0; q < G.length; q++) { const r = G[q]; let w = r.w * crowd; if (P.antiGain !== 1 && r.s < 0) w *= P.antiGain; m[r.n % D] += clamp(0.25 * r.s * w * opv(fns[q], r.op, X, r.a, r.b, r.c, P.delayMul === 1 ? r.d : Math.max(1, Math.min(HIST - 1, Math.round(r.d * P.delayMul)))), -2, 2) / Math.sqrt(cnt[r.n % D]); } }
+    for (let i = 0; i < D; i++) m[i] = clamp(m[i], -3, 3); return m; }
+  const norm = s => { const u = new Float64Array(D); for (let i = 0; i < D; i++) u[i] = (s[i] - ctr[i]) / R; return u; };
+  let s, omef = null, omefOut = [0, 0];
+  if (att.type === 'omef') { const raw = { ...OMEF_DEF }; macros.forEach((mm, i) => raw[mm[0]] = c[i]);
+    omef = makeOmefStepper(raw, mods ? (ox, oy) => { const u = [(ox - ctr[0]) / R, (oy - ctr[1]) / R], m = M(lastU, u); return [ox + R * m[0], oy + R * m[1]]; } : null); s = [0, 0]; }
+  else s = (s0 || att.init).slice();
+  let lastU = norm(s), speed = 1;
+  if (att.type === 'flow') { let acc = 0; for (let k = 0; k < 50; k++) { const v = att.f(s, c); acc += Math.sqrt(v.reduce((a, b) => a + b * b, 0)) / R; } speed = acc / 50; }
+  const obj = { s, D, step() { let u = lastU;
+      if (omef) { const q = omef(); obj.s = s = [q[0], q[1]]; }
+      else { let sN = rawStep(att, s, c);
+        if (mods) { const m = M(u, norm(sN)), k = att.type === 'flow' ? att.dt * speed : 1; sN = sN.map((v, i) => v + k * R * m[i]); }
+        if (!sN.every(Number.isFinite) || sN.some((v, i) => Math.abs((v - ctr[i]) / R) > 60)) sN = att.init.slice();   // rescue: restart from the attractor's own initial point
+        obj.s = s = sN; }
+      lastU = norm(s); U[hd].set(lastU); hd = (hd + 1) % HIST; t++; return lastU; } };
+  return obj;
+}
+// ---------- picture: projection + the picture controls ----------
+function makePicture(att, P) { const d = k => P[k] - DEF[k];
+  const yaw = d('theta0'), pitch = 0.9 * d('thetaMul'), cy = cosP(yaw), sy = sinP(yaw), cp = cosP(pitch), sp = sinP(pitch);
+  const post = P.aspect !== 1 || P.shear !== 0 || P.rot !== 0 || P.radWarp !== 0 || P.picSquash !== 0 || P.polarMix !== 0 || P.kaleido !== 1 || P.invert !== 0, cr = cosP(P.rot), sr = sinP(P.rot);
+  const depthIdx = att.D === 3 ? [0, 1, 2].find(i => !att.ax.includes(i)) : -1;
+  return u => { let X, Y, Z = 0;
+    if (att.D === 3) { X = u[att.ax[0]]; Y = u[att.ax[1]]; Z = u[depthIdx]; if (yaw !== 0) { const a = X * cy - Z * sy; Z = X * sy + Z * cy; X = a; } if (pitch !== 0) { const b = Y * cp - Z * sp; Z = Y * sp + Z * cp; Y = b; } }
+    else { X = u[0]; Y = u[1]; if (yaw !== 0) { const a = X * cy - Y * sy; Y = X * sy + Y * cy; X = a; } if (pitch !== 0) X *= cp + 0.4 * sp * Y; }
+    if (P.oddStretch !== 0.15) Y *= 1 + d('oddStretch'); if (P.projTilt !== 0) X += d('projTilt') * (att.D === 3 ? Z : Y * Y - 0.3);
+    if (!post) return [X, Y];
+    if (P.aspect !== 1) Y *= P.aspect; if (P.shear !== 0) X += P.shear * Y;
+    if (P.rot !== 0) { const a = X * cr - Y * sr; Y = X * sr + Y * cr; X = a; }
+    if (P.radWarp !== 0) { const f = 1 + P.radWarp * (X * X + Y * Y); X *= f; Y *= f; }
+    if (P.picSquash !== 0) { X /= 1 + P.picSquash * Math.abs(X); Y /= 1 + P.picSquash * Math.abs(Y); }
+    if (P.kaleido !== 1 || P.polarMix !== 0) { const r = Math.sqrt(X * X + Y * Y); let th = atan2P(Y, X);
+      if (P.kaleido !== 1) { const sec = 2 * Math.PI / P.kaleido; th = ((th % sec) + sec) % sec; if (th > sec / 2) th = sec - th; X = r * cosP(th); Y = r * sinP(th); }
+      if (P.polarMix !== 0) { X = (1 - P.polarMix) * X + P.polarMix * (th * 0.35); Y = (1 - P.polarMix) * Y + P.polarMix * (r - 0.6); } }
+    if (P.invert !== 0) { const q = X * X + Y * Y + 0.05; X = (1 - P.invert) * X + P.invert * 0.25 * X / q; Y = (1 - P.invert) * Y + P.invert * 0.25 * Y / q; }
+    return [X, Y]; }; }
+// ---------- scoring (as in the formula) ----------
+function bbox(Q) { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (let t = 0; t < Q.length; t += 2) { if (!Number.isFinite(Q[t]) || !Number.isFinite(Q[t + 1])) continue; if (Q[t] < a) a = Q[t]; if (Q[t] > b) b = Q[t]; if (Q[t + 1] < c) c = Q[t + 1]; if (Q[t + 1] > d) d = Q[t + 1]; } return [a, b, c, d]; }
+function density(Q, B, g) { const Dn = new Float64Array(g * g), w = B[1] - B[0], hh = B[3] - B[2]; for (let t = 0; t < Q.length; t += 2) { if (!Number.isFinite(Q[t])) continue; Dn[Math.min(g - 1, Math.max(0, (Q[t + 1] - B[2]) / hh * g | 0)) * g + Math.min(g - 1, Math.max(0, (Q[t] - B[0]) / w * g | 0))] += 2 / Q.length; } return Dn; }
+function corner(Q, B) { const w = (B[1] - B[0]) / 4, hh = (B[3] - B[2]) / 4; let best = { v: 0, delta: 0, cx: 0, cy: 0 };
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) { const x0 = B[0] + i * w, y0 = B[2] + j * hh, Z = [];
+    for (let t = 0; t < Q.length; t += 2) { const u = (Q[t] - x0) / w, v = (Q[t + 1] - y0) / hh; if (u >= 0 && u < 1 && v >= 0 && v < 1) Z.push(u, v); }
+    const n = Z.length / 2; if (n < 200) continue; const m = Math.min(n, 700), st = n / m, r1 = 1 / 40, r2 = 1 / 10; let c1 = 0, c2 = 0;
+    for (let a = 0; a < m; a++) { const p = Math.floor(a * st); for (let b = a + 1; b < m; b++) { const q = Math.floor(b * st), dx = Z[2 * p] - Z[2 * q], dy = Z[2 * p + 1] - Z[2 * q + 1], dd = dx * dx + dy * dy; if (dd < r2 * r2) { c2++; if (dd < r1 * r1) c1++; } } }
+    if (!c1) continue; const delta = logP(c2 / c1) / logP(r2 / r1), val = delta > 1 && delta < 2 ? sinP(Math.PI * delta) ** 2 : 0; if (val > best.v) best = { v: val, delta, cx: x0 + w / 2, cy: y0 + hh / 2 }; }
+  return best; }
+const L1 = (p, q) => { if (p.length !== q.length) return 2; let s = 0; for (let i = 0; i < p.length; i++) s += Math.abs(p[i] - q[i]); return s; };
+// ---------- slime-mold meta formula (unchanged in form) ----------
+function makeMeta(L, P) { const nodes = [], idx = {}; const add = (kind, key) => { idx[kind + ':' + key] = nodes.length; nodes.push({ kind, key, fs: 0, fc: 0, tried: false }); };
+  Object.keys(L).forEach(k => add('op', k)); for (let n = 0; n < 6; n++) add('wire', n); DELAYS.forEach(dl => add('delay', dl)); const edges = [];
+  const rebuild = () => { edges.length = 0; for (let u = 0; u < nodes.length; u++) for (let v = u + 1; v < nodes.length; v++) { const A = nodes[u], B = nodes[v];
+      if (A.kind === 'op' && B.kind === 'op') edges.push({ u, v, G: 1, l: P.lenOp, Q: 0 }); else if ((A.kind === 'op') !== (B.kind === 'op')) { const o = A.kind === 'op' ? A : B, other = A.kind === 'op' ? B : A; if (other.kind === 'wire') edges.push({ u, v, G: 1, l: P.lenWire, Q: 0 }); else if (o.key.includes('echo')) edges.push({ u, v, G: 1, l: 1, Q: 0 }); } } };
+  rebuild();
+  return { nodes, idx, edges, addOp(k) { const old = edges.map(e => ({ ...e })); add('op', k); rebuild(); for (const e of edges) { const m = old.find(o => o.u === e.u && o.v === e.v); e.G = m ? m.G : 0.1; } },
+    relen() { for (const e of edges) { const A = nodes[e.u], B = nodes[e.v]; e.l = A.kind === 'op' && B.kind === 'op' ? P.lenOp : (A.kind === 'wire' || B.kind === 'wire') ? P.lenWire : 1; } } }; }
+function solvePressures(M, src) { const N = M.nodes.length, A = [...Array(N)].map(() => new Float64Array(N + 1));
+  for (const e of M.edges) { const g = e.G / e.l; A[e.u][e.u] += g; A[e.v][e.v] += g; A[e.u][e.v] -= g; A[e.v][e.u] -= g; } for (let u = 0; u < N; u++) A[u][N] = src[u]; const n = N - 1;
+  for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r; [A[c], A[p]] = [A[p], A[c]]; const piv = A[c][c] || 1e-12;
+    for (let r = 0; r < n; r++) if (r !== c) { const f = A[r][c] / piv; if (f) for (let k = c; k <= N; k++) if (k < n || k === N) A[r][k] -= f * A[c][k]; } }
+  const p = new Float64Array(N); for (let r = 0; r < n; r++) p[r] = A[r][N] / (A[r][r] || 1e-12); return p; }
+function metaStep(M, L, current, P, force) { M.relen(); const N = M.nodes.length, src = new Float64Array(N); current.forEach(i => src[i] += 1 / current.length);
+  const f = M.nodes.map(v => { const m = v.fc ? v.fs / v.fc : 0; return P.foodK === 1 ? m : powP(m, P.foodK); }), Fs = f.reduce((s, v) => s + v, 0);
+  if (Fs > 0) f.forEach((v, i) => src[i] -= v / Fs); else { const others = M.nodes.map((_, i) => i).filter(i => !current.includes(i)); others.forEach(i => src[i] -= 1 / others.length); }
+  const p = solvePressures(M, src); for (const e of M.edges) { e.Q = e.G * (p[e.u] - p[e.v]) / e.l; e.G = Math.max(1e-6, e.G + P.eta * (Math.abs(e.Q) - e.G)); }
+  const through = new Float64Array(N); for (const e of M.edges) { through[e.u] += Math.abs(e.Q); through[e.v] += Math.abs(e.Q); }
+  const pick = kind => { let best = -1, bt = -1, any = -1, at = -1; M.nodes.forEach((v, i) => { if (v.kind !== kind) return; if (through[i] > at) { at = through[i]; any = i; } if (!v.tried && through[i] > bt) { bt = through[i]; best = i; } }); return best >= 0 ? best : any; };
+  const proposal = { op: M.nodes[pick('op')].key, n: M.nodes[pick('wire')].key, d: M.nodes[pick('delay')].key };
+  let composite = null, qe = null; for (const e of M.edges) { const A = M.nodes[e.u], B = M.nodes[e.v]; if (A.kind === 'op' && B.kind === 'op' && Math.abs(e.Q) > 0.03 && (!qe || Math.abs(e.Q) > Math.abs(qe.Q))) qe = e; }
+  if (qe) { const name = addComposite(L, M.nodes[qe.u].key, M.nodes[qe.v].key); if (name) { M.addOp(name); composite = name; } }
+  if (!composite && force) { const ops = M.nodes.map((v, i) => i).filter(i => M.nodes[i].kind === 'op' && M.nodes[i].key !== 'echo').sort((i, j) => through[j] - through[i]); for (let a = 0; a < ops.length && !composite; a++) for (let b = 0; b < ops.length && !composite; b++) if (a !== b) { const name = addComposite(L, M.nodes[ops[a]].key, M.nodes[ops[b]].key); if (name) { M.addOp(name); composite = name; } } }
+  return { proposal, composite }; }
+// ---------- evolution of the chosen attractor (frozen at speed 0) ----------
+function hashS(s, G, c, e) { let k = 2166136261 ^ e; const f = new Float64Array(1), w = new Uint32Array(f.buffer); for (const v of s.concat(c)) { f[0] = v; k = Math.imul(k ^ w[0], 16777619); k = Math.imul(k ^ w[1], 16777619); } for (const r of G) { f[0] = r.w; k = Math.imul(k ^ w[0] ^ r.s, 16777619); } return k >>> 0; }
+function addRel(G, r, P) { while (G.length >= P.cap) { let k = 0; G.forEach((q, i) => { if (q.w < G[k].w) k = i; }); G.splice(k, 1); } G.push(r); return r; }
+function birth(prop, u) { return { op: prop.op, n: prop.n, a: Math.floor(u() * 6), b: Math.floor(u() * 6), c: Math.floor(u() * 6), d: prop.d, w: 0.45 + 0.7 * u(), s: u() < 0.5 ? 1 : -1 }; }
+function makeMachine(attIndex, seed, P) {
+  const att = ATTRACTORS[attIndex], L = makeLib(P), M = makeMeta(L, P), nat = natural(att, att.c);
+  let coef = att.c.slice(), G = [], s = att.init.slice(), pi = 1, Bbar = 0, e = -1;
+  const A = []; let prevRho = null, low = 0, calm = 0, zero = 0, rest = 0, tur = 0, inv = 0, lastBorn = null;
+  const conceptIdx = r => [M.idx['op:' + r.op], M.idx['wire:' + r.n], M.idx['delay:' + r.d]];
+  function sample(c, g, s0, n) { const pic = makePicture(att, P), sys = system(att, nat, c, g, P, L, s0), Q = new Float64Array(2 * n); for (let t = 0; t < 200; t++) sys.step(); for (let t = 0; t < n; t++) { const p = pic(sys.step()); Q[2 * t] = p[0]; Q[2 * t + 1] = p[1]; } return { Q, s: sys.s.slice() }; }
+  function epoch() { e++; const u = U(hashS(s, G, coef, e) ^ seed), u2 = U(hashS(s, G, coef, e) ^ seed ^ 0x9E3779B9);
+    inv += P.invent; const force = inv >= 1; if (force) inv = 0;
+    const meta = metaStep(M, L, lastBorn ? conceptIdx(lastBorn) : [M.idx['op:hinge']], P, force);
+    const C = G.map(r => ({ ...r })); let cc = coef.slice(); const roll = u(); let kind;
+    if (meta.composite && force) { addRel(C, birth({ op: meta.composite, n: meta.proposal.n, d: meta.proposal.d }, u), P); }
+    const t1 = P.pBirth, t2 = t1 + P.pDeath, t3 = t2 + P.pAnti, t4 = t3 + 0.2;
+    if (roll < t1) { const r = addRel(C, birth(meta.proposal, u), P); kind = 'birth'; if (P.advice > 0 && u2() < P.advice) { r.a = meta.proposal.n; r.b = (meta.proposal.n + 3) % 6; kind = 'advised birth'; } }
+    else if (roll < t2 && C.length) { C.splice(Math.floor(u() * C.length), 1); kind = 'death'; }
+    else if (roll < t3 && C.length) { const k = Math.floor(u() * C.length); C[k].s = -C[k].s; kind = 'anti'; }
+    else if (roll < t4 && C.length) { const k = Math.floor(u() * C.length); C[k].w *= 0.6 + P.reweigh * u(); kind = 'reweigh'; }
+    else if (C.length && u() < 0.5) { const k = Math.floor(u() * C.length), f = ['n', 'a', 'b', 'c'][Math.floor(u() * 4)]; C[k][f] = Math.floor(u() * 6); kind = 'rewire'; if (P.advice > 0 && u2() < P.advice) { C[k].n = meta.proposal.n; kind = 'advised rewire'; } }
+    else { const k = Math.floor(u() * cc.length); cc[k] = cc[k] * (1 + 0.12 * (P.reweigh / 0.9) * (u() - 0.5)) + 0.02 * (u() - 0.5); kind = 'coefficient'; }
+    const R = sample(cc, C, s, P.T), Bx = bbox(R.Q), ok = Number.isFinite(Bx[0]) && Bx[1] - Bx[0] > 1e-6 && Bx[3] - Bx[2] > 1e-6;
+    const rhoE = ok ? density(R.Q, Bx, P.grid) : null, K = ok ? corner(R.Q, Bx) : { v: 0 }, S = !ok ? 0 : A.length ? Math.min(...A.map(a => L1(rhoE, a.rho))) : 2, Bp = S * K.v;
+    for (const r of C) for (const i of conceptIdx(r)) { M.nodes[i].fs += Bp; M.nodes[i].fc++; M.nodes[i].tried = true; }
+    let accept = pi > 0 ? Bp >= P.acceptTol * Bbar : Bp < Bbar; if (P.contrary > 0 && u2() < P.contrary) accept = !accept;
+    if (accept && ok) { G = C; coef = cc; s = R.s; Bbar = Bp; if (att.type !== 'omef') s = s.map((v, i) => nat.ctr[i] + nat.R * clamp((v - nat.ctr[i]) / nat.R + 0.04 * P.leap * sinP(5 * i + 3 * e), -3, 3)); else coef = coef.map((v, i) => clamp(v + 0.03 * P.leap * sinP(5 * i + 3 * e), -3, 3)); if (kind === 'birth') lastBorn = C[C.length - 1]; if (S > P.archiveS) A.push({ rho: rhoE, G: C.map(r => ({ ...r })) }); }
+    Bbar = pi > 0 ? P.barDecay * Bbar : 1.05 * Bbar;
+    low = S < P.boredS ? low + 1 : 0; rest += P.restless; const forced = rest >= 1; if (forced) rest = 0; let flip = false;
+    const jolt = (amp) => { s = s.map((v, i) => nat.ctr[i] + nat.R * clamp(((v - nat.ctr[i]) / nat.R) * (1 - amp * 0.15) + amp * 0.1 * sinP(3 * i + v), -3, 3)); };
+    if (low >= 10 || forced) { pi = -pi; low = 0; flip = true; Bbar = Bp; if (A.length && rhoE) { let far = A[0], fd = -1; for (const a of A) { const dd = L1(rhoE, a.rho); if (dd > fd) { fd = dd; far = a; } } const half = Math.max(1, Math.floor(P.cap / 2)), top = g => [...g].sort((p, q) => q.w - p.w).slice(0, half); G = top(G).concat(top(far.G).map(r => ({ ...r, s: -r.s }))); } if (att.type !== 'omef') jolt(P.leap); }
+    if (ok && prevRho) { calm = L1(rhoE, prevRho) < 0.12 ? calm + 1 : 0; tur += P.turbulence; const ft = tur >= 1; if (ft) tur = 0; if ((calm >= 6 || ft) && G.length) { let k = 0; G.forEach((r, q) => { if (r.w > G[k].w) k = q; }); G.splice(k, 1); addRel(G, birth(meta.proposal, u), P); calm = 0; } }
+    if (ok) prevRho = rhoE;
+    if (P.erosion > 0) for (const r of G) r.w *= 1 - P.erosion;
+    zero = Bp < 0.05 ? zero + 1 : 0; if (zero >= P.zeroN) { const r = birth(meta.proposal, u); r.w = 1 + 0.4 * u(); addRel(G, r, P); if (att.type !== 'omef') jolt(P.leap / 2.3 * 1.3); zero = 0; }
+    return { e, kind, accept, flip, B: Bp, corner: K, view: accept && ok ? Bx : null };
+  }
+  return { att, nat, L, P, epoch, sample, live: (s0) => system(att, nat, coef, G, P, L, s0 || s), state: () => ({ coef: coef.slice(), G: G.map(r => ({ ...r })), s: s.slice(), pi }) };
+}
+
+return { ATTRACTORS, PARAMS, DEF, makeMachine, makePicture };
+})();
+</script>
+<script>(function(){'use strict';
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d');let W=cv.width,Hh=cv.height;
+const MACHINE=[['speed','Machine','Evolution speed',0,10,0.5,0],['ppf','Machine','Points per frame',2000,60000,1000,16000],['trail','Machine','Trail',0.8,1,0.005,0.97],['ink','Machine','Ink',1,100,1,55],['seed','Machine','Seed',1,9999,1,1],['autoseed','Machine','Next attractor every (min)',0,60,1,0]];
+const ALL=MACHINE.concat(CORE.PARAMS),DEF0=Object.fromEntries(ALL.map(d=>[d[0],d[6]]));
+const P={...CORE.DEF};
+const NOTES={Machine:'Evolution speed 0 keeps the attractor exactly as published.',Step:'Bend the attractor\'s own motion.',Operators:'Push operators into the attractor\'s coordinates.',Picture:'How the attractor is viewed.',Evolution:'Only acts when evolution speed is above 0.',
+ 'Meta formula':'Only acts when evolution speed is above 0.',Rendering:'Tone and color only.'};
+const groupsEl=$('groups'),groupDiv={};
+for(const g of ['Machine','Step','Operators','Picture','Evolution','Meta formula','Rendering']){const d=document.createElement('details');d.className='group';if(g==='Machine')d.open=true;d.innerHTML=`<summary>${g} <span style="color:var(--muted);font-weight:400">(${ALL.filter(a=>a[1]===g).length})</span></summary><div><div class="gh">${NOTES[g]}</div></div>`;groupsEl.appendChild(d);groupDiv[g]=d.querySelector('div');}
+const dec=st=>st>=1?0:st>=0.1?1:st>=0.01?2:3;
+for(const d of ALL){const r=document.createElement('div');r.className='row';r.id='row_'+d[0];r.innerHTML=`<label for="${d[0]}">${d[2]}</label><input id="${d[0]}" type="range" min="${d[3]}" max="${d[4]}" step="${d[5]}" value="${d[6]}" aria-label="${d[2]}"><div class="value" id="${d[0]}v"></div>`;groupDiv[d[1]].appendChild(r);}
+const val=k=>+$(k).value;
+function label(k){const d=ALL.find(a=>a[0]===k),v=val(k);let t=v.toFixed(dec(d[5]));if(k==='speed'&&v===0)t='frozen';if(k==='ppf')t=Math.round(v/1000)+'K';if(k==='trail'&&v>=1)t='∞';if(k==='kaleido'&&v===1)t='off';if(k==='autoseed'&&v===0)t='off';$(k+'v').textContent=t;$('row_'+k).classList.toggle('moved',Math.abs(v-d[6])>1e-12);}
+function fire(e){e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}
+function snap(e,v){const mn=+e.min,mx=+e.max,st=+e.step||1;v=Math.max(mn,Math.min(mx,v));v=mn+Math.round((v-mn)/st)*st;const dc=(String(e.step).split('.')[1]||'').length;return +Math.max(mn,Math.min(mx,v)).toFixed(dc);}
+document.querySelectorAll('.row input[type=range]').forEach(e=>{const row=e.parentNode,c=document.createElement('div'),t=document.createElement('div');c.className='ctl';t.className='trk';
+ const mk=(s,dd)=>{const b=document.createElement('button');b.type='button';b.className='stepb';b.textContent=s;b.setAttribute('aria-label',(dd<0?'Decrease ':'Increase ')+e.getAttribute('aria-label'));b.addEventListener('click',()=>{const st=+e.step||1,inc=(e.id==='seed'||st>=1&&(+e.max-+e.min)<=40)?st:Math.max(st,Math.round((+e.max-+e.min)*.05/st)*st),v=snap(e,+e.value+dd*inc);if(v!==+e.value){e.value=v;fire(e);}});return b;};
+ row.insertBefore(c,e);t.appendChild(e);c.append(mk('−',-1),t,mk('+',1));
+ t.addEventListener('click',ev=>{if(ev.target===e&&!matchMedia('(pointer:coarse)').matches)return;const r=e.getBoundingClientRect();if(r.width<=0)return;const f=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)),v=snap(e,+e.min+f*(+e.max-+e.min));if(v!==+e.value){e.value=v;fire(e);}});});
+// ---------- machine ----------
+let mach,live,pic,attIdx=0,view=null,target=null,cornerOn=false,lastEntry=null,paused=false,acc=0,lastT=0,rounds=0;
+let H,HS,img;function alloc(w,h){W=w;Hh=h;cv.width=w;cv.height=h;H=new Float32Array(W*Hh);HS=new Float32Array(W*Hh);img=ctx.createImageData(W,Hh);for(let i=3;i<img.data.length;i+=4)img.data[i]=255;}alloc(800,800);
+function boundsOf(P2){let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity;for(const p of P2){if(!Number.isFinite(p[0])||!Number.isFinite(p[1]))continue;a=Math.min(a,p[0]);b=Math.max(b,p[0]);c=Math.min(c,p[1]);d=Math.max(d,p[1]);}if(!(b>a))b=a+1;if(!(d>c))d=c+1;return[a,b,c,d];}
+function reframe(){const s=mach.live(live?live.s:null),pts=[];for(let t=0;t<200;t++)s.step();for(let t=0;t<4000;t++)pts.push(pic(s.step()));target=boundsOf(pts);if(!view)view=target.slice();}
+function rebuild(fromLive){live=mach.live(fromLive&&live?live.s.slice():null);if(!fromLive)for(let t=0;t<200;t++)live.step();}
+const picker=$('picker');CORE.ATTRACTORS.forEach((a,i)=>{const b=document.createElement('button');b.type='button';b.textContent=a.name;b.onclick=()=>{attIdx=i;start();};picker.appendChild(b);});
+function markPick(){[...picker.children].forEach((b,i)=>b.classList.toggle('on',i===attIdx));}
+function start(){mach=CORE.makeMachine(attIdx,val('seed'),P);pic=CORE.makePicture(mach.att,P);rounds=0;H.fill(0);HS.fill(0);view=null;lastEntry=null;live=null;rebuild(false);reframe();view=target.slice();markPick();}
+function evolveOnce(){const en=mach.epoch();rounds++;lastEntry=en;if(en.accept||en.flip){rebuild(false);if(en.view)target=en.view.slice();else reframe();}}
+const GROUP_OF=Object.fromEntries(ALL.map(d=>[d[0],d[1]]));
+function onParam(k){label(k);const g=GROUP_OF[k];if(g==='Machine'||g==='Rendering')return;P[k]=val(k);
+ if(g==='Step'||g==='Operators'){rebuild(true);}
+ else if(g==='Picture'){pic=CORE.makePicture(mach.att,P);reframe();H.fill(0);HS.fill(0);}}
+let px=0,py=0;
+function frame(t){requestAnimationFrame(frame);if(!mach)return;const dt=Math.min(.25,(t-lastT)/1000||0);lastT=t;
+ if(!paused){const sp=val('speed');if(sp>0){acc+=dt*sp;let n=0;while(acc>=1&&n<4){acc-=1;evolveOnce();n++;}if(n===4)acc=0;}
+  let tg=target;if(cornerOn&&lastEntry&&lastEntry.corner&&lastEntry.corner.v>0){const w=(target[1]-target[0])/8,h=(target[3]-target[2])/8;tg=[lastEntry.corner.cx-w,lastEntry.corner.cx+w,lastEntry.corner.cy-h,lastEntry.corner.cy+h];}
+  const k=Math.min(1,dt*2.5);for(let i=0;i<4;i++)view[i]+=(tg[i]-view[i])*k;
+  const tr=val('trail');if(tr<1)for(let i=0;i<H.length;i++){H[i]*=tr;HS[i]*=tr;}
+  const cx=(view[0]+view[1])/2,cy=(view[2]+view[3])/2,half=Math.max(view[1]-view[0],view[3]-view[2])/2*1.08/val('zoom'),sc=Math.min(W,Hh)/(2*half),n=val('ppf'),sys=live,spl=val('splat'),colorOn=val('speedColor')>0;
+  const tb=performance.now();for(let q=0;q<n;q++){if((q&511)===511&&performance.now()-tb>18)break;const p=pic(sys.step());let i=((p[0]-cx)*sc+W/2)|0,j=((cy-p[1])*sc+Hh/2)|0;
+   let spd=0;if(colorOn){const dx=p[0]-px,dy=p[1]-py;spd=Math.min(1,Math.sqrt(dx*dx+dy*dy)/half);px=p[0];py=p[1];}
+   if(spl===1){if(i>=0&&i<W&&j>=0&&j<Hh){H[j*W+i]+=1;if(colorOn)HS[j*W+i]+=spd;}}
+   else{for(let a=0;a<spl;a++)for(let b=0;b<spl;b++){const ii=i+a,jj=j+b;if(ii>=0&&ii<W&&jj>=0&&jj<Hh){H[jj*W+ii]+=1;if(colorOn)HS[jj*W+ii]+=spd;}}}}}
+ let mx=0;for(let i=0;i<H.length;i++)if(H[i]>mx)mx=H[i];const lm=Math.log1p(mx||1),gain=0.35+val('ink')/60,d=img.data,gam=val('gamma'),fl=val('floor'),neg=val('negMix'),scol=val('speedColor');
+ for(let i=0,o=0;i<H.length;i++,o+=4){let v=0;if(H[i]){let u=Math.pow(Math.log1p(H[i])/lm,gam);if(fl>0)u=Math.max(0,(u-fl)/(1-fl));v=Math.min(1,gain*u);}
+  let r=v,g=v,b=v;if(scol>0&&H[i]){const f=Math.min(1,HS[i]/H[i]*3);const cr=0.24+0.76*f,cg=0.55-0.0*f,cb=1-0.84*f;r=v*((1-scol)+scol*cr*1.3);g=v*((1-scol)+scol*cg*1.3);b=v*((1-scol)+scol*cb*1.3);}
+  if(neg>0){r=r*(1-neg)+(1-r)*neg;g=g*(1-neg)+(1-g)*neg;b=b*(1-neg)+(1-b)*neg;}
+  d[o]=Math.min(255,r*255);d[o+1]=Math.min(255,g*255);d[o+2]=Math.min(255,b*255);}
+ ctx.putImageData(img,0,0);
+ $('hud').textContent=immersive?CORE.ATTRACTORS[attIdx].name:'';}
+for(const d of ALL){const k=d[0];$(k).addEventListener('input',()=>onParam(k));label(k);}
+$('seed').addEventListener('change',()=>start());
+$('play').onclick=()=>{paused=!paused;$('play').textContent=paused?'Play':'Pause';};
+$('restart').onclick=()=>start();
+$('newseed').onclick=()=>{const s=$('seed');s.value=(+s.value%9999)+1;label('seed');start();};
+$('resetall').onclick=()=>{for(const d of ALL){if(d[0]==='seed')continue;$(d[0]).value=d[6];label(d[0]);if(d[1]!=='Machine'&&d[1]!=='Rendering')P[d[0]]=d[6];}start();};
+$('corner').onclick=()=>{cornerOn=!cornerOn;$('corner').textContent='Corner: '+(cornerOn?'on':'off');H.fill(0);HS.fill(0);};
+$('save').onclick=()=>{const a=document.createElement('a');a.download=`self-evolving-formula-seed${val('seed')}-round${rounds}.png`;a.href=cv.toDataURL('image/png');a.click();};
+// ---------- full screen / screensaver ----------
+let immersive=false,saver=false,wake=null,uiTimer=null,seedClock=0;
+function fitCanvas(){if(!immersive){alloc(800,800);return;}const dpr=Math.min(window.devicePixelRatio||1,2);let w=Math.round(innerWidth*dpr),h=Math.round(innerHeight*dpr);const maxPx=1800000;if(w*h>maxPx){const s=Math.sqrt(maxPx/(w*h));w=Math.round(w*s);h=Math.round(h*s);}alloc(w,h);}
+function showUI(){document.body.classList.add('showui');document.body.classList.remove('nocursor');clearTimeout(uiTimer);uiTimer=setTimeout(()=>{document.body.classList.remove('showui');if(immersive)document.body.classList.add('nocursor');},3000);}
+async function keepAwake(){try{if('wakeLock' in navigator&&immersive){wake=await navigator.wakeLock.request('screen');}}catch(e){}}
+function enter(asSaver){immersive=true;saver=!!asSaver;document.body.classList.add('immersive');if(saver&&val('autoseed')===0){$('autoseed').value=10;label('autoseed');}
+ const el=document.documentElement;try{if(el.requestFullscreen)el.requestFullscreen().catch(()=>{});else if(el.webkitRequestFullscreen)el.webkitRequestFullscreen();}catch(e){}
+ fitCanvas();keepAwake();showUI();}
+function leave(){if(!immersive)return;immersive=false;saver=false;document.body.classList.remove('immersive','showui','nocursor');try{if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});else if(document.webkitFullscreenElement&&document.webkitExitFullscreen)document.webkitExitFullscreen();}catch(e){}try{wake&&wake.release();}catch(e){}wake=null;fitCanvas();}
+$('fullscreen').onclick=()=>enter(false);$('saver').onclick=()=>enter(true);$('exitfs').onclick=e=>{e.stopPropagation();leave();};
+cv.addEventListener('click',()=>{if(immersive)showUI();});document.addEventListener('mousemove',()=>{if(immersive)showUI();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&immersive)leave();});
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&immersive&&!saverURL)leave();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&immersive)keepAwake();});
+window.addEventListener('resize',()=>{if(immersive)fitCanvas();});
+setInterval(()=>{const m=val('autoseed');if(m>0&&!paused){seedClock+=1;if(seedClock>=m*60){seedClock=0;attIdx=(attIdx+1)%CORE.ATTRACTORS.length;start();}}else seedClock=0;},1000);
+const qs=new URLSearchParams(location.search),saverURL=qs.has('screensaver');
+if(qs.has('a')){const k=CORE.ATTRACTORS.findIndex(a=>a.id===qs.get('a'));if(k>=0)attIdx=k;}
+if(qs.has('seed')){const s=Math.max(1,Math.min(9999,parseInt(qs.get('seed'))||1));$('seed').value=s;label('seed');}
+window.SEF={start,evolveOnce,P,enter,leave,size:()=>[W,Hh],state:()=>({rounds,lastEntry,att:attIdx,view,target,mach}),H,pick:i=>{attIdx=i;start();}};
+start();if(saverURL){enter(true);}requestAnimationFrame(frame);
+})();</script></body></html>
