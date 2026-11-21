@@ -1,0 +1,42 @@
+name: Experimental Room social-memory tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/room_social_memory.py'
+      - 'scripts/test_room_social_memory.py'
+      - 'scripts/room_social_eval.py'
+      - 'scripts/test_room_social_eval.py'
+      - 'scripts/room_social_decision.py'
+      - 'scripts/test_room_social_decision.py'
+      - 'scripts/room_social_receipts.py'
+      - 'scripts/test_room_social_receipts.py'
+      - 'scripts/room_social_trial.py'
+      - 'scripts/test_room_social_trial.py'
+      - 'scripts/room_social_joint_context.py'
+      - 'scripts/test_room_social_joint_context.py'
+      - '.github/workflows/room-social-memory-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  witnessed-memory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify witnessed memory and relationship evidence
+        run: |
+          python -m unittest discover -s scripts -p 'test_room_social_memory.py' -v
+          python -m unittest discover -s scripts -p 'test_room_social_eval.py' -v
+          python -m unittest discover -s scripts -p 'test_room_social_decision.py' -v
+          python -m unittest discover -s scripts -p 'test_room_social_joint_context.py' -v
+          python -m unittest discover -s scripts -p 'test_room_social_receipts.py' -v
+          python -m unittest discover -s scripts -p 'test_room_social_trial.py' -v
+      - name: Produce reproducible snapshot audit (not an agent-quality verdict)
+        run: python scripts/room_social_eval.py --feed room/feed.json --last 160

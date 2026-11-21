@@ -127,6 +127,126 @@ def _semantic_echo(text: str, speaker: str, history: list) -> bool:
     return False
 
 
+def _retain_social_evidence(previous: list, current: list) -> list:
+    """Preserve witnessed, public, directly addressed Allen bids across feed eviction.
+
+    These are nonbinding social observations, not referee-certified actions.
+    Reject collisions and private/unknown visibility. Retire only on a
+    later publicly witnessed explicit reply_to from the addressee.
+    """
+    from collections import Counter
+    from room_social_joint_context import joint_context
+
+    previous = previous if isinstance(previous, list) else []
+    current = current if isinstance(current, list) else []
+    valid = [
+        e for e in current if isinstance(e, dict)
+        and isinstance(e.get("id"), str) and e["id"]
+    ]
+    counts = Counter(e["id"] for e in valid)
+    collisions = {eid for eid, count in counts.items() if count > 1}
+    # The source can only be retained from a public, unique witnessed event.
+    safe = [
+        e for e in valid if e["id"] not in collisions
+        and e.get("visibility", "public") == "public"
+        and e.get("speaker") in ("allen", "owen", "sarah", "mara", "jules")
+        and isinstance(e.get("text"), str) and e["text"].strip()
+    ]
+    accepted = {}
+    for e in previous:
+        if not isinstance(e, dict) or not isinstance(e.get("id"), str):
+            continue
+        if e["id"] in collisions or e.get("visibility") != "public":
+            continue
+        if e.get("speaker") != "allen" or not isinstance(e.get("text"), str):
+            continue
+        if e["id"] in accepted:
+            accepted.pop(e["id"], None)  # Fail closed on retained collisions.
+            continue
+        accepted[e["id"]] = e
+    for e in safe:
+        if e["speaker"] != "allen":
+            continue
+        if e["id"] in accepted and accepted[e["id"]]["text"] != e["text"]:
+            accepted.pop(e["id"], None)
+            continue
+        if e["id"] not in accepted:
+            accepted[e["id"]] = {
+                "id": e["id"], "speaker": "allen", "text": e["text"][:1000],
+                "visibility": "public", "at": e.get("at", ""),
+                **({"to": e["to"]} if isinstance(e.get("to"), str) else {}),
+            }
+    # Use the existing witnessed-history compiler to reject ordinary mentions.
+    # A retained source is not a fresh event, and no synthetic reply is added.
+    ordered = list(accepted.values())
+    open_ids = set()
+    for who in ("sarah", "mara", "owen", "jules"):
+        for bid in joint_context(ordered, who, limit=30)["open_bids"]:
+            if bid.get("from") == "allen" and bid.get("kind") in ("address", "question"):
+                open_ids.add(bid["source_id"])
+    ordered = [e for e in ordered if e["id"] in open_ids]
+    for reply in safe:
+        if reply["speaker"] == "allen":
+            continue
+        parent = reply.get("reply_to")
+        if not isinstance(parent, str):
+            continue
+        # An explicit visible reply is evidence of a reply, not fulfillment.
+        addressed = joint_context(
+            [e for e in ordered if e["id"] == parent] + [reply],
+            reply["speaker"], limit=1
+        )
+        if parent in addressed["linked_reply_ids"]:
+            ordered = [e for e in ordered if e["id"] != parent]
+    return ordered[-24:]
+
+
+def _social_context(conversation: list, person: str) -> str:
+    """Keep witnessed direct Allen requests accessible until linked resolution.
+
+    This is NON-BINDING social evidence, NOT a verified world observation and
+    NOT a demand to speak. Failed or silent native beats must not erase the
+    request merely because the transport previously marked it seen.
+    """
+    from collections import Counter
+    from room_social_joint_context import joint_context
+
+    # Malformed or colliding IDs cannot authorize a social obligation.
+    counts = Counter(
+        item["id"] for item in conversation
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+        and item["id"]
+    )
+    unique = [
+        item for item in conversation
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+        and counts[item["id"]] == 1
+    ]
+    bids = joint_context(unique, person, limit=12)["open_bids"]
+    directed = [
+        bid for bid in bids
+        if bid.get("from") == "allen" and
+        bid.get("kind") in ("address", "question")
+    ][-2:]
+    if not directed:
+        return ""
+    lines = [
+        "WITNESSED UNRESOLVED DIALOGUE (NOT a verified physical fact; "
+        "response optional, no invented progress):"
+    ]
+    for bid in directed:
+        quote = str(bid.get("text") or "").replace("\r", " ").replace("\n", " ")[:300]
+        lines.append(
+            "Allen directly addressed you; source_event_id="
+            + str(bid["source_id"])[:100] + "; words=" + json.dumps(quote, ensure_ascii=False)
+        )
+    lines.append(
+        "You may answer, decline truthfully, or continue independent work. "
+        "Never claim the request was fulfilled unless the referee verified it."
+    )
+    return "\n".join(lines)
+
+
 def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     room = root / "room"
     conversation = _load(room / "conversation.json", [])
@@ -137,6 +257,9 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     checkpoint_path = room / CHECKPOINT
     checkpoint = _load(checkpoint_path, {}) if checkpoint_path.is_file() else {}
     new_input = _new_input(conversation, ack_path, checkpoint)
+    retained_social = _retain_social_evidence(
+        checkpoint.get("pending_social_evidence", []), conversation
+    )
     upcoming_cycle = int(state.get("cycle", 0)) + 1
     life_path = room / "life.json"
     life_world = (_load(life_path, {}) if life_path.is_file()
@@ -144,10 +267,19 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     room_life.validate(life_world, c.CFG)
     room_life.repair_profile_goals(life_world, c.CFG)
     # Native agents see the verified current environment BEFORE they choose.
-    world_contexts = {
-        who: room_life.context(life_world, who)
-        for who in native.PARTICIPANTS
-    }
+    world_contexts = {}
+    for who in native.PARTICIPANTS:
+        physical = room_life.context(life_world, who)
+        pending = _social_context(retained_social, who)
+        # The native world's constant component is capped at 3000 chars.
+        # Reserve explicit space for unresolved *witnessed* conversation
+        # without conflating it with trusted referee-generated world effects.
+        if pending:
+            world_contexts[who] = (
+                physical[:max(0, 2998 - len(pending))] + "\n\n" + pending
+            )
+        else:
+            world_contexts[who] = physical
     delivered_world_ids = list(checkpoint.get("delivered_life_event_ids") or [])
     already_delivered = set(delivered_world_ids)
     pending_world_events = [
@@ -186,6 +318,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     )
     checkpoint = _load(checkpoint_path, {})
     checkpoint["bootstrap_policy"] = bootstrap_policy
+    checkpoint["pending_social_evidence"] = retained_social
     checkpoint["delivered_life_event_ids"] = list(dict.fromkeys([
         *delivered_world_ids, *output.get("injected_world_events", [])
     ]))[-120:]

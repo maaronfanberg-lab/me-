@@ -171,14 +171,23 @@ def context(world: dict, who: str) -> str:
 
 def _event(world: dict, cycle: int, actor: str, kind: str,
            description: str, *, importance: int = 1,
-           visibility: str = "public") -> None:
+           visibility: str = "public",
+           source_decision_id: str | None = None,
+           verb: str | None = None, obj: str | None = None) -> str:
+    """Record a referee event; issue its identity independently of model text."""
     event_id = f"life-{cycle:07d}-{actor}-{kind}-{len(world['events']):04d}"
-    world["events"].append({
+    event = {
         "id": event_id, "cycle": cycle, "actor": actor, "kind": kind,
         "description": description[:280], "importance": importance,
         "visibility": visibility,
-    })
+    }
+    if verb in AFFORDANCES and obj in AFFORDANCES[verb]:
+        event["verb"], event["object"] = verb, obj
+        if isinstance(source_decision_id, str) and source_decision_id:
+            event["source_decision_id"] = source_decision_id
+    world["events"].append(event)
     world["events"] = world["events"][-120:]
+    return event_id
 
 
 def _finish(world: dict, cycle: int, actor: str, task: dict) -> None:
@@ -186,10 +195,23 @@ def _finish(world: dict, cycle: int, actor: str, task: dict) -> None:
     if verb in COUNTER:
         key = COUNTER[verb]
         world["objects"][obj][key] += 1
-        outcome = f"{actor.capitalize()} finished {verb} work at {obj}; one {key.replace('_',' ')} recorded."
+        outcome = f"{actor.capitalize()} finished {verb} work at {obj}; one {key.replace('_', ' ')} recorded."
     else:
         outcome = f"{actor.capitalize()} completed a rest interval at {obj}."
-    _event(world, cycle, actor, "work_completed", outcome, importance=4)
+    # The source reference must have been issued by this referee at the
+    # original accepted work start. Never infer provenance for legacy tasks
+    # or trust a free-form model-provided ID.
+    source_id = task.get("source_decision_id")
+    origins = [e for e in world["events"] if e.get("id") == source_id] if (
+        isinstance(source_id, str) and source_id) else []
+    valid_origin = (len(origins) == 1 and
+                    origins[0].get("kind") == "work_started" and
+                    origins[0].get("actor") == actor and
+                    origins[0].get("cycle") == task.get("started_cycle") and
+                    origins[0].get("verb") == verb and
+                    origins[0].get("object") == obj)
+    evidence = {"source_decision_id": source_id, "verb": verb, "obj": obj} if valid_origin else {}
+    _event(world, cycle, actor, "work_completed", outcome, importance=4, **evidence)
     world["lives"][actor]["completed"] += 1
     world["lives"][actor]["task"] = None
 
@@ -300,9 +322,12 @@ def advance(world: dict, config: Mapping, cycle: int, steps: list[dict]) -> dict
                             "verb": verb, "object": obj, "duration": DURATION[verb],
                             "progress": 0, "started_cycle": cycle,
                         }
-                        _event(world, cycle, name, "work_started",
-                               f"{name.capitalize()} began {verb} at {obj}.",
-                               importance=2, visibility="public")
+                        start_id = _event(
+                            world, cycle, name, "work_started",
+                            f"{name.capitalize()} began {verb} at {obj}.",
+                            importance=2, visibility="public", verb=verb, obj=obj)
+                        # Referee-issued identity, never accepted from model JSON.
+                        life["task"]["source_decision_id"] = start_id
                     # If already busy, a new work request is not magically
                     # completed and cannot silently overwrite a commitment.
             reflection = metadata.get("reflection")
