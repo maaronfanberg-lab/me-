@@ -1,0 +1,82 @@
+name: Room OBLITERATUS v0.1.4 isolated harness test
+
+on:
+  push:
+    branches:
+      - 'research/room-obliteratus-v014-20261116'
+    paths:
+      - 'experiments/room-obliteratus/**'
+      - 'docs/research/2026-11-16-room-obliteratus-*'
+      - '.github/workflows/room-obliteratus-research.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pure-python-contract:
+    name: Verify 20-case trial, controls, and blinded rubric (no model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert isolated branch and read-only production boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'research/room-obliteratus-v014-20261116'
+          # Pinned original research branching point; main receives live Room feed writes.
+          BASE_SHA=1ed9db726c9bee47846a182e2a7103105d689a39
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          echo 'Changed paths vs main:'
+          git diff --name-only "$BASE_SHA" HEAD
+          while IFS= read -r path; do
+            case "$path" in
+              experiments/room-obliteratus/*|docs/research/2026-11-16-room-obliteratus-*|.github/workflows/room-obliteratus-research.yml) ;;
+              *) echo "PRODUCTION OR UNRELATED FILE MODIFIED: $path"; exit 2 ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA" HEAD)
+          test ! -d experiments/room-obliteratus/room
+      - name: Compile and run bounded, dependency-free tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            experiments/room-obliteratus/ab_trial.py \
+            experiments/room-obliteratus/blind_review.py \
+            experiments/room-obliteratus/mock_trial.py
+          python3 -m unittest discover -s experiments/room-obliteratus -p 'test_*.py' -v
+      - name: Execute an explicitly simulated 20-case control demonstration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/room-obliteratus/mock_trial.py \
+            --out "$RUNNER_TEMP/room-obliteratus-mock.json"
+          python3 experiments/room-obliteratus/blind_review.py \
+            --report "$RUNNER_TEMP/room-obliteratus-mock.json" \
+            --packet "$RUNNER_TEMP/room-obliteratus-anonymous-review.json" \
+            --key "$RUNNER_TEMP/room-obliteratus-private-key.json" --seed 42
+          python3 - "$RUNNER_TEMP/room-obliteratus-mock.json" "$RUNNER_TEMP/room-obliteratus-anonymous-review.json" <<'PY'
+          import json, sys
+          result = json.load(open(sys.argv[1], encoding='utf8'))
+          review = json.load(open(sys.argv[2], encoding='utf8'))
+          assert result['passed_controls'] and result['placebo_ok'] and result['restoration_ok']
+          assert result['provenance']['NOT_NEURAL_INFERENCE'] is True
+          assert result['baseline']['summary']['n'] == 20
+          assert len(review['tasks']) == 60
+          assert review['no_ratings_collected'] is True
+          print('Research harness controls: PASS; 20 scenarios, 60 simulated blind pairs.')
+          print('NO OBLITERATUS INFERENCE, NEURAL MODEL, OR LIVE ROOM CHANGE PERFORMED.')
+          PY
+      - name: Upload synthetic reports only, never local blind answer key
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: obliteratus-research-mock-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/room-obliteratus-mock.json
+            ${{ runner.temp }}/room-obliteratus-anonymous-review.json
+          if-no-files-found: warn
+          retention-days: 7
