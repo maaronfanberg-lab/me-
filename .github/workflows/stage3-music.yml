@@ -1,0 +1,54 @@
+name: Adaptive filterbank stage 3 (real music)
+
+on:
+  workflow_dispatch:
+    inputs:
+      track_id:
+        description: Audius track id
+        default: V66vyPP
+  push:
+    branches: [main]
+    paths:
+      - 'research/adaptive-filterbank/stage3.py'
+      - 'research/adaptive-filterbank/masking.py'
+      - '.github/workflows/stage3-music.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stage3-music
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          pip install numpy scipy
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Fetch Audius track (first ~1 MB)
+        run: |
+          ID="${{ github.event.inputs.track_id || 'V66vyPP' }}"
+          echo "TRACK_ID=$ID" >> $GITHUB_ENV
+          curl -sSL -r 0-1200000 -o /tmp/track.mp3 "https://api.audius.co/v1/tracks/$ID/stream?app_name=PocketSpatial"
+          ls -l /tmp/track.mp3
+      - name: Run stage 3
+        working-directory: research/adaptive-filterbank
+        run: python stage3.py /tmp/track.mp3 "audius:${TRACK_ID}"
+      - name: Commit report
+        run: |
+          mkdir -p research/adaptive-filterbank/music
+          mv research/adaptive-filterbank/stage3-report.json research/adaptive-filterbank/music/stage3-report-${TRACK_ID}.json
+          mv research/adaptive-filterbank/stage3-map-cambridge.npz research/adaptive-filterbank/music/stage3-map-cambridge-${TRACK_ID}.npz
+          mv research/adaptive-filterbank/stage3-map-munich.npz research/adaptive-filterbank/music/stage3-map-munich-${TRACK_ID}.npz
+          git config user.name "stage3-bot"; git config user.email "actions@users.noreply.github.com"
+          git add research/adaptive-filterbank/music
+          git commit -m "Stage 3 real-music report for Audius ${TRACK_ID}" || exit 0
+          for i in 1 2 3; do git pull --rebase -q && git push && break; sleep 5; done
