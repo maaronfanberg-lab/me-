@@ -35,3 +35,24 @@
 **Test fix (thresholds unchanged).** The upper-slope fit now uses only points at least 10 dB above the threshold in quiet. Before this, the internal-noise floor made the slope look flatter than it is.
 
 **Open question.** The two references come from different data sets: notched noise (Glasberg & Moore) and tone masking patterns (Zwicker). Raw masking-pattern data, such as Moore, Alcántara & Dau 1998 (JASA 104:1023), are needed to judge which is right. Those data were not reachable from here.
+
+## Stage 2b — two modes (Alex's call: keep both instead of picking one)
+
+`masking.py` now offers `mode="cambridge"` (Glasberg & Moore 1990) and `mode="munich"` (Terhardt/Zwicker). Both use the same 1-dB threshold rule.
+
+**Checks (`stage2b_modes.py`, `stage2b-report.json`): all pass.**
+| Check | Result |
+|---|---|
+| M1 Cambridge mode matches Stage 2 bit for bit | max difference 0.0 dB |
+| M2 Munich mode, computed the long way, matches the Terhardt pattern | max 0.17 dB (limit 0.5) |
+| M3 fast curve matches the exact search, both modes, 300–6000 Hz | max 0.0 dB (limit 1.0) |
+| M4 two-tone masker | finite, and rises with masker level, in both modes |
+| M5 the modes differ more below the masker than above | ✓ |
+
+**Fix log (none of the limits were changed).**
+1. Engine: the detector grid was 0.1 ERB, which put a 0.56 dB quantization error on steep slopes. It is now 0.02 ERB.
+2. Engine: the fast curve ignored off-frequency listening and was 11 dB too high below a loud masker in Cambridge mode. It is now solved exactly over all places.
+3. Engine: in Cambridge mode, a target within 0.5 ERB of a masker changes the masker's filter shape, so the fast curve was 2.1 dB off there. These points now use the exact search.
+4. Test: the exclusion zone in M3 was removed, so the check has no holes.
+
+**Raw-data check still pending.** It needs the full text of Moore, Alcántara & Dau 1998.
