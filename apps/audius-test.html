@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Audius Stage 0 Test</title>
+<style>
+:root{color-scheme:light dark;--bg:light-dark(#f4f2ee,#121212);--ink:light-dark(#151515,#ececec);--mut:light-dark(#666,#999);--ok:#1f8a4c;--bad:#c8371e;--card:light-dark(#fff,#1d1d1d)}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,system-ui,sans-serif;padding:20px max(4vw,14px) 60px;max-width:720px;margin-inline:auto}
+h1{font-size:26px;margin:0 0 4px}
+p.sub{color:var(--mut);margin:0 0 18px;font-size:15px}
+input{width:100%;font-size:16px;padding:12px;border-radius:10px;border:1px solid var(--mut);background:var(--card);color:var(--ink)}
+button{font-size:17px;min-height:48px;padding:0 18px;border-radius:12px;border:0;background:#1d2bd8;color:#fff;margin:10px 8px 0 0;touch-action:manipulation}
+button.sec{background:var(--card);color:var(--ink);border:1px solid var(--mut)}
+.row{display:grid;grid-template-columns:2.2em 1fr;gap:6px;padding:10px 12px;background:var(--card);border-radius:10px;margin-top:8px}
+.st{font-weight:700}.pass{color:var(--ok)}.fail{color:var(--bad)}.na{color:var(--mut)}
+.det{grid-column:2;color:var(--mut);font-size:14px;overflow-wrap:anywhere}
+#meter{height:22px;background:var(--card);border-radius:8px;overflow:hidden;margin-top:14px}
+#bar{height:100%;width:0;background:var(--ok);transition:width .05s}
+#verdict{font-size:20px;font-weight:700;margin-top:18px}
+pre{white-space:pre-wrap;font-size:12px;background:var(--card);padding:10px;border-radius:8px;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<h1>Audius → Web Audio test</h1>
+<p class="sub">Stage 0. Checks whether an Audius stream can reach a processor in Safari. Leave the link empty to use the top trending track.</p>
+<input id="url" placeholder="Paste an Audius track link (optional)" autocomplete="off">
+<div>
+  <button id="go">Run test</button>
+  <button id="stop" class="sec">Stop audio</button>
+  <button id="copy" class="sec">Copy report</button>
+</div>
+<div id="meter"><div id="bar"></div></div>
+<div id="rows"></div>
+<div id="verdict"></div>
+<pre id="raw"></pre>
+<script>
+{
+const API='https://api.audius.co/v1', APP='pocket-spatial-test';
+const rowsEl=document.getElementById('rows'), bar=document.getElementById('bar'), verdict=document.getElementById('verdict'), raw=document.getElementById('raw');
+let ctx=null, audio=null, raf=0, report=[];
+const T={
+ api:'A. API reachable (search/trending JSON)',
+ track:'B. Track found',
+ fetchBytes:'C. Stream bytes readable by script (fetch)',
+ decode:'D. Bytes decode to audio (decodeAudioData)',
+ decodeLevel:'E. Decoded audio has real level',
+ elLoad:'F. Audio element loads with crossOrigin',
+ elLevel:'G. Live level reaches processor (the key test)'
+};
+function set(k,s,d){
+  let r=document.getElementById('r-'+k);
+  if(!r){r=document.createElement('div');r.className='row';r.id='r-'+k;rowsEl.appendChild(r)}
+  const sym=s==='pass'?'✓':s==='fail'?'✗':'…';
+  r.innerHTML=`<span class="st ${s}">${sym}</span><span>${T[k]}</span><span class="det">${d||''}</span>`;
+  report=report.filter(x=>x[0]!==k);report.push([k,s,d||'']);
+  raw.textContent=report.map(x=>`${x[0]} ${x[1].toUpperCase()} ${x[2]}`).join('\n')+'\n'+navigator.userAgent;
+}
+function rms(buf){let s=0;for(let i=0;i<buf.length;i++)s+=buf[i]*buf[i];return Math.sqrt(s/buf.length)}
+const db=x=>x>0?(20*Math.log10(x)).toFixed(1)+' dBFS':'-inf dBFS (silence)';
+async function getJSON(u){const r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+function stopAudio(){cancelAnimationFrame(raf);if(audio){audio.pause();audio.src='';audio=null}bar.style.width='0'}
+async function run(){
+  stopAudio();rowsEl.innerHTML='';verdict.textContent='';report=[];
+  // AudioContext must be created inside the tap
+  if(!ctx){ctx=new (window.AudioContext||window.webkitAudioContext)()}
+  try{await ctx.resume()}catch(e){}
+  if(/Claude\//.test(navigator.userAgent)||!/github\.io$/.test(location.hostname)){
+    verdict.innerHTML='<span class="fail">Not a valid run: this page must be opened in Safari at maaronfanberg-lab.github.io/me-/apps/audius-test.html. Previews block all network access.</span>';
+    raw.textContent='INVALID ENVIRONMENT '+location.href+'\n'+navigator.userAgent;return}
+  const link=document.getElementById('url').value.trim();
+  let track=null;
+  set('api','na','requesting…');
+  try{
+    if(link){track=(await getJSON(`${API}/resolve?url=${encodeURIComponent(link)}&app_name=${APP}`)).data}
+    else{const j=await getJSON(`${API}/tracks/trending?app_name=${APP}`);track=j.data&&j.data[0]}
+    set('api','pass','JSON received');
+  }catch(e){set('api','fail',String(e.message||e)+' — likely CORS or API key needed');finish();return}
+  if(!track||!track.id){set('track','fail','no track in response (link may be a playlist or user)');finish();return}
+  set('track','pass',`${track.title} — ${track.user&&track.user.name} (id ${track.id})`);
+  const sUrl=`${API}/tracks/${track.id}/stream?app_name=${APP}`;
+  // C/D/E: fetch path
+  set('fetchBytes','na','requesting first ~400 KB…');
+  try{
+    const r=await fetch(sUrl,{headers:{Range:'bytes=0-400000'}});
+    if(!r.ok&&r.status!==206)throw new Error('HTTP '+r.status);
+    const ab=await r.arrayBuffer();
+    set('fetchBytes','pass',`${ab.byteLength} bytes, status ${r.status}, final URL host ${new URL(r.url).host}`);
+    set('decode','na','decoding…');
+    try{
+      const b=await ctx.decodeAudioData(ab.slice(0));
+      set('decode','pass',`${b.duration.toFixed(1)} s, ${b.sampleRate} Hz, ${b.numberOfChannels} ch`);
+      const ch=b.getChannelData(0), v=rms(ch.subarray(Math.floor(ch.length*0.3)));
+      set('decodeLevel',v>1e-4?'pass':'fail',`RMS ${db(v)} (pass > -80 dBFS)`);
+    }catch(e){set('decode','fail',String(e.message||e)+' (partial MP3 may not decode; not decisive)')}
+  }catch(e){set('fetchBytes','fail',String(e.message||e)+' — stream host blocks script reads (CORS)')}
+  // F/G: media element path
+  set('elLoad','na','loading…');
+  audio=new Audio();audio.crossOrigin='anonymous';audio.preload='auto';audio.playsInline=true;audio.src=sUrl;
+  const src=ctx.createMediaElementSource(audio), an=ctx.createAnalyser();an.fftSize=2048;
+  src.connect(an);an.connect(ctx.destination);
+  const buf=new Float32Array(an.fftSize);let peak=0,frames=0,t0=0;
+  audio.onerror=()=>{set('elLoad','fail','media error '+(audio&&audio.error?audio.error.code:'?')+' — CORS likely blocked');finish()};
+  try{await audio.play();set('elLoad','pass','playing')}catch(e){set('elLoad','fail',String(e.message||e));finish();return}
+  set('elLevel','na','measuring 6 s…');t0=performance.now();
+  const tick=()=>{
+    an.getFloatTimeDomainData(buf);const v=rms(buf);peak=Math.max(peak,v);frames++;
+    bar.style.width=Math.min(100,v*300)+'%';
+    if(performance.now()-t0<6000){raf=requestAnimationFrame(tick)}
+    else{set('elLevel',peak>1e-4?'pass':'fail',`peak RMS ${db(peak)} over ${frames} frames (pass > -80 dBFS). If you hear music but this fails, Safari is muting the processor input.`);finish()}
+  };tick();
+}
+function finish(){
+  const g=report.find(x=>x[0]==='elLevel'),c=report.find(x=>x[0]==='fetchBytes');
+  if(g&&g[1]==='pass')verdict.innerHTML='<span class="pass">PASS — direct streaming works. No relay needed.</span>';
+  else if(c&&c[1]==='pass')verdict.innerHTML='<span class="pass">PARTIAL — script can read bytes; app can decode chunks itself. No relay needed.</span>';
+  else verdict.innerHTML='<span class="fail">FAIL — a small relay (Cloudflare Worker) will be needed.</span>';
+}
+document.getElementById('go').addEventListener('click',run);
+document.getElementById('stop').addEventListener('click',stopAudio);
+document.getElementById('copy').addEventListener('click',()=>{navigator.clipboard.writeText(raw.textContent).catch(()=>{})});
+}
+</script>
+</body>
+</html>
