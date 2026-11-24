@@ -89,6 +89,24 @@ async function run(browserType,name){
   check(name,'Original accumulates points in browser',after>before && after>0,'points '+before+' -> '+after);
   check(name,'Original canvas contains visible particles',origMetrics && origMetrics.fill>0.0001,JSON.stringify(origMetrics));
   await capture(page,name+'-original');
+  const originalBefore=await page.evaluate(()=>({
+   equation:window.OMEFExclusive.allDefs.map(d=>document.getElementById(d[0]).value),
+   excluded:['points','ink','size','originalSpeed','originalPersistence'].map(k=>document.getElementById(k).value)
+  }));
+  await nap(6500);
+  const originalAfter=await page.evaluate(()=>({
+   equation:window.OMEFExclusive.allDefs.map(d=>document.getElementById(d[0]).value),
+   excluded:['points','ink','size','originalSpeed','originalPersistence'].map(k=>document.getElementById(k).value)
+  }));
+  const originalMoving=originalAfter.equation.filter((v,i)=>v!==originalBefore.equation[i]).length;
+  check(name,'Original automatic evolution moves all 61 equation sliders',
+   originalMoving>=58,'changed='+originalMoving+'/61');
+  check(name,'Original autonomous drift preserves point ink size speed and trail settings',
+   JSON.stringify(originalBefore.excluded)===JSON.stringify(originalAfter.excluded),
+   JSON.stringify({before:originalBefore.excluded,after:originalAfter.excluded}));
+  const originalDriftCanvas=await canvasMetrics(page);
+  check(name,'Original continues drawing visible attractors through full-coefficient evolution',
+   originalDriftCanvas&&originalDriftCanvas.fill>.0001,JSON.stringify(originalDriftCanvas));
   const original=await testControls(page,'#omefUI input[type="range"]',name+' Original');
   await testControls(page,'#points, #ink, #size',name+' Shared canvas');
   const cb=page.locator('#livePreview');
