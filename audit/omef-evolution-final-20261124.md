@@ -1,5 +1,8 @@
 # OMEF Exclusive — Evolution Lab release evidence (24 Nov 2026)
 
+## Final public verification
+[Public OMEF Evolution Lab](https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive-evolution-lab-20261124.html) was verified with a real browser on GitHub Pages. [GitHub Actions run 45414776448](https://github.com/maaronfanberg-lab/me-/actions/runs/45414776448) completed **94/94 passing checks**; the site returned HTTP 200, exposed the complete genome evolution and true 144-step delayed state-space observation, and rendered actual attractor points.
+
 ## Published separately
 `apps/omef-exclusive-evolution-lab-20261124.html` is the new preview. The existing `apps/omef-exclusive.html` and earlier Coupled/Link Lab files are not overwritten by this release. Its mathematical and UI source matches the validated experimental branch, apart from its visible page title and heading.
 
