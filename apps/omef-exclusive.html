@@ -89,7 +89,12 @@ body.omef-immersive.omef-hud-visible #immersiveHUD{opacity:1;pointer-events:auto
 <section id="twinEngine"><h2>Drawing engine</h2><div class="grid2"><button id="engineOriginal" class="engbtn active" aria-pressed="true">Original OMEF</button><button id="engineTwin" class="engbtn secondary" aria-pressed="false">Coupled OMEF · 1 image</button></div><div id="engineInfo" class="hint" role="status" style="margin:9px 0 0">ORIGINAL · Restored native OMEF state-space trajectory (no artificial shape templates). The independent 10D formula is replotted when controls change.</div></section>
 <div id="omefUI">
 <section><h2>OMEF genome</h2><div class="pure">Recovered historical OMEF dynamics: Original now uses its earlier ten-dimensional recurrence, without hardcoded spirals, waves or flower outlines. The starting configuration and Next attractor choices were numerically simulated as coherent filaments and folds. Sliders still change the actual formula coefficients; some settings can lead to chaotic clouds.</div><div id="macro"></div><div class="grid2"><button id="random">Next attractor</button><button id="mutate">Mutate slightly</button><button id="preset" class="secondary">Restore filaments</button><button id="render" class="secondary">Render again</button></div></section>
-<section><h2>OMEF self-feedback</h2><div class="hint">Only the attractor's own delayed output is fed back into Pair, Regime, and Projection. There is no external attractor formula mixed in.</div><div id="feedback"></div></section>
+<section id="originalEvolutionPanel"><h2>Original filament evolution</h2>
+<div class="hint">One continuously evolving ten-coordinate OMEF equation. Sliders change the live mathematical state without discarding its delayed memory. No shape templates.</div>
+<div class="grid2"><button id="originalPause">Pause drawing</button><button id="originalAuto" class="secondary">Auto drift: On</button><button id="originalClear" class="secondary">Clear trails</button><button id="originalRestart" class="secondary">Restart trajectory</button></div>
+<div class="row"><label for="originalSpeed">Simulation speed</label><input type="range" id="originalSpeed" min="1" max="10" step="1" value="7"/><span class="value" id="originalSpeedv">7</span></div>
+<div class="row"><label for="originalPersistence">Filament persistence (s)</label><input type="range" id="originalPersistence" min="20" max="240" step="10" value="160"/><span class="value" id="originalPersistencev">160</span></div>
+<div class="hint" id="originalLiveInfo">Accumulating the native OMEF trajectory.</div></section><section><h2>OMEF self-feedback</h2><div class="hint">Only the attractor's own delayed output is fed back into Pair, Regime, and Projection. There is no external attractor formula mixed in.</div><div id="feedback"></div></section>
 <section><h2>Deep OMEF controls</h2><div class="hint">These are direct controls for pair, triad, delay, regime, cycles, retention and the state-space projections. They modify the actual OMEF recurrence; their visible sensitivity varies with the current system state.</div><div id="deep"></div></section>
 </div>
 
@@ -207,7 +212,12 @@ function genomeProjection(U,H,pp,phase1,phase2,alpha){
 }
 function makeStepper(raw){const pp=logMap(raw),observer=structuralObserver(pp),U=Float64Array.from([.11,-.07,.19,-.13,.08,.04,.15,-.09,.12,.03]),hist=Array.from({length:34},()=>Float64Array.from(U)),alpha=Float64Array.from([.36,.24,.21,.19]),OUT=64,outX=new Float64Array(OUT),outY=new Float64Array(OUT);let head=0,phase1=.2,phase2=1.1,outHead=0,smoothX=0,smoothY=0;const pair=.24+.50*Math.tanh(.60*pp.a),tri=.08+.36*Math.tanh(.62*pp.b),market=.045+.31*Math.tanh(.60*pp.c),shadow=.04+.29*Math.tanh(.62*pp.d),reg=.008+.20*(Math.tanh(.65*pp.e)+1)/2,gold=.018+.26*(Math.tanh(.65*pp.f)+1)/2,fib=.015+.28*(Math.tanh(.65*pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2+.23*Math.tanh(.60*pp.h),proj=(Math.tanh(.82*pp.i)+1)/2;const H=(lag,i)=>{lag=Math.max(1,Math.min(34,Math.round(lag)));return hist[(head-lag+34)%34][i]};return function(){const lag=Math.max(1,Math.min(32,Math.round(pp.fbLag))),oi=(outHead-lag+OUT)%OUT,dx=outX[oi],dy=outY[oi];smoothX=pp.fbDamping*smoothX+(1-pp.fbDamping)*dx;smoothY=pp.fbDamping*smoothY+(1-pp.fbDamping)*dy;const fbx=pp.fbMix*dx+(1-pp.fbMix)*smoothX,fby=pp.fbMix*dy+(1-pp.fbMix)*smoothY,fb1=Math.tanh(fbx),fb2=Math.tanh(fby),fb3=Math.tanh(.7*fbx-.7*fby);phase1+=pp.phaseSpeed*(1+pp.phaseMod1*Math.sin(U[0]));phase2+=pp.phaseSpeed/pp.phaseRatio*(1+pp.phaseMod2*Math.sin(U[6]));let s0=pp.r0u8*U[8]+pp.r0u6*U[6]+pp.fbRegime*fb1,s1=pp.r1u6*U[6]+pp.r1u4sq*U[4]*U[4]+pp.fbRegime*fb2,s2=pp.r2u2*U[2]+pp.r2u7*U[7]+pp.fbRegime*fb3,s3=pp.r3u8*U[8]+pp.r3u0*U[0]-pp.fbRegime*(.6*fb1+.4*fb2),m=Math.max(s0,s1,s2,s3),v=[Math.exp(s0-m),Math.exp(s1-m),Math.exp(s2-m),Math.exp(s3-m)],sum=v[0]+v[1]+v[2]+v[3];for(let r=0;r<4;r++)alpha[r]=(1-reg)*alpha[r]+reg*v[r]/sum;const N=new Float64Array(10);for(let i=0;i<10;i++){const j=(i+3)%10,k=(i+7)%10,l=(i+5)%10;let pairTerm=Math.sin(U[j]*pp.pairFreqA+i*pp.pairPhaseA)-pp.pairCosAmp*Math.cos(U[k]*pp.pairFreqB-i*pp.pairPhaseB);pairTerm+=pp.fbPair*(fb1*Math.sin(U[j]+i*.17)+.6*fb2*Math.cos(U[k]-i*.11));const triTerm=pp.triScale*U[j]*U[k]-pp.triCross*U[l]*U[(i+1)%10],marketTerm=pp.marketW1*(H(pp.lagA,j)-H(pp.lagB,k))+pp.marketW2*(H(pp.lagC,i)-H(34,l)),shadowTerm=pp.shadowSelf*(U[i]-H(pp.shadowLag,i))-pp.shadowCross*(H(21,j)-H(34,k)),regimeTerm=(alpha[0]-alpha[3])*Math.sin(.7+i*.43)+(alpha[1]-alpha[2])*Math.cos(.3+i*.29),goldenTerm=Math.sin(phase1+i*.61)+pp.goldCos*Math.cos(phase2+i*.41),fibTerm=pp.fib1*H(1,i)+pp.fib3*H(3,j)+pp.fib8*H(8,k)+pp.fib13*H(13,l)-pp.fibSelf*U[i],rawN=edge*U[i]+pair*pairTerm+tri*triTerm+market*marketTerm+shadow*shadowTerm+pp.regimeForce*regimeTerm+gold*goldenTerm+fib*fibTerm;N[i]=Math.tanh(pp.squash*rawN)}hist[head].set(N);head=(head+1)%34;U.set(N);let xA=pp.xA0*(U[0]-U[3])+pp.xA7*(U[7]-U[2])+pp.xAdelay*(H(8,9)-H(21,4)),yA=pp.yA6*(U[6]-U[8])+pp.yA5*(U[5]+U[1])+pp.yAdelay*(H(13,0)-H(3,7)),xB=pp.projReg*(alpha[0]-alpha[3])+pp.projCross*(U[2]*U[7]-U[1]*U[8])+pp.projPhase*Math.sin(phase1),yB=pp.projReg*(alpha[1]-alpha[2])+pp.projCross*(U[0]*U[6]-U[3]*U[5])+pp.projPhase*Math.sin(phase2);xA+=pp.fbProjection*fb2;yA+=pp.fbProjection*fb1;xB+=pp.fbProjection*fb3;yB-=pp.fbProjection*fb2;const genome=genomeProjection(U,H,pp,phase1,phase2,alpha);xA+=genome[0];yA+=genome[1];xB+=genome[2];yB+=genome[3];const nativeX=xA*(1-proj)+xB*proj,nativeY=yA*(1-proj)+yB*proj;const [ox,oy]=observeFormula2(nativeX,nativeY,U,H,alpha,phase1,phase2,observer);outX[outHead]=clamp(ox,-12,12);outY[outHead]=clamp(oy,-12,12);outHead=(outHead+1)%OUT;return[ox,oy]}}
 
-function makeOriginalStepper(raw){const pp=logMap(raw),U=Float64Array.from([.11,-.07,.19,-.13,.08,.04,.15,-.09,.12,.03]),hist=Array.from({length:34},()=>Float64Array.from(U)),alpha=Float64Array.from([.36,.24,.21,.19]),OUT=64,outX=new Float64Array(OUT),outY=new Float64Array(OUT);let head=0,phase1=.2,phase2=1.1,outHead=0,smoothX=0,smoothY=0;const pair=.22+.18*Math.tanh(pp.a),tri=.09+.12*Math.tanh(pp.b),market=.04+.11*Math.tanh(pp.c),shadow=.03+.10*Math.tanh(pp.d),reg=.018+.06*(Math.tanh(pp.e)+1)/2,gold=.035+.095*(Math.tanh(pp.f)+1)/2,fib=.025+.10*(Math.tanh(pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2,proj=(Math.tanh(pp.i)+1)/2;const H=(lag,i)=>{lag=Math.max(1,Math.min(34,Math.round(lag)));return hist[(head-lag+34)%34][i]};return function(){const lag=Math.max(1,Math.min(32,Math.round(pp.fbLag))),oi=(outHead-lag+OUT)%OUT,dx=outX[oi],dy=outY[oi];smoothX=pp.fbDamping*smoothX+(1-pp.fbDamping)*dx;smoothY=pp.fbDamping*smoothY+(1-pp.fbDamping)*dy;const fbx=pp.fbMix*dx+(1-pp.fbMix)*smoothX,fby=pp.fbMix*dy+(1-pp.fbMix)*smoothY,fb1=Math.tanh(fbx),fb2=Math.tanh(fby),fb3=Math.tanh(.7*fbx-.7*fby);phase1+=pp.phaseSpeed*(1+pp.phaseMod1*Math.sin(U[0]));phase2+=pp.phaseSpeed/pp.phaseRatio*(1+pp.phaseMod2*Math.sin(U[6]));let s0=pp.r0u8*U[8]+pp.r0u6*U[6]+pp.fbRegime*fb1,s1=pp.r1u6*U[6]+pp.r1u4sq*U[4]*U[4]+pp.fbRegime*fb2,s2=pp.r2u2*U[2]+pp.r2u7*U[7]+pp.fbRegime*fb3,s3=pp.r3u8*U[8]+pp.r3u0*U[0]-pp.fbRegime*(.6*fb1+.4*fb2),m=Math.max(s0,s1,s2,s3),v=[Math.exp(s0-m),Math.exp(s1-m),Math.exp(s2-m),Math.exp(s3-m)],sum=v[0]+v[1]+v[2]+v[3];for(let r=0;r<4;r++)alpha[r]=(1-reg)*alpha[r]+reg*v[r]/sum;const N=new Float64Array(10);for(let i=0;i<10;i++){const j=(i+3)%10,k=(i+7)%10,l=(i+5)%10;let pairTerm=Math.sin(U[j]*pp.pairFreqA+i*pp.pairPhaseA)-pp.pairCosAmp*Math.cos(U[k]*pp.pairFreqB-i*pp.pairPhaseB);pairTerm+=pp.fbPair*(fb1*Math.sin(U[j]+i*.17)+.6*fb2*Math.cos(U[k]-i*.11));const triTerm=pp.triScale*U[j]*U[k]-pp.triCross*U[l]*U[(i+1)%10],marketTerm=pp.marketW1*(H(pp.lagA,j)-H(pp.lagB,k))+pp.marketW2*(H(pp.lagC,i)-H(34,l)),shadowTerm=pp.shadowSelf*(U[i]-H(pp.shadowLag,i))-pp.shadowCross*(H(21,j)-H(34,k)),regimeTerm=(alpha[0]-alpha[3])*Math.sin(.7+i*.43)+(alpha[1]-alpha[2])*Math.cos(.3+i*.29),goldenTerm=Math.sin(phase1+i*.61)+pp.goldCos*Math.cos(phase2+i*.41),fibTerm=pp.fib1*H(1,i)+pp.fib3*H(3,j)+pp.fib8*H(8,k)+pp.fib13*H(13,l)-pp.fibSelf*U[i],rawN=edge*U[i]+pair*pairTerm+tri*triTerm+market*marketTerm+shadow*shadowTerm+pp.regimeForce*regimeTerm+gold*goldenTerm+fib*fibTerm;N[i]=Math.tanh(pp.squash*rawN)}hist[head].set(N);head=(head+1)%34;U.set(N);let xA=pp.xA0*(U[0]-U[3])+pp.xA7*(U[7]-U[2])+pp.xAdelay*(H(8,9)-H(21,4)),yA=pp.yA6*(U[6]-U[8])+pp.yA5*(U[5]+U[1])+pp.yAdelay*(H(13,0)-H(3,7)),xB=pp.projReg*(alpha[0]-alpha[3])+pp.projCross*(U[2]*U[7]-U[1]*U[8])+pp.projPhase*Math.sin(phase1),yB=pp.projReg*(alpha[1]-alpha[2])+pp.projCross*(U[0]*U[6]-U[3]*U[5])+pp.projPhase*Math.sin(phase2);xA+=pp.fbProjection*fb2;yA+=pp.fbProjection*fb1;xB+=pp.fbProjection*fb3;yB-=pp.fbProjection*fb2;const ox=xA*(1-proj)+xB*proj,oy=yA*(1-proj)+yB*proj;outX[outHead]=clamp(ox,-12,12);outY[outHead]=clamp(oy,-12,12);outHead=(outHead+1)%OUT;return[ox,oy]}}
+function makeOriginalStepper(raw){let pp=logMap(raw);const U=Float64Array.from([.11,-.07,.19,-.13,.08,.04,.15,-.09,.12,.03]),hist=Array.from({length:34},()=>Float64Array.from(U)),alpha=Float64Array.from([.36,.24,.21,.19]),OUT=64,outX=new Float64Array(OUT),outY=new Float64Array(OUT);let head=0,phase1=.2,phase2=1.1,outHead=0,smoothX=0,smoothY=0;let pair=.22+.18*Math.tanh(pp.a),tri=.09+.12*Math.tanh(pp.b),market=.04+.11*Math.tanh(pp.c),shadow=.03+.10*Math.tanh(pp.d),reg=.018+.06*(Math.tanh(pp.e)+1)/2,gold=.035+.095*(Math.tanh(pp.f)+1)/2,fib=.025+.10*(Math.tanh(pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2,proj=(Math.tanh(pp.i)+1)/2;const H=(lag,i)=>{lag=Math.max(1,Math.min(34,Math.round(lag)));return hist[(head-lag+34)%34][i]};const next=function(){const lag=Math.max(1,Math.min(32,Math.round(pp.fbLag))),oi=(outHead-lag+OUT)%OUT,dx=outX[oi],dy=outY[oi];smoothX=pp.fbDamping*smoothX+(1-pp.fbDamping)*dx;smoothY=pp.fbDamping*smoothY+(1-pp.fbDamping)*dy;const fbx=pp.fbMix*dx+(1-pp.fbMix)*smoothX,fby=pp.fbMix*dy+(1-pp.fbMix)*smoothY,fb1=Math.tanh(fbx),fb2=Math.tanh(fby),fb3=Math.tanh(.7*fbx-.7*fby);phase1+=pp.phaseSpeed*(1+pp.phaseMod1*Math.sin(U[0]));phase2+=pp.phaseSpeed/pp.phaseRatio*(1+pp.phaseMod2*Math.sin(U[6]));let s0=pp.r0u8*U[8]+pp.r0u6*U[6]+pp.fbRegime*fb1,s1=pp.r1u6*U[6]+pp.r1u4sq*U[4]*U[4]+pp.fbRegime*fb2,s2=pp.r2u2*U[2]+pp.r2u7*U[7]+pp.fbRegime*fb3,s3=pp.r3u8*U[8]+pp.r3u0*U[0]-pp.fbRegime*(.6*fb1+.4*fb2),m=Math.max(s0,s1,s2,s3),v=[Math.exp(s0-m),Math.exp(s1-m),Math.exp(s2-m),Math.exp(s3-m)],sum=v[0]+v[1]+v[2]+v[3];for(let r=0;r<4;r++)alpha[r]=(1-reg)*alpha[r]+reg*v[r]/sum;const N=new Float64Array(10);for(let i=0;i<10;i++){const j=(i+3)%10,k=(i+7)%10,l=(i+5)%10;let pairTerm=Math.sin(U[j]*pp.pairFreqA+i*pp.pairPhaseA)-pp.pairCosAmp*Math.cos(U[k]*pp.pairFreqB-i*pp.pairPhaseB);pairTerm+=pp.fbPair*(fb1*Math.sin(U[j]+i*.17)+.6*fb2*Math.cos(U[k]-i*.11));const triTerm=pp.triScale*U[j]*U[k]-pp.triCross*U[l]*U[(i+1)%10],marketTerm=pp.marketW1*(H(pp.lagA,j)-H(pp.lagB,k))+pp.marketW2*(H(pp.lagC,i)-H(34,l)),shadowTerm=pp.shadowSelf*(U[i]-H(pp.shadowLag,i))-pp.shadowCross*(H(21,j)-H(34,k)),regimeTerm=(alpha[0]-alpha[3])*Math.sin(.7+i*.43)+(alpha[1]-alpha[2])*Math.cos(.3+i*.29),goldenTerm=Math.sin(phase1+i*.61)+pp.goldCos*Math.cos(phase2+i*.41),fibTerm=pp.fib1*H(1,i)+pp.fib3*H(3,j)+pp.fib8*H(8,k)+pp.fib13*H(13,l)-pp.fibSelf*U[i],rawN=edge*U[i]+pair*pairTerm+tri*triTerm+market*marketTerm+shadow*shadowTerm+pp.regimeForce*regimeTerm+gold*goldenTerm+fib*fibTerm;N[i]=Math.tanh(pp.squash*rawN)}hist[head].set(N);head=(head+1)%34;U.set(N);let xA=pp.xA0*(U[0]-U[3])+pp.xA7*(U[7]-U[2])+pp.xAdelay*(H(8,9)-H(21,4)),yA=pp.yA6*(U[6]-U[8])+pp.yA5*(U[5]+U[1])+pp.yAdelay*(H(13,0)-H(3,7)),xB=pp.projReg*(alpha[0]-alpha[3])+pp.projCross*(U[2]*U[7]-U[1]*U[8])+pp.projPhase*Math.sin(phase1),yB=pp.projReg*(alpha[1]-alpha[2])+pp.projCross*(U[0]*U[6]-U[3]*U[5])+pp.projPhase*Math.sin(phase2);xA+=pp.fbProjection*fb2;yA+=pp.fbProjection*fb1;xB+=pp.fbProjection*fb3;yB-=pp.fbProjection*fb2;const ox=xA*(1-proj)+xB*proj,oy=yA*(1-proj)+yB*proj;outX[outHead]=clamp(ox,-12,12);outY[outHead]=clamp(oy,-12,12);outHead=(outHead+1)%OUT;return[ox,oy]};
+ next.setRaw=function(raw){pp=logMap(raw);
+  pair=.22+.18*Math.tanh(pp.a);tri=.09+.12*Math.tanh(pp.b);market=.04+.11*Math.tanh(pp.c);shadow=.03+.10*Math.tanh(pp.d);
+  reg=.018+.06*(Math.tanh(pp.e)+1)/2;gold=.035+.095*(Math.tanh(pp.f)+1)/2;fib=.025+.10*(Math.tanh(pp.g)+1)/2;
+  edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2;proj=(Math.tanh(pp.i)+1)/2;
+ };return next;}
 
 function makeTwinEngine(raw,seed,observationReference){let pp=logMap(raw),observer=structuralObserver(pp,observationReference);const U=Float64Array.from(seed===0?[.11,-.07,.19,-.13,.08,.04,.15,-.09,.12,.03]:[.11+.13*seed,-.07-.08*seed,.19-.11*seed,-.13+.07*seed,.08+.05*seed,.04-.09*seed,.15+.04*seed,-.09-.05*seed,.12-.07*seed,.03+.06*seed]),hist=Array.from({length:34},()=>Float64Array.from(U)),alpha=Float64Array.from([.36,.24,.21,.19]),OUT=64,outX=new Float64Array(OUT),outY=new Float64Array(OUT);let head=0,phase1=.2+.85*seed,phase2=1.1+1.27*seed,outHead=0,smoothX=0,smoothY=0;let pair=.24+.50*Math.tanh(.60*pp.a),tri=.08+.36*Math.tanh(.62*pp.b),market=.045+.31*Math.tanh(.60*pp.c),shadow=.04+.29*Math.tanh(.62*pp.d),reg=.008+.20*(Math.tanh(.65*pp.e)+1)/2,gold=.018+.26*(Math.tanh(.65*pp.f)+1)/2,fib=.015+.28*(Math.tanh(.65*pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2+.23*Math.tanh(.60*pp.h),proj=(Math.tanh(.82*pp.i)+1)/2;const H=(lag,i)=>{lag=Math.max(1,Math.min(34,Math.round(lag)));return hist[(head-lag+34)%34][i]};const step=function(inj){inj=Object.assign({pair:0,triad:0,market:0,shadow:0,regime:0,golden:0,fibonacci:0,projection:0},inj||{});const lag=Math.max(1,Math.min(32,Math.round(pp.fbLag))),oi=(outHead-lag+OUT)%OUT,dx=outX[oi],dy=outY[oi];smoothX=pp.fbDamping*smoothX+(1-pp.fbDamping)*dx;smoothY=pp.fbDamping*smoothY+(1-pp.fbDamping)*dy;const fbx=pp.fbMix*dx+(1-pp.fbMix)*smoothX,fby=pp.fbMix*dy+(1-pp.fbMix)*smoothY,fb1=Math.tanh(fbx),fb2=Math.tanh(fby),fb3=Math.tanh(.7*fbx-.7*fby);phase1+=pp.phaseSpeed*(1+pp.phaseMod1*Math.sin(U[0])+.65*inj.golden+.22*Math.tanh(inj.market+inj.pair));phase2+=pp.phaseSpeed/pp.phaseRatio*(1+pp.phaseMod2*Math.sin(U[6])+.18*Math.tanh(inj.shadow+inj.fibonacci));let s0=pp.r0u8*U[8]+pp.r0u6*U[6]+pp.fbRegime*fb1+.7*inj.regime,s1=pp.r1u6*U[6]+pp.r1u4sq*U[4]*U[4]+pp.fbRegime*fb2+.7*inj.regime*Math.sin(phase2),s2=pp.r2u2*U[2]+pp.r2u7*U[7]+pp.fbRegime*fb3-.7*inj.regime,s3=pp.r3u8*U[8]+pp.r3u0*U[0]-pp.fbRegime*(.6*fb1+.4*fb2)+.5*inj.regime*Math.cos(phase1),m=Math.max(s0,s1,s2,s3),v=[Math.exp(s0-m),Math.exp(s1-m),Math.exp(s2-m),Math.exp(s3-m)],sum=v[0]+v[1]+v[2]+v[3];for(let r=0;r<4;r++)alpha[r]=(1-reg)*alpha[r]+reg*v[r]/sum;const N=new Float64Array(10),acc={pair:0,triad:0,market:0,shadow:0,golden:0,fibonacci:0};for(let i=0;i<10;i++){const j=(i+3)%10,k=(i+7)%10,l=(i+5)%10;let pairTerm=Math.sin(U[j]*pp.pairFreqA+i*pp.pairPhaseA)-pp.pairCosAmp*Math.cos(U[k]*pp.pairFreqB-i*pp.pairPhaseB);pairTerm+=pp.fbPair*(fb1*Math.sin(U[j]+i*.17)+.6*fb2*Math.cos(U[k]-i*.11))+inj.pair*Math.sin(U[j]+i*.29);const triTerm=pp.triScale*U[j]*U[k]-pp.triCross*U[l]*U[(i+1)%10]+inj.triad*(U[j]*U[l]-U[k]*U[(i+1)%10]),marketTerm=pp.marketW1*(H(pp.lagA,j)-H(pp.lagB,k))+pp.marketW2*(H(pp.lagC,i)-H(34,l))+inj.market*(H(pp.lagA,j)-H(pp.lagC,i)),shadowTerm=pp.shadowSelf*(U[i]-H(pp.shadowLag,i))-pp.shadowCross*(H(21,j)-H(34,k))+inj.shadow*(H(pp.shadowLag,i)-H(21,j)),regimeTerm=(alpha[0]-alpha[3])*Math.sin(.7+i*.43)+(alpha[1]-alpha[2])*Math.cos(.3+i*.29),goldenTerm=Math.sin(phase1+i*.61)+pp.goldCos*Math.cos(phase2+i*.41)+inj.golden*Math.sin(phase1-phase2+i*.17),fibTerm=pp.fib1*H(1,i)+pp.fib3*H(3,j)+pp.fib8*H(8,k)+pp.fib13*H(13,l)-pp.fibSelf*U[i]+inj.fibonacci*(H(8,j)-H(13,l)),rawN=edge*U[i]+pair*pairTerm+tri*triTerm+market*marketTerm+shadow*shadowTerm+pp.regimeForce*regimeTerm+gold*goldenTerm+fib*fibTerm+.70*Math.tanh(.7*(inj.pair*Math.sin(U[j]+i*.31)+inj.triad*(U[k]-U[l])+inj.market*Math.sin(H(8,j)-U[i]+i*.2)+inj.shadow*Math.cos(U[l]+i*.26)+inj.regime*Math.sin(U[k]+i*.49)+inj.golden*Math.cos(phase1+i*.23)+inj.fibonacci*Math.sin(H(13,l)+i*.37)+inj.projection*Math.cos(U[j]+phase2*.3)));acc.pair+=pairTerm*Math.cos(i*.71);acc.triad+=triTerm*Math.sin(i*.47+.3);acc.market+=marketTerm*Math.cos(i*.39);acc.shadow+=shadowTerm*Math.sin(i*.43+.2);acc.golden+=goldenTerm*Math.cos(i*.27);acc.fibonacci+=fibTerm*Math.sin(i*.57+.8);N[i]=Math.tanh(pp.squash*rawN)}hist[head].set(N);head=(head+1)%34;U.set(N);let xA=pp.xA0*(U[0]-U[3])+pp.xA7*(U[7]-U[2])+pp.xAdelay*(H(8,9)-H(21,4)),yA=pp.yA6*(U[6]-U[8])+pp.yA5*(U[5]+U[1])+pp.yAdelay*(H(13,0)-H(3,7)),xB=pp.projReg*(alpha[0]-alpha[3])+pp.projCross*(U[2]*U[7]-U[1]*U[8])+pp.projPhase*Math.sin(phase1),yB=pp.projReg*(alpha[1]-alpha[2])+pp.projCross*(U[0]*U[6]-U[3]*U[5])+pp.projPhase*Math.sin(phase2);xA+=pp.fbProjection*fb2+inj.projection*(U[0]-U[6]);yA+=pp.fbProjection*fb1+inj.projection*(U[3]-U[7]);xB+=pp.fbProjection*fb3+.5*inj.projection*(alpha[0]-alpha[2]);yB-=pp.fbProjection*fb2-.5*inj.projection*(alpha[1]-alpha[3]);const genome=genomeProjection(U,H,pp,phase1,phase2,alpha);xA+=genome[0];yA+=genome[1];xB+=genome[2];yB+=genome[3];const nativeX=xA*(1-proj)+xB*proj,nativeY=yA*(1-proj)+yB*proj;const [ox,oy]=observeFormula2(nativeX,nativeY,U,H,alpha,phase1,phase2,observer);outX[outHead]=clamp(ox,-12,12);outY[outHead]=clamp(oy,-12,12);outHead=(outHead+1)%OUT;return {xy:[ox,oy],phase:phase1,signals:{pair:Math.tanh(acc.pair/4),triad:Math.tanh(acc.triad/2),market:Math.tanh(acc.market/3),shadow:Math.tanh(acc.shadow/3),regime:Math.tanh(3*(alpha[0]-alpha[3])+alpha[1]-alpha[2]),golden:Math.tanh(acc.golden/4),fibonacci:Math.tanh(acc.fibonacci/3),projection:Math.tanh((ox-oy)/2)}}};step.setRaw=function(next){pp=logMap(next);observer=structuralObserver(pp,observationReference);pair=.24+.50*Math.tanh(.60*pp.a),tri=.08+.36*Math.tanh(.62*pp.b),market=.045+.31*Math.tanh(.60*pp.c),shadow=.04+.29*Math.tanh(.62*pp.d),reg=.008+.20*(Math.tanh(.65*pp.e)+1)/2,gold=.018+.26*(Math.tanh(.65*pp.f)+1)/2,fib=.015+.28*(Math.tanh(.65*pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2+.23*Math.tanh(.60*pp.h),proj=(Math.tanh(.82*pp.i)+1)/2;};step.adjustSeed=function(d){phase1+=.85*d;phase2+=1.27*d;for(let i=0;i<10;i++)U[i]+=.01*d*Math.cos(i*.9);};return step;}
 
@@ -891,19 +901,102 @@ function buildTwinUI(){
  function mode(m){
   if(activeEngine===m)return;activeEngine=m;const twin=m==='twin';
   $('modeSubtitle').textContent=twin?'Coupled OMEF · two 10D equations · one evolving attractor':'Original OMEF-A · one 10D equation · single attractor';
-  $('engineInfo').textContent=twin?'COUPLED · Two complete 10-coordinate OMEF engines with directed, delayed subsystem feedback; a single continuous output.':'ORIGINAL · One autonomous 10-coordinate OMEF equation. No cross-formula connections. A new static attractor is plotted when controls change.';
+  $('engineInfo').textContent=twin?'COUPLED · Two complete 10-coordinate OMEF engines with directed, delayed subsystem feedback; a single continuous output.':'ORIGINAL · One autonomous 10-coordinate OMEF equation. No cross-formula connections. The 10D state persists and draws continuously while live coefficients change.';
   cv.setAttribute('aria-label',twin?'One attractor computed from two mutually coupled OMEF equations':'Original autonomous OMEF-A attractor');
   $('omefUI').hidden=twin;$('twinUI').hidden=!twin;
   $('engineTwin').classList.toggle('active',twin);$('engineOriginal').classList.toggle('active',!twin);
   $('engineOriginal').setAttribute('aria-pressed',String(!twin));$('engineTwin').setAttribute('aria-pressed',String(twin));
-  stage.classList.toggle('twin-on',twin);cancelPreview();evolutionCancel();if(!twin){cancelMorph();liveState=null;}render(twin);if(!twin)evolutionStatus('Paused outside coupled mode');
+  stage.classList.toggle('twin-on',twin);cancelPreview();evolutionCancel();if(twin){originalStopFrame();originalLive=null;}if(!twin){cancelMorph();liveState=null;}render(twin);if(!twin)evolutionStatus('Paused outside coupled mode');
  }
  $('engineOriginal').onclick=()=>mode('omef');$('engineTwin').onclick=()=>mode('twin');
 }
 function bounds(raw,n){const st=makeOriginalStepper(raw);let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,valid=0;for(let i=0;i<n;i++){const q=st();if(i<140)continue;const x=q[0],y=q[1];if(Number.isFinite(x)&&Number.isFinite(y)&&Math.abs(x)<1e5&&Math.abs(y)<1e5){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);valid++}}if(valid<500||maxX-minX<.01||maxY-minY<.01)return null;return{minX,maxX,minY,maxY,w:maxX-minX,h:maxY-minY}}
 function clearCanvas(){ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--canvas');ctx.fillRect(0,0,cv.width,cv.height)}
-function render(preview=false){if(activeEngine==='twin')return twinRender(preview);cancelMorph();token++;const my=token;stopped=false;updateValues();clearCanvas();count.textContent='Total drawn points: 0';const raw=rawValues(),full=+$('points').value,total=preview?Math.min(18000,full):full,alphaInk=clamp(.015+(+$('ink').value)/650,.015,.17),dot=(+$('size').value)/2;status.textContent=(preview?'preview':'testing')+' · ORIGINAL OMEF-A';setTimeout(()=>{if(my!==token)return;const b=bounds(raw,preview?2400:8000);if(!b){status.textContent='collapsed · lower feedback or Random visible';return}const pad=55,scale=Math.min((cv.width-pad*2)/b.w,(cv.height-pad*2)/b.h),ox=cv.width/2-scale*(b.minX+b.maxX)/2,oy=cv.height/2+scale*(b.minY+b.maxY)/2,st=makeOriginalStepper(raw),rgb=getComputedStyle(document.body).getPropertyValue('--ink');let drawn=0;ctx.fillStyle='rgba('+rgb+','+alphaInk+')';status.textContent=(preview?'live preview':'rendering')+' · ORIGINAL OMEF-A';function batch(){if(my!==token||stopped)return;const start=performance.now();ctx.beginPath();while(drawn<total&&performance.now()-start<(preview?4:7)){const q=st(),px=ox+q[0]*scale,py=oy-q[1]*scale;if(Number.isFinite(px)&&Number.isFinite(py)&&px>=0&&px<cv.width&&py>=0&&py<cv.height)ctx.rect(px,py,dot,dot);drawn++}ctx.fill();count.textContent='Total drawn points: '+drawn.toLocaleString();if(drawn<total)setTimeout(batch,0);else status.textContent=(preview?'preview ready':'done')+' · ORIGINAL OMEF-A'}batch()},preview?5:20)}
-function requestPreview(){if(!$('livePreview').checked||previewPending)return;previewPending=true;previewTimer=setTimeout(()=>{previewPending=false;previewTimer=null;render(true)},170)}function cancelPreview(){if(previewTimer){clearTimeout(previewTimer);previewTimer=null}previewPending=false}
+
+/* The native Original OMEF recurrence now retains its 10D state and delayed
+   memory when controls move. The Web Canvas accumulates the same trajectory,
+   not a collection of canned parametric shapes. Frame work is time-limited. */
+let originalLive=null,originalPaused=false,originalAuto=true,originalGeneration=0;
+function originalStopFrame(){if(originalLive&&originalLive.frame)cancelAnimationFrame(originalLive.frame);if(originalLive)originalLive.frame=0;}
+function originalResetInk(){ctx.globalAlpha=1;clearCanvas();if(originalLive){originalLive.lastFade=performance.now();originalLive.detailUntil=performance.now()+6000;}}
+function originalUpdateControls(){$('originalPause').textContent=originalPaused?'Resume drawing':'Pause drawing';$('originalAuto').textContent='Auto drift: '+(originalAuto?'On':'Off');}
+function originalTargets(){
+ if(!originalLive||activeEngine!=='omef')return;
+ const st=originalLive,now=performance.now();
+ st.target=rawValues();st.manualUntil=now+16000;st.quickFadeUntil=now+2700;st.detailUntil=now+6500;st.nextDrift=now+20000;
+ if(!st.frame&&!originalPaused)st.frame=requestAnimationFrame(originalFrame);
+}
+function originalStart(){
+ if(activeEngine!=='omef')return;
+ originalStopFrame();originalLive=null;originalGeneration++;
+ stopped=false;cancelPreview();updateValues();originalResetInk();
+ const raw=rawValues(),b=bounds(raw,5000)||{minX:-5,maxX:5,minY:-5,maxY:5,w:10,h:10};
+ const scale=clamp(Math.min((cv.width-100)/Math.max(.4,b.w),(cv.height-100)/Math.max(.4,b.h)),10,550);
+ const cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2,now=performance.now();
+ originalLive={solver:makeOriginalStepper(raw),raw:{...raw},target:{...raw},generation:originalGeneration,
+  frame:0,last:0,frames:0,lastFade:now,drawn:0,cx,cy,scale,targetCx:cx,targetCy:cy,targetScale:scale,
+  minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity,samples:0,
+  manualUntil:0,quickFadeUntil:0,detailUntil:now+6500,nextDrift:now+18000};
+ count.textContent='Total drawn points: 0';status.textContent='ORIGINAL · evolving native filaments';
+ originalUpdateControls();if(!originalPaused)originalLive.frame=requestAnimationFrame(originalFrame);
+}
+function originalFrame(time){
+ const st=originalLive;if(!st||originalPaused||activeEngine!=='omef'||st.generation!==originalGeneration)return;
+ st.frame=0;const dt=st.last?clamp(time-st.last,1,70):16.67;st.last=time;st.frames++;
+ if(originalAuto&&time>st.nextDrift&&time>st.manualUntil){
+  const ids=['a','b','c','d','e','f','g','h','i','pairFreqA','pairFreqB','triScale','triCross','phaseSpeed','fibSelf','edgeBase'];
+  const id=ids[Math.floor(Math.random()*ids.length)],d=defMap[id],step=d[4],width=d[3]-d[2];
+  let v=clamp(st.target[id]+(Math.random()-.5)*width*.03,d[2],d[3]);
+  v=d[2]+Math.round((v-d[2])/step)*step;st.target[id]=+clamp(v,d[2],d[3]).toFixed(6);
+  $(id).value=st.target[id];updateValues();st.detailUntil=time+6000;st.nextDrift=time+17000;
+ }
+ const rate=1-Math.exp(-dt/740);let updated=false;
+ for(const d of allDefs){const id=d[0],x=st.raw[id],y=st.target[id];if(x===y)continue;
+  st.raw[id]=Math.abs(y-x)<Math.max(1e-7,Math.abs(y)*1e-5)?y:x+(y-x)*rate;updated=true;
+ }
+ if(updated)st.solver.setRaw(st.raw);
+ const cameraRate=1-Math.exp(-dt/(time<st.quickFadeUntil?420:1850));
+ st.cx+=(st.targetCx-st.cx)*cameraRate;st.cy+=(st.targetCy-st.cy)*cameraRate;
+ st.scale+=(st.targetScale-st.scale)*cameraRate;
+ const style=getComputedStyle(document.body),paper=style.getPropertyValue('--canvas').trim()||'#000',fast=time<st.quickFadeUntil;
+ if(time-st.lastFade>(fast?125:850)){
+  ctx.globalAlpha=fast?.17:1-Math.exp(-.85/(+$('originalPersistence').value||160));
+  ctx.fillStyle=paper;ctx.fillRect(0,0,cv.width,cv.height);ctx.globalAlpha=1;st.lastFade=time;
+ }
+ const rgb=style.getPropertyValue('--ink').trim()||'255,255,255',ink=clamp(.015+(+$('ink').value)/650,.015,.17);
+ ctx.fillStyle='rgba('+rgb+','+(time<st.detailUntil?Math.min(.18,ink*1.15):ink)+')';
+ const dot=Math.max(.65,(+$('size').value)/2),cap=130+55*(+$('originalSpeed').value||7);
+ ctx.beginPath();const start=performance.now();let drawn=0;
+ while(drawn<cap&&performance.now()-start<5.2){
+  const q=st.solver(),x=q[0],y=q[1];drawn++;
+  if(!Number.isFinite(x)||!Number.isFinite(y)||Math.abs(x)>1e4||Math.abs(y)>1e4)continue;
+  const px=cv.width/2+(x-st.cx)*st.scale,py=cv.height/2-(y-st.cy)*st.scale;
+  if(px>=0&&px<cv.width&&py>=0&&py<cv.height)ctx.rect(px,py,dot,dot);
+  st.minX=Math.min(st.minX,x);st.maxX=Math.max(st.maxX,x);
+  st.minY=Math.min(st.minY,y);st.maxY=Math.max(st.maxY,y);
+  st.samples++;st.drawn++;
+ }
+ ctx.fill();
+ if(st.samples>=2500){
+  const w=st.maxX-st.minX,h=st.maxY-st.minY;
+  if(w>.04&&h>.04&&Number.isFinite(w+h)){
+   st.targetCx=(st.minX+st.maxX)/2;st.targetCy=(st.minY+st.maxY)/2;
+   st.targetScale=clamp(Math.min((cv.width-90)/w,(cv.height-90)/h),10,550);
+  }
+  st.samples=0;st.minX=st.minY=Infinity;st.maxX=st.maxY=-Infinity;
+ }
+ if(st.frames%12===0){
+  count.textContent='Total drawn points: '+st.drawn.toLocaleString();
+  status.textContent='ORIGINAL · evolving · '+st.drawn.toLocaleString()+' points';
+  $('originalLiveInfo').textContent='10D oscillator alive · '+st.drawn.toLocaleString()+' samples · '+(originalAuto?'gentle parameter drift':'fixed coefficients');
+ }
+ st.frame=requestAnimationFrame(originalFrame);
+}
+function render(preview=false){
+ if(activeEngine==='twin')return twinRender(preview);
+ if(originalLive){originalTargets();return;}originalStart();
+}
+function requestPreview(){if(activeEngine==='omef'){originalTargets();return;}if(!$('livePreview').checked||previewPending)return;previewPending=true;previewTimer=setTimeout(()=>{previewPending=false;previewTimer=null;render(true)},170)}function cancelPreview(){if(previewTimer){clearTimeout(previewTimer);previewTimer=null}previewPending=false}
 function apply(o){originalFocusId=null;allDefs.forEach(d=>{if(o[d[0]]!==undefined)$(d[0]).value=o[d[0]]});updateValues()}
 
 // Historically recovered OMEF parameters. These are six real coefficient
@@ -915,7 +1008,7 @@ const originalSeedLabels=["interwoven canopy","branching filaments","shelf-like 
 let originalSeedIndex=0;
 const originalSeed=(index)=>Object.fromEntries(allDefs.map(d=>[d[0],originalTestedSeeds[index][d[0]]===undefined?d[5]:originalTestedSeeds[index][d[0]]]));
 
-function reset(){originalFocusId=null;originalSeedIndex=0;apply(originalSeed(0));render(false)}
+function reset(){originalFocusId=null;originalSeedIndex=0;apply(originalSeed(0));originalStart()}
 
 
 function mutate(){
@@ -931,9 +1024,14 @@ function mutate(){
 }
 function randomVisible(){
  originalSeedIndex=(originalSeedIndex+1+Math.floor(Math.random()*(originalTestedSeeds.length-1)))%originalTestedSeeds.length;
- apply(originalSeed(originalSeedIndex));render(false);
+ apply(originalSeed(originalSeedIndex));originalStart();
 }
-function wire(){allDefs.forEach(d=>{const e=$(d[0]);e.addEventListener('input',()=>{originalFocusId=d[0];updateValues();requestPreview()});e.addEventListener('change',()=>{cancelPreview();render(false)})});['points','ink','size'].forEach(k=>{$(k).addEventListener('input',()=>{updateValues();requestPreview()});$(k).addEventListener('change',()=>{cancelPreview();render(false)})});$('random').onclick=randomVisible;$('mutate').onclick=mutate;$('preset').onclick=reset;$('render').onclick=()=>render(false);$('stop').onclick=()=>{stopped=true;token++;cancelMorph();liveState=null;evolutionOn=false;evolutionCancel();evolutionStatus('Stopped');status.textContent='stopped'};$('download').onclick=()=>{const a=document.createElement('a');a.download='omef-exclusive.png';a.href=cv.toDataURL('image/png');a.click()};document.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-theme]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.body.className=b.dataset.theme==='light'?'':b.dataset.theme;render(false)})}
+function wire(){allDefs.forEach(d=>{const e=$(d[0]);e.addEventListener('input',()=>{originalFocusId=d[0];updateValues();originalTargets()});e.addEventListener('change',()=>{cancelPreview();originalTargets()})});['points','ink','size'].forEach(k=>{$(k).addEventListener('input',()=>{updateValues();requestPreview()});$(k).addEventListener('change',()=>{cancelPreview();render(false)})});$('random').onclick=randomVisible;$('mutate').onclick=mutate;$('preset').onclick=reset;$('render').onclick=()=>originalStart();
+ $('originalPause').onclick=()=>{originalPaused=!originalPaused;originalUpdateControls();if(!originalPaused&&activeEngine==='omef'){if(!originalLive)originalStart();else if(!originalLive.frame)originalLive.frame=requestAnimationFrame(originalFrame);}};
+ $('originalAuto').onclick=()=>{originalAuto=!originalAuto;originalUpdateControls();if(originalLive)originalLive.nextDrift=performance.now()+17000;};
+ $('originalClear').onclick=()=>originalResetInk();
+ $('originalRestart').onclick=()=>originalStart();
+ for(const id of ['originalSpeed','originalPersistence'])$(id).addEventListener('input',()=>{$(id+'v').textContent=$(id).value;});$('stop').onclick=()=>{stopped=true;token++;originalStopFrame();originalLive=null;cancelMorph();liveState=null;evolutionOn=false;evolutionCancel();evolutionStatus('Stopped');status.textContent='stopped'};$('download').onclick=()=>{const a=document.createElement('a');a.download='omef-exclusive.png';a.href=cv.toDataURL('image/png');a.click()};document.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-theme]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.body.className=b.dataset.theme==='light'?'':b.dataset.theme;if(activeEngine==='omef')originalResetInk();else render(false)})}
 
 // The browser viewport, not the system browser chrome, is the immersive surface.
 // Resizing the bitmap must not reset the coupled 20D oscillator or its histories.
@@ -960,7 +1058,7 @@ function immerseResize(){
  if(newW===beforeW&&newH===beforeH)return;
  // Preserve visible trails at the correct aspect ratio, not as a stretched image.
  let saved=null;
- if(activeEngine==='twin'&&liveState){
+ if((activeEngine==='twin'&&liveState)||(activeEngine==='omef'&&originalLive)){
   saved=document.createElement('canvas');
   saved.width=beforeW;saved.height=beforeH;
   saved.getContext('2d').drawImage(cv,0,0);
@@ -979,6 +1077,12 @@ function immerseResize(){
   liveState.maxX=liveState.maxY=-Infinity;
   liveState.samples=0;
   liveState.detailUntil=performance.now()+3500;
+ }else if(activeEngine==='omef'&&originalLive){
+  const fit=Math.min(newW/beforeW,newH/beforeH);
+  if(saved)ctx.drawImage(saved,(newW-beforeW*fit)/2,(newH-beforeH*fit)/2,beforeW*fit,beforeH*fit);
+  originalLive.scale*=fit;originalLive.targetScale*=fit;
+  originalLive.samples=0;originalLive.minX=originalLive.minY=Infinity;
+  originalLive.maxX=originalLive.maxY=-Infinity;originalLive.detailUntil=performance.now()+3800;
  }else if(activeEngine==='omef')render(true);
 }
 function immerseSet(enable){
@@ -1013,7 +1117,7 @@ function immerseWire(){
  }
 }
 
-window.OMEFExclusive={makeStepper,makeOriginalStepper,originalTestedSeeds,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinCombinedBounds,twinCombine,twinDefaults,twinRaw,activeMode:()=>activeEngine,solverCheck:verifyTwinSolver,evolutionState:()=>({active:evolutionOn,accepted:evolutionAccepted,rejected:evolutionRejected,mode:activeEngine,nextIn:liveState?Math.max(0,(liveState.nextEvolution-performance.now())/1000):null,label:liveState?.mutationLabel||''})};buildTwinUI();wire();immerseWire();apply(originalSeed(0));updateValues();$('engineTwin').click();
+window.OMEFExclusive={makeStepper,makeOriginalStepper,originalTestedSeeds,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinCombinedBounds,twinCombine,twinDefaults,twinRaw,activeMode:()=>activeEngine,solverCheck:verifyTwinSolver,evolutionState:()=>({active:evolutionOn,accepted:evolutionAccepted,rejected:evolutionRejected,mode:activeEngine,nextIn:liveState?Math.max(0,(liveState.nextEvolution-performance.now())/1000):null,label:liveState?.mutationLabel||''})};buildTwinUI();wire();immerseWire();apply(originalSeed(0));updateValues();originalStart();
 })();</script><script>(function(){'use strict';
 // Tap path for every slider: -/+ buttons (1% of range, at least one step) and tap-to-jump on the track.
 // On touch screens the slider itself ignores touches, so a scroll that starts on it just scrolls.
