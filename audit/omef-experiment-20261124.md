@@ -20,7 +20,7 @@ Recover naturally emergent, asymmetrical, interwoven mathematical filament sculp
 - A control-baseline sanity check uses **equal-length samples** and returns 0% difference for identical settings.
 
 ## Mobile-sized browser audit
-GitHub Actions workflow run [45392695932](https://github.com/maaronfanberg-lab/me-/actions/runs/45392695932) passed **82/82** checks. Tested Chromium and WebKit with mobile viewports, Original 63 range inputs, Coupled 154 range inputs, restoring distinct A/B coefficients, real pointer interactions, themes, full-screen controls, and JS runtime errors. This does not test the user's physical iPhone.
+GitHub Actions workflow run [45392695932](https://github.com/maaronfanberg-lab/me-/actions/runs/45392695932) passed **82/82** checks in the initial local browser audit; the follow-up run [45393274775](https://github.com/maaronfanberg-lab/me-/actions/runs/45393274775) passed **85/85** checks including live public Pages verification. Tested Chromium and WebKit with mobile viewports, Original 63 range inputs, Coupled 154 range inputs, restoring distinct A/B coefficients, real pointer interactions, themes, full-screen controls, and JS runtime errors. This does not test the user's physical iPhone.
 
 ## What is *not* proven
 - This is an experimental preview, **not the replacement for live OMEF Exclusive**.
@@ -29,7 +29,7 @@ GitHub Actions workflow run [45392695932](https://github.com/maaronfanberg-lab/m
 - Browser automation is not a substitute for testing the app on the user's actual iPhone.
 
 ## Published preview
-The separate Pages file `apps/omef-exclusive-coupled-lab-20261124.html` was created from this experiment. It leaves the existing `apps/omef-exclusive.html` untouched.
+The separate Pages file `apps/omef-exclusive-coupled-lab-20261124.html` was created from this experiment. It leaves the existing `apps/omef-exclusive.html` untouched. The public preview returned HTTP 200 in a real mobile-sized Chromium browser, displayed the audited asymmetric A/B coefficients, contained no canned-shape switch, and rendered actual pixels. URL: https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive-coupled-lab-20261124.html
 
 ## Next technical experiment
 Improve individual-link sensitivity **inside the delayed node-to-node equations**, with explicit controls over transferred memory and phase response, while rejecting high-entropy clouds and preserving the strong nonlinear interactions already observed. Re-run equal-length endpoint tests, 1M-step render, and Chromium/WebKit interface audit before considering replacement of the live app.
