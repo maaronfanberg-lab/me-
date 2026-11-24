@@ -78,8 +78,19 @@ for(let i=0;i<8;i++){
  const strengthRight=difference(baseline,raster(right)),delayRight=difference(baseline,raster(delayed));
  report.sliders.push({link:i,source:cfg.links[i].source,from:cfg.links[i].from,to:cfg.links[i].to,
   strengthRight,delayRight});
- assert(strengthRight>=25,'Coupling link '+i+' still too weak at far right: '+strengthRight);
- assert(delayRight>=12,'Delay link '+i+' still ineffective at 144 steps: '+delayRight);
+ assert(strengthRight>=48,'Coupling link '+i+' still too weak at far right: '+strengthRight);
+ assert(delayRight>=42,'Delay link '+i+' still ineffective at 144 steps: '+delayRight);
+}
+
+const fullScalars=[
+ ['global',4],['mix',0],['seed',3],['interference',3],['projection',0]
+];
+report.globalEndpoints=[];
+for(const [id,target] of fullScalars){
+ const config={...cfg,[id]:target,links:cfg.links.map(x=>({...x}))};
+ const changed=difference(baseline,raster(config,14000));
+ report.globalEndpoints.push({id,target,percentChanged:changed});
+ assert(changed>=25,'Coupled global '+id+' endpoint is visually silent: '+changed);
 }
 fs.mkdirSync('audit-artifacts',{recursive:true});
 fs.writeFileSync('audit-artifacts/coupled-solver-stress.json',JSON.stringify(report,null,2));
