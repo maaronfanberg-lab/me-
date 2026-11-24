@@ -318,9 +318,9 @@ async function testAutonomousEvolution(){
  }catch(e){check('WebKit autonomous evolution','Real autonomous evolution test completed',false,String(e).slice(0,1100));}
  finally{if(context)await context.close().catch(()=>{});if(browser)await browser.close().catch(()=>{});}
 }
-async function testPublicLinkLab(){
+async function testPublicEvolutionLab(){
  let browser;
- const url='https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive-link-lab-20261124.html?verify='+Date.now();
+ const url='https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive-evolution-lab-20261124.html?verify='+Date.now();
  try{
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2});
@@ -333,17 +333,20 @@ async function testPublicLinkLab(){
    originalCount:window.OMEFExclusive.allDefs.length,
    noCannedShapes:Array.from(document.scripts).every(s=>!s.textContent.includes('switch(info.mode)')),
    longDelays:Array.from({length:8},(_,i)=>Number(document.getElementById('tl'+i+'lag').max)),
-   nodeCalibration:Array.from(document.scripts).some(s=>s.textContent.includes('nodeSignalScale'))
+   nodeCalibration:Array.from(document.scripts).some(s=>s.textContent.includes('nodeSignalScale')),
+   fullGenomeEvolution:Array.from(document.scripts).some(s=>s.textContent.includes('st.evolutionCursor')&&s.textContent.includes("st.targetWeights=hot(winner.cfg.projection)")),
+   nativeLens:Array.from(document.scripts).some(s=>s.textContent.includes('function coupledObservationLens')&&s.textContent.includes('lagLongA')),
+   couplingSafeguard:Array.from(document.scripts).some(s=>s.textContent.includes('global:[.35,4]'))
   }));
   check('Public experimental preview','Published Pages URL returns HTTP 200',response?.status()===200,'HTTP '+response?.status());
   check('Public experimental preview','Pages serves the audited asymmetric Coupled Lab build',
-   info.title.includes('Coupled Link Lab')&&Math.abs(info.formulaMix-.7)<.00001&&info.distinctAandB&&info.originalCount===61&&info.noCannedShapes&&info.nodeCalibration&&info.longDelays.every(x=>x===144),
+   info.title.includes('Evolution Lab')&&Math.abs(info.formulaMix-.7)<.00001&&info.distinctAandB&&info.originalCount===61&&info.noCannedShapes&&info.nodeCalibration&&info.longDelays.every(x=>x===144)&&info.fullGenomeEvolution&&info.nativeLens&&info.couplingSafeguard,
    JSON.stringify(info));
   await page.locator('#engineTwin').click({timeout:10000});
   await page.waitForTimeout(1600);
   const metrics=await canvasMetrics(page);
-  check('Public experimental preview','Published Coupled Link Lab paints real attractor points',metrics&&metrics.fill>.0001,JSON.stringify(metrics));
-  await capture(page,'public-coupled-link-lab-preview');
+  check('Public experimental preview','Published OMEF Evolution Lab paints real attractor points',metrics&&metrics.fill>.0001,JSON.stringify(metrics));
+  await capture(page,'public-omef-evolution-lab');
  }catch(e){check('Public experimental preview','Public browser verification finishes',false,String(e).slice(0,850));}
  finally{if(browser)await browser.close();}
 }
@@ -376,7 +379,7 @@ async function testLiveDeployment(){
 (async()=>{
   for (const [engine,name] of [[chromium,'Chromium-iPhone-size'],[webkit,'WebKit-iPhone-size']])await run(engine,name);
   await testAutonomousEvolution();
-  // Unpublished staging version; public verification follows Pages deployment.
+  await testPublicEvolutionLab();
   fs.writeFileSync('audit-artifacts/audit-results.json',JSON.stringify(report,null,2));
   console.log('AUDIT_SUMMARY '+JSON.stringify({passes:report.passes,failures:report.failures,browsers:report.browsers,screenshots:report.screenshots}).slice(0,14000));
   process.exitCode=report.failures?1:0;
