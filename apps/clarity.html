@@ -3,34 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0a0a0b">
 <title>Clarity</title>
 <style>
-/* VOICE calm studio tool / IDEA a channel strip / PICTURE live EQ curve / COLOUR graphite + one teal accent / TYPE system UI */
-:root{color-scheme:light dark;--bg:light-dark(#f3f2ef,#121314);--card:light-dark(#fff,#1c1d1f);--ink:light-dark(#141414,#ececec);--mut:light-dark(#666,#9a9a9a);--acc:#0f9b8e;--warn:#c8371e;--line:light-dark(#ddd,#333)}
-:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+/* VOICE quiet hi-fi faceplate / IDEA black anodised panel, ivory legends / PICTURE the live EQ trace / COLOUR black, graphite, ivory / TYPE system UI, light weights */
+:root{color-scheme:dark;--bg:#0a0a0b;--card:#131315;--line:#26262a;--ink:#e9e4da;--mut:#8b877e;--sel:#e9e4da;--selink:#0a0a0b;--warn:#c9675a}
 *{box-sizing:border-box;min-width:0}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,system-ui,sans-serif;padding:14px max(4vw,12px) 60px;max-width:760px;margin-inline:auto}
-h1{font-size:26px;margin:4px 0 10px}
-.card{background:var(--card);border-radius:14px;padding:12px;margin-top:12px}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,system-ui,sans-serif;padding:18px max(4vw,14px) 64px;max-width:720px;margin-inline:auto;-webkit-font-smoothing:antialiased}
+h1{font-size:22px;font-weight:300;letter-spacing:.18em;margin:6px 0 14px;color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:12px}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.lbl{font-size:14px;color:var(--mut);width:100%;margin-top:6px}
-button{font:inherit;font-size:16px;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);touch-action:manipulation}
-button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
-button.big{min-width:120px;font-weight:600}
-input{font:inherit;font-size:16px;min-height:44px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);flex:1}
-#tracks button{width:100%;text-align:left;margin-top:6px;padding:8px 12px;min-height:48px}
+.seg{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.seg.two{grid-template-columns:repeat(2,minmax(0,1fr))}.seg button{padding:0 4px}
+.lbl{font-size:13px;color:var(--mut);width:100%;margin-top:12px;letter-spacing:.04em}
+button{font:inherit;font-size:15px;min-height:44px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:active{background:#1d1d20}
+button.on{background:var(--sel);color:var(--selink);border-color:var(--sel)}
+button.big{min-width:120px;font-weight:500;letter-spacing:.02em}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+input{font:inherit;font-size:16px;min-height:44px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:#0e0e10;color:var(--ink);flex:1}
+input::placeholder{color:#5f5c56}
+#tracks button{width:100%;text-align:left;margin-top:6px;padding:9px 12px;min-height:50px;border-color:#1f1f23}
 #tracks small{color:var(--mut)}
 .fig{position:relative;height:150px}.fig canvas{position:absolute;inset:0;width:100%;height:100%}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;font-size:14px}
-.stats b{display:block;font-size:20px}
-.eqrow{display:grid;grid-template-columns:4.2em 44px 4.6em 44px 1fr;gap:8px;align-items:center;margin-top:6px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;font-size:13px;color:var(--mut)}
+.stats b{display:block;font-size:20px;font-weight:300;color:var(--ink);font-variant-numeric:tabular-nums}
+.eqrow{display:grid;grid-template-columns:4.6em 44px 3.6em 44px 1fr;gap:8px;align-items:center;margin-top:6px}
 .eqrow button{padding:0;min-width:44px}.eqrow .v{text-align:right;font-variant-numeric:tabular-nums}
-.eqbar{height:8px;border-radius:4px;background:var(--line);position:relative;overflow:hidden}.eqbar i{position:absolute;top:0;bottom:0;background:var(--acc)}
-.status{font-size:14px;color:var(--mut);margin-top:8px}.status.warn{color:var(--warn)}
+.eqbar{height:3px;border-radius:2px;background:var(--line);position:relative;overflow:hidden}.eqbar i{position:absolute;top:0;bottom:0;background:var(--ink)}
+.status{font-size:13px;color:var(--mut);margin-top:10px}.status.warn{color:var(--warn)}
+b{font-weight:500}
 </style>
 </head>
 <body>
-<h1>Clarity</h1>
+<h1>CLARITY</h1>
 
 <div class="card">
   <div class="row"><input id="q" placeholder="Search Audius, or paste a track link (blank = trending)" autocomplete="off"><button id="find">Find</button></div>
@@ -43,10 +49,10 @@ input{font:inherit;font-size:16px;min-height:44px;padding:0 10px;border-radius:1
     <button id="play" class="big">Play</button>
     <button id="ab" class="big on">Clarity on</button>
   </div>
-  <div class="lbl">Recover</div><div class="row" id="rec"></div>
-  <div class="lbl">Tame</div><div class="row" id="tam"></div>
-  <div class="lbl">Bias (− favours Tame, + favours Recover)</div><div class="row" id="bia"></div>
-  <div class="lbl">Ear model</div><div class="row" id="mod"></div>
+  <div class="lbl">Recover</div><div class="seg" id="rec"></div>
+  <div class="lbl">Tame</div><div class="seg" id="tam"></div>
+  <div class="lbl">Bias (− favours Tame, + favours Recover)</div><div class="seg" id="bia"></div>
+  <div class="lbl">Ear model</div><div class="seg two" id="mod"></div>
 </div>
 
 <div class="card">
@@ -72,7 +78,7 @@ const API = 'https://api.audius.co/v1', APP = 'PocketSpatial';
 const $ = id => document.getElementById(id);
 let ctx = null, node = null, worker = null, audio = null, src = null, tracks = [], playing = false;
 const S = { recover: 1, tame: 1, bias: 0, mode: 'cambridge', on: true, eq: [0, 0, 0, 0, 0, 0, 0, 0] };
-const EQF = ['60', '150', '400', '1k', '2.5k', '6k', '10k', '14k'];
+const EQF = ['60 Hz', '150 Hz', '400 Hz', '1 kHz', '2.5 kHz', '6 kHz', '10 kHz', '14 kHz'];
 
 function group(el, values, labels, key, fmt) {
   values.forEach((v, i) => {
@@ -95,7 +101,7 @@ function drawEqRows() {
   EQF.forEach((lab, i) => {
     const r = document.createElement('div'); r.className = 'eqrow';
     const v = S.eq[i], w = Math.abs(v) / 12 * 50;
-    r.innerHTML = `<span>${lab} Hz</span><button type="button" aria-label="${lab} down">−</button><span class="v">${v > 0 ? '+' : ''}${v.toFixed(1)}</span><button type="button" aria-label="${lab} up">+</button><div class="eqbar"><i style="left:${v >= 0 ? 50 : 50 - w}%;width:${w}%"></i></div>`;
+    r.innerHTML = `<span>${lab}</span><button type="button" aria-label="${lab} down">−</button><span class="v">${v > 0 ? '+' : ''}${v.toFixed(1)}</span><button type="button" aria-label="${lab} up">+</button><div class="eqbar"><i style="left:${v >= 0 ? 50 : 50 - w}%;width:${w}%"></i></div>`;
     const [dn, up] = r.querySelectorAll('button');
     dn.addEventListener('click', () => { S.eq[i] = Math.max(-12, S.eq[i] - 1.5); drawEqRows(); send(); });
     up.addEventListener('click', () => { S.eq[i] = Math.min(12, S.eq[i] + 1.5); drawEqRows(); send(); });
@@ -172,12 +178,12 @@ function showStats(d) {
 function drawEQ(g) {
   const W = cv.clientWidth, H = cv.clientHeight, dpr = devicePixelRatio || 1;
   cv.width = W * dpr; cv.height = H * dpr; const c = cv.getContext('2d'); c.scale(dpr, dpr);
-  const ink = getComputedStyle(document.body).color;
+  const ink = '#8b877e';
   c.clearRect(0, 0, W, H);
   c.strokeStyle = ink; c.globalAlpha = 0.25; c.beginPath(); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke(); c.globalAlpha = 1;
   c.fillStyle = ink; c.font = '12px system-ui'; c.fillText('+6 dB', 4, 14); c.fillText('−6 dB', 4, H - 4);
   [100, 1000, 10000].forEach(f => { const x = W * Math.log(f / 50) / Math.log(16000 / 50); c.globalAlpha = 0.5; c.fillText(f >= 1000 ? f / 1000 + 'k' : f, x + 2, H / 2 - 4); c.globalAlpha = 1; });
-  c.strokeStyle = '#0f9b8e'; c.lineWidth = 2; c.beginPath();
+  c.strokeStyle = '#e9e4da'; c.lineWidth = 1.5; c.beginPath();
   for (let k = 0; k < g.length; k++) {
     const f = 50 + 25 * k, x = W * Math.log(f / 50) / Math.log(16000 / 50), y = H / 2 - (g[k] / 6) * (H / 2 - 6);
     k ? c.lineTo(x, y) : c.moveTo(x, y);
