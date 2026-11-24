@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clarity</title>
+<style>
+/* VOICE calm studio tool / IDEA a channel strip / PICTURE live EQ curve / COLOUR graphite + one teal accent / TYPE system UI */
+:root{color-scheme:light dark;--bg:light-dark(#f3f2ef,#121314);--card:light-dark(#fff,#1c1d1f);--ink:light-dark(#141414,#ececec);--mut:light-dark(#666,#9a9a9a);--acc:#0f9b8e;--warn:#c8371e;--line:light-dark(#ddd,#333)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,system-ui,sans-serif;padding:14px max(4vw,12px) 60px;max-width:760px;margin-inline:auto}
+h1{font-size:26px;margin:4px 0 10px}
+.card{background:var(--card);border-radius:14px;padding:12px;margin-top:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lbl{font-size:14px;color:var(--mut);width:100%;margin-top:6px}
+button{font:inherit;font-size:16px;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);touch-action:manipulation}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+button.big{min-width:120px;font-weight:600}
+input{font:inherit;font-size:16px;min-height:44px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);flex:1}
+#tracks button{width:100%;text-align:left;margin-top:6px;padding:8px 12px;min-height:48px}
+#tracks small{color:var(--mut)}
+.fig{position:relative;height:150px}.fig canvas{position:absolute;inset:0;width:100%;height:100%}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;font-size:14px}
+.stats b{display:block;font-size:20px}
+.status{font-size:14px;color:var(--mut);margin-top:8px}.status.warn{color:var(--warn)}
+</style>
+</head>
+<body>
+<h1>Clarity</h1>
+
+<div class="card">
+  <div class="row"><input id="q" placeholder="Search Audius, or paste a track link (blank = trending)" autocomplete="off"><button id="find">Find</button></div>
+  <div id="tracks"></div>
+  <div id="status" class="status">Tap Find to load tracks.</div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <button id="play" class="big">Play</button>
+    <button id="ab" class="big on">Clarity on</button>
+  </div>
+  <div class="lbl">Recover</div><div class="row" id="rec"></div>
+  <div class="lbl">Tame</div><div class="row" id="tam"></div>
+  <div class="lbl">Bias (− favours Tame, + favours Recover)</div><div class="row" id="bia"></div>
+  <div class="lbl">Ear model</div><div class="row" id="mod"></div>
+</div>
+
+<div class="card">
+  <div class="fig"><canvas id="eq"></canvas></div>
+  <div class="stats" style="margin-top:10px">
+    <div>Engine load<b id="load">–</b></div>
+    <div>Slowest frame<b id="worst">–</b></div>
+    <div>Dropped frames<b id="drop">0</b></div>
+    <div>Hidden now<b id="hid">–</b></div>
+  </div>
+  <div id="perf" class="status">Engine load is the share of each 10 ms the analysis needs. Under 100% keeps up in real time.</div>
+</div>
+
+<script>
+{
+const API = 'https://api.audius.co/v1', APP = 'PocketSpatial';
+const $ = id => document.getElementById(id);
+let ctx = null, node = null, worker = null, audio = null, src = null, tracks = [], playing = false;
+const S = { recover: 1, tame: 1, bias: 0, mode: 'cambridge', on: true };
+
+function group(el, values, labels, key, fmt) {
+  values.forEach((v, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = labels[i];
+    b.addEventListener('click', () => { S[key] = v; [...el.children].forEach(c => c.classList.remove('on')); b.classList.add('on'); send(); });
+    if (S[key] === v) b.classList.add('on'); el.appendChild(b);
+  });
+}
+group($('rec'), [0, 0.5, 1, 1.5, 2], ['0%', '50%', '100%', '150%', '200%'], 'recover');
+group($('tam'), [0, 0.5, 1, 1.5, 2], ['0%', '50%', '100%', '150%', '200%'], 'tame');
+group($('bia'), [-1, -0.5, 0, 0.5, 1], ['−100', '−50', '0', '+50', '+100'], 'bias');
+group($('mod'), ['cambridge', 'munich'], ['Cambridge', 'Munich'], 'mode');
+
+function send() { if (worker) worker.postMessage({ type: 'settings', s: S }); }
+function status(t, warn) { $('status').textContent = t; $('status').className = 'status' + (warn ? ' warn' : ''); }
+
+async function getJSON(u) { const r = await fetch(u); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
+$('find').addEventListener('click', async () => {
+  const q = $('q').value.trim(); status('Loading…');
+  try {
+    let list;
+    if (/^https?:\/\//.test(q)) { const d = (await getJSON(`${API}/resolve?url=${encodeURIComponent(q)}&app_name=${APP}`)).data; list = d ? [d] : []; }
+    else if (q) list = (await getJSON(`${API}/tracks/search?query=${encodeURIComponent(q)}&limit=30&app_name=${APP}`)).data;
+    else list = (await getJSON(`${API}/tracks/trending?limit=30&app_name=${APP}`)).data;
+    tracks = (list || []).filter(t => t && t.id && t.is_streamable !== false && !t.stream_conditions);
+    const box = $('tracks'); box.innerHTML = '';
+    tracks.forEach(t => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.innerHTML = `${esc(t.title)}<br><small>${esc(t.user && t.user.name || '')}</small>`;
+      b.addEventListener('click', () => start(t)); box.appendChild(b);
+    });
+    status(tracks.length ? 'Tap a track to play it through Clarity.' : 'No playable tracks found.', !tracks.length);
+  } catch (e) { status('Audius did not answer: ' + e.message, true); }
+});
+function esc(s) { return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+async function ensureAudio() {
+  if (ctx) return true;
+  try { ctx = new AudioContext({ sampleRate: 48000 }); } catch (e) { ctx = new AudioContext(); }
+  if (ctx.sampleRate !== 48000) { status('This device runs audio at ' + ctx.sampleRate + ' Hz; Clarity needs 48000 Hz.', true); return false; }
+  await ctx.audioWorklet.addModule('clarity-engine.js?v=1');
+  await ctx.audioWorklet.addModule('clarity-worklet.js?v=1');
+  node = new AudioWorkletNode(ctx, 'clarity-processor', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
+  worker = new Worker('clarity-worker.js?v=1');
+  const ch = new MessageChannel();
+  node.port.postMessage({ type: 'port', port: ch.port1 }, [ch.port1]);
+  worker.postMessage({ type: 'port', port: ch.port2 }, [ch.port2]);
+  worker.onmessage = e => { if (e.data.type === 'stats') showStats(e.data); };
+  send();
+  audio = new Audio(); audio.crossOrigin = 'anonymous'; audio.playsInline = true; audio.preload = 'auto';
+  src = ctx.createMediaElementSource(audio); src.connect(node); node.connect(ctx.destination);
+  audio.addEventListener('ended', () => { playing = false; $('play').textContent = 'Play'; });
+  return true;
+}
+async function start(t) {
+  if (!(await ensureAudio())) return;
+  await ctx.resume();
+  audio.src = `${API}/tracks/${t.id}/stream?app_name=${APP}`;
+  try { await audio.play(); playing = true; $('play').textContent = 'Pause'; status('Playing: ' + t.title); }
+  catch (e) { status('Playback failed: ' + e.message, true); }
+}
+$('play').addEventListener('click', async () => {
+  if (!audio || !audio.src) { status('Pick a track first.', true); return; }
+  if (playing) { audio.pause(); playing = false; $('play').textContent = 'Play'; }
+  else { await ctx.resume(); await audio.play(); playing = true; $('play').textContent = 'Pause'; }
+});
+$('ab').addEventListener('click', () => {
+  S.on = !S.on; $('ab').textContent = S.on ? 'Clarity on' : 'Clarity off (bypass)'; $('ab').classList.toggle('on', S.on);
+  if (node) node.port.postMessage({ type: 'bypass', on: !S.on }); send();
+});
+
+const cv = $('eq');
+function showStats(d) {
+  $('load').textContent = Math.round(d.load * 100) + '%';
+  $('worst').textContent = d.worstMs.toFixed(1) + ' ms';
+  $('drop').textContent = d.dropped;
+  $('hid').textContent = Math.round(d.hiddenShare * 100) + '%';
+  $('perf').className = 'status' + (d.load > 1 || d.dropped > 0 ? ' warn' : '');
+  drawEQ(d.gains);
+}
+function drawEQ(g) {
+  const W = cv.clientWidth, H = cv.clientHeight, dpr = devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr; const c = cv.getContext('2d'); c.scale(dpr, dpr);
+  const ink = getComputedStyle(document.body).color;
+  c.clearRect(0, 0, W, H);
+  c.strokeStyle = ink; c.globalAlpha = 0.25; c.beginPath(); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke(); c.globalAlpha = 1;
+  c.fillStyle = ink; c.font = '12px system-ui'; c.fillText('+6 dB', 4, 14); c.fillText('−6 dB', 4, H - 4);
+  [100, 1000, 10000].forEach(f => { const x = W * Math.log(f / 50) / Math.log(16000 / 50); c.globalAlpha = 0.5; c.fillText(f >= 1000 ? f / 1000 + 'k' : f, x + 2, H / 2 - 4); c.globalAlpha = 1; });
+  c.strokeStyle = '#0f9b8e'; c.lineWidth = 2; c.beginPath();
+  for (let k = 0; k < g.length; k++) {
+    const f = 50 + 25 * k, x = W * Math.log(f / 50) / Math.log(16000 / 50), y = H / 2 - (g[k] / 6) * (H / 2 - 6);
+    k ? c.lineTo(x, y) : c.moveTo(x, y);
+  }
+  c.stroke();
+}
+}
+</script>
+</body>
+</html>
