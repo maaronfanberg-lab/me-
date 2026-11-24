@@ -64,6 +64,7 @@ jobs:
             found=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "github-pages")] | length' 2>/dev/null || echo 0)
             if [ "$found" -ge 1 ]; then
               echo "Pages artifact is available to the deployment API"
+              sleep 12
               exit 0
             fi
             echo "Pages artifact not indexed yet (attempt $attempt)"
@@ -75,4 +76,4 @@ jobs:
       - name: Deploy Pages
         if: github.ref == 'refs/heads/main'
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5.0.1
