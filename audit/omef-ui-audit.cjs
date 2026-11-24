@@ -239,10 +239,17 @@ async function testLiveDeployment(){
     const info=await page.evaluate(()=>({
       initialized:Boolean(window.OMEFExclusive),originalControls:Boolean(document.getElementById('originalPause')),
       originalCount:window.OMEFExclusive?.allDefs?.length||0,
-      title:document.title
+      title:document.title,
+      cannedShapeSwitch:document.documentElement.outerHTML.includes('switch(info.mode)'),
+      nativeCoupledProjected:document.documentElement.outerHTML.includes('return native;'),
+      couplingPresetA:Number(document.getElementById('twA_a')?.value),
+      couplingPersistence:Number(document.getElementById('twinPersistence')?.value),
+      crossCoupling:Number(document.getElementById('twinGlobal')?.value)
     }));
     check('GitHub Pages','Deployed site returns HTTP 200',resp?.status()===200,'HTTP '+resp?.status());
     check('GitHub Pages','Live deployment has the audited Original UI',info.initialized&&info.originalControls&&info.originalCount===61,JSON.stringify(info));
+    check('GitHub Pages','Live Coupled has NO hardcoded waves/flowers',info.nativeCoupledProjected&&!info.cannedShapeSwitch,JSON.stringify(info));
+    check('GitHub Pages','Live Coupled uses the tested native-filament preset',Math.abs(info.couplingPresetA-(-2.7))<.02&&Math.abs(info.crossCoupling-.4)<.02&&info.couplingPersistence===100,JSON.stringify(info));
     if(info.initialized)await capture(page,'live-github-pages');
     report.deployment={url,code:resp?.status(),...info};
   }catch(e){check('GitHub Pages','Live site opens in browser',false,String(e).slice(0,350));report.deployment={url,error:String(e)}}
@@ -250,7 +257,7 @@ async function testLiveDeployment(){
 }
 (async()=>{
   for (const [engine,name] of [[chromium,'Chromium-iPhone-size'],[webkit,'WebKit-iPhone-size']])await run(engine,name);
-  // Staging test branch is not published to GitHub Pages until approved.
+  await testLiveDeployment();
   fs.writeFileSync('audit-artifacts/audit-results.json',JSON.stringify(report,null,2));
   console.log('AUDIT_SUMMARY '+JSON.stringify({passes:report.passes,failures:report.failures,browsers:report.browsers,screenshots:report.screenshots}).slice(0,14000));
   process.exitCode=report.failures?1:0;
