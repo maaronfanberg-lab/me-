@@ -311,21 +311,32 @@ async function testAutonomousEvolution(){
    movingStart.linkSliders.filter((v,i)=>v!==movingEnd.linkSliders[i]).length;
   check('WebKit autonomous evolution','Sliders animate through intermediate actual equation values',
    slidersInMotion>=25,'movingIn950ms='+slidersInMotion);
-  await page.waitForFunction(()=>{
-   const text=document.getElementById('twinEvolutionStatus')?.textContent||'';
-   return Number((text.match(/(\d+) accepted/)||[])[1]||0)>=3;
-  },null,{timeout:75000,polling:350});
-  const after=await snapshot();
-  const genomesChanged=after.A.filter((v,i)=>v!==before.A[i]).length+after.B.filter((v,i)=>v!==before.B[i]).length;
-  const circuitChanged=after.links.some((v,i)=>v!==before.links[i]);
-  const linkSlidersChanged=after.linkSliders.filter((v,i)=>v!==before.linkSliders[i]).length;
+  // A slider that evolves and later returns to its initial value must still
+  // count as having moved. Watch the REAL input thumbs throughout the search.
+  const observations=[before,movingStart,movingEnd];
+  let after=movingEnd;
+  const deadline=Date.now()+75000;
+  while(after.accepted<3&&Date.now()<deadline){
+   await page.waitForTimeout(750);
+   after=await snapshot();observations.push(after);
+  }
+  const changedA=new Set(),changedB=new Set(),changedLinks=new Set();
+  for(let j=1;j<observations.length;j++){
+   const previous=observations[j-1],current=observations[j];
+   current.A.forEach((v,i)=>{if(v!==previous.A[i])changedA.add(i);});
+   current.B.forEach((v,i)=>{if(v!==previous.B[i])changedB.add(i);});
+   current.linkSliders.forEach((v,i)=>{if(v!==previous.linkSliders[i])changedLinks.add(i);});
+  }
+  const genomesChanged=changedA.size+changedB.size;
+  const linkSlidersChanged=changedLinks.size;
+  const circuitChanged=observations.some(v=>v.links.some((x,i)=>x!==before.links[i]));
   const globalsChanged=after.scalars.some((v,i)=>v!==before.scalars[i]);
   check('WebKit autonomous evolution','At least three distinct evolutions are accepted in the real interface',after.accepted>=3,
     JSON.stringify({before:before.accepted,after:after.accepted,status:after.status}));
   check('WebKit autonomous evolution','Evolution moves almost all 122 displayed A/B formula sliders',
-    genomesChanged>=96,'changed='+genomesChanged+'/122');
+    genomesChanged>=116,'movedAtLeastOnce='+genomesChanged+'/122 (observed '+observations.length+' samples)');
   check('WebKit autonomous evolution','Evolution moves most of the 24 numeric link sliders',
-    linkSlidersChanged>=18,'changed='+linkSlidersChanged+'/24');
+    linkSlidersChanged>=22,'movedAtLeastOnce='+linkSlidersChanged+'/24 (observed '+observations.length+' samples)');
   check('WebKit autonomous evolution','Evolution retargets mathematical circuit or global controls',circuitChanged||globalsChanged,
     JSON.stringify({circuitChanged,globalsChanged,scalars:after.scalars}));
   check('WebKit autonomous evolution','Points, ink, size, speed and trail controls remain unchanged',
