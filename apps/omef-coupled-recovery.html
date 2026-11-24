@@ -115,7 +115,7 @@ body.omef-immersive.omef-hud-visible #immersiveHUD{opacity:1;pointer-events:auto
 <div class="grid2"><button id="twinRestore" class="secondary">Restore circuit</button><button id="twinDecouple" class="secondary">Switch off links</button><button id="twinRerender" class="secondary">Build more detail</button></div>
 <div class="pure" id="twinStats" style="margin-top:10px">Cross-system resonance will be measured here.</div><button id="twinVerify" class="secondary">Verify equations and coupling</button><div class="pure" id="twinSolverReport" role="status" aria-live="polite" style="margin-top:8px">Numerical self-check available. Tests original-equation parity, both coupled outputs, and delayed cross-link drive.</div>
 </section><section id="twinParameterSection"><h2>OMEF genome controls · A and B</h2><p class="twin-note">Each of the nine controls modifies actual OMEF coefficients and their state-derived projection; there are no geometric presets. Both A and B influence the shared geometry. Moving a slider rapidly fades old trails and reframes the new attractor without resetting the coupled histories.</p><div id="twinGenomeStatus" class="pure" aria-live="polite">Adjust any A or B genome control to see its live numerical application.</div><div class="grid2"><button id="twinResetA" class="secondary">Reset A</button><button id="twinResetB" class="secondary">Reset B</button><button id="twinCopyAB">Copy A → B</button><button id="twinCopyBA">Copy B → A</button></div><div id="twinParameterGroups"></div></section>
-<section><h2>Subsystem-to-subsystem connections</h2><p class="twin-note">The eight directed links directly reshape the two 10D governing equations. The image uses their native coupled state-space projection, never parameter-selected geometric outlines.  Evolution changes both the network AND selected coefficients inside the formulas. The two full OMEF state machines preserve their 20 coordinates, histories and phases while coefficients and cross-links change gradually. The original fine-filament style is continuously accumulated on ONE canvas. There are no new-image crossfades. Manual edits hold random mutation for 12 seconds.</p><div id="twinLinks"></div></section>
+<section><h2>Subsystem-to-subsystem connections</h2><p class="twin-note">The eight directed links directly reshape the two 10D governing equations. The image uses their native coupled state-space projection, never parameter-selected geometric outlines.  Each accepted evolution step changes every unlocked slider in both formulas and the network. Points, Ink, Size, Evolution Speed and Trail Persistence are held fixed. The two full OMEF state machines preserve their 20 coordinates, histories and phases while coefficients and cross-links change gradually. The original fine-filament style is continuously accumulated on ONE canvas. There are no new-image crossfades. Manual edits hold random mutation for 12 seconds.</p><div id="twinLinks"></div></section>
 </div>
 <section><h2>Rendering</h2><div class="toggle"><input id="livePreview" type="checkbox" checked><label for="livePreview">Live preview while dragging sliders</label></div><div id="renderControls"></div><div class="grid3 theme"><button data-theme="dark" class="active">Dark</button><button data-theme="light">Light</button><button data-theme="color">Color</button></div><div class="grid2" style="margin-top:8px"><button id="download">Save PNG</button><button id="stop" class="danger">Stop</button></div></section>
 </div></div><script>(function(){const macros=[['a','Pair coupling',-3,3,.01,1.15],['b','Triad coupling',-3,3,.01,1.45],['c','Market memory',-3,3,.01,.72],['d','Shadow feedback',-3,3,.01,1.10],['e','Regime fluidity',-3,3,.01,1.20],['f','Golden cycles',-3,3,.01,.85],['g','Fibonacci memory',-3,3,.01,1.10],['h','Spectral edge',-3,3,.01,.65],['i','Projection mix',-3,3,.01,.35]],feedback=[['fbPair','Feedback pair',0,.8,.01,.18],['fbRegime','Feedback regime',0,.6,.01,.12],['fbProjection','Feedback projection',0,.8,.01,.22],['fbLag','Feedback lag',1,32,1,8],['fbMix','Feedback mix',0,1,.01,.55],['fbDamping','Feedback damping',.70,.995,.005,.92]],groups=[['Pair field',[['pairFreqA','Pair sin freq',.2,3,.01,1.70],['pairFreqB','Pair cos freq',.2,3,.01,1.31],['pairCosAmp','Pair cos amp',0,1.5,.01,.72],['pairPhaseA','Pair phase A',0,1,.01,.37],['pairPhaseB','Pair phase B',0,1,.01,.23]]],['Triad geometry',[['triScale','Triad scale',0,2,.01,1],['triCross','Triad cross',0,2,.01,1]]],['Market delays',[['marketW1','Lag A − Lag B',0,2,.01,1],['marketW2','Lag C − 34',0,1.5,.01,.55],['lagA','Delay A',1,21,1,13],['lagB','Delay B',2,34,1,21],['lagC','Delay C',1,13,1,8]]],['Shadow memory',[['shadowSelf','Shadow self',0,2,.01,1],['shadowCross','Shadow cross',0,1.5,.01,.65],['shadowLag','Shadow lag',1,34,1,13]]],['Regime field',[['r0u8','R0 U8',0,2,.01,1.15],['r0u6','R0 U6',-1.5,0,.01,-.52],['r1u6','R1 U6',0,2,.01,.92],['r1u4sq','R1 U4²',0,1,.01,.28],['r2u2','R2 U2',-1.5,0,.01,-.88],['r2u7','R2 U7',0,1.5,.01,.58],['r3u8','R3 U8',-1.5,0,.01,-.95],['r3u0','R3 U0',-1.5,0,.01,-.42],['regimeForce','Regime force',0,.5,.005,.17]]],['Golden phases',[['phaseSpeed','Phase speed',.005,.09,.001,.029],['phaseRatio','Golden ratio',1.2,2.2,.001,1.618],['phaseMod1','Phase mod U0',0,.5,.01,.18],['phaseMod2','Phase mod U6',0,.5,.01,.16],['goldCos','Golden cos amp',0,1.5,.01,.72]]],['Fibonacci memory',[['fib1','Fib lag 1',0,.8,.01,.43],['fib3','Fib lag 3',0,.8,.01,.27],['fib8','Fib lag 8',0,.8,.01,.18],['fib13','Fib lag 13',0,.8,.01,.12],['fibSelf','Fib self subtract',0,2,.01,1]]],['Core retention',[['edgeBase','Retention base',.3,1.2,.005,.78],['edgeSpan','Retention span',0,.5,.005,.16],['squash','Tanh squash',.3,2,.01,1]]],['Projection A',[['xA0','xA U0-U3',0,2.5,.01,1.25],['xA7','xA U7-U2',0,2,.01,.85],['xAdelay','xA delay',0,1,.01,.35],['yA6','yA U6-U8',0,2.5,.01,1.18],['yA5','yA U5+U1',0,2,.01,.78],['yAdelay','yA delay',0,1,.01,.32]]],['Projection B',[['projReg','Regime projection',0,3,.01,2.05],['projCross','Cross product',0,2,.01,.88],['projPhase','Phase projection',0,1.5,.01,.55]]]];const row=(d,p)=>{let r=document.createElement('div');r.className='row';r.innerHTML=`<label>${d[1]}</label><input id="${d[0]}" type="range" min="${d[2]}" max="${d[3]}" step="${d[4]}" value="${d[5]}"><div id="${d[0]}v" class="value">${d[5]}</div>`;p.appendChild(r)};macros.forEach(d=>row(d,document.getElementById('macro')));feedback.forEach(d=>row(d,document.getElementById('feedback')));groups.forEach((g,i)=>{let det=document.createElement('details');det.className='group';if(i<2)det.open=true;det.innerHTML=`<summary>${g[0]}</summary><div></div>`;g[1].forEach(d=>row(d,det.querySelector('div')));document.getElementById('deep').appendChild(det)});[['points','Points',25000,1000000,25000,250000],['ink','Ink',1,100,1,42],['size','Size',1,8,1,2]].forEach(d=>row(d,document.getElementById('renderControls')));})();</script><script>(function(){'use strict';
@@ -354,7 +354,7 @@ function evolutionStatus(phrase){
  $('twinAutoToggle').textContent=evolutionOn?'Pause evolution':'Resume evolution';
  $('twinAutoToggle').setAttribute('aria-pressed',String(evolutionOn));
  $('twinEvolutionStatus').textContent=label+' · '+evolutionAccepted+' accepted · '+evolutionRejected+' rejected'+(phrase?' · '+phrase:'');
- $('twinSpeedInfo').textContent='New OMEF targets every '+evolutionSeconds().toFixed(1)+' seconds (while running) · mutation depth '+$('twinDepth').value+'/10 · drift smoothness '+(+$('twinMorphDuration').value).toFixed(1)+' s. The solver always keeps its history.';
+ $('twinSpeedInfo').textContent='New OMEF targets every '+evolutionSeconds().toFixed(1)+' seconds (while running) · mutation depth '+$('twinDepth').value+'/10 · drift smoothness '+(+$('twinMorphDuration').value).toFixed(1)+' s. All unlocked sliders evolve together; Points, Ink, Size, Speed and Trails stay fixed. The solver keeps its history.';
 }
 function evolutionCancel(){evolutionEpoch++;if(evolutionTimer!==null){clearTimeout(evolutionTimer);evolutionTimer=null;}}
 function holdForEditing(){
@@ -514,65 +514,68 @@ function liveInput(){
  st.targetWeights=hot(cfg.projection);liveRetarget(st,st.requested);
  st.nextEvolution=performance.now()+Math.max(evolutionSeconds()*1000,manualHoldUntil-Date.now());
 }
+// Every accepted evolution target moves every unlocked range control.
+function evolveStep(value,min,max,step,fraction,rng=Math.random){
+ const count=Math.floor((max-min)/step+1e-7);
+ const index=clamp(Math.round((value-min)/step),0,count);
+ const radius=Math.max(1,Math.round(count*fraction*(.35+.65*rng())));
+ const sign=rng()<.5?-1:1;
+ const next=clamp(index+sign*radius,0,count);
+ const moved=next===index?clamp(index-sign*radius,0,count):next;
+ return +(min+moved*step).toFixed(9);
+}
+function allSliderProposal(A,B,cfg,depth,smoothness,rng=Math.random,scale=1){
+ const fraction=(.004+.0017*depth)*scale;
+ const move=(v,min,max,step,m=1)=>evolveStep(v,min,max,step,fraction*m,rng);
+ const a={...A},b={...B};
+ for(const [id,,min,max,step] of allDefs){
+  a[id]=move(A[id],min,max,step);b[id]=move(B[id],min,max,step);
+ }
+ const links=cfg.links.map((l,i)=>({...l,slot:l.slot??i,
+  strength:move(l.strength,-2,2,.05),lag:move(l.lag,1,34,1),
+  offset:move(l.offset,0,315,5)}));
+ const next={...cfg,global:move(cfg.global,0,4,.05),seed:move(cfg.seed,0,3,.05),
+  mix:move(cfg.mix,0,1,.01),interference:move(cfg.interference,0,3,.02),links};
+ return {A:a,B:b,cfg:next,edges:links,
+  depth:evolveStep(depth,1,10,1,0,rng),smoothness:evolveStep(smoothness,.8,9,.2,0,rng)};
+}
+function allSliderAccept(test,original){
+ if(!test)return false;
+ const novelty=visualDifference(test,original);
+ return novelty>=.14&&test.shapeScore>=Math.max(.49,(original?original.shapeScore:.58)-.095)
+    &&test.occupancy<=Math.min(.48,(original?original.occupancy:.4)+.095)
+    &&test.denseMass>=Math.max(.50,(original?original.denseMass:.5)-.12)&&test.travel<.12;
+}
+
 function liveMutate(){
  const st=liveState;if(!st||stopped||twinPaused||activeEngine!=='twin'||!evolutionOn)return false;
- const original=sampleVisualProfile(st.targetA,st.targetB,st.targetCfg,1250);
- const depth=+$('twinDepth').value;
- const mac=allDefs.slice(0,9),fine=allDefs.slice(9);
+ const original=sampleVisualProfile(st.targetA,st.targetB,st.targetCfg,2100);
+ const depth=+$('twinDepth').value,smoothness=+$('twinMorphDuration').value;
  let winner=null;
- // Choose substantial bounded parameter perturbations, testing the actual two
- // OMEF systems before accepting. Neither the live state nor histories reset.
  for(let attempt=0;attempt<3;attempt++){
-  const A={...st.targetA},B={...st.targetB},changes=[];
-  const count=2+Math.floor(depth/3);
-  for(let j=0;j<count;j++){
-   const pool=j%2===0?mac:fine;
-   const d=pool[Math.floor(Math.random()*pool.length)];
-   const [key,,min,max,step]=d,side=j%2===0?'A':'B',o=side==='A'?A:B;
-   const old=o[key],amplitude=(max-min)*(.035+.009*depth)*(.5+Math.random()*.5);
-   let v=clamp(old+(Math.random()<.5?-1:1)*amplitude,min,max);
-   const decimals=(String(step).split('.')[1]||'').length;
-   v=clamp(+(min+Math.round((v-min)/step)*step).toFixed(decimals),min,max);
-   if(v===old)v=clamp(old+(Math.random()<.5?-step:step),min,max);
-   o[key]=v;
-   changes.push(side+'.'+key);
-  }
-  const edges=st.requested.map(x=>({...x}));
-  if(Math.random()<.33){
-   const e=edges[Math.floor(Math.random()*edges.length)];
-   if(Math.random()<.15){
-    const nodes=twinNodes.map(v=>v[0]);
-    if(Math.random()<.5)e.from=nodes[Math.floor(Math.random()*nodes.length)];
-    else e.to=nodes[Math.floor(Math.random()*nodes.length)];
-   }else e.strength=clamp(e.strength+(Math.random()-.5)*(.12+.012*depth),-1.9,1.9);
-  }
-  const cfg={...st.targetCfg,links:edges};
-  const test=sampleVisualProfile(A,B,cfg,1250);
-  if(!test)continue;
-  const novelty=visualDifference(test,original);
-  const okay=test.shapeScore>=Math.max(.49,(original?original.shapeScore:.58)-.095)
-    &&test.occupancy<=Math.min(.48,(original?original.occupancy:.4)+.095)
-    &&test.denseMass>=Math.max(.50,(original?original.denseMass:.5)-.12) &&test.travel<.12;
-  if(!okay||novelty<.14)continue;
-  const rank=Math.min(.75,novelty)+.16*test.shapeScore;
-  if(!winner||rank>winner.rank)winner={A,B,cfg,edges,changes,novelty,rank};
+  const c=allSliderProposal(st.targetA,st.targetB,st.targetCfg,depth,smoothness,Math.random,[1,.65,1.5][attempt]);
+  const test=sampleVisualProfile(c.A,c.B,c.cfg,2100);
+  if(!allSliderAccept(test,original))continue;
+  const novelty=visualDifference(test,original),rank=Math.min(.75,novelty)+.16*test.shapeScore;
+  if(!winner||rank>winner.rank)winner={...c,novelty,rank};
   if(novelty>.28&&novelty<.72)break;
  }
  if(!winner){
   evolutionRejected++;
   st.nextEvolution=performance.now()+Math.max(800,evolutionSeconds()*250);
-  evolutionStatus('No new coherent form passed; retrying');
+  evolutionStatus('No coherent all-slider proposal passed; retrying');
   return false;
  }
  evolutionAccepted++;
  st.targetA=winner.A;st.targetB=winner.B;st.targetCfg=winner.cfg;st.requested=winner.edges;
- liveRetarget(st,winner.edges);
- st.mutationLabel=winner.changes.join(', ');
- st.lastNovelty=winner.novelty;
- st.lastMutation=performance.now();
- st.quickFadeUntil=st.lastMutation+1400;
- st.detailUntil=Math.max(st.detailUntil,st.lastMutation+2900);
+ st.targetWeights=hot(winner.cfg.projection);liveRetarget(st,winner.edges);
+ st.mutationLabel='all '+(2*allDefs.length+4+3*winner.edges.length+2)+' unlocked sliders';
+ st.lastNovelty=winner.novelty;st.lastMutation=performance.now();
+ st.quickFadeUntil=st.lastMutation+1400;st.detailUntil=Math.max(st.detailUntil,st.lastMutation+2900);
  applyTwinGenome(winner.A,winner.B);applyTwinLinks(winner.edges);
+ for(const [id,value] of [['twinGlobal',winner.cfg.global],['twinSeed',winner.cfg.seed],['twinMix',winner.cfg.mix],['twinInterference',winner.cfg.interference],['twinDepth',winner.depth],['twinMorphDuration',winner.smoothness]]){
+  const e=$(id);e.value=value;$(id+'v').textContent=(+e.value).toFixed(+e.step>=1?0:2);
+ }
  evolutionStatus('Evolving '+st.mutationLabel+' · '+Math.round(100*winner.novelty)+'% geometry change');
  return true;
 }
@@ -1093,7 +1096,7 @@ function immerseWire(){
  }
 }
 
-window.OMEFExclusive={makeStepper,makeOriginalStepper,originalTestedSeeds,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinCombinedBounds,twinCombine,twinDefaults,twinRaw,activeMode:()=>activeEngine,coupledState:()=>liveState?({paused:twinPaused,drawn:liveState.drawn,frames:liveState.frames,config:{...liveState.config},targets:{...liveState.targetCfg}}):null,solverCheck:verifyTwinSolver,evolutionState:()=>({active:evolutionOn,accepted:evolutionAccepted,rejected:evolutionRejected,mode:activeEngine,nextIn:liveState?Math.max(0,(liveState.nextEvolution-performance.now())/1000):null,label:liveState?.mutationLabel||''})};buildTwinUI();wire();immerseWire();apply(originalSeed(0));updateValues();originalStart();
+window.OMEFExclusive={makeStepper,makeOriginalStepper,originalTestedSeeds,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinCombinedBounds,twinCombine,twinDefaults,twinRaw,allSliderProposal,allSliderAccept,sampleVisualProfile,activeMode:()=>activeEngine,coupledState:()=>liveState?({paused:twinPaused,drawn:liveState.drawn,frames:liveState.frames,config:{...liveState.config},targets:{...liveState.targetCfg}}):null,solverCheck:verifyTwinSolver,evolutionState:()=>({active:evolutionOn,accepted:evolutionAccepted,rejected:evolutionRejected,mode:activeEngine,nextIn:liveState?Math.max(0,(liveState.nextEvolution-performance.now())/1000):null,label:liveState?.mutationLabel||''})};buildTwinUI();wire();immerseWire();apply(originalSeed(0));updateValues();originalStart();
 })();</script><script>(function(){'use strict';
 // Tap path for every slider: -/+ buttons (1% of range, at least one step) and tap-to-jump on the track.
 // On touch screens the slider itself ignores touches, so a scroll that starts on it just scrolls.
