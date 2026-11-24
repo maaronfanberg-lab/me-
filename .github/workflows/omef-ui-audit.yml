@@ -26,8 +26,8 @@ jobs:
           node-version: '22'
       - name: Install real browser engines
         run: |
-          npm install --no-save playwright@1.56.1
-          npx playwright install --with-deps chromium webkit
+          npm install --no-save playwright@latest
+          npx playwright install chromium webkit
       - name: Exercise mobile-sized browser controls and capture screenshots
         run: node audit/omef-ui-audit.cjs
       - name: Upload UI screenshots and test report
