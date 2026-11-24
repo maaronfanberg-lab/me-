@@ -497,13 +497,50 @@ function sampleVisualProfile(rawA,rawB,cfg,n=2100){
  const travel=totalStep/Math.max(1,points.length-1)/Math.hypot(width,height);
  const continuity=1-clamp(travel/.14,0,1);
  const shapeScore=clamp(.46*denseMass+.29*(1-occupancy)+.25*continuity,0,1);
- if(occupied<65||occupancy>.58||denseMass<.35||travel>.13)return null;
- return {hist:Array.from(hist),count:points.length,width,height,occupied,occupancy,denseMass,centerMass,shapeScore,travel};
+ if(occupied<65||occupancy>.75||denseMass<.24||travel>.13)return null;
+ // Histogram dissimilarity alone can call the SAME wing/ribbon silhouette new.
+ // Compare shape-invariant structure: covariance, central void, occupancy,
+ // trajectory curvature, winding, and four radial mass bands.
+ let mxx=0,myy=0,mxy=0,curve=0,turns=0,winding=0;
+ const radial=[0,0,0,0],diagonal=Math.hypot(width,height);
+ let previousAngle=null;
+ for(let i=0;i<points.length;i++){
+  const [x,y]=points[i],dx=x-meanX,dy=y-meanY;
+  mxx+=dx*dx;myy+=dy*dy;mxy+=dx*dy;
+  const radius=Math.hypot(dx/width,dy/height);
+  radial[Math.min(3,Math.floor(radius*6))]++;
+  const angle=Math.atan2(dy,dx);
+  if(previousAngle!==null){let da=angle-previousAngle;da=Math.atan2(Math.sin(da),Math.cos(da));winding+=da;}
+  previousAngle=angle;
+  if(i>=2){
+   const u=points[i-1],v=points[i-2],aX=u[0]-v[0],aY=u[1]-v[1],bX=x-u[0],bY=y-u[1];
+   const denominator=Math.hypot(aX,aY)*Math.hypot(bX,bY);
+   if(denominator>1e-10){const theta=Math.atan2(aX*bY-aY*bX,aX*bX+aY*bY);
+    curve+=Math.abs(theta);if(Math.abs(theta)>.3)turns++;}
+  }
+ }
+ const trace=mxx+myy,discriminant=Math.sqrt((mxx-myy)**2+4*mxy*mxy);
+ const axisRatio=(trace-discriminant)/Math.max(1e-8,trace+discriminant);
+ const descriptor=[
+  clamp(axisRatio,0,1),occupancy,centerMass,denseMass,
+  clamp(curve/(Math.max(1,points.length-2)*.8),0,1),
+  clamp(turns/Math.max(1,points.length-2)*6,0,1),
+  clamp(Math.abs(winding)/(2*Math.PI*12),0,1),
+  ...radial.map(x=>x/points.length)
+ ];
+ return {hist:Array.from(hist),count:points.length,width,height,occupied,occupancy,denseMass,centerMass,shapeScore,travel,descriptor};
 }
 function visualDifference(a,b){
  if(!a||!b)return 1;
  let distance=0;for(let i=0;i<a.hist.length;i++)distance+=Math.abs(a.hist[i]/a.count-b.hist[i]/b.count);
  return distance/2;
+}
+function structuralDistance(a,b){
+ if(!a||!b||!a.descriptor||!b.descriptor)return 1;
+ const weights=[.24,.10,.12,.09,.15,.09,.08,.05,.05,.05,.05];
+ let sum=0,weight=0;
+ for(let i=0;i<weights.length;i++){sum+=weights[i]*Math.min(1,Math.abs(a.descriptor[i]-b.descriptor[i])*(i<7?2.5:3));weight+=weights[i];}
+ return sum/weight;
 }
 function shuffled(array){const a=array.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function candidateLinks(current,forced){
