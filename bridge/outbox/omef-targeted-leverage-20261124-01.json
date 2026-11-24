@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/omef-targeted-leverage-20261124-01.json",
+  "request_sha256": "3ec62702604c68243fada25281e23ba680d0f0ea7a9c3311ce95828ccf2eec19",
+  "request_nonce": "omef-targeted-leverage-20261124-01",
+  "completed_at": "2026-11-24T11:47:34.977899Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "# Diagnosis (likeliest, not verified)\n\nThe strength histograms barely move because strength isn't the limiting variable. Four things probably cap the coupling's effect:\n\n- The bounded source signal σ saturates.\n- The phase gate φ averages the injection toward zero over a cycle.\n- The ±2.5 clamp saturates.\n- The joint projection acts in strength space, not response space.\n\nMultiplying by 1+k·d² only rescales a term that is already weak or cancelling. That fits the drop in filament concentration at high gain, where the clamp or sign-mixed phases act. I haven't seen the code, so treat this as a hypothesis.\n\n# Notation\n\nFor link ℓ (source i → target j):\n\n- u_ℓ = g·s_ℓ·σ(x_i(t−τ_ℓ))·φ_ℓ(t)\n- d_ℓ = (s_ℓ−s⁰_ℓ)/Δ_ℓ\n- Target response y_j(t; s)\n\nBoth methods below keep u ∝ s_ℓ. That makes the zero link exact. Each method also adds a term that vanishes at d=0, so the default trajectory is bit-exact.\n\n# Method A: response-metric (natural-gradient) projection\n\nThis acts on the optimizer and projection, not on the dynamics.\n\n1. Estimate the nodal sensitivity J_ℓ = ∂y_j/∂s_ℓ. Use a forward-difference or adjoint run through the native engine. Take it only over the named target's variables.\n2. Form G = JᵀJ + λI.\n3. Update Δs = −G⁻¹∇L.\n4. Project onto the bounds in the G-norm, not the Euclidean norm.\n5. Reparameterize s = s⁰ + Δ·tanh θ. This keeps s smooth and bounded and removes the endpoint pile-up.\n\n- **Strength:** it moves strengths along directions that change nodal outputs, and it leaves the dynamics untouched.\n- **Cost:** J must be recomputed as the trajectory changes.\n\n# Method B: source-innovation gain\n\nThis adds a gain that responds to the source's deviation from its default trajectory.\n\nu_ℓ = g·φ·s·[σ_τ + κ·d·(σ_τ − σ⁰_τ)]·c(·)\n\n- σ_τ = σ(x_i(t−τ)).\n- σ⁰ is the stored default-run source signal.\n- At d=0 the extra term vanishes, so the default is exact.\n- At s=0 the whole term vanishes, so the zero link is exact.\n- Because the extra term needs the source to deviate, a control only reaches variables whose source actually moved. Unrelated variables are not forced.\n- Replace the hard clamp with a smooth one: 2.5·tanh(v/2.5). This is exact only if the default never gets near the clamp. Check that first.\n- Choose κ so that the clamp-saturated fraction stays below about 5%.\n\n# Limitations\n\n- **Delay:** the response depends on τ through the delayed history, so ∂/∂τ is not smooth and J goes stale after a change in τ.\n- **Periodic phase:** at frequency ω, the net effect scales roughly as the coherence C_ℓ = |⟨φ(t)·σ(x_i(t−τ))·e^{−iωt}⟩|, which behaves like cos(ωτ + ψ_source − ψ_gate). Gain cannot fix a phase mismatch. If the phases are in quadrature or anti-phase, the effect is zero or reversed, and raising gain only saturates the clamp.\n- **Method B:** it needs the stored σ⁰, which is fragile under changed τ or a changed default.\n- **Both methods:** sensitivities are local and linear. They are unreliable near bifurcations or the clamp.\n\n# Minimal falsification experiment\n\nFor each of the 8 links, run these tests with the other links held fixed.\n\n1. **Baseline checks:** the default trajectory is bit-exact, and the s=0 link gives u≡0.\n2. **Response ratio:** perturb s by ±δ and compute R_ℓ = ‖Δy_j‖/δ.\n3. **Source surrogate:** replace the source with a phase-randomized or time-shifted surrogate that has the same spectrum.\n4. **Delay sweep:** run τ over a grid covering one period.\n5. **Off-target check:** measure the response in variables outside the named target.\n\nAccept if all of these hold:\n\n- R_ℓ is at least 1.5× the k=10 baseline-anchored value in at least 6 of 8 links.\n- Clamp saturation is below 5%.\n- The surrogate cuts the response by at least 50%.\n- R_ℓ(τ) follows cos(ωτ+ψ), with fit R² above 0.7.\n- The off-target response is at most 10% of the on-target response.\n\nReject if the surrogate leaves the response unchanged. That means the coupling is still decorative. Also reject if R doesn't depend on τ, which points to the phase gate or the clamp as the limit.",
+  "session_id": "4361bd63-c532-44e9-ae91-fce08fb43a6f",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 760,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 3775,
+    "output_tokens_details": {
+      "thinking_tokens": 2081
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 760,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3775,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 760,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 760
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.0410715,
+  "num_turns": 1
+}
