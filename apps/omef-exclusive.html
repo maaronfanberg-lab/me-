@@ -634,7 +634,9 @@ function liveMutate(){
    const options=[0,1,2,3,4,5].filter(x=>x!==+proposedCfg.projection);
    proposedCfg.projection=options[Math.floor(Math.random()*options.length)];
   }else{
-   const limits={global:[0,4],seed:[0,3],mix:[0,1],interference:[0,3]};
+   // Autonomous morphing keeps BOTH OMEF systems exchanging information.
+   // Manual decoupling may still explicitly set global coupling to zero.
+   const limits={global:[.35,4],seed:[0,3],mix:[.15,1],interference:[.08,3]};
    const [min,max]=limits[key],current=+proposedCfg[key],amplitude=(max-min)*(.10+.025*depth);
    proposedCfg[key]=clamp(current+amplitude*(Math.random()<.5?-1:1)*(.4+.6*Math.random()),min,max);
   }
