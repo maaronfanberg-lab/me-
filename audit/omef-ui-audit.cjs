@@ -247,6 +247,33 @@ async function run(browserType,name){
   report.browsers[name]={error:String(err),consoleErrors:scopedErrors};
  }finally{if(context)await context.close().catch(()=>{});if(browser)await browser.close().catch(()=>{});}
 }
+async function testPublicLabPreview(){
+ let browser;
+ const url='https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive-coupled-lab-20261124.html?verify='+Date.now();
+ try{
+  browser=await chromium.launch({headless:true});
+  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2});
+  const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>window.OMEFExclusive && document.getElementById('twinGlobal'),{timeout:25000});
+  const info=await page.evaluate(()=>({
+   title:document.title,
+   formulaMix:Number(document.getElementById('twinMix').value),
+   distinctAandB:Number(document.getElementById('twA_c').value)!==Number(document.getElementById('twB_c').value),
+   originalCount:window.OMEFExclusive.allDefs.length,
+   noCannedShapes:Array.from(document.scripts).every(s=>!s.textContent.includes('switch(info.mode)'))
+  }));
+  check('Public experimental preview','Published Pages URL returns HTTP 200',response?.status()===200,'HTTP '+response?.status());
+  check('Public experimental preview','Pages serves the audited asymmetric Coupled Lab build',
+   info.title.includes('Coupled Lab')&&Math.abs(info.formulaMix-.7)<.00001&&info.distinctAandB&&info.originalCount===61&&info.noCannedShapes,
+   JSON.stringify(info));
+  await page.locator('#engineTwin').click({timeout:10000});
+  await page.waitForTimeout(1600);
+  const metrics=await canvasMetrics(page);
+  check('Public experimental preview','Published Coupled Lab paints real attractor points',metrics&&metrics.fill>.0001,JSON.stringify(metrics));
+  await capture(page,'public-coupled-lab-preview');
+ }catch(e){check('Public experimental preview','Public browser verification finishes',false,String(e).slice(0,850));}
+ finally{if(browser)await browser.close();}
+}
 async function testLiveDeployment(){
   let browser, page;
   const url='https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive.html?audit='+Date.now();
@@ -275,7 +302,7 @@ async function testLiveDeployment(){
 }
 (async()=>{
   for (const [engine,name] of [[chromium,'Chromium-iPhone-size'],[webkit,'WebKit-iPhone-size']])await run(engine,name);
-  // Experiment has not been published; verify the local checked-out candidate only.
+  await testPublicLabPreview();
   fs.writeFileSync('audit-artifacts/audit-results.json',JSON.stringify(report,null,2));
   console.log('AUDIT_SUMMARY '+JSON.stringify({passes:report.passes,failures:report.failures,browsers:report.browsers,screenshots:report.screenshots}).slice(0,14000));
   process.exitCode=report.failures?1:0;
