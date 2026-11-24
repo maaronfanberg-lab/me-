@@ -1180,12 +1180,12 @@ function originalFrame(time){
   for(const d of allDefs){
    const id=d[0],min=d[2],max=d[3],step=d[4],span=max-min,old=st.target[id];
    const sign=Math.random()<.5?-1:1;
-   const size=Math.max(step,span*(.011+.015*Math.random()));
+   const size=Math.max(step*3,span*(.019+.020*Math.random()));
    const decimals=(String(step).split('.')[1]||'').length;
    const quant=v=>clamp(+(min+Math.round((clamp(v,min,max)-min)/step)*step).toFixed(decimals),min,max);
    let next=quant(old+sign*size);
    if(next===old)next=quant(old-sign*size);
-   if(next===old)next=quant(old+((max-old)>(old-min)?1:-1)*step);
+   if(next===old)next=quant(old+((max-old)>(old-min)?1:-1)*step*3);
    st.target[id]=next;
   }
   // Vary the cadence via the EXISTING speed control; never move that
