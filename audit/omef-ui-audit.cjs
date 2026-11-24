@@ -274,9 +274,9 @@ async function run(browserType,name){
   report.browsers[name]={error:String(err),consoleErrors:scopedErrors};
  }finally{if(context)await context.close().catch(()=>{});if(browser)await browser.close().catch(()=>{});}
 }
-async function testPublicLabPreview(){
+async function testPublicLinkLab(){
  let browser;
- const url='https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive-coupled-lab-20261124.html?verify='+Date.now();
+ const url='https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive-link-lab-20261124.html?verify='+Date.now();
  try{
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2});
@@ -287,17 +287,19 @@ async function testPublicLabPreview(){
    formulaMix:Number(document.getElementById('twinMix').value),
    distinctAandB:Number(document.getElementById('twA_c').value)!==Number(document.getElementById('twB_c').value),
    originalCount:window.OMEFExclusive.allDefs.length,
-   noCannedShapes:Array.from(document.scripts).every(s=>!s.textContent.includes('switch(info.mode)'))
+   noCannedShapes:Array.from(document.scripts).every(s=>!s.textContent.includes('switch(info.mode)')),
+   longDelays:Array.from({length:8},(_,i)=>Number(document.getElementById('tl'+i+'lag').max)),
+   nodeCalibration:Array.from(document.scripts).some(s=>s.textContent.includes('nodeSignalScale'))
   }));
   check('Public experimental preview','Published Pages URL returns HTTP 200',response?.status()===200,'HTTP '+response?.status());
   check('Public experimental preview','Pages serves the audited asymmetric Coupled Lab build',
-   info.title.includes('Coupled Lab')&&Math.abs(info.formulaMix-.7)<.00001&&info.distinctAandB&&info.originalCount===61&&info.noCannedShapes,
+   info.title.includes('Coupled Link Lab')&&Math.abs(info.formulaMix-.7)<.00001&&info.distinctAandB&&info.originalCount===61&&info.noCannedShapes&&info.nodeCalibration&&info.longDelays.every(x=>x===144),
    JSON.stringify(info));
   await page.locator('#engineTwin').click({timeout:10000});
   await page.waitForTimeout(1600);
   const metrics=await canvasMetrics(page);
-  check('Public experimental preview','Published Coupled Lab paints real attractor points',metrics&&metrics.fill>.0001,JSON.stringify(metrics));
-  await capture(page,'public-coupled-lab-preview');
+  check('Public experimental preview','Published Coupled Link Lab paints real attractor points',metrics&&metrics.fill>.0001,JSON.stringify(metrics));
+  await capture(page,'public-coupled-link-lab-preview');
  }catch(e){check('Public experimental preview','Public browser verification finishes',false,String(e).slice(0,850));}
  finally{if(browser)await browser.close();}
 }
@@ -329,7 +331,7 @@ async function testLiveDeployment(){
 }
 (async()=>{
   for (const [engine,name] of [[chromium,'Chromium-iPhone-size'],[webkit,'WebKit-iPhone-size']])await run(engine,name);
-  // Public preview is tested separately after successful staging audit.
+  await testPublicLinkLab();
   fs.writeFileSync('audit-artifacts/audit-results.json',JSON.stringify(report,null,2));
   console.log('AUDIT_SUMMARY '+JSON.stringify({passes:report.passes,failures:report.failures,browsers:report.browsers,screenshots:report.screenshots}).slice(0,14000));
   process.exitCode=report.failures?1:0;
