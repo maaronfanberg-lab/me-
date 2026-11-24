@@ -239,10 +239,16 @@ async function testLiveDeployment(){
     const info=await page.evaluate(()=>({
       initialized:Boolean(window.OMEFExclusive),originalControls:Boolean(document.getElementById('originalPause')),
       originalCount:window.OMEFExclusive?.allDefs?.length||0,
-      title:document.title
+      title:document.title,
+      nativeCoupledOnly:Array.from(document.scripts).every(x=>!x.textContent.includes('switch(info.mode)')),
+      hasVerifiedFilamentSeed:Array.from(document.scripts).some(x=>x.textContent.includes('previousTwinFilamentPreset')),
+      crossCoupling:Number(document.getElementById('twinGlobal')?.value),
+      formulaBmix:Number(document.getElementById('twinMix')?.value)
     }));
     check('GitHub Pages','Deployed site returns HTTP 200',resp?.status()===200,'HTTP '+resp?.status());
-    check('GitHub Pages','Live deployment has the audited Original UI',info.initialized&&info.originalControls&&info.originalCount===61,JSON.stringify(info));
+    check('GitHub Pages','Live deployment has repaired native Coupled OMEF (no canned shapes)',
+      info.initialized&&info.originalControls&&info.originalCount===61&&info.nativeCoupledOnly&&info.hasVerifiedFilamentSeed
+      &&Math.abs(info.crossCoupling-.4)<.00001&&Math.abs(info.formulaBmix-.02)<.00001,JSON.stringify(info));
     if(info.initialized)await capture(page,'live-github-pages');
     report.deployment={url,code:resp?.status(),...info};
   }catch(e){check('GitHub Pages','Live site opens in browser',false,String(e).slice(0,350));report.deployment={url,error:String(e)}}
