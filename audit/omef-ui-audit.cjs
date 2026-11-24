@@ -144,6 +144,33 @@ async function run(browserType,name){
   check(name,'Coupled mode calculates and renders',(coupled0>0)&&coupledMetrics?.fill>0.0001,'points='+coupled0+' metrics='+JSON.stringify(coupledMetrics));
   await capture(page,name+'-coupled');
   const twin=await testControls(page,'#twinUI input[type="range"]',name+' Coupled');
+  const expandedDelay=await page.evaluate(()=>Array.from({length:8},(_,i)=>{
+    const e=document.getElementById('tl'+i+'lag');
+    return {id:e.id,min:Number(e.min),max:Number(e.max),current:Number(e.value)};
+  }));
+  check(name,'All eight link delays reach 144 real simulation steps',
+    expandedDelay.length===8&&expandedDelay.every(x=>x.min===1&&x.max===144),JSON.stringify(expandedDelay));
+  const delayedDynamics=await page.evaluate(()=>{
+    const api=window.OMEFExclusive,raw=(side)=>Object.fromEntries(api.allDefs.map(d=>[d[0],Number(document.getElementById('tw'+side+'_'+d[0]).value)]));
+    const links=Array.from({length:8},(_,i)=>({source:document.getElementById('tl'+i+'source').value,
+      from:document.getElementById('tl'+i+'from').value,to:document.getElementById('tl'+i+'to').value,
+      strength:Number(document.getElementById('tl'+i+'strength').value),lag:Number(document.getElementById('tl'+i+'lag').value),
+      offset:Number(document.getElementById('tl'+i+'offset').value),gate:document.getElementById('tl'+i+'gate').value}));
+    const cfg={global:Number(document.getElementById('twinGlobal').value),mix:Number(document.getElementById('twinMix').value),
+      interference:Number(document.getElementById('twinInterference').value),seed:Number(document.getElementById('twinSeed').value),projection:5,links};
+    const late={...cfg,links:links.map((l,i)=>i===4?{...l,lag:144}:{...l})};
+    const A=raw('A'),B=raw('B'),normal=api.twinStepper(A,B,cfg),changed=api.twinStepper(A,B,late);
+    let distance=0,invalid=0;
+    for(let n=0;n<2400;n++){
+      const p=api.twinCombine(normal(),cfg),q=api.twinCombine(changed(),late);
+      if(!p.concat(q).every(Number.isFinite))invalid++;
+      else if(n>160)distance+=Math.hypot(p[0]-q[0],p[1]-q[1]);
+    }
+    return {compared:2400,invalid,meanDistance:distance/(2400-161)};
+  });
+  check(name,'144-step delay changes actual OMEF state-space output',
+    delayedDynamics.invalid===0&&delayedDynamics.meanDistance>.0002,JSON.stringify(delayedDynamics));
+
   const selects=await page.evaluate(()=>{
     let ok=0,fail=[];
     for(const e of document.querySelectorAll('#twinUI select')){
@@ -302,7 +329,7 @@ async function testLiveDeployment(){
 }
 (async()=>{
   for (const [engine,name] of [[chromium,'Chromium-iPhone-size'],[webkit,'WebKit-iPhone-size']])await run(engine,name);
-  await testPublicLabPreview();
+  // Public preview is tested separately after successful staging audit.
   fs.writeFileSync('audit-artifacts/audit-results.json',JSON.stringify(report,null,2));
   console.log('AUDIT_SUMMARY '+JSON.stringify({passes:report.passes,failures:report.failures,browsers:report.browsers,screenshots:report.screenshots}).slice(0,14000));
   process.exitCode=report.failures?1:0;
