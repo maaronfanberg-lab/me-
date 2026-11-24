@@ -274,6 +274,50 @@ async function run(browserType,name){
   report.browsers[name]={error:String(err),consoleErrors:scopedErrors};
  }finally{if(context)await context.close().catch(()=>{});if(browser)await browser.close().catch(()=>{});}
 }
+async function testAutonomousEvolution(){
+ let browser,context,page;
+ try{
+  browser=await webkit.launch({headless:true});
+  context=await browser.newContext({...devices['iPhone 13'],viewport:{width:390,height:844},deviceScaleFactor:2});
+  page=await context.newPage();
+  const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+  await page.goto('file://'+path.resolve('apps/omef-exclusive.html'),{waitUntil:'domcontentloaded',timeout:35000});
+  await page.waitForFunction(()=>window.OMEFExclusive&&document.getElementById('twinSpeed'),{timeout:15000});
+  // Configure evolution speed without dispatching a manual-control event,
+  // which intentionally starts a 12-second inspection hold.
+  await page.evaluate(()=>{document.getElementById('twinSpeed').value='10';});
+  await page.locator('#engineTwin').click({timeout:15000});
+  const snapshot=()=>page.evaluate(()=>{
+   const ids=['points','ink','size','twinSpeed','twinPersistence'];
+   const keep=Object.fromEntries(ids.map(k=>[k,document.getElementById(k).value]));
+   const A=window.OMEFExclusive.allDefs.map(d=>document.getElementById('twA_'+d[0]).value);
+   const B=window.OMEFExclusive.allDefs.map(d=>document.getElementById('twB_'+d[0]).value);
+   const status=document.getElementById('twinEvolutionStatus').textContent;
+   const links=Array.from({length:8},(_,i)=>['source','from','to','strength','lag','offset','gate'].map(k=>document.getElementById('tl'+i+k).value).join(':'));
+   const scalars=['twinGlobal','twinSeed','twinMix','twinInterference','twinProjection','twinDepth','twinMorphDuration'].map(k=>document.getElementById(k).value);
+   return {keep,A,B,status,links,scalars,accepted:Number((status.match(/(\d+) accepted/)||[])[1]||0)};
+  });
+  const before=await snapshot();
+  await page.waitForFunction(()=>{
+   const text=document.getElementById('twinEvolutionStatus')?.textContent||'';
+   return Number((text.match(/(\d+) accepted/)||[])[1]||0)>=3;
+  },null,{timeout:75000,polling:350});
+  const after=await snapshot();
+  const genomesChanged=after.A.filter((v,i)=>v!==before.A[i]).length+after.B.filter((v,i)=>v!==before.B[i]).length;
+  const circuitChanged=after.links.some((v,i)=>v!==before.links[i]);
+  const globalsChanged=after.scalars.some((v,i)=>v!==before.scalars[i]);
+  check('WebKit autonomous evolution','At least three distinct evolutions are accepted in the real interface',after.accepted>=3,
+    JSON.stringify({before:before.accepted,after:after.accepted,status:after.status}));
+  check('WebKit autonomous evolution','Autonomous cycles actually update mathematical genome values',genomesChanged>=5,'changed='+genomesChanged);
+  check('WebKit autonomous evolution','Evolution retargets mathematical circuit or global controls',circuitChanged||globalsChanged,
+    JSON.stringify({circuitChanged,globalsChanged,scalars:after.scalars}));
+  check('WebKit autonomous evolution','Points, ink, size, speed and trail controls remain unchanged',
+    JSON.stringify(before.keep)===JSON.stringify(after.keep),JSON.stringify({before:before.keep,after:after.keep}));
+  check('WebKit autonomous evolution','No uncaught JavaScript errors through evolution',errors.length===0,errors.join(' | ').slice(0,750));
+  await capture(page,'WebKit-autonomous-evolution');
+ }catch(e){check('WebKit autonomous evolution','Real autonomous evolution test completed',false,String(e).slice(0,1100));}
+ finally{if(context)await context.close().catch(()=>{});if(browser)await browser.close().catch(()=>{});}
+}
 async function testPublicLinkLab(){
  let browser;
  const url='https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive-link-lab-20261124.html?verify='+Date.now();
@@ -331,7 +375,8 @@ async function testLiveDeployment(){
 }
 (async()=>{
   for (const [engine,name] of [[chromium,'Chromium-iPhone-size'],[webkit,'WebKit-iPhone-size']])await run(engine,name);
-  await testPublicLinkLab();
+  await testAutonomousEvolution();
+  // Unpublished staging version; public verification follows Pages deployment.
   fs.writeFileSync('audit-artifacts/audit-results.json',JSON.stringify(report,null,2));
   console.log('AUDIT_SUMMARY '+JSON.stringify({passes:report.passes,failures:report.failures,browsers:report.browsers,screenshots:report.screenshots}).slice(0,14000));
   process.exitCode=report.failures?1:0;
