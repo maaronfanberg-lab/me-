@@ -56,3 +56,23 @@
 4. Test: the exclusion zone in M3 was removed, so the check has no holes.
 
 **Raw-data check still pending.** It needs the full text of Moore, Alcántara & Dau 1998.
+
+## Stage 3: live "hidden" map (filterbank + masking), PASS
+Code: `research/adaptive-filterbank/stage3.py`. Real music runs on GitHub Actions (`stage3-music.yml`).
+
+| Check (limits fixed in advance) | Synthetic chord + drums | Audius V66vyPP, 15 s (Cambridge / Munich) |
+|---|---|---|
+| Flicker: flips reversed within 50 ms (median/s, limit 2) | 0 | 0 / 0 (p90 0.27 / 0) |
+| Steady jitter: p95 margin change per 10 ms (limit 3 dB) | 0.38 / 0.43 | 0.43 / 0.47 |
+| Same output on every run | ✓ | ✓ |
+| Sanity vs Stage 2 exact (limit 3 dB) | 0.75 / 1.26 dB | same |
+
+- Raw audible↔hidden flips on real music: 5.3 per second. These follow the music.
+- Share of the audible range marked hidden: 55% (Cambridge), 50% (Munich).
+- Compute: about 77 s for 15 s of audio in offline Python on the runner. That figure says nothing about phone speed, which is still untested.
+
+Fix log (limits unchanged):
+1. Engine: a band's own leakage 25 Hz away masked it. The own-sound neighbourhood now extends to the point where the band's own filter response is 40 dB down.
+2. Test: flicker counted real changes. It now counts only flips that reverse within 50 ms.
+3. Test: the steady set was empty and showed a false 0.0, because w never reaches exactly 0. Steady now means w < 0.01, and at least 1000 steps are required.
+4. CI: the report-commit step hung on `pull --rebase` in the shallow clone, so the run was cancelled. The figures above come from the run log. The step now uses a bounded fetch and rebase.
