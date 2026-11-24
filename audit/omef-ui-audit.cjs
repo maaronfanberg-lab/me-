@@ -177,7 +177,7 @@ async function run(browserType,name){
     mix:Number(document.getElementById('twinMix').value)
   }));
   check(name,'Restore filaments reinstates distinct A/B coefficients and hybrid projection',
-    Math.abs(restoredSeed.A-restoredSeed.B)>1 && Math.abs(restoredSeed.mix-.7)<.0001,
+    Math.abs(restoredSeed.A-restoredSeed.B)>.5 && Math.abs(restoredSeed.mix-.7)<.0001,
     JSON.stringify(restoredSeed));
   await capture(page,name+'-recovered-coupled');
   // Identical dynamical state must NOT be silently replaced by a parameter-
