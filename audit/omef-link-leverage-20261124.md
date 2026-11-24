@@ -35,10 +35,12 @@ Computed from **the same 14,000-point simulation horizon** in each comparison, u
 | A Fibonacci → B Pair | 33.49% | 23.80% |
 
 ## Browser verification
-**86/86 automated checks passed** across mobile-sized Chromium and WebKit, including 154 Coupled sliders, 63 Original and common sliders, all eight expanded delay controls, a direct browser check that delay=144 changes the actual math, mode controls, themes and full-screen controls. No uncaught runtime errors reported. Automated browser emulation is not equivalent to testing the user's physical iPhone.
+**89/89 automated checks passed** across mobile-sized Chromium, WebKit, and a separately checked public GitHub Pages preview in [run 45406132088](https://github.com/maaronfanberg-lab/me-/actions/runs/45406132088), including 154 Coupled sliders, 63 Original and common sliders, all eight expanded delay controls, a direct browser check that delay=144 changes the actual math, mode controls, themes and full-screen controls. No uncaught runtime errors reported. Automated browser emulation is not equivalent to testing the user's physical iPhone.
 
 ## Visual-quality caveats
 Compared 134,550-point rasterizations for old/new defaults and maximum settings at matched point counts. The new output preserves the layered canopy rather than abruptly becoming a single flower, but the change is not yet a new family of highly intricate sculptures. The user-set target of **near-100% visual transformation at slider extremes is not yet achieved**. The weakest tested delay endpoint still changed only ~15%.
 
 ## Preview
+[Open public Coupled Link Lab](https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive-link-lab-20261124.html). HTTP 200, true 144-step delays, node calibration and visible rendered attractor were verified by the public Chromium audit. The exact published app matches the tested experimental source except for its HTML page heading and title.
+
 `apps/omef-exclusive-link-lab-20261124.html` on the public GitHub Pages repository. This is separate from `apps/omef-exclusive-coupled-lab-20261124.html` and the original Exclusive app.
