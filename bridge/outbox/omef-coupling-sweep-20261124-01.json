@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/omef-coupling-sweep-20261124-01.json",
+  "request_sha256": "36862668a59ff314607c04ddd9cb9f15b8c6c34277456a6c9584b01571250f7f",
+  "request_nonce": "omef-coupling-sweep-20261124-01",
+  "completed_at": "2026-11-24T12:18:05.443140Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "## Interpretation\n\n**Observations (from your numbers):**\n- Coupling does change the joint image. TV against uncoupled rises from 0 to about 0.85 by gain 2.\n- Top-12% bin mass falls from .903 to .629 at gain 1, then rises to .743 at gain 4. So the loop structure gets thicker and more diffuse, and it doesn't turn into a new sharp object.\n- Mean step is flat to slightly falling up to gain 1, then rises slightly at 2 and jumps at 4 (.0407). Gain 4 is probably driven toward a more agitated or saturated regime, not a better-organized one.\n- Direct joint projection vs A alone is only TV ~.11–.15 at high gain. So the joint picture is mostly A's marginal, with B and the cross-links smearing it.\n\n**Likeliest cause (inference):** Symmetric global coupling at these gains acts as noise-like or diffusive mixing of A's orbit. It doesn't create a new joint invariant set. The large TV against uncoupled is mostly A's own trajectory being perturbed and filling in, not a new B-structured geometry. TV against the uncoupled run is also a poor measure of \"distinct\". It is large for any thickening or smearing, and it says nothing about intricacy.\n\n**Caveats:**\n- Top-bin mass depends on bin size, bounding-box normalization, and sample count. A 24k-sample, 48×48 image is coarse for thin filaments.\n- Non-monotonic concentration doesn't establish that gain .45 is \"best\". It only shows the thin-loop-to-filled transition.\n- Four B seeds are few. Per-seed variance isn't reported.\n\n## Next experiment (most defensible)\n\nStop sweeping one global gain. Run a **structured, directional coupling sweep at low gain, 0.05–0.6**:\n1. Test A→B only, B→A only, and an antisymmetric/rotational coupling, instead of a single global gain.\n2. Project onto several planes that mix A and B coordinates, not only a fixed A-dominated projection.\n3. Use longer runs (≥200k samples, finer bins, or a density at fixed 128²).\n4. Score the results with measures other than TV and top-bin mass:\n   - Correlation or fractal dimension, or a box-count slope, of the joint attractor.\n   - Mutual information between the A and B coordinates.\n   - Largest Lyapunov exponent, to separate chaos from noise.\n   - Joint-vs-A-alone TV, which should stay large.\n5. Include controls: a surrogate with B replaced by time-shuffled or phase-randomized B (same marginals, no coupling), and a noise-injected uncoupled A matched to the same step-size increase.\n\n**Falsifiable predictions:**\n- If the coupling creates genuine joint structure, the real run should differ from the shuffled-B surrogate on mutual information and joint-vs-A TV, and it should keep a box-count slope above the noise control. Joint-vs-A TV should go well above .15 in some mixed projection.\n- If instead the noise-matched control reproduces the density change and TV, the diagnosis (diffusive smearing) holds. Then gain isn't the right control, and the next step is different coupling topology or nonlinearity, not more sweeping.\n\n**Uncertainty:** I haven't inspected the code, so I'm assuming the coupling is additive and symmetric. Whether intricacy can be reached at all depends on the engine's dynamics. Visual preference is a separate judgment that these metrics can't settle.",
+  "session_id": "80f303e3-e447-4ecb-a59e-da01d2c58977",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 824,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 1183,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 824,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1183,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 824,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 824
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.015407500000000001,
+  "num_turns": 1
+}
