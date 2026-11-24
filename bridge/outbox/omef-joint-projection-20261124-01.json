@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/omef-joint-projection-20261124-01.json",
+  "request_sha256": "4659579af8e0e2c244dbbd94df6c9599d85e518bfa1226e056e3c17260fbffc9",
+  "request_nonce": "omef-joint-projection-20261124-01",
+  "completed_at": "2026-11-24T15:51:13.449946Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "# Review: joint-state projections for the 10D+10D recurrent pair\n\nThis review uses only the supplied facts. I ran no code and read no files.\n\n**Notation**\n- Pair the coordinates into complex numbers: zA_k = A₂ₖ + i·A₂ₖ₊₁ and zB_k = B₂ₖ + i·B₂ₖ₊₁, for k = 0..4.\n- Then |z_k| ≤ √2.\n- P and Q are fixed 2×10 matrices with orthonormal rows. P can be the native xy selector.\n- Every map below is a pure function of (A_t, B_t) at iteration t. Each gives one point per iteration.\n\n**Interaction versus projection**\n- Any linear map p = L·[A;B] is independent mixing. It adds the two native views, and the only coupling it shows is whatever the dynamics already put into the joint distribution.\n- The existing .23·mix·B term is of this type.\n- Only terms that are bilinear or phase-dependent in (A,B) can be sensitive to the relative phase between the subsystems. Even those only reveal the interaction. They do not create it.\n\n## Three families\n\n**F1. Balanced symmetric/antisymmetric linear (the independent-mixing baseline)**\n- S = (A+B)/√2 and D = (A−B)/√2.\n- p = (u·S, v·D), where u and v are unit vectors, e.g. u = P₀ and v = P₁ applied to the same index set.\n- Each of A and B contributes equally to the energy of p, and the weight does not depend on `mix`.\n- Treat this as the control. If a later family looks better only because it is more spread out, F1 should show the same spread.\n\n**F2. Hermitian complex cross-product (genuine relative-phase interaction)**\n- c = (1/10) Σ_k zA_k · conj(zB_k), so |c| ≤ 1.\n- p = (Re c, Im c).\n- Re c is the sum of the 2D dot products (A·B over the pairs). Im c is the sum of the 2D wedge products (determinants).\n- It is invariant under a common rotation of both subsystems. It depends only on the phase difference.\n- Caveat: for weakly correlated zero-mean A and B, c clusters near 0. If concentration shows this, use the sign-preserving rescale c·(|c|+ε)^(−1/2) or an equivalent monotone radial map. That map is applied to the output only and does not touch the state.\n\n**F3. Linear carrier plus bilinear modulation (hybrid)**\n- p = (1/√2)(P·A + Q·B)/√2 + γ·(Re m, Im m).\n- Here m = (1/5) Σ_k w_k · zA_k · zB_k, with fixed unit weights w_k.\n- This is the phase-sum product. F2 uses the phase difference instead.\n- The carrier keeps the filament structure from the native views, and the bilinear term adds the cross-phase dependence.\n- Use a fixed γ (e.g. 0.3–0.5, to be tuned). Make it independent of `mix` so that strong coupling does not drive the smearing.\n- Equivalent general form: (AᵀM₁B, AᵀM₂B), with M₁ symmetric and M₂ antisymmetric.\n\n## Falsification tests\nRun each with identical seeds and parameters. Compare against native A-xy and F1.\n\n1. **Exact dynamics**\n   - Hash the full (A_t, B_t) trajectories, the RNG state, and the delay buffers with the new projection on and off.\n   - They must match bit for bit.\n   - Any difference means the projection leaked into the state, and the change is rejected.\n\n2. **Concentration**\n   - Measure the fraction of points within r of the centroid, the occupied-cell entropy on a fixed grid, and the correlation dimension.\n   - Do this at low and at strong coupling.\n   - F2 is falsified if mass collapses to the origin and the radial rescale does not fix it.\n   - Any family is falsified if its smearing grows with `mix` as much as the existing projection does.\n\n3. **Non-degenerate extent**\n   - Compute the PCA eigenvalue ratio λ₂/λ₁. Require it above a threshold, e.g. 0.05.\n   - Also require 1–99 percentile extents on both axes above a floor.\n   - Check that the points are not on a line, which can happen when Im c ≈ 0 because A and B are phase-locked.\n\n4. **B contribution**\n   - Replace B with its time mean, or with a constant, in the projection only, and not in the dynamics.\n   - Measure the change in the image (e.g. a 2D histogram Wasserstein distance) and the variance share of the B-dependent terms.\n   - Pass condition: a non-trivial share that stays stable across `mix`.\n   - For F2, Var share → 0 if the B term is absent. This would show F2 reduces to something A-only.\n\n5. **Phase-shuffled control**\n   - Make surrogates of B that keep its power spectrum but destroy phase relative to A. Examples are an IAAFT surrogate, or a circular shift by more than the coupling delay and the correlation time. Keep A unchanged.\n   - Recompute each projection.\n   - For F2 and F3's bilinear term, the statistics of the cross-term should change. This includes the Im c distribution, the mutual information between p and A-xy, and the structure (e.g. filament curvature or autocorrelation).\n   - If F2's image is unchanged under the shuffle, its apparent interaction is only marginal mixing.\n   - F1 should change only through the cross-covariance. Compare how much each one changes.\n   - Also rotate zB by a constant phase φ. F2 should rotate rigidly, so the image is the same up to rotation. A time-varying random φ_t should destroy the structure.\n\n6. **Interaction versus mixing**\n   - Fit F1's linear prediction to the F2 and F3 outputs.\n   - The residual that the linear fit cannot explain, and that disappears under the phase shuffle, is the genuine interaction signal.",
+  "session_id": "eb7ad848-5824-4e25-8b75-3e4700ceaf2b",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 3496,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 3807,
+    "output_tokens_details": {
+      "thinking_tokens": 1781
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 3496,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 3807,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 3496,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 3496
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.05205799999999999,
+  "num_turns": 1
+}
