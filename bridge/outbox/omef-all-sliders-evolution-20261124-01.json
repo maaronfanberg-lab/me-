@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/omef-all-sliders-evolution-20261124-01.json",
+  "request_sha256": "629009d1fe2c05e8e36f165c3b7b8ac4c615f3ed2c57f44f30e139e6b718b5d7",
+  "request_nonce": "omef-all-sliders-evolution-20261124-01",
+  "completed_at": "2026-11-24T12:06:40.105441Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "Review is based only on the facts you supplied. I didn't inspect the repository, so everything below is inference.\n\n## Highest-priority correctness traps\n\n1. **\"At least one legal increment\" vs. clamping and locks.**\n   - A slider at its min or max, or one with a single legal value, can't move in the chosen direction. A clamped step leaves it unchanged and breaks the invariant.\n   - Fix: pick the direction from the legal neighbors. If a value is locked, or has no legal neighbor, define that behavior explicitly.\n   - Falsify: set every slider to min, then to max, then to a one-step-from-bound value. Run N proposals and assert that every non-excluded slider differs from its previous value.\n   - Count the sliders: 2×61 + 4 + 24 = 150. Also test that the \"every slider\" check covers all of them.\n\n2. **Increment quantization.**\n   - Compare in quantized integer steps, not floats. A float step smaller than the display or step grid can round back to the same value.\n   - Also check for float drift that makes \"exact locked values\" differ in the last bit.\n   - Falsify: after 10k proposals, assert locked values are bit-identical, and assert that all values lie on the step grid.\n\n3. **Acceptance semantics.**\n   - \"Every accepted proposal changes each slider\" only holds if the change is applied after acceptance. If the solver or the shape screen rejects a candidate and you retry, make sure the retry doesn't mutate the live state partially.\n   - Rejection loops can also starve. Forcing all 150 sliders to move shrinks the feasible set, so the rejection rate may rise sharply.\n   - Falsify: record the rejection rate and the retry count against the baseline. Add a hard cap with a defined fallback. Assert the state is unchanged after a rejected proposal.\n\n4. **Exclusion list.**\n   - Points, ink, size, speed and trail persistence must be excluded by identity (stable key), not by index or label. Dropdowns must also be untouched.\n   - Falsify: snapshot the excluded keys and all dropdown values before and after 1k steps, and assert equality. Check that the excluded keys exist in both engines and in the link and global groups.\n\n5. **Locked values.**\n   - Define the precedence: lock vs. \"must change\". Locks should win, and the forced-change test should skip locked sliders.\n   - Check whether locks apply per engine A/B, and whether a lock shared by a link pair is handled.\n\n6. **Random-walk boundedness.**\n   - \"Small bounded\" needs a definition: per-step cap, and whether it is a reflecting or clamped boundary. Clamping at the bounds creates sticky edges, and every slider then fails the \"must change\" rule there.\n   - Falsify: run a long walk and histogram occupancy. Check for pile-up at the bounds.\n\n7. **Drift smoothness and mutation depth, \"one step\".**\n   - These are themselves evolving meta-parameters. Make sure they are ±1 step exactly, that they are clamped, and that the changed values are used in the same proposal or the next one (state which).\n   - Falsify: assert |Δ| equals one step, and test at the bounds.\n\n## Performance and stability traps\n\n1. **Link delay and phase crossfade.**\n   - Crossfading only the *changed* links is good, but with the forced-change rule every link changes on every accept. That means 8 concurrent crossfades.\n   - If a new accept arrives mid-fade, define the behavior: restart from the current interpolated value (not the old target), or you get a jump. Phase should be interpolated circularly (shortest arc), not linearly, or you get a sweep through the wrong values at the wrap.\n   - Delay changes can reallocate buffers or click. Check that interpolating delay doesn't cause a pitch artifact or a discontinuity.\n   - Falsify: accepts in rapid succession. Check for max |Δ| per frame at the wrap (phase 359°→1°).\n\n2. **Solver cost.**\n   - Changing all 150 sliders each step defeats any caching or warm start keyed on \"unchanged parameters\". Cache invalidation may now fire every time.\n   - Falsify: profile ms per accepted proposal against the baseline. Check for memo or cache hit rate dropping to 0.\n\n3. **Shape-screening interplay.**\n   - Larger joint moves raise the chance of unstable, degenerate or blank shapes. Small per-slider steps can still combine into a large change in output.\n   - Falsify: compare the screen-pass rate before and after. Test with seeded RNG for reproducibility.\n\n4. **UI and update churn.**\n   - 150 control updates per accept can cause redraws, or event handlers can re-trigger evolve (feedback loop). Apply as a batch with a single recompute and suppress change events.\n   - Falsify: count the recompute calls per accept (should be 1) and the handler invocations.\n\n5. **Determinism and testing.**\n   - Use a seedable RNG so that all of the above checks are reproducible.\n\n## Priority order\n(1) forced-change vs. bounds, quantization and locks; (2) rejection and retry starvation; (3) exclusion and dropdown integrity; (4) crossfade restart and phase wrap; (5) batch updates and solver cache cost.",
+  "session_id": "af8a8d3e-bade-46a5-816a-62bae7e306d5",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 664,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 1747,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 664,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1747,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 664,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 664
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.0204075,
+  "num_turns": 1
+}
