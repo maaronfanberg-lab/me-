@@ -90,6 +90,10 @@ async function run(browserType,name){
   check(name,'Original canvas contains visible particles',origMetrics && origMetrics.fill>0.0001,JSON.stringify(origMetrics));
   await capture(page,name+'-original');
   const original=await testControls(page,'#omefUI input[type="range"]',name+' Original');
+  await testControls(page,'#points, #ink, #size',name+' Shared canvas');
+  const cb=page.locator('#livePreview');
+  const cbBefore=await cb.isChecked();await cb.check({force:true});await cb.uncheck({force:true});await cb.setChecked(cbBefore,{force:true});
+  check(name,'Preview checkbox responds',await cb.isChecked()===cbBefore,'checked='+cbBefore);
   await page.locator('#originalPause').click();
   await nap(300);
   const paused0=await counts(page);await nap(600);const paused1=await counts(page);
@@ -109,7 +113,16 @@ async function run(browserType,name){
   const newSeed=await page.locator('#a').inputValue();
   check(name,'Next attractor responds to real mobile pointer click',!pointerError&&firstSeed!==newSeed,'Pair '+firstSeed+' -> '+newSeed+'; '+pointerError);
   await capture(page,name+'-next');
-  await page.locator('#originalClear').click({force:true});
+  const beforeMutation=await page.evaluate(()=>window.OMEFExclusive.allDefs.map(d=>Number(document.getElementById(d[0]).value)));
+  await page.locator('#mutate').click();
+  const afterMutation=await page.evaluate(()=>window.OMEFExclusive.allDefs.map(d=>Number(document.getElementById(d[0]).value)));
+  check(name,'Mutate slightly changes formula controls',beforeMutation.some((x,i)=>x!==afterMutation[i]));
+  await page.locator('#preset').click();
+  check(name,'Restore filaments restores tested starting parameter',Math.abs(Number(await page.locator('#a').inputValue())-1.16)<.011);
+  await page.locator('#render').click();
+  await nap(350);
+  check(name,'Render again restarts a working trajectory',(await counts(page))>0);
+  await page.locator('#originalClear').click();
   await page.locator('#originalRestart').click({force:true});
   await nap(600);
   check(name,'Restart restores a working native engine',(await counts(page))>0,'points='+(await counts(page)));
@@ -148,8 +161,43 @@ async function run(browserType,name){
   const afterTap=await page.locator('#twinGlobal').inputValue();
   check(name,'Cross-coupling responds to pointer drag',drag&&beforeTap!==afterTap,beforeTap+' -> '+afterTap);
   await capture(page,name+'-coupled-after-slider');
+  const buttonTests=[
+    ['twinCopyAB','Copy A to B'],['twinCopyBA','Copy B to A'],
+    ['twinResetA','Reset A'],['twinResetB','Reset B'],
+    ['twinRestoreFilament','Restore coupled filaments'],
+    ['twinClearTrail','Clear coupled trails'],
+    ['twinAdoptOriginal','Adopt original state'],
+    ['twinDecouple','Decouple link circuit'],
+    ['twinRestore','Restore link circuit'],
+    ['twinRerender','Accumulate detail'],
+    ['twinAutoToggle','Pause evolution']
+  ];
+  for(const [id,label] of buttonTests) {
+    let failure='';
+    try{await page.locator('#'+id).click({timeout:6000});}
+    catch(e){failure=String(e).slice(0,250);}
+    check(name,'Button: '+label,!failure,failure);
+  }
+  const decouple=await page.evaluate(()=>Array.from({length:8},(_,i)=>Number(document.getElementById('tl'+i+'strength').value)));
+  check(name,'Coupled link controls remain numeric',decouple.every(Number.isFinite),JSON.stringify(decouple));
+  const themeButtons=page.locator('[data-theme]');
+  const nThemes=await themeButtons.count();let switched=0;
+  for(let i=0;i<nThemes;i++){
+    let err='';try{await themeButtons.nth(i).click({timeout:4000});switched++;}catch(e){err=String(e).slice(0,170);}
+  }
+  check(name,'All theme buttons receive pointer clicks',nThemes>0&&switched===nThemes,'clicked='+switched+'/'+nThemes);
+  let fullError='';
+  try {
+    await page.locator('#immersiveEnter').click({timeout:5000});
+    check(name,'Full-screen immersive mode enters',await page.evaluate(()=>document.body.classList.contains('omef-immersive')));
+    await page.locator('#immersiveHide').click({timeout:4000});
+    check(name,'Immersive controls can hide',await page.evaluate(()=>!document.body.classList.contains('omef-hud-visible')));
+    await page.evaluate(()=>document.getElementById('omefCanvas').click());
+    await page.locator('#immersiveExit').click({timeout:5000});
+    check(name,'Immersive mode exits',await page.evaluate(()=>!document.body.classList.contains('omef-immersive')));
+  }catch(e){fullError=String(e).slice(0,300);check(name,'Immersive control sequence',false,fullError);}
   const errors=scopedErrors.filter(e=>!e.includes('favicon'));
-  check(name,'No uncaught JavaScript runtime errors',errors.length===0,errors.slice(0,7).join(' | '));
+  check(name,'No uncaught JavaScript runtime errors after control audit',errors.length===0,errors.slice(0,7).join(' | '));
   report.browsers[name]={original,twins:twin,errors,originalImage:origMetrics,coupledImage:coupledMetrics,counts:{originalBefore:before,originalAfter:after,coupled:coupled0,coupledAfter:twin2}};
  } catch(err){
   check(name,'Browser suite completed',false,String(err?.stack||err).slice(0,1100));
