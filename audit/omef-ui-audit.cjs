@@ -294,10 +294,23 @@ async function testAutonomousEvolution(){
    const B=window.OMEFExclusive.allDefs.map(d=>document.getElementById('twB_'+d[0]).value);
    const status=document.getElementById('twinEvolutionStatus').textContent;
    const links=Array.from({length:8},(_,i)=>['source','from','to','strength','lag','offset','gate'].map(k=>document.getElementById('tl'+i+k).value).join(':'));
+   const linkSliders=Array.from({length:8},(_,i)=>['strength','lag','offset'].map(k=>document.getElementById('tl'+i+k).value)).flat();
    const scalars=['twinGlobal','twinSeed','twinMix','twinInterference','twinProjection','twinDepth','twinMorphDuration'].map(k=>document.getElementById(k).value);
-   return {keep,A,B,status,links,scalars,accepted:Number((status.match(/(\d+) accepted/)||[])[1]||0)};
+   return {keep,A,B,status,links,linkSliders,scalars,accepted:Number((status.match(/(\d+) accepted/)||[])[1]||0)};
   });
   const before=await snapshot();
+  await page.waitForFunction(()=>{
+   const text=document.getElementById('twinEvolutionStatus')?.textContent||'';
+   return Number((text.match(/(\d+) accepted/)||[])[1]||0)>=1;
+  },null,{timeout:55000,polling:350});
+  const movingStart=await snapshot();
+  await page.waitForTimeout(950);
+  const movingEnd=await snapshot();
+  const slidersInMotion=movingStart.A.filter((v,i)=>v!==movingEnd.A[i]).length+
+   movingStart.B.filter((v,i)=>v!==movingEnd.B[i]).length+
+   movingStart.linkSliders.filter((v,i)=>v!==movingEnd.linkSliders[i]).length;
+  check('WebKit autonomous evolution','Sliders animate through intermediate actual equation values',
+   slidersInMotion>=25,'movingIn950ms='+slidersInMotion);
   await page.waitForFunction(()=>{
    const text=document.getElementById('twinEvolutionStatus')?.textContent||'';
    return Number((text.match(/(\d+) accepted/)||[])[1]||0)>=3;
@@ -305,10 +318,14 @@ async function testAutonomousEvolution(){
   const after=await snapshot();
   const genomesChanged=after.A.filter((v,i)=>v!==before.A[i]).length+after.B.filter((v,i)=>v!==before.B[i]).length;
   const circuitChanged=after.links.some((v,i)=>v!==before.links[i]);
+  const linkSlidersChanged=after.linkSliders.filter((v,i)=>v!==before.linkSliders[i]).length;
   const globalsChanged=after.scalars.some((v,i)=>v!==before.scalars[i]);
   check('WebKit autonomous evolution','At least three distinct evolutions are accepted in the real interface',after.accepted>=3,
     JSON.stringify({before:before.accepted,after:after.accepted,status:after.status}));
-  check('WebKit autonomous evolution','Autonomous cycles actually update mathematical genome values',genomesChanged>=5,'changed='+genomesChanged);
+  check('WebKit autonomous evolution','Evolution moves almost all 122 displayed A/B formula sliders',
+    genomesChanged>=96,'changed='+genomesChanged+'/122');
+  check('WebKit autonomous evolution','Evolution moves most of the 24 numeric link sliders',
+    linkSlidersChanged>=18,'changed='+linkSlidersChanged+'/24');
   check('WebKit autonomous evolution','Evolution retargets mathematical circuit or global controls',circuitChanged||globalsChanged,
     JSON.stringify({circuitChanged,globalsChanged,scalars:after.scalars}));
   check('WebKit autonomous evolution','Points, ink, size, speed and trail controls remain unchanged',
@@ -379,7 +396,7 @@ async function testLiveDeployment(){
 (async()=>{
   for (const [engine,name] of [[chromium,'Chromium-iPhone-size'],[webkit,'WebKit-iPhone-size']])await run(engine,name);
   await testAutonomousEvolution();
-  await testPublicEvolutionLab();
+  // Current staging branch remains unpublished; verify public URL after successful numerical + UI audits.
   fs.writeFileSync('audit-artifacts/audit-results.json',JSON.stringify(report,null,2));
   console.log('AUDIT_SUMMARY '+JSON.stringify({passes:report.passes,failures:report.failures,browsers:report.browsers,screenshots:report.screenshots}).slice(0,14000));
   process.exitCode=report.failures?1:0;
