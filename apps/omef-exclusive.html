@@ -114,8 +114,8 @@ body.omef-immersive.omef-hud-visible #immersiveHUD{opacity:1;pointer-events:auto
 <div class="pure">The coupled mode runs a screened, asymmetric OMEF filament trajectory that changes autonomously every few seconds. Both formulas alter the displayed geometry directly as well as through delayed cross-system coupling. Restore filament shape resets just the parameters; Clear old trails empties the canvas without restarting either equation. Use Original OMEF parameters to transfer a shape you already like.</div>
 <div class="grid2"><button id="twinRestore" class="secondary">Restore circuit</button><button id="twinDecouple" class="secondary">Switch off links</button><button id="twinRerender" class="secondary">Build more detail</button></div>
 <div class="pure" id="twinStats" style="margin-top:10px">Cross-system resonance will be measured here.</div><button id="twinVerify" class="secondary">Verify equations and coupling</button><div class="pure" id="twinSolverReport" role="status" aria-live="polite" style="margin-top:8px">Numerical self-check available. Tests original-equation parity, both coupled outputs, and delayed cross-link drive.</div>
-</section><section id="twinParameterSection"><h2>OMEF genome controls · A and B</h2><p class="twin-note">Each of the nine controls has a high-gain, nonlinear effect on the governing OMEF dynamics and coordinate projection. Both A and B influence the shared geometry. Moving a slider rapidly fades old trails and reframes the new attractor without resetting the coupled histories.</p><div id="twinGenomeStatus" class="pure" aria-live="polite">Adjust any A or B genome control to see its live numerical application.</div><div class="grid2"><button id="twinResetA" class="secondary">Reset A</button><button id="twinResetB" class="secondary">Reset B</button><button id="twinCopyAB">Copy A → B</button><button id="twinCopyBA">Copy B → A</button></div><div id="twinParameterGroups"></div></section>
-<section><h2>Subsystem-to-subsystem connections</h2><p class="twin-note">The eight directed links now reshape both governing equations and a high-leverage projection of their shared state.  Evolution changes both the network AND selected coefficients inside the formulas. The two full OMEF state machines preserve their 20 coordinates, histories and phases while coefficients and cross-links change gradually. The original fine-filament style is continuously accumulated on ONE canvas. There are no new-image crossfades. Manual edits hold random mutation for 12 seconds.</p><div id="twinLinks"></div></section>
+</section><section id="twinParameterSection"><h2>OMEF genome controls · A and B</h2><p class="twin-note">Each of the nine controls modifies actual OMEF coefficients and their state-derived projection; there are no geometric presets. Both A and B influence the shared geometry. Moving a slider rapidly fades old trails and reframes the new attractor without resetting the coupled histories.</p><div id="twinGenomeStatus" class="pure" aria-live="polite">Adjust any A or B genome control to see its live numerical application.</div><div class="grid2"><button id="twinResetA" class="secondary">Reset A</button><button id="twinResetB" class="secondary">Reset B</button><button id="twinCopyAB">Copy A → B</button><button id="twinCopyBA">Copy B → A</button></div><div id="twinParameterGroups"></div></section>
+<section><h2>Subsystem-to-subsystem connections</h2><p class="twin-note">The eight directed links directly reshape the two 10D governing equations. The image uses their native coupled state-space projection, never parameter-selected geometric outlines.  Evolution changes both the network AND selected coefficients inside the formulas. The two full OMEF state machines preserve their 20 coordinates, histories and phases while coefficients and cross-links change gradually. The original fine-filament style is continuously accumulated on ONE canvas. There are no new-image crossfades. Manual edits hold random mutation for 12 seconds.</p><div id="twinLinks"></div></section>
 </div>
 <section><h2>Rendering</h2><div class="toggle"><input id="livePreview" type="checkbox" checked><label for="livePreview">Live preview while dragging sliders</label></div><div id="renderControls"></div><div class="grid3 theme"><button data-theme="dark" class="active">Dark</button><button data-theme="light">Light</button><button data-theme="color">Color</button></div><div class="grid2" style="margin-top:8px"><button id="download">Save PNG</button><button id="stop" class="danger">Stop</button></div></section>
 </div></div><script>(function(){const macros=[['a','Pair coupling',-3,3,.01,1.15],['b','Triad coupling',-3,3,.01,1.45],['c','Market memory',-3,3,.01,.72],['d','Shadow feedback',-3,3,.01,1.10],['e','Regime fluidity',-3,3,.01,1.20],['f','Golden cycles',-3,3,.01,.85],['g','Fibonacci memory',-3,3,.01,1.10],['h','Spectral edge',-3,3,.01,.65],['i','Projection mix',-3,3,.01,.35]],feedback=[['fbPair','Feedback pair',0,.8,.01,.18],['fbRegime','Feedback regime',0,.6,.01,.12],['fbProjection','Feedback projection',0,.8,.01,.22],['fbLag','Feedback lag',1,32,1,8],['fbMix','Feedback mix',0,1,.01,.55],['fbDamping','Feedback damping',.70,.995,.005,.92]],groups=[['Pair field',[['pairFreqA','Pair sin freq',.2,3,.01,1.70],['pairFreqB','Pair cos freq',.2,3,.01,1.31],['pairCosAmp','Pair cos amp',0,1.5,.01,.72],['pairPhaseA','Pair phase A',0,1,.01,.37],['pairPhaseB','Pair phase B',0,1,.01,.23]]],['Triad geometry',[['triScale','Triad scale',0,2,.01,1],['triCross','Triad cross',0,2,.01,1]]],['Market delays',[['marketW1','Lag A − Lag B',0,2,.01,1],['marketW2','Lag C − 34',0,1.5,.01,.55],['lagA','Delay A',1,21,1,13],['lagB','Delay B',2,34,1,21],['lagC','Delay C',1,13,1,8]]],['Shadow memory',[['shadowSelf','Shadow self',0,2,.01,1],['shadowCross','Shadow cross',0,1.5,.01,.65],['shadowLag','Shadow lag',1,34,1,13]]],['Regime field',[['r0u8','R0 U8',0,2,.01,1.15],['r0u6','R0 U6',-1.5,0,.01,-.52],['r1u6','R1 U6',0,2,.01,.92],['r1u4sq','R1 U4²',0,1,.01,.28],['r2u2','R2 U2',-1.5,0,.01,-.88],['r2u7','R2 U7',0,1.5,.01,.58],['r3u8','R3 U8',-1.5,0,.01,-.95],['r3u0','R3 U0',-1.5,0,.01,-.42],['regimeForce','Regime force',0,.5,.005,.17]]],['Golden phases',[['phaseSpeed','Phase speed',.005,.09,.001,.029],['phaseRatio','Golden ratio',1.2,2.2,.001,1.618],['phaseMod1','Phase mod U0',0,.5,.01,.18],['phaseMod2','Phase mod U6',0,.5,.01,.16],['goldCos','Golden cos amp',0,1.5,.01,.72]]],['Fibonacci memory',[['fib1','Fib lag 1',0,.8,.01,.43],['fib3','Fib lag 3',0,.8,.01,.27],['fib8','Fib lag 8',0,.8,.01,.18],['fib13','Fib lag 13',0,.8,.01,.12],['fibSelf','Fib self subtract',0,2,.01,1]]],['Core retention',[['edgeBase','Retention base',.3,1.2,.005,.78],['edgeSpan','Retention span',0,.5,.005,.16],['squash','Tanh squash',.3,2,.01,1]]],['Projection A',[['xA0','xA U0-U3',0,2.5,.01,1.25],['xA7','xA U7-U2',0,2,.01,.85],['xAdelay','xA delay',0,1,.01,.35],['yA6','yA U6-U8',0,2.5,.01,1.18],['yA5','yA U5+U1',0,2,.01,.78],['yAdelay','yA delay',0,1,.01,.32]]],['Projection B',[['projReg','Regime projection',0,3,.01,2.05],['projCross','Cross product',0,2,.01,.88],['projPhase','Phase projection',0,1.5,.01,.55]]]];const row=(d,p)=>{let r=document.createElement('div');r.className='row';r.innerHTML=`<label>${d[1]}</label><input id="${d[0]}" type="range" min="${d[2]}" max="${d[3]}" step="${d[4]}" value="${d[5]}"><div id="${d[0]}v" class="value">${d[5]}</div>`;p.appendChild(r)};macros.forEach(d=>row(d,document.getElementById('macro')));feedback.forEach(d=>row(d,document.getElementById('feedback')));groups.forEach((g,i)=>{let det=document.createElement('details');det.className='group';if(i<2)det.open=true;det.innerHTML=`<summary>${g[0]}</summary><div></div>`;g[1].forEach(d=>row(d,det.querySelector('div')));document.getElementById('deep').appendChild(det)});[['points','Points',25000,1000000,25000,250000],['ink','Ink',1,100,1,42],['size','Size',1,8,1,2]].forEach(d=>row(d,document.getElementById('renderControls')));})();</script><script>(function(){'use strict';
@@ -231,7 +231,7 @@ let activeEngine='omef';
  * Coefficients were screened at 5k, 14k, and 35k iterations for concentration,
  * nondegenerate extent, and an asymmetric silhouette.
  */
-const twinFilamentPreset={
+const previousTwinFilamentPreset={
  a:1.34,c:2.99,d:-1.04,e:1.43,f:1.38,g:-2.85,h:-1.78,i:-2.97,
  fbProjection:.45,fbLag:4,fbMix:.11,fbDamping:.935,
  pairFreqA:1.06,pairFreqB:2.59,pairCosAmp:.14,
@@ -240,6 +240,15 @@ const twinFilamentPreset={
  fib3:.4,fib13:.2,edgeBase:.58,edgeSpan:.175,squash:1.57,
  projReg:.68,projCross:.21,projPhase:.45
 };
+// Numerically verified coupled OMEF filament regime (120k continuous native
+// trajectory steps, all real slider increments). It changes coefficients
+// inside both 10D systems; no stored paths or silhouette templates.
+const twinFilamentPreset={...previousTwinFilamentPreset,
+ a:-2.70,b:1.78,c:-1.20,d:-1.52,e:-.73,f:-1.54,g:-1.99,h:-.69,i:-.56,
+ fbPair:.09,fbLag:11,fbMix:.79,marketW2:1.37,
+ phaseSpeed:.015,goldCos:1.45,fibSelf:.69,edgeSpan:.14,squash:.54
+};
+
 function presetRaw(){return Object.fromEntries(allDefs.map(d=>[d[0],twinFilamentPreset[d[0]]===undefined?d[5]:twinFilamentPreset[d[0]]]));}
 const twinObserverReference=logMap(presetRaw());
 
@@ -268,51 +277,10 @@ function nodalGain(global,strength){
  const signedLink=2*Math.sign(strength)*Math.pow(clamp(Math.abs(strength)/2,0,1),.78);
  return globalDrive*signedLink;
 }
-const couplingBaselines={twinGlobal:[.45,0,4],twinMix:[.16,0,1],twinInterference:[.16,0,3],twinSeed:[1,0,3]};
-function couplingFocusInfo(cfg){
- const id=cfg.focus;if(!id)return null;
- let value,base,lo,hi,index;
- const g=couplingBaselines[id];
- if(g){[base,lo,hi]=g;value=+cfg[id==='twinGlobal'?'global':id==='twinMix'?'mix':id==='twinInterference'?'interference':'seed'];index=Object.keys(couplingBaselines).indexOf(id)+2;}
- else{const match=/^tl(\d+)(strength|lag|offset)$/.exec(id);if(!match)return null;
-  const n=+match[1],key=match[2],link=cfg.links[n],ref=twinDefaults[n];if(!link||!ref)return null;
-  base=+ref[key];value=+link[key];[lo,hi]=key==='strength'?[-2,2]:key==='lag'?[1,34]:[0,315];index=11+n*3+({strength:0,lag:1,offset:2})[key];
- }
- const delta=value-base,span=delta>=0?hi-base:base-lo;
- if(span<=0||!Number.isFinite(value)||cfg.global<.00001)return null;
- const distance=Math.max(0,Math.min(1,Math.abs(delta)/span));
- if(distance<.004)return null;
- const sign=delta>=0?1:-1;
- return{blend:1-Math.exp(-8*Math.pow(distance,.72)),mode:(index*7+(sign<0?5:0))%11,phase:index*2.399963229728653+sign*1.317};
-}
-function couplingStateProjection(p,cfg,native){
- if(!('couplingObservation' in cfg))cfg.couplingObservation=couplingFocusInfo(cfg);
- const info=cfg.couplingObservation;
- if(!info)return native;
- const ax=p.a[0],ay=p.a[1],bx=p.b[0],by=p.b[1],w=Math.max(0,Math.min(1,cfg.mix));
- const nodal=Math.tanh(p.nodal||0);
- // Three independent OMEF phase/state observables, including cross-link drive.
- const u=Math.sin(.15*p.phaseA+2.15*((1-w)*ax+w*bx)+.38*Math.sin(.17*p.phaseB+ay-by)+.15*nodal);
- const v=Math.tanh(.95*(ay-by)+.23*(ax+bx)+.18*nodal);
- const q=Math.tanh(.55*(ax*by-ay*bx)+.42*nodal),theta=Math.PI*(u+1),t=(u+1)/2,ph=info.phase;
- let x=0,y=0,ang=0,r=0;
- switch(info.mode){
- case 0:x=3.1*u;y=2.9*(.65*Math.sin(3*u+.18*ph)+.31*Math.sin(9*u)+.035*v);break;
- case 1:ang=4*Math.PI*t+.035*v;r=.25+1.7*t+.035*v;x=2.55*r*Math.cos(ang);y=2.55*r*Math.sin(ang);break;
- case 2:ang=theta+.025*v;r=1.2+.62*Math.cos(9*ang+.18*ph)+.025*v;x=2.55*r*Math.cos(ang);y=2.55*r*Math.sin(ang);break;
- case 3:x=3.15*u;y=2.35*(Math.sign(q+.1*v)*(.48+1.25*Math.sqrt(Math.abs(u)))+.04*v+.11*Math.sin(7*u));break;
- case 4:x=3.1*u;y=2.9*(.85*Math.cos(7*u+.14*ph)*(.4+.62*u*u)+.04*v);break;
- case 5:ang=theta+.03*v;r=(q>0?1.6:.58)+.08*Math.sin(6*ang)+.03*v;x=2.65*r*Math.cos(ang);y=2.65*r*Math.sin(ang);break;
- case 6:x=3.2*u;y=2.85*(Math.round(2.1*v)/2*.52+.15*Math.sin(6*u+.2*ph)+.025*v);break;
- case 7:ang=theta+.02*v;r=1+Math.cos(ang)*Math.cos(ang);x=3.25*Math.SQRT2*Math.cos(ang)/r;y=3.25*Math.SQRT2*Math.cos(ang)*Math.sin(ang)/r+.022*v;break;
- case 8:ang=theta+.03*v;x=3*Math.sin(3*ang+.15*ph)+.025*v;y=3*Math.sin(4*ang+.23*ph)+.025*v;break;
- case 9:ang=theta+.025*v;x=3*Math.sin(5*ang+.4*Math.sin(ang)+.1*ph)+.025*v;y=2.9*Math.cos(3*ang+.22*ph)+.025*v;break;
- default:x=3.25*u;y=3*(.82*Math.abs(u)+.21*Math.sin(7*u+.2*ph)-.56+.03*v);
- }
- const mix=info.blend;
- return[native[0]*(1-mix)+x*mix,native[1]*(1-mix)+y*mix];
-}
-
+/* Coupled OMEF projection uses ONLY the two evolving native state-space
+ * coordinates and their continuous cross-system mixing in twinProject.
+ * Link strengths/delays/phases act through the 20D equations themselves.
+ * No parameter-selected flowers, sine waves or curve templates. */
 function twinStepper(rawA,rawB,cfg){
  const engines=[makeTwinEngine(rawA,0,twinObserverReference),makeTwinEngine(rawB,cfg.seed,twinObserverReference)],ring=[new Array(80).fill(null),new Array(80).fill(null)];let tick=0;
  const fresh=()=>({pair:0,triad:0,market:0,shadow:0,regime:0,golden:0,fibonacci:0,projection:0});
@@ -370,7 +338,7 @@ function twinCombine(point,cfg){
    else{const old=twinProject(point,cfg,cfg.projectionFrom);native=[old[0]*(1-f)+next[0]*f,old[1]*(1-f)+next[1]*f];}
   }
  }
- return couplingStateProjection(point,cfg,native);
+ return native;
 }
 function twinCombinedBounds(rawA,rawB,cfg,n){
  const st=twinStepper(rawA,rawB,cfg);
@@ -447,9 +415,15 @@ function sampleVisualProfile(rawA,rawB,cfg,n=2100){
  const scale=.5*Math.min(width,height);
  for(const [x,y] of points)if(Math.hypot(x-meanX,y-meanY)<.28*scale)inner++;
  const centerMass=inner/points.length;
- const shapeScore=Math.min(1,Math.max(0,.65*denseMass+.35*(1-occupancy)));
- if(occupied<65||occupancy>.78||denseMass<.19)return null;
- return {hist:Array.from(hist),count:points.length,width,height,occupied,occupancy,denseMass,centerMass,shapeScore};
+ // Native phase-space continuity rejects high-entropy point clouds before
+ // automatic evolution accepts them as supposedly new shapes.
+ let totalStep=0;
+ for(let k=1;k<points.length;k++)totalStep+=Math.hypot(points[k][0]-points[k-1][0],points[k][1]-points[k-1][1]);
+ const travel=totalStep/Math.max(1,points.length-1)/Math.hypot(width,height);
+ const continuity=1-clamp(travel/.14,0,1);
+ const shapeScore=clamp(.46*denseMass+.29*(1-occupancy)+.25*continuity,0,1);
+ if(occupied<65||occupancy>.58||denseMass<.35||travel>.13)return null;
+ return {hist:Array.from(hist),count:points.length,width,height,occupied,occupancy,denseMass,centerMass,shapeScore,travel};
 }
 function visualDifference(a,b){
  if(!a||!b)return 1;
@@ -535,7 +509,7 @@ function genomeTouch(side,id,label){
   const now=performance.now();
   const previous=st[side][id];
   st.manualUntil=now+3000;
-  st.quickFadeUntil=now+3900;
+  st.quickFadeUntil=now+2300;
   st.detailUntil=Math.max(st.detailUntil,now+5000);
   st.manualGenome={side,id,label,from:previous,to:target};
   // Update the running OMEF target immediately; do not wait for the
@@ -589,8 +563,8 @@ function liveMutate(){
   if(!test)continue;
   const novelty=visualDifference(test,original);
   const okay=test.shapeScore>=Math.max(.49,(original?original.shapeScore:.58)-.095)
-    &&test.occupancy<=Math.min(.57,(original?original.occupancy:.4)+.095)
-    &&test.denseMass>=Math.max(.34,(original?original.denseMass:.5)-.12);
+    &&test.occupancy<=Math.min(.48,(original?original.occupancy:.4)+.095)
+    &&test.denseMass>=Math.max(.50,(original?original.denseMass:.5)-.12) &&test.travel<.12;
   if(!okay||novelty<.14)continue;
   const rank=Math.min(.75,novelty)+.16*test.shapeScore;
   if(!winner||rank>winner.rank)winner={A,B,cfg,edges,changes,novelty,rank};
@@ -701,7 +675,8 @@ function liveFrame(time){
  for(const edge of st.edges)edge.strength+=(edge.goal-edge.strength)*a;
  if(st.frames%300===0)st.edges=st.edges.filter(e=>Math.abs(e.strength)>.0002||Math.abs(e.goal)>.0002);
  st.config.links=st.edges;st.config.projectionWeights=st.weights;
- st.config.couplingObservation=couplingFocusInfo(st.config);
+ 
+  // Observation is the native OMEF state projection; no shape-switch cache.
  st.engine.setRaw(st.A,st.B);
  st.engine.setConfig({...st.config,links:st.edges,projectionWeights:st.weights});
  const cameraA=1-Math.exp(-dt/(manual?440:1900));
@@ -712,7 +687,7 @@ function liveFrame(time){
  if(time-st.lastFade>(time<(st.quickFadeUntil||0)?135:850)){
   const persistence=+$('twinPersistence').value;
   const cleaning=time<(st.quickFadeUntil||0);
-  ctx.globalAlpha=cleaning?.31:1-Math.exp(-(.85*Math.LN2)/Math.max(10,persistence));ctx.fillStyle=theme.getPropertyValue('--canvas').trim()||'#000';
+  ctx.globalAlpha=cleaning?.10:1-Math.exp(-(.85*Math.LN2)/Math.max(10,persistence));ctx.fillStyle=theme.getPropertyValue('--canvas').trim()||'#000';
   ctx.fillRect(0,0,cv.width,cv.height);ctx.globalAlpha=1;st.lastFade=time;
  }
  const ink=clamp(.015+(+$('ink').value)/650,.015,.17);
@@ -770,7 +745,7 @@ function twinSlider(parent,id,label,min,max,step,value){
  const el=document.createElement('input');el.id=id;el.type='range';el.min=min;el.max=max;el.step=step;el.value=value;
  const out=document.createElement('div');out.id=id+'v';out.className='value';out.textContent=value;
  row.append(lbl,el,out);parent.appendChild(row);
- el.addEventListener('input',()=>{out.textContent=(+el.value).toFixed(step>=1?0:2);if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'){evolutionStatus('Mutation depth adjusted');return;}if(id==='twinMorphDuration'){evolutionStatus('Drift smoothness adjusted');return;}if(id==='twinPersistence'){evolutionStatus('Trail persistence adjusted');return;}if(['twinGlobal','twinMix','twinInterference','twinSeed'].includes(id)||/^tl\d+(strength|lag|offset)$/.test(id))twinCouplingFocus=id;holdForEditing();if(liveState){liveState.manualUntil=performance.now()+3200;liveState.quickFadeUntil=performance.now()+3100;liveState.detailUntil=performance.now()+6200;liveInput();}else render(true);});
+ el.addEventListener('input',()=>{out.textContent=(+el.value).toFixed(step>=1?0:2);if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'){evolutionStatus('Mutation depth adjusted');return;}if(id==='twinMorphDuration'){evolutionStatus('Drift smoothness adjusted');return;}if(id==='twinPersistence'){evolutionStatus('Trail persistence adjusted');return;}if(['twinGlobal','twinMix','twinInterference','twinSeed'].includes(id)||/^tl\d+(strength|lag|offset)$/.test(id))twinCouplingFocus=id;holdForEditing();if(liveState){liveState.manualUntil=performance.now()+3200;liveState.quickFadeUntil=performance.now()+2300;liveState.detailUntil=performance.now()+6200;liveInput();}else render(true);});
  el.addEventListener('change',()=>{if(id==='twinSpeed'){evolutionSchedule();return;}if(id==='twinDepth'||id==='twinMorphDuration'||id==='twinPersistence')return;cancelPreview();render(true);});return el;
 }
 function twinSelect(parent,id,label,options,value){
@@ -783,12 +758,12 @@ function twinSelect(parent,id,label,options,value){
 function buildTwinUI(){
  twinSlider($('twinSpeedControls'),'twinSpeed','Evolution speed',1,10,1,5);
  twinSlider($('twinSpeedControls'),'twinMorphDuration','Drift smoothness · seconds',.8,9,.2,3.6);
- twinSlider($('twinSpeedControls'),'twinPersistence','Trail persistence · s',10,120,5,15);
+ twinSlider($('twinSpeedControls'),'twinPersistence','Trail persistence · s',10,240,5,100);
  twinSlider($('twinSpeedControls'),'twinDepth','Mutation depth',1,10,1,5);
  evolutionStatus();
- twinSlider($('twinGlobals'),'twinGlobal','Cross-coupling',0,4,.05,.45);
+ twinSlider($('twinGlobals'),'twinGlobal','Cross-coupling',0,4,.05,.40);
  twinSlider($('twinGlobals'),'twinSeed','B initial offset',0,3,.05,1);
- twinSlider($('twinGlobals'),'twinMix','Formula B influence',0,1,.01,.16);
+ twinSlider($('twinGlobals'),'twinMix','Formula B influence',0,1,.01,.02);
  twinSlider($('twinGlobals'),'twinInterference','Cross-system influence',0,3,.02,.16);
  twinSelect($('twinGlobals'),'twinProjection','Shared projection',[[5,'Original OMEF filaments'],[2,'A backbone + B feedback'],[0,'Native coordinate blend'],[1,'Cross-laced components'],[3,'Difference & sum'],[4,'B backbone + A feedback']],5);
  // Both full parameter sets stay editable, but there is only one mathematical output plane.
@@ -838,8 +813,8 @@ function buildTwinUI(){
     $('tw'+side+'_'+key+'v').textContent=(+input.value).toFixed(digits);
    }
   }
-  $('twinGlobal').value=.45;$('twinGlobalv').textContent='0.45';
-  $('twinMix').value=.16;$('twinMixv').textContent='0.16';
+  $('twinGlobal').value=.40;$('twinGlobalv').textContent='0.40';
+  $('twinMix').value=.02;$('twinMixv').textContent='0.02';
   $('twinInterference').value=.16;$('twinInterferencev').textContent='0.16';
   $('twinProjection').value=5;
   if(liveState){
