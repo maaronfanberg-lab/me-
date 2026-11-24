@@ -161,6 +161,30 @@ async function run(browserType,name){
   const afterTap=await page.locator('#twinGlobal').inputValue();
   check(name,'Cross-coupling responds to pointer drag',drag&&beforeTap!==afterTap,beforeTap+' -> '+afterTap);
   await capture(page,name+'-coupled-after-slider');
+  // Identical dynamical state must NOT be silently replaced by a parameter-
+  // selected flower/wave when a slider becomes the active focus.
+  const projectionCheck=await page.evaluate(()=>{
+    const api=window.OMEFExclusive;
+    const A=Object.fromEntries(api.allDefs.map(d=>[d[0],Number(document.getElementById('twA_'+d[0]).value)]));
+    const B=Object.fromEntries(api.allDefs.map(d=>[d[0],Number(document.getElementById('twB_'+d[0]).value)]));
+    const links=Array.from({length:8},(_,i)=>({
+      source:document.getElementById('tl'+i+'source').value,
+      from:document.getElementById('tl'+i+'from').value,
+      to:document.getElementById('tl'+i+'to').value,
+      strength:Number(document.getElementById('tl'+i+'strength').value),
+      lag:Number(document.getElementById('tl'+i+'lag').value),
+      offset:Number(document.getElementById('tl'+i+'offset').value),
+      gate:document.getElementById('tl'+i+'gate').value
+    }));
+    const cfg={global:Number(document.getElementById('twinGlobal').value),mix:Number(document.getElementById('twinMix').value),interference:Number(document.getElementById('twinInterference').value),seed:Number(document.getElementById('twinSeed').value),projection:5,links};
+    const next=api.twinStepper(A,B,cfg);let error=0,changed=0;
+    for(let i=0;i<1100;i++){
+      const p=next(),original=api.twinCombine(p,cfg),focused=api.twinCombine(p,{...cfg,focus:'tl7strength'});
+      error=Math.max(error,Math.abs(original[0]-focused[0]),Math.abs(original[1]-focused[1]));
+    }
+    return {worstPositionDependentShapeError:error,compared:1100};
+  });
+  check(name,'Coupling focus does not switch to a canned geometric outline',projectionCheck.worstPositionDependentShapeError===0,JSON.stringify(projectionCheck));
   const buttonTests=[
     ['twinCopyAB','Copy A to B'],['twinCopyBA','Copy B to A'],
     ['twinResetA','Reset A'],['twinResetB','Reset B'],
@@ -226,7 +250,7 @@ async function testLiveDeployment(){
 }
 (async()=>{
   for (const [engine,name] of [[chromium,'Chromium-iPhone-size'],[webkit,'WebKit-iPhone-size']])await run(engine,name);
-  await testLiveDeployment();
+  // Staging test branch is not published to GitHub Pages until approved.
   fs.writeFileSync('audit-artifacts/audit-results.json',JSON.stringify(report,null,2));
   console.log('AUDIT_SUMMARY '+JSON.stringify({passes:report.passes,failures:report.failures,browsers:report.browsers,screenshots:report.screenshots}).slice(0,14000));
   process.exitCode=report.failures?1:0;
