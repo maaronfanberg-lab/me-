@@ -58,6 +58,7 @@ NEAR1 /= NEAR1.sum(1, keepdims=True)
 GS = np.exp(-0.5 * ((EN[:, None] - EN[None, :]) / 0.5) ** 2); GS /= GS.sum(1, keepdims=True)
 
 GS25 = np.exp(-0.5 * ((EN[:, None] - EN[None, :]) / 0.25) ** 2); GS25N = GS25.copy(); GS25 /= GS25.sum(1, keepdims=True)
+GS25c = np.where(np.abs(EN[:, None] - EN[None, :]) / 0.25 <= 6, GS25N, 0.0); GS25c /= GS25c.sum(1, keepdims=True)
 
 def attribute(L, bw_now, mode):
     """For each band: margin, the place where it is hardest to hear, and the band (outside its own
@@ -96,22 +97,32 @@ def gains2(lev, w, mode, recover=1.0, tame=1.0, bias=0.0):
     Recover/Tame amounts. Then 0.25-ERB smoothing, loudness compensation, 30 ms causal smoothing."""
     nb, nf = lev.shape
     bwf = (1 - w) * S3.BW_N[:, None] + w * S3.BW_W[:, None]
-    G = np.zeros((nb, nf)); a = np.exp(-10.0 / 30.0); prev = np.zeros(nb)
+    G = np.zeros((nb, nf)); a = np.exp(-10.0 / 30.0); prev = np.zeros(nb); pcp = np.zeros(nb, int)
+    ar, ao, off = np.exp(-10.0 / 150.0), np.exp(-10.0 / 400.0), 0.0
     for j in range(nf):
         L = lev[:, j]
         m, k, peak = attribute(L, bwf[:, j], mode)
-        cand = peak & (m > -12) & (m < 0) & (L > M.quiet_threshold(S3.FC) + 10)
+        cond = peak & (m > -12) & (m < 0) & (L > M.quiet_threshold(S3.FC) + 10)
+        # persistence (v3): near-hidden for 3 frames (30 ms), +-1 band drift allowed
+        nbm = np.maximum(pcp, np.maximum(np.concatenate([[0], pcp[:-1]]), np.concatenate([pcp[1:], [0]])))
+        pc = np.where(cond, nbm + 1, 0); pcp = pc
+        cand = cond & (pc >= 3)
         D = 1 - m
         up = np.zeros(nb); down = np.zeros(nb)
-        up[cand] = np.minimum((1 + bias) / 2 * D[cand], 6.0) * recover
-        np.maximum.at(down, k[cand], np.minimum((1 - bias) / 2 * D[cand], 6.0) * tame)
+        up[cand] = np.minimum((1 + bias) / 2 * D[cand], 3.0) * recover            # (v4) cap 3 dB per 100%
+        np.maximum.at(down, k[cand], np.minimum((1 - bias) / 2 * D[cand], 3.0) * tame)
         # spread each lift/cut as a 0.25-ERB bump keeping its full depth at the centre (dilation);
         # averaging (first version) diluted a single-band 6 dB lift to ~0.4 dB.
         g = (GS25N * up[None, :]).max(1) - (GS25N * down[None, :]).max(1)
+        g = GS25c @ g          # (v3) light 0.25-ERB averaging of the finished curve (no comb ripple)
+        # (v4 anti-pumping) shape: 30 ms attack / 150 ms release; loudness offset: 400 ms, clamped +-3 dB
+        away = np.abs(g) > np.abs(prev)
+        co = np.where(away, a, ar)
+        prev = co * prev + (1 - co) * g
         P = 10 ** (L / 10) * KW
-        g -= 10 * np.log10((P * 10 ** (g / 10)).sum() / P.sum())
-        prev = a * prev + (1 - a) * g
-        G[:, j] = prev
+        off_now = 10 * np.log10((P * 10 ** (prev / 10)).sum() / P.sum())
+        off = float(np.clip(ao * off + (1 - ao) * off_now, -3.0, 3.0))
+        G[:, j] = prev - off
     return G
 
 def gains(lev, mg, recover=1.0, tame=1.0):

@@ -88,6 +88,9 @@ function biq(b, a, f) {
   var nr = b[0] + b[1] * cr + b[2] * c2r, ni = b[1] * ci + b[2] * c2i, dr = a[0] + a[1] * cr + a[2] * c2r, di = a[1] * ci + a[2] * c2i;
   return (nr * nr + ni * ni) / (dr * dr + di * di);
 }
+var KWB = new Float64Array(NN / 2 + 1);
+for (var kb = 1; kb <= NN / 2; kb++) KWB[kb] = biq([1.53512485958697, -2.69169618940638, 1.19839281085285], [1, -1.69065929318241, 0.73248077421585], kb * FS / NN)
+  * biq([1, -2, 1], [1, -1.99004745483398, 0.99007225036621], kb * FS / NN);
 var KW = new Float64Array(K);
 for (var kk = 0; kk < K; kk++) KW[kk] = biq([1.53512485958697, -2.69169618940638, 1.19839281085285], [1, -1.69065929318241, 0.73248077421585], FC[kk])
   * biq([1, -2, 1], [1, -1.99004745483398, 0.99007225036621], FC[kk]);
@@ -177,7 +180,7 @@ function ClarityEngine(opts) {
   this.buf = new Float64Array(NN);
   this.Lhist = []; for (var i = 0; i < 7; i++) { var r = new Float64Array(K); r.fill(-1e9); this.Lhist.push(r); }
   this.w = new Float64Array(K); this.cnt = new Int32Array(K); this.s = null;
-  this.prevG = new Float64Array(K);
+  this.prevG = new Float64Array(K); this.pc = new Int32Array(K);
   this.re = new Float64Array(NN); this.im = new Float64Array(NN);
   this.re2 = new Float64Array(NW); this.im2 = new Float64Array(NW);
 }
@@ -223,22 +226,27 @@ ClarityEngine.prototype.analyse = function (hop) {
     bw[b] = (1 - w[b]) * BWN[b] + w[b] * BWW[b];
   }
   var m = this.masker.frame(lev, bw);
-  return { lev: lev, thr: m.thr, margin: m.margin, dstar: m.dstar, w: Float64Array.from(w) };
+  return { lev: lev, thr: m.thr, margin: m.margin, dstar: m.dstar, w: Float64Array.from(w), P: P, Xn: Xn, Xw: Xw };
 };
-var GA = Math.exp(-10 / 30);
+var GA = Math.exp(-10 / 30), GR = Math.exp(-10 / 150), GO = Math.exp(-10 / 100), PERSIST = 3, CAP = 3;
 ClarityEngine.prototype.step = function (hop) {          // one 480-sample hop -> gains (dB) for this frame
   var a = this.analyse(hop), lev = a.lev, mg = a.margin, b, k;
-  var up = new Float64Array(K), down = new Float64Array(K), touched = [];
+  var up = new Float64Array(K), down = new Float64Array(K), touched = [], pc = new Int32Array(K);
   for (b = 0; b < K; b++) {
     var left = b > 0 ? lev[b - 1] : -Infinity, right = b < K - 1 ? lev[b + 1] : -Infinity;
     var peak = lev[b] >= left && lev[b] >= right;
-    if (!(peak && mg[b] > -12 && mg[b] < 0 && lev[b] > QT[b] + 10)) continue;
+    var cond = peak && mg[b] > -12 && mg[b] < 0 && lev[b] > QT[b] + 10;
+    // persistence: a component must stay near-hidden for 3 frames (30 ms; +-1 band drift allowed).
+    // Noise ripple peaks change every frame and are not detail to recover.
+    if (cond) pc[b] = 1 + Math.max(this.pc[b], b > 0 ? this.pc[b - 1] : 0, b < K - 1 ? this.pc[b + 1] : 0);
+    if (!(cond && pc[b] >= PERSIST)) continue;
     var Dd = 1 - mg[b];
-    var u = Math.min((1 + this.bias) / 2 * Dd, 6) * this.recover; if (u > up[b]) up[b] = u;
+    var u = Math.min((1 + this.bias) / 2 * Dd, CAP) * this.recover; if (u > up[b]) up[b] = u;
     var km = this.masker.mainMasker(b, a.dstar[b]);
-    var dn = Math.min((1 - this.bias) / 2 * Dd, 6) * this.tame; if (dn > down[km]) down[km] = dn;
+    var dn = Math.min((1 - this.bias) / 2 * Dd, CAP) * this.tame; if (dn > down[km]) down[km] = dn;
     touched.push(b, km);
   }
+  this.pc = pc;
   var g = new Float64Array(K);
   // full-depth 0.25-ERB bumps (max over sources), lifts minus cuts
   var gu = new Float64Array(K), gd = new Float64Array(K);
@@ -252,11 +260,32 @@ ClarityEngine.prototype.step = function (hop) {          // one 480-sample hop -
       if (down[src] * ker > gd[k]) gd[k] = down[src] * ker;
     }
   }
-  var num = 0, den = 0;
-  for (k = 0; k < K; k++) { g[k] = gu[k] - gd[k]; var Pk = Math.pow(10, lev[k] / 10) * KW[k]; num += Pk * Math.pow(10, g[k] / 10); den += Pk; }
-  var off = 10 * Math.log10(num / den);
-  for (k = 0; k < K; k++) { this.prevG[k] = GA * this.prevG[k] + (1 - GA) * (g[k] - off); }
-  a.gains = Float64Array.from(this.prevG);
+  var raw = new Float64Array(K);
+  for (k = 0; k < K; k++) raw[k] = gu[k] - gd[k];
+  // light 0.25-ERB averaging of the finished curve: removes comb-like ripple between neighbouring bumps
+  for (k = 0; k < K; k++) {
+    var sw = 0, sv = 0, k1 = k; while (k1 > 0 && EN[k] - EN[k1 - 1] <= 1.5) k1--;
+    for (var j2 = k1; j2 < K; j2++) { var de2 = (EN[j2] - EN[k]) / 0.25; if (de2 > 6) break; var kw = Math.exp(-0.5 * de2 * de2); sw += kw; sv += kw * raw[j2]; }
+    g[k] = sv / sw;
+  }
+  // (v4, anti-pumping) the EQ SHAPE moves with 30 ms attack / 150 ms release; the broadband loudness
+  // offset is computed from the smoothed shape and moves slowly (400 ms), clamped to +-3 dB.
+  for (k = 0; k < K; k++) {
+    var pv = this.prevG[k], away = Math.abs(g[k]) > Math.abs(pv);
+    this.prevG[k] = (away ? GA : GR) * pv + (1 - (away ? GA : GR)) * g[k];
+  }
+  // loudness hold (v5): K-weighted power of the CURRENT (unsmoothed) band spectrum with and without the
+  // EQ, each averaged over ~200 ms, matches BS.1770 momentary loudness; the offset is their ratio.
+  // short (21 ms) spectrum: reacts to drum hits as they happen
+  var num = 0, den = 0, gb = this.gbin || (this.gbin = new Float64Array(FG.length));
+  interpDb(this.prevG, gb);                                // EQ on the 4096 grid; the 1024 grid is every 4th bin
+  for (k = 1; k <= NW / 2; k++) { var Pk = a.Xw[k] * KWB[4 * k]; num += Pk * Math.pow(10, gb[4 * k] / 10); den += Pk; }
+  this.ln = this.ln == null ? num : GO * this.ln + (1 - GO) * num;
+  this.ld = this.ld == null ? den : GO * this.ld + (1 - GO) * den;
+  this.off = (this.ld > 0 && this.ln > 0) ? 10 * Math.log10(this.ln / this.ld) : 0;
+  this.off = Math.max(-6, Math.min(6, this.off));
+  var out = new Float64Array(K); for (k = 0; k < K; k++) out[k] = this.prevG[k] - this.off;
+  a.gains = out;
   return a;
 };
 
@@ -308,6 +337,21 @@ MinPhaseEQ.prototype.processFrame = function (c, seg) {
   return out;
 };
 
-var api = { ClarityEngine: ClarityEngine, MinPhaseEQ: MinPhaseEQ, FS: FS, HOP: HOP, K: K, FC: FC, D: D, fft: fft };
+/* ---------- user EQ: 8 bands, dB, piecewise-linear on log frequency, flat beyond the ends ---------- */
+var EQF = [60, 150, 400, 1000, 2500, 6000, 10000, 14000];
+function userCurve(db) {
+  var out = new Float64Array(K);
+  for (var k = 0; k < K; k++) {
+    var f = FC[k];
+    if (f <= EQF[0]) { out[k] = db[0]; continue; }
+    if (f >= EQF[7]) { out[k] = db[7]; continue; }
+    var j = 0; while (EQF[j + 1] < f) j++;
+    var t = Math.log(f / EQF[j]) / Math.log(EQF[j + 1] / EQF[j]);
+    out[k] = db[j] + t * (db[j + 1] - db[j]);
+  }
+  return out;
+}
+
+var api = { ClarityEngine: ClarityEngine, userCurve: userCurve, EQF: EQF, QT: QT, MinPhaseEQ: MinPhaseEQ, FS: FS, HOP: HOP, K: K, FC: FC, D: D, fft: fft };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Clarity = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

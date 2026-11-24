@@ -67,8 +67,10 @@ def main():
             "node_timing": json.load(open(out + ".t")),
         }
         r = {k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items()}
-        r["pass"] = bool(r["lev_p99_db"] <= PASS["lev_p99_db"] and r["margin_p99_db"] <= PASS["margin_p99_db"]
-                         and r["gain_p99_db"] <= PASS["gain_p99_db"] and r["audio_snr_db"] >= PASS["audio_snr_db"])
+        # v5: gains/loudness logic changed in JS (anti-pumping, persistence, loudness hold from the
+        # live spectrum) and is now tested directly on the JS engine (pumping_test.py, js_melody.py).
+        # Parity here covers the shared analysis + masking model.
+        r["pass"] = bool(r["lev_p99_db"] <= PASS["lev_p99_db"] and r["margin_p99_db"] <= PASS["margin_p99_db"])
         rep[mode] = r
     rep["STAGE6_PASS"] = all(rep[m]["pass"] for m in ("cambridge", "munich"))
     json.dump(rep, open(os.path.join(here, "stage6-report.json"), "w"), indent=1)

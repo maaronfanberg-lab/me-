@@ -23,6 +23,9 @@ input{font:inherit;font-size:16px;min-height:44px;padding:0 10px;border-radius:1
 .fig{position:relative;height:150px}.fig canvas{position:absolute;inset:0;width:100%;height:100%}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;font-size:14px}
 .stats b{display:block;font-size:20px}
+.eqrow{display:grid;grid-template-columns:4.2em 44px 4.6em 44px 1fr;gap:8px;align-items:center;margin-top:6px}
+.eqrow button{padding:0;min-width:44px}.eqrow .v{text-align:right;font-variant-numeric:tabular-nums}
+.eqbar{height:8px;border-radius:4px;background:var(--line);position:relative;overflow:hidden}.eqbar i{position:absolute;top:0;bottom:0;background:var(--acc)}
 .status{font-size:14px;color:var(--mut);margin-top:8px}.status.warn{color:var(--warn)}
 </style>
 </head>
@@ -47,12 +50,18 @@ input{font:inherit;font-size:16px;min-height:44px;padding:0 10px;border-radius:1
 </div>
 
 <div class="card">
+  <div class="row" style="justify-content:space-between"><b>EQ</b><button id="flat">Flat</button></div>
+  <div id="eqb"></div>
+  <div class="status">Tap − or + (1.5 dB steps, up to ±12 dB). Your EQ stays on even with Clarity off.</div>
+</div>
+
+<div class="card">
   <div class="fig"><canvas id="eq"></canvas></div>
   <div class="stats" style="margin-top:10px">
     <div>Engine load<b id="load">–</b></div>
     <div>Slowest frame<b id="worst">–</b></div>
     <div>Dropped frames<b id="drop">0</b></div>
-    <div>Hidden now<b id="hid">–</b></div>
+    <div>Hidden sounds<b id="hid">–</b></div>
   </div>
   <div id="perf" class="status">Engine load is the share of each 10 ms the analysis needs. Under 100% keeps up in real time.</div>
 </div>
@@ -62,7 +71,8 @@ input{font:inherit;font-size:16px;min-height:44px;padding:0 10px;border-radius:1
 const API = 'https://api.audius.co/v1', APP = 'PocketSpatial';
 const $ = id => document.getElementById(id);
 let ctx = null, node = null, worker = null, audio = null, src = null, tracks = [], playing = false;
-const S = { recover: 1, tame: 1, bias: 0, mode: 'cambridge', on: true };
+const S = { recover: 1, tame: 1, bias: 0, mode: 'cambridge', on: true, eq: [0, 0, 0, 0, 0, 0, 0, 0] };
+const EQF = ['60', '150', '400', '1k', '2.5k', '6k', '10k', '14k'];
 
 function group(el, values, labels, key, fmt) {
   values.forEach((v, i) => {
@@ -76,7 +86,23 @@ group($('tam'), [0, 0.5, 1, 1.5, 2], ['0%', '50%', '100%', '150%', '200%'], 'tam
 group($('bia'), [-1, -0.5, 0, 0.5, 1], ['−100', '−50', '0', '+50', '+100'], 'bias');
 group($('mod'), ['cambridge', 'munich'], ['Cambridge', 'Munich'], 'mode');
 
-function send() { if (worker) worker.postMessage({ type: 'settings', s: S }); }
+function send() {
+  if (worker) worker.postMessage({ type: 'settings', s: S });
+  if (node) node.port.postMessage({ type: 'bypass', on: !S.on && S.eq.every(v => v === 0) });
+}
+function drawEqRows() {
+  const box = $('eqb'); box.innerHTML = '';
+  EQF.forEach((lab, i) => {
+    const r = document.createElement('div'); r.className = 'eqrow';
+    const v = S.eq[i], w = Math.abs(v) / 12 * 50;
+    r.innerHTML = `<span>${lab} Hz</span><button type="button" aria-label="${lab} down">−</button><span class="v">${v > 0 ? '+' : ''}${v.toFixed(1)}</span><button type="button" aria-label="${lab} up">+</button><div class="eqbar"><i style="left:${v >= 0 ? 50 : 50 - w}%;width:${w}%"></i></div>`;
+    const [dn, up] = r.querySelectorAll('button');
+    dn.addEventListener('click', () => { S.eq[i] = Math.max(-12, S.eq[i] - 1.5); drawEqRows(); send(); });
+    up.addEventListener('click', () => { S.eq[i] = Math.min(12, S.eq[i] + 1.5); drawEqRows(); send(); });
+    box.appendChild(r);
+  });
+}
+drawEqRows();
 function status(t, warn) { $('status').textContent = t; $('status').className = 'status' + (warn ? ' warn' : ''); }
 
 async function getJSON(u) { const r = await fetch(u); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
@@ -103,10 +129,10 @@ async function ensureAudio() {
   if (ctx) return true;
   try { ctx = new AudioContext({ sampleRate: 48000 }); } catch (e) { ctx = new AudioContext(); }
   if (ctx.sampleRate !== 48000) { status('This device runs audio at ' + ctx.sampleRate + ' Hz; Clarity needs 48000 Hz.', true); return false; }
-  await ctx.audioWorklet.addModule('clarity-engine.js?v=1');
-  await ctx.audioWorklet.addModule('clarity-worklet.js?v=1');
+  await ctx.audioWorklet.addModule('clarity-engine.js?v=2');
+  await ctx.audioWorklet.addModule('clarity-worklet.js?v=2');
   node = new AudioWorkletNode(ctx, 'clarity-processor', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
-  worker = new Worker('clarity-worker.js?v=1');
+  worker = new Worker('clarity-worker.js?v=2');
   const ch = new MessageChannel();
   node.port.postMessage({ type: 'port', port: ch.port1 }, [ch.port1]);
   worker.postMessage({ type: 'port', port: ch.port2 }, [ch.port2]);
@@ -130,9 +156,9 @@ $('play').addEventListener('click', async () => {
   else { await ctx.resume(); await audio.play(); playing = true; $('play').textContent = 'Pause'; }
 });
 $('ab').addEventListener('click', () => {
-  S.on = !S.on; $('ab').textContent = S.on ? 'Clarity on' : 'Clarity off (bypass)'; $('ab').classList.toggle('on', S.on);
-  if (node) node.port.postMessage({ type: 'bypass', on: !S.on }); send();
+  S.on = !S.on; $('ab').textContent = S.on ? 'Clarity on' : 'Clarity off'; $('ab').classList.toggle('on', S.on); send();
 });
+$('flat').addEventListener('click', () => { S.eq = [0, 0, 0, 0, 0, 0, 0, 0]; drawEqRows(); send(); });
 
 const cv = $('eq');
 function showStats(d) {
