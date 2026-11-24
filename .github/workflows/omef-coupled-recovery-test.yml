@@ -1,0 +1,43 @@
+name: Coupled recovery browser smoke test
+on:
+  push:
+    branches: [omef-coupled-recovery-20261124]
+    paths:
+      - 'apps/omef-exclusive.html'
+      - 'tests/omef-coupled-browser.cjs'
+      - '.github/workflows/omef-coupled-recovery-test.yml'
+permissions:
+  contents: write
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-package-lock playwright
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/omef-coupled-browser.cjs
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coupled-browser-evidence
+          path: |
+            omef-browser-result.json
+            omef-*.png
+      - if: always()
+        run: |
+          if [ -f omef-browser-result.json ]; then
+            mkdir -p docs/research
+            cp omef-browser-result.json docs/research/omef-coupled-browser-result.json
+            git config user.name 'OMEF CI'
+            git config user.email 'actions@users.noreply.github.com'
+            git add docs/research/omef-coupled-browser-result.json
+            git commit -m 'Record coupled browser smoke test result' && git push || true
+            node -e "if(require('./omef-browser-result.json').some(x=>!x.pass))process.exit(1)"
+          else
+            exit 1
+          fi
