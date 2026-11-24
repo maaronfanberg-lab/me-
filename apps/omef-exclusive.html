@@ -92,7 +92,7 @@ body.omef-immersive.omef-hud-visible #immersiveHUD{opacity:1;pointer-events:auto
 
 <section id="twinEngine"><h2>Drawing engine</h2><div class="grid2"><button id="engineOriginal" class="engbtn active" aria-pressed="true">Original OMEF</button><button id="engineTwin" class="engbtn secondary" aria-pressed="false">Coupled OMEF · 1 image</button></div><div id="engineInfo" class="hint" role="status" style="margin:9px 0 0">ORIGINAL · Restored native OMEF state-space trajectory (no artificial shape templates). The independent 10D formula is replotted when controls change.</div></section>
 <div id="omefUI">
-<section><h2>OMEF genome</h2><div class="pure">Recovered historical OMEF dynamics: Original now uses its earlier ten-dimensional recurrence, without hardcoded spirals, waves or flower outlines. The starting configuration and Next attractor choices were numerically simulated as coherent filaments and folds. Sliders still change the actual formula coefficients; some settings can lead to chaotic clouds.</div><div id="macro"></div><div class="grid2"><button id="random">Next attractor</button><button id="mutate">Mutate slightly</button><button id="preset" class="secondary">Restore filaments</button><button id="render" class="secondary">Render again</button></div></section>
+<section><h2>OMEF genome</h2><div class="pure">Recovered historical OMEF dynamics: Original now uses its earlier ten-dimensional recurrence, without hardcoded spirals, waves or flower outlines. The starting configuration and Next attractor choices were numerically simulated as coherent filaments and folds. Sliders still change the actual formula coefficients; some settings can lead to chaotic clouds.</div><div id="macro"></div><div class="grid2"><button id="random">Next attractor</button><button id="mutate">Mutate slightly</button><button id="preset" class="secondary">Restore this attractor</button><button id="render" class="secondary">Render again</button></div></section>
 <section id="originalEvolutionPanel"><h2>Original filament evolution</h2>
 <div class="hint">One continuously evolving ten-coordinate OMEF equation. Sliders change the live mathematical state without discarding its delayed memory. No shape templates.</div>
 <div class="grid2"><button id="originalPause">Pause drawing</button><button id="originalAuto" class="secondary">Auto drift: On</button><button id="originalClear" class="secondary">Clear trails</button><button id="originalRestart" class="secondary">Restart trajectory</button></div>
@@ -1004,7 +1004,7 @@ function originalFrame(time){
   const ids=['a','b','c','d','e','f','g','h','i','pairFreqA','pairFreqB','triScale','triCross','phaseSpeed','fibSelf','edgeBase'];
   const id=ids[Math.floor(Math.random()*ids.length)],d=defMap[id],step=d[4],width=d[3]-d[2];
   let v=clamp(st.target[id]+(Math.random()-.5)*width*.03,d[2],d[3]);
-  v=d[2]+Math.round((v-d[2])/step)*step;st.target[id]=+clamp(v,d[2],d[3]).toFixed(6);
+  v=d[2]+Math.round((v-d[2])/step)*step;{const prev=st.target[id];st.target[id]=+clamp(v,d[2],d[3]).toFixed(6);/* Auto drift moves the coefficients only: the view reference moves with it, so drift never turns the slider view. */if(originalViewRef&&originalViewRef[id]!==undefined)originalViewRef[id]+=st.target[id]-prev;}
   $(id).value=st.target[id];updateValues();st.detailUntil=time+6000;st.nextDrift=time+17000;
  }
  const rate=1-Math.exp(-dt/740);let updated=false;
@@ -1065,7 +1065,7 @@ const originalSeedLabels=["interwoven canopy","branching filaments","shelf-like 
 let originalSeedIndex=0;
 const originalSeed=(index)=>Object.fromEntries(allDefs.map(d=>[d[0],originalTestedSeeds[index][d[0]]===undefined?d[5]:originalTestedSeeds[index][d[0]]]));
 
-function reset(){originalFocusId=null;originalSeedIndex=0;originalViewRef=originalSeed(0);apply(originalSeed(0));originalStart()}
+function reset(){originalFocusId=null;/* back to the start of the attractor now showing */originalViewRef=originalSeed(originalSeedIndex);apply(originalSeed(originalSeedIndex));originalStart()}
 
 
 function mutate(){

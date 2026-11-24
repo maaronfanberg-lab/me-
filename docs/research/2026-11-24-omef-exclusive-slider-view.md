@@ -25,3 +25,9 @@
 **Added to Next attractor:** silk fin, silk drape, twisted silk ribbon, silk bell. The six original starts are bit-identical.
 
 **Gate.** Every control moved 15% from each new start: 244/244 clear max(0.2, 2× that start's own drift), minimum 0.25. Live page: no errors; Next attractor reaches the new starts; silk drape + Shadow cross +15% gives a folded silk shell.
+
+## Stage 3 — always a way back (2026-11-24)
+
+**Observed:** Alex: changes felt permanent; "OK but not like it was."
+**Changes:** (1) Auto drift now moves the view reference along with the coefficient it nudges, so drift alone never turns the slider view (as before the slider-view change). (2) "Restore filaments" → "Restore this attractor": returns to the start of the attractor currently showing (previously always jumped to the first one). (3) The version from before today is kept unchanged at apps/omef-exclusive-before.html.
+**Checks:** untouched starts still bit-identical (6 × 50k steps); coupled unchanged. 3-minute live drift test, image change vs start at 3 min: before-today 0.65, previous build 0.61, this build 0.59. The drift itself is random and similar in all three; the fix only stops the view from turning on top of it.
