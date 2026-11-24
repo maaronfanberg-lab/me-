@@ -56,6 +56,13 @@ b{font-weight:500}
 </div>
 
 <div class="card">
+  <b>Feel</b>
+  <div class="lbl">Felt bass, sent to the subwoofer and lined up with the beat</div><div class="seg" id="fam" style="grid-template-columns:repeat(4,minmax(0,1fr))"></div>
+  <div class="lbl">Character</div><div class="seg two" id="fmo"></div>
+  <div class="status">Natural follows the song's own bass. Pulse turns the beat into a steady 50 Hz throb you feel more than hear.</div>
+</div>
+
+<div class="card">
   <div class="row" style="justify-content:space-between"><b>EQ</b><button id="flat">Flat</button></div>
   <div id="eqb"></div>
   <div class="status">Tap − or + (1.5 dB steps, up to ±12 dB). Your EQ stays on even with Clarity off.</div>
@@ -77,7 +84,7 @@ b{font-weight:500}
 const API = 'https://api.audius.co/v1', APP = 'PocketSpatial';
 const $ = id => document.getElementById(id);
 let ctx = null, node = null, worker = null, audio = null, src = null, tracks = [], playing = false;
-const S = { recover: 1, tame: 1, bias: 0, mode: 'cambridge', on: true, eq: [0, 0, 0, 0, 0, 0, 0, 0] };
+const S = { recover: 1, tame: 1, bias: 0, mode: 'cambridge', on: true, eq: [0, 0, 0, 0, 0, 0, 0, 0], feel: 0, feelMode: 'natural' };
 const EQF = ['60 Hz', '150 Hz', '400 Hz', '1 kHz', '2.5 kHz', '6 kHz', '10 kHz', '14 kHz'];
 
 function group(el, values, labels, key, fmt) {
@@ -91,10 +98,13 @@ group($('rec'), [0, 0.5, 1, 1.5, 2], ['0%', '50%', '100%', '150%', '200%'], 'rec
 group($('tam'), [0, 0.5, 1, 1.5, 2], ['0%', '50%', '100%', '150%', '200%'], 'tame');
 group($('bia'), [-1, -0.5, 0, 0.5, 1], ['−100', '−50', '0', '+50', '+100'], 'bias');
 group($('mod'), ['cambridge', 'munich'], ['Cambridge', 'Munich'], 'mode');
+group($('fam'), [0, 0.25, 0.5, 1], ['Off', 'Low', 'Medium', 'High'], 'feel');
+group($('fmo'), ['natural', 'pulse'], ['Natural', 'Pulse'], 'feelMode');
 
 function send() {
   if (worker) worker.postMessage({ type: 'settings', s: S });
   if (node) node.port.postMessage({ type: 'bypass', on: !S.on && S.eq.every(v => v === 0) });
+  if (node) node.port.postMessage({ type: 'feel', amount: S.feel, mode: S.feelMode });
 }
 function drawEqRows() {
   const box = $('eqb'); box.innerHTML = '';
@@ -136,7 +146,8 @@ async function ensureAudio() {
   try { ctx = new AudioContext({ sampleRate: 48000 }); } catch (e) { ctx = new AudioContext(); }
   if (ctx.sampleRate !== 48000) { status('This device runs audio at ' + ctx.sampleRate + ' Hz; Clarity needs 48000 Hz.', true); return false; }
   await ctx.audioWorklet.addModule('clarity-engine.js?v=2');
-  await ctx.audioWorklet.addModule('clarity-worklet.js?v=2');
+  await ctx.audioWorklet.addModule('clarity-feel.js?v=3');
+  await ctx.audioWorklet.addModule('clarity-worklet.js?v=3');
   node = new AudioWorkletNode(ctx, 'clarity-processor', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
   worker = new Worker('clarity-worker.js?v=2');
   const ch = new MessageChannel();

@@ -1,6 +1,9 @@
 /* Clarity worklet: stereo in -> mono hops to the analysis worker; applies the latest minimum-phase EQ
    spectrum to both channels with 20 ms Hann frames, 10 ms hop (OLA). Requires clarity-engine.js to be
    added to the same AudioWorklet first (shares globalThis.Clarity). Latency: 2 hops (20 ms). */
+// group delays (samples at 48 kHz) of the Feel paths, measured in feel_align_test.js
+const FEEL_GD = { natural: 432, pulse: 288 };
+function softLimit(x) { const a = Math.abs(x); return a <= 0.9 ? x : Math.sign(x) * (0.9 + 0.1 * Math.tanh((a - 0.9) / 0.1)); }
 class ClarityProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
@@ -13,9 +16,16 @@ class ClarityProcessor extends AudioWorkletProcessor {
       const m = e.data;
       if (m.type === 'port') { this.wport = m.port; this.wport.onmessage = (ev) => this.onH(ev.data); }
       else if (m.type === 'bypass') this.bypass = !!m.on;
+      else if (m.type === 'feel') {
+        this.feelAmt = m.amount; if (m.mode !== this.feelMode || !this.feel) { this.feelMode = m.mode; this.feel = new globalThis.ClarityFeel.Feel(sampleRate, { mode: m.mode }); this.fbuf.fill(0); }
+      }
     };
     this.pendingH = null; this.ready = false;
+    // Feel (vibration content for the subwoofer), aligned with the delayed audio
+    this.feelAmt = 0; this.feelMode = 'natural'; this.feel = null;
+    this.fbuf = new Float32Array(2048); this.fw = 0;
   }
+  feelDelay() { return 2 * this.HOP - (this.feelMode === 'pulse' ? FEEL_GD.pulse : FEEL_GD.natural); }
   onH(d) { if (d.type === 'H') this.pendingH = d; }
   process(inputs, outputs) {
     const inp = inputs[0], out = outputs[0], H = this.HOP;
@@ -27,9 +37,14 @@ class ClarityProcessor extends AudioWorkletProcessor {
         const f = this.outL[0];
         oL[i] = f.bypass ? f.dl[this.outPos] : f.l[this.outPos];
         oR[i] = f.bypass ? f.dr[this.outPos] : f.r[this.outPos];
+        if (this.feelAmt > 0) {
+          const v = this.feelAmt * this.fbuf[(this.fw - this.feelDelay() + 2048) & 2047];
+          oL[i] = softLimit(oL[i] + v); oR[i] = softLimit(oR[i] + v);
+        }
         this.outPos++;
         if (this.outPos === H) { this.outL.shift(); this.outPos = 0; }
       } else { oL[i] = 0; oR[i] = 0; }
+      if (this.feel) { this.fbuf[this.fw] = this.feel.sample(0.5 * (L[i] + R[i])); this.fw = (this.fw + 1) & 2047; }
       this.inL[H + this.fill] = L[i]; this.inR[H + this.fill] = R[i]; this.fill++;
       if (this.fill === H) this.hop();
     }
