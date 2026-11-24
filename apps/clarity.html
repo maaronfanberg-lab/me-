@@ -56,6 +56,11 @@ b{font-weight:500}
 </div>
 
 <div class="card">
+  <b>Space</b>
+  <div class="lbl">For headphones: places the music on two speakers in a room, outside your head</div><div class="seg" id="spc" style="grid-template-columns:repeat(4,minmax(0,1fr))"></div>
+</div>
+
+<div class="card">
   <b>Feel</b>
   <div class="lbl">Felt bass, sent to the subwoofer and lined up with the beat</div><div class="seg" id="fam" style="grid-template-columns:repeat(4,minmax(0,1fr))"></div>
   <div class="lbl">Character</div><div class="seg two" id="fmo"></div>
@@ -79,12 +84,14 @@ b{font-weight:500}
   <div id="perf" class="status">Engine load is the share of each 10 ms the analysis needs. Under 100% keeps up in real time.</div>
 </div>
 
+<script src="clarity-space.js?v=1"></script>
 <script>
 {
 const API = 'https://api.audius.co/v1', APP = 'PocketSpatial';
 const $ = id => document.getElementById(id);
 let ctx = null, node = null, worker = null, audio = null, src = null, tracks = [], playing = false;
-const S = { recover: 1, tame: 1, bias: 0, mode: 'cambridge', on: true, eq: [0, 0, 0, 0, 0, 0, 0, 0], feel: 0, feelMode: 'natural' };
+const S = { recover: 1, tame: 1, bias: 0, mode: 'cambridge', on: true, eq: [0, 0, 0, 0, 0, 0, 0, 0], feel: 0, feelMode: 'natural', space: 'off' };
+let space = null;
 const EQF = ['60 Hz', '150 Hz', '400 Hz', '1 kHz', '2.5 kHz', '6 kHz', '10 kHz', '14 kHz'];
 
 function group(el, values, labels, key, fmt) {
@@ -99,12 +106,14 @@ group($('tam'), [0, 0.5, 1, 1.5, 2], ['0%', '50%', '100%', '150%', '200%'], 'tam
 group($('bia'), [-1, -0.5, 0, 0.5, 1], ['−100', '−50', '0', '+50', '+100'], 'bias');
 group($('mod'), ['cambridge', 'munich'], ['Cambridge', 'Munich'], 'mode');
 group($('fam'), [0, 0.25, 0.5, 1], ['Off', 'Low', 'Medium', 'High'], 'feel');
+group($('spc'), ['off', 'near', 'room', 'large'], ['Off', 'Near', 'Room', 'Large'], 'space');
 group($('fmo'), ['natural', 'pulse'], ['Natural', 'Pulse'], 'feelMode');
 
 function send() {
   if (worker) worker.postMessage({ type: 'settings', s: S });
   if (node) node.port.postMessage({ type: 'bypass', on: !S.on && S.eq.every(v => v === 0) });
   if (node) node.port.postMessage({ type: 'feel', amount: S.feel, mode: S.feelMode });
+  if (space && space.preset !== S.space) space.setPreset(S.space);
 }
 function drawEqRows() {
   const box = $('eqb'); box.innerHTML = '';
@@ -156,7 +165,8 @@ async function ensureAudio() {
   worker.onmessage = e => { if (e.data.type === 'stats') showStats(e.data); };
   send();
   audio = new Audio(); audio.crossOrigin = 'anonymous'; audio.playsInline = true; audio.preload = 'auto';
-  src = ctx.createMediaElementSource(audio); src.connect(node); node.connect(ctx.destination);
+  space = new ClaritySpace.Space(ctx); space.setPreset(S.space);
+  src = ctx.createMediaElementSource(audio); src.connect(node); node.connect(space.input); space.output.connect(ctx.destination);
   audio.addEventListener('ended', () => { playing = false; $('play').textContent = 'Play'; });
   return true;
 }
