@@ -129,6 +129,85 @@ const allDefs=macros.concat(feedbackDefs,...groups.map(g=>g[1]));
 const defMap=Object.fromEntries(allDefs.map(d=>[d[0],d]));
 const discreteIds=new Set(['fbLag','lagA','lagB','lagC','shadowLag']);
 const LOG_STRENGTH=8;
+/* Slider view. Every genome control also turns the 2D window through the
+ * running 10D state toward the quantities that control itself acts on
+ * (its own equation term at two coordinates, its delay, its regime weight,
+ * its phase). Identity at the reference configuration, so the reference
+ * drawing is bit-identical; the angle grows with the control's distance from
+ * that reference. Purely observational: feedback and dynamics keep using the
+ * native output. No templates — every coordinate is the trajectory's own data. */
+const VIEW_SPEC={
+ a:['P0','P5'],pairFreqA:['P1','P6'],pairFreqB:['P2','P7'],pairCosAmp:['P3','P8'],pairPhaseA:['P4','P9'],pairPhaseB:['P6','P1'],fbPair:['f1','P2'],
+ b:['T0','T5'],triScale:['T1','T6'],triCross:['T2','T7'],
+ c:['M0','M5'],marketW1:['M1','M6'],marketW2:['M2','M8'],lagA:['Z3','LlagA.3'],lagB:['Z7','LlagB.7'],lagC:['Z0','LlagC.0'],
+ d:['S0','S5'],shadowSelf:['S1','S6'],shadowCross:['S2','S8'],shadowLag:['Z4','LshadowLag.4'],
+ e:['R0','R5'],r0u8:['A0','Z8'],r0u6:['A0','Z6'],r1u6:['A1','Z6'],r1u4sq:['A1','Z4'],r2u2:['A2','Z2'],r2u7:['A2','Z7'],r3u8:['A3','Z8'],r3u0:['A3','Z0'],regimeForce:['R2','R7'],fbRegime:['f3','R3'],
+ f:['G0','G5'],phaseSpeed:['G1','Z1'],phaseRatio:['G2','G7'],phaseMod1:['s1','Z0'],phaseMod2:['s2','Z6'],goldCos:['G3','G8'],
+ g:['B0','B5'],fib1:['B1','K1.1'],fib3:['B2','K3.7'],fib8:['B3','K8.8'],fib13:['B4','K13.9'],fibSelf:['Z5','B6'],
+ h:['Z0','Z5'],edgeBase:['Z1','K5.6'],edgeSpan:['Z2','K13.7'],squash:['Z3','K21.8'],
+ i:['A0','A1'],xA0:['Z0','K8.3'],xA7:['Z7','K3.2'],xAdelay:['K8.9','K21.4'],yA6:['Z6','K13.8'],yA5:['Z5','K2.1'],yAdelay:['K13.0','K3.7'],
+ projReg:['A3','A2'],projCross:['C0','C1'],projPhase:['s1','s2'],fbProjection:['f2','f1'],
+ fbLag:['x','y'],fbMix:['x','f2'],fbDamping:['y','f3']
+};
+const VIEW_TERMS=()=>Array.from({length:8},()=>new Float64Array(10));
+function viewCompile(code){
+ const n=+code.slice(1),t='PTMSRGBZ'.indexOf(code[0]);
+ if(t>=0)return c=>c.T[t][n];
+ switch(code[0]){
+  case 'U':return c=>c.U[n];
+  case 'A':return c=>c.alpha[n];
+  case 'C':return n===0?c=>c.U[2]*c.U[7]-c.U[1]*c.U[8]:c=>c.U[0]*c.U[6]-c.U[3]*c.U[5];
+  case 'H':{const [lag,i]=code.slice(1).split('.').map(Number);return c=>c.H(lag,i);}
+  case 'K':{const [lag,i]=code.slice(1).split('.').map(Number);return c=>c.Z(lag,i);}
+  case 'L':{const [key,i]=code.slice(1).split('.');return c=>c.Z(c.pp[key],+i);}
+  case 's':return n===1?c=>Math.sin(c.phase1):c=>Math.sin(c.phase2);
+  case 'f':return n===1?c=>c.fb1:n===2?c=>c.fb2:c=>c.fb3;
+  case 'x':return c=>Math.tanh(c.fbx);
+  case 'y':return c=>Math.tanh(c.fby);
+ }
+ throw new Error('view code '+code);
+}
+const VIEW_FN=Object.fromEntries(Object.entries(VIEW_SPEC).map(([k,v])=>[k,v.map(viewCompile)]));
+const VIEW_TURN=3.3,VIEW_MEMORY=1/34,VIEW_EMA=1/400,VIEW_DEPTH=34;
+function makeViewer(refSource){
+ const ref=typeof refSource==='function'?refSource():refSource,items=new Map();
+ let rx=0,ry=0,primed=false,zHead=0;
+ const zh=Array.from({length:VIEW_DEPTH},()=>new Float64Array(10));
+ const Z=(lag,i)=>zh[(zHead-Math.max(1,Math.min(VIEW_DEPTH-1,Math.round(lag)))+VIEW_DEPTH)%VIEW_DEPTH][i];
+ const v={active:false,set(raw){
+  v.active=false;if(!ref)return;
+  for(const id in VIEW_FN){const d=defMap[id];if(!d||raw[id]===undefined||ref[id]===undefined)continue;
+   const z=clamp((raw[id]-ref[id])/(d[3]-d[2]),-1,1);
+   let it=items.get(id);
+   if(Math.abs(z)<1e-9){if(it)it.on=false;continue;}
+   if(!it){it={fa:VIEW_FN[id][0],fb:VIEW_FN[id][1],ea:0,eb:0,primed:false};items.set(id,it);}
+   it.on=true;it.cos=Math.cos(VIEW_TURN*z);it.sin=Math.sin(VIEW_TURN*z);v.active=true;
+  }
+ },terms(X,Y,c){
+  // One rotation per moved control: [cos, sin, feature x, feature y], features
+  // rescaled to the running size of this engine's native drawing.
+  zh[zHead].set(c.T[7]);zHead=(zHead+1)%VIEW_DEPTH;c.Z=Z;
+  if(!primed){rx=X*X+1e-6;ry=Y*Y+1e-6;primed=true;}else{rx+=(X*X-rx)*VIEW_EMA;ry+=(Y*Y-ry)*VIEW_EMA;}
+  const sx=Math.sqrt(rx),sy=Math.sqrt(ry),out=[];
+  for(const it of items.values()){
+   if(!it.on)continue;let a=it.fa(c),b=it.fb(c);if(!Number.isFinite(a))a=0;if(!Number.isFinite(b))b=0;
+   // Fibonacci-span (34-step) running memory of the observable: chaotic jitter
+   // averages out and the trajectory's slower structure is traced as filament.
+   // Each observable is then centred and scaled by its own running mean and
+   // spread, so a slowly varying weight is seen as its variation, not its offset.
+   if(!it.primed){it.ma=it.ca=a;it.mb=it.cb=b;it.ea=it.eb=1e-6;it.primed=true;}
+   else{it.ma+=(a-it.ma)*VIEW_MEMORY;it.mb+=(b-it.mb)*VIEW_MEMORY;
+    it.ca+=(it.ma-it.ca)*VIEW_EMA;it.cb+=(it.mb-it.cb)*VIEW_EMA;
+    it.ea+=((it.ma-it.ca)**2-it.ea)*VIEW_EMA;it.eb+=((it.mb-it.cb)**2-it.eb)*VIEW_EMA;}
+   out.push(it.cos,it.sin,sx*(it.ma-it.ca)/Math.sqrt(it.ea+1e-9),sy*(it.mb-it.cb)/Math.sqrt(it.eb+1e-9));
+  }
+  return out;
+ },apply(X,Y,c){return viewCompose([X,Y],v.terms(X,Y,c));}};
+ return v;
+}
+function viewCompose(p,t){let X=p[0],Y=p[1];for(let k=0;k<t.length;k+=4){const x=t[k]*X+t[k+1]*t[k+2],y=t[k]*Y+t[k+1]*t[k+3];X=x;Y=y;}return [X,Y];}
+let originalViewRef=null;
+
 function logMap(raw){const q={...raw},denom=Math.log1p(LOG_STRENGTH);for(const d of allDefs){const [id,,min,max,step,def]=d;if(discreteIds.has(id)||step>=1||q[id]===undefined)continue;const v=+q[id];if(!Number.isFinite(v)||v===def)continue;if(v>def){const span=max-def;if(span<=0)continue;const t=clamp((v-def)/span,0,1);q[id]=def+span*Math.log1p(LOG_STRENGTH*t)/denom}else{const span=def-min;if(span<=0)continue;const t=clamp((def-v)/span,0,1);q[id]=def-span*Math.log1p(LOG_STRENGTH*t)/denom}}return q}
 function rawValues(){const o={};allDefs.forEach(d=>o[d[0]]=+$(d[0]).value);return o}
 function updateValues(){const raw=rawValues(),effective=logMap(raw);allDefs.forEach(d=>{const id=d[0],v=discreteIds.has(id)?raw[id]:effective[id],dec=d[4]>=1?0:(d[4]<.01?3:2);$(id+'v').textContent=(+v).toFixed(dec)});$('pointsv').textContent=fmt(+$('points').value);$('inkv').textContent=$('ink').value;$('sizev').textContent=$('size').value}
@@ -216,8 +295,8 @@ function genomeProjection(U,H,pp,phase1,phase2,alpha){
 }
 function makeStepper(raw){const pp=logMap(raw),observer=structuralObserver(pp),U=Float64Array.from([.11,-.07,.19,-.13,.08,.04,.15,-.09,.12,.03]),hist=Array.from({length:34},()=>Float64Array.from(U)),alpha=Float64Array.from([.36,.24,.21,.19]),OUT=64,outX=new Float64Array(OUT),outY=new Float64Array(OUT);let head=0,phase1=.2,phase2=1.1,outHead=0,smoothX=0,smoothY=0;const pair=.24+.50*Math.tanh(.60*pp.a),tri=.08+.36*Math.tanh(.62*pp.b),market=.045+.31*Math.tanh(.60*pp.c),shadow=.04+.29*Math.tanh(.62*pp.d),reg=.008+.20*(Math.tanh(.65*pp.e)+1)/2,gold=.018+.26*(Math.tanh(.65*pp.f)+1)/2,fib=.015+.28*(Math.tanh(.65*pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2+.23*Math.tanh(.60*pp.h),proj=(Math.tanh(.82*pp.i)+1)/2;const H=(lag,i)=>{lag=Math.max(1,Math.min(34,Math.round(lag)));return hist[(head-lag+34)%34][i]};return function(){const lag=Math.max(1,Math.min(32,Math.round(pp.fbLag))),oi=(outHead-lag+OUT)%OUT,dx=outX[oi],dy=outY[oi];smoothX=pp.fbDamping*smoothX+(1-pp.fbDamping)*dx;smoothY=pp.fbDamping*smoothY+(1-pp.fbDamping)*dy;const fbx=pp.fbMix*dx+(1-pp.fbMix)*smoothX,fby=pp.fbMix*dy+(1-pp.fbMix)*smoothY,fb1=Math.tanh(fbx),fb2=Math.tanh(fby),fb3=Math.tanh(.7*fbx-.7*fby);phase1+=pp.phaseSpeed*(1+pp.phaseMod1*Math.sin(U[0]));phase2+=pp.phaseSpeed/pp.phaseRatio*(1+pp.phaseMod2*Math.sin(U[6]));let s0=pp.r0u8*U[8]+pp.r0u6*U[6]+pp.fbRegime*fb1,s1=pp.r1u6*U[6]+pp.r1u4sq*U[4]*U[4]+pp.fbRegime*fb2,s2=pp.r2u2*U[2]+pp.r2u7*U[7]+pp.fbRegime*fb3,s3=pp.r3u8*U[8]+pp.r3u0*U[0]-pp.fbRegime*(.6*fb1+.4*fb2),m=Math.max(s0,s1,s2,s3),v=[Math.exp(s0-m),Math.exp(s1-m),Math.exp(s2-m),Math.exp(s3-m)],sum=v[0]+v[1]+v[2]+v[3];for(let r=0;r<4;r++)alpha[r]=(1-reg)*alpha[r]+reg*v[r]/sum;const N=new Float64Array(10);for(let i=0;i<10;i++){const j=(i+3)%10,k=(i+7)%10,l=(i+5)%10;let pairTerm=Math.sin(U[j]*pp.pairFreqA+i*pp.pairPhaseA)-pp.pairCosAmp*Math.cos(U[k]*pp.pairFreqB-i*pp.pairPhaseB);pairTerm+=pp.fbPair*(fb1*Math.sin(U[j]+i*.17)+.6*fb2*Math.cos(U[k]-i*.11));const triTerm=pp.triScale*U[j]*U[k]-pp.triCross*U[l]*U[(i+1)%10],marketTerm=pp.marketW1*(H(pp.lagA,j)-H(pp.lagB,k))+pp.marketW2*(H(pp.lagC,i)-H(34,l)),shadowTerm=pp.shadowSelf*(U[i]-H(pp.shadowLag,i))-pp.shadowCross*(H(21,j)-H(34,k)),regimeTerm=(alpha[0]-alpha[3])*Math.sin(.7+i*.43)+(alpha[1]-alpha[2])*Math.cos(.3+i*.29),goldenTerm=Math.sin(phase1+i*.61)+pp.goldCos*Math.cos(phase2+i*.41),fibTerm=pp.fib1*H(1,i)+pp.fib3*H(3,j)+pp.fib8*H(8,k)+pp.fib13*H(13,l)-pp.fibSelf*U[i],rawN=edge*U[i]+pair*pairTerm+tri*triTerm+market*marketTerm+shadow*shadowTerm+pp.regimeForce*regimeTerm+gold*goldenTerm+fib*fibTerm;N[i]=Math.tanh(pp.squash*rawN)}hist[head].set(N);head=(head+1)%34;U.set(N);let xA=pp.xA0*(U[0]-U[3])+pp.xA7*(U[7]-U[2])+pp.xAdelay*(H(8,9)-H(21,4)),yA=pp.yA6*(U[6]-U[8])+pp.yA5*(U[5]+U[1])+pp.yAdelay*(H(13,0)-H(3,7)),xB=pp.projReg*(alpha[0]-alpha[3])+pp.projCross*(U[2]*U[7]-U[1]*U[8])+pp.projPhase*Math.sin(phase1),yB=pp.projReg*(alpha[1]-alpha[2])+pp.projCross*(U[0]*U[6]-U[3]*U[5])+pp.projPhase*Math.sin(phase2);xA+=pp.fbProjection*fb2;yA+=pp.fbProjection*fb1;xB+=pp.fbProjection*fb3;yB-=pp.fbProjection*fb2;const genome=genomeProjection(U,H,pp,phase1,phase2,alpha);xA+=genome[0];yA+=genome[1];xB+=genome[2];yB+=genome[3];const nativeX=xA*(1-proj)+xB*proj,nativeY=yA*(1-proj)+yB*proj;const [ox,oy]=observeFormula2(nativeX,nativeY,U,H,alpha,phase1,phase2,observer);outX[outHead]=clamp(ox,-12,12);outY[outHead]=clamp(oy,-12,12);outHead=(outHead+1)%OUT;return[ox,oy]}}
 
-function makeOriginalStepper(raw){let pp=logMap(raw);const U=Float64Array.from([.11,-.07,.19,-.13,.08,.04,.15,-.09,.12,.03]),hist=Array.from({length:34},()=>Float64Array.from(U)),alpha=Float64Array.from([.36,.24,.21,.19]),OUT=64,outX=new Float64Array(OUT),outY=new Float64Array(OUT);let head=0,phase1=.2,phase2=1.1,outHead=0,smoothX=0,smoothY=0;let pair=.22+.18*Math.tanh(pp.a),tri=.09+.12*Math.tanh(pp.b),market=.04+.11*Math.tanh(pp.c),shadow=.03+.10*Math.tanh(pp.d),reg=.018+.06*(Math.tanh(pp.e)+1)/2,gold=.035+.095*(Math.tanh(pp.f)+1)/2,fib=.025+.10*(Math.tanh(pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2,proj=(Math.tanh(pp.i)+1)/2;const H=(lag,i)=>{lag=Math.max(1,Math.min(34,Math.round(lag)));return hist[(head-lag+34)%34][i]};const next=function(){const lag=Math.max(1,Math.min(32,Math.round(pp.fbLag))),oi=(outHead-lag+OUT)%OUT,dx=outX[oi],dy=outY[oi];smoothX=pp.fbDamping*smoothX+(1-pp.fbDamping)*dx;smoothY=pp.fbDamping*smoothY+(1-pp.fbDamping)*dy;const fbx=pp.fbMix*dx+(1-pp.fbMix)*smoothX,fby=pp.fbMix*dy+(1-pp.fbMix)*smoothY,fb1=Math.tanh(fbx),fb2=Math.tanh(fby),fb3=Math.tanh(.7*fbx-.7*fby);phase1+=pp.phaseSpeed*(1+pp.phaseMod1*Math.sin(U[0]));phase2+=pp.phaseSpeed/pp.phaseRatio*(1+pp.phaseMod2*Math.sin(U[6]));let s0=pp.r0u8*U[8]+pp.r0u6*U[6]+pp.fbRegime*fb1,s1=pp.r1u6*U[6]+pp.r1u4sq*U[4]*U[4]+pp.fbRegime*fb2,s2=pp.r2u2*U[2]+pp.r2u7*U[7]+pp.fbRegime*fb3,s3=pp.r3u8*U[8]+pp.r3u0*U[0]-pp.fbRegime*(.6*fb1+.4*fb2),m=Math.max(s0,s1,s2,s3),v=[Math.exp(s0-m),Math.exp(s1-m),Math.exp(s2-m),Math.exp(s3-m)],sum=v[0]+v[1]+v[2]+v[3];for(let r=0;r<4;r++)alpha[r]=(1-reg)*alpha[r]+reg*v[r]/sum;const N=new Float64Array(10);for(let i=0;i<10;i++){const j=(i+3)%10,k=(i+7)%10,l=(i+5)%10;let pairTerm=Math.sin(U[j]*pp.pairFreqA+i*pp.pairPhaseA)-pp.pairCosAmp*Math.cos(U[k]*pp.pairFreqB-i*pp.pairPhaseB);pairTerm+=pp.fbPair*(fb1*Math.sin(U[j]+i*.17)+.6*fb2*Math.cos(U[k]-i*.11));const triTerm=pp.triScale*U[j]*U[k]-pp.triCross*U[l]*U[(i+1)%10],marketTerm=pp.marketW1*(H(pp.lagA,j)-H(pp.lagB,k))+pp.marketW2*(H(pp.lagC,i)-H(34,l)),shadowTerm=pp.shadowSelf*(U[i]-H(pp.shadowLag,i))-pp.shadowCross*(H(21,j)-H(34,k)),regimeTerm=(alpha[0]-alpha[3])*Math.sin(.7+i*.43)+(alpha[1]-alpha[2])*Math.cos(.3+i*.29),goldenTerm=Math.sin(phase1+i*.61)+pp.goldCos*Math.cos(phase2+i*.41),fibTerm=pp.fib1*H(1,i)+pp.fib3*H(3,j)+pp.fib8*H(8,k)+pp.fib13*H(13,l)-pp.fibSelf*U[i],rawN=edge*U[i]+pair*pairTerm+tri*triTerm+market*marketTerm+shadow*shadowTerm+pp.regimeForce*regimeTerm+gold*goldenTerm+fib*fibTerm;N[i]=Math.tanh(pp.squash*rawN)}hist[head].set(N);head=(head+1)%34;U.set(N);let xA=pp.xA0*(U[0]-U[3])+pp.xA7*(U[7]-U[2])+pp.xAdelay*(H(8,9)-H(21,4)),yA=pp.yA6*(U[6]-U[8])+pp.yA5*(U[5]+U[1])+pp.yAdelay*(H(13,0)-H(3,7)),xB=pp.projReg*(alpha[0]-alpha[3])+pp.projCross*(U[2]*U[7]-U[1]*U[8])+pp.projPhase*Math.sin(phase1),yB=pp.projReg*(alpha[1]-alpha[2])+pp.projCross*(U[0]*U[6]-U[3]*U[5])+pp.projPhase*Math.sin(phase2);xA+=pp.fbProjection*fb2;yA+=pp.fbProjection*fb1;xB+=pp.fbProjection*fb3;yB-=pp.fbProjection*fb2;const ox=xA*(1-proj)+xB*proj,oy=yA*(1-proj)+yB*proj;outX[outHead]=clamp(ox,-12,12);outY[outHead]=clamp(oy,-12,12);outHead=(outHead+1)%OUT;return[ox,oy]};
- next.setRaw=function(raw){pp=logMap(raw);
+function makeOriginalStepper(raw,viewRef){let pp=logMap(raw);const V=makeViewer(viewRef===undefined?originalViewRef:viewRef),T=VIEW_TERMS();V.set(raw);const U=Float64Array.from([.11,-.07,.19,-.13,.08,.04,.15,-.09,.12,.03]),hist=Array.from({length:34},()=>Float64Array.from(U)),alpha=Float64Array.from([.36,.24,.21,.19]),OUT=64,outX=new Float64Array(OUT),outY=new Float64Array(OUT);let head=0,phase1=.2,phase2=1.1,outHead=0,smoothX=0,smoothY=0;let pair=.22+.18*Math.tanh(pp.a),tri=.09+.12*Math.tanh(pp.b),market=.04+.11*Math.tanh(pp.c),shadow=.03+.10*Math.tanh(pp.d),reg=.018+.06*(Math.tanh(pp.e)+1)/2,gold=.035+.095*(Math.tanh(pp.f)+1)/2,fib=.025+.10*(Math.tanh(pp.g)+1)/2,edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2,proj=(Math.tanh(pp.i)+1)/2;const H=(lag,i)=>{lag=Math.max(1,Math.min(34,Math.round(lag)));return hist[(head-lag+34)%34][i]};const next=function(){const lag=Math.max(1,Math.min(32,Math.round(pp.fbLag))),oi=(outHead-lag+OUT)%OUT,dx=outX[oi],dy=outY[oi];smoothX=pp.fbDamping*smoothX+(1-pp.fbDamping)*dx;smoothY=pp.fbDamping*smoothY+(1-pp.fbDamping)*dy;const fbx=pp.fbMix*dx+(1-pp.fbMix)*smoothX,fby=pp.fbMix*dy+(1-pp.fbMix)*smoothY,fb1=Math.tanh(fbx),fb2=Math.tanh(fby),fb3=Math.tanh(.7*fbx-.7*fby);phase1+=pp.phaseSpeed*(1+pp.phaseMod1*Math.sin(U[0]));phase2+=pp.phaseSpeed/pp.phaseRatio*(1+pp.phaseMod2*Math.sin(U[6]));let s0=pp.r0u8*U[8]+pp.r0u6*U[6]+pp.fbRegime*fb1,s1=pp.r1u6*U[6]+pp.r1u4sq*U[4]*U[4]+pp.fbRegime*fb2,s2=pp.r2u2*U[2]+pp.r2u7*U[7]+pp.fbRegime*fb3,s3=pp.r3u8*U[8]+pp.r3u0*U[0]-pp.fbRegime*(.6*fb1+.4*fb2),m=Math.max(s0,s1,s2,s3),v=[Math.exp(s0-m),Math.exp(s1-m),Math.exp(s2-m),Math.exp(s3-m)],sum=v[0]+v[1]+v[2]+v[3];for(let r=0;r<4;r++)alpha[r]=(1-reg)*alpha[r]+reg*v[r]/sum;const N=new Float64Array(10);for(let i=0;i<10;i++){const j=(i+3)%10,k=(i+7)%10,l=(i+5)%10;let pairTerm=Math.sin(U[j]*pp.pairFreqA+i*pp.pairPhaseA)-pp.pairCosAmp*Math.cos(U[k]*pp.pairFreqB-i*pp.pairPhaseB);pairTerm+=pp.fbPair*(fb1*Math.sin(U[j]+i*.17)+.6*fb2*Math.cos(U[k]-i*.11));const triTerm=pp.triScale*U[j]*U[k]-pp.triCross*U[l]*U[(i+1)%10],marketTerm=pp.marketW1*(H(pp.lagA,j)-H(pp.lagB,k))+pp.marketW2*(H(pp.lagC,i)-H(34,l)),shadowTerm=pp.shadowSelf*(U[i]-H(pp.shadowLag,i))-pp.shadowCross*(H(21,j)-H(34,k)),regimeTerm=(alpha[0]-alpha[3])*Math.sin(.7+i*.43)+(alpha[1]-alpha[2])*Math.cos(.3+i*.29),goldenTerm=Math.sin(phase1+i*.61)+pp.goldCos*Math.cos(phase2+i*.41),fibTerm=pp.fib1*H(1,i)+pp.fib3*H(3,j)+pp.fib8*H(8,k)+pp.fib13*H(13,l)-pp.fibSelf*U[i],rawN=edge*U[i]+pair*pairTerm+tri*triTerm+market*marketTerm+shadow*shadowTerm+pp.regimeForce*regimeTerm+gold*goldenTerm+fib*fibTerm;N[i]=Math.tanh(pp.squash*rawN);T[0][i]=pairTerm;T[1][i]=triTerm;T[2][i]=marketTerm;T[3][i]=shadowTerm;T[4][i]=regimeTerm;T[5][i]=goldenTerm;T[6][i]=fibTerm;T[7][i]=pp.squash*rawN}hist[head].set(N);head=(head+1)%34;U.set(N);let xA=pp.xA0*(U[0]-U[3])+pp.xA7*(U[7]-U[2])+pp.xAdelay*(H(8,9)-H(21,4)),yA=pp.yA6*(U[6]-U[8])+pp.yA5*(U[5]+U[1])+pp.yAdelay*(H(13,0)-H(3,7)),xB=pp.projReg*(alpha[0]-alpha[3])+pp.projCross*(U[2]*U[7]-U[1]*U[8])+pp.projPhase*Math.sin(phase1),yB=pp.projReg*(alpha[1]-alpha[2])+pp.projCross*(U[0]*U[6]-U[3]*U[5])+pp.projPhase*Math.sin(phase2);xA+=pp.fbProjection*fb2;yA+=pp.fbProjection*fb1;xB+=pp.fbProjection*fb3;yB-=pp.fbProjection*fb2;const ox=xA*(1-proj)+xB*proj,oy=yA*(1-proj)+yB*proj;outX[outHead]=clamp(ox,-12,12);outY[outHead]=clamp(oy,-12,12);outHead=(outHead+1)%OUT;return V.active?V.apply(ox,oy,{U,H,alpha,T,fb1,fb2,fb3,fbx,fby,phase1,phase2,pp}):[ox,oy]};
+ next.setRaw=function(raw){pp=logMap(raw);V.set(raw);
   pair=.22+.18*Math.tanh(pp.a);tri=.09+.12*Math.tanh(pp.b);market=.04+.11*Math.tanh(pp.c);shadow=.03+.10*Math.tanh(pp.d);
   reg=.018+.06*(Math.tanh(pp.e)+1)/2;gold=.035+.095*(Math.tanh(pp.f)+1)/2;fib=.025+.10*(Math.tanh(pp.g)+1)/2;
   edge=pp.edgeBase+pp.edgeSpan*(Math.tanh(pp.h)+1)/2;proj=(Math.tanh(pp.i)+1)/2;
@@ -986,7 +1065,7 @@ const originalSeedLabels=["interwoven canopy","branching filaments","shelf-like 
 let originalSeedIndex=0;
 const originalSeed=(index)=>Object.fromEntries(allDefs.map(d=>[d[0],originalTestedSeeds[index][d[0]]===undefined?d[5]:originalTestedSeeds[index][d[0]]]));
 
-function reset(){originalFocusId=null;originalSeedIndex=0;apply(originalSeed(0));originalStart()}
+function reset(){originalFocusId=null;originalSeedIndex=0;originalViewRef=originalSeed(0);apply(originalSeed(0));originalStart()}
 
 
 function mutate(){
@@ -1002,7 +1081,7 @@ function mutate(){
 }
 function randomVisible(){
  originalSeedIndex=(originalSeedIndex+1+Math.floor(Math.random()*(originalTestedSeeds.length-1)))%originalTestedSeeds.length;
- apply(originalSeed(originalSeedIndex));originalStart();
+ originalViewRef=originalSeed(originalSeedIndex);apply(originalSeed(originalSeedIndex));originalStart();
 }
 function wire(){allDefs.forEach(d=>{const e=$(d[0]);e.addEventListener('input',()=>{originalFocusId=d[0];updateValues();originalTargets()});e.addEventListener('change',()=>{cancelPreview();originalTargets()})});['points','ink','size'].forEach(k=>{$(k).addEventListener('input',()=>{updateValues();requestPreview()});$(k).addEventListener('change',()=>{cancelPreview();render(false)})});$('random').onclick=randomVisible;$('mutate').onclick=mutate;$('preset').onclick=reset;$('render').onclick=()=>originalStart();
  $('originalPause').onclick=()=>{originalPaused=!originalPaused;originalUpdateControls();if(!originalPaused&&activeEngine==='omef'){if(!originalLive)originalStart();else if(!originalLive.frame)originalLive.frame=requestAnimationFrame(originalFrame);}};
@@ -1095,7 +1174,7 @@ function immerseWire(){
  }
 }
 
-window.OMEFExclusive={makeStepper,makeOriginalStepper,originalTestedSeeds,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinCombinedBounds,twinCombine,twinDefaults,twinRaw,activeMode:()=>activeEngine,solverCheck:verifyTwinSolver,evolutionState:()=>({active:evolutionOn,accepted:evolutionAccepted,rejected:evolutionRejected,mode:activeEngine,nextIn:liveState?Math.max(0,(liveState.nextEvolution-performance.now())/1000):null,label:liveState?.mutationLabel||''})};buildTwinUI();wire();immerseWire();apply(originalSeed(0));updateValues();originalStart();
+window.OMEFExclusive={makeStepper,makeOriginalStepper,originalTestedSeeds,bounds,logMap,allDefs,LOG_STRENGTH,makeTwinEngine,twinStepper,twinBounds,twinCombinedBounds,twinCombine,twinDefaults,twinRaw,activeMode:()=>activeEngine,solverCheck:verifyTwinSolver,evolutionState:()=>({active:evolutionOn,accepted:evolutionAccepted,rejected:evolutionRejected,mode:activeEngine,nextIn:liveState?Math.max(0,(liveState.nextEvolution-performance.now())/1000):null,label:liveState?.mutationLabel||''})};buildTwinUI();wire();immerseWire();originalViewRef=originalSeed(0);apply(originalSeed(0));updateValues();originalStart();
 })();</script><script>(function(){'use strict';
 // Tap path for every slider: -/+ buttons (1% of range, at least one step) and tap-to-jump on the track.
 // On touch screens the slider itself ignores touches, so a scroll that starts on it just scrolls.
