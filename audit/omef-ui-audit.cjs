@@ -90,7 +90,7 @@ async function run(browserType,name){
   check(name,'Original canvas contains visible particles',origMetrics && origMetrics.fill>0.0001,JSON.stringify(origMetrics));
   await capture(page,name+'-original');
   const original=await testControls(page,'#omefUI input[type="range"]',name+' Original');
-  await page.locator('#originalPause').click({force:true});
+  await page.locator('#originalPause').click();
   await nap(300);
   const paused0=await counts(page);await nap(600);const paused1=await counts(page);
   check(name,'Pause drawing halts point count',paused1===paused0,paused0+' -> '+paused1);
@@ -98,20 +98,22 @@ async function run(browserType,name){
   await nap(500);const resumed=await counts(page);
   check(name,'Resume drawing restores simulation',resumed>paused1,paused1+' -> '+resumed);
   const auto0=await page.locator('#originalAuto').innerText();
-  await page.locator('#originalAuto').click({force:true});
+  await page.locator('#originalAuto').click();
   const auto1=await page.locator('#originalAuto').innerText();
   check(name,'Auto drift button switches state',auto0!==auto1,auto0+' -> '+auto1);
   const firstSeed=await page.locator('#a').inputValue();
-  await page.locator('#random').click({force:true});
+  let pointerError='';
+  try {await page.locator('#random').click({timeout:6000});}
+  catch(e){pointerError=String(e).slice(0,300);}
   await nap(400);
   const newSeed=await page.locator('#a').inputValue();
-  check(name,'Next attractor changes real parameter settings',firstSeed!==newSeed,'Pair coupling '+firstSeed+' -> '+newSeed);
+  check(name,'Next attractor responds to real mobile pointer click',!pointerError&&firstSeed!==newSeed,'Pair '+firstSeed+' -> '+newSeed+'; '+pointerError);
   await capture(page,name+'-next');
   await page.locator('#originalClear').click({force:true});
   await page.locator('#originalRestart').click({force:true});
   await nap(600);
   check(name,'Restart restores a working native engine',(await counts(page))>0,'points='+(await counts(page)));
-  await page.locator('#engineTwin').click({force:true});
+  await page.locator('#engineTwin').click();
   await page.waitForFunction(()=>window.OMEFExclusive.activeMode()==='twin',{timeout:30000});
   await nap(1800);
   const coupled0=await counts(page);
@@ -119,6 +121,18 @@ async function run(browserType,name){
   check(name,'Coupled mode calculates and renders',(coupled0>0)&&coupledMetrics?.fill>0.0001,'points='+coupled0+' metrics='+JSON.stringify(coupledMetrics));
   await capture(page,name+'-coupled');
   const twin=await testControls(page,'#twinUI input[type="range"]',name+' Coupled');
+  const selects=await page.evaluate(()=>{
+    let ok=0,fail=[];
+    for(const e of document.querySelectorAll('#twinUI select')){
+      const original=e.value, alt=Array.from(e.options).find(x=>x.value!==original);
+      if(!alt)continue;
+      e.value=alt.value;e.dispatchEvent(new Event('change',{bubbles:true}));
+      if(e.value===alt.value)ok++;else fail.push(e.id);
+      e.value=original;e.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    return {tested:document.querySelectorAll('#twinUI select').length,ok,fail};
+  });
+  check(name,'Coupling select menus respond to UI change events',selects.ok===selects.tested && selects.tested>0,JSON.stringify(selects));
   check(name,'All 122 A/B genome controls present',await page.locator('input[id^=twA_], input[id^=twB_]').count()===122,
     'A/B genome='+(await page.locator('input[id^=twA_], input[id^=twB_]').count()));
   const twin1=await counts(page); await nap(700);const twin2=await counts(page);
@@ -142,8 +156,29 @@ async function run(browserType,name){
   report.browsers[name]={error:String(err),consoleErrors:scopedErrors};
  }finally{if(context)await context.close().catch(()=>{});if(browser)await browser.close().catch(()=>{});}
 }
+async function testLiveDeployment(){
+  let browser, page;
+  const url='https://maaronfanberg-lab.github.io/me-/apps/omef-exclusive.html?audit='+Date.now();
+  try{
+    browser=await chromium.launch({headless:true});
+    page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2});
+    const resp=await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
+    await page.waitForTimeout(1000);
+    const info=await page.evaluate(()=>({
+      initialized:Boolean(window.OMEFExclusive),originalControls:Boolean(document.getElementById('originalPause')),
+      originalCount:window.OMEFExclusive?.allDefs?.length||0,
+      title:document.title
+    }));
+    check('GitHub Pages','Deployed site returns HTTP 200',resp?.status()===200,'HTTP '+resp?.status());
+    check('GitHub Pages','Live deployment has the audited Original UI',info.initialized&&info.originalControls&&info.originalCount===61,JSON.stringify(info));
+    if(info.initialized)await capture(page,'live-github-pages');
+    report.deployment={url,code:resp?.status(),...info};
+  }catch(e){check('GitHub Pages','Live site opens in browser',false,String(e).slice(0,350));report.deployment={url,error:String(e)}}
+  finally{if(browser)await browser.close().catch(()=>{});}
+}
 (async()=>{
   for (const [engine,name] of [[chromium,'Chromium-iPhone-size'],[webkit,'WebKit-iPhone-size']])await run(engine,name);
+  await testLiveDeployment();
   fs.writeFileSync('audit-artifacts/audit-results.json',JSON.stringify(report,null,2));
   console.log('AUDIT_SUMMARY '+JSON.stringify({passes:report.passes,failures:report.failures,browsers:report.browsers,screenshots:report.screenshots}).slice(0,14000));
   process.exitCode=report.failures?1:0;

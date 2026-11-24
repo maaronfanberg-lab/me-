@@ -14,6 +14,8 @@ permissions:
 jobs:
   browser-audit:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
     timeout-minutes: 20
     steps:
       - name: Check out app and test code
@@ -26,8 +28,8 @@ jobs:
           node-version: '22'
       - name: Install real browser engines
         run: |
-          npm install --no-save playwright@latest
-          npx playwright install chromium webkit
+          npm install --no-save playwright@1.56.1
+          echo "Using preinstalled Chromium and WebKit from official Playwright container"
       - name: Exercise mobile-sized browser controls and capture screenshots
         run: node audit/omef-ui-audit.cjs
       - name: Upload UI screenshots and test report
