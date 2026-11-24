@@ -683,6 +683,18 @@ function liveMutate(){
  liveRetarget(st,winner.edges);
  st.mutationLabel=winner.changes.join(', ');
  st.lastNovelty=winner.novelty;st.lastMutation=performance.now();
+ // The two non-speed/non-trail evolution-quality controls also wander.
+ // Preserve the user's explicit exclusions: points, ink, dot size,
+ // evolution speed, and trail persistence are never auto-mutated.
+ if(evolutionAccepted%2===0){
+  const e=$('twinDepth'),change=Math.random()<.5?-1:1;
+  e.value=clamp(+e.value+change,1,10);$('twinDepthv').textContent=(+e.value).toFixed(0);
+ }
+ if(evolutionAccepted%3===0){
+  const e=$('twinMorphDuration'),change=Math.random()<.5?-.2:.2;
+  e.value=clamp(Math.round((+e.value+change)*5)/5,.8,9);
+  $('twinMorphDurationv').textContent=(+e.value).toFixed(1);
+ }
  st.quickFadeUntil=st.lastMutation+1000;
  st.detailUntil=Math.max(st.detailUntil,st.lastMutation+2800);
  applyTwinGenome(winner.A,winner.B);applyTwinLinks(winner.edges);
@@ -1037,11 +1049,18 @@ function originalStart(){
 function originalFrame(time){
  const st=originalLive;if(st)st.frame=0;if(!st||originalPaused||activeEngine!=='omef'||st.generation!==originalGeneration)return;const dt=st.last?clamp(time-st.last,1,70):16.67;st.last=time;st.frames++;
  if(originalAuto&&time>st.nextDrift&&time>st.manualUntil){
-  const ids=['a','b','c','d','e','f','g','h','i','pairFreqA','pairFreqB','triScale','triCross','phaseSpeed','fibSelf','edgeBase'];
-  const id=ids[Math.floor(Math.random()*ids.length)],d=defMap[id],step=d[4],width=d[3]-d[2];
-  let v=clamp(st.target[id]+(Math.random()-.5)*width*.03,d[2],d[3]);
-  v=d[2]+Math.round((v-d[2])/step)*step;st.target[id]=+clamp(v,d[2],d[3]).toFixed(6);
-  $(id).value=st.target[id];updateValues();st.detailUntil=time+6000;st.nextDrift=time+17000;
+  // Original also sweeps all 61 underlying OMEF coefficients, not just
+  // the original nine macros. Evolution never changes rendering controls.
+  let cursor=st.autoCursor||0;
+  for(let j=0;j<9;j++){
+   const d=allDefs[(cursor+j)%allDefs.length],id=d[0],step=d[4],span=d[3]-d[2];
+   const movement=(Math.random()<.5?-1:1)*span*(.045+.07*Math.random());
+   const target=clamp(st.target[id]+movement,d[2],d[3]);
+   st.target[id]=+clamp(d[2]+Math.round((target-d[2])/step)*step,d[2],d[3]).toFixed(6);
+   $(id).value=st.target[id];
+  }
+  st.autoCursor=(cursor+9)%allDefs.length;
+  updateValues();st.detailUntil=time+6500;st.nextDrift=time+10500;
  }
  const rate=1-Math.exp(-dt/740);let updated=false;
  for(const d of allDefs){const id=d[0],x=st.raw[id],y=st.target[id];if(x===y)continue;
