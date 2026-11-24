@@ -218,11 +218,25 @@ def run(x, label, mode="cambridge"):
     bwf1 = (1 - w) * S3.BW_N[:, None] + w * S3.BW_W[:, None]
     bwf2 = (1 - w2) * S3.BW_N[:, None] + w2 * S3.BW_W[:, None]
     n_near = n_flip = 0; dm = []
+    NH = np.zeros(lev.shape, bool); M1 = np.zeros(lev.shape); M2 = np.zeros(lev.shape)
     for j in range(lev.shape[1]):
         m1, _, pk = attribute(lev[:, j], bwf1[:, j], mode)
         m2, _, _ = attribute(lev2[:, j], bwf2[:, j], mode)
         c = pk & (m1 > -12) & (m1 < 0) & (lev[:, j] > M.quiet_threshold(S3.FC) + 10)
         n_near += int(c.sum()); n_flip += int((c & (m2 > 0)).sum()); dm.extend((m2 - m1)[c].tolist())
+        NH[:, j] = c; M1[:, j] = m1; M2[:, j] = m2
+    # persistent: same band near-hidden for >= 5 consecutive frames (50 ms); score frames 3+ of each run
+    run_len = np.zeros(lev.shape, int)
+    for j in range(lev.shape[1]):
+        run_len[:, j] = np.where(NH[:, j], (run_len[:, j - 1] + 1) if j else 1, 0)
+    full = np.zeros(lev.shape, bool)
+    for j in range(lev.shape[1] - 1, -1, -1):
+        nxt = full[:, j + 1] if j + 1 < lev.shape[1] else np.zeros(lev.shape[0], bool)
+        full[:, j] = NH[:, j] & ((run_len[:, j] >= 5) | (nxt & NH[:, j]))
+    sel = full & (run_len >= 3)
+    rep["persistent_near_hidden_cells"] = int(sel.sum())
+    rep["persistent_became_audible_pct"] = round(100.0 * float(((M2 > 0) & sel).sum()) / max(int(sel.sum()), 1), 1)
+    rep["persistent_median_margin_gain_db"] = round(float(np.median((M2 - M1)[sel])), 2) if sel.any() else None
     rep["near_hidden_components"] = n_near
     rep["near_hidden_became_audible_pct"] = round(100.0 * n_flip / max(n_near, 1), 1)
     rep["near_hidden_median_margin_gain_db"] = round(float(np.median(dm)), 2) if dm else None

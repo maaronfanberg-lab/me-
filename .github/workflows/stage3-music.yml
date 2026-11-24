@@ -53,6 +53,9 @@ jobs:
           mv research/adaptive-filterbank/stage3-map-cambridge.npz research/adaptive-filterbank/music/stage3-map-cambridge-${TRACK_ID}.npz
           mv research/adaptive-filterbank/stage3-map-munich.npz research/adaptive-filterbank/music/stage3-map-munich-${TRACK_ID}.npz
           mv research/adaptive-filterbank/stage4-report.json research/adaptive-filterbank/music/stage4-report-${TRACK_ID}.json
+          # the scripts also overwrite tracked local reports; restore them so the rebase is clean
+          git checkout -- research/adaptive-filterbank/ 2>/dev/null || true
+          rm -f research/adaptive-filterbank/*.npz
           git config user.name "stage3-bot"; git config user.email "actions@users.noreply.github.com"
           git add research/adaptive-filterbank/music
           git commit -m "Stage 3 real-music report for Audius ${TRACK_ID}" || exit 0
