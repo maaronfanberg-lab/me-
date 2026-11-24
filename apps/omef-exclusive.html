@@ -359,8 +359,8 @@ function twinStepper(rawA,rawB,cfg){
   const a=engines[0](inject[0]),b=engines[1](inject[1]);ring[0][tick%256]=a;ring[1][tick%256]=b;tick++;
   const lagA=ring[0][((tick-22)%256+256)%256],lagB=ring[1][((tick-56)%256+256)%256],lagLongA=ring[0][((tick-90)%256+256)%256];
   const delta=a.phase-b.phase;const nodal=Math.tanh(inject[0].projection-inject[1].projection+.5*(inject[0].pair-inject[1].pair)+.3*(inject[0].regime-inject[1].regime));return {a:a.xy,b:b.xy,lagA:lagA?lagA.xy:a.xy,lagB:lagB?lagB.xy:b.xy,lagLongA:lagLongA?lagLongA.xy:a.xy,phaseA:a.phase,phaseB:b.phase,cos:Math.cos(delta),sin:Math.sin(delta),drive,nodal};
- };next.setRaw=function(A,B){engines[0].setRaw(A);engines[1].setRaw(B);lensRawA=A;lensRawB=B;cfg.lens=coupledObservationLens(A,B,cfg);};
- next.setConfig=function(c){const change=(+c.seed)-(+cfg.seed);if(Math.abs(change)>.000001)engines[1].adjustSeed(change);cfg=c;cfg.lens=coupledObservationLens(lensRawA,lensRawB,cfg);};
+ };next.setRaw=function(A,B){engines[0].setRaw(A);engines[1].setRaw(B);lensRawA=A;lensRawB=B;if(!cfg.lensOverride)cfg.lens=coupledObservationLens(A,B,cfg);};
+ next.setConfig=function(c){const change=(+c.seed)-(+cfg.seed);if(Math.abs(change)>.000001)engines[1].adjustSeed(change);cfg=c;if(!c.lensOverride)cfg.lens=coupledObservationLens(lensRawA,lensRawB,cfg);};
  return next;
 }
 
@@ -727,6 +727,7 @@ function liveMutate(){
  const depth=+$('twinDepth').value;
  const current=sampleVisualProfile(st.targetA,st.targetB,st.targetCfg,1600);
  const reference=st.lastFoundProfile||current;
+ if(!st.displayLinks)st.displayLinks=st.requested.map(l=>({...l}));
  let choices=[];
  for(let attempt=0;attempt<5;attempt++){
   const proposal=fullSpectrumProposal(st,depth,attempt);
@@ -887,7 +888,7 @@ function liveFrame(time){
  ls.blend+=(desiredLens.blend-ls.blend)*observationRate;
  ls.sine+=(Math.sin(desiredLens.phase)-ls.sine)*observationRate;
  ls.cosine+=(Math.cos(desiredLens.phase)-ls.cosine)*observationRate;
- st.config.lens={blend:ls.blend,phase:Math.atan2(ls.sine,ls.cosine)};
+ st.config.lensOverride=true;st.config.lens={blend:ls.blend,phase:Math.atan2(ls.sine,ls.cosine)};
  
   // Observation is the native OMEF state projection; no shape-switch cache.
  st.engine.setRaw(st.A,st.B);
