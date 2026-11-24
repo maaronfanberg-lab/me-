@@ -13,3 +13,15 @@
 - Cost: ~165k steps/s with all 61 controls moved vs ~420k before (dev machine; not a phone measurement).
 
 **Coupled mode — not changed.** The same approach was tried there and measured worse: 51/61 vs 61/61 against the floor, and lower distinctness between controls (median 0.15 vs 0.18). The existing coupled observer bends every control into a similar rope; that remains open.
+
+## Stage 2 — silk starting attractors (2026-11-24)
+
+**Observed:** Alex shared silk/veil reference images and asked that the sliders be able to reach that look. Measured: from the existing "orbital lattice" start, slider moves already give folded silk sheets; from the other five starts they mostly give scribbles.
+
+**Search.** 6,111 random coefficient sets near the six existing starts (native recurrence, no view). Silk criterion: sharp turns (>0.6 rad between consecutive steps) in <0.8% of steps, mean turning >0.012 rad (not a plain loop), sheet occupancy 22–62%, irregular silhouette. 220 passed. Robustness: 21 controls moved ±12% each with the view on; kept sets where ≥95% of moves stay silky (100 left), then picked by farthest-apart image.
+
+**Stationarity check (caught 4 failures):** compared the drawing at 30k vs 60k steps. Four candidates (silk leaf, silk horn, silk loop, nested silk shell) keep drifting by themselves (window difference 0.56–0.64), so a slider move could not be told apart from drift. They were dropped.
+
+**Added to Next attractor:** silk fin, silk drape, twisted silk ribbon, silk bell. The six original starts are bit-identical.
+
+**Gate.** Every control moved 15% from each new start: 244/244 clear max(0.2, 2× that start's own drift), minimum 0.25. Live page: no errors; Next attractor reaches the new starts; silk drape + Shadow cross +15% gives a folded silk shell.
