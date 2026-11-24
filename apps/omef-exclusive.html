@@ -331,7 +331,7 @@ function coupledObservationLens(rawA,rawB,cfg){
  add(cfg.seed,1,0,3,252);
  add(cfg.interference,.16,0,3,253);
  add(cfg.projection,5,0,5,254);
- const blend=amount>0?clamp(1-Math.exp(-3.6*amount),0,.985):0;
+ const blend=amount>0?clamp(.85*(1-Math.exp(-3.6*amount)),0,.85):0;
  return {blend,phase:Math.atan2(sx,sy),active:amount};
 }
 function twinStepper(rawA,rawB,cfg){
@@ -410,7 +410,12 @@ function twinCombine(point,cfg){
  const P0=[ax+bx+.65*lb[0],ay-by+.30*la[1]];
  const P1=[bx-ay+.55*older[1],by+ax+.20*la[0]];
  const P2=[ax*bx-ay*by+.80*la[0],ax*by+ay*bx+.70*lb[1]];
- const angle=lens.phase,w1=.12+.08*Math.sin(angle),w2=.68+.12*Math.cos(angle),w0=1-w1-w2;
+ const angle=lens.phase,
+   z0=Math.exp(1.8*Math.cos(angle)),
+   z1=Math.exp(1.8*Math.cos(angle-2*Math.PI/3)),
+   z2=Math.exp(1.8*Math.cos(angle+2*Math.PI/3)),
+   normalization=z0+z1+z2,
+   w0=z0/normalization,w1=z1/normalization,w2=z2/normalization;
  const x=w0*P0[0]+w1*P1[0]+w2*P2[0],y=w0*P0[1]+w1*P1[1]+w2*P2[1];
  const f=lens.blend;
  return [native[0]*(1-f)+x*f,native[1]*(1-f)+y*f];
@@ -534,6 +539,34 @@ function visualDifference(a,b){
  if(!a||!b)return 1;
  let distance=0;for(let i=0;i<a.hist.length;i++)distance+=Math.abs(a.hist[i]/a.count-b.hist[i]/b.count);
  return distance/2;
+}
+// Judge coarse silhouette and mass distribution, not tiny orbital variations.
+function macroStructureSignature(p){
+ if(!p)return null;
+ const mass=new Float64Array(48),coverage=new Float64Array(48);
+ for(let y=0;y<30;y++)for(let x=0;x<40;x++){
+  const v=p.hist[y*40+x],idx=Math.floor(y/5)*8+Math.floor(x/5);
+  mass[idx]+=v/p.count;coverage[idx]+=v>0?1/25:0;
+ }
+ const blurred=new Float64Array(48);let total=0;
+ for(let y=0;y<6;y++)for(let x=0;x<8;x++){
+  let sum=0,weight=0;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+   const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=8||yy>=6)continue;
+   const w=dx===0&&dy===0?4:1;sum+=mass[yy*8+xx]*w;weight+=w;
+  }
+  blurred[y*8+x]=sum/weight;total+=blurred[y*8+x];
+ }
+ for(let i=0;i<48;i++)blurred[i]/=Math.max(total,1e-12);
+ return {mass:blurred,coverage,aspect:p.width/p.height};
+}
+function macroStructureDistance(a,b){
+ if(!a||!b)return 1;
+ const A=macroStructureSignature(a),B=macroStructureSignature(b);
+ let mass=0,coverage=0;
+ for(let i=0;i<48;i++){mass+=Math.abs(A.mass[i]-B.mass[i]);coverage+=Math.abs(A.coverage[i]-B.coverage[i]);}
+ const aspect=clamp(Math.abs(Math.log(A.aspect/B.aspect))/1.5,0,1);
+ return .275*mass+.20*coverage/48+.25*aspect;
 }
 function structuralDistance(a,b){
  if(!a||!b||!a.descriptor||!b.descriptor)return 1;
