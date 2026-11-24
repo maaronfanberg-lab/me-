@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/omef-baseline-review-20261124-1137b.json",
+  "request_sha256": "d20d0ea00131c9f44974995af1c8d1371395d4746b02222321001cc3bad97090",
+  "request_nonce": "omef-baseline-review-20261124-1137b",
+  "completed_at": "2026-11-24T11:37:50.536056Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "# Critique (from the stated facts only; I haven't inspected the repo)\n\n## Likely diagnosis\nGenome changes have weak geometric leverage for four reasons. These are inferences, not observations.\n\n1. **Endpoints are unchanged by the parameter map.** A log map around the defaults only rescales the coefficients. A and B still project to the same native points, so the genome moves the dynamics (speed, coupling) and not the geometry that's combined.\n2. **tanh saturates twice.** The state updates use tanh. The macro coefficients use tanh of the mapped value. Away from the defaults, extra genome range compresses and gives diminishing leverage.\n3. **The ±2.5 clamp per subsystem** can mask differences in link injection. Strength, phase gate and source signal get flattened once the clamp is reached. The product of global, strength, source and gate is also multiplicative, so a small factor suppresses everything.\n4. **Mode 5 weights are small.** The B term is .23*mix and the interference term is .045*interference*bounded cross-products. A dominates, so B and interference changes have little effect on the combined point unless mix and interference are large.\n5. **Smoothing and the 15 s trail half-life** blur short-term effects. A test that looks too soon will see little change, and old trails will contaminate measurements.\n\n## Prioritized minimal, reversible changes\nGate each change behind a flag, default off. With the flag off, output must be bit-identical to the historical output.\n\n1. **Endpoint-leverage term (highest priority).** Add a genome-driven offset or blend on the endpoint projections. Make it identically zero at the default genome, for example a term proportional to (mapped − default) in log space. Default trajectories are then unchanged and off-default genomes move the endpoints.\n2. **Mode 5 gain factors.** Multiply the B and interference weights by 1 + k·g(genome), with g(default) = 0. Start with small k.\n3. **Soften saturation only off-default.** For example, rescale the tanh argument by a factor that equals 1 at the default. Don't change the clamp until the first two changes are measured. If you do, use a soft clamp that's identical below roughly 2.0.\n4. **Trail handling.** Leave the 15 s half-life alone. Add a test-only trail reset so measurements are clean.\n\n## Numerical falsification tests\n- **Regression (hard gate):** at the default genome, flags on and off, run N ≥ 10⁴ steps from fixed seeds. Max |Δ| over all coordinates must be ≤ 1e-12, or exactly 0 if the arithmetic is the same. Any larger deviation means the \"preserves history\" claim is false.\n- **Leverage:** sweep each genome parameter across its range, e.g. 9 points, with the others at default. Measure endpoint displacement, the L2 distance between the final combined points after settling for ≥ 5 smoothing time constants and ≥ 3 half-lives (45 s). Pass if displacement grows monotonically and the max/min ratio improves clearly over baseline. Set the target before running, e.g. ≥ 3× at the extremes.\n- **Saturation:** report the fraction of steps where |injection| hits 2.5, and the fraction of tanh outputs with |x| > 0.95. If the clamp is active in more than about 5% of steps at default, the clamp is hiding effects. If it is active at default at all, the trajectory-preservation claim is at risk when you soften it.\n- **Attribution:** zero out B, then interference, one at a time. If the combined-point change is below noise, that term is irrelevant. Noise means the run-to-run spread over different seeds.\n- **Sensitivity:** perturb the initial state by 1e-6. A large amplification means chaotic divergence, and trajectory comparison needs statistics. Don't use pointwise comparison for off-default genomes.\n\n## Browser falsification tests\n- Run identical seeds with the flag off and on in the same build. Compare canvas or frame-buffer hashes at fixed frame indices at default. They should be exactly identical, which assumes deterministic timing. Drive time with a fixed-step clock, not wall clock.\n- Move one genome slider from min to max after a trail reset. Wait 45 s or advance the fake clock. Screenshot and compare. Blind-rate or measure the visible change. Do the same with the flag off as the control.\n- Check for dropped frames and a stable frame time. The new terms must not add measurable cost.\n- Repeat on at least two browsers or engines, because floating-point and Math.tanh differences could break bit-identity. Relax to a tolerance there and say so.\n\n## Limits of density-histogram TV\n- TV distance depends on binning, bin count, sample length and the trail window. With finite samples there is a positive bias, so compare against a same-config noise floor (seed A vs seed B).\n- It discards temporal order, so it misses phase, speed and trajectory-shape differences. Different orbits can have the same occupancy.\n- It is insensitive to small shifts that stay within a bin, and it saturates near 1 once supports are disjoint, so it can't rank large differences.\n- Trail decay and smoothing mean a short window mixes old and new coefficients. Use a window well past the transient.\n- Use it alongside endpoint L2, a distance such as Wasserstein, and a temporal statistic such as autocorrelation or spectrum.\n\n## Stop/go\n**Go** only if all of these hold:\n- Default regression is exact, or within 1e-12.\n- Leverage meets the pre-registered target.\n- TV exceeds the noise floor by a pre-set margin, e.g. 3×, and a second metric agrees.\n- Saturation doesn't get worse at default.\n- Browser hashes match at default.\n\n**Stop** if any of these happen:\n- The default trajectory drifts.\n- The leverage gain appears only in TV and not in endpoint distance.\n- The dynamics become unstable or the clamp is hit often.\n- Results don't replicate across seeds or browsers.\n\nRoll back by switching the flag off. No code or deploy changes are part of this review.",
+  "session_id": "df713940-bf01-489a-afed-da8c46c2ee7a",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 736,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 2027,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 736,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2027,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 736,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 736
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.023495500000000002,
+  "num_turns": 1
+}
