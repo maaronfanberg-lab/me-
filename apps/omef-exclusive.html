@@ -638,111 +638,158 @@ function liveInput(){
  st.targetWeights=hot(cfg.projection);liveRetarget(st,st.requested);
  st.nextEvolution=performance.now()+Math.max(evolutionSeconds()*1000,manualHoldUntil-Date.now());
 }
+// Explore the full governing system on every cycle. Moving all numeric
+// controls does not imply a new geometric regime: discovery is judged by
+// independent phase-space descriptors, not by a new screen-space shape.
+function fullSpectrumProposal(st,depth,attempt){
+ const A={...st.targetA},B={...st.targetB};
+ const cfg={...st.targetCfg,links:st.requested.map(l=>({...l}))};
+ const cycle=(st.evolutionCycle||0),phase=cycle*.79+attempt*1.73;
+ const scale=attempt<3?1:attempt===3?.45:.18;
+ const move=(value,min,max,step,index,rate=.03)=>{
+  const old=+value,span=max-min,theta=(index+1)*2.3999632297+phase;
+  const wave=Math.sin(theta)+.35*Math.cos(theta*1.7+cycle*.27);
+  const sign=wave>=0?1:-1;
+  const distance=Math.max(step,span*rate*scale*(.4+.6*Math.min(1,Math.abs(wave))));
+  const precision=(String(step).split('.')[1]||'').length;
+  const quant=v=>clamp(+(min+Math.round((clamp(v,min,max)-min)/step)*step).toFixed(precision),min,max);
+  let target=quant(old+sign*distance);
+  if(target===old)target=quant(old-sign*distance);
+  if(target===old)target=quant(old+((max-old)>(old-min)?1:-1)*step);
+  return target;
+ };
+ let moved=0;
+ for(let i=0;i<allDefs.length;i++){
+  const d=allDefs[i],id=d[0],min=d[2],max=d[3],step=d[4];
+  const left=move(A[id],min,max,step,i,.018+.0035*depth);
+  const right=move(B[id],min,max,step,i+allDefs.length,.018+.0035*depth);
+  if(left!==A[id]){A[id]=left;moved++;}
+  if(right!==B[id]){B[id]=right;moved++;}
+ }
+ for(let i=0;i<cfg.links.length;i++){
+  const link=cfg.links[i];
+  link.strength=move(link.strength,-2,2,.05,200+i*3,.028+.006*depth);
+  link.lag=move(link.lag,1,144,1,201+i*3,.018+.002*depth);
+  link.offset=move(link.offset,0,315,5,202+i*3,.022+.004*depth);
+ }
+ // Categorical topology changes too, but not all at once: the continuous
+ // signed link weights remain causal and topology changes crossfade.
+ const nodes=twinNodes.map(n=>n[0]);
+ const gates=['crest','node','bipolar'];
+ const selected=(cycle+attempt)%8;
+ const link=cfg.links[selected];
+ switch((cycle+attempt)%4){
+  case 0:link.from=nodes[(nodes.indexOf(link.from)+1+cycle%3)%nodes.length];break;
+  case 1:link.to=nodes[(nodes.indexOf(link.to)+1+cycle%4)%nodes.length];break;
+  case 2:link.gate=gates[(gates.indexOf(link.gate)+1)%gates.length];break;
+  case 3:link.source=link.source==='A'?'B':'A';break;
+ }
+ cfg.global=move(cfg.global,.35,4,.05,300,.032+.008*depth);
+ cfg.seed=move(cfg.seed,0,3,.05,301,.025+.006*depth);
+ cfg.mix=move(cfg.mix,.15,1,.01,302,.034+.007*depth);
+ cfg.interference=move(cfg.interference,.08,3,.02,303,.026+.006*depth);
+ cfg.projection=(Number(cfg.projection)+1+((cycle+attempt)%5))%6;
+ return {A,B,cfg,edges:cfg.links,changedCoefficients:moved};
+}
+function paintEvolvingControls(st){
+ // Numeric input thumbs visibly move with the ACTUAL smoothed state, without
+ // dispatching input/change events (which would trigger the manual hold).
+ if(!st||Date.now()<manualHoldUntil)return;
+ for(const d of allDefs){
+  const key=d[0],digits=(String(d[4]).split('.')[1]||'').length;
+  for(const [side,state] of [['A',st.A],['B',st.B]]){
+   const input=$('tw'+side+'_'+key);
+   const min=+input.min,step=+input.step;
+   const val=clamp(min+Math.round((state[key]-min)/step)*step,+input.min,+input.max);
+   if(+input.value!==val){input.value=val;$('tw'+side+'_'+key+'v').textContent=(+input.value).toFixed(digits);}
+  }
+ }
+ for(const [key,id] of [['global','twinGlobal'],['seed','twinSeed'],['mix','twinMix'],['interference','twinInterference']]){
+  const input=$(id),step=+input.step,min=+input.min;
+  const val=clamp(min+Math.round((st.config[key]-min)/step)*step,+input.min,+input.max);
+  if(+input.value!==val){input.value=val;$(id+'v').textContent=(+input.value).toFixed(2);}
+ }
+ if(!st.displayLinks)st.displayLinks=st.requested.map(l=>({...l}));
+ const a=.18;
+ for(let i=0;i<st.displayLinks.length;i++){
+  const d=st.displayLinks[i],goal=st.requested[i];
+  for(const key of ['strength','lag','offset']){
+   d[key]+=(goal[key]-d[key])*a;
+   const input=$('tl'+i+key),step=+input.step,min=+input.min;
+   const v=clamp(min+Math.round((d[key]-min)/step)*step,+input.min,+input.max);
+   if(+input.value!==v){input.value=v;$('tl'+i+key+'v').textContent=(+input.value).toFixed(step>=1?0:2);}
+  }
+ }
+}
 function liveMutate(){
  const st=liveState;
  if(!st||stopped||activeEngine!=='twin'||!evolutionOn)return false;
- const depth=+$('twinDepth').value,genomeSlots=allDefs.length*2;
- const baseline=sampleVisualProfile(st.targetA,st.targetB,st.targetCfg,1550);
- // Cursor runs through EVERY A and B genome variable, not just the nine macros.
- // It advances even when a proposal is rejected, avoiding trapped evolution.
- const cursor=st.evolutionCursor||0;
- const count=Math.min(11,3+Math.round(depth*.65));
- const candidates=[];
- const mutationCycle=st.evolutionCycle||0;
- const globals=['global','seed','mix','interference','projection'];
- const links=st.requested.map(l=>({...l}));
+ const depth=+$('twinDepth').value;
+ const current=sampleVisualProfile(st.targetA,st.targetB,st.targetCfg,1600);
+ const reference=st.lastFoundProfile||current;
+ let choices=[];
  for(let attempt=0;attempt<5;attempt++){
-  const A={...st.targetA},B={...st.targetB},changes=[];
-  const proposedCfg={...st.targetCfg,links:links.map(l=>({...l}))};
-  for(let j=0;j<count;j++){
-   const position=(cursor+attempt*13+j)%genomeSlots;
-   const side=position<allDefs.length?'A':'B',def=allDefs[position%allDefs.length];
-   const [key,,min,max,step]=def,raw=side==='A'?A:B,old=raw[key],span=max-min;
-   const depthFactor=.035+.018*depth;
-   const move=(.35+.65*Math.random())*span*depthFactor*(Math.random()<.5?-1:1);
-   const decimals=(String(step).split('.')[1]||'').length;
-   const quantized=+(min+Math.round((clamp(old+move,min,max)-min)/step)*step).toFixed(decimals);
-   const value=clamp(quantized,min,max);
-   if(value!==old){raw[key]=value;changes.push(side+'.'+key);}
-  }
-  // Global controls and the projection are genuine evolution targets too.
-  const key=globals[(mutationCycle+attempt)%globals.length];
-  if(key==='projection'){
-   const options=[0,1,2,3,4,5].filter(x=>x!==+proposedCfg.projection);
-   proposedCfg.projection=options[Math.floor(Math.random()*options.length)];
-  }else{
-   // Autonomous morphing keeps BOTH OMEF systems exchanging information.
-   // Manual decoupling may still explicitly set global coupling to zero.
-   const limits={global:[.35,4],seed:[0,3],mix:[.15,1],interference:[.08,3]};
-   const [min,max]=limits[key],current=+proposedCfg[key],amplitude=(max-min)*(.10+.025*depth);
-   proposedCfg[key]=clamp(current+amplitude*(Math.random()<.5?-1:1)*(.4+.6*Math.random()),min,max);
-  }
-  changes.push('coupled.'+key);
-  // Directed topology, source, receiving node, gate, delay, and signed strength
-  // all participate in the actual delayed 20D recurrence.
-  const linkIndex=(mutationCycle+attempt)%proposedCfg.links.length;
-  const edge=proposedCfg.links[linkIndex];
-  const routeKind=(mutationCycle+attempt)%6;
-  const nodes=twinNodes.map(n=>n[0]);
-  if(routeKind===0)edge.strength=clamp(edge.strength+(Math.random()<.5?-1:1)*(.3+.1*depth),-2,2);
-  else if(routeKind===1)edge.lag=[2,5,13,21,34,55,89,144][Math.floor(Math.random()*8)];
-  else if(routeKind===2)edge.offset=[0,45,90,135,180,225,270,315][Math.floor(Math.random()*8)];
-  else if(routeKind===3)edge.from=nodes[Math.floor(Math.random()*nodes.length)];
-  else if(routeKind===4)edge.to=nodes[Math.floor(Math.random()*nodes.length)];
-  else {edge.gate=['crest','node','bipolar'][Math.floor(Math.random()*3)];edge.source=edge.source==='A'?'B':'A';}
-  changes.push('link'+(linkIndex+1));
-  const profile=sampleVisualProfile(A,B,proposedCfg,1750);
+  const proposal=fullSpectrumProposal(st,depth,attempt);
+  const profile=sampleVisualProfile(proposal.A,proposal.B,proposal.cfg,1550);
   if(!profile)continue;
-  const novelty=visualDifference(profile,baseline);
-  if(novelty<.12||profile.occupancy>.72||profile.denseMass<.28||profile.travel>.10)continue;
-  // Novelty is necessary, but not sufficient: preserve actual coherent
-  // trajectory folds rather than maximizing point-cloud dissimilarity.
-  const score=.55*novelty+.28*profile.shapeScore+.17*(1-profile.occupancy);
-  candidates.push({A,B,cfg:proposedCfg,edges:proposedCfg.links,changes,novelty,profile,score});
+  const familyDistance=structuralDistance(profile,reference);
+  const localDistance=structuralDistance(profile,current);
+  const visual=visualDifference(profile,reference);
+  const score=.50*familyDistance+.24*localDistance+.17*profile.shapeScore+.09*visual;
+  choices.push({...proposal,profile,familyDistance,localDistance,visual,score});
  }
- st.evolutionCursor=(cursor+count)%genomeSlots;
- st.evolutionCycle=mutationCycle+1;
- candidates.sort((x,y)=>y.score-x.score);
+ st.evolutionCycle=(st.evolutionCycle||0)+1;
+ choices.sort((a,b)=>b.score-a.score);
  let winner=null;
- for(const proposal of candidates.slice(0,3)){
-  const longRun=sampleVisualProfile(proposal.A,proposal.B,proposal.cfg,3900);
-  if(longRun&&longRun.occupancy<.78&&longRun.denseMass>.30&&longRun.travel<.09){
-   winner={...proposal,longRun};break;
+ for(const proposal of choices.slice(0,3)){
+  const longRun=sampleVisualProfile(proposal.A,proposal.B,proposal.cfg,3000);
+  if(longRun&&longRun.occupancy<.73&&longRun.denseMass>.27&&longRun.travel<.10){
+   winner={...proposal,longRun};
+   break;
   }
  }
  if(!winner){
   evolutionRejected++;
-  st.nextEvolution=performance.now()+Math.max(900,evolutionSeconds()*440);
-  evolutionStatus('Searching for coherent new dynamics');
+  st.searchingRounds=(st.searchingRounds||0)+1;
+  st.nextEvolution=performance.now()+Math.max(550,evolutionSeconds()*480);
+  evolutionStatus('Searching · candidate did not maintain coherent trajectories');
   return false;
  }
+ // An exploratory step is NOT falsely reported as the discovery of a new
+ // shape family. The whole slider set still moves while searching.
+ const structuralNovelty=structuralDistance(winner.longRun,reference);
+ const newFamily=structuralNovelty>=.22&&winner.visual>=.20;
  evolutionAccepted++;
+ if(newFamily){
+  st.shapeFamilies=(st.shapeFamilies||0)+1;
+  st.lastFoundProfile=winner.longRun;
+  st.searchingRounds=0;
+ }else st.searchingRounds=(st.searchingRounds||0)+1;
  st.targetA=winner.A;st.targetB=winner.B;st.targetCfg=winner.cfg;
  st.requested=winner.edges;st.targetWeights=hot(winner.cfg.projection);
  liveRetarget(st,winner.edges);
- st.mutationLabel=winner.changes.join(', ');
- st.lastNovelty=winner.novelty;st.lastMutation=performance.now();
- // The two non-speed/non-trail evolution-quality controls also wander.
- // Preserve the user's explicit exclusions: points, ink, dot size,
- // evolution speed, and trail persistence are never auto-mutated.
- if(evolutionAccepted%2===0){
-  const e=$('twinDepth'),change=Math.random()<.5?-1:1;
-  e.value=clamp(+e.value+change,1,10);$('twinDepthv').textContent=(+e.value).toFixed(0);
- }
- if(evolutionAccepted%3===0){
-  const e=$('twinMorphDuration'),change=Math.random()<.5?-.2:.2;
-  e.value=clamp(Math.round((+e.value+change)*5)/5,.8,9);
-  $('twinMorphDurationv').textContent=(+e.value).toFixed(1);
- }
- st.quickFadeUntil=st.lastMutation+1000;
- st.detailUntil=Math.max(st.detailUntil,st.lastMutation+2800);
- applyTwinGenome(winner.A,winner.B);applyTwinLinks(winner.edges);
- for(const key of ['global','seed','mix','interference']){
-  const id={global:'twinGlobal',seed:'twinSeed',mix:'twinMix',interference:'twinInterference'}[key];
-  $(id).value=winner.cfg[key];$(id+'v').textContent=(+$(id).value).toFixed(2);
- }
+ st.mutationLabel=(newFamily?'new structural family '+st.shapeFamilies:
+  'exploring structural variants · attempt '+st.searchingRounds)+
+  ' · 122 coefficients + 24 link sliders + 4 globals';
+ st.lastNovelty=structuralNovelty;
+ st.lastMutation=performance.now();
+ st.quickFadeUntil=st.lastMutation+850;
+ st.detailUntil=Math.max(st.detailUntil,st.lastMutation+(newFamily?7500:2600));
+ // Full-spectrum motion includes search quality and morph smoothness, but
+ // never changes points, ink, size, evolution speed, or trail persistence.
+ const v=$('twinDepth'),m=$('twinMorphDuration'),direction=st.evolutionCycle%2?1:-1;
+ v.value=clamp(+v.value+direction,1,10);$('twinDepthv').textContent=(+v.value).toFixed(0);
+ m.value=clamp(Math.round((+m.value+direction*.2)*5)/5,.8,9);
+ $('twinMorphDurationv').textContent=(+m.value).toFixed(1);
+ // Numeric sliders animate to the new targets in paintEvolvingControls.
+ // The discrete source/target/gate and projection selectors update at once.
+ for(let i=0;i<winner.edges.length;i++)
+  for(const key of ['source','from','to','gate'])$('tl'+i+key).value=winner.edges[i][key];
+ refreshTwinLinkCaptions();
  $('twinProjection').value=winner.cfg.projection;
- evolutionStatus('Evolving '+st.mutationLabel+' · '+Math.round(100*winner.novelty)+'% phase-space novelty');
+ st.nextEvolution=performance.now()+(newFamily?Math.max(5500,evolutionSeconds()*1000):Math.max(950,evolutionSeconds()*800));
+ evolutionStatus((newFamily?'Discovered a new shape family':'Searching for a genuinely different shape')+
+  ' · structure '+Math.round(100*structuralNovelty)+'%, visual '+Math.round(100*winner.visual)+'%');
  return true;
 }
 function evolutionSearch(force){if(!liveState){if(activeEngine==='twin')twinRender(true);return;}if(!evolutionOn&&force){evolutionOn=true;evolutionStatus('Evolution resumed');}const ok=liveMutate();if(ok)liveState.nextEvolution=performance.now()+evolutionSeconds()*1000;}
@@ -883,6 +930,7 @@ function liveFrame(time){
   st.samples=0;st.minX=st.minY=Infinity;st.maxX=st.maxY=-Infinity;
  }
  if(st.frames%12===0){
+  if(evolutionOn)paintEvolvingControls(st);
   if(st.manualGenome){
    const g=st.manualGenome,current=st[g.side][g.id];
    const denominator=Math.abs(g.to-g.from),progress=denominator<.00001?100:Math.max(0,Math.min(100,100*(1-Math.abs(g.to-current)/denominator)));
