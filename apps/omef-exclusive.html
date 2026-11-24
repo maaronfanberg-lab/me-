@@ -84,6 +84,10 @@ body.omef-immersive.omef-hud-visible #immersiveHUD{opacity:1;pointer-events:auto
  height:100dvh!important}
  #immersiveEnter{padding:8px 10px;font-size:12px}
 }
+@media (max-width:719px){
+ #omefUI button,#twinUI button,#omefUI input,#twinUI input,
+ #engineOriginal,#engineTwin {scroll-margin-top:50svh;}
+}
 </style></head><body class="dark"><div class="app"><header><h1>OMEF EXCLUSIVE</h1><div class="sub" id="modeSubtitle">Original OMEF-A · one 10D equation · single attractor</div></header><div class="stage"><canvas id="omefCanvas" width="1000" height="760" aria-label="Original autonomous OMEF-A attractor"></canvas><button type="button" id="immersiveEnter" aria-label="Enter full-screen visual mode">⛶ Full screen</button><div id="immersiveHUD" role="group" aria-label="Immersive view controls"><button type="button" id="immersiveExit">Show controls</button><button type="button" id="immersiveHide">Hide</button></div><div class="badge" id="count">Total drawn points: 0</div><div class="status" id="status">booting</div></div><div class="panel">
 
 <section id="twinEngine"><h2>Drawing engine</h2><div class="grid2"><button id="engineOriginal" class="engbtn active" aria-pressed="true">Original OMEF</button><button id="engineTwin" class="engbtn secondary" aria-pressed="false">Coupled OMEF · 1 image</button></div><div id="engineInfo" class="hint" role="status" style="margin:9px 0 0">ORIGINAL · Restored native OMEF state-space trajectory (no artificial shape templates). The independent 10D formula is replotted when controls change.</div></section>
@@ -941,8 +945,7 @@ function originalStart(){
  originalUpdateControls();if(!originalPaused)originalLive.frame=requestAnimationFrame(originalFrame);
 }
 function originalFrame(time){
- const st=originalLive;if(!st||originalPaused||activeEngine!=='omef'||st.generation!==originalGeneration)return;
- st.frame=0;const dt=st.last?clamp(time-st.last,1,70):16.67;st.last=time;st.frames++;
+ const st=originalLive;if(st)st.frame=0;if(!st||originalPaused||activeEngine!=='omef'||st.generation!==originalGeneration)return;const dt=st.last?clamp(time-st.last,1,70):16.67;st.last=time;st.frames++;
  if(originalAuto&&time>st.nextDrift&&time>st.manualUntil){
   const ids=['a','b','c','d','e','f','g','h','i','pairFreqA','pairFreqB','triScale','triCross','phaseSpeed','fibSelf','edgeBase'];
   const id=ids[Math.floor(Math.random()*ids.length)],d=defMap[id],step=d[4],width=d[3]-d[2];

@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -52,6 +53,24 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: .
+
+      - name: Wait until uploaded Pages artifact is indexed
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          for attempt in $(seq 1 24); do
+            found=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "github-pages")] | length' 2>/dev/null || echo 0)
+            if [ "$found" -ge 1 ]; then
+              echo "Pages artifact is available to the deployment API"
+              exit 0
+            fi
+            echo "Pages artifact not indexed yet (attempt $attempt)"
+            sleep 5
+          done
+          echo '::error::Pages artifact upload completed but its metadata is still unavailable'
+          exit 1
 
       - name: Deploy Pages
         if: github.ref == 'refs/heads/main'
