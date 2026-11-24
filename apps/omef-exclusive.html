@@ -678,7 +678,8 @@ function fullSpectrumProposal(st,depth,attempt){
  const A={...st.targetA},B={...st.targetB};
  const cfg={...st.targetCfg,links:st.requested.map(l=>({...l}))};
  const cycle=(st.evolutionCycle||0),phase=cycle*.79+attempt*1.73;
- const scale=attempt<3?1:attempt===3?.45:.18;
+ const stalled=st.searchingRounds||0,boost=stalled>=7?2.6:stalled>=4?1.75:1;
+ const scale=attempt<3?boost:attempt===3?.55:.23;
  const move=(value,min,max,step,index,rate=.03)=>{
   const old=+value,span=max-min,theta=(index+1)*2.3999632297+phase;
   const wave=Math.sin(theta)+.35*Math.cos(theta*1.7+cycle*.27);
@@ -759,7 +760,8 @@ function liveMutate(){
  if(!st||stopped||activeEngine!=='twin'||!evolutionOn)return false;
  const depth=+$('twinDepth').value;
  const current=sampleVisualProfile(st.targetA,st.targetB,st.targetCfg,1600);
- const reference=st.lastFoundProfile||current;
+ if(!st.shapeArchive)st.shapeArchive=[sampleVisualProfile(st.targetA,st.targetB,st.targetCfg,10000)].filter(Boolean);
+ const reference=st.lastFoundProfile||st.shapeArchive[0]||current;
  if(!st.displayLinks)st.displayLinks=st.requested.map(l=>({...l}));
  let choices=[];
  for(let attempt=0;attempt<5;attempt++){
@@ -768,15 +770,16 @@ function liveMutate(){
   if(!profile)continue;
   const familyDistance=structuralDistance(profile,reference);
   const localDistance=structuralDistance(profile,current);
+  const silhouette=macroStructureDistance(profile,reference);
   const visual=visualDifference(profile,reference);
-  const score=.50*familyDistance+.24*localDistance+.17*profile.shapeScore+.09*visual;
+  const score=.34*silhouette+.24*familyDistance+.19*localDistance+.15*profile.shapeScore+.08*visual;
   choices.push({...proposal,profile,familyDistance,localDistance,visual,score});
  }
  st.evolutionCycle=(st.evolutionCycle||0)+1;
  choices.sort((a,b)=>b.score-a.score);
  let winner=null;
  for(const proposal of choices.slice(0,3)){
-  const longRun=sampleVisualProfile(proposal.A,proposal.B,proposal.cfg,3000);
+  const longRun=sampleVisualProfile(proposal.A,proposal.B,proposal.cfg,11000);
   if(longRun&&longRun.occupancy<.73&&longRun.denseMass>.27&&longRun.travel<.10){
    winner={...proposal,longRun};
    break;
@@ -792,11 +795,13 @@ function liveMutate(){
  // An exploratory step is NOT falsely reported as the discovery of a new
  // shape family. The whole slider set still moves while searching.
  const structuralNovelty=structuralDistance(winner.longRun,reference);
- const newFamily=structuralNovelty>=.22&&winner.visual>=.20;
+ const shapeNovelty=st.shapeArchive.length?Math.min(...st.shapeArchive.map(p=>macroStructureDistance(winner.longRun,p))):1;
+ const newFamily=shapeNovelty>=.34&&structuralNovelty>=.17&&winner.visual>=.17;
  evolutionAccepted++;
  if(newFamily){
   st.shapeFamilies=(st.shapeFamilies||0)+1;
   st.lastFoundProfile=winner.longRun;
+  st.shapeArchive.push(winner.longRun);if(st.shapeArchive.length>10)st.shapeArchive.shift();
   st.searchingRounds=0;
  }else st.searchingRounds=(st.searchingRounds||0)+1;
  st.targetA=winner.A;st.targetB=winner.B;st.targetCfg=winner.cfg;
@@ -805,7 +810,7 @@ function liveMutate(){
  st.mutationLabel=(newFamily?'new structural family '+st.shapeFamilies:
   'exploring structural variants · attempt '+st.searchingRounds)+
   ' · 122 coefficients + 24 link sliders + 4 globals';
- st.lastNovelty=structuralNovelty;
+ st.lastNovelty=shapeNovelty;
  st.lastMutation=performance.now();
  st.quickFadeUntil=st.lastMutation+850;
  st.detailUntil=Math.max(st.detailUntil,st.lastMutation+(newFamily?7500:2600));
@@ -823,7 +828,7 @@ function liveMutate(){
  $('twinProjection').value=winner.cfg.projection;
  st.nextEvolution=performance.now()+(newFamily?Math.max(5500,evolutionSeconds()*1000):Math.max(950,evolutionSeconds()*800));
  evolutionStatus((newFamily?'Discovered a new shape family':'Searching for a genuinely different shape')+
-  ' · structure '+Math.round(100*structuralNovelty)+'%, visual '+Math.round(100*winner.visual)+'%');
+  ' · silhouette '+Math.round(100*shapeNovelty)+'%, visual '+Math.round(100*winner.visual)+'%');
  return true;
 }
 function evolutionSearch(force){if(!liveState){if(activeEngine==='twin')twinRender(true);return;}if(!evolutionOn&&force){evolutionOn=true;evolutionStatus('Evolution resumed');}const ok=liveMutate();if(ok)liveState.nextEvolution=performance.now()+evolutionSeconds()*1000;}
