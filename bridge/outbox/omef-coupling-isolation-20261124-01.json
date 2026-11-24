@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/omef-coupling-isolation-20261124-01.json",
+  "request_sha256": "7eaf8f3e6abffd189d95dc205ef99d95bdde948408b457e9770cff38c91403d1",
+  "request_nonce": "omef-coupling-isolation-20261124-01",
+  "completed_at": "2026-11-24T11:42:02.270742Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "# Review of the coupled OMEF issue\n\nThis is based only on the supplied facts. I haven't inspected the code.\n\n## Likeliest diagnosis (hypotheses, not findings)\n1. **Excessive forcing is the most probable cause and the cheapest to test.**\n   - The sources are already tanh-bounded, and `tanh(3s)` then pushes them toward ±1. That is a second saturation stage, and it removes amplitude information.\n   - The per-link gain reaches 6.8, against a historical `global*strength*s*gate`.\n   - The target clamp is ±6, against ±2.5 before. The ±9 per-link clamp can never bind for one link, so it is effectively decorative.\n   - In a 10D tanh recurrent system, a drive of about 6 should saturate the units. That would push the state toward a source-slaved, near-binary or locked regime instead of a filament-rich one.\n2. **Observer-feedback contamination is plausible but unverified.** If `structuralObserver` output is written into the projection feedback history, the observer becomes part of the dynamics. Its nonlinearity would then sit inside the loop.\n3. **Mixed projection is plausible and mainly confounds the other two.**\n   - The mode5 projection changed in form: a `.22+1.15*mix` B-weight with nonlinear shear, against `A+.23*mix*B` plus a bounded `.045` cross term.\n   - The arbitrary weighted bases and the polynomial curve replace native geometry off the reference.\n   - These could cause the look change without any dynamics change.\n\nThe three causes can coexist, so use factorial designs and don't stop at the first hit.\n\n## Prioritized changes\n\n### P0. Isolation scaffolding (do first)\n- Leave the original OMEF files untouched. Work in a forked engine file or a new directory on a branch.\n- Add one config object with a flag per factor. Defaults must reproduce current coupled behavior exactly.\n- Gate: a seeded run with default flags must hash-match the current engine output, and two same-seed runs must be identical.\n- Record trajectories (raw state, projected state, observed state, coupling input, clamp events) so later steps can replay them.\n- Controls to build now:\n  - The uncoupled pair.\n  - The historical engine as a reference, if it is runnable.\n  - A **time-shuffled or phase-randomized source** with matched amplitude spectrum.\n  - A **constant source** with matched RMS.\n  - Coupling to a delayed copy of the system's own state.\n\n### P1. Forcing ablation (observer and projection held at current)\nRun these as a 2×2×2 factorial plus a gain sweep:\n- Link nonlinearity: `tanh(3s)` against linear `s`.\n- Target clamp: ±6 against ±2.5.\n- Gain map: current nodalGain against historical `global*strength*phase gate`.\n- A global-gain sweep from 0 upward, which shows where structure collapses.\n\nMetrics, all logged per run:\n- Hidden-unit saturation fraction (|h|>0.95).\n- Clamp-hit rate per link and per target.\n- Drive ratio: RMS(coupling input) / RMS(recurrent pre-activation).\n- Cross-system synchronization: lagged correlation or mutual information.\n- A largest-Lyapunov or divergence-rate estimate.\n- Participation ratio of the state, as effective dimension.\n- The filament metric (below).\n\n**Predictions:**\n- If H1 is true, reducing forcing should cut saturation and clamp hits and restore filaments, even with the current observer and projection.\n- H1 is falsified if filaments stay poor at a drive ratio and saturation comparable to the historical engine.\n- Also falsified if the structure appears only when coupling is zero. That would point to the projection or observer, or to a loss of coupling benefit.\n\n### P2. Observer-feedback test\nFirst verify by reading the code whether observed output is pushed into the feedback history. That is currently a hypothesis. Then add three flags:\n- **A:** history stores the raw projected state, and the observer is applied display-only.\n- **B:** the current behavior.\n- **C:** an observer bypass (identity).\n\nRun at a fixed, moderate forcing level taken from P1.\n\nMetrics:\n- The same set as P1.\n- Trajectory divergence between A and B from identical seeds.\n- A perturbation-growth test: add a small ε to the history and measure the growth rate under A and B. The observer's local gain inside the loop shows up here.\n\n**Prediction:** if H2 is true, A should differ from B in saturation, Lyapunov estimate and filament score, and perturbation growth should be larger under B. If A and B differ by less than seed-to-seed variance, H2 is falsified.\n\n### P3. Projection test (cheapest to run, but only clean if P2 shows no feedback)\n- Replay recorded raw state trajectories through each projection with no dynamics rerun:\n  1. Current mode5.\n  2. Historical mode5 (`A+.23*mix*B+.045*bounded cross`).\n  3. Hybrids: swap only the B-weight, only the shear, or only the cross term.\n  4. Native geometry against weighted arbitrary bases, and the polynomial curve on or off.\n- If the observer is in the loop, replaying is not valid for that configuration. Rerun the dynamics instead.\n\n**Prediction:** if H3 is true, the filament score should change substantially with projection on identical states.\n- It is falsified if the filament score is invariant to the projection across the replayed states.\n- If the score is poor under every projection, the states themselves are the problem. That points back to H1 or H2.\n\n### P4. Joint structure and controls (only after the above)\n- Combine the best-performing settings from P1 to P3.\n- Run one joint filament-rich structure with the strong controls above.\n- Sweep the delay lightly, since delay sets which source phase gets multiplied.\n- Add an explicit sync or lock detector.\n\n## Filament metric (define and freeze before running)\nUse at least two independent measures so one cannot be gamed:\n- Ridge or vesselness (Frangi-type) energy normalized by occupied area.\n- Skeleton length per occupied pixel.\n- A box-counting dimension, with a reported fit range.\n- Occupancy fraction as a guard against blank or fully filled frames.\n\nReport medians with confidence intervals over at least 10 seeds. Pre-register the thresholds, for example \"recovered\" meaning at least X% of the historical engine's score. Don't pick the thresholds after seeing the data.\n\n## Test gates\n1. Default-flag hash match and determinism.\n2. The metric must separate the historical reference from the current engine, and the shuffled and constant-source controls must score distinctly. If it can't, the metric is invalid.\n3. A factor counts as causal only if flipping it alone moves the metric beyond seed variance, and the saturation or loop-gain mechanism moves with it.\n4. Check the factor interactions for non-additive effects before attributing a cause.\n\n## Uncertainties\n- I don't know what the historical \"phase gate\" or the `global` range was. Gain comparisons may not be like-for-like.\n- The observer-history coupling is unverified.\n- The filament metric is undefined in the supplied facts.\n- The clamp-hit rates and the saturation levels are predictions from the supplied bounds, not measurements.\n- Several causes may act together, and the cure may be non-monotonic. For example, too little coupling might also remove structure.\n- Replay-based projection tests are invalid if any feedback path remains.",
+  "session_id": "72440bc1-7d3a-4e2b-9b86-ee576812bcd5",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 862,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 4033,
+    "output_tokens_details": {
+      "thinking_tokens": 1520
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 862,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 4033,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 862,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 862
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.0440595,
+  "num_turns": 1
+}
