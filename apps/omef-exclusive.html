@@ -549,71 +549,96 @@ function liveInput(){
  st.nextEvolution=performance.now()+Math.max(evolutionSeconds()*1000,manualHoldUntil-Date.now());
 }
 function liveMutate(){
- const st=liveState;if(!st||stopped||activeEngine!=='twin'||!evolutionOn)return false;
- const original=sampleVisualProfile(st.targetA,st.targetB,st.targetCfg,1250);
- const depth=+$('twinDepth').value;
- const mac=allDefs.slice(0,9),fine=allDefs.slice(9);
- let winner=null;
- // Choose substantial bounded parameter perturbations, testing the actual two
- // OMEF systems before accepting. Neither the live state nor histories reset.
- for(let attempt=0;attempt<3;attempt++){
+ const st=liveState;
+ if(!st||stopped||activeEngine!=='twin'||!evolutionOn)return false;
+ const depth=+$('twinDepth').value,genomeSlots=allDefs.length*2;
+ const baseline=sampleVisualProfile(st.targetA,st.targetB,st.targetCfg,1550);
+ // Cursor runs through EVERY A and B genome variable, not just the nine macros.
+ // It advances even when a proposal is rejected, avoiding trapped evolution.
+ const cursor=st.evolutionCursor||0;
+ const count=Math.min(11,3+Math.round(depth*.65));
+ const candidates=[];
+ const mutationCycle=st.evolutionCycle||0;
+ const globals=['global','seed','mix','interference','projection'];
+ const links=st.requested.map(l=>({...l}));
+ for(let attempt=0;attempt<5;attempt++){
   const A={...st.targetA},B={...st.targetB},changes=[];
-  const count=2+Math.floor(depth/3);
+  const proposedCfg={...st.targetCfg,links:links.map(l=>({...l}))};
   for(let j=0;j<count;j++){
-   const pool=j%2===0?mac:fine;
-   const d=pool[Math.floor(Math.random()*pool.length)];
-   const [key,,min,max,step]=d,side=j%2===0?'A':'B',o=side==='A'?A:B;
-   const old=o[key],amplitude=(max-min)*(.035+.009*depth)*(.5+Math.random()*.5);
-   let v=clamp(old+(Math.random()<.5?-1:1)*amplitude,min,max);
+   const position=(cursor+attempt*13+j)%genomeSlots;
+   const side=position<allDefs.length?'A':'B',def=allDefs[position%allDefs.length];
+   const [key,,min,max,step]=def,raw=side==='A'?A:B,old=raw[key],span=max-min;
+   const depthFactor=.035+.018*depth;
+   const move=(.35+.65*Math.random())*span*depthFactor*(Math.random()<.5?-1:1);
    const decimals=(String(step).split('.')[1]||'').length;
-   v=clamp(+(min+Math.round((v-min)/step)*step).toFixed(decimals),min,max);
-   if(v===old)v=clamp(old+(Math.random()<.5?-step:step),min,max);
-   o[key]=v;
-   changes.push(side+'.'+key);
+   const quantized=+(min+Math.round((clamp(old+move,min,max)-min)/step)*step).toFixed(decimals);
+   const value=clamp(quantized,min,max);
+   if(value!==old){raw[key]=value;changes.push(side+'.'+key);}
   }
-  const edges=st.requested.map(x=>({...x}));
-  if(Math.random()<.33){
-   const e=edges[Math.floor(Math.random()*edges.length)];
-   if(Math.random()<.15){
-    const nodes=twinNodes.map(v=>v[0]);
-    if(Math.random()<.5)e.from=nodes[Math.floor(Math.random()*nodes.length)];
-    else e.to=nodes[Math.floor(Math.random()*nodes.length)];
-   }else e.strength=clamp(e.strength+(Math.random()-.5)*(.12+.012*depth),-1.9,1.9);
+  // Global controls and the projection are genuine evolution targets too.
+  const key=globals[(mutationCycle+attempt)%globals.length];
+  if(key==='projection'){
+   const options=[0,1,2,3,4,5].filter(x=>x!==+proposedCfg.projection);
+   proposedCfg.projection=options[Math.floor(Math.random()*options.length)];
+  }else{
+   const limits={global:[0,4],seed:[0,3],mix:[0,1],interference:[0,3]};
+   const [min,max]=limits[key],current=+proposedCfg[key],amplitude=(max-min)*(.10+.025*depth);
+   proposedCfg[key]=clamp(current+amplitude*(Math.random()<.5?-1:1)*(.4+.6*Math.random()),min,max);
   }
-  const cfg={...st.targetCfg,links:edges};
-  const test=sampleVisualProfile(A,B,cfg,1250);
-  if(!test)continue;
-  const novelty=visualDifference(test,original);
-  const okay=test.shapeScore>=Math.max(.49,(original?original.shapeScore:.58)-.095)
-    &&test.occupancy<=Math.min(.48,(original?original.occupancy:.4)+.095)
-    &&test.denseMass>=Math.max(.50,(original?original.denseMass:.5)-.12) &&test.travel<.12;
-  if(!okay||novelty<.14)continue;
-  const rank=Math.min(.75,novelty)+.16*test.shapeScore;
-  if(!winner||rank>winner.rank)winner={A,B,cfg,edges,changes,novelty,rank};
-  if(novelty>.28&&novelty<.72)break;
+  changes.push('coupled.'+key);
+  // Directed topology, source, receiving node, gate, delay, and signed strength
+  // all participate in the actual delayed 20D recurrence.
+  const linkIndex=(mutationCycle+attempt)%proposedCfg.links.length;
+  const edge=proposedCfg.links[linkIndex];
+  const routeKind=(mutationCycle+attempt)%6;
+  const nodes=twinNodes.map(n=>n[0]);
+  if(routeKind===0)edge.strength=clamp(edge.strength+(Math.random()<.5?-1:1)*(.3+.1*depth),-2,2);
+  else if(routeKind===1)edge.lag=[2,5,13,21,34,55,89,144][Math.floor(Math.random()*8)];
+  else if(routeKind===2)edge.offset=[0,45,90,135,180,225,270,315][Math.floor(Math.random()*8)];
+  else if(routeKind===3)edge.from=nodes[Math.floor(Math.random()*nodes.length)];
+  else if(routeKind===4)edge.to=nodes[Math.floor(Math.random()*nodes.length)];
+  else {edge.gate=['crest','node','bipolar'][Math.floor(Math.random()*3)];edge.source=edge.source==='A'?'B':'A';}
+  changes.push('link'+(linkIndex+1));
+  const profile=sampleVisualProfile(A,B,proposedCfg,1750);
+  if(!profile)continue;
+  const novelty=visualDifference(profile,baseline);
+  if(novelty<.12||profile.occupancy>.72||profile.denseMass<.28||profile.travel>.10)continue;
+  // Novelty is necessary, but not sufficient: preserve actual coherent
+  // trajectory folds rather than maximizing point-cloud dissimilarity.
+  const score=.55*novelty+.28*profile.shapeScore+.17*(1-profile.occupancy);
+  candidates.push({A,B,cfg:proposedCfg,edges:proposedCfg.links,changes,novelty,profile,score});
  }
- if(winner){
-  // Check the candidate again over a longer horizon before changing the
-  // live oscillator. Short-run contrast alone can hide cloud collapse.
-  const longRun=sampleVisualProfile(winner.A,winner.B,winner.cfg,5100);
-  if(!longRun||longRun.occupancy>.60||longRun.denseMass<.43||longRun.travel>.10)winner=null;
+ st.evolutionCursor=(cursor+count)%genomeSlots;
+ st.evolutionCycle=mutationCycle+1;
+ candidates.sort((x,y)=>y.score-x.score);
+ let winner=null;
+ for(const proposal of candidates.slice(0,3)){
+  const longRun=sampleVisualProfile(proposal.A,proposal.B,proposal.cfg,3900);
+  if(longRun&&longRun.occupancy<.78&&longRun.denseMass>.30&&longRun.travel<.09){
+   winner={...proposal,longRun};break;
+  }
  }
  if(!winner){
   evolutionRejected++;
-  st.nextEvolution=performance.now()+Math.max(800,evolutionSeconds()*250);
-  evolutionStatus('No new coherent form passed; retrying');
+  st.nextEvolution=performance.now()+Math.max(900,evolutionSeconds()*440);
+  evolutionStatus('Searching for coherent new dynamics');
   return false;
  }
  evolutionAccepted++;
- st.targetA=winner.A;st.targetB=winner.B;st.targetCfg=winner.cfg;st.requested=winner.edges;
+ st.targetA=winner.A;st.targetB=winner.B;st.targetCfg=winner.cfg;
+ st.requested=winner.edges;st.targetWeights=hot(winner.cfg.projection);
  liveRetarget(st,winner.edges);
  st.mutationLabel=winner.changes.join(', ');
- st.lastNovelty=winner.novelty;
- st.lastMutation=performance.now();
- st.quickFadeUntil=st.lastMutation+1400;
- st.detailUntil=Math.max(st.detailUntil,st.lastMutation+2900);
+ st.lastNovelty=winner.novelty;st.lastMutation=performance.now();
+ st.quickFadeUntil=st.lastMutation+1000;
+ st.detailUntil=Math.max(st.detailUntil,st.lastMutation+2800);
  applyTwinGenome(winner.A,winner.B);applyTwinLinks(winner.edges);
- evolutionStatus('Evolving '+st.mutationLabel+' · '+Math.round(100*winner.novelty)+'% geometry change');
+ for(const key of ['global','seed','mix','interference']){
+  const id={global:'twinGlobal',seed:'twinSeed',mix:'twinMix',interference:'twinInterference'}[key];
+  $(id).value=winner.cfg[key];$(id+'v').textContent=(+$(id).value).toFixed(2);
+ }
+ $('twinProjection').value=winner.cfg.projection;
+ evolutionStatus('Evolving '+st.mutationLabel+' · '+Math.round(100*winner.novelty)+'% phase-space novelty');
  return true;
 }
 function evolutionSearch(force){if(!liveState){if(activeEngine==='twin')twinRender(true);return;}if(!evolutionOn&&force){evolutionOn=true;evolutionStatus('Evolution resumed');}const ok=liveMutate();if(ok)liveState.nextEvolution=performance.now()+evolutionSeconds()*1000;}
