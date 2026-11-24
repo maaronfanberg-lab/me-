@@ -1168,25 +1168,31 @@ function originalStart(){
  originalLive={solver:makeOriginalStepper(raw),raw:{...raw},target:{...raw},generation:originalGeneration,
   frame:0,last:0,frames:0,lastFade:now,drawn:0,cx,cy,scale,targetCx:cx,targetCy:cy,targetScale:scale,
   minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity,samples:0,
-  manualUntil:0,quickFadeUntil:0,detailUntil:now+6500,nextDrift:now+18000};
+  manualUntil:0,quickFadeUntil:0,detailUntil:now+6500,nextDrift:now+2800};
  count.textContent='Total drawn points: 0';status.textContent='ORIGINAL · evolving native filaments';
  originalUpdateControls();if(!originalPaused)originalLive.frame=requestAnimationFrame(originalFrame);
 }
 function originalFrame(time){
  const st=originalLive;if(st)st.frame=0;if(!st||originalPaused||activeEngine!=='omef'||st.generation!==originalGeneration)return;const dt=st.last?clamp(time-st.last,1,70):16.67;st.last=time;st.frames++;
  if(originalAuto&&time>st.nextDrift&&time>st.manualUntil){
-  // Original also sweeps all 61 underlying OMEF coefficients, not just
-  // the original nine macros. Evolution never changes rendering controls.
-  let cursor=st.autoCursor||0;
-  for(let j=0;j<9;j++){
-   const d=allDefs[(cursor+j)%allDefs.length],id=d[0],step=d[4],span=d[3]-d[2];
-   const movement=(Math.random()<.5?-1:1)*span*(.045+.07*Math.random());
-   const target=clamp(st.target[id]+movement,d[2],d[3]);
-   st.target[id]=+clamp(d[2]+Math.round((target-d[2])/step)*step,d[2],d[3]).toFixed(6);
-   $(id).value=st.target[id];
+  // Original mode also moves EVERY eligible formula slider each cycle.
+  // The ten-coordinate equation remains the source of all rendered points.
+  for(const d of allDefs){
+   const id=d[0],min=d[2],max=d[3],step=d[4],span=max-min,old=st.target[id];
+   const sign=Math.random()<.5?-1:1;
+   const size=Math.max(step,span*(.011+.015*Math.random()));
+   const decimals=(String(step).split('.')[1]||'').length;
+   const quant=v=>clamp(+(min+Math.round((clamp(v,min,max)-min)/step)*step).toFixed(decimals),min,max);
+   let next=quant(old+sign*size);
+   if(next===old)next=quant(old-sign*size);
+   if(next===old)next=quant(old+((max-old)>(old-min)?1:-1)*step);
+   st.target[id]=next;
   }
-  st.autoCursor=(cursor+9)%allDefs.length;
-  updateValues();st.detailUntil=time+6500;st.nextDrift=time+10500;
+  // Vary the cadence via the EXISTING speed control; never move that
+  // speed slider automatically. Preserve points/ink/size/trail settings.
+  const speed=clamp(+$('originalSpeed').value||7,1,10);
+  st.detailUntil=time+6500;
+  st.nextDrift=time+clamp(29000/(speed+2),2300,7000);
  }
  const rate=1-Math.exp(-dt/740);let updated=false;
  for(const d of allDefs){const id=d[0],x=st.raw[id],y=st.target[id];if(x===y)continue;
@@ -1224,6 +1230,16 @@ function originalFrame(time){
   st.samples=0;st.minX=st.minY=Infinity;st.maxX=st.maxY=-Infinity;
  }
  if(st.frames%12===0){
+  if(originalAuto&&time>st.manualUntil){
+   // Visual slider thumbs reflect the smoothly interpolated actual solver
+   // coefficients. Do not dispatch events or alter user drawing settings.
+   for(const d of allDefs){
+    const id=d[0],control=$(id),min=+control.min,step=+control.step;
+    const value=clamp(min+Math.round((st.raw[id]-min)/step)*step,+control.min,+control.max);
+    if(+control.value!==value)control.value=value;
+   }
+   updateValues();
+  }
   count.textContent='Total drawn points: '+st.drawn.toLocaleString();
   status.textContent='ORIGINAL · evolving · '+st.drawn.toLocaleString()+' points';
   $('originalLiveInfo').textContent='10D oscillator alive · '+st.drawn.toLocaleString()+' samples · '+(originalAuto?'gentle parameter drift':'fixed coefficients');
