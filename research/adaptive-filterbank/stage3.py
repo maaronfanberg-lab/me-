@@ -11,8 +11,7 @@ Pipeline (each step from Stages 1-2; nothing tuned on the test track):
     attack 22 ms, release 50 ms (alpha_a = 0.045, alpha_r = 0.02 per 1 ms).
  5. Every 10 ms: each band is a component (fc, level). Calibration: a full-scale sine = 100 dB SPL
     (stated assumption). Masking (Stage 2, mode cambridge or munich): for band b, masker excitation =
-    all bands except b's own neighbourhood (|f - fc_b| < current blended bandwidth of b, since those
-    bands hold the same sound); threshold by the 1-dB rule solved over all places; margin = level - threshold.
+    all bands except those holding b's own sound (level explained by b's own filter leakage); threshold by the 1-dB rule solved over all places; margin = level - threshold.
 
 Pass conditions fixed before the first run: PASS.
 """
@@ -115,14 +114,16 @@ def frame_margins(levels, bw_now, mode):
     I = 10 ** (levels / 10)
     W = comp_weights(levels, mode)
     C = W * I[None, :]
-    cs = np.concatenate([np.zeros((C.shape[0], 1)), np.cumsum(C, 1)], 1)
-    # own neighbourhood = where band b's own filter response is within 40 dB of its peak:
-    # (1 + (df/b')^2)^-4 = 1e-4  ->  df = 3 b',  b' = 1.019 bw.  (First version used df < bw; the
-    # tone's own leakage 25 Hz away, only 11.6 dB down, then "masked" it.)
-    r = 3.0 * 1.019 * bw_now
-    lo = np.searchsorted(FC, FC - r, side="left")
-    hi = np.searchsorted(FC, FC + r, side="right")
-    E_minus = cs[:, -1:] - (cs[:, hi] - cs[:, lo]) + M.NOISE[:, None]
+    # Own sound = neighbouring bands whose level is explained by band b's own filter leakage
+    # (level <= L_b + 10log10|G_b(f_k)|^2 + 3 dB). Louder neighbours hold OTHER sound and stay maskers.
+    # (v1: df < bw; v2: fixed 40-dB radius, which also threw out a pad partial 20 Hz from a melody
+    # note and called the hidden note audible - caught by the hidden-melody ground-truth test.)
+    bp = 1.019 * bw_now
+    resp = -40.0 * np.log10(1.0 + ((FC[None, :] - FC[:, None]) / bp[:, None]) ** 2)   # [b, k] dB
+    own = levels[None, :] <= levels[:, None] + resp + 3.0
+    own &= resp > -60.0
+    from scipy.sparse import csr_matrix
+    E_minus = (C.sum(1, keepdims=True) - np.asarray(csr_matrix(own.astype(float)).dot(C.T).T)) + M.NOISE[:, None]
     with np.errstate(divide="ignore"):
         T = 10 * np.log10(E_minus) + OFF - 10 * np.log10(np.maximum(W, 1e-30))
     T[W < 1e-12] = np.inf

@@ -1,4 +1,4 @@
-name: Adaptive filterbank stage 3 (real music)
+name: Adaptive filterbank stages 3-4 (real music)
 
 on:
   workflow_dispatch:
@@ -11,6 +11,7 @@ on:
     paths:
       - 'research/adaptive-filterbank/stage3.py'
       - 'research/adaptive-filterbank/masking.py'
+      - 'research/adaptive-filterbank/stage4.py'
       - '.github/workflows/stage3-music.yml'
 
 permissions:
@@ -23,7 +24,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
@@ -42,12 +43,16 @@ jobs:
       - name: Run stage 3
         working-directory: research/adaptive-filterbank
         run: python stage3.py /tmp/track.mp3 "audius:${TRACK_ID}"
+      - name: Run stage 4 (Recover/Tame EQ) on the same excerpt
+        working-directory: research/adaptive-filterbank
+        run: python stage4.py /tmp/track.mp3 "audius:${TRACK_ID}"
       - name: Commit report
         run: |
           mkdir -p research/adaptive-filterbank/music
           mv research/adaptive-filterbank/stage3-report.json research/adaptive-filterbank/music/stage3-report-${TRACK_ID}.json
           mv research/adaptive-filterbank/stage3-map-cambridge.npz research/adaptive-filterbank/music/stage3-map-cambridge-${TRACK_ID}.npz
           mv research/adaptive-filterbank/stage3-map-munich.npz research/adaptive-filterbank/music/stage3-map-munich-${TRACK_ID}.npz
+          mv research/adaptive-filterbank/stage4-report.json research/adaptive-filterbank/music/stage4-report-${TRACK_ID}.json
           git config user.name "stage3-bot"; git config user.email "actions@users.noreply.github.com"
           git add research/adaptive-filterbank/music
           git commit -m "Stage 3 real-music report for Audius ${TRACK_ID}" || exit 0
