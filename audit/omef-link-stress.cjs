@@ -50,8 +50,8 @@ for(const x of [report.default,report.strong,report.zero]){
 assert(report.default.minorMajorCovarianceRatio>.25,'Default folded structure collapsed into a line');
 assert(report.strong.minorMajorCovarianceRatio>.15,'Strong-coupling phase space collapsed');
 assert(report.zero.meanTransmittedDrive===0,'Global zero must eliminate all directed coupling');
-function raster(c,n=14000) {
- const step=model.twinStepper(A,B,c),points=[];
+function raster(c,n=14000,rawA=A,rawB=B) {
+ const step=model.twinStepper(rawA,rawB,c),points=[];
  for(let i=0;i<n+350;i++){
   const p=model.twinCombine(step(),c);
   assert(p.every(Number.isFinite),'Nonfinite value in endpoint sweep');
@@ -92,6 +92,28 @@ for(const [id,target] of fullScalars){
  report.globalEndpoints.push({id,target,percentChanged:changed});
  assert(changed>=25,'Coupled global '+id+' endpoint is visually silent: '+changed);
 }
+// Every original A/B coefficient also has an independently measurable
+// endpoint effect in the genuine coupled equations and state-space observer.
+const genomeReference=raster(cfg,3600);
+report.genomeEndpoints=[];
+for(const def of model.allDefs){
+ const [key,,lo,hi]=def;
+ for(const side of ['A','B']){
+  const baselineRaw=side==='A'?A:B;
+  const endpoint=Math.abs(baselineRaw[key]-lo)>Math.abs(baselineRaw[key]-hi)?lo:hi;
+  const altered={...baselineRaw,[key]:endpoint};
+  const result=raster({...cfg,links:cfg.links.map(l=>({...l}))},3600,
+    side==='A'?altered:A,side==='B'?altered:B);
+  const percentChanged=difference(genomeReference,result);
+  report.genomeEndpoints.push({side,key,endpoint,percentChanged});
+  assert(percentChanged>=50,'Formula '+side+'.'+key+' endpoint too weak: '+percentChanged.toFixed(2)+'%');
+ }
+}
+const sortedGenome=report.genomeEndpoints.map(x=>x.percentChanged).sort((a,b)=>a-b);
+report.genomeSummary={count:sortedGenome.length,min:sortedGenome[0],
+ median:sortedGenome[Math.floor(sortedGenome.length/2)],max:sortedGenome[sortedGenome.length-1]};
+assert(report.genomeSummary.count===122,'Did not check every A/B formula slider');
+console.log('GENOME_ENDPOINT_AUDIT '+JSON.stringify(report.genomeSummary));
 fs.mkdirSync('audit-artifacts',{recursive:true});
 fs.writeFileSync('audit-artifacts/coupled-solver-stress.json',JSON.stringify(report,null,2));
 console.log('NUMERICAL_AUDIT '+JSON.stringify(report));
