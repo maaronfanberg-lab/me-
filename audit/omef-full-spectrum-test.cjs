@@ -2,7 +2,11 @@
 const fs=require('fs'),assert=require('assert');
 const html=fs.readFileSync('apps/omef-exclusive.html','utf8');
 function section(a,b){const i=html.indexOf(a),j=html.indexOf(b,i+a.length);assert(i>=0&&j>i,'Missing section: '+a);return html.slice(i,j);}
-const core=section('const macros=[','let evolutionOn=true');
+const secondScript=html.indexOf("<script>(function(){'use strict';");
+assert(secondScript>=0,'Coupled OMEF source script not located');
+const coreStart=html.indexOf('const macros=[',secondScript),coreEnd=html.indexOf('let evolutionOn=true',coreStart);
+assert(coreStart>0&&coreEnd>coreStart,'Coupled full engine source was not isolated');
+const core=html.slice(coreStart,coreEnd);
 const profile=section('function sampleVisualProfile(','function candidateLinks(');
 const evolution=section('// Explore the full governing system','function evolutionSearch(force){');
 assert(evolution.includes('function fullSpectrumProposal('));
