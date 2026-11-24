@@ -1,0 +1,42 @@
+name: OMEF Exclusive Mobile Browser Audit
+on:
+  push:
+    branches:
+      - experiment/omef-coupled-deep-memory-2026-11-24
+    paths:
+      - .github/workflows/omef-ui-audit.yml
+      - audit/omef-ui-audit.cjs
+      - apps/omef-exclusive.html
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-audit:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 20
+    steps:
+      - name: Check out app and test code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install real browser engines
+        run: |
+          npm install --no-save playwright@1.56.1
+          echo "Using preinstalled Chromium and WebKit from official Playwright container"
+      - name: Exercise mobile-sized browser controls and capture screenshots
+        run: node audit/omef-ui-audit.cjs
+      - name: Upload UI screenshots and test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omef-ui-audit
+          path: audit-artifacts/
+          retention-days: 14
