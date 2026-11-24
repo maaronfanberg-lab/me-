@@ -7,6 +7,7 @@ on:
       - .github/workflows/omef-ui-audit.yml
       - audit/omef-ui-audit.cjs
       - audit/omef-link-stress.cjs
+      - audit/omef-full-spectrum-test.cjs
       - apps/omef-exclusive.html
   workflow_dispatch:
 
@@ -34,6 +35,8 @@ jobs:
           echo "Using preinstalled Chromium and WebKit from official Playwright container"
       - name: Run million-step OMEF solver and endpoint stress checks
         run: node audit/omef-link-stress.cjs
+      - name: Prove every formula/link slider evolves and excluded controls stay fixed
+        run: node audit/omef-full-spectrum-test.cjs
       - name: Exercise mobile-sized browser controls and capture screenshots
         run: node audit/omef-ui-audit.cjs
       - name: Upload UI screenshots and test report
