@@ -1,0 +1,118 @@
+name: Room OBLITERATUS real pretrained-model research pilot
+
+on:
+  push:
+    branches:
+      - 'research/room-obliteratus-v014-20261116'
+    paths:
+      - 'experiments/room-obliteratus/real_pilot.py'
+      - '.github/workflows/room-obliteratus-real-pilot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: obliteratus-real-neural-research-only
+  cancel-in-progress: true
+
+jobs:
+  real-neural:
+    name: Pinned release, independent concept validation and conditional real steering
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify the isolated branch and no changes outside research
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'research/room-obliteratus-v014-20261116'
+          BASE_SHA=1ed9db726c9bee47846a182e2a7103105d689a39
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          while IFS= read -r path; do
+            case "$path" in
+              experiments/room-obliteratus/*|docs/research/2026-11-16-room-obliteratus-*|.github/workflows/room-obliteratus-*.yml) ;;
+              *) echo "UNRELATED OR PRODUCTION FILE: $path"; exit 2 ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA" HEAD)
+          python3 -m py_compile experiments/room-obliteratus/real_pilot.py
+          python3 -m unittest discover -s experiments/room-obliteratus -p 'test_*.py' -v
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU PyTorch
+        run: python -m pip install --disable-pip-version-check 'torch==2.5.1' --index-url https://download.pytorch.org/whl/cpu
+      - name: Verify and install exact OBLITERATUS v0.1.4 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --max-time 120 \
+            'https://github.com/elder-plinius/OBLITERATUS/releases/download/v0.1.4/OBLITERATUS-461ff086e675d93969bbd7c99c53505762452309.zip' \
+            -o "$RUNNER_TEMP/obliteratus-v0.1.4.zip"
+          echo 'e2d0fb696b8cd025124e6d7cc69bbd8b7d969adc0f019697cb2a5dd6696eba99  '"$RUNNER_TEMP"'/obliteratus-v0.1.4.zip' | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/obliteratus-source"
+          unzip -q "$RUNNER_TEMP/obliteratus-v0.1.4.zip" -d "$RUNNER_TEMP/obliteratus-source"
+          source_dir="$(find "$RUNNER_TEMP/obliteratus-source" -name pyproject.toml -printf '%h\n' | head -1)"
+          test -n "$source_dir"
+          python -m pip install --disable-pip-version-check 'transformers==4.57.1' 'huggingface_hub==0.36.0' "$source_dir"
+          python - <<'PY'
+          from importlib.metadata import version
+          assert version('obliteratus') == '0.1.4'
+          from obliteratus.concepts import apply_concept_intervention
+          print('Actual OBLITERATUS source imported', flush=True)
+          PY
+      - name: Download exact open dense model, never production Room model
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          HF_HUB_DISABLE_XET: '1'
+        shell: bash
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          from pathlib import Path
+          import hashlib,os
+          revision='12fd25f77366fa6b3b4b768ec3050bf629380bac'
+          path=snapshot_download('HuggingFaceTB/SmolLM2-135M-Instruct',
+                revision=revision,local_dir=os.environ['RUNNER_TEMP']+'/obliteratus-model',
+                allow_patterns=['*.json','*.safetensors','merges.txt','vocab.json'])
+          weights=Path(path)/'model.safetensors'
+          assert weights.is_file() and weights.stat().st_size>100000000
+          print('MODEL_REVISION:',revision,'WEIGHTS_SHA256:',hashlib.sha256(weights.read_bytes()).hexdigest())
+          PY
+      - name: Measure neural activations and run strictly gated reversible trial
+        shell: bash
+        env:
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+          TOKENIZERS_PARALLELISM: 'false'
+          OMP_NUM_THREADS: '2'
+        run: |
+          set -euo pipefail
+          python -u experiments/room-obliteratus/real_pilot.py \
+            --model-dir "$RUNNER_TEMP/obliteratus-model" \
+            --cases experiments/room-obliteratus/synthetic_cases.json \
+            --n-cases 20 --max-tokens 36 \
+            --out "$RUNNER_TEMP/obliteratus-real-neural-report.json"
+          python - <<'PY'
+          import json,os
+          data=json.load(open(os.environ['RUNNER_TEMP']+'/obliteratus-real-neural-report.json'))
+          assert data['neural_activations_measured'] is True
+          assert data['production_room_modified'] is False
+          if data['steering_executed']:
+              assert data['trial']['passed_controls'] is True
+          else:
+              assert data['validation']['verdict']=='fail'
+          print('VALIDATION:',data['validation']['verdict'],'REAL_STEERING:',data['steering_executed'])
+          PY
+      - name: Upload only synthetic pilot metrics and fictional responses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: obliteratus-real-neural-pilot-${{ github.run_id }}
+          path: ${{ runner.temp }}/obliteratus-real-neural-report.json
+          if-no-files-found: warn
+          retention-days: 14
