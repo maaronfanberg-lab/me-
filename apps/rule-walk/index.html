@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title></title><style>*{box-sizing:border-box}body{margin:0;background:white;color:black;font:14px system-ui}main{max-width:1000px;margin:auto;padding:10px}svg{width:100%;height:54dvh;min-height:240px;display:block;touch-action:none}section{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}label{display:block}input{width:100%;accent-color:black;display:block;margin:8px 0}output{float:right}button{background:white;color:black;border:1px solid black;padding:10px 14px;border-radius:5px;font:inherit}nav{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}#status{font-variant-numeric:tabular-nums;margin-left:auto;align-self:center}</style></head><body><main><svg id="view" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><polyline id="line" fill="none" stroke="black" stroke-linejoin="miter" vector-effect="non-scaling-stroke"/></svg><nav><button id="play">Replay</button><button id="pause">Pause</button><button id="reset">Reset</button><button id="full">Finish</button><span id="status"></span></nav><section id="controls"></section></main><script>
+"use strict";
+function path(v){
+const pi=3141592653589793238462643383279502884197n;
+let c=BigInt(Math.round(v[0]*100)),e=-2,x=0,y=0,a=0,pts=[[0,0]],hits=[0,0,0,0,0];
+for(let i=0;i<v[1];i++){
+const n=Number(c)*10**e,div=e>=0?c*10n**BigInt(e)>10n:c>10n*10n**BigInt(-e);
+const r=div?(n>20?0:1):(n<6.5?2:n<8.25?3:4);hits[r]++;
+if(div){c*=5n;e--}else{c*=pi;e-=39}
+const s=c.toString();if(s.length>20){e+=s.length-20;c=BigInt(s.slice(0,20))}
+const m=Number(c)*10**e,len=1+Math.floor(m/5)*v[7];
+a=(a+v[2+r]*Math.PI/180)%(Math.PI*2);
+x+=Math.cos(a)*len;y+=Math.sin(a)*len;pts.push([x,y]);
+}
+return {pts,hits};
+}
+function advance(count,seconds,speed,total){return Math.min(total,count+Math.max(0,seconds)*speed)}
+
+const defs=[["Seed",0.01,100,0.01,7],["Steps",50,5000,50,750],["Turn 1",-180,180,15,90],["Turn 2",-180,180,15,-90],["Turn 3",-180,180,15,90],["Turn 4",-180,180,15,0],["Turn 5",-180,180,15,90],["Length contrast",0,3,0.25,1],["Ink",0.15,2,0.05,0.55],["Speed",5,2000,5,100]];
+const line=document.getElementById("line"),view=document.getElementById("view"),status=document.getElementById("status"),pause=document.getElementById("pause");
+let v=defs.map(d=>d[4]),points=[],count=1,running=false,last=0,shown=-1,timer=0;
+function draw(){const n=Math.min(points.length,Math.floor(count));if(n!==shown){line.setAttribute("points",points.slice(0,n).join(" "));shown=n;}line.setAttribute("stroke-width",v[8]);status.textContent=Math.max(0,n-1)+" / "+v[1];}
+function setRunning(on){running=on;last=performance.now();pause.textContent=on?"Pause":"Resume";}
+function rebuild(play){const p=path(v).pts;let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const [x,y] of p){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y)}const scale=Math.min(750/Math.max(1,maxX-minX),550/Math.max(1,maxY-minY));points=p.map(([x,y])=>((x-(minX+maxX)/2)*scale+400).toFixed(3)+","+((y-(minY+maxY)/2)*scale+300).toFixed(3));count=play?Math.min(2,points.length):points.length;shown=-1;setRunning(play);draw();}
+const inputs=defs.map((d,i)=>{const l=document.createElement("label"),out=document.createElement("output"),el=document.createElement("input");l.append(document.createTextNode(d[0]),out,el);el.type="range";el.min=d[1];el.max=d[2];el.step=d[3];el.value=d[4];out.textContent=d[4];document.getElementById("controls").append(l);el.addEventListener("input",()=>{v[i]=Number(el.value);out.textContent=el.value;if(i===8){draw();return}if(i===9)return;clearTimeout(timer);timer=setTimeout(()=>rebuild(true),35)});return [el,out]});
+document.getElementById("play").onclick=()=>{count=1;shown=-1;setRunning(true);draw()};
+pause.onclick=()=>{if(count>=points.length){count=1;shown=-1;}setRunning(!running);draw()};
+document.getElementById("full").onclick=()=>{count=points.length;setRunning(false);draw()};
+document.getElementById("reset").onclick=()=>{v=defs.map(d=>d[4]);inputs.forEach(([el,out],i)=>{el.value=v[i];out.textContent=v[i]});rebuild(true)};
+setInterval(()=>{if(!running)return;const now=performance.now();count=advance(count,Math.min(.25,(now-last)/1000),v[9],points.length);last=now;draw();if(count>=points.length)setRunning(false)},33);
+rebuild(true);
+</script></body></html>
