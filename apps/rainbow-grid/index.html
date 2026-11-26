@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title></title><style>*{box-sizing:border-box}body{margin:0;background:white;color:black;font:13px system-ui}main{max-width:1200px;margin:auto;padding:8px}svg{display:block;width:100%;height:55vh;height:55dvh;min-height:220px;border:1px solid #ccc;touch-action:none}nav,.legend{display:flex;flex-wrap:wrap;gap:8px;margin:9px 0;align-items:center}button{background:white;color:black;border:1px solid #777;border-radius:4px;padding:9px 12px;font:inherit}section{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 14px}input{display:block;width:100%;accent-color:black;margin:7px 0}output{float:right}#status{margin-left:auto;font-variant-numeric:tabular-nums}.expanded svg{height:85vh;height:85dvh}.expanded section,.expanded .legend{display:none}.swatch{font-weight:bold}</style></head><body><main><svg id="view" xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs><pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M1 0 H0 V1" fill="none" stroke="black" stroke-width=".045"/></pattern></defs><rect id="paper" fill="url(#grid)"/><g id="marks"/><line id="pen" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg><nav><button id="play">Replay</button><button id="pause">Pause</button><button id="finish">Finish</button><button id="reset">Reset</button><button id="expand">Expand</button><span id="status"></span></nav><div class="legend" id="legend"></div><section id="controls"></section></main><script>
+"use strict";
+const palette=["#e32525","#f28516","#d9ad00","#169746","#235fe0","#8a31ca"];
+function walk(v){
+let n=1+((v[0]-1)%v[5]+v[5])%v[5],x=0,y=0,d=0,total=0,pts=[],hits=[0,0,0,0,0,0],directions=[[0,-1],[1,0],[0,1],[-1,0]];
+for(let i=0;i<v[1];i++){
+const k=2*(i%3)+Math.floor(n*1000)%2;hits[k]++;
+let raw=k===0?n+v[3]:k===1?n-v[3]:k===2?n*v[4]:k===3?n/v[4]:k===4?n*n:Math.log(n);
+n=1+((raw-1)%v[5]+v[5])%v[5];
+d=(d+(k%2?1:3))%4;
+const len=Math.max(1,Math.min(v[6],Math.floor(n))),a=x,b=y;
+x+=directions[d][0]*len;y+=directions[d][1]*len;
+pts.push({a,b,x,y,k,len,start:total,end:total+len});total+=len;
+}
+return {pts,hits,total};
+}
+function frame(g,dist){let lo=0,hi=g.pts.length;while(lo<hi){const m=(lo+hi)>>1;if(g.pts[m].end<=dist)lo=m+1;else hi=m}const p=g.pts[lo];return {done:lo,partial:p?Math.max(0,Math.min(1,(dist-p.start)/p.len)):0};}
+const defs=[["Seed",1,31,0.001,7.123],["Moves",30,2400,30,600],["Speed (squares/s)",10,2000,10,300],["Add / subtract",0.1,15,0.1,3],["Multiply / divide",1.1,5,0.1,2],["Number range",8,64,1,31],["Maximum stride",2,64,1,35],["Ink",0.3,4,0.1,1.1],["Zoom",0.5,5,0.1,1],["Grid",0,1,0.05,0.2]],$=id=>document.getElementById(id),ns="http://www.w3.org/2000/svg";
+let v=defs.map(d=>d[4]),g,marks=[],shown=0,progress=0,running=false,last=0,box,panX=0,panY=0,timer=0;
+function attr(el,obj){for(const [k,x] of Object.entries(obj))el.setAttribute(k,x)}
+function camera(){if(!box)return;const [cx,cy,w,h]=box,W=w/v[8],H=h/v[8],X=cx+panX-W/2,Y=cy+panY-H/2;attr($("view"),{viewBox:[X,Y,W,H].join(" ")});attr($("paper"),{x:X,y:Y,width:W,height:H,opacity:v[9]});}
+function draw(){if(!g)return;const f=frame(g,progress);while(shown<f.done)marks[shown++].style.display="";while(shown>f.done)marks[--shown].style.display="none";const p=g.pts[f.done],pen=$("pen");pen.style.display=p&&f.partial>0?"":"none";if(p)attr(pen,{x1:p.a,y1:p.b,x2:p.a+(p.x-p.a)*f.partial,y2:p.b+(p.y-p.b)*f.partial,stroke:palette[p.k],"stroke-width":v[7]});$("status").textContent=f.done+" / "+v[1];}
+function active(on){running=on;last=performance.now();$("pause").textContent=on?"Pause":"Resume";}
+function ink(){for(const el of marks)el.setAttribute("stroke-width",v[7]);draw()}
+function rebuild(){g=walk(v);let xs=[0,...g.pts.map(p=>p.x)],ys=[0,...g.pts.map(p=>p.y)],l=Math.min(...xs),r=Math.max(...xs),b=Math.min(...ys),t=Math.max(...ys);let w=Math.max(10,r-l+10),h=Math.max(10,t-b+10),ratio=Math.max(.3,$("view").clientWidth/Math.max(1,$("view").clientHeight));if(w/h<ratio)w=h*ratio;else h=w/ratio;box=[(l+r)/2,(b+t)/2,w,h];panX=panY=0;progress=0;shown=0;const group=$("marks");group.textContent="";marks=g.pts.map(p=>{const el=document.createElementNS(ns,"line");attr(el,{x1:p.a,y1:p.b,x2:p.x,y2:p.y,stroke:palette[p.k],"stroke-width":v[7],"stroke-linecap":"round","vector-effect":"non-scaling-stroke"});el.style.display="none";group.appendChild(el);return el});camera();draw();active(true)}
+["Addition","Subtraction","Multiplication","Division","Square","Log"].forEach((name,i)=>{const s=document.createElement("span");s.className="swatch";s.style.color=palette[i];s.textContent=name;$("legend").appendChild(s)});
+const inputs=defs.map((d,i)=>{let l=document.createElement("label"),o=document.createElement("output"),el=document.createElement("input");l.append(document.createTextNode(d[0]),o,el);el.type="range";el.min=d[1];el.max=d[2];el.step=d[3];el.value=d[4];o.textContent=d[4];$("controls").appendChild(l);el.oninput=()=>{v[i]=Number(el.value);o.textContent=el.value;if(i===2)return;if(i===7){ink();return}if(i>=8){camera();return}clearTimeout(timer);timer=setTimeout(rebuild,60)};return [el,o]});
+$("play").onclick=()=>{progress=0;draw();active(true)};
+$("pause").onclick=()=>{if(progress>=g.total)progress=0;active(!running);draw()};
+$("finish").onclick=()=>{progress=g.total;active(false);draw()};
+$("reset").onclick=()=>{clearTimeout(timer);v=defs.map(d=>d[4]);inputs.forEach(([el,o],i)=>{el.value=v[i];o.textContent=v[i]});rebuild()};
+$("expand").onclick=()=>{const yes=document.body.classList.toggle("expanded");$("expand").textContent=yes?"Controls":"Expand";camera()};
+const view=$("view");let drag=null;view.onpointerdown=e=>{drag=[e.clientX,e.clientY];view.setPointerCapture(e.pointerId)};view.onpointermove=e=>{if(!drag)return;let k=Math.max(box[2]/view.clientWidth,box[3]/view.clientHeight)/v[8];panX-=(e.clientX-drag[0])*k;panY-=(e.clientY-drag[1])*k;drag=[e.clientX,e.clientY];camera()};view.onpointerup=view.onpointercancel=()=>drag=null;
+setInterval(()=>{if(!running)return;let now=performance.now();progress=Math.min(g.total,progress+Math.max(0,Math.min(.25,(now-last)/1000))*v[2]);last=now;draw();if(progress>=g.total)active(false)},33);
+rebuild();
+</script></body></html>
