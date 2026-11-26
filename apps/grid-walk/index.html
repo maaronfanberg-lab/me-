@@ -1,0 +1,35 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title></title><style>*{box-sizing:border-box}body{margin:0;background:white;color:black;font:14px system-ui}main{max-width:1100px;margin:auto;padding:8px}svg{display:block;width:100%;height:56vh;height:56dvh;min-height:240px;touch-action:none;border:1px solid black}nav{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}button{background:white;color:black;border:1px solid black;border-radius:4px;padding:9px 12px;font:inherit}section{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}input{display:block;width:100%;accent-color:black;margin:7px 0}output{float:right}#status{margin-left:auto;align-self:center;font-variant-numeric:tabular-nums}body.expanded svg{height:86vh;height:86dvh}body.expanded section{display:none}</style></head><body><main><svg id="view" xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs><pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M 1 0 H 0 V 1" fill="none" stroke="black" stroke-width=".025"/></pattern></defs><rect id="paper" fill="url(#grid)"/><polyline id="line" fill="none" stroke="black" stroke-linecap="square" stroke-linejoin="miter" vector-effect="non-scaling-stroke"/></svg><nav><button id="play">Replay</button><button id="pause">Pause</button><button id="finish">Finish</button><button id="reset">Reset</button><button id="expand">Expand</button><span id="status"></span></nav><section id="controls"></section></main><script>
+"use strict";
+function gridWalk(v){
+const pi=3141592653589793238462643383279502884197n;
+let c=BigInt(Math.round(v[0]*100)),e=-2,x=0,y=0,heading=0,total=0;
+const pts=[[0,0,0]],directions=[[0,-1],[1,0],[0,1],[-1,0]],hits=[0,0];
+for(let i=0;i<v[1];i++){
+const div=e>=0?c*10n**BigInt(e)>10n:c>10n*10n**BigInt(-e);
+if(div){c*=5n;e--;hits[1]++}else{c*=pi;e-=39;hits[0]++}
+const s=c.toString();if(s.length>20){e+=s.length-20;c=BigInt(s.slice(0,20))}
+const integer=e>=0?c*10n**BigInt(e):c/10n**BigInt(-e);
+const length=Math.max(1,Math.min(v[5],Number(integer)))+v[6];
+heading=(heading+(div?v[4]:v[3])+4)%4;
+x+=directions[heading][0]*length;y+=directions[heading][1]*length;total+=length;pts.push([x,y,total]);
+}
+return {pts,total,hits};
+}
+function prefix(p,d){let lo=0,hi=p.length-1;while(lo<hi){const m=Math.ceil((lo+hi)/2);if(p[m][2]<=d)lo=m;else hi=m-1}const a=p[lo],b=p[lo+1],q=p.slice(0,lo+1).map(t=>t[0]+","+t[1]);if(b&&d>a[2]){let t=(d-a[2])/(b[2]-a[2]);q.push((a[0]+t*(b[0]-a[0]))+","+(a[1]+t*(b[1]-a[1])))}return q.join(" ")}
+
+const defs=[["Seed",0.01,100,0.01,7],["Moves",10,2000,10,250],["Speed (squares/s)",5,1000,5,100],["π turn (−1 left / +1 right)",-1,1,2,-1],["÷2 turn (−1 left / +1 right)",-1,1,2,1],["Maximum stride",2,35,1,35],["Extra squares",0,12,1,0],["Ink",0.2,3,0.1,0.7],["Zoom",0.5,5,0.1,1],["Grid",0,1,0.05,0.25]],$=id=>document.getElementById(id);
+let v=defs.map(d=>d[4]),g,progress=0,running=false,last=0,box,panX=0,panY=0,timer=0;
+function camera(){if(!box)return;const [cx,cy,w,h]=box;const W=w/v[8],H=h/v[8],X=cx+panX-W/2,Y=cy+panY-H/2;$("view").setAttribute("viewBox",[X,Y,W,H].join(" "));for(const [k,a] of Object.entries({x:X,y:Y,width:W,height:H,opacity:v[9]}))$("paper").setAttribute(k,a);}
+function draw(){if(!g)return;$("line").setAttribute("points",prefix(g.pts,progress));$("line").setAttribute("stroke-width",v[7]);$("status").textContent=Math.floor(progress)+" / "+g.total;}
+function active(on){running=on;last=performance.now();$("pause").textContent=on?"Pause":"Resume";}
+function rebuild(){g=gridWalk(v);let xs=g.pts.map(p=>p[0]),ys=g.pts.map(p=>p[1]),l=Math.min(...xs),r=Math.max(...xs),b=Math.min(...ys),t=Math.max(...ys);let w=Math.max(10,r-l+8),h=Math.max(10,t-b+8),ratio=Math.max(.3,$("view").clientWidth/Math.max(1,$("view").clientHeight));if(w/h<ratio)w=h*ratio;else h=w/ratio;box=[(l+r)/2,(b+t)/2,w,h];panX=panY=0;progress=0;camera();draw();active(true)}
+const inputs=defs.map((d,i)=>{let l=document.createElement("label"),o=document.createElement("output"),el=document.createElement("input");l.append(document.createTextNode(d[0]),o,el);el.type="range";el.min=d[1];el.max=d[2];el.step=d[3];el.value=d[4];o.textContent=d[4];$("controls").append(l);el.oninput=()=>{v[i]=Number(el.value);o.textContent=el.value;if(i===2)return;if(i===7){draw();return}if(i>=8){camera();return}clearTimeout(timer);timer=setTimeout(rebuild,50)};return [el,o]});
+$("play").onclick=()=>{progress=0;draw();active(true)};
+$("pause").onclick=()=>{if(progress>=g.total)progress=0;active(!running);draw()};
+$("finish").onclick=()=>{progress=g.total;active(false);draw()};
+$("reset").onclick=()=>{clearTimeout(timer);v=defs.map(d=>d[4]);inputs.forEach(([el,o],i)=>{el.value=v[i];o.textContent=v[i]});rebuild()};
+$("expand").onclick=()=>{const yes=document.body.classList.toggle("expanded");$("expand").textContent=yes?"Controls":"Expand";camera()};
+let drag=null;const view=$("view");view.onpointerdown=e=>{drag=[e.clientX,e.clientY];view.setPointerCapture(e.pointerId)};view.onpointermove=e=>{if(!drag)return;let k=Math.max(box[2]/view.clientWidth,box[3]/view.clientHeight)/v[8];panX-=(e.clientX-drag[0])*k;panY-=(e.clientY-drag[1])*k;drag=[e.clientX,e.clientY];camera()};view.onpointerup=view.onpointercancel=()=>drag=null;
+setInterval(()=>{if(!running)return;let now=performance.now();progress=Math.min(g.total,progress+Math.max(0,Math.min(.25,(now-last)/1000))*v[2]);last=now;draw();if(progress>=g.total)active(false)},33);
+rebuild();
+</script></body></html>
