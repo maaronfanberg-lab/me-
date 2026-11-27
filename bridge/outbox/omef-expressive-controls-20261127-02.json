@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/omef-expressive-controls-20261127-02.json",
+  "request_sha256": "81c4e93a400bfbb7d9abd002404c3151bf664c34dc2c9b5731364781375bbe8a",
+  "request_nonce": "omef-expressive-controls-20261127-02",
+  "completed_at": "2026-11-27T20:36:17.130071Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "# Review: `apps/omef-living-architecture-20261127.html` (read-only, nothing run)\n\nEverything below is from reading the source. I ran no tests, so any claim about how strongly a control acts is a hypothesis for you to test.\n\n## Observations from the code\n\n- **Control count.** The file defines 61 classic controls (9 macros plus 52 in groups) and 32 extra controls (12 `extraDefs` plus 20 `architectureDefs`). That is 93.\n- **Zero-gain path.** If no extension is active and the view is native, `makeSystem` returns the plain `makeStepper(raw)`. The drive term is added only when `drive` exists, so zero gains should reproduce the baseline exactly. This path is worth freezing.\n- **Conditional controls.** 17 controls are children in the `dependencies` map. `clock`, `adapt` and `shift` are also gated by network mode. `archClock` is gated by any architecture gain. These cannot have a baseline-visible effect. A \"93/93 respond\" result therefore had to enable their parents.\n- **`seed`.** It is not one of the 93 controls and only matters when `windGain≠0`.\n- **Render path.**\n  - Each render starts a fresh system. It discards no burn-in. The probe discards 140 steps.\n  - `scale=fit` derives its framing from an 18,000-step min/max probe. That framing is noisy, and it can zoom-jump during a slider drag.\n  - Slider drags re-render from scratch after an 80 ms debounce.\n  - Integer controls (`fbLag`, `lagA/B/C`, `shadowLag`, the clocks, `shift`) change in discrete jumps.\n- **Likely causes of the seven weak controls (hypotheses, not tested).**\n  - `fbMix`, `fbDamping`, `fbLag`:\n    - The feedback is gated by small gains (`fbPair` .18, `fbRegime` .12, `fbProjection` .22) and passes through `tanh`.\n    - `fbDamping` is weighted by `(1-fbMix)`, so the two are algebraically coupled as one one-pole filter.\n  - `phaseMod2`: it is a 16% frequency modulation of the slow `phase2`. That phase enters only through `goldCos` and through `projPhase`, which is weighted by `proj`.\n  - `phaseRatio`: it only detunes `phase2`. It may matter only near rational locking ratios.\n  - `r0u6`: it is one of 8 logits. The regime weights `alpha` relax at a rate of only about .02–.08 per step.\n  - `clock`: it is network-only and adaptive-only, and it decimates a slow update.\n\n## 1. Fingerprints that ignore chaotic divergence\n\nDifferent long orbits are different samples of the same invariant measure, so compare measures, not pixels.\n\n- **Fixed framing.** Use the `natural` scale and discard a fixed burn-in. Never use `fit` for fingerprints.\n- **Features, per window of 500k samples.**\n  - Log-density histograms at 32², 64² and 128².\n  - Sliced-Wasserstein distance on the (x,y) cloud.\n  - Box-counting slope and lacunarity.\n  - Radial and angular marginals.\n  - A gradient-orientation histogram.\n  - Occupied fraction at fixed counts, not the ink transfer curve.\n  - Use the temporal autocorrelation of x and y as a secondary, non-visual feature only.\n- **Contexts.**\n  - Baseline, `weak`, `coord`, `narrow`.\n  - Adaptive network, hierarchy, and `living` with all nine gains at 0.25.\n  - A second `seed` for wind.\n  - Context-gated controls are tested only in their declared context and labelled \"contextual\".\n- **Doses.** Test ±5%, ±20% and the full range on the control's own scale.\n\n## 2. Repeat-window noise correction\n\n- Split one 10M orbit into 20 windows of 500k. Compute the within-orbit distance distribution D_w, using window-to-window distances (median and q95).\n- **True null.** Perturb a control by about 1e-9. This gives a different orbit with the same measure, so it measures what \"no visible effect\" looks like.\n- **Accept a control** only if all of these hold:\n  - Distance at the ±20% dose is at least 2× the null q95 in at least 2 contexts.\n  - The dose response is not flat, meaning the full-range distance is at least 2× the ±5% distance, or Spearman |ρ| is at least 0.6.\n  - It repeats on a second orbit start (a different initial U).\n- Report the effect size as d/q95_null. Do not report p-values from single pairs.\n\n## 3. Redundancy test\n\n1. Build a response matrix J (controls × features) of signed feature deltas per context.\n2. Compute the effective rank (SVD). Compute the leave-one-out R² of each control's response from the others (ridge or NNLS). Flag R² above 0.9.\n3. For each suspect pair (i, j), search a 1-D δj to minimise the distance to the image of (i+δi). If the minimum is below null q95 at most doses, the pair is redundant.\n4. Check these analytic couplings explicitly:\n   - `fbMix` and `fbDamping`.\n   - The `r*` logits against the regime softmax. A uniform scale of all `r*` is one degree of freedom.\n   - `marketW1`/`lagA`/`lagB`.\n   - The `a`–`i` macros after `tanh` saturation. This matters especially beyond |2|.\n\n## 4. Replacing weak controls with real math\n\nEach replacement has a neutral value that reproduces the old recurrence bit-for-bit. The removed control becomes a constant at its old default, so the baseline is unchanged. These are proposals and need validation.\n\n- **`fbMix`/`fbDamping`/`fbLag`:** first re-test them with the feedback gains raised to 3×. If they respond, they were only attenuated, not dead. If they stay weak, replace with:\n  - `fbRotate`, an SO(2) rotation of (dx,dy) before `tanh`. Its neutral value is 0.\n  - `fbCross`, an asymmetric x↔y swap. Its neutral value is 0.\n  - A fractional-lag Hermite read of the `OUT` ring.\n- **`phaseMod2`/`phaseRatio`:** replace with `phaseLock`, a Kuramoto term κ·sin(phase1−phase2) added to the phase2 increment (neutral 0). It produces Arnold-tongue structure. Before removing `phaseRatio`, test it at rational values such as 1.5 and 2.\n- **`r0u6`:** replace with `regimeHysteresis`, a replicator-style self-term s_r += h·alpha_r (neutral 0). It gives persistence and bistability, so it is not a rescale of the existing logits.\n- **`clock`:** replace with `linkAsym`, an antisymmetric component of W (neutral 0). It gives directed circulation in the network.\n- Reject any replacement that fails the Section 2 and 3 tests. Keeping fewer than 93 is acceptable.\n\n## 5. Preserving the original aesthetic and zero-gain trajectory\n\n- **Frozen baseline.** Keep the old app untouched. Copy the engine into the successor file. Hash the first 1M float64 (x,y) values of the default orbit, plus the 10M-sample bin array.\n- **Engine determinism.** Bit hashes hold only on the same JS engine and version, because `Math.sin`, `Math.exp` and `Math.tanh` differ across engines and the orbit is chaotic. Across engines, compare statistical fingerprints within the null q95.\n- **Zero-gain tests.**\n  - Every gain = 0 gives bit-identical output, in both the native and non-native `view` paths.\n  - All children, at any value, give bit-identical output.\n  - Gain = ε gives a continuous signal. It is `0.42·tanh(ε·part)`, so it should be proportional to ε.\n- **Aesthetic fingerprint.** Keep the baseline's multi-resolution histograms and its box-counting slope as a regression envelope for the default view.\n\n## 6. Smooth mobile adjustment and 10M single orbit\n\n- **During a drag:**\n  - Freeze the framing and keep the same initial state and seed.\n  - Low-pass the control value (a one-pole filter) rather than jumping.\n  - Crossfade previews instead of clearing.\n- **Integer controls:**\n  - Use interpolated fractional delays; the weights give the old integer behaviour when the delay is whole.\n  - Replace clock decimation with an accumulator `acc += 1/clock` that fires at `acc ≥ 1`. For integer clocks, check its schedule matches the old one.\n- **Conditional rows:**\n  - Keep them visible but show why they are inactive, and name the parent control.\n  - A child disabled mid-drag when its parent crosses zero should keep its value.\n- **10M orbit:**\n  - Stream in chunks (the worker already posts bins roughly every 250 ms).\n  - Accumulate per-window bins alongside the total, so the fingerprints in Section 2 come free.\n  - Cancel the worker on slider input.\n\n## Falsification checks\n\n- If the null q95 from the 1e-9 perturbation is comparable to the effect of \"86/93\" controls, that count was mostly orbit noise.\n- If fixing the feedback gains at 3× makes the three feedback controls pass, replace nothing there.\n- If the leave-one-out R² is above 0.9 for more than a handful of controls, 93 distinct controls cannot be justified.",
+  "session_id": "840d0207-98a3-4a5e-8b05-bf095372d9b2",
+  "usage": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 28759,
+    "cache_read_input_tokens": 7610,
+    "output_tokens": 10048,
+    "output_tokens_details": {
+      "thinking_tokens": 6209
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 28759,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 9444,
+        "cache_read_input_tokens": 4026,
+        "cache_creation_input_tokens": 24733,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 24733
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.216289,
+  "num_turns": 5
+}
