@@ -1,0 +1,52 @@
+{
+  "protocol": "content-addressed-oracle-v1",
+  "ok": true,
+  "request_file": "bridge/inbox/omef-distinctness-multicontext-20261127-03.json",
+  "request_sha256": "92a13fb7f49669861088ce25576fdff9acba439903c6aa32374855695895e8c2",
+  "request_nonce": "omef-distinctness-multicontext-20261127-03",
+  "completed_at": "2026-11-27T21:06:33.852979Z",
+  "transport": "claude-code-subscription-oauth",
+  "model": "claude-sonnet-5-5",
+  "verified_model_family": "claude",
+  "resolved_models": [
+    "claude-sonnet-5-5"
+  ],
+  "response": "**Scope note:** I read no repository files for this review. The protocol is built from your task description and the batch figures you gave. It does not describe the app's actual code, so check the feature definitions against the engine before you freeze it.\n\n## 0. Principles\n- Freeze everything before confirmation: feature extractor, distance, doses, thresholds, mimic search class, and seeds. Calibrate thresholds on nulls only, never on control outcomes.\n- Split the work into **discovery** (the existing batches, used only to nominate) and **confirmation** (fresh seeds and fresh initial states). Confirmation never reuses a discovery run.\n- The result is \"no distinguishing failure found under this protocol\", not \"proven unique\". See §9.\n\n## 1. Definitions\n- **Run** R(c, d, k, s, w): control c at dose d, context k, initial-state seed s, repeat window w. All other parameters stay at the context defaults.\n- **Distances.** Two TV distances on density histograms:\n  - TV_fix compares against the baseline in a fixed frame.\n  - TV_fit compares after each density is fitted independently (own bounds and normalisation).\n  - Also compute these at two horizons (T/2 and T) as drift checks.\n- **Null floor** N_k:\n  - Replicate null: baseline against baseline with an independent seed.\n  - Tiny-dose null: dose ε against baseline.\n  - Use the 99th percentile of the larger one, estimated from at least 12 pairs per context. This floor also includes the long-run divergence of chaotic trajectories.\n  - Effect size is E = TV / N_k.\n- **Visible in context k:** both TV_fix and TV_fit have E ≥ 1.5 at the top usable dose. The median over at least 3 seeds must also clear the floor, not just the best seed.\n- **Meaningful intermediate response**, on the 5-dose grid:\n  - Spearman ρ ≥ 0.8 between dose and effect.\n  - The mid-dose effect lies between 20% and 80% of the maximum (no cliff or step).\n  - No dose is degenerate, such as collapse, saturation, or an extreme fill fraction.\n  - A usable-band gate is better than \"more distance is better\", so it doesn't reward chaos.\n\n## 2. Context independence\n- The 10 contexts should be clustered by descriptor (e.g., density spread, occupancy, spectral content). A control's two confirming contexts must come from different clusters.\n- A control counts as **confirmed** only if it is visible in at least 2 contexts, each with fresh seeds, and in at least one context that is not its discovery \"best\" context. Estimate the effect again on fresh seeds. This counters winner's-curse bias.\n- Use at least 3 independent initial states per context and dose. Draw them from separate RNG streams, not from adjacent seeds of one generator.\n\n## 3. Camera and shape guard\n- Do no automatic camera, scale, or shape changes in any run.\n- Also compute the distance after the best similarity alignment (translate, scale, rotate). If the effect disappears after alignment, label the control \"pose/scale\". Don't count it as a texture or structure control. Keep the label honest.\n\n## 4. Pairwise matching, including reverse response\nFor each control a, in each shared context k:\n1. Compute the signed feature displacement Δ_a(d) = φ(a,d) − φ(baseline).\n2. Use a screen over all pairs: cosine similarity of Δ in feature space, across all dose pairs. Flag any pair with |cos| ≥ 0.8. A cosine near −1 signals a reverse mimic, where b at the opposite dose reproduces a.\n3. For flagged pairs, run a fine confirmatory match:\n   - Render b at 9 doses, covering both signs if the control is bipolar.\n   - Find min over d_b of TV(a(d_a), b(d_b)), for each a-dose and in both directions (a to b and b to a).\n   - Call it a **mimic** if that minimum is ≤ the null floor N_k for at least 3 of the 5 a-doses.\n   - A reverse mimic counts the same way. It is a duplicate axis with the sign flipped.\n4. A pair is **duplicate** if it is a mimic in at least 2 contexts.\n5. Keep the pair only if each member has some structure the other can't reproduce. Drop or merge the weaker one. Don't pick the survivor by the largest effect. Pick it by the better intermediate response, then by simplicity.\n\n## 5. Multi-control mimics\n- For each control c, fit Δ_c as a sparse combination of at most 3 other controls' displacements. Use non-negative or signed weights, and fit on context A.\n- **Verify by rendering, not by linear algebra.** Set the real control values from the fit (nonlinearity matters) and run them in a held-out context B and on fresh seeds.\n- Mimicked if the rendered distance to c(d) is ≤ N_k for at least 3 of 5 doses, in at least 2 contexts. A true duplicate transfers across contexts. A spurious fit won't.\n- Also report the residual fraction ‖Δ_c − Σ w_j Δ_j‖ / ‖Δ_c‖ as a diagnostic. It is not the acceptance test.\n\n## 6. Interaction tests\nFull pairwise testing (4,278 pairs) is too much. Test these instead:\n- For each control, 2 random partners plus its top nearest neighbours from the cosine screen. Run a 2×2 factorial at mid-dose.\n- Additivity: compare Δ(a+b) with Δ(a)+Δ(b).\n- **Persistence:** c must still pass the visibility test with a random background of 3 other controls set to mid-dose. A control that disappears under normal use is not really exposed.\n- Interactions are informative (they show artistic range). A strong interaction is not a failure. Use the tests to find nonlinear mimics and masking.\n\n## 7. Repeat-window effects\nFor the recurrence controls, show that the window itself does the work:\n- **Window ablation:** swap the window contents for a time-shuffled or marginal-matched surrogate. Real against surrogate must beat N_k.\n- **Splice test:** at time t, replace the window with one taken from an independent run. Do the same with a sham splice, using its own contents. The sham must give a null-level difference. The real splice must give a larger one.\n- **Window dependence:** for the two windows, the dose-response curves must differ above null (a dose×window interaction). A control with identical curves in both windows is \"window-independent\". It may still count, but it doesn't count as a repeat-window effect.\n- For the 40 new recurrence operators, don't count any as \"repeat-based\" unless they pass the splice test. Instrument window reads so you can see it directly.\n\n## 8. Selection bias and multiplicity\n- Pre-register the counts: 93 + 40 candidates, thresholds, and contexts. Report all failures, not just the winners.\n- Use a max-statistic null across controls (family-wise) or BH FDR at 5% across control×context tests.\n- **Do not tune to hit 93.** If fewer than 93 pass, report the real number.\n- **Positive and negative controls for the method (this is the main falsifier):**\n  - Plant known duplicates: an aliased copy of a control, a reverse-sign copy, and a sum of two controls.\n  - Plant a near-inert control.\n  - Run a label-shuffle test.\n  - The protocol must flag the plants and pass genuinely independent controls. If it misses a plant, loosen nothing and fix the method.\n\n## 9. Art gate and caveats\n- **Blind human review:** show a contact sheet of A/B pairs, mixing dose-matched pairs with true duplicates and nulls. Check that the \"distinct\" calls match what a viewer actually sees. Metrics are a proxy for visual difference only.\n- **Finite support:** the claim holds only for these features, these 10 contexts, these doses, and this mimic search class (≤3 controls, sampled interactions). Report a minimum detectable distance per control. State a mimic outside the search class as the residual risk.\n- Distinctness is relative to the feature set. A feature set that is blind to something can't rule out a mimic there.\n\n## 10. Practical budget (local CPU)\nA funnel keeps cost down:\n1. Use the existing 107 that passed visibility and the 62 that passed in at least 2 contexts. Run no new tests on the ones that failed visibility everywhere.\n2. Confirm in 2 fresh contexts × 5 doses × 3 seeds × 2 windows = 60 runs per control. That is about 5,600 runs for 93 controls, plus about 200 null runs per context.\n3. Spend the mimic rendering and interaction budget only on flagged pairs, about 5 to 10 per control (50 to 100 runs each).\n4. Cache all baselines per (context, seed, window) and reuse them as the reference. Use shorter horizons for the screen, with the full horizon only for the finalists.\n5. Before launching, estimate cost from your measured rate (23.5M steps for the first batches) times the run count above.\n\n**Acceptance:** a control is \"exposed\" if it is confirmed in 2 independent contexts (§1 to §2), is not a mimic or duplicate (§4 to §5), passes the persistence and window tests where applicable, and survives the blind review.",
+  "session_id": "8c2c3f3e-0145-46e0-9fbd-1535440fdb49",
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 948,
+    "cache_read_input_tokens": 2775,
+    "output_tokens": 5754,
+    "output_tokens_details": {
+      "thinking_tokens": 2629
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 948,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 5754,
+        "cache_read_input_tokens": 2775,
+        "cache_creation_input_tokens": 948,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 948
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "reported_cost_usd": 0.06161349999999999,
+  "num_turns": 1
+}
