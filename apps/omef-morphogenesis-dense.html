@@ -1,0 +1,139 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090d13"><title>OMEF Morphogenesis — Dense Fluid Edition</title><style>
+html,body{margin:0;background:#090d13;color:#dbe5ee;font:14px system-ui,sans-serif}#fluid{max-width:1050px;margin:auto;padding:10px;border-radius:12px}#fluid *{box-sizing:border-box}#fluid canvas{width:100%;height:335px;background:#03060a;border-radius:8px;display:block;touch-action:none}#fluid .bar{display:flex;gap:5px;margin:7px 0;flex-wrap:wrap}#fluid button,#fluid select{background:#202a36;color:#e1e8ef;border:1px solid #394755;border-radius:7px;padding:9px;font:inherit;cursor:pointer}#fluid button{flex:1}#fluid .head{display:flex;align-items:center;gap:8px}#fluid .head label{flex:1}#fluid output{font-variant-numeric:tabular-nums;color:#b5deeb}#fluid input[type=range]{width:100%;height:25px;accent-color:#acdce9}#fluid input[type=checkbox]{accent-color:#acdce9}#fluid .module{padding:8px 0;border-bottom:1px solid #26313b}#fluid .sub{color:#9aafc0;font-size:11px;line-height:1.5}#fluid #modules{max-height:340px;overflow:auto}#fluid .large canvas{height:calc(100dvh - 95px);min-height:335px}#fluid summary{padding:12px 0;cursor:pointer}#fluid #portgrid{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}#fluid #portgrid button{padding:7px 0;font-size:10px}#fluid .sel{border-color:#b5deeb!important}#fluid .off{opacity:.35}#fluid pre{font-size:11px;white-space:pre-wrap;color:#a9becc}#fluid #viewport{position:sticky;top:0;background:#090d13;z-index:2;padding-bottom:1px}
+@media(min-width:750px){#fluid:not(:has(.large)) canvas{height:470px}}
+</style></head><body><div id="fluid">
+<div style="letter-spacing:.15em;font-size:10px;color:#9bb6c9;padding-bottom:8px">OMEF / MORPHOGENESIS / DENSE FLUID · <a href="../index.html" style="color:inherit">PROJECT HOME</a></div>
+<div id="viewport"><canvas id="cv"></canvas><div id="status" class="sub">Initializing mathematical engine…</div><div class="bar"><button id="expand">Expand</button><button id="plus">Zoom +</button><button id="minus">Zoom −</button><button id="view">Reset view</button></div></div>
+<div id="panel"><div class="bar"><button id="evolve">Evolve</button><button id="explore">Explore</button><button id="undo">Undo</button><button id="reset">Reset</button></div>
+<div class="head"><label>Evolution speed</label><output id="speedv">2</output></div><input type="range" id="speed" min="1" max="10" value="2">
+<div class="head"><label>Motion softness</label><output id="softv">Silky</output></div><input type="range" id="soft" min="1" max="10" value="8">
+<div class="head"><label for="mesh">Mesh density</label><output id="meshval">285 layers</output></div><input type="range" id="mesh" min="25" max="380" step="1" value="285"><div class="sub">More solved trajectory layers; brightness is balanced to retain fine filaments.</div><div style="margin:12px 0 5px">Mathematical architecture</div><div class="sub">Remove, restore, strengthen or reverse mathematical terms.</div><div id="modules"></div>
+<details><summary>Experimental harmonicean feedback</summary><div class="sub">Optional squared qubit-error / harmonic-mean interaction. Off by default; excluded from automatic evolution.</div><div id="experimental"></div></details>
+<details><summary>62 individual coupling ports</summary><div id="portgrid"></div><div class="head" style="margin-top:8px"><label id="portlabel">Port 01</label><output id="portval">1.00</output></div><input id="portweight" type="range" min="-2" max="2" step=".01" value="1"><div class="bar"><button id="portoff">Disconnect</button><button id="portreset">Restore all</button></div></details>
+<details><summary>Visual controls</summary><div id="visual"></div><select id="palette" style="width:100%"><option value="ice">Ivory & ice</option><option value="spectrum">Optical spectrum</option><option value="blue">Electric blue</option><option value="gold">Amber & violet</option><option value="mono">Silver filaments</option></select><div class="bar"><button id="rotate">Rotate</button><button id="save">Save artwork</button></div></details>
+<details><summary>Numerical diagnostics</summary><pre id="audit"></pre></details></div></div>
+<script>function engine(){
+const N=80,P=62,M=100,TAU=2*Math.PI,L=380;
+const D=[['tension','String tension',0,3,.65],['quartic','Confinement',0,2,.3],['bulk','Field stiffness',0,2,.7],['couple','Reciprocal coupling',0,3,1.1],['phase','RPC100 coherence',-2,2,.75],['log','Complex log feedback',-2,2,.35],['memory','Memory feedback',-2,2,.45],['ports','62-port coupling',-2,2,.85],['bend','Bending',0,2,0],['asym','Asymmetric drive',-2,2,.55],['damp','Damping',0,1,.08],['twist','Cross-axis feedback',-2,2,0],['harmonic','Higher harmonics',-2,2,0],['nonlocal','Nonlocal field',-2,2,.15],['curvature','Phase curvature',0,2,.2],['modes','100 nonlinear modes',-2,2,.18],['qubit','Two-qubit interaction',0,2,.2],['qh','Harmonicean feedback',-2,2,0]];
+const base=Object.fromEntries(D.map(d=>[d[0],d[4]])),clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+function* generate(w,seed,weights,layers=L){
+let stiffness=4*w.tension+16*w.bend+4*w.bulk+2*w.couple+6*w.quartic+4*Math.abs(w.log)+2*Math.abs(w.memory)+2*Math.abs(w.ports)+4*Math.abs(w.twist)+4*Math.abs(w.harmonic)+4*Math.abs(w.nonlocal)+2*w.curvature+3*Math.abs(w.modes)+2*w.qubit+3*Math.abs(w.qh);
+let steps=Math.ceil(16.625/Math.min(.035,.19/Math.sqrt(1+stiffness))),h=16.625/steps;
+let q=new Float64Array(3*N),p=q.slice(),mem=q.slice(),f=new Float64Array(N),v=f.slice(),r=new Float64Array(P),rm=r.slice(),th=new Float64Array(101),tn=th.slice(),m=new Float64Array(M),mc=m.slice(),dq=q.slice(),df=f.slice(),u=new Float64Array([1,0,0,0]),b=new Float64Array(4),A=new Float64Array(N),B=A.slice(),C=new Float64Array(100),out=new Float32Array(layers*N*3),t=0,max=0,coh=0,zn=1;
+let total=weights.reduce((s,x)=>s+Math.abs(x),0)||1;
+for(let i=0;i<N;i++){let a=TAU*i/N,rad=1+.19*Math.cos(3*a+seed)+.09*Math.sin(7*a+seed);q[3*i]=rad*Math.cos(a);q[3*i+1]=rad*Math.sin(a);q[3*i+2]=.3*Math.sin(2*a+.2)+.12*Math.cos(5*a+seed);p[3*i]=-.13*Math.sin(a);p[3*i+1]=.13*Math.cos(a);p[3*i+2]=.23*Math.sin(3*a+seed);f[i]=.55*Math.sin(3*a)+.24*Math.cos(5*a+seed);A[i]=Math.cos(2*a);B[i]=Math.sin(3*a)}
+mem.set(q);for(let j=0;j<101;j++)th[j]=j*1.618+seed;for(let j=0;j<M;j++)m[j]=.08*Math.sin(j*.61+seed);
+let last=0;
+for(let k=0;k<steps;k++){
+let x=1,y=0,meanF=0,meanV=0;
+for(let i=0;i<N;i++){x+=.5*A[i]*f[i]/N;y+=.5*B[i]*f[i]/N;if(w.qh){meanF+=f[i]*f[i]/N;meanV+=(p[3*i]**2+p[3*i+1]**2+p[3*i+2]**2)/N}}
+let R=Math.max(.04,x*x+y*y),lr=.5*Math.log(R),li=Math.atan2(y,x);
+let ar=Math.cos(th[100]),ai=Math.sin(th[100]);coh=0;
+for(let j=99;j>=0;j--){ar=.5*(ar+Math.cos(th[j]));ai=.5*(ai+Math.sin(th[j]));C[j]=ar*ar+ai*ai;coh+=C[j]/100}coh=.5*(coh+C[0]);
+for(let j=0;j<101;j++){let l=(j+100)%101,n=(j+1)%101;tn[j]=th[j]+h*(.5+.013*j+.15*Math.tanh(f[j%N])+w.log*.13*(lr*Math.cos(j)+li*Math.sin(j))+w.curvature*.4*(Math.sin(th[n]-th[j])+Math.sin(th[l]-th[j]))+w.phase*.16*Math.sin(th[n]-th[j]))}th.set(tn);
+if(w.qubit){for(let j=0;j<4;j++){let z=(j&2?-1:1)*(x-1)+(j&1?-1:1)*y,a=h*w.qubit*z,cs=Math.cos(a),sn=Math.sin(a),old=u[j];u[j]=old*cs+b[j]*sn;b[j]=b[j]*cs-old*sn}
+let cs=Math.cos(h*.65*w.qubit),sn=Math.sin(h*.65*w.qubit);for(let j=0;j<2;j++){let l=3-j,a=u[j],d=b[j],e=u[l],g=b[l];u[j]=cs*a+sn*g;b[j]=cs*d-sn*e;u[l]=cs*e+sn*d;b[l]=cs*g-sn*a}}
+let zz=u[0]**2+b[0]**2+u[3]**2+b[3]**2-u[1]**2-b[1]**2-u[2]**2-b[2]**2,xx=2*(u[0]*u[3]+b[0]*b[3]+u[1]*u[2]+b[1]*b[2]);zn=u.reduce((s,a,j)=>s+a*a+b[j]*b[j],0);
+let qh=0;if(w.qh){let H=2*(meanF+.01)*(meanV+.01)/(meanF+meanV+.02);qh=Math.tanh(((xx-.35)**2+(zz-.2)**2)/(H+.05)*.25)}
+let pr=0;for(let j=0;j<P;j++){let i=Math.floor(j*N/P);rm[j]+=h*.45*(r[j]-rm[j]);r[j]+=h*(-.8*r[j]+.6*Math.tanh(q[3*i+2]+f[i])+.2*(2*C[j]-1)+w.memory*.14*rm[j]);pr+=weights[j]*Math.tanh(r[j])/total}
+let mr=0;for(let j=0;j<M;j++){mc[j]=m[j]+h*(-.65*m[j]-.2*m[j]**3+.35*Math.tanh(f[j%N])+.12*Math.sin(th[j])+.2*(m[(j+1)%M]-m[j]));mr+=mc[j]/M}m.set(mc);
+for(let i=0;i<N;i++){
+let j=(i+1)%N,l=(i+N-1)%N,jj=(i+2)%N,ll=(i+N-2)%N,a=TAU*i/N,o=3*i,z=q[o+2],norm=q[o]**2+q[o+1]**2+z*z,delta=f[i]-.8*z,port=Math.floor(i*P/N),local=weights[port]*Math.tanh(r[port])/Math.max(1,total/P);
+df[i]=w.bulk*(f[j]+f[l]-2*f[i])-.35*f[i]-.15*f[i]**3-w.couple*delta-w.log*(lr*x*A[i]+li*x*B[i]+lr*y*B[i]-li*y*A[i])/R-.22*v[i]+w.ports*.22*Math.tanh(z)*weights[port]/Math.max(1,total/P)+w.nonlocal*.35*(f[(i+23)%N]+f[(i+57)%N]-2*f[i])+w.modes*.45*m[i%M]+w.qubit*.2*(zz*A[i]+xx*B[i])-w.qh*.25*coh*qh*(A[i]-B[i]);
+for(let d=0;d<3;d++){
+let s=q[o+d],lap=q[3*j+d]+q[3*l+d]-2*s,bi=q[3*jj+d]-4*q[3*j+d]+6*s-4*q[3*l+d]+q[3*ll+d];
+dq[o+d]=w.tension*lap-w.quartic*norm*s-w.bend*bi-w.damp*p[o+d]+w.memory*(mem[o+d]-s);
+if(d===2)dq[o+d]+=.8*w.couple*delta+w.phase*(2*coh-1)*.5*Math.sin(3*a)+w.ports*(pr+.5*local)*Math.cos(2*a)+w.asym*.30*Math.sin(5*a+.75*t)+w.harmonic*.45*Math.sin(3*f[i]+a)+w.curvature*.18*Math.sin(th[i%101]-th[(i+1)%101])+w.modes*.55*(m[i%M]+mr)*Math.cos(4*a)+w.qubit*.14*xx*Math.cos(3*a)-w.qh*.25*coh*qh*Math.sin(2*a);
+if(d===0)dq[o+d]+=w.twist*.4*q[3*j+1]+w.asym*.17*Math.cos(2*a+.6*t);
+if(d===1)dq[o+d]-=w.twist*.4*q[3*l]+w.asym*.16*Math.sin(3*a-.5*t);
+}}
+max=0;for(let i=0;i<N;i++){v[i]+=h*df[i];f[i]+=h*v[i];max=Math.max(max,Math.abs(f[i]),Math.abs(v[i]));for(let d=0;d<3;d++){let j=3*i+d;mem[j]+=h*.65*(q[j]-mem[j]);p[j]+=h*dq[j];q[j]+=h*p[j];max=Math.max(max,Math.abs(q[j]),Math.abs(p[j]))}}
+if(!Number.isFinite(max)||max>30||Math.abs(zn-1)>1e-7)throw Error('Numerical limit — last valid sculpture retained');
+t+=h;let idx=Math.floor((k+1)*layers/steps);if(idx>last){out.set(q,last*N*3);last=idx}
+if(k%4===3)yield;
+}
+return {out,h,coh,zn,max}
+}
+function glide(pos,vel,target,dt,omega){let e=Math.exp(-omega*dt),err=0;for(let i=0;i<pos.length;i++){let x=pos[i]-target[i],j=vel[i]+omega*x;let nx=(x+j*dt)*e,nv=(vel[i]-omega*j*dt)*e;pos[i]=target[i]+nx;vel[i]=nv;err=Math.max(err,Math.abs(nx),Math.abs(nv)/omega)}return err}
+return {N,P,M,L,D,base,clamp,generate,glide}
+}
+(function ui(){
+const {N,P,M,L,D,base,clamp,generate,glide}=engine();
+const root=document.getElementById('fluid'),$=id=>root.querySelector('#'+id),cv=$('cv'),ctx=cv.getContext('2d');
+let w={...base},weights=Array(P).fill(1),seed=0,history=[],refs={},port=0;
+let pos=null,vel=null,target=null,job=null,pending=null,moving=false,dirty=true,az=.22,el=.47,zoom=1,ink=.8,size=.65,density=285,speed=2,soft=8,evolving=false,rotating=false,lastTime=0,lastEvolve=0;
+function remember(){history.push({w:{...w},weights:[...weights],seed});if(history.length>40)history.shift()}
+function request(){pending={w:{...w},weights:[...weights],seed}}
+function sync(){for(let [k] of D){let a=refs[k];if(a){a.slider.value=w[k];a.out.textContent=w[k].toFixed(2);a.check.checked=w[k]!==0}}}
+function stop(){evolving=false;$('evolve').textContent='Evolve'}
+function build(){
+for(let [k,name,min,max,def] of D){
+let div=document.createElement('div');div.className='module';
+div.innerHTML=`<div class="head"><input type="checkbox" aria-label="Enable ${name}"><label>${name}</label><output></output></div><input type="range" aria-label="${name}" min="${min}" max="${max}" step=".01">`;
+$(k==='qh'?'experimental':'modules').append(div);
+let slider=div.querySelector('input[type=range]'),check=div.querySelector('input[type=checkbox]'),out=div.querySelector('output');refs[k]={slider,check,out};
+slider.onpointerdown=()=>{stop();remember()};slider.oninput=()=>{stop();w[k]=+slider.value;check.checked=w[k]!==0;out.textContent=w[k].toFixed(2);request()};
+check.onchange=()=>{stop();remember();w[k]=check.checked?(def||.5):0;sync();request()};
+}sync()
+}
+function ports(){
+$('portgrid').innerHTML='';
+for(let j=0;j<P;j++){let btn=document.createElement('button');btn.textContent=String(j+1).padStart(2,'0');btn.className=(j===port?'sel ':'')+(weights[j]===0?'off':'');btn.onclick=()=>{port=j;ports()};$('portgrid').append(btn)}
+$('portlabel').textContent='Port '+String(port+1).padStart(2,'0');$('portval').textContent=weights[port].toFixed(2);$('portweight').value=weights[port]
+}
+$('portweight').onpointerdown=()=>{stop();remember()};
+$('portweight').oninput=()=>{stop();weights[port]=+$('portweight').value;$('portval').textContent=weights[port].toFixed(2);request()};$('portweight').onchange=ports;
+$('portoff').onclick=()=>{stop();remember();weights[port]=0;ports();request()};
+$('portreset').onclick=()=>{stop();remember();weights.fill(1);ports();request()};
+$('reset').onclick=()=>{stop();remember();w={...base};weights.fill(1);seed=0;az=.22;el=.47;zoom=1;sync();ports();request()};
+$('undo').onclick=()=>{stop();let a=history.pop();if(a){w=a.w;weights=a.weights;seed=a.seed;sync();ports();request()}};
+$('explore').onclick=()=>{stop();remember();for(let [k,n,l,h] of D){if(k!=='qh')w[k]=clamp(w[k]+(Math.random()-.5)*.65,l,h)}seed+=(Math.random()-.5)*.3;sync();request()};
+$('evolve').onclick=()=>{if(evolving){stop();return}remember();evolving=true;$('evolve').textContent='Freeze';lastEvolve=0};
+$('speed').oninput=()=>{speed=+$('speed').value;$('speedv').textContent=speed};
+$('soft').oninput=()=>{soft=+$('soft').value;$('softv').textContent=soft>=7?'Silky':soft>=4?'Gentle':'Responsive'};
+$('mesh').oninput=()=>{density=+$('mesh').value;$('meshval').textContent=density+' layers';dirty=true};
+let dirs=D.map((_,i)=>Math.sin(i*3.14+.7));
+function evolve(){for(let i=0;i<D.length;i++){let [k,n,l,h]=D[i];if(k==='qh')continue;dirs[i]=clamp(dirs[i]+(Math.random()-.5)*.1,-1,1);w[k]=clamp(w[k]+dirs[i]*.004*speed,l,h);if(w[k]===l||w[k]===h)dirs[i]*=-1}sync();request()}
+function render(){
+if(!pos)return;let W=cv.clientWidth,H=cv.clientHeight;if(!W||!H)return;
+let dpr=Math.min(2,window.devicePixelRatio||1),ww=Math.round(W*dpr),hh=Math.round(H*dpr);
+if(cv.width!==ww||cv.height!==hh){cv.width=ww;cv.height=hh}
+ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#03060a';ctx.fillRect(0,0,W,H);
+let a=Math.cos(az),b=Math.sin(az),c=Math.cos(el),d=Math.sin(el),s=Math.min(W,H)*.33*zoom,palette=$('palette').value;
+for(let k=0;k<density;k++){let layer=Math.min(L-1,Math.max(0,Math.round((k+1)*L/density)-1)),t=k/Math.max(1,density-1),hue=195+28*t,sat=35+40*t,light=83-26*t;
+if(palette==='spectrum'){hue=180+260*t;sat=82;light=72}
+if(palette==='blue'){hue=195+35*t;sat=94;light=73}
+if(palette==='gold'){hue=35+255*t;sat=80;light=72}
+if(palette==='mono'){sat=0;light=88-28*t}
+ctx.beginPath();ctx.strokeStyle=`hsla(${hue},${sat}%,${light}%,${ink*Math.min(1,Math.pow(95/density,.65))*(.17+.38*t)})`;ctx.lineWidth=size;
+for(let j=0;j<=N;j++){let i=3*(layer*N+j%N),x=pos[i],y=pos[i+1],z=pos[i+2],xx=a*x-b*y,yy=b*x+a*y,py=c*z-d*yy,pz=c*yy+d*z,per=3.8/(4.8-clamp(pz,-2.5,2.5)),X=W/2+xx*s*per,Y=H/2-py*s*per;j?ctx.lineTo(X,Y):ctx.moveTo(X,Y)}ctx.stroke()
+}}
+function frame(now){
+if(!root.isConnected)return;
+let dt=Math.min(.034,Math.max(.001,(now-(lastTime||now-16))/1000));lastTime=now;
+if(evolving&&!job&&!pending&&now-lastEvolve>Math.max(140,650-speed*45)){lastEvolve=now;evolve()}
+if(!job&&pending){let s=pending;pending=null;job={g:generate(s.w,s.seed,s.weights),s}}
+if(job){let start=performance.now();try{do{let r=job.g.next();if(r.done){target=r.value.out;if(!pos){pos=Float64Array.from(target);vel=new Float64Array(pos.length);dirty=true}else{moving=true}
+$('status').textContent=D.filter(d=>job.s.w[d[0]]!==0).length+' active terms · '+job.s.weights.filter(x=>x!==0).length+' connected ports · '+L*N+' solved vertices';
+$('audit').textContent='Integration step: '+r.value.h.toFixed(5)+'\nRPC coherence: '+r.value.coh.toFixed(6)+'\nQubit norm: '+r.value.zn.toFixed(10)+'\nHarmonicean: '+(job.s.w.qh===0?'Off':job.s.w.qh.toFixed(2))+'\nReduced E16-inspired system.';
+job=null;break}}while(performance.now()-start<3.5)}catch(e){job=null;$('status').textContent=e.message;if(evolving)stop()}}
+if(moving&&target){let err=glide(pos,vel,target,dt,16-soft*1.3);dirty=true;if(err<.00002){pos.set(target);vel.fill(0);moving=false}}
+if(rotating){az+=dt*.35;dirty=true}
+if(dirty){render();dirty=false}
+requestAnimationFrame(frame)
+}
+$('plus').onclick=()=>{zoom=clamp(zoom*1.25,.1,10);dirty=true};
+$('minus').onclick=()=>{zoom=clamp(zoom/1.25,.1,10);dirty=true};
+$('view').onclick=()=>{az=.22;el=.47;zoom=1;rotating=false;$('rotate').textContent='Rotate';dirty=true};
+$('expand').onclick=()=>{let on=$('viewport').classList.toggle('large');$('panel').style.display=on?'none':'';$('expand').textContent=on?'Controls':'Expand';dirty=true};
+$('rotate').onclick=()=>{rotating=!rotating;$('rotate').textContent=rotating?'Stop rotation':'Rotate'};
+$('palette').onchange=()=>{dirty=true};
+$('save').onclick=()=>{let a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download='omef-dense-fluid.png';a.click()};
+for(let [name,min,max,step,value,fn] of [['Ink',.1,1,.01,ink,v=>ink=v],['Filament width',.2,2,.05,size,v=>size=v]]){let div=document.createElement('div');div.className='module';div.innerHTML=`<div class="head"><label>${name}</label><output>${value}</output></div><input type="range" min="${min}" max="${max}" step="${step}" value="${value}">`;$('visual').append(div);div.querySelector('input').oninput=e=>{div.querySelector('output').textContent=e.target.value;fn(+e.target.value);dirty=true}}
+let ptr=new Map(),dist=0;
+cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.clientX,e.clientY]);if(ptr.size===2){let [p,q]=[...ptr.values()];dist=Math.hypot(p[0]-q[0],p[1]-q[1])}};
+cv.onpointermove=e=>{if(!ptr.has(e.pointerId))return;let [x,y]=ptr.get(e.pointerId);ptr.set(e.pointerId,[e.clientX,e.clientY]);if(ptr.size===2){let [p,q]=[...ptr.values()],d=Math.hypot(p[0]-q[0],p[1]-q[1]);if(dist>0)zoom=clamp(zoom*d/dist,.1,10);dist=d}else{az+=(e.clientX-x)*.008;el+=(e.clientY-y)*.008}dirty=true};
+cv.onpointerup=cv.onpointercancel=e=>{ptr.delete(e.pointerId);dist=0};
+if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{dirty=true}).observe(cv);
+build();ports();request();requestAnimationFrame(frame);
+})();</script></body></html>
