@@ -1,0 +1,300 @@
+{
+ "browser": "webkit",
+ "platform": "macOS-26.7.2-arm64-arm-64bit",
+ "checks": [
+  {
+   "name": "live: loads and starts with no script error",
+   "status": "PASS",
+   "detail": "running=True engine='audio worklet' errors=[]"
+  },
+  {
+   "name": "live: live audio clock runs",
+   "status": "PASS",
+   "detail": "state=running, advanced 0.704 s in 0.7 s"
+  },
+  {
+   "name": "live: every shape sounds (live)",
+   "status": "PASS",
+   "detail": "String 0.483 \u00b7 Tine 0.466 \u00b7 Chime 0.543 \u00b7 Drum 0.565 \u00b7 Hoop 0.605 \u00b7 Web 0.504 \u00b7 Tank 0.691 \u00b7 Twins 0.691 \u00b7 String 0.478"
+  },
+  {
+   "name": "live: audio clock freeze when choosing Tank (median of 3)",
+   "status": "PASS",
+   "detail": "243 ms (runs [243, 232, 243]; page main-thread gaps [8, 8, 8]; new bodies ['Tank chip', 'Tank chip', 'Tank chip'])"
+  },
+  {
+   "name": "live: engine renders offline in this browser (8 shapes)",
+   "status": "PASS",
+   "detail": "{}"
+  },
+  {
+   "name": "live: engine output finite and audible (offline)",
+   "status": "PASS",
+   "detail": "String pk 0.436 \u00b7 Tine pk 0.6078 \u00b7 Chime pk 0.7674 \u00b7 Drum pk 0.7672 \u00b7 Hoop pk 0.4518 \u00b7 Web pk 0.7674 \u00b7 Tank pk 0.2608 \u00b7 Twins pk 0.5166"
+  },
+  {
+   "name": "live: same sound as the Node engine (level within 0.5 dB)",
+   "status": "PASS",
+   "detail": "worst level difference 0.000 dB; first 2048 samples bit-identical on 8/8 shapes"
+  },
+  {
+   "name": "live: engine speed in this browser (times real time, 1 voice)",
+   "status": "PASS",
+   "detail": "{\"String\": 69.0, \"Tank\": 20.4}"
+  },
+  {
+   "name": "preview: loads and starts with no script error",
+   "status": "FAIL",
+   "detail": "running=None engine=None errors=['tap #start: Page.tap: Timeout 30000ms exceeded.\\nCall log:\\n  - waiting for locator(\"#start\")\\n']"
+  },
+  {
+   "name": "preview: background tuner (Worker) runs in WebKit",
+   "status": "FAIL",
+   "detail": "{}"
+  },
+  {
+   "name": "preview: the check ran to the end",
+   "status": "FAIL",
+   "detail": "-packages/playwright/_impl/_page.py\", line 467, in evaluate\n    return await self._main_frame.evaluate(expression, arg)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py\", line 320, in evaluate\n    await self._channel.send(\n  File \"/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py\", line 69, in send\n    return await self._connection.wrap_api_call(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py\", line 559, in wrap_api_call\n    raise rewrite_error(error, f\"{parsed_st['apiName']}: {error}\") from None\nplaywright._impl._errors.Error: Page.evaluate: ReferenceError: Can't find variable: ctx\n"
+  },
+  {
+   "name": "preview before Stage I: the same Size taps",
+   "status": "NOTE",
+   "detail": "no live audio on this machine; comparison not run"
+  }
+ ],
+ "env": {
+  "live": {
+   "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+   "audioWorkletNode": true,
+   "offline": true,
+   "worker": true,
+   "audioSession": "playback",
+   "running": true,
+   "audioMode": "audio worklet",
+   "ctxState": "running",
+   "rate": 32000,
+   "readout": "16 masses \u00a0 15 springsreference mode 335.0 Hz3\u00d7 \u00b7 32 kHz \u00b7 audio worklet",
+   "tuner": null
+  },
+  "preview": {
+   "error": "Page.evaluate: ReferenceError: Can't find variable: state"
+  }
+ },
+ "offline": {
+  "live": {
+   "String": {
+    "pk": 0.436,
+    "rms": 0.058206683117038825,
+    "bad": 0,
+    "onset": 18,
+    "render_ms": 76,
+    "build_and_tune_ms": 22,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Tine": {
+    "pk": 0.6078,
+    "rms": 0.11898317024489657,
+    "bad": 0,
+    "onset": 17,
+    "render_ms": 86,
+    "build_and_tune_ms": 14,
+    "engine_ready": true,
+    "vs_node_rms_db": -0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Chime": {
+    "pk": 0.7674,
+    "rms": 0.19571376557130166,
+    "bad": 0,
+    "onset": 28,
+    "render_ms": 75,
+    "build_and_tune_ms": 17,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Drum": {
+    "pk": 0.7672,
+    "rms": 0.11008879261095918,
+    "bad": 0,
+    "onset": 17,
+    "render_ms": 90,
+    "build_and_tune_ms": 14,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Hoop": {
+    "pk": 0.4518,
+    "rms": 0.08647572889200167,
+    "bad": 0,
+    "onset": 18,
+    "render_ms": 85,
+    "build_and_tune_ms": 31,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Web": {
+    "pk": 0.7674,
+    "rms": 0.1499775902176776,
+    "bad": 0,
+    "onset": 17,
+    "render_ms": 69,
+    "build_and_tune_ms": 16,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Tank": {
+    "pk": 0.2608,
+    "rms": 0.07642066096903781,
+    "bad": 0,
+    "onset": 18,
+    "render_ms": 153,
+    "build_and_tune_ms": 318,
+    "engine_ready": true,
+    "vs_node_rms_db": -0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   },
+   "Twins": {
+    "pk": 0.5166,
+    "rms": 0.06864678315284707,
+    "bad": 0,
+    "onset": 25,
+    "render_ms": 82,
+    "build_and_tune_ms": 33,
+    "engine_ready": true,
+    "vs_node_rms_db": 0.0,
+    "vs_node_pk_db": 0.0,
+    "head_max_abs_diff": 0.0,
+    "head_identical": true,
+    "onset_shift_samples": 0
+   }
+  }
+ },
+ "live": {
+  "live": {
+   "clock": {
+    "state": "running",
+    "advanced": 0.7040000000000002
+   },
+   "peaks": [
+    [
+     "String",
+     {
+      "pk": 0.483,
+      "bad": 0
+     }
+    ],
+    [
+     "Tine",
+     {
+      "pk": 0.466,
+      "bad": 0
+     }
+    ],
+    [
+     "Chime",
+     {
+      "pk": 0.543,
+      "bad": 0
+     }
+    ],
+    [
+     "Drum",
+     {
+      "pk": 0.565,
+      "bad": 0
+     }
+    ],
+    [
+     "Hoop",
+     {
+      "pk": 0.605,
+      "bad": 0
+     }
+    ],
+    [
+     "Web",
+     {
+      "pk": 0.504,
+      "bad": 0
+     }
+    ],
+    [
+     "Tank",
+     {
+      "pk": 0.691,
+      "bad": 0
+     }
+    ],
+    [
+     "Twins",
+     {
+      "pk": 0.691,
+      "bad": 0
+     }
+    ],
+    [
+     "String",
+     {
+      "pk": 0.478,
+      "bad": 0
+     }
+    ]
+   ],
+   "tank_stall_ms": [
+    243,
+    232,
+    243
+   ],
+   "main_thread_gap_ms": [
+    8,
+    8,
+    8
+   ],
+   "bodies_built": [
+    "Tank chip",
+    "Tank chip",
+    "Tank chip"
+   ]
+  }
+ },
+ "bench": {
+  "live": {
+   "String": 69.0,
+   "Tank": 20.4
+  }
+ },
+ "browser_version": "26.0",
+ "summary": {
+  "pass": 8,
+  "fail": 3,
+  "note": 1
+ }
+}

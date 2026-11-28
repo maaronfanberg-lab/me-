@@ -1,0 +1,29 @@
+browser: webkit 26.0 on macOS-26.7.2-arm64-arm-64bit
+127.0.0.1 - - [28/Nov/2026 19:28:07] "GET /apps/resonator.html HTTP/1.1" 200 -
+PASS live: loads and starts with no script error — running=True engine='audio worklet' errors=[]
+PASS live: live audio clock runs — state=running, advanced 0.704 s in 0.7 s
+PASS live: every shape sounds (live) — String 0.483 · Tine 0.466 · Chime 0.543 · Drum 0.565 · Hoop 0.605 · Web 0.504 · Tank 0.691 · Twins 0.691 · String 0.478
+PASS live: audio clock freeze when choosing Tank (median of 3) — 243 ms (runs [243, 232, 243]; page main-thread gaps [8, 8, 8]; new bodies ['Tank chip', 'Tank chip', 'Tank chip'])
+PASS live: engine renders offline in this browser (8 shapes) — {}
+PASS live: engine output finite and audible (offline) — String pk 0.436 · Tine pk 0.6078 · Chime pk 0.7674 · Drum pk 0.7672 · Hoop pk 0.4518 · Web pk 0.7674 · Tank pk 0.2608 · Twins pk 0.5166
+PASS live: same sound as the Node engine (level within 0.5 dB) — worst level difference 0.000 dB; first 2048 samples bit-identical on 8/8 shapes
+PASS live: engine speed in this browser (times real time, 1 voice) — {"String": 69.0, "Tank": 20.4}
+127.0.0.1 - - [28/Nov/2026 19:29:04] code 404, message File not found
+127.0.0.1 - - [28/Nov/2026 19:29:04] "GET /apps/resonator-next.html HTTP/1.1" 404 -
+FAIL preview: loads and starts with no script error — running=None engine=None errors=['tap #start: Page.tap: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator("#start")\n']
+FAIL preview: background tuner (Worker) runs in WebKit — {}
+FAIL preview: the check ran to the end — -packages/playwright/_impl/_page.py", line 467, in evaluate
+    return await self._main_frame.evaluate(expression, arg)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py", line 320, in evaluate
+    await self._channel.send(
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.Error: Page.evaluate: ReferenceError: Can't find variable: ctx
+
+NOTE preview before Stage I: the same Size taps — no live audio on this machine; comparison not run
+
+3 FAILED, 8 passed, 1 notes
