@@ -53,7 +53,7 @@ def _new_input(conversation, ack_path, prior_checkpoint):
     return recent
 
 
-def _message_from_concordia(raw: str, name: str, history: list) -> str:
+def _message_from_concordia(raw: str, name: str, history: list, *, require_say: bool = False) -> str:
     # Native Concordia emits an action + trailing JSON control block.
     # The JSON must never appear as character dialogue in the Room viewer.
     lead = re.sub(r"^\s*" + re.escape(name) + r"\s*:\s*", "", str(raw), flags=re.I)
@@ -62,6 +62,11 @@ def _message_from_concordia(raw: str, name: str, history: list) -> str:
     # Some local model replies append a bare control-list fragment after
     # valid speech. It is not dialogue and must not reach the public feed.
     text = re.sub(r"\s*\[\s*\]\s*$", "", text).strip()
+    say = re.match(r"^SAY\s*:\s*", text, flags=re.I)
+    if require_say and not say:
+        return ""
+    if say:
+        text = text[say.end():].strip()
     if not isinstance(meta.get("mask"), list) or not isinstance(meta.get("timer"), dict):
         return ""
     if not text or len(text) > 520:
@@ -135,7 +140,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     discourse = _load(room / "discourse.json", {"nodes": [], "roots": []})
     live = _load(room / "live.json", {})
     checkpoint_path = room / CHECKPOINT
-    checkpoint = _load(checkpoint_path, {}) if checkpoint_path.is_file() else {}
+    checkpoint = native.read_checkpoint(checkpoint_path) if checkpoint_path.is_file() else {}
     new_input = _new_input(conversation, ack_path, checkpoint)
     upcoming_cycle = int(state.get("cycle", 0)) + 1
     life_path = room / "life.json"
@@ -184,7 +189,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
         world_events=pending_world_events,
         user_event=user_event,
     )
-    checkpoint = _load(checkpoint_path, {})
+    checkpoint = native.read_checkpoint(checkpoint_path)
     checkpoint["bootstrap_policy"] = bootstrap_policy
     checkpoint["delivered_life_event_ids"] = list(dict.fromkeys([
         *delivered_world_ids, *output.get("injected_world_events", [])
@@ -194,7 +199,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
     checkpoint["seen_allen_messages"] = list(
         dict.fromkeys([*old_seen, *(str(m["id"]) for m in new_input)])
     )[-300:]
-    _save(checkpoint_path, checkpoint)
+    native.write_checkpoint(checkpoint_path, checkpoint)
 
     cycle = upcoming_cycle
     # This referee never decides who speaks: Concordia already did that.
@@ -213,7 +218,7 @@ def beat(root: Path, *, mode: str, ack_path: Path, steps: int = 1) -> dict:
             if speaker not in native.PARTICIPANTS:
                 continue
             publication["actions"] += 1
-            text = _message_from_concordia(raw, candidate_name, conversation)
+            text = _message_from_concordia(raw, candidate_name, conversation, require_say=(mode == "llama"))
             if not text:
                 publication["invalid_format"] += 1
                 continue
