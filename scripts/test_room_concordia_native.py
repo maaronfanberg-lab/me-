@@ -2,6 +2,7 @@
 """Real-upstream integration tests. No imitation or monkeypatched Concordia."""
 from pathlib import Path
 import json
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +10,18 @@ import room_concordia_native as native
 
 
 class NativeConcordiaTests(unittest.TestCase):
+    def test_lossless_checkpoint_compression_and_legacy_read(self):
+        original = {"schema": 1, "entities": {"Sarah": {"memory": ["past event"] * 5000}}, "game_master": {"timer": "15m"}}
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "checkpoint.json"
+            path.write_text(json.dumps(original), encoding="utf-8")
+            self.assertEqual(native.read_checkpoint(path), original)
+            with patch.object(native, "CHECKPOINT_COMPRESS_BYTES", 100):
+                native.write_checkpoint(path, original)
+            self.assertEqual(json.loads(path.read_text())["checkpoint_encoding"], "gzip+base64-v1")
+            self.assertEqual(native.read_checkpoint(path), original)
+            self.assertLess(path.stat().st_size, 2000)
+
     def test_terminal_all_silent_checkpoint_rearms_without_erasing_memory(self):
         root = native.ROOT
         # The live outage checkpoint had masks [''] for all four people,
