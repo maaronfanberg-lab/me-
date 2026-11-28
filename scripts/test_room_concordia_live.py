@@ -13,6 +13,11 @@ import room_engine_v5 as core
 
 class LiveRoomTests(unittest.TestCase):
 
+    def test_live_speech_is_distinct_from_activity_reports(self):
+        control = '\n{"mask":["action."],"timer":{"time":"15m"}}'
+        self.assertEqual(bridge._message_from_concordia("I inspect the notebook." + control, "Sarah", [], require_say=True), "")
+        self.assertEqual(bridge._message_from_concordia("SAY: Owen, what did you find in the notebook?" + control, "Sarah", [], require_say=True), "Owen, what did you find in the notebook?")
+
     def make_root(self):
         t = tempfile.TemporaryDirectory()
         self.addCleanup(t.cleanup)

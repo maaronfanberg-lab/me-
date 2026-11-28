@@ -280,7 +280,7 @@ jobs:
             timeout -k "${ROOM_NODE_KILL_GRACE_SECONDS}s" "${ROOM_NODE_TIMEOUT_SECONDS}s" python3 scripts/room_participant.py room_work/allen-inbox.json room_work/allen-ack.json || return 1
             if [ "${ROOM_NATIVE_CONCORDIA:-0}" = "1" ]; then
               [ "${ROOM_BRAIN_ACTIVE:-none}" != "none" ] || { echo "Native Room requires a working Llama brain"; return 1; }
-              timeout -k 15s 300s python3 scripts/room_concordia_live.py --mode llama --ack-path room_work/allen-ack.json || return 1
+              timeout -k 15s 720s python3 scripts/room_concordia_live.py --mode llama --ack-path room_work/allen-ack.json || return 1
               python3 scripts/build_room_feed.py || return 1
               return 0
             fi

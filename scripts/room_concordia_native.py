@@ -9,6 +9,8 @@ Run with --mode llama only while the existing local llama-server is running.
 from __future__ import annotations
 
 import argparse
+import base64
+import gzip
 from collections.abc import Collection, Mapping, Sequence
 import datetime as dt
 import hashlib
@@ -33,6 +35,31 @@ from concordia.prefabs.game_master import interrupt_driven
 
 PARTICIPANTS = ("sarah", "mara", "owen", "jules")
 ROOT = Path(__file__).resolve().parents[1]
+
+CHECKPOINT_COMPRESS_BYTES = 8 * 1024 * 1024
+CHECKPOINT_MAX_BYTES = 90 * 1024 * 1024
+
+
+def read_checkpoint(path: Path) -> dict:
+    obj = json.loads(path.read_text(encoding="utf-8"))
+    if obj.get("checkpoint_encoding") == "gzip+base64-v1":
+        obj = json.loads(gzip.decompress(base64.b64decode(obj["payload"], validate=True)))
+    return obj
+
+
+def write_checkpoint(path: Path, snapshot: dict) -> None:
+    # Lossless storage: keep identities, memory banks and scheduler intact.
+    raw = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(raw) >= CHECKPOINT_COMPRESS_BYTES:
+        raw = json.dumps({"checkpoint_encoding": "gzip+base64-v1",
+                          "payload": base64.b64encode(gzip.compress(raw, compresslevel=6, mtime=0)).decode("ascii")},
+                         separators=(",", ":")).encode("utf-8")
+    if len(raw) >= CHECKPOINT_MAX_BYTES:
+        raise ValueError("Room checkpoint exceeds safe GitHub publication size; refusing to discard memories")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(path.name + ".tmp")
+    temp.write_bytes(raw)
+    os.replace(temp, path)
 
 
 def embed(text: str) -> np.ndarray:
@@ -80,6 +107,9 @@ class LocalLlama(language_model.LanguageModel):
         if address.path != "/v1/chat/completions":
             raise ValueError("Expected llama.cpp's /v1/chat/completions endpoint")
         self.url, self.model_id = url, model_id
+        # llama-server has one inference slot. Do not start HTTP timeouts
+        # for requests that are still waiting for the preceding agent.
+        self._inference_lock = threading.Lock()
 
     def _sample_raw_text(
         self,
@@ -97,7 +127,7 @@ class LocalLlama(language_model.LanguageModel):
         body: dict[str, Any] = {
             "model": self.model_id,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": min(int(max_tokens), 600),
+            "max_tokens": min(int(max_tokens), 220),
             "temperature": max(0.05, min(float(temperature), 1.2)),
             "top_p": float(top_p),
             "stream": False,
@@ -110,8 +140,9 @@ class LocalLlama(language_model.LanguageModel):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=min(90, max(5, timeout))) as reply:
-            result = json.load(reply)
+        with self._inference_lock:
+            with urllib.request.urlopen(request, timeout=min(150, max(90, timeout))) as reply:
+                result = json.load(reply)
         choices = result.get("choices") or []
         output = str((choices[0].get("message") or {}).get("content") or "") if choices else ""
         if not output.strip():
@@ -356,13 +387,19 @@ def run(
             "call_to_action": (
                 "What does {name} independently choose to do next? Respect your "
                 "own enduring goal and only the VERIFIED physical outcomes in "
-                "your context. You may work privately, listen, rest, or speak "
-                "only when you have a specific observation or consequence to "
-                "respond to. Do not talk about the mechanics or quality of "
-                "conversation. Do not announce plans as accomplished results. "
-                "The action text before the JSON is ONLY what you actually "
-                "say or physically do now, written in first person. It may be "
-                "empty when you work privately or remain quiet. End with ONE "
+                "your context. You may also initiate a real conversation, ask a peer "
+                "a specific question, answer their latest question, disagree, or build "
+                "on their idea. Respond to what they actually said, not just report "
+                "what you are doing. Address them directly when appropriate. "
+                "Each of you is trying to amuse the others. When speaking, look for "
+                "playful observations, unexpected comparisons, callbacks to their jokes, "
+                "witty replies or gentle absurdity in your own style. Build on what someone "
+                "actually said; do not recycle stock jokes or explain the joke. Let others "
+                "respond, and allow a joke to fail naturally. Keep your own identity. "
+                "Do not discuss conversation mechanics or announce plans as results. "
+                "For public speech put SAY: followed by your actual words before the JSON. "
+                "For physical action or private work, omit SAY:; do not describe it as speech. "
+                "You may remain quiet. End with ONE "
                 "JSON control object containing mask (a list of event prefixes) "
                 "and timer (a time duration and personal reason). A valid "
                 "minimal control object looks like "
@@ -386,7 +423,7 @@ def run(
         raise RuntimeError("Native Concordia game master is not active")
     scheduler = master.get_component("entity_scheduler")
     if state_in is not None:
-        snapshot = json.loads(Path(state_in).read_text(encoding="utf-8"))
+        snapshot = read_checkpoint(Path(state_in))
         if snapshot.get("schema") != 1 or snapshot.get("players") != names:
             raise ValueError("Native Concordia checkpoint incompatible with these players")
         saved_scheduler = snapshot["game_master"]["context_components"]["entity_scheduler"]
@@ -452,6 +489,18 @@ def run(
                         f"WITNESSED REPORT BY {speaker.upper()} (not your own "
                         f"experience or intention; their claims are unverified): {utterance}"
                     )
+    # Published peer speech becomes a real scheduler event, not merely a
+    # background memory. Existing action.* subscriptions can hear it;
+    # agents who chose quiet masks keep that choice.
+    if mode == "llama":
+        for item in list(recent_public)[-4:]:
+            speaker = str(item.get("speaker") or "").lower()
+            utterance = str(item.get("text") or "").strip()[:520]
+            if speaker in PARTICIPANTS and utterance:
+                scheduler.inject_event(interrupt_scheduling.Event(
+                    timestamp=scheduler.get_current_time(), tag="action.peer_speech",
+                    source=speaker.capitalize(), description=f"{speaker.capitalize()} said: {utterance}",
+                ))
     engine = simultaneous.Simultaneous()
     records: list[dict[str, Any]] = []
 
@@ -478,11 +527,7 @@ def run(
             "game_master": master.get_state(),
             "entities": {p.name: p.get_state() for p in players},
         }
-        destination = Path(state_out)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        temp = destination.with_name(destination.name + ".tmp")
-        temp.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
-        os.replace(temp, destination)
+        write_checkpoint(Path(state_out), snapshot)
     # Report only scheduler mechanics, never agent memory or private prompts.
     scheduler_state = scheduler.get_state()
     scheduler_diagnostics = {

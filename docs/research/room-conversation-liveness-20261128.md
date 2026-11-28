@@ -1,0 +1,12 @@
+# Room conversational liveness repair — 2026-11-28
+
+## Observed failure
+The Room run 46151305151 (job 140998332791) restored the model but recorded simultaneous HTTP read timeouts for agents, a quiet cycle, and four GitHub GH001 rejections for `room/native-concordia-state.json` exceeding 100 MiB. The runner was then cancelled before a subsequent push. Last committed feed cycle was 78914 (2026-11-23 19:02 UTC).
+
+## Evidence and gate
+1. Observed symptoms: stale publication, transport timeouts, and private activity reports presented as conversation. The first two are evidenced by the job log; the latter by the user and the previous parser accepting any action text.
+2–3. Technical mechanisms: GitHub's 100 MiB file limit (https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github), Python lossless gzip (https://docs.python.org/3/library/gzip.html), and the pinned Concordia source (https://github.com/google-deepmind/concordia/tree/4e4aec94b76b937c6d491cc4fc414ab92fd080c5). The existing model server has one inference slot.
+4–5. Natural conversation: Sacks, Schegloff & Jefferson (1974), turn-taking; Clark & Wilkes-Gibbs (1986), collaborative grounding. A witnessed peer utterance should be an opportunity for response rather than an obligatory turn. Only actual model-produced speech should appear as speech.
+6–8. Competing explanations/limits: model slowness, publication rejection, scheduler attention, and user-facing labeling are distinct. A 3B model may still produce malformed or unresponsive dialogue. No claim that these human findings validate model behavior; no fixed speaker quotas or forced dialogue.
+9. Implementation: lossless compressed JSON checkpoint envelope, backward-compatible loading, single-slot request serialization and bounded generation, longer native runner/watchdog grace, actual published utterances as scheduler events, explicit SAY marker on live model utterances. No model or identity replacement. Old checkpoint preserved in Git history; no reset of current memory. Existing private-work and silence options remain.
+10. Validation: existing scripted upstream-engine tests plus regressions for lossless legacy checkpoint migration and separating private activity from speech. Real-model live success requires a committed cycle above 78914 with new actual speech by different agents, a peer response, no GH001 rejection and no repeated model timeout. The scripted test alone does not establish this. Post-deployment evidence pending.
